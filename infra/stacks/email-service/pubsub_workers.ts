@@ -5,6 +5,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
+  versionEnvironment,
   withTelemetry,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -133,7 +134,10 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 1024,
               memory: stack === 'prod' ? 3742 : 1742, // 2048 minimum - 256 for datadog - 50 for log_router
-              environment: [...containerEnvVars],
+              environment: [
+                ...containerEnvVars,
+                versionEnvironment(image.image.imageUri),
+              ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',

@@ -3,12 +3,7 @@ import type { EmailEntity } from '@entity';
 
 /** Whether a local working copy still shows as its own draft row. */
 export function isListedLocalDraft(draft: LocalDraft): boolean {
-  return !(
-    draft.status === 'synced' ||
-    (draft.status === 'deleting' &&
-      !!draft.queuedAttemptId &&
-      draft.queuedAttemptId === draft.latestAttemptId)
-  );
+  return draft.status !== 'synced' && draft.status !== 'deleting';
 }
 
 /** The conversation row a local working copy appears under. */

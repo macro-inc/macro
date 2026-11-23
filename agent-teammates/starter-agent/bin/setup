@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# bin/setup: turns a fresh copy of this directory into one particular agent.
+#
+# It asks who owns the agent and for the agent's own Macro account, then
+# writes agent.json (who it is), an age key if this machine has none,
+# .sops.yaml and secrets.enc.json (its credentials, encrypted), links the
+# muppet library, installs its packages, and offers to install and start its
+# systemd user services. It gives the agent no name and no personality: the
+# agent asks its owner who it is, in Macro, the first time it runs.
+#
+# Run it once per agent, from a copy of this directory that is not inside
+# another git repository. It refuses to overwrite an agent that is already set
+# up.
+set -euo pipefail
+here=$(cd "$(dirname "$0")/.." && pwd)
+cd "$here"
+
+# Everything below needs bun, sops and age, which the flake's shell has.
+if [[ -z ${AGENT_SHELL:-} ]]; then
+  command -v nix >/dev/null || { echo "bin/setup needs nix (https://nixos.org/download)"; exit 1; }
+  AGENT_SHELL=1 exec nix develop "$here" --command "$here/bin/setup" "$@"
+fi
+
+settings=agent.json
+secrets=secrets.enc.json
+rules=.sops.yaml
+muppet=${MUPPET:-$here/../muppet}
+keys=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
+
+say() { printf '\n%s\n' "$*"; }
+ask() { # ask <prompt> [default]: prints the answer
+  local answer
+  if [[ -n ${2:-} ]]; then read -r -p "$1 [$2]: " answer; else read -r -p "$1: " answer; fi
+  printf '%s' "${answer:-${2:-}}"
+}
+
+# The agent commits to its own repository after every wake, so it can't live
+# inside someone else's: its memory and credentials would land in their history.
+top=$(git rev-parse --show-toplevel 2>/dev/null || true)
+[[ -z $top || $top == "$here" ]] || {
+  echo "This directory is inside another git repository ($top)."
+  echo "An agent needs a repository of its own. Copy this directory to where the agent will live, e.g.:"
+  echo "  cp -r $here ~/my-agent && cd ~/my-agent && MUPPET=$(cd "$here/.." && pwd)/muppet bin/setup"
+  exit 1
+}
+
+[[ -e $settings || -e $secrets ]] && {
+  echo "This agent is already set up ($settings or $secrets exists). To start over, remove both."
+  exit 1
+}
+[[ -d $muppet/packages/lib ]] || {
+  echo "The muppet library isn't at $muppet. Put it beside this directory, or set MUPPET to where it is."
+  exit 1
+}
+command -v claude >/dev/null || echo "Note: the claude program isn't on your PATH. The agent runs on Claude Code: install it and sign in before starting the agent."
+
+say "Who owns this agent? Only this Macro account will be able to give it orders."
+owner=$(ask "Owner's Macro email")
+[[ $owner == *@* ]] || { echo "That isn't an email address."; exit 1; }
+
+say "The agent needs a Macro account of its own, and an API key for it (Macro: Settings, API keys, signed in as the agent's account)."
+me=$(ask "The agent's Macro email")
+[[ $me == *@* ]] || { echo "That isn't an email address."; exit 1; }
+[[ $me != "$owner" ]] || { echo "The agent needs its own account: it can't be its owner's."; exit 1; }
+read -r -s -p "The agent's Macro API key (not shown): " key; echo
+[[ -n $key ]] || { echo "No key given."; exit 1; }
+
+zone=$(ask "Your time zone" "$(timedatectl show -p Timezone --value 2>/dev/null || echo UTC)")
+
+# The agent has no name yet: it commits as "Agent" until its owner names it.
+bun -e '
+  const [file, owner, me, timeZone] = process.argv.slice(1);
+  await Bun.write(file, JSON.stringify({
+    owner: `macro|${owner}`, me: `macro|${me}`,
+    name: "Agent", email: me, timeZone, model: "claude-opus-5-5",
+  }, null, "\t") + "\n");
+' "$settings" "$owner" "$me" "$zone"
+
+# One age key per machine opens every agent's credentials on it.
+if [[ ! -s $keys ]]; then
+  mkdir -p "$(dirname "$keys")"
+  (umask 077; age-keygen -o "$keys" 2>/dev/null)
+  say "Made an age key at $keys. Back it up: without it, this agent's credentials can't be read."
+fi
+public=$(age-keygen -y "$keys" | head -1)
+sed -i "s|age: .*|age: $public|" "$rules"
+
+# The key goes from memory to sops on stdin: never into a file in the clear, or a program's arguments.
+printf '%s' "$key" | bun -e '
+  const [name] = process.argv.slice(1);
+  process.stdout.write(JSON.stringify({ [name]: (await Bun.stdin.text()).trim() }));
+' MACRO_API_KEY \
+  | sops encrypt --filename-override "$secrets" --input-type json --output-type json /dev/stdin > "$secrets"
+unset key
+sops decrypt "$secrets" >/dev/null || { echo "The credentials file didn't encrypt properly."; rm -f "$secrets"; exit 1; }
+
+say "Installing packages..."
+(cd "$muppet/packages/lib" && bun install >/dev/null && bun link >/dev/null)
+bun install >/dev/null
+
+git rev-parse --git-dir >/dev/null 2>&1 || git init -q -b main
+git add "$settings" "$secrets" "$rules"
+git -c user.name="Agent" -c user.email="$me" commit -q -m "Set up: who owns this agent, and its Macro account" || true
+
+unit=$(basename "$here")
+say "The agent runs as a systemd user service named $unit (after this directory)."
+if [[ $(ask "Install and start it now? (y/n)" y) == y* ]]; then
+  units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
+  mkdir -p "$units"
+  for template in agent.service agent-screen.service; do
+    target=$units/${template/agent/$unit}
+    sed -e "s|@ROOT@|$here|g" -e "s|@UNIT@|$unit|g" -e "s|@NAME@|$unit|g" "systemd/$template" > "$target"
+  done
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$unit.service"
+  say "Started. It will DM $owner in Macro to ask who it is. Watch it with: journalctl --user -u $unit -f"
+  echo "For screen share on calls, also: systemctl --user enable --now $unit-screen.service"
+else
+  say "Not started. Run it by hand with: bin/agent run"
+fi
+
+say "Voice on calls and a mailbox are optional, and need credentials of their own: README.md says which, and the agent can be told to add them with setCredential."

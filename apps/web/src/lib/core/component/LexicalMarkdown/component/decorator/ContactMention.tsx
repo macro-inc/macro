@@ -118,11 +118,17 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
           data-is-company={props.isCompany}
           data-contact-mention="true"
         >
-          <span class="inline-flex items-center gap-1">
-            <Show when={props.isCompany} fallback={<UserIcon class="size-3" />}>
-              <BuildingIcon class="size-3" />
+          {/* The face is one unbreakable box, so a long address can't wrap:
+              it truncates at the line's width (less the chip's padding)
+              instead of widening the message. The hover card shows it whole. */}
+          <span class="inline-flex max-w-[calc(100%-0.25rem)] items-center gap-1">
+            <Show
+              when={props.isCompany}
+              fallback={<UserIcon class="size-3 shrink-0" />}
+            >
+              <BuildingIcon class="size-3 shrink-0" />
             </Show>
-            {displayName()}
+            <span class="min-w-0 truncate">{displayName()}</span>
           </span>
         </span>
         <MentionTooltip show={isSelectedAsNode()} text="Open" />
@@ -137,13 +143,15 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
             <div class="flex items-center gap-2">
               <Show
                 when={props.isCompany}
-                fallback={<UserIcon class="size-5" />}
+                fallback={<UserIcon class="size-5 shrink-0" />}
               >
-                <BuildingIcon class="size-5" />
+                <BuildingIcon class="size-5 shrink-0" />
               </Show>
-              <div class="flex-1">
-                <div class="font-semibold">{props.name}</div>
-                <div class="text-sm text-ink-muted">{props.emailOrDomain}</div>
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold wrap-anywhere">{props.name}</div>
+                <div class="text-sm text-ink-muted wrap-anywhere">
+                  {props.emailOrDomain}
+                </div>
               </div>
             </div>
             <div class="mt-2 text-xs text-ink-muted">

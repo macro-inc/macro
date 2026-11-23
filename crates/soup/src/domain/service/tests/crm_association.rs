@@ -9,12 +9,19 @@ use crm::domain::{
     association::{CrmAssociation, CrmRecordAssociation},
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor},
+    email_privacy::{
+        EmailContributionConsent, EmailContributionMailbox, EmailPrivacyChange,
+        EmailPrivacyService, EmailPrivacySettings,
+    },
     model::{
-        CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+        CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError,
+        CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
-use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::{
+    BotId, BotReceiptScope, EditAccessLevel, Entity, EntityAccessAuth, EntityPermission,
+    EntityType as AccessEntityType, TeamRole, ViewAccessLevel,
+};
 use item_filters::ast::{crm_association::CrmAssociation as Record, document::DocumentLiteral};
 use models_properties::EntityType as PropertyEntityType;
 
@@ -25,10 +32,81 @@ const SIBLING_CONTACT: Uuid = Uuid::from_u128(0xc2);
 const CHANNEL: Uuid = Uuid::from_u128(0xc4a);
 
 /// Resolves the company to its two contacts; any other record is not visible.
-#[derive(Clone)]
-struct FakeCrm;
+/// The activity scope has one domain and one address, and one property edge
+/// per item kind ([`ACTIVITY_EDGES`]); its calls are recorded, and the access
+/// each edges read was given.
+#[derive(Clone, Default)]
+struct FakeCrm {
+    activity_calls: Arc<Mutex<Vec<ActivityCall>>>,
+    edge_access: Arc<Mutex<Vec<Option<EdgeAccess>>>>,
+}
+
+/// The team a receipt grants, and the scope of the bot holding it.
+type EdgeAccess = (Uuid, Option<BotReceiptScope>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ActivityCall {
+    Participants,
+    Edges(Vec<PropertyEntityType>),
+}
+
+const ACTIVITY_DOCUMENT: Uuid = Uuid::from_u128(0xad);
+const ACTIVITY_TASK: Uuid = Uuid::from_u128(0xa7);
+const ACTIVITY_CALL: Uuid = Uuid::from_u128(0xac);
+const ACTIVITY_CHAT: Uuid = Uuid::from_u128(0xa1);
+const ACTIVITY_EDGES: [(PropertyEntityType, Uuid); 4] = [
+    (PropertyEntityType::Document, ACTIVITY_DOCUMENT),
+    (PropertyEntityType::Task, ACTIVITY_TASK),
+    (PropertyEntityType::CallRecord, ACTIVITY_CALL),
+    (PropertyEntityType::Chat, ACTIVITY_CHAT),
+];
+
+impl EmailPrivacyService for FakeCrm {
+    async fn email_consent(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<EmailContributionConsent, CrmError> {
+        panic!("unexpected email_consent call")
+    }
+
+    async fn excluded_email_threads(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+        _: Option<Uuid>,
+        _: Option<Uuid>,
+    ) -> Result<crm::domain::email_privacy::ExcludedEmailThreads, CrmError> {
+        panic!("unexpected excluded_email_threads call")
+    }
+
+    async fn contribution_mailbox(
+        &self,
+        _: Uuid,
+        _: &str,
+    ) -> Result<Option<EmailContributionMailbox>, CrmError> {
+        panic!("unexpected contribution_mailbox call")
+    }
+
+    async fn email_privacy(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<EmailPrivacySettings, CrmError> {
+        panic!("unexpected email_privacy call")
+    }
+
+    async fn change_email_privacy(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+        _: EmailPrivacyChange,
+    ) -> Result<EmailPrivacySettings, CrmError> {
+        panic!("unexpected change_email_privacy call")
+    }
+}
 
 impl CrmService for FakeCrm {
+    async fn current_member_access(&self, _: &str) -> Result<Option<(uuid::Uuid, bool)>, CrmError> {
+        Ok(None)
+    }
+
     async fn resolve_association(
         &self,
         user_id: &str,
@@ -42,10 +120,50 @@ impl CrmService for FakeCrm {
                 vec![CONTACT, SIBLING_CONTACT],
             )),
             CrmAssociation::Contact(CONTACT) => Ok(CrmRecordAssociation::contact(CONTACT)),
-            CrmAssociation::Activity => Ok(CrmRecordAssociation::default()),
+            CrmAssociation::Activity => {
+                self.activity_calls
+                    .lock()
+                    .unwrap()
+                    .push(ActivityCall::Participants);
+                Ok(CrmRecordAssociation {
+                    domains: vec!["example.com".into()],
+                    addresses: vec!["pat@example.org".into()],
+                    ..CrmRecordAssociation::default()
+                })
+            }
             CrmAssociation::Company(_) => Err(CrmError::CompanyNotFoundForTeam),
             CrmAssociation::Contact(_) => Err(CrmError::ContactNotFoundForTeam),
         }
+    }
+
+    async fn activity_property_edges(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        entity_types: &[PropertyEntityType],
+    ) -> Result<Vec<crm::domain::association::CrmActivityEdge>, CrmError> {
+        assert_eq!(user_id, USER);
+        self.edge_access.lock().unwrap().push(access.map(|access| {
+            let bot = match access.receipt().auth() {
+                EntityAccessAuth::Bot(bot) => Some(bot.scope().clone()),
+                _ => None,
+            };
+            (access.team_id(), bot)
+        }));
+        self.activity_calls
+            .lock()
+            .unwrap()
+            .push(ActivityCall::Edges(entity_types.to_vec()));
+        Ok(ACTIVITY_EDGES
+            .into_iter()
+            .filter(|(entity_type, _)| entity_types.contains(entity_type))
+            .map(
+                |(entity_type, id)| crm::domain::association::CrmActivityEdge {
+                    entity_type,
+                    entity_id: id.to_string(),
+                },
+            )
+            .collect())
     }
 
     async fn list_contacts_for_soup(
@@ -157,6 +275,55 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.set_contact_hidden")
     }
 
+    async fn set_contact_email(
+        &self,
+        _access: &crm::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: &str,
+    ) -> Result<crm::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn set_contact_company(
+        &self,
+        _access: &crm::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _company_id: uuid::Uuid,
+    ) -> Result<crm::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn add_contact_email(
+        &self,
+        _access: &crm::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: &str,
+    ) -> Result<crm::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn remove_contact_email(
+        &self,
+        _access: &crm::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: &str,
+    ) -> Result<crm::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn unlink_contact_company(
+        &self,
+        _access: &crm::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+    ) -> Result<crm::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
     async fn set_contact_name(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
@@ -167,7 +334,7 @@ impl CrmService for FakeCrm {
 
     async fn crm_scope_precheck(
         &self,
-        _team_id: &uuid::Uuid,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
         _domains: &[String],
         _addresses: &[String],
     ) -> Result<CrmScopePrecheck, CrmError> {
@@ -194,10 +361,18 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.list_contacts_for_company")
     }
 
+    async fn list_company_contacts_page(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _query: crm::domain::model::CrmCompanyContactsQuery,
+    ) -> Result<crm::domain::model::CrmCompanyContactsPage, CrmError> {
+        unimplemented!("FakeCrm.list_company_contacts_page")
+    }
+
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         unimplemented!("FakeCrm.get_contact_for_team")
     }
 
@@ -218,11 +393,29 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.get_contact_by_email")
     }
 
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        unimplemented!("FakeCrm.get_company_by_domain")
+    }
+
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!("FakeCrm.get_company_for_team")
+    }
+
+    async fn preview_records(
+        &self,
+        _user_id: &str,
+        _company_ids: &[uuid::Uuid],
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<crm::domain::previews::CrmPreviews, CrmError> {
+        unimplemented!("FakeCrm.preview_records")
     }
 
     async fn get_team_settings(
@@ -349,10 +542,7 @@ fn request(filters: EntityFilterAst) -> SoupRequest<EntityFilterAst> {
     }
 }
 
-fn service(
-    repo: MockSoupRepo,
-    comms: ReferencingComms,
-) -> SoupImpl<
+type Service = SoupImpl<
     MockSoupRepo,
     FrecencyQueryServiceImpl<MockFrecencyStorage>,
     NoopEmailPreviewService,
@@ -360,14 +550,20 @@ fn service(
     NoopCallRecordQueryService,
     FakeCrm,
     NoopPullRequestListing,
-> {
+>;
+
+fn service(repo: MockSoupRepo, comms: ReferencingComms) -> Service {
+    service_with(repo, comms, FakeCrm::default())
+}
+
+fn service_with(repo: MockSoupRepo, comms: ReferencingComms, crm: FakeCrm) -> Service {
     SoupImpl::new(
         repo,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
         NoopEmailPreviewService,
         comms,
         NoopCallRecordQueryService,
-        FakeCrm,
+        crm,
         NoopPullRequestListing,
     )
 }
@@ -385,11 +581,11 @@ fn document_ids(expr: &Expr<DocumentLiteral>) -> Vec<Uuid> {
 async fn company_scope_matches_properties_and_references_of_its_contacts() {
     let comms = ReferencingComms::default();
     let mut repo = MockSoupRepo::new();
-    repo.expect_crm_property_edges()
-        .times(1)
-        .returning(|companies, contacts| {
+    repo.expect_crm_property_edges().times(1).returning(
+        |companies, contacts, custom_task_properties| {
             assert_eq!(companies, [COMPANY]);
             assert_eq!(contacts, [CONTACT, SIBLING_CONTACT]);
+            assert!(custom_task_properties);
             // A contact-only task: Contacts property without Companies.
             Box::pin(async {
                 Ok(vec![
@@ -403,7 +599,8 @@ async fn company_scope_matches_properties_and_references_of_its_contacts() {
                     },
                 ])
             })
-        });
+        },
+    );
     repo.expect_expanded_generic_cursor_soup()
         .times(1)
         .returning(|request| {
@@ -460,13 +657,14 @@ async fn company_scope_matches_properties_and_references_of_its_contacts() {
 async fn contact_scope_excludes_company_only_and_sibling_items() {
     let comms = ReferencingComms::default();
     let mut repo = MockSoupRepo::new();
-    repo.expect_crm_property_edges()
-        .times(1)
-        .returning(|companies, contacts| {
+    repo.expect_crm_property_edges().times(1).returning(
+        |companies, contacts, custom_task_properties| {
             assert!(companies.is_empty());
             assert_eq!(contacts, [CONTACT]);
+            assert!(custom_task_properties);
             Box::pin(async { Ok(Vec::new()) })
-        });
+        },
+    );
     repo.expect_expanded_generic_cursor_soup()
         .times(1)
         .returning(|request| {
@@ -578,4 +776,242 @@ async fn associations_require_an_expanded_query() {
         assert_matches!(result, Err(SoupErr::AstErr(_)));
     }
     assert!(comms.targets.lock().unwrap().is_empty());
+}
+
+/// Runs a Sales view (`crm_association::test::sales_view`) through the
+/// service, checks the filter its candidate query receives, and returns what
+/// it read of the activity scope.
+async fn sales_view_reads(
+    filters: EntityFilterAst,
+    check: impl Fn(&EntityFilterAst) + Send + 'static,
+) -> Vec<ActivityCall> {
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_generic_cursor_soup()
+        .times(1)
+        .returning(move |request| {
+            let SimpleSortQuery::ItemsFilter(query) = request.cursor else {
+                panic!("filtered query")
+            };
+            assert_eq!(query.filter().crm_association, None);
+            check(query.filter());
+            Box::pin(async { Ok(Vec::new()) })
+        });
+    service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup(request(filters), None)
+        .await
+        .unwrap();
+    crm.activity_calls.lock().unwrap().clone()
+}
+
+fn sales_view(tab: &str) -> EntityFilterAst {
+    use crate::domain::service::crm_association::test::{ast, sales_view};
+    ast(sales_view(tab))
+}
+
+#[tokio::test]
+async fn sales_tasks_read_only_document_and_task_edges() {
+    let calls = sales_view_reads(sales_view("tasks"), |filter| {
+        let mut documents = document_ids(filter.document_filter.as_deref().unwrap());
+        documents.sort();
+        assert_eq!(documents, [ACTIVITY_TASK, ACTIVITY_DOCUMENT]);
+    })
+    .await;
+    assert_eq!(
+        calls,
+        [ActivityCall::Edges(vec![
+            PropertyEntityType::Document,
+            PropertyEntityType::Task
+        ])]
+    );
+}
+
+#[tokio::test]
+async fn sales_calls_read_only_call_edges() {
+    use item_filters::ast::call::CallLiteral;
+    let calls = sales_view_reads(sales_view("calls"), |filter| {
+        assert_matches!(
+            filter.call_filter.as_deref(),
+            Some(Expr::Literal(CallLiteral::CallId(id))) if *id == ACTIVITY_CALL
+        );
+    })
+    .await;
+    assert_eq!(
+        calls,
+        [ActivityCall::Edges(vec![PropertyEntityType::CallRecord])]
+    );
+}
+
+#[tokio::test]
+async fn sales_email_reads_only_participants() {
+    use item_filters::ast::email::{Email, EmailLiteral};
+    let calls = sales_view_reads(sales_view("email"), |filter| {
+        let tree = serde_json::to_string(&filter.email_filter.tree).unwrap();
+        for literal in [
+            EmailLiteral::Sender(Email::Domain("example.com".into())),
+            EmailLiteral::Bcc(Email::Domain("example.com".into())),
+        ] {
+            let literal = serde_json::to_string(&literal).unwrap();
+            assert!(tree.contains(&literal), "{tree} names {literal}");
+        }
+        assert!(tree.contains("pat@example.org"), "{tree}");
+        // No edge was read, so every property-matched source is pinned.
+        assert_eq!(
+            document_ids(filter.document_filter.as_deref().unwrap()),
+            [Uuid::nil()]
+        );
+    })
+    .await;
+    // The edge call only authorizes the scope: it names no item kind.
+    assert_eq!(
+        calls,
+        [ActivityCall::Participants, ActivityCall::Edges(Vec::new())]
+    );
+}
+
+#[tokio::test]
+async fn activity_with_database_rows_takes_the_record_path() {
+    let mut filters = sales_view("tasks");
+    filters.database_row_filter = Some(Arc::new(Expr::val(
+        item_filters::ast::database_row::DatabaseRowLiteral::Include,
+    )));
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_crm_property_edges().times(1).returning(
+        |companies, contacts, custom_task_properties| {
+            assert!(companies.is_empty() && contacts.is_empty());
+            // The activity scope matches the built-in properties only.
+            assert!(!custom_task_properties);
+            Box::pin(async { Ok(Vec::new()) })
+        },
+    );
+    repo.expect_expanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+    service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup(request(filters), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        *crm.activity_calls.lock().unwrap(),
+        [ActivityCall::Participants]
+    );
+}
+
+/// The grouped path resolves the activity scope too, under the viewer's own
+/// teams: it reads only the edges Sales Tasks lists, and hands the grouped
+/// candidate query the resolved ids.
+#[tokio::test]
+async fn sales_tasks_grouped_reads_only_document_and_task_edges() {
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_grouped_cursor_soup()
+        .times(1)
+        .returning(|request| {
+            let filter = request.cursor.filter();
+            assert_eq!(filter.crm_association, None);
+            let mut documents = document_ids(filter.document_filter.as_deref().unwrap());
+            documents.sort();
+            assert_eq!(documents, [ACTIVITY_TASK, ACTIVITY_DOCUMENT]);
+            let tree = serde_json::to_string(filter).unwrap();
+            for unread in [ACTIVITY_CALL, ACTIVITY_CHAT] {
+                assert!(!tree.contains(&unread.to_string()), "{tree}");
+            }
+            Box::pin(async { Ok(Vec::<ItemGroupingInfo>::new().into_iter()) })
+        });
+    let items: Vec<_> = service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup_grouped(GroupedSortRequest {
+            limit: 100,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), sales_view("tasks")),
+            user_id: MacroUserIdStr::parse_from_str(USER).unwrap(),
+            grouping: GroupingConfig {
+                field: GroupByField::Date,
+                group_key: None,
+                per_group_limit: Some(100),
+            },
+        })
+        .await
+        .unwrap()
+        .collect();
+    assert!(items.is_empty());
+    assert_eq!(
+        *crm.activity_calls.lock().unwrap(),
+        [ActivityCall::Edges(vec![
+            PropertyEntityType::Document,
+            PropertyEntityType::Task
+        ])]
+    );
+    assert_eq!(*crm.edge_access.lock().unwrap(), [None]);
+}
+
+/// Grouped pages without properties resolve the activity scope the same way.
+#[tokio::test]
+async fn sales_tasks_grouped_without_properties_resolve_the_activity_scope() {
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_grouped_cursor_soup()
+        .times(1)
+        .returning(|request| {
+            let filter = request.cursor.filter();
+            assert_eq!(filter.crm_association, None);
+            let mut documents = document_ids(filter.document_filter.as_deref().unwrap());
+            documents.sort();
+            assert_eq!(documents, [ACTIVITY_TASK, ACTIVITY_DOCUMENT]);
+            Box::pin(async { Ok(Vec::<ItemGroupingInfo>::new().into_iter()) })
+        });
+    repo.expect_populate_properties().times(0);
+    let items: Vec<_> = service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup_grouped_without_properties(GroupedSortRequest {
+            limit: 100,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), sales_view("tasks")),
+            user_id: MacroUserIdStr::parse_from_str(USER).unwrap(),
+            grouping: GroupingConfig {
+                field: GroupByField::Date,
+                group_key: None,
+                per_group_limit: Some(100),
+            },
+        })
+        .await
+        .unwrap()
+        .collect();
+    assert!(items.is_empty());
+    assert_eq!(
+        *crm.activity_calls.lock().unwrap(),
+        [ActivityCall::Edges(vec![
+            PropertyEntityType::Document,
+            PropertyEntityType::Task
+        ])]
+    );
+}
+
+/// A bot's team receipt reaches the edges read, so the CRM service scopes
+/// them to the bot's team rather than to the user it acts for.
+#[tokio::test]
+async fn sales_tasks_pass_a_bots_team_receipt_to_the_edges_read() {
+    const TEAM: Uuid = Uuid::from_u128(0x7ea);
+    let receipt = EntityAccessReceipt::<MemberTeamRole>::try_new_bot(
+        BotId::new_from_uuid(Uuid::from_u128(0xb07)).into_storage_id(),
+        BotReceiptScope::Team { team_id: TEAM },
+        Entity {
+            entity_id: TEAM.to_string(),
+            entity_type: AccessEntityType::Team,
+        },
+        EntityPermission::TeamRole {
+            role: TeamRole::Member,
+        },
+    )
+    .unwrap();
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+    service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup(request(sales_view("tasks")), Some(receipt))
+        .await
+        .unwrap();
+    assert_eq!(
+        *crm.edge_access.lock().unwrap(),
+        [Some((TEAM, Some(BotReceiptScope::Team { team_id: TEAM })))]
+    );
 }

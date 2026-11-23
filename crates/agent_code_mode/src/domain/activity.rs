@@ -1,11 +1,7 @@
 //! Bounded, advisory activity derived from the generated SDK operation catalog.
 use super::{ExecutionActivity, RecordedCallStatus};
+use code_execution::domain::operations;
 use serde::Deserialize;
-use std::{collections::BTreeMap, sync::LazyLock};
-
-static OPERATIONS: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
-    serde_json::from_str(code_mode_assets::OPERATIONS).expect("generated operation catalog")
-});
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -28,7 +24,10 @@ pub(super) fn observe(
     let Ok(event) = serde_json::from_value::<Activity>(value) else {
         return;
     };
-    let Some(label) = OPERATIONS.get(&format!("{}.{}", event.service, event.operation)) else {
+    let Some(label) = operations()
+        .get(&format!("{}.{}", event.service, event.operation))
+        .map(|operation| &operation.label)
+    else {
         return;
     };
     let status = match event.status.as_str() {

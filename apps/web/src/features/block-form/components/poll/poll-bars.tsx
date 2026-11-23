@@ -25,7 +25,7 @@ function moveFocus(event: KeyboardEvent, list: HTMLElement | null) {
 
 /**
  * A poll's options as bars: each is the vote button for that option, with
- * its count when results show. The viewer's own vote is marked.
+ * its count once the tally loads. The viewer's own vote is marked.
  */
 export function PollBars(props: {
   question: string;
@@ -38,7 +38,7 @@ export function PollBars(props: {
   /** Keep keyboard focus while saving, and reject repeated votes. */
   pending?: boolean;
   summary: string;
-  /** What shows instead of the summary while counts aren't shown. */
+  /** What shows instead of the summary until the counts load. */
   hiddenNote: string;
   onVote: (optionId: string) => void;
   /** The results door: `expanded` when it shows them in place. */

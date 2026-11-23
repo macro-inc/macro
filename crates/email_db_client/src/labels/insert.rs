@@ -52,7 +52,6 @@ pub async fn insert_message_label(
 }
 
 /// Inserts a label for multiple messages at once
-#[tracing::instrument(skip(executor), err)]
 pub async fn insert_message_labels_batch<'e, E>(
     executor: E,
     message_ids: &Vec<Uuid>,
@@ -62,14 +61,6 @@ pub async fn insert_message_labels_batch<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
-    if message_ids.is_empty() {
-        return Ok(0);
-    }
-
-    if provider_label_id.is_empty() {
-        anyhow::bail!("Provider label ID cannot be empty");
-    }
-
     let result = sqlx::query!(
         r#"
         INSERT INTO email_message_labels (message_id, label_id)
@@ -99,22 +90,10 @@ where
 /// Inserts or updates labels for a user.
 /// Labels are shared across messages, so this should be done separately from inserting message_labels
 /// to avoid deadlock issues.
-#[tracing::instrument(skip(pool, service_labels), fields(label_count = service_labels.len()), err)]
 pub async fn insert_or_update_labels(
     pool: &PgPool,
-    mut service_labels: Vec<service::label::Label>,
+    service_labels: Vec<service::label::Label>,
 ) -> anyhow::Result<()> {
-    if service_labels.is_empty() {
-        return Ok(());
-    }
-
-    // need to generate before conversion
-    for service_label in service_labels.iter_mut() {
-        if service_label.id.is_none() {
-            service_label.id = Some(macro_uuid::generate_uuid_v7());
-        }
-    }
-
     let db_labels: Vec<db::label::Label> = service_labels.into_iter().map(Into::into).collect();
 
     // Extract data for batch insert

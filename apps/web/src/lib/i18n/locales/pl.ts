@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Projekt',
     newProject: 'Nowy projekt',
     contentAlreadyOpen: 'Ta zawartość jest już otwarta',
-    unableToOpenConversation: 'Nie można otworzyć rozmowy. Spróbuj ponownie.',
     mobileSearchPlaceholder: 'Szukaj…',
     closeSearch: 'Zamknij wyszukiwanie',
     searchFullTextFor: 'Szukaj w pełnym tekście „{{query}}”',
@@ -105,7 +104,6 @@ export default {
     close: 'Zamknij',
     delete: 'Usuń',
     rename: 'Zmień nazwę',
-    more: 'Więcej',
     search: 'Szukaj',
     settings: 'Ustawienia',
   },
@@ -529,6 +527,12 @@ export default {
       other: 'Usunięto {{count}} elementu',
     },
     toastDeleteFailed: 'Nie udało się usunąć',
+    toastPropertySet: {
+      one: '{{property}}: ustawiono',
+      few: '{{property}}: ustawiono dla {{count}} elementów',
+      many: '{{property}}: ustawiono dla {{count}} elementów',
+      other: '{{property}}: ustawiono dla {{count}} elementu',
+    },
     toastAddedToFavorites: 'Dodano do ulubionych',
     toastAddedCountToFavorites: {
       one: 'Dodano {{count}} element do ulubionych',
@@ -626,10 +630,6 @@ export default {
       other: 'Oznaczono jako nieukończone {{accepted}} z {{count}} elementu',
     },
     toastMarkNotDoneFailed: 'Nie udało się oznaczyć jako nieukończone',
-    toastThreadStaysDone:
-      'Ten wątek nie zawiera odebranych wiadomości, więc pozostaje ukończony',
-    toastThreadsStayDone:
-      'Te wątki nie zawierają odebranych wiadomości, więc pozostają ukończone',
     toastCountNotRestored: {
       one: 'Nie udało się przywrócić {{count}} elementu.',
       few: 'Nie udało się przywrócić {{count}} elementów.',
@@ -742,8 +742,6 @@ export default {
     create: 'Utwórz',
     getMobileApp: 'Pobierz aplikację mobilną',
     signedInAs: 'Zalogowano jako {{name}}',
-    commandMenu: 'Menu poleceń',
-    searchEverything: 'Szukaj wszędzie',
     customizeSidebar: 'Dostosuj pasek boczny',
     customizeSidebarDescription:
       'Wybierz aplikacje widoczne na pasku bocznym i przeciągnij, aby zmienić ich kolejność. Strona główna jest zawsze pierwsza.',
@@ -811,7 +809,7 @@ export default {
     tabMobileApp: 'Aplikacja mobilna',
     tabTags: 'Tagi',
     tabIntegrations: 'Integracje',
-    tabRuntimes: 'Środowiska',
+    tabRuntimes: 'Maszyny',
     tabMcpServer: 'Serwer MCP',
     tabApiKeys: 'Klucze API',
     tabBots: 'Boty',
@@ -831,7 +829,6 @@ export default {
       'Nie znaleziono ustawień. Spróbuj „podpis”, „motyw” lub „kalendarz”.',
     backToSettings: 'Wróć do ustawień',
     closeSettings: 'Zamknij ustawienia',
-    goToTab: 'Przejdź do karty ustawień {{number}}',
     editProfile: 'Edytuj profil',
     logOut: 'Wyloguj się',
     yourAccount: 'Twoje konto',

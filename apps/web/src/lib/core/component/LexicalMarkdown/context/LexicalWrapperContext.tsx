@@ -9,6 +9,7 @@ import {
   RegisteredNodesByType,
   SupportedNodeTypes,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import type { NodeKey } from 'lexical';
 import {
   createEditor,
@@ -101,7 +102,11 @@ export function createLexicalWrapper({
     theme: theme ?? baseTheme,
     namespace: namespace + '_' + _id,
     nodes: [...nodes, ...replacements],
-    onError: console.error,
+    onError: (error) =>
+      Telemetry.error(error, {
+        'error.source': 'lexical',
+        'lexical.editor_type': type,
+      }),
   });
 
   const plugins = createPluginManager(editor, type);

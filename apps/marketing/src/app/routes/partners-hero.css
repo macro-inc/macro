@@ -27,7 +27,7 @@
   max-width: 40ch;
   font-size: 17px;
   line-height: 1.65;
-  font-weight: 400;
+  font-weight: 370;
   color: var(--post-muted);
 }
 .partners-article .partners-hero .posts-hero-art {
@@ -146,7 +146,7 @@ html[data-palette='cream'] .partners-article .partners-hero .partners-subtitle {
   margin-top: 4px;
   color: var(--post-muted);
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 370;
   line-height: 1.5;
   text-decoration: underline;
   text-underline-offset: 4px;

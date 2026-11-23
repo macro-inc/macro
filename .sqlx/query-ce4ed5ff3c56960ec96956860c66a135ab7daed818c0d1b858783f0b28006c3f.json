@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,attempts = 0,\n                        available_at = CASE WHEN revision = $5 THEN 'infinity'::timestamptz ELSE now() END\n                    WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce4ed5ff3c56960ec96956860c66a135ab7daed818c0d1b858783f0b28006c3f"
+}

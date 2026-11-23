@@ -50,10 +50,21 @@ async fn take_slot(
 }
 
 struct PgReplyLease {
-    _transaction: sqlx::Transaction<'static, sqlx::Postgres>,
+    transaction: sqlx::Transaction<'static, sqlx::Postgres>,
     _slot: tokio::sync::OwnedSemaphorePermit,
 }
-impl ConversationLease for PgReplyLease {}
+
+#[async_trait::async_trait]
+impl ConversationLease for PgReplyLease {
+    async fn release(self: Box<Self>) {
+        let Self { transaction, _slot } = *self;
+        // The lock ends with the transaction. A failed rollback means the
+        // connection is gone, and the server releases the lock with it.
+        if let Err(error) = transaction.rollback().await {
+            tracing::warn!(?error, "could not roll back a conversation lease");
+        }
+    }
+}
 
 impl PgConversationTurnStore {
     /// Construct at the composition root from MacroDB.
@@ -93,7 +104,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         .map_err(anyhow::Error::from)?;
         Ok(claimed.then(|| {
             Box::new(PgReplyLease {
-                _transaction: tx,
+                transaction: tx,
                 _slot: slot,
             }) as Box<dyn ConversationLease>
         }))
@@ -115,7 +126,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         .map_err(anyhow::Error::from)?;
         Ok(claimed.then(|| {
             Box::new(PgReplyLease {
-                _transaction: tx,
+                transaction: tx,
                 _slot: slot,
             }) as Box<dyn ConversationLease>
         }))
@@ -315,7 +326,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
             return Ok(None);
         }
         Ok(Some(Box::new(PgReplyLease {
-            _transaction: tx,
+            transaction: tx,
             _slot: slot,
         })))
     }

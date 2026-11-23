@@ -13,12 +13,19 @@ pub mod set_company_name;
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
+pub mod contact_emails;
+pub mod set_contact_company;
+pub mod set_contact_email;
 /// Set the display name (`name`) on a `crm_contacts` row.
 pub mod set_contact_name;
 
 /// List contacts of a `crm_companies` row. Role-aware: members see
 /// visible contacts only; admin/owner see hidden contacts too.
 pub mod list_company_contacts;
+
+/// One page of a company's contacts, filtered by archive state and search,
+/// for the Team list. Same visibility rules as `list_company_contacts`.
+pub mod list_company_contacts_page;
 
 /// Fetch a single CRM contact by id. Role-aware: members 404 on hidden
 /// rows; admin/owner reach hidden contacts (and hidden parent companies).
@@ -28,11 +35,17 @@ pub mod get_contact;
 /// receive null for hidden rows; admin/owner reach hidden contacts.
 pub mod get_contact_by_email;
 
+/// Resolve a team's CRM company by one of its domains.
+pub mod get_company_by_domain;
+
 /// Search the caller's team's CRM contacts by email or name.
 pub mod search_contacts;
 
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
+
+/// Title many CRM company and contact chips in one request.
+pub mod previews;
 
 /// Manually create a CRM company (name + domain) for the caller's team.
 pub mod create_company;
@@ -40,8 +53,11 @@ pub mod create_company;
 /// Manually create a contact (name + email) under a CRM company.
 pub mod create_contact;
 
-/// Manually create a contact without a company for the caller's team.
+/// Manually create a contact for the caller's team without naming a company.
 pub mod create_team_contact;
+
+/// Operator route: file a team's manual contacts under their domain's company.
+pub mod file_unfiled_contacts;
 
 /// The domains a team keeps out of email sync.
 pub mod blocked_domains;
@@ -49,6 +65,14 @@ pub mod blocked_domains;
 /// Team-level CRM configuration (permission thresholds, closed stages,
 /// team saved views).
 pub mod team_settings;
+
+/// Fresh viewer authority for session cache retirement.
+pub mod member_access;
+
+/// Own-member contribution rules and consent commands.
+pub mod email_policy;
+/// Individual email consent and domain blocklists.
+pub mod email_privacy;
 
 /// The team's deal stage set, gated on `edit_stages_role`.
 pub mod stages;
@@ -126,16 +150,52 @@ impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
     }
 }
 
+/// Routes for internal callers, nested under the host's `/internal` router.
+/// Each handler authenticates with the internal-only extractor.
+pub fn crm_internal_router<C, St, Eas, Auth, S>(
+    state: CrmRouterState<C, St, Eas, Auth>,
+) -> Router<S>
+where
+    C: crate::domain::contact_filing::ContactFilingService,
+    St: Send + Sync + 'static,
+    Eas: Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            file_unfiled_contacts::ROUTE,
+            post(file_unfiled_contacts::handler::<C, St, Eas, Auth>),
+        )
+        .with_state(state)
+}
+
 /// Build the CRM router with all endpoints.
 pub fn crm_router<C, St, Eas, Auth, S>(state: CrmRouterState<C, St, Eas, Auth>) -> Router<S>
 where
-    C: CrmService,
+    C: CrmService
+        + crate::domain::email_policy_api::EmailPolicyService
+        + crate::domain::email_policy_preview::EmailPreviewService,
     St: CrmStageService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     Router::new()
+        .merge(email_policy::routes::<C, St, Eas, Auth>())
+        .route(
+            "/member-access",
+            get(member_access::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/email-privacy",
+            get(email_privacy::get_handler::<C, St, Eas, Auth>)
+                .put(email_privacy::update_handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/email-privacy/threads",
+            get(email_privacy::excluded_threads_handler::<C, St, Eas, Auth>),
+        )
         .route(
             "/companies",
             post(create_company::handler::<C, St, Eas, Auth>),
@@ -153,13 +213,22 @@ where
             put(set_company_name::handler::<C, St, Eas, Auth>),
         )
         .route(
+            "/companies/by-domain",
+            get(get_company_by_domain::handler::<C, St, Eas, Auth>),
+        )
+        .route(
             "/companies/{company_id}",
             get(get_company::handler::<C, St, Eas, Auth>),
         )
+        .route("/previews", post(previews::handler::<C, St, Eas, Auth>))
         .route(
             "/companies/{company_id}/contacts",
             get(list_company_contacts::handler::<C, St, Eas, Auth>)
                 .post(create_contact::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/companies/{company_id}/contacts/page",
+            get(list_company_contacts_page::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts",
@@ -177,6 +246,20 @@ where
         .route(
             "/contacts/{contact_id}/hidden",
             put(set_contact_hidden::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/contacts/{contact_id}/email",
+            put(set_contact_email::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/contacts/{contact_id}/emails",
+            put(contact_emails::add_handler::<C, St, Eas, Auth>)
+                .delete(contact_emails::remove_handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/contacts/{contact_id}/company",
+            put(set_contact_company::handler::<C, St, Eas, Auth>)
+                .delete(set_contact_company::unlink_handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}/name",
@@ -225,6 +308,18 @@ impl IntoResponse for CrmError {
                     message: message.into(),
                 }),
             ),
+            CrmError::BlocksConnectedMailbox(reason) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: reason.to_string().into(),
+                }),
+            ),
+            CrmError::AccessDenied => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "CRM access is not enabled for this team member".into(),
+                }),
+            ),
             CrmError::AdminRoleRequired => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
@@ -234,9 +329,51 @@ impl IntoResponse for CrmError {
             CrmError::SettingsAdminRequired => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
+                    message: "changing CRM admin settings requires admin/owner team role".into(),
+                }),
+            ),
+            CrmError::ThreadExclusionsUnavailable => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "thread exclusions are not available".into(),
+                }),
+            ),
+            CrmError::SelectiveEmailUnavailable => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "selective email contribution is not available".into(),
+                }),
+            ),
+            CrmError::EmailPolicyConflict => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
                     message:
-                        "changing crm permission or stage settings requires admin/owner team role"
+                        "email contribution changed; inspect the current policy before retrying"
                             .into(),
+                }),
+            ),
+            CrmError::EmailPolicySharingRefused => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "this credential cannot enable email contribution".into(),
+                }),
+            ),
+            CrmError::EmailPreviewRateLimited => (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorResponse {
+                    message: "wait before starting another email contribution preview".into(),
+                }),
+            ),
+            CrmError::EmailRuleLimitExceeded(error) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: error.to_string().into(),
+                }),
+            ),
+            CrmError::EmailPreviewBudgetExhausted => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    message: "email contribution preview reached its work budget".into(),
                 }),
             ),
             CrmError::StageEditRoleRequired(role) => (
@@ -252,13 +389,13 @@ impl IntoResponse for CrmError {
             CrmError::CompanyHidden => (
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
-                    message: "crm company is hidden; un-hide before enabling email sync".into(),
+                    message: "crm company is archived; restore it before making this change".into(),
                 }),
             ),
             CrmError::CompanyAlreadyExistsForTeam => (
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
-                    message: "a crm company already exists for this domain".into(),
+                    message: "a crm company already exists for this domain; get it with GET /crm/companies/by-domain, which returns an archived company to team admins only".into(),
                 }),
             ),
             CrmError::ContactAlreadyExistsForCompany => (
@@ -267,10 +404,22 @@ impl IntoResponse for CrmError {
                     message: "a crm contact with this email already exists for the company".into(),
                 }),
             ),
+            CrmError::ContactAlreadyExistsForTeam => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "a crm contact with this email already exists for the team".into(),
+                }),
+            ),
             CrmError::CrmDisabledForTeam => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
-                    message: "crm is not enabled for this team".into(),
+                    message: "crm is unavailable for this team".into(),
+                }),
+            ),
+            CrmError::Contended => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    message: "crm records are busy; retry later".into(),
                 }),
             ),
             CrmError::InvalidTeamId | CrmError::StorageLayerError(_) => (

@@ -3,6 +3,15 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 
 const DECLINE_FIELD: &str = "singleValueExtendedProperties.automaticDecline";
 const INSTANCE_DECLINE_FIELD: &str = "instances.singleValueExtendedProperties.automaticDecline";
+/// An exception without the start of the occurrence it replaces. An
+/// `originalStart` Macro cannot parse is `instances.originalStart` instead.
+pub(super) const UNPAIRED_EXCEPTION_FIELD: &str = "instances.originalStart.missing";
+
+/// A normalized event, and the occurrences of its series left out of it.
+pub(super) struct Projection {
+    pub(super) upsert: CalendarEventUpsert,
+    pub(super) skipped: Vec<SkippedOccurrence>,
+}
 
 #[cfg(test)]
 mod test;
@@ -178,7 +187,7 @@ pub(super) fn projection(
     target: &ProviderCalendarTarget,
     master: Value,
     instances: Vec<Value>,
-) -> Result<CalendarEventUpsert, Rejected> {
+) -> Result<Projection, Rejected> {
     let event_id = Uuid::now_v7();
     let time = event_time(&master)?;
     let updated = master["lastModifiedDateTime"]
@@ -258,6 +267,7 @@ pub(super) fn projection(
     };
     let mut occurrences = std::collections::BTreeMap::new();
     let mut overrides = vec![];
+    let mut skipped = vec![];
     for instance in instances {
         if instance["isCancelled"].as_bool() == Some(true) {
             continue;
@@ -266,7 +276,19 @@ pub(super) fn projection(
         let original = original(&instance).map_err(|e| e.under("instances"))?;
         let recurrence_id = original.as_ref().map(EventStart::occurrence_key);
         if instance["type"].as_str() == Some("exception") {
-            let original_time = original.ok_or_else(|| Rejected::at("instances.originalStart"))?;
+            // Neither its slot nor its own details can be told apart from
+            // the series, so it is left out, as Google sync never shows an
+            // exception without its original start, and the rest of the
+            // series still imports.
+            let Some(original_time) = original else {
+                skipped.push(SkippedOccurrence {
+                    provider_id: field(&instance, "id")
+                        .map_err(|e| e.under("instances"))?
+                        .into(),
+                    field: UNPAIRED_EXCEPTION_FIELD.into(),
+                });
+                continue;
+            };
             let instance_preferences = preferences(&instance);
             // Graph may omit inherited extended properties. Preserve the series'
             // extra reminders unless this instance carries its own settings or
@@ -319,7 +341,7 @@ pub(super) fn projection(
             );
         }
     }
-    Ok(CalendarEventUpsert {
+    let upsert = CalendarEventUpsert {
         event,
         source: CalendarEventSource::Outlook(ProviderEventSource {
             automatic_decline: if master["showAs"].as_str() == Some("oof") {
@@ -344,7 +366,8 @@ pub(super) fn projection(
         }),
         overrides,
         occurrences: occurrences.into_values().collect(),
-    })
+    };
+    Ok(Projection { upsert, skipped })
 }
 
 pub(super) fn preferences(event: &Value) -> Value {

@@ -20,6 +20,7 @@ export type DraftStorageSession = {
   /** The epoch this account took over from an account that never signed out, and when. */
   replaced?: { epoch: string; at: number };
 };
+export type LocalDraftListOptions = { omitSendLockedReplies?: boolean };
 /** `writeId` identifies the save that produced the record, so a replay can recognize its own commit. */
 type StoredDraft = LocalDraft & { epoch: string; writeId?: string };
 const STORES = ['drafts', 'files', 'attempts', 'sends', 'meta'] as const;
@@ -273,21 +274,47 @@ export function createLocalDraftStore(
       if (!result) throw new Error('This draft session is no longer active');
       return result;
     },
-    async list(session: DraftStorageSession): Promise<LocalDraft[]> {
+    async list(
+      session: DraftStorageSession,
+      options?: LocalDraftListOptions
+    ): Promise<LocalDraft[]> {
       return await transaction('readonly', (tx, finish) =>
         withSession(
           tx,
           session,
           () => {
             const request = tx.objectStore('drafts').getAll();
-            request.onsuccess = () =>
-              finish(
-                (request.result as StoredDraft[]).filter(
-                  (draft) =>
-                    draft.accountId === session.accountId &&
-                    draft.epoch === session.epoch
-                )
+            request.onsuccess = () => {
+              const drafts = (request.result as StoredDraft[]).filter(
+                (draft) =>
+                  draft.accountId === session.accountId &&
+                  draft.epoch === session.epoch
               );
+              if (
+                !options?.omitSendLockedReplies ||
+                !drafts.some((draft) => draft.content.replying_to_id)
+              ) {
+                finish(drafts);
+                return;
+              }
+              // Read the reply and its reservation in the same snapshot. The
+              // durable send may own a client ID the server has yet to return.
+              const range = IDBKeyRange.bound(['send-lock'], ['send-lock', []]);
+              const locks = tx.objectStore('meta').getAllKeys(range);
+              locks.onsuccess = () => {
+                const locked = new Set<string>();
+                for (const key of locks.result) {
+                  if (Array.isArray(key) && typeof key[1] === 'string')
+                    locked.add(key[1]);
+                }
+                finish(
+                  drafts.filter(
+                    (draft) =>
+                      !draft.content.replying_to_id || !locked.has(draft.key)
+                  )
+                );
+              };
+            };
           },
           finish,
           []
@@ -365,6 +392,8 @@ export function createLocalDraftStore(
                       writeId,
                       latestAttemptId: previous?.latestAttemptId,
                       queuedAttemptId: previous?.queuedAttemptId,
+                      // An edit drops a discard the queue has not admitted.
+                      deleteAttemptId: undefined,
                       attachments: input.attachments.map((attachment) => {
                         if (attachment.type !== 'local') return attachment;
                         const receipt = previous?.attachments.find(

@@ -23,9 +23,15 @@ export interface BucketConfig<T extends MentionItem = MentionItem> {
   label: string;
   getData: () => T[];
   getFullCount: () => number;
+  windowKey?: () => string | undefined;
   hasMore?: () => boolean;
   isLoadingMore?: () => boolean;
   loadMore?: () => Promise<void> | void;
+  /** Whether the listed rows wait for results that will land among them. */
+  holding?: () => boolean;
+  /** Whether a read the category needs failed; `retry` reads it again. */
+  failed?: () => boolean;
+  retry?: () => void;
 }
 
 /**
@@ -112,12 +118,32 @@ class MentionsMenuController {
 
     // Keep people visible while asynchronous entity/email results arrive.
     // Proportional allocation can otherwise remove the person under the pointer.
-    const peopleCount = Math.min(users, PEOPLE_PREVIEW_COUNT, this.targetItems);
+    // While people load, their preview keeps all its rows, so the other
+    // categories do not give up rows when the people land.
+    const previewRows = Math.min(PEOPLE_PREVIEW_COUNT, this.targetItems);
+    const peopleCount = Math.min(users, previewRows);
+    const peopleRows = this.getBucket('users')?.holding?.()
+      ? previewRows
+      : peopleCount;
     return {
       users: peopleCount,
-      ...this.computeBins(otherBins, this.targetItems - peopleCount),
+      ...this.computeBins(otherBins, this.targetItems - peopleRows),
     };
   });
+
+  /**
+   * Placeholder rows a holding category's preview shows below its listed rows,
+   * up to the People preview, so that nothing below them moves when the
+   * results it waits for arrive.
+   */
+  loadingRows(bucketId: string): number {
+    if (!this.getBucket(bucketId)?.holding?.()) return 0;
+    const listed = this.bins()[bucketId] ?? 0;
+    return Math.max(
+      0,
+      Math.min(PEOPLE_PREVIEW_COUNT, this.targetItems) - listed
+    );
+  }
 
   combinedItems = createLazyMemo((): MentionItem[] => {
     const buckets = this.buckets();
@@ -329,7 +355,7 @@ class MentionsMenuController {
     const configs = this.buckets();
     if (!configs) return false;
     const nonEmptyCount = configs.filter(
-      (config) => config.getFullCount() > 0
+      (config) => config.getFullCount() > 0 || config.hasMore?.()
     ).length;
     return nonEmptyCount === 1;
   });
@@ -353,7 +379,9 @@ class MentionsMenuController {
     const currentBins = this.bins();
     const config = this.buckets().find((bucket) => bucket.id === categoryId);
     const abbreviatedCount = currentBins[categoryId] || 0;
-    return (config?.getFullCount() ?? 0) > abbreviatedCount;
+    return (
+      (config?.getFullCount() ?? 0) > abbreviatedCount || !!config?.hasMore?.()
+    );
   }
 
   private computeBins(rawBins: MentionBins, targetItems: number): MentionBins {

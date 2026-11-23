@@ -1,9 +1,11 @@
 use super::*;
 use chrono::Utc;
 use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 mod call_retries;
+mod call_roots;
 mod event_posts;
 mod guest_chat;
 mod initiative;
@@ -21,6 +23,8 @@ struct Repo {
     file_type: Option<String>,
     concurrent_create: bool,
     client_message_id: Option<Uuid>,
+    call_thread: Option<CallThreadFacts>,
+    call_statuses: HashMap<Uuid, CallEntryStatus>,
 }
 
 impl Repo {
@@ -32,6 +36,26 @@ impl Repo {
 }
 
 impl MessageRepository for Repo {
+    async fn account_display_names(
+        &self,
+        _: &[String],
+    ) -> Result<HashMap<String, String>, MessageError> {
+        Ok(HashMap::from([(
+            "macro|author@example.com".into(),
+            "Author Example".into(),
+        )]))
+    }
+    async fn call_thread_facts(&self, _: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
+        Ok(self.call_thread.clone())
+    }
+
+    async fn call_entry_statuses(
+        &self,
+        _: &[Uuid],
+    ) -> Result<HashMap<Uuid, CallEntryStatus>, MessageError> {
+        Ok(self.call_statuses.clone())
+    }
+
     async fn document_file_type(&self, _: &str) -> Result<Option<String>, MessageError> {
         Ok(self.file_type.clone())
     }
@@ -72,6 +96,12 @@ impl MessageRepository for Repo {
             .cloned();
         if let Some(message) = message.as_mut()
             && self.torn_down(message.root_id())
+        {
+            message.deleted_at.get_or_insert_with(Utc::now);
+            message.content.clear();
+        }
+        if let Some(message) = message.as_mut()
+            && self.deletes.lock().unwrap().contains(&message.id)
         {
             message.deleted_at.get_or_insert_with(Utc::now);
             message.content.clear();
@@ -140,6 +170,12 @@ impl MessageRepository for Repo {
         })
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+        if command
+            .canonical_root_id
+            .is_some_and(|root| self.torn_down(root))
+        {
+            return Err(MessageError::NotFound);
+        }
         if command.input.id == Some(self.message.id)
             || (self.client_message_id.is_some() && command.input.id == self.client_message_id)
         {
@@ -244,6 +280,7 @@ fn fixture() -> Repo {
     let user = "macro|author@example.com";
     Repo {
         message: Message {
+            kind: MessageKind::Message,
             id,
             parent: MessageParent::parse("document", "doc").unwrap(),
             thread_id: None,
@@ -285,6 +322,8 @@ fn fixture() -> Repo {
         file_type: Some("md".into()),
         concurrent_create: false,
         client_message_id: None,
+        call_thread: None,
+        call_statuses: HashMap::new(),
     }
 }
 
@@ -726,6 +765,24 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
             .await,
         Err(MessageError::Invalid(_))
     ));
+    for sender in [
+        "participant:00000000-0000-0000-0000-000000000001",
+        "guest|00000000-0000-0000-0000-000000000001",
+    ] {
+        assert!(matches!(
+            service
+                .validate_references(
+                    &access("macro|author@example.com", "doc", AccessLevel::Comment),
+                    vec![SimpleMention {
+                        entity_type: "user".into(),
+                        entity_id: sender.into(),
+                    }],
+                    &[],
+                )
+                .await,
+            Err(MessageError::Invalid("invalid mentioned user"))
+        ));
+    }
 }
 
 fn post_input() -> PostMessage {
@@ -1313,6 +1370,23 @@ struct StrictRepo {
 }
 
 impl MessageRepository for StrictRepo {
+    async fn account_display_names(
+        &self,
+        ids: &[String],
+    ) -> Result<HashMap<String, String>, MessageError> {
+        self.inner.account_display_names(ids).await
+    }
+    async fn call_thread_facts(&self, id: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
+        self.inner.call_thread_facts(id).await
+    }
+
+    async fn call_entry_statuses(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, CallEntryStatus>, MessageError> {
+        self.inner.call_entry_statuses(ids).await
+    }
+
     async fn document_file_type(&self, id: &str) -> Result<Option<String>, MessageError> {
         self.inner.document_file_type(id).await
     }

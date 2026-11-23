@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO stripe_customer_listing (customer_id, listed_at) VALUES ($1, $2)\n                ON CONFLICT (customer_id) DO UPDATE SET listed_at = EXCLUDED.listed_at\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65f5be1a8dea5e1ebc46f3b37ee5e61331c1ba55690ad5f61d890a258c582e45"
+}

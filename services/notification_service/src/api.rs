@@ -15,6 +15,8 @@ pub mod context;
 
 // Routes
 mod health;
+pub(crate) mod notification_settings;
+pub(crate) mod ping;
 mod unsubscribe;
 pub(crate) mod user_notification;
 
@@ -23,11 +25,17 @@ pub(crate) mod swagger;
 pub async fn setup_and_serve<S: ::notification::domain::service::NotificationReader>(
     state: ApiContext,
     ingress_state: NotificationRouterState<S, AuthorizationService>,
+    ping_state: ping::PingState,
 ) -> anyhow::Result<()> {
     let port = state.config.port;
+    let correlation = state.correlation.clone();
     let env = state.config.environment;
-    let app = api_router(state.clone(), ingress_state)
+    let app = api_router(state.clone(), ingress_state, ping_state)
         .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
         .merge(health::router())
         .layer(
             ServiceBuilder::new()
@@ -71,6 +79,7 @@ fn swagger_ui() -> Router {
 fn api_router<S: ::notification::domain::service::NotificationReader>(
     _state: ApiContext,
     ingress_state: NotificationRouterState<S, AuthorizationService>,
+    ping_state: ping::PingState,
 ) -> Router<ApiContext> {
     let middleware = {
         ServiceBuilder::new().layer(axum::middleware::from_fn(
@@ -83,9 +92,13 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
             "/device",
             ::notification::inbound::http::device::device_router::<S, AuthorizationService>(),
         )
-        .nest("/user_notifications", user_notification::router())
+        .nest(
+            "/user_notifications",
+            user_notification::router().merge(ping::router(ping_state)),
+        )
         .with_state(ingress_state)
         .nest("/unsubscribe", unsubscribe::router())
+        .nest("/notification_settings", notification_settings::router())
         .layer(middleware);
     Router::new()
         .nest("/{version}", internal_router.clone())
@@ -100,6 +113,31 @@ mod tests {
         http::{Request, StatusCode},
     };
     use tower::ServiceExt;
+
+    /// The router answers an unknown `/{version}` with "404 invalid api
+    /// version", so a documented path must use a version the service
+    /// accepts, or every client generated from the spec calls a route that
+    /// doesn't exist.
+    #[test]
+    fn documented_paths_use_versions_the_service_accepts() {
+        use std::str::FromStr;
+        let spec = swagger::ApiDoc::openapi();
+        for path in spec.paths.paths.keys() {
+            let Some(version) = path
+                .strip_prefix('/')
+                .and_then(|path| path.split('/').next())
+                .filter(|segment| {
+                    segment.starts_with('v') && segment[1..].chars().all(|c| c.is_ascii_digit())
+                })
+            else {
+                continue;
+            };
+            assert!(
+                model::version::NotificationServiceApiVersion::from_str(version).is_ok(),
+                "{path} is documented under {version}, which the service doesn't serve"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn openapi_is_served_at_root_and_gateway_prefix() {

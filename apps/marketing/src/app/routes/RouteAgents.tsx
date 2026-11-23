@@ -1,10 +1,10 @@
+import IconCompany from '@icon/system/regular/buildings.svg';
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconFolder from '@icon/system/regular/folder-simple.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
-import IconCall from '../../assets/icons/icon-call.svg';
-import IconChannels from '../../assets/icons/icon-channels.svg';
-import IconCompany from '../../assets/icons/icon-company.svg';
-import IconEmail from '../../assets/icons/icon-email.svg';
-import IconFolder from '../../assets/icons/icon-folder.svg';
-import IconTasks from '../../assets/icons/icon-tasks.svg';
 import { AgentThreadWindow } from '../components/graphics/AgentThreadWindow';
 import { AgentsFeatureGrid } from '../components/sections/AgentsFeatureGrid';
 import { AgentsUiGrid } from '../components/sections/AgentsUiGrid';
@@ -1162,7 +1162,7 @@ const contextBlock: LoopsFeatureBlock = {
   ),
   description:
     'Your email, messages, tasks, docs, calls, and CRM — read in a single pass, and distilled into one clear answer.',
-  href: 'https://docs.macro.com/product/agents',
+  href: '/agents#guide',
   heroShot: ContextSpotlight,
   heroBare: true,
 };
@@ -1178,7 +1178,7 @@ const actionsBlock: LoopsFeatureBlock = {
   ),
   description:
     'Ask an agent to turn a call into tasks, draft an email, or update a record — it does it.',
-  href: 'https://docs.macro.com/product/agents',
+  href: '/agents#guide',
   heroShot: ActionsSpotlight,
   heroBare: true,
 };
@@ -1194,7 +1194,7 @@ const scheduleBlock: LoopsFeatureBlock = {
   ),
   description:
     'Set recurring automations — daily briefs, weekly recaps — and find results waiting for you.',
-  href: 'https://docs.macro.com/product/agents',
+  href: '/agents#guide',
   heroShot: ScheduleSpotlight,
   heroBare: true,
 };

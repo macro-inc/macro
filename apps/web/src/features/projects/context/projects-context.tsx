@@ -3,7 +3,12 @@ import type { Property, PropertyApiValues } from '@property/types';
 import type { Accessor, ParentProps } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
 import type { ProjectAssignmentResult } from '../core/assignment';
-import type { Project, ProjectDetail, ProjectFilters } from '../core/project';
+import type {
+  Project,
+  ProjectDetail,
+  ProjectFilters,
+  ProjectIdentity,
+} from '../core/project';
 
 export type ProjectRow = {
   project: Project;
@@ -28,6 +33,11 @@ export type ProjectSource = {
   refresh(): Promise<void>;
 };
 
+/** What a label needs: the name and icon, without the counts, members and sharing. */
+export type ProjectIdentitySource = {
+  project: Accessor<ProjectIdentity | undefined>;
+};
+
 export type ProjectPropertyDraft = {
   property: Property;
   value: PropertyApiValues;
@@ -44,11 +54,17 @@ export type ProjectCreationInput = {
 /** Capabilities supplied by the production entry point or by a test. */
 export type ProjectsContext = {
   userId: Accessor<string | undefined>;
+  /**
+   * Whether a project's dates read as a range and edit their start too; see
+   * `enable-task-start-date`. A host without it shows the due date alone.
+   */
+  startDatesEnabled?: Accessor<boolean>;
   createCollectionSource(
     filters?: Accessor<ProjectFilters>,
     enabled?: Accessor<boolean>
   ): ProjectsSource;
   createProjectSource(id: Accessor<string>): ProjectSource;
+  createProjectIdentitySource(id: Accessor<string>): ProjectIdentitySource;
   createPropertyDefinitionsSource(): {
     properties: Accessor<readonly Property[]>;
     loading: Accessor<boolean>;

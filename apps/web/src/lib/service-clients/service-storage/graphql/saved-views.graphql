@@ -5,6 +5,7 @@ fragment SavedViewFields on GraphqlSavedView {
   config
   sharedTeamId
   revision
+  appearance
   createdAt
   updatedAt
 }
@@ -36,4 +37,8 @@ mutation UpdateSavedView($input: UpdateSavedViewInput!) {
 
 mutation DeleteSavedView($input: DeleteSavedViewInput!) {
   deleteSavedView(input: $input)
+}
+
+mutation ReorderSavedViews($input: ReorderSavedViewsInput!) {
+  reorderSavedViews(input: $input) { ...SavedViewFields }
 }

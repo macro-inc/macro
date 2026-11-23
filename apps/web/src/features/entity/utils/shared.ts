@@ -11,11 +11,13 @@ const OWNER_PRINCIPAL_ROW = [
   'document',
   'form',
   'email',
+  'harness',
   'initiative',
   'project',
 ] as const;
 
 const UNSHARED_ROW = [
+  'team',
   'call',
   'channel',
   'channel_message',

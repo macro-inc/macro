@@ -1,5 +1,6 @@
 /* Frozen website styling. Do not import application styles here. */
 @import "tailwindcss" source(none);
+@import "./site-icons.css";
 
 
 
@@ -178,7 +179,8 @@
   --layer-inset: var(--color-surface-0);
 
   ::selection {
-    background-color: oklch(from var(--color-ink) l c h / 0.1);
+    background-color: #b8d5ff;
+    color: #101820;
   }
 
 }
@@ -431,10 +433,12 @@ body.tauri-ios {
 
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
    inactive split chrome instead of only tinting the outer panel element.
-   Lower lightness directly: mixing with ink reverses the effect in dark themes. */
+   Lower lightness directly: mixing with ink reverses the effect in dark themes.
+   Work in OKLab, which has no hue: Chrome drops the hue of a near-neutral sRGB
+   color converted to OKLCH, and `h` then paints it at 0deg (pink). */
 .split-panel-inactive {
-  --color-panel: oklch(
-    from var(--theme-panel, var(--color-surface-1)) calc(l - 0.025) c h
+  --color-panel: oklab(
+    from var(--theme-panel, var(--color-surface-1)) calc(l - 0.025) a b
   );
 }
 
@@ -1168,15 +1172,6 @@ html[data-touch-device='true'] :is(
     width: 100dvw;
   }
 
-
-  /* scuffed: stops text from being selectable by default for mobile usage */
-  :where(*, ::before, ::after) {
-    user-select: none;
-  }
-
-  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
-    user-select: text;
-  }
 
   /* iOS answers a long-press on an image with its own callout ("Share", "Save
      to Photos", "Copy"), which preempts the app's own long-press affordances

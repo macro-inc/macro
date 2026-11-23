@@ -39,7 +39,8 @@ Add one `defineFlag` next to its neighbors. Do not add `ENABLE_*_FLAG` /
   (`DEV_MODE_ENV || undefined`), not the boolean itself. If it must stay off in
   dev, say why in a comment above it. On a remote flag, `false` is a real
   override and **skips PostHog**. On-in-local only is
-  `LOCAL_ONLY || undefined` (the Vite dev server and `just stack` bundles).
+  `LOCAL_ONLY || undefined` (the Vite dev server and `just run_local
+  --static-frontend` or `just stack` bundles).
 - Never invert on the flag object. If the product question is "disable X",
   invert at the call site (`!isFeatureEnabled(disableX)`).
 - Env-only exports that are used as `if (ENABLE_FOO)` must be the boolean:
@@ -72,8 +73,8 @@ isFeatureEnabled(enableFoo)            // queries, helpers, env-only
 ```
 
 A thin `useXFlag` wrapper around `useFeatureFlag(flag)` is fine when several
-call sites share the same read. Compose flags in the wrapper (calendar search
-requires calendar UI), not on the flag object.
+call sites share the same read. Compose flags in the wrapper (a sub-feature that
+requires its parent feature), not on the flag object.
 
 `useFeatureFlag` / `ShowFeatureFlag` take a `RemoteFlag`. Passing an env-only
 flag is a type error.
@@ -85,7 +86,11 @@ These are the mistakes past flagged launches had to fix:
 - **Loading is not off.** Until PostHog answers, `isFeatureEnabled` returns
   `false` and `useFeatureFlag` returns `{ loading: true }`. A cold deep link
   must wait for `loading` to clear rather than fall back to the off path (see
-  `block-database`'s `load`), or the page flashes or degrades.
+  the Activity route's `flagsLoaded` gate), or the page flashes or degrades.
+  A build that never starts PostHog (no `VITE_POSTHOG_API_KEY`, or the Vite
+  dev server) answers at once, as an unreachable PostHog does: every flag
+  without a `default` or env override reads off, not loading (on for a reader
+  that passes `enabledWhenUnreachable`).
 - **Read reactively** (FE-52): call `isFeatureEnabled` / `useFeatureFlag` inside
   a reactive scope, never snapshot it at mount or module load.
 - **Gate every entry point**: routes, deep links, previews, copy-link,
@@ -97,12 +102,26 @@ These are the mistakes past flagged launches had to fix:
   can no longer be turned off from PostHog; use `undefined` so PostHog stays in
   control.
 
+Dev and prod share one PostHog project and the same user IDs. To roll out to
+dev only, target the person property `environment = dev`; a release
+condition on user IDs alone also matches in prod. Web (`analytics.ts`) and
+backend (`crates/feature_flags`) both send `prod`, `dev`, or `local` (local
+stacks); a web build in any other mode sends `unknown`. Put the condition in
+the same release-condition set as the user IDs, as a person property: cohort
+and group conditions ignore this override.
+
 ## 5. Backend
 
 - **Per-user remote flags** use `crates/feature_flags` (read its `README.md`):
   construct `PostHogFeatureFlags` once at the composition root, load one
   `FlagSnapshot` per authenticated user id, and read it synchronously. A failed
   load returns `Err`; the caller decides the fallback, explicitly. Wire the adapter and its config at the consuming service composition root.
+- **A flag checked per event or per row** (thousands of loads an hour) uses
+  `PostHogLocalFeatureFlags` instead: it polls the named flags' definitions
+  with a project secret key (a second Doppler key) and evaluates them in
+  memory. Keep such a flag's conditions to what it supports (person `email`,
+  `distinct_id` or `environment`, a rollout percentage); anything else fails
+  every load.
 - **Every backend rollout or feature gate**, per user or for everyone, is a
   `crates/feature_flags` flag, never a `MacroConfig`/Doppler boolean.
   `MacroConfig` holds real environment configuration (endpoints, credentials,
@@ -113,7 +132,9 @@ These are the mistakes past flagged launches had to fix:
 ## 6. Remove it
 
 When a flag is fully rolled out, delete the `defineFlag`, every reader, and the
-off path in the same change, and say which PostHog flag can be archived.
+off path in the same change, and say which PostHog flag can be archived. A
+rolled-out flag still hides its feature when the flag request fails or is
+blocked, so remove it soon after rollout.
 
 ## Don't
 

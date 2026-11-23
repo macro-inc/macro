@@ -37,6 +37,10 @@ export function TasksContent(props: TaskListProps) {
             emptyContent={props.emptyContent}
             loadingContent={props.loadingContent}
             errorContent={props.errorContent}
+            listStart={props.listStart}
+            scrollContainer={props.scrollContainer}
+            scrollStart={props.scrollStart}
+            stickyInset={props.stickyInset}
           />
         </Match>
       </Switch>

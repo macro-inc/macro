@@ -103,6 +103,17 @@ impl EntityAccessManagementRepository for PgRepository {
     ) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
         entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
+        // Before the old folders' grants go: what the project already holds
+        // through them is no new access.
+        if let Some(new_project_id) = new_project_id {
+            entity_access_db_utils::project_grants::refuse_filing(
+                &mut transaction,
+                project_id,
+                EntityType::Project,
+                new_project_id,
+            )
+            .await?;
+        }
 
         // The project entities we will need to update (including the project itself)
         let project_entities = self

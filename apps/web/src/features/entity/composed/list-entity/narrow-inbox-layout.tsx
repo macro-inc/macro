@@ -22,7 +22,7 @@ import {
   ChannelMessageNarrowBody,
 } from './channel';
 import { EmailIdentity, EmailInboxChip, EmailNarrowBody } from './email';
-import { InboxDivider, type LayoutProps } from './shared';
+import { classicWeight, InboxDivider, type LayoutProps } from './shared';
 import { TaskNarrowBody } from './task';
 
 export function NarrowInboxLayout(props: LayoutProps) {
@@ -58,16 +58,34 @@ export function NarrowInboxLayout(props: LayoutProps) {
         placement="icon"
         class="flex items-center self-center pr-(--soup-inbox-icon-padding-r)"
       >
-        <UnreadIndicator
-          class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)"
-          active={props.unread}
-        />
+        <Show
+          when={props.classic && !props.hideCheckbox}
+          fallback={
+            <UnreadIndicator
+              class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)"
+              active={props.unread && !props.classic}
+            />
+          }
+        >
+          {/* Classic keeps the checkbox in the unread dot's column, beside the
+              sender's picture, so selecting never covers who it's from. */}
+          <div class="h-(--soup-inbox-icon-diameter) w-(--soup-inbox-unread) shrink-0">
+            <MultiSelectCheckbox
+              checked={props.checked}
+              onChecked={props.onChecked}
+              showBorder
+            />
+          </div>
+        </Show>
         <div class="relative size-(--soup-inbox-icon-diameter) shrink-0 group">
-          <Show when={props.hideCheckbox || !props.checked}>
+          <Show when={props.hideCheckbox || props.classic || !props.checked}>
             <div
               class={cn(
                 'absolute inset-0 grid place-items-center transition-opacity',
-                { 'group-hover:opacity-0': !props.hideCheckbox }
+                {
+                  'group-hover:opacity-0':
+                    !props.hideCheckbox && !props.classic,
+                }
               )}
             >
               <Show
@@ -93,7 +111,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
               </Show>
             </div>
           </Show>
-          <Show when={!props.hideCheckbox}>
+          <Show when={!props.hideCheckbox && !props.classic}>
             {/* TODO: make multiselect work on mobile */}
             <div
               class={cn(
@@ -112,7 +130,10 @@ export function NarrowInboxLayout(props: LayoutProps) {
 
       <Entity.Slot
         placement="title"
-        class="ph-no-capture flex items-center gap-2 truncate font-semibold pt-3"
+        class={cn(
+          'ph-no-capture flex items-center gap-2 truncate pt-3',
+          props.classic ? classicWeight(props.unread) : 'font-semibold'
+        )}
       >
         <Show
           when={isEmailEntity(props.entity) && props.entity}
@@ -129,7 +150,12 @@ export function NarrowInboxLayout(props: LayoutProps) {
 
       <Entity.Slot
         placement="timestamp"
-        class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
+        class={cn(
+          'flex items-center justify-end gap-1 text-xs text-right pt-3 pr-4',
+          props.classic ? classicWeight(props.unread) : 'font-light',
+          // A Classic unread date reads like its sender and subject.
+          props.classic && props.unread ? 'text-ink' : 'text-ink-extra-muted'
+        )}
       >
         {props.leadingAction}
         {props.referenceProperties}
@@ -161,6 +187,9 @@ export function NarrowInboxLayout(props: LayoutProps) {
               showHitSnippet={props.showHitSnippet}
               setContainerRef={props.setSnippetContainerRef}
               previewLeading={props.previewLeading}
+              subjectClass={
+                props.classic ? classicWeight(props.unread) : undefined
+              }
             />
           )}
         </Match>
@@ -184,7 +213,8 @@ export function NarrowInboxLayout(props: LayoutProps) {
           <Entity.Slot placement="body" class="pb-2 min-h-[2lh] pr-4" />
         </Match>
       </Switch>
-      <InboxDivider />
+      {/* Classic rows draw their wall-to-wall line over this pixel. */}
+      <InboxDivider hidden={props.classic} />
     </Entity.Layout>
   );
 }

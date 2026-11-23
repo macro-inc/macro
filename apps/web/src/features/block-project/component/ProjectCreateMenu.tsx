@@ -2,18 +2,16 @@ import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableAiEditor,
-  enableChatV3Agents,
   enableFigViewer,
   enablePsdEditor,
   isFeatureEnabled,
@@ -22,7 +20,6 @@ import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
   createCanvasFile,
-  createChat,
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
@@ -40,17 +37,25 @@ type MenuItemProps = {
   action: () => void | Promise<void>;
 };
 
-type CreateBlockSpec = {
+type CreateSpecBase = {
   label: string;
   blockName: BlockName | BlockAlias;
   hotkeyToken: HotkeyToken;
   icon: Component;
+};
+
+type CreateBlockSpec = CreateSpecBase & {
   loading?: boolean;
   createFn: (projectId: string) => Promise<string>;
   params?: ObjectLike;
 };
 
-const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
+/** Opens a new agent conversation that mentions the folder. */
+type AgentCreateSpec = CreateSpecBase;
+
+type CreateSpec = CreateBlockSpec | AgentCreateSpec;
+
+const BLOCK_CREATE_SPECS: CreateSpec[] = [
   {
     get label() {
       return t('create.spreadsheetLabel');
@@ -138,14 +143,6 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
         <EntityIcon targetType="chat" size="shrinkFill" theme="monochrome" />
       </div>
     ),
-    createFn: async (projectId) => {
-      const result = await createChat({ projectId });
-      if ('error' in result) {
-        console.error(result.error);
-        throw new Error(t('create.failedToCreateChat'));
-      }
-      return result.chatId;
-    },
   },
   {
     get label() {
@@ -307,6 +304,33 @@ function makeCreateBlock({
   };
 }
 
+function runCreateSpec(
+  spec: CreateSpec,
+  project: { id: string; name: string },
+  createBlock: ReturnType<typeof makeCreateBlock>
+) {
+  if (!('createFn' in spec)) {
+    fireAndForget(
+      openChatWithAgent({
+        type: 'project',
+        id: project.id,
+        name: project.name,
+      }),
+      'project-create'
+    );
+    return;
+  }
+  fireAndForget(
+    createBlock({
+      blockName: spec.blockName,
+      loading: spec.loading,
+      createFn: () => spec.createFn(project.id),
+      params: spec.params,
+    }),
+    'project-create'
+  );
+}
+
 function ProjectCreateDialog(props: {
   open: boolean;
   onClose: () => void;
@@ -315,9 +339,7 @@ function ProjectCreateDialog(props: {
 }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
-  const spreadsheetAccess = useSpreadsheetAccess();
-  const offered = (spec: CreateBlockSpec) => {
-    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+  const offered = (spec: CreateSpec) => {
     if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
     if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
     if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
@@ -338,28 +360,10 @@ function ProjectCreateDialog(props: {
                   class="flex items-center gap-2 py-1 text-sm hover:bg-hover w-full text-left min-h-11"
                   onClick={() => {
                     props.onClose();
-                    if (
-                      spec.blockName === 'chat' &&
-                      isFeatureEnabled(enableChatV3Agents)
-                    ) {
-                      fireAndForget(
-                        openChatWithAgent({
-                          type: 'project',
-                          id: props.projectId,
-                          name: props.name,
-                        }),
-                        'project-create'
-                      );
-                      return;
-                    }
-                    fireAndForget(
-                      createBlock({
-                        blockName: spec.blockName,
-                        loading: spec.loading,
-                        createFn: () => spec.createFn(props.projectId),
-                        params: spec.params,
-                      }),
-                      'project-create'
+                    runCreateSpec(
+                      spec,
+                      { id: props.projectId, name: props.name },
+                      createBlock
                     );
                   }}
                 >
@@ -391,9 +395,7 @@ function MenuItem(props: MenuItemProps) {
 function MenuContent(props: { projectId: string; name: string }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
-  const spreadsheetAccess = useSpreadsheetAccess();
-  const offered = (spec: CreateBlockSpec) => {
-    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+  const offered = (spec: CreateSpec) => {
     if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
     if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
     if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
@@ -404,25 +406,12 @@ function MenuContent(props: { projectId: string; name: string }) {
     BLOCK_CREATE_SPECS.filter(offered).map((spec) => ({
       label: spec.label,
       Icon: spec.icon,
-      action: () => {
-        if (spec.blockName === 'chat' && isFeatureEnabled(enableChatV3Agents)) {
-          fireAndForget(
-            openChatWithAgent({
-              type: 'project',
-              id: props.projectId,
-              name: props.name,
-            }),
-            'project-create'
-          );
-          return;
-        }
-        return createBlock({
-          blockName: spec.blockName,
-          loading: spec.loading,
-          createFn: () => spec.createFn(props.projectId),
-          params: spec.params,
-        });
-      },
+      action: () =>
+        runCreateSpec(
+          spec,
+          { id: props.projectId, name: props.name },
+          createBlock
+        ),
     }));
 
   return (

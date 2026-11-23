@@ -14,6 +14,14 @@ characters inside a URL remain literal. Code, existing links, mention payloads,
 and escaped URL text retain their own syntax. Existing bare URLs become clickable
 when imported; their source Markdown is not rewritten in storage.
 
+An editor links a typed or pasted URL only once the caret leaves it, so a
+message sent right after its URL holds the URL as plain text, and Lexical's
+export escapes its `*`, `_`, `` ` `` and `~`. Import therefore links a URL whose
+only escapes are of those characters; any other escape, such as `\.` or `\:`,
+keeps it literal. `$convertToMarkdownString` also writes such a URL in unformatted text
+without those escapes, so stored Markdown carries the URL as typed. Formatted
+text keeps them, because a raw `*` or `~` would pair with the format's markers.
+
 The editor and parser share URL validation and normalization. Preserve existing
 percent escapes, use the HTTP/HTTPS/mailto allowlist, and continue past rejected
 matches to find later valid links.
@@ -29,6 +37,16 @@ removed links as escaped literal text.
 Before this marker existed, removed links could be saved as plain URL text or as
 ordinary link payloads. Their original intent cannot be recovered; legacy bare
 URLs follow the automatic-linking policy.
+
+Saved content can name any URL, so a link keeps a URL only when
+`isAllowedLinkUrl` (`utils/link-url.ts`) accepts it: http, https, mailto, sms or
+tel (the schemes Lexical's `LinkNode` opens), or a relative URL. It parses the
+URL as a browser resolves an `href`, after Markdown unescaping. An `<m-link>` or
+Markdown link to any other URL imports as its text alone; use
+`STANDARD_TRANSFORMERS` from `transformers/customTransformers.ts`, never
+Lexical's `TRANSFORMERS`, whose `LINK` does not check. PR and booking mentions
+drop such a URL from saved JSON, and the web renderers check again before
+rendering an anchor or opening a URL.
 
 ## Canvas text
 

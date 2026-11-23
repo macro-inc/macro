@@ -5,6 +5,7 @@ import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
+  createMemo,
   type JSX,
   Match,
   onCleanup,
@@ -48,6 +49,7 @@ import type {
   DatabaseColumnCastsSource,
   DatabaseColumnConversion,
   DatabaseColumnTypeChange,
+  DatabaseRelationTargets,
   DatabaseSchemaChange,
 } from '../core/column-schema';
 import type {
@@ -127,14 +129,17 @@ export type DatabaseRecordsViewProps = {
   onComposeRecord?: (values: Record<string, DatabaseCellValue>) => void;
   renderTextEditor?: GridCellProps['renderTextEditor'];
   renderTextValue?: GridCellProps['renderTextValue'];
+  renderLinkValue?: GridCellProps['renderLinkValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
+  /** Opens a record someone clicks somewhere else, in place of the record panel, as a view in a document opens its database; returns whether it did, else the panel opens. */
+  onOpenRecord?: (rowId: string) => boolean;
   /** Opens document/file references in any column, including record panel fields. */
   onOpenDocumentMention?: (id: string) => void;
   /** Opens what a record's title mentions, such as a pipeline row's company, in place of editing it. */
   onOpenTitleMention?: (id: string, type: DatabaseEntityType) => void;
   renderRelationCell?: (props: RelationCellProps) => JSX.Element;
-  relationTables?: { id: string; name: string }[];
+  relationTables?: DatabaseRelationTargets;
   columnCasts?: DatabaseColumnCastsSource;
   onCellFocus?: (cell: DatabaseCellFocus | undefined) => void;
   remoteUsers?: DatabaseCellPresence[];
@@ -196,6 +201,16 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     return true;
   }
 
+  // The button is built again only when its label changes. Renaming a column
+  // changes `columns()`, and a button rebuilt then, as the blur that saves the
+  // name runs, takes the pointer press from under the user: no click follows.
+  const addColumnLabel = createMemo(() =>
+    columns().length ? undefined : 'Add first column'
+  );
+  const addColumn = createMemo(() =>
+    props.addColumn?.(addColumnLabel(), focusColumn)
+  );
+
   const columnLayout = createColumnLayout({
     view: () => props.view,
     columns,
@@ -225,6 +240,12 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     constrained: filtered,
     editCell,
   });
+  // Records the view itself opens, such as one just created, stay in its panel.
+  function openRecord(rowId: string) {
+    const savedId = draftRows.savedRowId(rowId);
+    if (savedId && props.onOpenRecord?.(savedId)) return;
+    records.open(rowId);
+  }
   const gridRows = createHeldGridRows({
     rows: () =>
       props.canEdit && visibleColumns().some(canEditCell)
@@ -346,11 +367,13 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           <GridCell
             {...options}
             column={column()}
+            rowCells={row().cells}
             emptyLabel={options?.emptyLabel ?? ''}
             value={rowValue(row(), column().id)}
             canEdit={props.canEdit}
             renderTextEditor={props.renderTextEditor}
             renderTextValue={props.renderTextValue}
+            renderLinkValue={props.renderLinkValue}
             renderMentionPicker={props.renderMentionPicker}
             renderMentionValue={props.renderMentionValue}
             onOpenMention={
@@ -485,7 +508,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                     ? 'Open the record to view or edit it.'
                     : `“${rowTitle(row(), columns())}” doesn’t match your filters.`
               }
-              onOpen={() => records.open(row().rowId)}
+              onOpen={() => openRecord(row().rowId)}
               onDismiss={records.dismissHiddenRecord}
             />
           )}
@@ -546,11 +569,12 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               renderCell={renderCell}
               renderTextValue={props.renderTextValue}
+              renderLinkValue={props.renderLinkValue}
               renderMentionValue={props.renderMentionValue}
               rowPending={controller.rowPending}
               createPending={controller.createPending}
               createComplete={controller.createComplete}
-              onOpen={records.open}
+              onOpen={openRecord}
               onCreate={records.createRow}
               onCompose={props.onComposeRecord}
               controlsRef={(controls) => {
@@ -570,7 +594,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                 !props.stored || props.canEdit ? props.onViewChange : undefined
               }
               rowPending={controller.rowPending}
-              onOpen={records.open}
+              onOpen={openRecord}
               onCreate={records.createRow}
               onWrite={writeRowCell}
               onCompose={props.onComposeRecord}
@@ -595,7 +619,10 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                         .filter((id): id is string => id !== undefined);
                       const writable = columnIds.filter((id) =>
                         columns().some(
-                          (column) => column.id === id && canEditCell(column)
+                          (column) =>
+                            column.id === id &&
+                            canEditCell(column) &&
+                            column.nullable !== false
                         )
                       );
                       if (!savedRows.length || !writable.length) return true;
@@ -641,22 +668,20 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               canEdit={props.canEdit}
               pending={controller.pending()}
-              addColumn={props.addColumn?.(
-                columns().length ? undefined : 'Add first column',
-                focusColumn
-              )}
+              addColumn={addColumn()}
               renderCell={renderCell}
               renderCellPreview={(row, column) => (
                 <GridCellPreview
                   column={column()}
                   value={rowValue(row(), column().id)}
+                  rowCells={row().cells}
                   canEdit={props.canEdit}
                 />
               )}
               controlsRef={tableReady}
               titleColumnId={titleColumn(columns())?.id}
               getRowTitle={(row) => rowTitle(row, columns())}
-              onOpen={records.open}
+              onOpen={openRecord}
               onDuplicate={records.duplicateRow}
               onRequestDelete={records.requestDelete}
               relationTables={props.relationTables}

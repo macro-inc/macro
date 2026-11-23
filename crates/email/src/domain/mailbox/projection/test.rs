@@ -1,4 +1,6 @@
 use super::*;
+use crate::domain::mailbox::{DatabaseFailure, EffectFailure};
+use crate::domain::models::error::LOCK_NOT_AVAILABLE;
 use models_email::service::{address::ContactInfo, link::UserProvider};
 
 fn context() -> ProjectionContext {
@@ -91,6 +93,7 @@ fn notification_retry_preserves_ids_and_staff_push_policy() {
         },
         from_current_generation: true,
         attempts: 1,
+        unfinished_claims: 0,
     };
     let first = notifications(&lease, &context);
     let retry = notifications(&lease, &context);
@@ -125,4 +128,52 @@ fn user_category_keeps_its_event_type_and_publication_identity() {
         first.event().event,
         EmailTopicEvent::ThreadLabelsUpdated(_)
     ));
+}
+
+#[tokio::test]
+async fn persisted_projection_restores_invocation_when_publishing_later() {
+    use macro_event_broker::MacroEvent;
+    let context = context();
+    let id = Uuid::now_v7();
+    let event: ProjectionEvent = serde_json::from_value(serde_json::json!({
+        "kind": "organization", "thread_id": Uuid::now_v7(),
+        "agent_correlation_id": id,
+    }))
+    .unwrap();
+    let persisted = serde_json::to_vec(&event).unwrap();
+    let restored: ProjectionEvent = serde_json::from_slice(&persisted).unwrap();
+    let published = agent_correlation::context::scope(restored.agent_correlation_id(), async {
+        organization_event(
+            &context.link,
+            Uuid::now_v7(),
+            context.link.macro_id.clone(),
+            &crate::domain::models::mailbox_action::MailboxAction::Category {
+                name: "TRASH".into(),
+                present: true,
+            },
+        )
+    })
+    .await;
+    assert_eq!(published.event().agent_correlation_id, Some(id));
+    let legacy: ProjectionEvent = serde_json::from_value(
+        serde_json::json!({"kind": "organization", "thread_id": Uuid::now_v7()}),
+    )
+    .unwrap();
+    assert_eq!(legacy.agent_correlation_id(), None);
+}
+
+#[test]
+fn refused_attachments_stop_sooner_and_worker_failures_never_count() {
+    let gone = MailboxError::Provider(EmailApiError::NotFound);
+    assert_eq!(attachment_failure_limit(&gone), Some(3));
+
+    let upload = MailboxError::Effect(EffectFailure::AttachmentUpload {
+        attachment_id: Uuid::nil(),
+    });
+    assert_eq!(attachment_failure_limit(&upload), Some(50));
+
+    let lock_timeout = MailboxError::database(DatabaseFailure::Sqlstate(LOCK_NOT_AVAILABLE.into()));
+    for error in [lock_timeout, MailboxError::Stale] {
+        assert_eq!(attachment_failure_limit(&error), None);
+    }
 }

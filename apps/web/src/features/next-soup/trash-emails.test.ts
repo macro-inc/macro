@@ -63,11 +63,6 @@ vi.mock('@queries/client', () => ({
     setQueryData: operationMocks.setQueryData,
   },
 }));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: operationMocks.refreshGraphqlSoup,
 }));
@@ -80,21 +75,15 @@ vi.mock('@queries/notification/entity-mutations', () => ({
 vi.mock('@queries/notification/user-notifications', () => ({
   bulkMarkNotificationsAsDone: vi.fn(async () => {}),
   bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
-  restoreUserNotifications: vi.fn(),
-  snapshotUserNotifications: vi.fn(() => []),
 }));
 vi.mock('@queries/soup/cache', () => ({
   getSoupEntityById: vi.fn(),
   invalidateSoupEntity: operationMocks.invalidateSoupEntity,
   optimisticUpdateSoupEntity: vi.fn(() => ({ rollback: vi.fn() })),
   removeSoupEntities: vi.fn(() => ({ rollback: vi.fn() })),
-  removeSoupEntitiesFromDoneFilteredQueries: vi.fn(() => ({
-    rollback: vi.fn(),
-  })),
 }));
 vi.mock('@service-email/client', () => ({
   emailClient: {
-    flagArchived: vi.fn(async () => {}),
     getUserLabels: vi.fn(async () => ({ labels: [] })),
     updateThreadState: operationMocks.updateThreadState,
   },

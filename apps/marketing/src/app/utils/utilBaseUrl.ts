@@ -1,5 +1,8 @@
-export const APP_BASE_URL =
-  import.meta.env.VITE_APP_BASE_URL || 'https://macro.com';
+import { resolveAppBaseUrl } from './appBaseUrl';
+
+export const APP_BASE_URL = resolveAppBaseUrl(
+  import.meta.env.VITE_APP_BASE_URL
+);
 
 export const GOOGLE_SSO_URL =
   import.meta.env.VITE_GOOGLE_SSO_URL ||

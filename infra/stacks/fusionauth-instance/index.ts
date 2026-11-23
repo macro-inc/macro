@@ -509,8 +509,10 @@ new FusionAuthIdpOpenIdConnect(
 );
 
 // -- Microsoft
+const MICROSOFT_COMMON_AUTHORITY = 'https://login.microsoftonline.com/common';
+
 if (config.get('microsoft-idp-secret-key')) {
-  const { client_id, client_secret, tenant_id } = aws.secretsmanager
+  const { client_id, client_secret } = aws.secretsmanager
     .getSecretVersionOutput({
       secretId: config.require('microsoft-idp-secret-key'),
     })
@@ -519,16 +521,40 @@ if (config.get('microsoft-idp-secret-key')) {
         JSON.parse(secret.secretString) as {
           client_id: string;
           client_secret: string;
-          tenant_id: string;
         }
     );
 
-  if (!client_id || !client_secret || !tenant_id) {
+  if (!client_id || !client_secret) {
     throw new Error(
-      'incorrectly configured microsoft idp secret. expected {client_id:"", client_secret:"", tenant_id:""'
+      'incorrectly configured microsoft idp secret. expected {client_id:"", client_secret:""}'
     );
   }
 
+  // Refuses a Microsoft sign-in unless its verified id_token says Microsoft
+  // verified the email's domain (`xms_edov`); see the template.
+  const reconcileMicrosoftSigninLambda = new FusionAuthLambda(
+    'reconcile-microsoft-signin-lambda',
+    {
+      lambdaId: 'f46fbceb-6db0-471c-a08d-12e7ac2b56ef',
+      name: 'reconcile_microsoft_signin',
+      type: 'OpenIDReconcile',
+      debug: stack !== 'prod',
+      body: fs.readFileSync(
+        './templates/reconcile_microsoft_signin.js',
+        'utf-8'
+      ),
+    },
+    { provider: fusionAuthProvider }
+  );
+
+  // Sign in with Microsoft. The `common` authority admits work, school, and
+  // personal accounts from any tenant; a tenant-specific issuer would admit
+  // only one directory. FusionAuth discovers the endpoints and signing keys
+  // from the issuer, so it verifies the id_token and can read `xms_edov`
+  // from it; with hand-set endpoints it would see userinfo claims only, which
+  // never say whether the email is verified. Hand-set endpoints are ignored
+  // once an issuer is set. Sign-in asks for identity only: mailbox access
+  // comes from the separate `/link/outlook` consent, which uses its own grant.
   new FusionAuthIdpOpenIdConnect(
     'microsoft-idp',
     {
@@ -537,12 +563,13 @@ if (config.get('microsoft-idp-secret-key')) {
       oauth2ClientId: client_id,
       oauth2ClientSecret: client_secret,
       oauth2ClientAuthenticationMethod: 'client_secret_basic',
-      oauth2Issuer: pulumi.interpolate`https://login.microsoftonline.com/${tenant_id}/v2.0`,
+      oauth2Issuer: `${MICROSOFT_COMMON_AUTHORITY}/v2.0`,
       buttonText: 'Microsoft',
-      oauth2Scope:
-        'openid email offline_access profile Mail.ReadWrite Mail.Send',
+      oauth2Scope: 'openid email profile offline_access',
       oauth2UniqueIdClaim: 'sub',
+      oauth2EmailVerifiedClaim: 'xms_edov',
       linkingStrategy: 'LinkByEmail',
+      lambdaReconcileId: reconcileMicrosoftSigninLambda.lambdaId,
       debug: stack !== 'prod',
       applicationConfigurations: [
         {

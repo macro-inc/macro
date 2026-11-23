@@ -17,3 +17,22 @@ fragment SoupNotificationsEntityFields on GraphqlSoupEntity {
 		...SoupNotificationFields
 	}
 }
+
+# One entity's complete unread edge, for marking the messages on screen read.
+# Read notifications are left out, as on an open channel: the unfiltered edge
+# keeps one seen row per notified message.
+query SoupUnseenNotifications($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				notifications(filter: { states: [UNSEEN] }) {
+					...SoupNotificationFields
+				}
+			}
+			nextCursor
+		}
+	}
+}

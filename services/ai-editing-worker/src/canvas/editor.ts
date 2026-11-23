@@ -87,6 +87,31 @@ export class CanvasEditor {
   ) {
     this.add({ kind: 'order', ids, position });
   }
+  createArtifact(
+    options: Omit<Extract<CanvasOp, { kind: 'createArtifact' }>, 'kind' | 'id'>
+  ): string {
+    const id = this.nextId();
+    this.add({ ...options, kind: 'createArtifact', id });
+    return id;
+  }
+  artifactSource(
+    id: string,
+    content: Omit<Extract<CanvasOp, { kind: 'artifactSource' }>, 'kind' | 'id'>
+  ) {
+    this.add({ ...content, kind: 'artifactSource', id });
+  }
+  artifactEdit(id: string, find: string, replace: string) {
+    this.add({ kind: 'artifactEdit', id, find, replace });
+  }
+  defineStyle(name: string, css: string | null) {
+    this.add({ kind: 'defineStyle', name, css });
+  }
+  defineComponent(name: string, html: string | null) {
+    this.add({ kind: 'defineComponent', name, html });
+  }
+  presentOrder(ids: string[]) {
+    this.add({ kind: 'presentOrder', ids });
+  }
   drain(): CanvasOp[] {
     return this.ops.splice(0);
   }

@@ -107,8 +107,8 @@ export function getCompanySelectOptionId(
 }
 
 /**
- * Find the team's stage definition (with options) in a team-scope
- * definitions listing, if the team has customized stages.
+ * Find the team's stage definition (with options) in a definitions listing
+ * of any scope, if the team has customized stages.
  */
 export function findTeamStageDefinition(
   definitions: PropertyDefinitionResponse[] | undefined

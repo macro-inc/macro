@@ -199,8 +199,8 @@ document `nc` (name contains) literal was added for scoped task search.
 
 **Resolution.** `SoupImpl` resolves every named record before any source query:
 `CrmService::resolve_association` authorizes the record with the viewer-scoped
-contact-listing policy (membership of a CRM-enabled team; hidden companies and
-contacts only for admins and owners; team-scoped bots restricted to their team)
+contact-listing policy (team membership, independent of email consent; hidden
+companies and contacts only for admins and owners; team-scoped bots restricted to their team)
 and returns the company with all of its visible contacts, or the single contact.
 An invisible record is `404` (`SoupErr::CrmRecordNotFound`), never an empty
 page. Edges are then read as complete sets: `SoupRepo::crm_property_edges`

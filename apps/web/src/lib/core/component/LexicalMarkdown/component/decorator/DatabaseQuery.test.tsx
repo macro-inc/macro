@@ -17,7 +17,7 @@ import {
   ParagraphNode,
   TextNode,
 } from 'lexical';
-import { createSignal, type JSX, onCleanup } from 'solid-js';
+import { type JSX, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -37,9 +37,7 @@ const control = vi.hoisted(() => ({
   clicks: 0,
   deferSaved: false,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableDatabases: { key: 'enable-databases' },
-}));
+vi.mock('@core/constant/featureFlags', () => ({}));
 vi.mock('../../context/LexicalWrapperContext', async () => ({
   LexicalWrapperContext: (await import('solid-js')).createContext(),
 }));
@@ -118,32 +116,34 @@ describe('database answer rollout', () => {
     }
   });
 
-  it('keeps the saved title without mounting live query wiring when disabled', async () => {
-    const [enabled, setEnabled] = createSignal(false);
-    control.enabled = enabled;
-    control.mounts = 0;
-    control.cleanups = 0;
-    const rendered = render(() => (
-      <DatabaseQuery
-        key="query"
-        theme={{}}
-        queryId="saved-query"
-        prompt="How many?"
-        title="Open tickets"
-        displayMode="scalar"
-      />
-    ));
-    expect(rendered.getByText('Open tickets')).toBeTruthy();
-    expect(control.mounts).toBe(0);
-    setEnabled(true);
-    await waitFor(() =>
-      expect(rendered.getByText('Interactive answer')).toBeTruthy()
-    );
-    expect(control.mounts).toBe(1);
-    setEnabled(false);
-    expect(rendered.getByText('Open tickets')).toBeTruthy();
-    expect(control.cleanups).toBe(1);
-    rendered.unmount();
+  it('holds a saved block’s place with its card until the answer code loads', () => {
+    control.enabled = () => true;
+    control.deferSaved = true;
+    try {
+      const saved = render(() => (
+        <DatabaseQuery
+          key="saved"
+          theme={{}}
+          queryId="saved"
+          prompt=""
+          displayMode="table"
+          title="Meetings"
+          height={240}
+        />
+      ));
+      expect(saved.getByText('Meetings')).toBeTruthy();
+      expect(
+        saved.getByRole('status', { name: 'Loading answer' })
+      ).toBeTruthy();
+      const viewport = saved.container.querySelector<HTMLElement>(
+        '[data-answer-viewport]'
+      );
+      expect(viewport?.style.height).toBe('240px');
+      expect(saved.queryByText('Interactive answer')).toBeNull();
+      saved.unmount();
+    } finally {
+      control.deferSaved = false;
+    }
   });
 });
 
@@ -235,11 +235,11 @@ function renderBlock(test: ReturnType<typeof createTestEditor>) {
   ));
 }
 
-describe('database answer while databases are off', () => {
+describe('database answer in an editor that skips preview fetches', () => {
   it('renders the placeholder in a live editor and leaves the node as saved', () => {
     const test = createTestEditor();
+    test.wrapper.skipPreviewFetch = true;
     const saved = test.editor.getEditorState().toJSON();
-    control.enabled = () => false;
     control.mounts = 0;
     const rendered = render(() => (
       <LexicalWrapperContext.Provider value={test.wrapper}>
@@ -378,7 +378,9 @@ describe('pressing a database answer block', () => {
         cancelable: true,
         button: 0,
       });
-      (await rendered.findByText(name)).dispatchEvent(press);
+      // The loading card also says Details; press the loaded answer's.
+      await rendered.findByText('Diwali Dinner');
+      rendered.getByText(name).dispatchEvent(press);
       expect(press.defaultPrevented).toBe(false);
       expect(selected(test.editor)).toEqual({ text: 'Above' });
       rendered.unmount();

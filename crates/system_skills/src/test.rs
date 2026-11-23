@@ -46,3 +46,71 @@ fn skills_render_non_empty_titled_markdown() {
         assert!(content.starts_with(&format!("# {}", skill.name)));
     }
 }
+
+/// The Compose Routines skill finds items with the SDK's existing searches
+/// and lists, tells the owner through an Ask AI step, and ends with the
+/// code-step text CreateRoutine and the drafter read. The code form code mode
+/// carries leaves out the routine-tools part, and the routine-tools form
+/// leaves out the code-step text, which `CreateRoutine`'s description already
+/// carries.
+#[test]
+fn compose_routines_finds_items_with_the_sdk_and_ends_with_the_code_step_text() {
+    let content = compose_routines::SKILL.render_content();
+    for rule in [
+        "macro.channels.search(name)",
+        "searchOn: 'name', matchType: 'exact'",
+        "macro.users.search(name)",
+        "macro.initiatives.summaries()",
+        "macro.routines.check(routine, { created })",
+        "a code step never messages or emails the routine's owner",
+        "This replaces what the routines guide says about ids in knobs.",
+        "# Without code",
+    ] {
+        assert!(content.contains(rule), "{rule}");
+    }
+    let code = compose_routines::CODE.to_string();
+    assert!(
+        content
+            .trim_end()
+            .ends_with(routine_program::CODE_STEPS.trim_end())
+    );
+    assert!(
+        code.trim_end()
+            .ends_with(routine_program::CODE_STEPS.trim_end())
+    );
+    assert!(code.contains("macro.routines.check(routine, { created })"));
+    assert!(!code.contains("# Without code"));
+    let direct = compose_routines::DIRECT.to_string();
+    assert!(direct.contains("a code step never messages or emails the routine's owner"));
+    assert!(!direct.contains(routine_program::CODE_STEPS));
+    assert!(direct.contains("`NameSearch`"));
+    assert!(!direct.contains("ExecuteCode"));
+}
+
+/// The skill's routine looks list Macro's icons and colors, as saving takes
+/// them.
+#[test]
+fn compose_routines_lists_macros_icons_and_colors() {
+    let content = compose_routines::SKILL.render_content();
+    let listed = |label: &str| -> Vec<String> {
+        let line = content
+            .lines()
+            .find_map(|line| line.trim().strip_prefix(label))
+            .unwrap_or_else(|| panic!("no {label} line"));
+        line.trim_end_matches('.')
+            .replace(" or ", ", ")
+            .split(", ")
+            .map(str::to_owned)
+            .collect()
+    };
+    assert_eq!(
+        listed("- `name`, an icon: "),
+        model_entity::macro_icon_names().to_vec()
+    );
+    let colors = listed("- `color`: ");
+    assert_eq!(colors.len(), 12, "{colors:?}");
+    for color in colors {
+        serde_json::from_value::<model_entity::AppearanceColor>(serde_json::json!(color))
+            .unwrap_or_else(|error| panic!("{color}: {error}"));
+    }
+}

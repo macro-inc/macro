@@ -16,10 +16,27 @@
 
       # ── cloud-storage (Rust backend) ──────────────────────────────
 
-      rustToolchain = fenix.packages.${system}.fromToolchainFile {
+      rustToolchainManifestSha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
+      rustToolchainFromFile = fenix.packages.${system}.fromToolchainFile {
         file = ../rust-toolchain.toml;
-        sha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
+        sha256 = rustToolchainManifestSha256;
       };
+      # On macOS, add llvm-tools: Xcode 27's SwiftPM builds the Tauri plugins'
+      # @_cdecl exports as local symbols, and swift-rs promotes them back with
+      # the llvm-objcopy in rustc's sysroot. Without it the iOS app library
+      # fails to link. macOS only, so Linux toolchains and their caches stay
+      # as they are.
+      rustToolchain =
+        if isDarwin then
+          fenix.packages.${system}.combine [
+            rustToolchainFromFile
+            (fenix.packages.${system}.toolchainOf {
+              channel = (builtins.fromTOML (builtins.readFile ../rust-toolchain.toml)).toolchain.channel;
+              sha256 = rustToolchainManifestSha256;
+            }).llvm-tools
+          ]
+        else
+          rustToolchainFromFile;
 
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
@@ -56,24 +73,52 @@
       # `crates/agent_harness/container/ensure_ready.sh` survives the prune;
       # `.ttf` and `.xml` for the fonts and preset shape definitions that
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
-      # `static_assets/schema.graphql` that `cache-core`'s build script reads;
+      # `static_assets/schema.graphql` that `cache-schema`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
-      # for the Deno bootstrap and timer shims;
+      # for the Deno bootstrap and timer shims; `.lua` for the Redis scripts
+      # `crates/rate_limit` embeds;
       # `.proto` for the protobuf files the `whatsmeow_proto` and
       # `whatsmeow_signal` build scripts compile.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto|lua)$" path != null;
+      # `crates/routine_program` embeds its catalog programs with `include_str!`.
+      # Only these `.ts` files: matching every `.ts` would pull the web app into
+      # the Rust source hash.
+      routineCatalogFilter =
+        path: _type: builtins.match ".*/crates/routine_program/src/catalog/[^/]*\\.ts$" (toString path) != null;
+      # Rust templates (askama, minijinja) include their stylesheets, such as
+      # `services/mcp_auth_proxy/templates/broker_page.css`. Only `templates/`
+      # stylesheets under Rust crates and services: matching every `.css` would
+      # pull the web app into the Rust source hash.
+      templateCssFilter =
+        path: _type:
+        builtins.match ".*/(crates|services)/[^/]+/templates/.*\\.css$" (toString path) != null;
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
+      # agent_git embeds the starter agent across the crate boundary, every
+      # file but its installed packages, which are not Cargo sources or
+      # generic assets.
+      starterAgentRoot = toString ../packages/starter-agent;
+      starterAgentFilter =
+        path: _type:
+        pkgs.lib.hasPrefix (starterAgentRoot + "/") (toString path)
+        && !(pkgs.lib.hasPrefix (starterAgentRoot + "/node_modules") (toString path));
+      starterAgentSrc = pkgs.lib.cleanSourceWith {
+        src = ../packages/starter-agent;
+        filter = path: type: starterAgentFilter path type;
+      };
       srcFilter =
         path: type:
         (sqlxFilter path type)
         || (localCaFilter path type)
         || (pdfiumFilter path type)
         || (assetFilter path type)
+        || (routineCatalogFilter path type)
+        || (templateCssFilter path type)
         || (binFilter path type)
+        || (starterAgentFilter path type)
         || (craneLib.filterCargoSources path type);
       cloudStorageSrc = pkgs.lib.cleanSourceWith {
         src = ../.;
@@ -141,6 +186,8 @@
           || (rel == "vendor")
           || (rel == "vendor/utoipa-swagger-ui")
           || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
+          || (rel == "vendor/chrono-tz")
+          || (pkgs.lib.hasPrefix "vendor/chrono-tz/" rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -169,6 +216,12 @@
           chmod -R +w $out
           cp -rfT ${rootDepsSrc} $out
           chmod -R +w $out
+          ${pkgs.lib.optionalString (builtins.elem "crates/agent_git" dirs) ''
+            mkdir -p $out/packages
+            rm -rf $out/packages/starter-agent
+            cp -rT ${starterAgentSrc} $out/packages/starter-agent
+            chmod -R +w $out/packages/starter-agent
+          ''}
           ${overlays}
         '';
 
@@ -489,6 +542,11 @@
           binaries = [ "notification_service" ];
         }
         {
+          serviceName = "search-freshness-probe";
+          packageName = "search_freshness_probe";
+          binaries = [ "search_freshness_probe" ];
+        }
+        {
           serviceName = "search-processing-service";
           packageName = "search_processing_service";
           binaries = [ "search_processing_service" ];
@@ -596,6 +654,61 @@
             '';
           }
         );
+
+      # The daemons baked into the Macro computer image (nix/macro-box), built
+      # like the deploy leaves: a pruned source, so only a change in their own
+      # crate closure rebuilds them, over third-party deps compiled once per
+      # Cargo.lock. A local stack with `--computers docker` builds these on
+      # every `run_local`.
+      guestBinaryDefinitions = [
+        {
+          pname = "macrod";
+          packageName = "coding_agent_worker";
+        }
+        {
+          pname = "harnessd";
+          packageName = "harnessd";
+        }
+      ];
+
+      guestCargoArtifacts = craneLib.buildDepsOnly (
+        commonArgs
+        // {
+          pname = "macro-box-guest-deps";
+          doCheck = false;
+          cargoCheckCommand = "true";
+          cargoExtraArgs =
+            "--locked "
+            + pkgs.lib.concatMapStringsSep " " (
+              def: "--package ${def.packageName} --bin ${def.pname}"
+            ) guestBinaryDefinitions;
+          CARGO_PROFILE = "release";
+        }
+      );
+
+      guestBinaryPackage =
+        { pname, packageName }:
+        craneLib.buildPackage (
+          commonArgs
+          // {
+            src = prunedDeploySrc "guest-${pname}" packageName;
+            cargoArtifacts = guestCargoArtifacts;
+            pname = "macro-box-${pname}";
+            doCheck = false;
+            cargoExtraArgs = "--locked --package ${packageName} --bin ${pname}";
+            CARGO_PROFILE = "release";
+            installPhaseCommand = ''
+              install -Dm0755 target/release/${pname} "$out/bin/${pname}"
+            '';
+          }
+        );
+
+      guestBinaryPackages = pkgs.lib.listToAttrs (
+        map (def: {
+          name = "macro-box-${def.pname}";
+          value = guestBinaryPackage def;
+        }) guestBinaryDefinitions
+      );
 
       deployServiceBinaryPackages = pkgs.lib.listToAttrs (
         map (def: {
@@ -730,6 +843,31 @@
             unzip -tqq "$out/call_recording_preview_handler/ffmpeg-layer.zip" >/dev/null
           '';
 
+      # cargo hashes the linker path into every crate's fingerprint, and zigbuild
+      # writes its linker wrapper under its cache directory. Under $TMPDIR, which
+      # is random per build on the CI runners, no handler could reuse the shared
+      # dependency layer. /tmp isn't usable instead because it isn't private there.
+      # Generating the wrappers into the store gives every build one path, and
+      # zigbuild only rewrites a wrapper whose content differs.
+      zigbuildWrappers =
+        pkgs.runCommand "cargo-zigbuild-wrappers"
+          {
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.cargo-zigbuild
+              pkgs.zig
+            ];
+          }
+          ''
+            export HOME="$TMPDIR/home" XDG_CACHE_HOME="$TMPDIR/xdg"
+            export ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig" ZIG_LOCAL_CACHE_DIR="$TMPDIR/zig"
+            export CARGO_ZIGBUILD_CACHE_DIR="$out"
+            mkdir -p "$HOME" src
+            printf '[package]\nname = "probe"\nversion = "0.0.0"\nedition = "2021"\n' > Cargo.toml
+            echo 'fn main() {}' > src/main.rs
+            cargo zigbuild --release --offline --target ${lambdaZigTarget}
+          '';
+
       lambdaCommonArgs = commonArgs // {
         # zig links the final binary (cargo-zigbuild); drop the host-only mold arg.
         RUSTFLAGS = "";
@@ -773,14 +911,14 @@
           export ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig-cache"
           export ZIG_LOCAL_CACHE_DIR="$TMPDIR/zig-cache"
           export XDG_CACHE_HOME="$TMPDIR/xdg"
+          export CARGO_ZIGBUILD_CACHE_DIR=${zigbuildWrappers}
 
           # Inherited cargoArtifacts can carry CMake configure state
-          # (CMakeCache.txt / CMakeFiles) from the deps-only layer. Its
-          # CMAKE_C_COMPILER points at a cargo-zigbuild wrapper script under
-          # $TMPDIR whose hash-suffixed name need not exist in this sandbox,
-          # and CMake hard-fails validating a cached compiler that is gone
-          # ("is not a full path to an existing compiler tool"). Drop the
-          # configure state so a build-script re-run reconfigures cleanly;
+          # (CMakeCache.txt / CMakeFiles) from the deps-only layer, which
+          # records paths from the build that made it, and CMake hard-fails
+          # validating a cached compiler that is gone ("is not a full path to
+          # an existing compiler tool"). Drop the configure state so a
+          # build-script re-run reconfigures cleanly;
           # crates whose fingerprints are clean never read it, so this costs
           # nothing on the cached path. (Today aws-lc-sys is the only cmake
           # crate in the graph, via AWS_LC_SYS_CMAKE_BUILDER below.)
@@ -809,7 +947,9 @@
       # One shared dep closure for all lambda handlers. Build it with the same
       # cargo-zigbuild target used by the final packages; Cargo fingerprints the
       # `.2.26` target separately from the plain triple, so warming the plain
-      # target does not help the deploy builds.
+      # target does not help the deploy builds. Select with --bin, as
+      # deployLambdaPackage does: without --package cargo resolves features across
+      # the workspace, and any other selection gives units the handlers can't reuse.
       lambdaDeployCargoArtifacts = craneLib.buildDepsOnly (
         lambdaCommonArgs
         // {
@@ -821,7 +961,7 @@
           cargoBuildCommand = "cargo zigbuild --release";
           cargoExtraArgs =
             "--locked --target ${lambdaZigTarget} "
-            + pkgs.lib.concatMapStringsSep " " (n: "--package ${n}") lambdaNames;
+            + pkgs.lib.concatMapStringsSep " " (n: "--bin ${n}") lambdaNames;
         }
       );
 
@@ -998,9 +1138,19 @@
         '';
       };
 
+      # Local dev shells build Rust through kache (see the shellHook); CI keeps
+      # sccache.
+      kache = pkgs.callPackage ./_kache.nix { };
+      kacheRustcWrapper = pkgs.writeShellScript "kache-rustc-wrapper" (
+        builtins.replaceStrings [ "@kache@" ] [ (pkgs.lib.getExe kache) ] (
+          builtins.readFile ./kache-rustc-wrapper.sh
+        )
+      );
+
       shellTools =
         with pkgs;
         [
+          kache
           daytona
           goalert-mcp
           goalert-mcp-macro
@@ -1019,6 +1169,7 @@
           zip
           cargo-info
           cargo-udeps
+          cargo-shear
           cargo-tauri
           cargo-lambda
           cargo-zigbuild
@@ -1095,8 +1246,19 @@
         pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
           grep -q "fn write_embed_code" \
             ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
+          grep -q "IANA_TZDB_VERSION" \
+            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
           touch $out
         '';
+        pruned-deploy-src-starter-agent =
+          pkgs.runCommand "cloud-storage-pruned-starter-agent"
+            { nativeBuildInputs = [ pkgs.diffutils ]; }
+            ''
+              diff -r ${starterAgentSrc} ${src}/packages/starter-agent
+              diff -r ${starterAgentSrc} \
+                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/packages/starter-agent
+              touch $out
+            '';
         fmt = craneLib.cargoFmt {
           inherit src;
           pname = "cloud-storage";
@@ -1176,9 +1338,11 @@
           ;
         default = cargoArtifacts;
         code-mode-assets = codeModeAssets;
+        macro-js-node-modules = jsNodeModules;
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
+      // guestBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
         deploy-service-binaries-email-service = emailServiceDeployBinaries;
@@ -1206,10 +1370,10 @@
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-              # Local dev shells favor reusable sccache artifacts across JJ
-              # workspaces. CI derivations do not inherit devShell attributes.
+              # CI needs sccache to cache every crate. It loads this shell through
+              # setup-nix-dev-shell, so these attributes reach its build steps.
+              # The shellHook switches local shells to incremental builds.
               CARGO_INCREMENTAL = "0";
-              SCCACHE_CACHE_SIZE = "30G";
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake
               # configure state behind; CMake then drops its command-line cache
@@ -1217,6 +1381,35 @@
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
               shellHook = ''
+                # Default the sccache size in the hook, not as an attribute: an
+                # attribute replaces the caller's value, while a machine with a
+                # dedicated cache disk (SCCACHE_DIR) sets its own size. CI gets
+                # the default too, since print-dev-env output evaluates this hook.
+                export SCCACHE_CACHE_SIZE="''${SCCACHE_CACHE_SIZE:-30G}"
+                # Local builds keep incremental compilation on and go through
+                # kache instead of sccache: kache reuses compiled crates across
+                # worktrees (a new worktree's build takes about a third of the
+                # time), and the wrapper keeps incremental state for crates
+                # rebuilt in place, so the edit loop stays fast. kache's
+                # scheduler is off: it slowed parallel builds by pacing their
+                # compilers. To use another cache, set RUSTC_WRAPPER after
+                # entering the shell.
+                # Line tables keep backtrace locations while shrinking test
+                # binaries; set CARGO_PROFILE_DEV_DEBUG=full to use a debugger.
+                if [ -z "''${CI:-}" ]; then
+                  unset CARGO_INCREMENTAL
+                  export RUSTC_WRAPPER=${kacheRustcWrapper}
+                  export KACHE_SCHEDULER="''${KACHE_SCHEDULER:-false}"
+                  export KACHE_LOCAL_ONLY="''${KACHE_LOCAL_ONLY:-true}"
+                  export CARGO_PROFILE_DEV_DEBUG="''${CARGO_PROFILE_DEV_DEBUG:-line-tables-only}"
+                  ${pkgs.lib.optionalString isLinux ''
+                    # Link host binaries with mold. Scoped to the host target, so
+                    # wasm and musl builds keep their own linkers; zig cc (cargo
+                    # zigbuild) ignores the flag. An exported RUSTFLAGS replaces
+                    # it, as cargo does.
+                    export CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS="''${CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS:--C link-arg=-fuse-ld=mold}"
+                  ''}
+                fi
                 if command -v prek >/dev/null 2>&1; then
                   repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
                   if [ -n "$repo_root" ] && [ -f "$repo_root/.pre-commit-config.yaml" ]; then

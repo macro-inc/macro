@@ -18,6 +18,11 @@ export {
 } from '@app/features/agent-interactions/components/PermissionOptions';
 export { ActionLine, type ActionLineProps } from './ActionLine';
 export {
+  ActivityLine,
+  type ActivityLineProps,
+  type ActivityLineStep,
+} from './ActivityLine';
+export {
   AGENT_INPUT_TEXT_AREA_ID,
   AgentInput,
   type AgentInputProps,

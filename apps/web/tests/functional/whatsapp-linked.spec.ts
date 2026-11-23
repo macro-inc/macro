@@ -49,6 +49,10 @@ type LinkedServer = {
   backfill: { state: string; imported: number } | null;
   /** History the owner's phone sent so far, older than everything shown. */
   imported: unknown[];
+  /** Reads of the latest page so far. */
+  latestReads: number;
+  /** When set, every read of the latest page after the first waits for it. */
+  heldRefresh?: Promise<void>;
   requests: string[];
   additions: ExternalChatAdd[];
   passkeyAnswers: unknown[];
@@ -75,10 +79,40 @@ type LinkedServer = {
   lookups: Record<string, string>;
   /** Times the owner pressed Import. */
   historyImports: number;
+  /** What the added chat is: the "Design Crit" group or a direct chat with Ana. */
+  kind: 'group' | 'direct';
+  /** The group's members, as its details report them. */
+  participants: {
+    jid: string;
+    name: string;
+    admin: boolean;
+    pictureFileId?: string;
+  }[];
+  /** Profile pictures' static file ids: the added chat's, and senders' by name. */
+  pictures: { chat?: string; senders?: Record<string, string> };
 };
 
 /** A person's phone-number JID. */
 const phoneJid = (digits: string) => `${digits}@s.whatsapp.net`;
+
+/** A message whose sender shows their profile picture, when the server has one. */
+function withPicture(state: LinkedServer, message: unknown) {
+  const shown = message as { sender: { name: string } };
+  const picture = state.pictures.senders?.[shown.sender.name];
+  return picture
+    ? { ...shown, sender: { ...shown.sender, pictureFileId: picture } }
+    : message;
+}
+
+/** A profile picture: a flat colour with a light disc, served as a static file. */
+function picture(colour: string) {
+  return {
+    contentType: 'image/svg+xml',
+    body: Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="${colour}"/><circle cx="32" cy="26" r="12" fill="#fff" opacity=".85"/><rect x="12" y="44" width="40" height="24" rx="12" fill="#fff" opacity=".85"/></svg>`
+    ),
+  };
+}
 
 function server(): LinkedServer {
   return {
@@ -88,6 +122,7 @@ function server(): LinkedServer {
     connects: 0,
     backfill: null,
     imported: [],
+    latestReads: 0,
     chats: [
       {
         jid: '14155550199@s.whatsapp.net',
@@ -147,6 +182,11 @@ function server(): LinkedServer {
     registered: [],
     lookups: {},
     historyImports: 0,
+    kind: 'group',
+    participants: [
+      { jid: phoneJid('14155550199'), name: 'Ana Ruiz', admin: true },
+    ],
+    pictures: {},
   };
 }
 
@@ -163,7 +203,16 @@ const incomingMessage = {
   editedAt: null,
   deleted: false,
   replyTo: null,
-  reactions: [{ emoji: '👍', count: 2, mine: false }],
+  reactions: [
+    {
+      emoji: '👍',
+      reactors: [
+        { name: 'Ben Okafor', userId: null },
+        { name: '+5550002', userId: null },
+      ],
+      mine: false,
+    },
+  ],
   attachments: [
     {
       ordinal: 0,
@@ -266,8 +315,9 @@ async function mount(page: Page, state: LinkedServer, query = '') {
             json: {
               id: CHAT_ID,
               provider: 'whatsapp',
-              kind: 'group',
-              name: 'Design Crit',
+              kind: state.kind,
+              name: state.kind === 'group' ? 'Design Crit' : 'Ana Ruiz',
+              pictureFileId: state.pictures.chat ?? null,
               userId: state.sharedViewer ? 'macro|owner@example.test' : USER_ID,
               accessLevel: state.sharedViewer ? 'view' : 'owner',
               canSend: state.canSend,
@@ -277,19 +327,22 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                 : null,
               unreadCount: 1,
               backfill: state.backfill,
-              members: {
-                name: 'Design Crit',
-                announce: false,
-                observedAt: '2026-10-21T10:00:00Z',
-                participants: [
-                  {
-                    jid: '14155550199@s.whatsapp.net',
-                    alternateJid: null,
-                    displayName: 'Ana Ruiz',
-                    admin: true,
-                  },
-                ],
-              },
+              members:
+                state.kind === 'group'
+                  ? {
+                      name: 'Design Crit',
+                      announce: false,
+                      observedAt: '2026-10-21T10:00:00Z',
+                      participants: state.participants.map((person) => ({
+                        jid: person.jid,
+                        alternateJid: null,
+                        displayName: person.name,
+                        name: person.name,
+                        admin: person.admin,
+                        pictureFileId: person.pictureFileId ?? null,
+                      })),
+                    }
+                  : null,
               limits: {
                 textLimitBytes: 65536,
                 attachmentLimitBytes: 33554432,
@@ -300,7 +353,11 @@ async function mount(page: Page, state: LinkedServer, query = '') {
               },
             },
           });
-        if (suffix === '/messages')
+        if (suffix === '/messages') {
+          if (!url.searchParams.has('before')) {
+            state.latestReads += 1;
+            if (state.latestReads > 1) await state.heldRefresh;
+          }
           return route.fulfill({
             json: {
               nextCursor: url.searchParams.has('before')
@@ -316,23 +373,24 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                       attachments: [],
                     },
                   ]
-                : [
-                    ...state.imported,
-                    incomingMessage,
-                    {
-                      ...incomingMessage,
-                      id: 'message-2',
-                      body: 'Looking now. Thanks, Ana!',
-                      sender: { name: 'Me', userId: USER_ID },
-                      sentAt: new Date().toISOString(),
-                      replyTo: 'message-1',
-                      reactions: [],
-                      attachments: [],
-                      deliveryState: 'accepted',
-                    },
-                  ],
+                : [...state.imported, incomingMessage]
+                    .map((message) => withPicture(state, message))
+                    .concat([
+                      {
+                        ...incomingMessage,
+                        id: 'message-2',
+                        body: 'Looking now. Thanks, Ana!',
+                        sender: { name: 'Me', userId: USER_ID },
+                        sentAt: new Date().toISOString(),
+                        replyTo: 'message-1',
+                        reactions: [],
+                        attachments: [],
+                        deliveryState: 'accepted',
+                      },
+                    ]),
             },
           });
+        }
         if (suffix === '/sends' && method === 'POST') {
           const body: ExternalChatSendReply = route.request().postDataJSON();
           state.outgoing.push(body);
@@ -413,6 +471,10 @@ async function mount(page: Page, state: LinkedServer, query = '') {
               sendReason: item.added?.id === CHAT_ID ? null : 'not_added',
               backfill: item.added?.backfill ?? null,
               community: item.community ?? null,
+              pictureFileId:
+                item.added?.id === CHAT_ID
+                  ? (state.pictures.chat ?? null)
+                  : null,
             })),
         });
       if (path === 'external-chats' && method === 'POST') {
@@ -552,11 +614,6 @@ async function mount(page: Page, state: LinkedServer, query = '') {
       }
       return route.fulfill({ status: 404, json: {} });
     }
-    // Chat's channel list feeds the composer's `@` menu; this account has none.
-    if (url.pathname === '/dss/channels/activity')
-      return route.fulfill({ json: [] });
-    if (url.pathname === '/dss/comms/channels')
-      return route.fulfill({ json: { items: [], next_cursor: null } });
     // Stored attachments are static files, like Chat's media.
     if (url.pathname.startsWith('/static-file/file/')) {
       const file = state.files[url.pathname.split('/').at(-1) ?? ''];
@@ -566,7 +623,14 @@ async function mount(page: Page, state: LinkedServer, query = '') {
     }
     if (/^\/(auth|dss|notification|connection-gateway)\//.test(url.pathname))
       return route.fulfill({ json: {} });
-    return route.fulfill({ response: await route.fetch() });
+    try {
+      return await route.fulfill({ response: await route.fetch() });
+    } catch (error) {
+      // Late asset reads may finish after Playwright has torn down the test.
+      if (error instanceof Error && error.message.includes('Test ended'))
+        return;
+      throw error;
+    }
   });
   await page.goto(
     `${origin}/tests/functional/whatsapp-linked/index.html${query}`
@@ -1072,6 +1136,16 @@ test('an independent group reads, replies, reacts and pages through channel rows
   await expect(page.getByText(/may already have arrived/)).toHaveCount(0);
   await expect.poll(() => state.readMessages).toContain('message-2');
   expect(state.outgoing).toEqual([]);
+  // Reactors outside Macro go by the name DSS gives them.
+  await page.locator('[data-message-reaction-chip][data-emoji="👍"]').hover();
+  await expect(
+    page.getByText('Ben Okafor and +5550002 reacted with')
+  ).toBeVisible();
+  await page.screenshot({
+    path: process.env.WHATSAPP_SCREENSHOT_DIR
+      ? join(process.env.WHATSAPP_SCREENSHOT_DIR, 'whatsapp-reactors.png')
+      : test.info().outputPath('whatsapp-reactors.png'),
+  });
   await page.locator('[data-message-id="message-1"]').hover();
   await page.getByRole('button', { name: 'Reply', exact: true }).click();
   await expect(page.getByText('Replying to Ana Ruiz')).toBeVisible();
@@ -1278,6 +1352,41 @@ function everyMessageType() {
   ];
 }
 
+test('a send settling keeps an older page that is still loading', async ({
+  page,
+}) => {
+  const state = server();
+  await mount(page, state, `?chat=${CHAT_ID}`);
+  await expect(
+    page.getByRole('button', { name: 'Load earlier messages' })
+  ).toBeVisible();
+  let releaseOlder = () => {};
+  const older = new Promise<void>((resolve) => {
+    releaseOlder = resolve;
+  });
+  let olderRequested = false;
+  await page.route(
+    (url) =>
+      url.pathname.endsWith('/messages') && url.searchParams.has('before'),
+    async (route) => {
+      olderRequested = true;
+      await older;
+      await route.fallback();
+    }
+  );
+  await page.getByRole('button', { name: 'Load earlier messages' }).click();
+  await expect.poll(() => olderRequested).toBe(true);
+  await typeInComposer(page, 'Sent while history loads');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect.poll(() => state.outgoing.length).toBe(1);
+  // The send's reply has reached the page, and its refresh with it.
+  await expect(
+    page.getByText('Sent while history loads', { exact: true })
+  ).toBeVisible();
+  releaseOlder();
+  await expect(page.getByText('Previous day discussion')).toBeVisible();
+});
+
 test('every WhatsApp message type renders with Chat parts and small cards', async ({
   page,
 }) => {
@@ -1371,6 +1480,13 @@ test('the composer mentions group participants as WhatsApp mentions', async ({
   await expect(page.getByText('+14155550199')).toBeVisible();
   await expect(page.getByText('@here')).toHaveCount(0);
   await page.keyboard.press('Enter');
+  // Wait for the selected mention and replacement of the inline search.
+  await expect(
+    page.locator('[data-input-editor-shell] [data-user-mention]')
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole('textbox').locator('.md-inline-search')
+  ).toHaveCount(0);
   await page.keyboard.type('!');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect.poll(() => state.outgoing.length).toBe(1);
@@ -1735,3 +1851,320 @@ test('the owner shares through direct people access without creating a channel',
   );
   expect(unexpected).toEqual([]);
 });
+
+const GROUP_PICTURE = '019a061e-0000-7000-8000-0000000000a1';
+const ANA_PICTURE = '019a061e-0000-7000-8000-0000000000a2';
+
+/** The loaded pictures, by static file id (senders' ask for a size). */
+const shownPictures = (page: Page) =>
+  page
+    .locator('img[src*="/static-file/file/"]')
+    .evaluateAll((images) =>
+      images
+        .filter((image) => (image as HTMLImageElement).complete)
+        .map((image) =>
+          new URL((image as HTMLImageElement).src).pathname.split('/').at(-1)
+        )
+    );
+
+for (const mobile of [false, true]) {
+  const device = mobile ? 'mobile' : 'desktop';
+  test.describe(`${device} profile pictures`, () => {
+    test.use({
+      viewport: mobile
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 900 },
+      isMobile: mobile,
+      hasTouch: mobile,
+    });
+    const screenshot = (page: Page, name: string) =>
+      page.screenshot({
+        path: process.env.WHATSAPP_SCREENSHOT_DIR
+          ? join(process.env.WHATSAPP_SCREENSHOT_DIR, `${name}-${device}.png`)
+          : test.info().outputPath(`${name}-${device}.png`),
+        fullPage: true,
+      });
+
+    test('a group, its senders and members show pictures, and a hidden one initials', async ({
+      page,
+    }) => {
+      const state = server();
+      state.pictures = {
+        chat: GROUP_PICTURE,
+        senders: { 'Ana Ruiz': ANA_PICTURE },
+      };
+      state.files = {
+        [GROUP_PICTURE]: picture('#2f7d6d'),
+        [ANA_PICTURE]: picture('#c2643a'),
+      };
+      // Ben hides his picture from the owner's account.
+      state.participants = [
+        {
+          jid: phoneJid('14155550199'),
+          name: 'Ana Ruiz',
+          admin: true,
+          pictureFileId: ANA_PICTURE,
+        },
+        { jid: phoneJid('14155550177'), name: 'Ben Okafor', admin: false },
+      ];
+      state.imported = [
+        {
+          ...incomingMessage,
+          id: 'message-ben',
+          sender: { name: 'Ben Okafor', userId: null },
+          body: 'I can take the mobile pass.',
+          sentAt: '2026-10-21T09:30:00Z',
+          reactions: [],
+          attachments: [],
+        },
+      ];
+      const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+      await expect(
+        page.getByRole('textbox', { name: 'Message Design Crit' })
+      ).toBeVisible();
+      await expect
+        .poll(() => shownPictures(page))
+        .toEqual(expect.arrayContaining([GROUP_PICTURE, ANA_PICTURE]));
+      // Ben's hidden picture leaves his initial.
+      const timeline = page.getByRole('log', { name: 'WhatsApp messages' });
+      await expect(timeline.getByText('B', { exact: true })).toBeVisible();
+      await expect(
+        timeline.getByRole('img', { name: 'Ben Okafor' })
+      ).toHaveCount(0);
+      await screenshot(page, 'pictures-group');
+
+      await page
+        .getByRole('button', { name: 'Show details', exact: true })
+        .click();
+      const members = page.getByRole('list', { name: 'WhatsApp members' });
+      await expect(members.getByRole('listitem')).toHaveCount(2);
+      await expect(
+        members
+          .getByRole('listitem')
+          .filter({ hasText: 'Ana Ruiz' })
+          .locator(`img[src*="${ANA_PICTURE}"]`)
+      ).toBeVisible();
+      await expect(
+        members
+          .getByRole('listitem')
+          .filter({ hasText: 'Ben Okafor' })
+          .locator('img')
+      ).toHaveCount(0);
+      await screenshot(page, 'pictures-group-details');
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth
+        )
+      ).toBe(false);
+      expect(unexpected).toEqual([]);
+    });
+
+    test('a direct chat shows the person in the header, timeline and External', async ({
+      page,
+    }) => {
+      const state = server();
+      state.kind = 'direct';
+      state.chats[1].added = null;
+      state.chats[0].added = { id: CHAT_ID, name: 'Ana Ruiz' };
+      state.pictures = {
+        chat: ANA_PICTURE,
+        senders: { 'Ana Ruiz': ANA_PICTURE },
+      };
+      state.files = { [ANA_PICTURE]: picture('#c2643a') };
+      const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+      await expect(
+        page.getByRole('textbox', { name: 'Message Ana Ruiz' })
+      ).toBeVisible();
+      await expect
+        .poll(async () => (await shownPictures(page)).length)
+        .toBeGreaterThanOrEqual(2);
+      expect(new Set(await shownPictures(page))).toEqual(
+        new Set([ANA_PICTURE])
+      );
+      await screenshot(page, 'pictures-direct');
+      expect(unexpected).toEqual([]);
+    });
+
+    test('External lists added chats with their pictures, others with their icon', async ({
+      page,
+    }) => {
+      const state = server();
+      state.chats[2].added = { id: 'group-shared', name: 'Launch War Room' };
+      state.pictures = { chat: GROUP_PICTURE };
+      state.files = { [GROUP_PICTURE]: picture('#2f7d6d') };
+      const unexpected = await mount(page, state, '?view=in-macro');
+      const nav = page.getByRole('navigation', {
+        name: 'WhatsApp chats in Macro',
+      });
+      await expect(
+        nav
+          .getByRole('button', { name: /design-crit/ })
+          .locator(`img[src*="${GROUP_PICTURE}"]`)
+      ).toBeVisible();
+      await expect(
+        nav.getByRole('button', { name: /Launch War Room/ }).locator('img')
+      ).toHaveCount(0);
+      await screenshot(page, 'pictures-external');
+      expect(unexpected).toEqual([]);
+    });
+  });
+}
+
+for (const [device, viewport] of [
+  ['phone', { width: 390, height: 844 }],
+  ['tablet', { width: 820, height: 1180 }],
+] as const) {
+  test.describe(`${device} timeline end`, () => {
+    test.use({ viewport, isMobile: true, hasTouch: true });
+
+    test('the last message stays above the floating composer', async ({
+      page,
+    }) => {
+      const state = server();
+      // Enough history that the timeline scrolls.
+      state.imported = Array.from({ length: 30 }, (_, index) => ({
+        ...incomingMessage,
+        id: `message-history-${index}`,
+        body: `Earlier message ${index}`,
+        sentAt: new Date(Date.UTC(2026, 9, 20, 8, index)).toISOString(),
+        reactions: [],
+        attachments: [],
+      }));
+      const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+      const composer = page.getByRole('textbox', {
+        name: 'Message Design Crit',
+      });
+      await expect(composer).toBeVisible();
+      const timeline = page.getByRole('log', { name: 'WhatsApp messages' });
+      await expect(
+        timeline.getByText('Looking now. Thanks, Ana!')
+      ).toBeVisible();
+      // Room between the last message and the top of the bottom chrome.
+      const clearance = () =>
+        page.evaluate(() => {
+          const last = [
+            ...document.querySelectorAll('[role="log"] [data-message-id]'),
+          ].at(-1);
+          const chrome = document.querySelector(
+            '[data-float-region="accessory"]'
+          );
+          if (!last || !chrome) return Number.NaN;
+          return (
+            chrome.getBoundingClientRect().top -
+            last.getBoundingClientRect().bottom
+          );
+        });
+      await expect.poll(clearance).toBeGreaterThanOrEqual(0);
+
+      // A draft growing to several lines raises the composer; the timeline
+      // follows it.
+      const accessory = page.locator('[data-float-region="accessory"]');
+      const before = (await accessory.boundingBox())?.height ?? 0;
+      await composer.click();
+      await page.keyboard.type('One');
+      for (const line of ['Two', 'Three', 'Four']) {
+        await page.keyboard.press('Enter');
+        await page.keyboard.type(line);
+      }
+      await expect
+        .poll(async () => (await accessory.boundingBox())?.height ?? 0)
+        .toBeGreaterThan(before + 40);
+      await expect.poll(clearance).toBeGreaterThanOrEqual(0);
+      expect(unexpected).toEqual([]);
+    });
+  });
+}
+
+/** WhatsApp messages from Ana, oldest first, a minute apart from `start`. */
+function earlierMessages(prefix: string, count: number, start: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...incomingMessage,
+    id: `message-${prefix}-${index}`,
+    body: `${prefix} message ${index}`,
+    sentAt: new Date(start + index * 60_000).toISOString(),
+    reactions: [],
+    attachments: [],
+  }));
+}
+
+/** The on-screen top of a message row. */
+const rowTop = (page: Page, id: string) =>
+  page
+    .locator(`[data-message-id="${id}"]`)
+    .evaluate((row) => row.getBoundingClientRect().top);
+
+for (const mobile of [false, true]) {
+  test.describe(`${mobile ? 'mobile' : 'desktop'} history above the reader`, () => {
+    test.use({
+      viewport: mobile
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 900 },
+      isMobile: mobile,
+      hasTouch: mobile,
+    });
+
+    test('imported history keeps the message being read in place', async ({
+      page,
+    }) => {
+      const state = server();
+      state.imported = earlierMessages('Earlier', 30, Date.UTC(2026, 9, 21, 8));
+      // The phone's next batch lands on the next read, once released.
+      let release = () => {};
+      state.heldRefresh = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+      const timeline = page.getByRole('log', { name: 'WhatsApp messages' });
+      await expect(
+        timeline.getByText('Looking now. Thanks, Ana!')
+      ).toBeVisible();
+
+      await timeline.hover();
+      await page.mouse.wheel(0, -500);
+      const reading = timeline.locator(
+        '[data-message-id="message-Earlier-20"]'
+      );
+      await expect(reading).toBeInViewport();
+      const top = await rowTop(page, 'message-Earlier-20');
+
+      state.imported = [
+        ...earlierMessages('Imported', 10, Date.UTC(2026, 9, 19, 8)),
+        ...state.imported,
+      ];
+      await expect.poll(() => state.latestReads).toBeGreaterThan(1);
+      release();
+      await expect(timeline.getByText('Imported message 9')).toBeAttached();
+      await expect
+        .poll(() => rowTop(page, 'message-Earlier-20'))
+        .toBeCloseTo(top, 0);
+      expect(unexpected).toEqual([]);
+    });
+
+    test('an earlier page keeps the message being read in place', async ({
+      page,
+    }) => {
+      const state = server();
+      state.imported = earlierMessages('Earlier', 30, Date.UTC(2026, 9, 21, 8));
+      const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+      const timeline = page.getByRole('log', { name: 'WhatsApp messages' });
+      await expect(
+        timeline.getByText('Looking now. Thanks, Ana!')
+      ).toBeVisible();
+
+      await timeline.hover();
+      await page.mouse.wheel(0, -10_000);
+      const more = page.getByRole('button', { name: 'Load earlier messages' });
+      await expect(more).toBeInViewport();
+      const top = await rowTop(page, 'message-Earlier-0');
+
+      await more.click();
+      await expect(
+        timeline.getByText('Previous day discussion')
+      ).toBeAttached();
+      await expect
+        .poll(() => rowTop(page, 'message-Earlier-0'))
+        .toBeCloseTo(top, 0);
+      expect(unexpected).toEqual([]);
+    });
+  });
+}

@@ -95,6 +95,8 @@ export class SyncServiceSource implements LiveSyncSource {
   private hasEverHadListener = false;
   /** Pending request/response waiters, matched against each incoming message. */
   private readonly waiters = new Set<MessageWaiter>();
+  /** Peer ids registered through this source, re-sent on every reconnect. */
+  private readonly peerIds = new Set<bigint>();
   private initialSyncReceived = false;
   private readonly initialSyncPromise: ResultAsync<InitialSync, TimeoutError>;
 
@@ -206,8 +208,20 @@ export class SyncServiceSource implements LiveSyncSource {
   };
 
   public registerPeerId = (peerId: bigint): void => {
+    this.peerIds.add(peerId);
     this.ws.send(FromPeer.fromPeerRegisterId({ peerid: peerId }));
   };
+
+  /**
+   * The server keeps registrations per connection (blame, active peers, and
+   * clearing a peer's cursor when it leaves), so a new connection must hear
+   * them again before the reconnect replays edits.
+   */
+  private reregisterPeerIds(): void {
+    for (const peerid of this.peerIds) {
+      this.ws.send(FromPeer.fromPeerRegisterId({ peerid }));
+    }
+  }
 
   public requestSnapshot = (): ResultAsync<RawUpdate, TimeoutError> => {
     this.ws.send(FromPeer.fromPeerRequestSnapshot({}));
@@ -343,6 +357,7 @@ export class SyncServiceSource implements LiveSyncSource {
       // waiter. Accept the eventual authorized connection and converge the
       // locally seeded document instead of permanently blocking WAL replay.
       this.ws.startHeartbeat();
+      this.reregisterPeerIds();
       const sync = message.value as InitialSync;
       this.emit({
         type: 'reconnect',
@@ -421,6 +436,7 @@ export class SyncServiceSource implements LiveSyncSource {
           message:
             'sync source: reconnect initial sync received, emitting reconnect event',
         });
+        this.reregisterPeerIds();
         this.emit({
           type: 'reconnect',
           snapshot: sync.snapshot,

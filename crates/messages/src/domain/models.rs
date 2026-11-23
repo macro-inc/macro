@@ -369,6 +369,10 @@ pub struct CountedReaction {
     pub emoji: String,
     /// User identifiers.
     pub users: Vec<String>,
+    /// Display names for reactors whose account identity is not visible to this viewer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(nullable = false))]
+    pub names: Option<std::collections::HashMap<String, String>>,
 }
 
 /// An entity attached to a message.
@@ -432,6 +436,20 @@ impl std::fmt::Display for SimpleMention {
     }
 }
 
+/// What a persisted message is. Set by the server, never by a client.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum MessageKind {
+    /// Something someone wrote.
+    #[default]
+    Message,
+    /// The root of a channel call's thread. Its id is the call id, and it
+    /// stands for the call rather than for anything the caller said.
+    CallRoot,
+}
+
 /// Shared message representation for channel timelines and entity discussions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -443,6 +461,9 @@ pub struct Message {
     pub parent: MessageParent,
     /// Root message UUID for replies; absent on roots.
     pub thread_id: Option<Uuid>,
+    /// What this message is.
+    #[serde(default)]
+    pub kind: MessageKind,
     /// Authenticated actor or owner of imported content.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     #[cfg_attr(feature = "json-schema", schemars(with = "String"))]
@@ -483,6 +504,14 @@ impl Message {
     pub fn root_id(&self) -> Uuid {
         self.thread_id.unwrap_or(self.id)
     }
+
+    /// Whether `bot` posted this message for `user`. Only then may a tool
+    /// acting as `bot` for `user` change the message as the bot; every other
+    /// change goes through the user's own receipt and authorship rules.
+    pub fn posted_by_bot_for(&self, bot: bot_id::BotId, user: &str) -> bool {
+        self.sender_id.as_bot().map(|sender| sender.bot_id()) == Some(bot)
+            && self.triggered_by.as_deref() == Some(user)
+    }
 }
 
 /// A discussion with its root and ordered replies, including root tombstones.
@@ -498,7 +527,8 @@ pub struct MessageThread {
     pub replies: Vec<Message>,
 }
 
-/// Internal notification behavior for a posted channel message.
+/// Who hears about a posted message. A caller may choose it for its own
+/// channel message, since every choice only narrows who is notified.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
@@ -508,7 +538,9 @@ pub enum PostMessageNotificationPolicy {
     Default,
     /// Notify tracked mentions without reply, channel-message, or channel-invite notifications.
     MentionsOnly,
-    /// Do not send notifications for this post. Realtime/search side effects still run.
+    /// Do not send notifications for this post, mentions included: no push,
+    /// email or inbox entry. Delivery, realtime, search and agent triggers
+    /// still run.
     Silent,
 }
 
@@ -536,6 +568,12 @@ pub enum MessageAttribution {
         /// The client's self-reported name, for display only.
         client: String,
     },
+    /// An account manager posted with its credential for the sender's account;
+    /// the post records the manager's account.
+    AccountManager {
+        /// The agent account holding the credential.
+        manager_user_id: String,
+    },
     /// Autonomous webhook delivery has no invoking user.
     Unprompted,
 }
@@ -545,7 +583,7 @@ impl MessageAttribution {
     pub fn has_acting_user(&self) -> bool {
         match self {
             Self::ActingUser | Self::ActingUserVia { .. } => true,
-            Self::Unprompted => false,
+            Self::AccountManager { .. } | Self::Unprompted => false,
         }
     }
 }
@@ -559,9 +597,10 @@ pub struct PostMessage {
     #[serde(skip)]
     #[cfg_attr(feature = "schema", schema(ignore))]
     pub attribution: MessageAttribution,
-    /// Notification behavior chosen by a trusted server caller.
-    #[serde(skip)]
-    #[cfg_attr(feature = "schema", schema(ignore))]
+    /// Who hears about this post. `Silent` still delivers and shows the
+    /// message, but sends no notification of any kind, mentions included.
+    /// Channel messages only; other parents accept only `Default`.
+    #[serde(default)]
     pub notification_policy: PostMessageNotificationPolicy,
     /// Client-minted UUIDv7 for the new message, so an optimistic message
     /// already carries its final id; the server mints one when absent.

@@ -23,15 +23,25 @@ agent loop.
 
 ## Scope
 
-- Owns: `gen_ai.*` attribute names/values, content bounding, and the setters
-  that attach them to spans opened elsewhere.
+- Owns: `gen_ai.*` attribute names/values, content bounding, the setters
+  that attach them to spans opened elsewhere, and `provider_account`: the
+  classifier and `ai provider account unavailable` log for provider responses
+  that mean Macro's account is suspended or out of credit (read by
+  `infra/stacks/monitoring/monitors/ai-providers.ts`).
 - Not here: the spans themselves (`invoke_agent`, `chat`, `execute_tool`) —
   those come from `rig`.
 
 ## Boundaries
 
-- Depends on: `macro_env_var` (reads `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`).
-- Used by: `agent`, `agent_inmem`, `agent_session`, `ai_toolset`.
+- Depends on: `strum`, `macro_env_var` (reads `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`).
+- Used by: `agent`, `agent_inmem`, `agent_session`, `ai_toolset`; for
+  `provider_account`, also every crate with its own provider client
+  (`anthropic`, `dictation`, `embedding`, `image_generation`, `task_dedup`,
+  `agent_harness_service`).
+
+`propagation::inject_mcp` / `set_parent_from_mcp` carry W3C context in an
+MCP request's `_meta` under SEP-414's `traceparent` / `tracestate` keys (the
+in-process agent's calls to the harness's internal MCP).
 
 `propagation::link` connects delayed outbox delivery to each producer's span
 without replacing the delivery worker's own parent.

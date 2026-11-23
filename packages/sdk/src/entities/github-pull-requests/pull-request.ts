@@ -28,7 +28,11 @@ export class GithubPullRequest extends MacroEntity<StoredGithubPullRequest> {
   /** Current state. */
   readonly status = this.field('status');
 
-  /** Captured change metadata, when available. */
+  /**
+   * Captured change metadata, when available.
+   *
+   * @readonly
+   */
   async changes(): Promise<{
     changeset?: PullRequestChangeset;
     error?: string;
@@ -47,7 +51,11 @@ export class GithubPullRequest extends MacroEntity<StoredGithubPullRequest> {
   }
 }
 
-/** One captured diff belonging to a pull request. */
+/**
+ * One captured diff belonging to a pull request.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
+ */
 export class PullRequestChangeset {
   constructor(
     private readonly client: MacroClient,
@@ -62,7 +70,11 @@ export class PullRequestChangeset {
     return this.record.id;
   }
 
-  /** Read the captured unified patch. */
+  /**
+   * Read the captured unified patch.
+   *
+   * @readonly
+   */
   async patch(): Promise<string> {
     return unwrap(
       await this.client.storage.getGithubPullRequestChangesPatch({

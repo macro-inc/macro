@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH RECURSIVE subtree AS (\n            SELECT id,0 AS depth FROM password_folders WHERE team_id=$1 AND id=$2\n            UNION ALL\n            SELECT child.id,subtree.depth+1 FROM password_folders child\n            JOIN subtree ON child.parent_id=subtree.id WHERE child.team_id=$1 AND subtree.depth<8\n        ) SELECT id AS \"id!\",depth AS \"depth!\" FROM subtree LIMIT 501",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "depth!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "4ede7c8eecf30ce55d441339a6f068deef27191c243f442f72772fd547a5f91e"
+}

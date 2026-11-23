@@ -1,5 +1,5 @@
-# Forms are not Soup entities: ask only for the outcome, not the Soup
-# effects whose hydration would fail.
+# Forms are not Soup entities: ask only for the outcome. They have no Soup
+# record for an effect to patch.
 fragment FormEntityMutationResultFields on GraphqlEntityMutationResult {
   __typename
   ... on GraphqlMutationError {

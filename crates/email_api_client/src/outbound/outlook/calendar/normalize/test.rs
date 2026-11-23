@@ -18,7 +18,9 @@ fn sensitivity_maps_consistently_for_series_and_exceptions() {
     ] {
         let mut master = event("series");
         master["sensitivity"] = json!(sensitivity);
-        let series = projection(&target(), master.clone(), vec![]).unwrap();
+        let series = projection(&target(), master.clone(), vec![])
+            .unwrap()
+            .upsert;
         assert_eq!(series.event.visibility, expected);
 
         // Explicit normal must replace a private series; private exceptions
@@ -30,7 +32,9 @@ fn sensitivity_maps_consistently_for_series_and_exceptions() {
         };
         let mut instance = exception();
         instance["sensitivity"] = json!(sensitivity);
-        let mut upsert = projection(&target(), master, vec![instance]).unwrap();
+        let mut upsert = projection(&target(), master, vec![instance])
+            .unwrap()
+            .upsert;
         assert_eq!(upsert.overrides[0].visibility, Some(expected));
         upsert.overrides[0].apply_to(&mut upsert.event);
         assert_eq!(upsert.event.visibility, expected);
@@ -49,7 +53,9 @@ fn show_as_maps_consistently_for_series_and_exceptions() {
     ] {
         let mut master = event("series");
         master["showAs"] = json!(show_as);
-        let series = projection(&target(), master.clone(), vec![]).unwrap();
+        let series = projection(&target(), master.clone(), vec![])
+            .unwrap()
+            .upsert;
         assert_eq!(series.event.transparency, expected);
 
         master["showAs"] = if expected == EventTransparency::Opaque {
@@ -59,7 +65,9 @@ fn show_as_maps_consistently_for_series_and_exceptions() {
         };
         let mut instance = exception();
         instance["showAs"] = json!(show_as);
-        let mut upsert = projection(&target(), master, vec![instance]).unwrap();
+        let mut upsert = projection(&target(), master, vec![instance])
+            .unwrap()
+            .upsert;
         assert_eq!(upsert.overrides[0].transparency, Some(expected));
         upsert.overrides[0].apply_to(&mut upsert.event);
         assert_eq!(upsert.event.transparency, expected);
@@ -73,7 +81,9 @@ fn omitted_exception_fields_inherit_series_privacy_and_availability() {
             let mut master = event("series");
             master["sensitivity"] = json!(privacy);
             master["showAs"] = json!(show_as);
-            let mut upsert = projection(&target(), master, vec![exception()]).unwrap();
+            let mut upsert = projection(&target(), master, vec![exception()])
+                .unwrap()
+                .upsert;
             let visibility = upsert.event.visibility;
             let transparency = upsert.event.transparency;
             assert_eq!(upsert.overrides[0].visibility, None);
@@ -92,7 +102,7 @@ fn source_retains_the_observed_role_without_inferring_it_from_editability() {
             let mut target = target();
             target.observed_access_role = role.map(str::to_owned);
             target.is_read_only = is_read_only;
-            let upsert = projection(&target, event("event"), vec![]).unwrap();
+            let upsert = projection(&target, event("event"), vec![]).unwrap().upsert;
             assert_eq!(
                 upsert.source.details().observed_access_role,
                 target.observed_access_role

@@ -10,6 +10,8 @@ const OTHER_RESPONDENT_ID: &str = "macro|other-respondent@macro.com";
 /// Another respondent's response, as ingestion records it.
 fn someone_elses_response(id: u128, form_id: &str) -> activity::ActivityRecord {
     activity::ActivityRecord {
+        agent_correlation_id: None,
+        agent_verb: None,
         id: Uuid::from_u128(id),
         actor: activity::Actor::new_from_user(
             MacroUserIdStr::parse_from_str(OTHER_RESPONDENT_ID).unwrap(),

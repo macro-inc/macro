@@ -261,11 +261,10 @@ type CommandTextareaProps = JSX.TextareaHTMLAttributes<HTMLTextAreaElement> & {
   as: 'textarea';
 };
 
-export function CommandMenuSearchInput(props: CommandInputProps): JSX.Element;
-export function CommandMenuSearchInput(
-  props: CommandTextareaProps
-): JSX.Element;
-export function CommandMenuSearchInput(
+export const CommandMenuSearchInput: {
+  (props: CommandInputProps): JSX.Element;
+  (props: CommandTextareaProps): JSX.Element;
+} = function CommandMenuSearchInput(
   props: CommandInputProps | CommandTextareaProps
 ) {
   if (props.as === 'textarea') {
@@ -293,7 +292,7 @@ export function CommandMenuSearchInput(
       {...rest}
     />
   );
-}
+};
 
 export function CommandMenuListItem(
   props: ParentProps<{

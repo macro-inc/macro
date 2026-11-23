@@ -22,7 +22,11 @@ export class ToolApproval {
     return new ToolApproval(client, session, id);
   }
 
-  /** Answer the approval using the generated discriminated answer contract. */
+  /**
+   * Answer the approval using the generated discriminated answer contract.
+   *
+   * @write
+   */
   async answer(answer: AnswerToolApprovalRequest['answer']) {
     return unwrap(
       await this.client.agentHarness.answerAgentSessionToolApproval({

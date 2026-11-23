@@ -35,6 +35,20 @@ export function artifactThemeTokens(element: Element): Record<string, string> {
   );
 }
 
+/**
+ * Focus inside a frame keeps keys from the host, so the host cannot exit or step
+ * through a presentation. Forward the few it needs, unless the artifact handled
+ * them or the user is typing. The host trusts these only as navigation.
+ */
+const KEY_BRIDGE = `addEventListener('keydown', function (event) {
+  var escape = event.key === 'Escape';
+  if (!escape && event.defaultPrevented) return;
+  if (!escape && ['ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown'].indexOf(event.key) === -1) return;
+  var target = event.target;
+  if (!escape && target.closest && target.closest('input,textarea,select,button,a,[contenteditable]')) return;
+  parent.postMessage({ macroArtifactKey: event.key }, '*');
+});`;
+
 /** Bound cycles and fan-out between components. Expansion runs on the host's main
  * thread, and a peer can store entries past the authoring limit. */
 const MAX_COMPONENT_EXPANSIONS = 500;
@@ -139,6 +153,9 @@ export function composeArtifactDocument(
   const marker = parsed.createElement('script');
   marker.textContent = loadMarker(loadToken);
 
-  parsed.head.prepend(policy, theme, marker);
+  const bridge = parsed.createElement('script');
+  bridge.textContent = KEY_BRIDGE;
+
+  parsed.head.prepend(policy, theme, marker, bridge);
   return `<!doctype html>${parsed.documentElement.outerHTML}`;
 }

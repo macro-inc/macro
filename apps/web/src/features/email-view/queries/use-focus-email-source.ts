@@ -6,6 +6,7 @@ import {
   testFacets,
 } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { DateValue } from '@core/util/date';
 import {
@@ -55,7 +56,7 @@ function matchesSearch(email: EmailEntity, text: string): boolean {
  * orders it. The server already sends it newest first, but sorting here keeps
  * rows under their day headers, which go by each row's own date. Done threads
  * leave at once, as on Signal: the server drops archived threads only on the
- * next read. Focus has no Status or Done filters.
+ * next read. Focus has no Read status or Done filters.
  */
 export function selectFocusEmails(
   emails: readonly EmailEntity[],
@@ -109,9 +110,11 @@ export function useFocusEmailSource(
 ): EmailDataSource {
   const notificationSource = useGlobalNotificationSource();
   const tabAvailability = useEmailTabAvailability();
+  const analytics = useAnalytics();
   // Never read Focus while its flags are off or still loading.
   const focus = useEmailFocusQuery(
-    () => state.tab === 'focus' && tabAvailability('focus') === 'on'
+    () => state.tab === 'focus' && tabAvailability('focus') === 'on',
+    (threads) => analytics.track('email_focus_tab_opened', { threads })
   );
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();

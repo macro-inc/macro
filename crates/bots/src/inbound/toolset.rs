@@ -132,6 +132,7 @@ fn bot_tool_error(action: &'static str, error: BotError) -> ToolCallError {
         BotError::Unauthorized => {
             "you do not have permission to manage this bot or its owning team".to_string()
         }
+        BotError::AgentTeammateComputer => error.to_string(),
         BotError::Repo(_) => format!("failed to {action}"),
     };
 

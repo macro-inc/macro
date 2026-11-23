@@ -9,6 +9,19 @@ export default defineConfig(({ command }) => ({
   root: directory,
   base: command === 'build' ? '/app/' : '/',
   plugins: [
+    {
+      // The directory reader's checkpoint and server modules load the app's
+      // sync and analytics code; the list order harness needs neither.
+      name: 'people-list-order-adapters',
+      enforce: 'pre',
+      resolveId(source, importer) {
+        if (
+          importer?.endsWith('/queries/contacts/directory.ts') &&
+          ['./backfill', '@service-storage/graphql-contacts'].includes(source)
+        )
+          return resolve(directory, 'people-list-order-adapters.ts');
+      },
+    },
     tsconfigPaths({
       projects: [resolve(directory, '../../../../../tsconfig.json')],
     }),
@@ -35,7 +48,7 @@ export default defineConfig(({ command }) => ({
     emptyOutDir: true,
     sourcemap: true,
     assetsInlineLimit: 0,
-    rollupOptions: {
+    rolldownOptions: {
       input: Object.fromEntries(
         [
           'calendar-points.html',
@@ -59,6 +72,8 @@ export default defineConfig(({ command }) => ({
           'query-write-scope.html',
           'email-participants.html',
           'search-buckets.html',
+          'people-references.html',
+          'people-list-order.html',
         ].map((name) => [name.replace('.html', ''), resolve(directory, name)])
       ),
     },

@@ -2,7 +2,6 @@ export interface EmailThreadKeyboardHandlers {
   activate: () => boolean;
   cancel: () => boolean;
   replyToFocusedMessage: () => boolean;
-  replyAllToFocusedMessage?: () => boolean;
   forwardFocusedMessage: () => boolean;
   /** Gates the sender actions, which have no target when every message is
    *  from the viewer. */
@@ -24,6 +23,9 @@ export interface EmailThreadKeyboardHandlers {
   markSenderNoise: () => boolean;
   navigateToPreviousMessage: () => boolean;
   navigateToNextMessage: () => boolean;
+  /** Space and Shift+Space: page the thread down or up, like a browser page. */
+  pageDown: (event?: KeyboardEvent) => boolean;
+  pageUp: (event?: KeyboardEvent) => boolean;
   /** Expands the focused message, or collapses it if already expanded. */
   expandFocusedMessage: () => boolean;
   expandAllMessages: () => boolean;

@@ -13,7 +13,11 @@ import {
   type CollapsibleItemInput,
   useRegisterPriorityCollapseItem,
 } from '../../priority-collapse/createPriorityCollapser';
-import { SplitLayoutContext, SplitPanelContext } from './context';
+import {
+  SplitLayoutContext,
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from './context';
 import type {
   SplitContent,
   SplitContentType,
@@ -21,6 +25,7 @@ import type {
   SplitManager,
 } from './layoutManager';
 import { shouldAutofocusNavigation } from './should-autofocus-navigation';
+import type { SplitDirection } from './split-direction';
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -55,10 +60,32 @@ export function useSplitPanelOrThrow() {
 }
 
 /**
+ * The view a split is in: the component it shows, or the nearest one behind
+ * its content in history (the list a detail was opened from).
+ */
+export function splitViewId(
+  handle: Pick<SplitHandle, 'history'>
+): string | undefined {
+  return handle.history().findLast((content) => content.type === 'component')
+    ?.id;
+}
+
+/**
  * Creates or replaces a named resource under the current split panel's owner.
+ * It lasts until the name is reused or the split moves to another view.
  */
 export function withSplitPanelOwner<T>(name: string, factory: () => T): T {
   return useSplitPanelOrThrow().replaceOwnedSlot(name, factory);
+}
+
+/** The split's own hotkey scope, also from content an inline preview hosts. */
+export function splitRootScope(
+  panel: Pick<
+    SplitPanelContextType,
+    'splitHotkeyScope' | 'splitRootHotkeyScope'
+  >
+): string {
+  return panel.splitRootHotkeyScope ?? panel.splitHotkeyScope;
 }
 
 /**
@@ -163,25 +190,13 @@ export function returnSplitToRecentListView(handle: SplitHandle) {
   }
 }
 
-export function focusAdjacentSplit(direction: 'left' | 'right') {
+/** Focuses the split beside the active one toward `direction`, as the splits tile. */
+export function focusAdjacentSplit(direction: SplitDirection) {
   const splitManager = globalSplitManager();
   if (!splitManager) return;
   const activeSplitId = splitManager.activeSplitId();
   if (!activeSplitId) return;
-  const currentSplitIds = splitManager.splits().map((s) => s.id);
-  const currentSplitIndex = currentSplitIds.indexOf(activeSplitId);
-  const getAdjacentSplitId = () => {
-    if (direction === 'left') {
-      if (currentSplitIndex === 0)
-        return currentSplitIds[currentSplitIds.length - 1];
-      return currentSplitIds[currentSplitIndex - 1];
-    } else {
-      if (currentSplitIndex === currentSplitIds.length - 1)
-        return currentSplitIds[0];
-      return currentSplitIds[currentSplitIndex + 1];
-    }
-  };
-  const adjacentSplitId = getAdjacentSplitId();
+  const adjacentSplitId = splitManager.adjacentSplit(activeSplitId, direction);
   if (!adjacentSplitId) return;
   splitManager.activateSplit(adjacentSplitId);
   splitManager.returnFocus();

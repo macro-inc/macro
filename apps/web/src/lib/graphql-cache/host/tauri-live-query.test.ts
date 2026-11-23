@@ -4,15 +4,22 @@ const { invoke, listen } = vi.hoisted(() => ({
   invoke: vi.fn(),
   listen: vi.fn(),
 }));
-vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+// Request ids differ per call; these tests check the payloads without them.
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (command: string, args: Record<string, unknown> = {}) => {
+    const { requestId: _, ...payload } = args;
+    return invoke(command, payload);
+  },
+}));
 vi.mock('@tauri-apps/api/event', () => ({ listen, emit: vi.fn() }));
 
+import { testAuthority } from '../authority-fixture';
 import {
   type EntityFilterCacheArgs,
   type LiveQueryUpdate,
   parseCacheRevision,
 } from '../protocol';
-import { createTauriCacheHost } from './tauri-host';
+import { createTauriCacheHost, LIVE_QUERY_CAPACITY } from './tauri-host';
 
 const args: EntityFilterCacheArgs = {
   filters: {},
@@ -42,9 +49,11 @@ describe('native retained view transport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listen.mockResolvedValue(() => {});
-    invoke.mockImplementation(async (command: string) =>
-      command.startsWith('graphql_cache_entity_filter') ? update : null
-    );
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_current_authority')
+        return testAuthority('scope-1');
+      return command.startsWith('graphql_cache_entity_filter') ? update : null;
+    });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -123,10 +132,27 @@ describe('native retained view transport', () => {
     host.dispose();
   });
 
+  it('resumes a descriptor while fewer readers than the bound register after it', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.entityFilter(args);
+    for (let id = 0; id < LIVE_QUERY_CAPACITY - 1; id++) {
+      await host.entityFilter({
+        ...args,
+        liveQuery: { ...args.liveQuery!, id: String(id) },
+      });
+    }
+    await host.entityFilter(args);
+    expect(invoke).toHaveBeenLastCalledWith(
+      'graphql_cache_entity_filter_resume',
+      { id: 'view', registrationId: 'registration-1', since: undefined }
+    );
+    host.dispose();
+  });
+
   it('bounds retained descriptors and clears them after reset', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await host.entityFilter(args);
-    for (let id = 0; id < 32; id++) {
+    for (let id = 0; id < LIVE_QUERY_CAPACITY; id++) {
       await host.entityFilter({
         ...args,
         liveQuery: { ...args.liveQuery!, id: String(id) },
@@ -149,9 +175,11 @@ describe('native retained view transport', () => {
 
   it('reads a fresh revision without transmitting a fragment for empty selections', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
-    invoke.mockImplementation(async (command: string) =>
-      command === 'graphql_cache_current_revision' ? '42' : null
-    );
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_current_authority')
+        return testAuthority('scope-1');
+      return command === 'graphql_cache_current_revision' ? '42' : null;
+    });
     await expect(
       host.readRecordsByKeys({
         document: args.liveQuery!.document,

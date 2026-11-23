@@ -3,12 +3,18 @@ use crate::hook::{BridgeInputs, StreamBridge, ToolLoads};
 use crate::stream::{StreamPart, ToolResponse};
 use crate::tool_result_limit::ToolResultLimit;
 use crate::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
+use genai_telemetry::attr;
+use opentelemetry::Value;
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
 use rig_agent::agent::ToolResultAction;
 use rig_agent::tool::ToolOutput;
 use rig_core::message::{Message, ToolResultContent, UserContent};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
+use tracing_subscriber::layer::SubscriberExt as _;
 
 fn limited_bridge(
     limit: &ToolResultLimit,
@@ -36,6 +42,51 @@ fn limited_bridge(
 /// A JSON result of 100,000 characters once serialized: past the limit.
 fn huge_result() -> serde_json::Value {
     serde_json::json!({ "logs": "é".repeat(99_989) })
+}
+
+#[tokio::test]
+async fn the_tool_span_records_a_result_cut_for_the_model() {
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let _guard = tracing::subscriber::set_default(
+        tracing_subscriber::registry()
+            .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test"))),
+    );
+    tracing::callsite::rebuild_interest_cache();
+    let limit = ToolResultLimit::default();
+    let (bridge, _rx) = limited_bridge(&limit);
+
+    bridge
+        .handle_tool_result(
+            "SearchLogs",
+            Some("toolu_1"),
+            "internal-1",
+            "{}",
+            &ToolOutput::json(huge_result()),
+            true,
+        )
+        .instrument(tracing::info_span!("execute_tool"))
+        .await;
+
+    provider.force_flush().expect("flush");
+    let spans = exporter.get_finished_spans().expect("finished spans");
+    let attribute = |key: &str| {
+        spans[0]
+            .attributes
+            .iter()
+            .find(|kv| kv.key.as_str() == key)
+            .map(|kv| kv.value.clone())
+    };
+    assert_eq!(
+        attribute(attr::MACRO_TOOL_RESULT_BYTES),
+        Some(Value::I64(huge_result().to_string().len() as i64))
+    );
+    assert_eq!(
+        attribute(attr::MACRO_TOOL_RESULT_CUT),
+        Some(Value::Bool(true))
+    );
 }
 
 #[tokio::test]

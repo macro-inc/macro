@@ -10,6 +10,7 @@ use crate::domain::models::{
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 use models_pagination::{
     Frecency, NotifiedAt, PaginatedCursor, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
     TypeEraseCursor,
@@ -101,12 +102,15 @@ pub trait SoupRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<TouchedEntity>, Self::Err>> + Send;
 
     /// Every entity whose Companies property names one of `company_ids` or
-    /// whose Contacts property names one of `contact_ids`. Not authorized:
+    /// whose Contacts property names one of `contact_ids`. With
+    /// `custom_task_properties`, also every task whose own custom
+    /// entity-reference property names one of those records. Not authorized:
     /// each entity reaches the caller only through its own source query.
     fn crm_property_edges<'a>(
         &self,
         company_ids: &'a [uuid::Uuid],
         contact_ids: &'a [uuid::Uuid],
+        custom_task_properties: bool,
     ) -> impl Future<Output = Result<Vec<CrmPropertyEdge>, Self::Err>> + Send;
 
     /// Fetch one page of notified-at candidates: entities the user holds a
@@ -126,6 +130,17 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         req: AttentionCandidateRequest<'a>,
     ) -> impl Future<Output = Result<Vec<AttentionCandidate>, Self::Err>> + Send;
+
+    /// Up to `limit` entities of each of `types` that the user holds an
+    /// unseen notification on, and the email threads with unread mail among
+    /// their `limit` newest pending mail notifications. Not gated on access
+    /// or filters: read what comes back through [`Self::attention_soup_page`].
+    fn attention_unread_entities<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        types: &'a [EntityType],
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, Self::Err>> + Send;
 }
 
 /// The possible outputs of soup — one paginated page per query mode.
@@ -343,6 +358,24 @@ pub trait SoupService: Send + Sync + 'static {
         >,
     > + Send;
 
+    /// Run a grouped soup query without entity properties, for callers that
+    /// resolve properties themselves.
+    ///
+    /// The default loads them through [`Self::get_user_soup_grouped`] and
+    /// drops them; the production service overrides it to skip the read.
+    fn get_user_soup_grouped_without_properties(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> impl Future<Output = Result<impl Iterator<Item = ItemGroupingInfo> + Send, SoupErr>> + Send
+    {
+        async move {
+            Ok(self
+                .get_user_soup_grouped(req)
+                .await?
+                .map(|item| item.map_extra(|_| ())))
+        }
+    }
+
     /// Display text for group keys that `group_by` leaves unlabeled, such as
     /// the names behind entity-id keys, limited to what the user can read.
     /// Keys the grouping labels on its own, or the user cannot read, are left
@@ -374,6 +407,29 @@ pub trait SoupService: Send + Sync + 'static {
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> impl Future<Output = Result<AttentionSoupPage, SoupErr>> + Send {
         let _ = (req, team_receipt);
+        async move {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "this soup service does not serve attention feeds"
+            )))
+        }
+    }
+
+    /// The entities that may hold an unread row of one of the viewer's
+    /// attention feeds: up to `limit` of each of `types` with an unseen
+    /// notification, and the email threads with unread mail among the
+    /// viewer's `limit` newest pending mail notifications. Nothing is gated
+    /// or filtered; [`Self::get_attention_page`] restricted to these
+    /// entities is.
+    ///
+    /// Services without attention feeds reject the request. The production
+    /// service overrides this method.
+    fn get_attention_unread_entities(
+        &self,
+        user: MacroUserIdStr<'static>,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, SoupErr>> + Send {
+        let _ = (user, types, limit);
         async move {
             Err(SoupErr::SoupDbErr(anyhow::anyhow!(
                 "this soup service does not serve attention feeds"
@@ -475,6 +531,13 @@ where
         (**self).get_user_soup_grouped(req).await
     }
 
+    async fn get_user_soup_grouped_without_properties(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo> + Send, SoupErr> {
+        (**self).get_user_soup_grouped_without_properties(req).await
+    }
+
     async fn group_labels<'a>(
         &'a self,
         user_id: MacroUserIdStr<'a>,
@@ -497,6 +560,17 @@ where
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Result<AttentionSoupPage, SoupErr> {
         (**self).get_attention_page(req, team_receipt).await
+    }
+
+    async fn get_attention_unread_entities(
+        &self,
+        user: MacroUserIdStr<'static>,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> Result<Vec<Entity<'static>>, SoupErr> {
+        (**self)
+            .get_attention_unread_entities(user, types, limit)
+            .await
     }
 }
 

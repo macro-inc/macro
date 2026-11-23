@@ -1,19 +1,18 @@
-import type { EntityWithRawNotifications } from '@app/features/soup/entity-notifications';
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications/types';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { InboxClear } from '../core/inbox-filters';
 import type { InboxRow, InboxRowType } from '../core/inbox-row';
 
-/** What one inbox row presents. */
+/**
+ * What one inbox row presents, as plain data the feed's store reconciles by
+ * row id. `rowEntity` gives the entity a row opens, with its notifications.
+ */
 export type InboxRowContent = {
-  /** The row's entity, carrying only the row's notifications. */
-  entity: EntityWithRawNotifications<EntityData>;
+  /** The entity the row is filed under. */
+  entity: EntityData;
   /** The row's notifications, newest first; the first names the row. */
   notifications: UnifiedNotification[];
-  /** The row's entity, opening at one of its notifications. */
-  entityAt: (
-    notification: UnifiedNotification
-  ) => EntityWithRawNotifications<EntityData>;
 };
 
 export type NotificationInboxRow = InboxRow<InboxRowContent>;
@@ -21,10 +20,29 @@ export type NotificationInboxRow = InboxRow<InboxRowContent>;
 /** Which rows a feed shows; with no row types it shows and reads nothing. */
 export type InboxScope = {
   rowTypes: readonly InboxRowType[];
+  /** No category selection: include kinds this client does not yet know. */
+  allKinds?: boolean;
+  /**
+   * Only unread rows. The server filters, so pages and live changes cover
+   * unread rows alone.
+   */
+  unreadOnly?: boolean;
 };
 
 /** A completed done, which the caller can reverse once. */
 export type InboxDoneResult = { undo: () => Promise<void> };
+
+/**
+ * A clear: how many rows it took, and its reversal. The server works through
+ * a clear on its own; one that didn't finish before the reply carries on
+ * there, `count` is so far, and `finished` resolves when it ends: to the
+ * final count, or undefined when it was undone or stopped instead.
+ */
+export type InboxClearResult = InboxDoneResult & {
+  count: number;
+  complete: boolean;
+  finished?: Promise<number | undefined>;
+};
 
 /** One live inbox feed for a scope. */
 export type InboxFeedSource = {
@@ -46,6 +64,22 @@ export type InboxFeedSource = {
    * the done fails; resolves to the undo otherwise.
    */
   markDone: (rows: readonly NotificationInboxRow[]) => Promise<InboxDoneResult>;
+  /**
+   * Hide one notification of a stack now and complete it, with the hidden
+   * ones about the same message. Rejects, showing it again, when the done
+   * fails; resolves to the undo otherwise.
+   */
+  markNotificationDone: (
+    row: NotificationInboxRow,
+    notification: UnifiedNotification
+  ) => Promise<InboxDoneResult>;
+  /**
+   * Clear the whole inbox of the rows `clear` takes, loaded or not, hiding
+   * them at once. The clear is the server's: it finishes without this tab,
+   * and its undo stops it if it is still at work. Rejects, showing the rows
+   * again, when it could not be started.
+   */
+  clear: (clear: InboxClear) => Promise<InboxClearResult>;
   /**
    * Read rows as seen now and mark them seen, hidden notifications included;
    * they read as unseen again when that fails.

@@ -1,4 +1,4 @@
-use crate::parse::column_limits;
+use crate::parse::{column_limits, nul_characters};
 use chrono::Utc;
 use models_email::email::db::{address, attachment};
 use models_email::email::service::{message, thread};
@@ -8,6 +8,12 @@ use models_email::service::message::HasContactInfo;
 use sqlx::types::Uuid;
 use std::mem;
 
+/// A provider value as its `varchar` column can hold it: without NUL
+/// characters, then clamped to the column's width.
+fn storable_varchar(value: Option<String>, limit: usize, column: &'static str) -> Option<String> {
+    column_limits::clamp_opt(nul_characters::remove_opt(value, column), limit, column)
+}
+
 /// Maps a ContactInfo to an EmailAddress, dropping it when the address cannot
 /// be stored.
 ///
@@ -15,7 +21,8 @@ use std::mem;
 /// `email_contacts.email_address` column width is tracking-token garbage (the
 /// one-click-unsubscribe addresses some senders put in `To:` run to hundreds
 /// of characters). Dropping the address is strictly better than failing the
-/// whole message insert on it.
+/// whole message insert on it. An address with a NUL character can't be stored
+/// either, and removing the character could turn it into someone else's.
 fn map_contact_to_db(contact: &service::address::ContactInfo) -> Option<address::EmailAddress> {
     if !column_limits::fits(&contact.email, column_limits::EMAIL_ADDRESS) {
         tracing::warn!(
@@ -25,11 +32,15 @@ fn map_contact_to_db(contact: &service::address::ContactInfo) -> Option<address:
         );
         return None;
     }
+    if contact.email.contains('\0') {
+        tracing::warn!("dropping unstorable email address with a NUL character");
+        return None;
+    }
 
     Some(address::EmailAddress {
         id: macro_uuid::generate_uuid_v7(), // this value doesn't actually matter as we will be setting it later again
         email_address: contact.email.clone(),
-        name: column_limits::clamp_opt(
+        name: storable_varchar(
             contact.name.clone(),
             column_limits::CONTACT_NAME,
             "email_contacts.name",
@@ -79,26 +90,33 @@ pub fn map_service_thread_to_db(
     }
 }
 
-#[tracing::instrument]
 pub fn map_service_message_to_db(
     service_msg: &mut message::Message,
     thread_id: Uuid,
     from_contact_id: Option<Uuid>,
 ) -> db::message::Message {
+    // In place, so the In-Reply-To lookup after the insert reads the headers as stored.
+    if let Some(headers) = service_msg.headers_json.as_mut() {
+        nul_characters::remove_from_json(headers, "email_messages.headers_jsonb");
+    }
+
     db::message::Message {
         id: service_msg.db_id,
         provider_id: service_msg.provider_id.clone(),
-        global_id: service_msg.global_id.clone(),
+        global_id: nul_characters::remove_opt(
+            service_msg.global_id.clone(),
+            "email_messages.global_id",
+        ),
         thread_id,
         provider_thread_id: service_msg.provider_thread_id.clone(),
         replying_to_id: service_msg.replying_to_id,
         link_id: service_msg.link_id,
         provider_history_id: service_msg.provider_history_id.clone(),
         internal_date_ts: service_msg.internal_date_ts,
-        snippet: service_msg.snippet.clone(),
+        snippet: nul_characters::remove_opt(service_msg.snippet.clone(), "email_messages.snippet"),
         size_estimate: service_msg.size_estimate,
-        subject: service_msg.subject.clone(),
-        from_name: column_limits::clamp_opt(
+        subject: nul_characters::remove_opt(service_msg.subject.clone(), "email_messages.subject"),
+        from_name: storable_varchar(
             service_msg.from.as_ref().and_then(|f| f.name.clone()),
             column_limits::CONTACT_NAME,
             "email_messages.from_name",
@@ -111,8 +129,14 @@ pub fn map_service_message_to_db(
         is_sent: service_msg.is_sent,
         is_draft: service_msg.is_draft,
         // these values can be large - move instead of clone
-        body_text: mem::take(&mut service_msg.body_text),
-        body_html_sanitized: mem::take(&mut service_msg.body_html_sanitized),
+        body_text: nul_characters::remove_opt(
+            mem::take(&mut service_msg.body_text),
+            "email_messages.body_text",
+        ),
+        body_html_sanitized: nul_characters::remove_opt(
+            mem::take(&mut service_msg.body_html_sanitized),
+            "email_messages.body_html_sanitized",
+        ),
         body_macro: mem::take(&mut service_msg.body_macro),
         headers_jsonb: service_msg.headers_json.clone(),
         created_at: service_msg.created_at,
@@ -153,18 +177,18 @@ pub fn map_service_attachments_to_db(
                 id: service_attachment.db_id,
                 message_id: message_db_id,
                 provider_attachment_id: service_attachment.provider_id.clone(),
-                filename: column_limits::clamp_opt(
+                filename: storable_varchar(
                     filename,
                     column_limits::ATTACHMENT_FILENAME,
                     "email_attachments.filename",
                 ),
-                mime_type: column_limits::clamp_opt(
+                mime_type: storable_varchar(
                     service_attachment.mime_type.clone(),
                     column_limits::ATTACHMENT_MIME_TYPE,
                     "email_attachments.mime_type",
                 ),
                 size_bytes: service_attachment.size_bytes,
-                content_id: column_limits::clamp_opt(
+                content_id: storable_varchar(
                     service_attachment.content_id.clone(),
                     column_limits::ATTACHMENT_CONTENT_ID,
                     "email_attachments.content_id",
@@ -180,7 +204,7 @@ pub fn map_new_contact_to_db(service_contact: &Contact) -> db::contact::Contact 
     db::contact::Contact {
         id: service_contact.id,
         link_id: service_contact.link_id,
-        name: column_limits::clamp_opt(
+        name: storable_varchar(
             service_contact.name.clone(),
             column_limits::CONTACT_NAME,
             "email_contacts.name",

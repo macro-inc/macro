@@ -5,9 +5,11 @@ import {
 } from '@app/features/next-soup/actions';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { enableTaskStartDate } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -23,7 +25,7 @@ import { TaskBoardView } from './views/task-board-view';
 /** Connects the task view to query adapters and app navigation. */
 export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
   const context = useTasksView();
-  const { state, source, openTask, projectsEnabled, calendar } = context;
+  const { state, source, openTask, calendar } = context;
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const layout = useSplitLayout();
@@ -33,16 +35,17 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
     grouping: () => toTaskBoardGrouping(state.groupBy),
     searching: source.boardSearching ?? (() => !!state.search.trim()),
     userId: useUserId(),
-    projectsEnabled,
     facets: () => state.facets,
     sort: () => state.sort,
     calendar,
     dueDate: () => taskDueDatePredicate(state.dueDate, calendar()),
   });
+  const startDates = useFeatureFlag(enableTaskStartDate);
   const data = {
     ...queries,
     createAssigneeName: (id: Accessor<string>) =>
       usePropertyUserDisplay(id).name,
+    startDatesEnabled: () => startDates().enabled,
   };
 
   const viewContext = () =>

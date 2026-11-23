@@ -118,7 +118,7 @@ it.each([true, false])(
     // The server answers after the composer, and its panel, are gone.
     unmount();
     resolve(project);
-    const [open, openInNewSplit] = await toastActions();
+    const [openInNewSplit, open] = await toastActions();
     expect(fixtures.manager.openWithSplit).not.toHaveBeenCalled();
     open.onClick();
     expect(fixtures.manager.openWithSplit).toHaveBeenLastCalledWith(
@@ -138,7 +138,7 @@ it('never opens a new split from the toast on a touch device', async () => {
   const { resolve, unmount } = submit(true);
   unmount();
   resolve(project);
-  const [, openInNewSplit] = await toastActions();
+  const [openInNewSplit] = await toastActions();
   openInNewSplit.onClick();
   expect(fixtures.manager.openWithSplit).toHaveBeenLastCalledWith(
     projectContent,

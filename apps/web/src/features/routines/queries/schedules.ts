@@ -1,3 +1,4 @@
+import { removeAcceptedSuggestion } from '@app/features/routine-suggestions/queries/routine-suggestions';
 import { analytics } from '@app/lib/analytics';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
@@ -15,6 +16,7 @@ import {
   useMutation,
   useQuery,
 } from '@tanstack/solid-query';
+import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { scheduledActionKeys } from './keys';
 import { routineTargetKind } from './routine-draft';
@@ -62,13 +64,15 @@ function patchScheduleEnabled(scheduleId: string, enabled: boolean) {
       current ? { ...current, enabled } : undefined
   );
 
-  queryClient.setQueryData(
+  for (const key of [
     scheduledActionKeys.list.queryKey,
-    (current: ScheduledAction[] | undefined) =>
+    scheduledActionKeys.subRoutines.queryKey,
+  ])
+    queryClient.setQueryData(key, (current: ScheduledAction[] | undefined) =>
       current?.map((item) =>
         item.id === scheduleId ? { ...item, enabled } : item
       )
-  );
+    );
 }
 
 function fetchSchedules() {
@@ -112,13 +116,138 @@ export function useScheduleHistoryQuery(
   return useQuery(() => scheduleHistoryQueryOptions(scheduleId(), enabled()));
 }
 
+// Cached past unmount; closes over the resolved schedule id only.
+function codeUpgradesQueryOptions(
+  scheduleId: string | null | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: scheduledActionKeys.codeUpgrades({
+      scheduleId: scheduleId ?? '__none__',
+    }).queryKey,
+    enabled: enabled && Boolean(scheduleId),
+    queryFn: async () =>
+      throwOnErr(
+        async () =>
+          await scheduledActionClient.listCodeUpgrades({
+            scheduleId: scheduleId!,
+          })
+      ),
+    ...QUERY_REFETCH_BEHAVIOR,
+  });
+}
+
+/** How the routine's code steps were brought to new SDKs, newest first. */
+export function useCodeUpgradesQuery(
+  scheduleId: Accessor<string | null | undefined>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => codeUpgradesQueryOptions(scheduleId(), enabled()));
+}
+
+// Cached past unmount; closes over the resolved schedule id only.
+function unusableItemsQueryOptions(
+  scheduleId: string | null | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: scheduledActionKeys.unusableItems({
+      scheduleId: scheduleId ?? '__none__',
+    }).queryKey,
+    enabled: enabled && Boolean(scheduleId),
+    queryFn: async () =>
+      throwOnErr(
+        async () =>
+          await scheduledActionClient.listUnusableItems({
+            scheduleId: scheduleId!,
+          })
+      ),
+    ...QUERY_REFETCH_BEHAVIOR,
+  });
+}
+
+/**
+ * The routine's knobs whose picked item its owner can't use now: deleted,
+ * trashed or out of their reach. Back from another tab, it checks again.
+ */
+export function useUnusableItemsQuery(
+  scheduleId: Accessor<string | null | undefined>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => unusableItemsQueryOptions(scheduleId(), enabled()));
+}
+
+function fetchSubRoutines() {
+  return throwOnErr(async () => await scheduledActionClient.listSubRoutines());
+}
+
+// Cached past unmount; closes over the resolved routine id only.
+function childrenQueryOptions(scheduleId: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: scheduledActionKeys.children({ scheduleId }).queryKey,
+    enabled,
+    queryFn: async () =>
+      throwOnErr(
+        async () => await scheduledActionClient.listChildren({ scheduleId })
+      ),
+    ...QUERY_REFETCH_BEHAVIOR,
+  });
+}
+
+/** What one routine's runs created, finished one-time ones included. */
+export function useChildrenQuery(
+  scheduleId: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => childrenQueryOptions(scheduleId(), enabled()));
+}
+
+/**
+ * Read a routine's children now, as a delete would remove them: fresh, and
+ * failing at once, offline too, rather than retrying while the confirmation
+ * is open.
+ */
+export function fetchChildren(scheduleId: string) {
+  return ResultAsync.fromPromise(
+    queryClient.fetchQuery({
+      ...childrenQueryOptions(scheduleId, true),
+      staleTime: 0,
+      retry: false,
+      networkMode: 'always',
+    }),
+    (error) => error
+  );
+}
+
+/** Every active routine another routine's run created. */
+export function useSubRoutinesQuery(enabled: Accessor<boolean>) {
+  return useQuery(() => ({
+    queryKey: scheduledActionKeys.subRoutines.queryKey,
+    enabled: enabled(),
+    queryFn: fetchSubRoutines,
+    placeholderData: keepPreviousData,
+    reconcile: 'id',
+    ...QUERY_REFETCH_BEHAVIOR,
+  }));
+}
+
 export function invalidateSchedules() {
   return Promise.all([
     queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
     }),
     queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.subRoutines.queryKey,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.children._def,
+    }),
+    queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.detail._def,
+    }),
+    // A save may have repicked one, or picked one its owner can't use.
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.unusableItems._def,
     }),
   ]);
 }
@@ -129,27 +258,39 @@ function _invalidateScheduleHistory(scheduleId: string) {
   });
 }
 
+/** A routine to create, and the suggestion it is saved from, if any. */
+export type CreateScheduleRequest = {
+  body: ActionConfiguration;
+  suggestionId?: string;
+};
+
 export function useCreateScheduleMutation(
-  callbacks?: MutationCallbacks<ScheduledAction, Error, ActionConfiguration>,
+  callbacks?: MutationCallbacks<ScheduledAction, Error, CreateScheduleRequest>,
   /** Whether the user created the routine or duplicated one, for analytics. */
   source: 'new' | 'duplicate' = 'new'
 ) {
   return useMutation(() => ({
-    mutationFn: async (request: ActionConfiguration) =>
+    mutationFn: async (request: CreateScheduleRequest) =>
       throwOnErr(
-        async () => await scheduledActionClient.createSchedule(request)
+        async () =>
+          await scheduledActionClient.createSchedule(request.body, {
+            suggestionId: request.suggestionId,
+          })
       ),
     ...withCallbacks(
       {
-        onSuccess: async (schedule) => {
+        onSuccess: async (schedule, request) => {
           // Client-side until scheduled_action reports to PostHog itself.
           analytics.track('routine_created', {
             routineId: schedule.id ?? undefined,
-            source,
+            source: request.suggestionId ? 'suggestion' : source,
+            suggestionId: request.suggestionId,
             triggerType: schedule.trigger.type,
             targetKind: routineTargetKind(schedule),
           });
           upsertSchedule(schedule);
+          if (request.suggestionId)
+            await removeAcceptedSuggestion(request.suggestionId);
           await invalidateSchedules();
         },
       },
@@ -236,6 +377,32 @@ export function useSetScheduleEnabledMutation(
         },
         onSuccess: (schedule) => upsertSchedule(schedule),
         onSettled: () => invalidateSchedules(),
+      },
+      callbacks
+    ),
+  }));
+}
+
+/**
+ * Keep a sub-routine as the owner's own routine. It joins the main list and
+ * leaves its parent's, so both are read again.
+ */
+export function useDetachScheduleMutation(
+  callbacks?: MutationCallbacks<ScheduledAction, Error, { scheduleId: string }>
+) {
+  return useMutation(() => ({
+    mutationFn: async (args: { scheduleId: string }) =>
+      throwOnErr(async () => await scheduledActionClient.detach(args)),
+    ...withCallbacks(
+      {
+        onSuccess: async (schedule: ScheduledAction) => {
+          if (schedule.id)
+            queryClient.setQueryData(
+              scheduledActionKeys.detail({ scheduleId: schedule.id }).queryKey,
+              schedule
+            );
+          await invalidateSchedules();
+        },
       },
       callbacks
     ),

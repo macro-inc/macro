@@ -733,3 +733,11 @@ mark {
   text-decoration-color: var(--diff-author-color, hsl(0, 65%, 55%));
   opacity: 0.6;
 }
+
+/* Collapsible sections: blocks inside a folded heading's section. Print and
+ * other non-screen media show everything. */
+@media screen {
+  .md-folded {
+    display: none !important;
+  }
+}

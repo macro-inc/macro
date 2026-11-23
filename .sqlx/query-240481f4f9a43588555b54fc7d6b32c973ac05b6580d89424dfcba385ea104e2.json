@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT idempotency_key, created_at > now() - make_interval(secs => $2) AS \"in_flight!\" FROM subscription_item_change WHERE subscription_id = $1 AND outcome = 'pending'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "idempotency_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "in_flight!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "240481f4f9a43588555b54fc7d6b32c973ac05b6580d89424dfcba385ea104e2"
+}

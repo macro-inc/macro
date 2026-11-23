@@ -23,7 +23,8 @@ export type DeleteDialogProps = ManagedDialogProps & {
   class?: string;
   /** Where focus lands on close, e.g. when the opener no longer exists. */
   onCloseAutoFocus?: DialogProps['onCloseAutoFocus'];
-  onDelete: () => void;
+  /** Receives the typed confirmation, so the server can check it too. */
+  onDelete: (confirmation: string) => void;
 };
 
 /** Shared destructive-action dialog with optional typed confirmation. */
@@ -42,7 +43,7 @@ export function DeleteDialog(props: DeleteDialogProps) {
   };
 
   const deleteItem = () => {
-    if (canDelete()) props.onDelete();
+    if (canDelete()) props.onDelete(confirmation());
   };
 
   return (

@@ -132,6 +132,17 @@ impl FakeDocumentService {
 }
 
 impl DocumentService for FakeDocumentService {
+    async fn set_appearance(
+        &self,
+        _receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance.validate().map_err(DocumentError::BadRequest)?;
+        Ok(appearance)
+    }
+
     async fn internal_get_basic_document(
         &self,
         _document_id: &str,
@@ -578,7 +589,8 @@ impl EditingWorkerService for FakeEditingWorker {
         _: &str,
         _: &DocumentPermissionToken,
         _: &crate::domain::canvas::CanvasRequest,
-    ) -> anyhow::Result<crate::domain::canvas::CanvasResult> {
+        _: bool,
+    ) -> Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError> {
         panic!("unexpected canvas call")
     }
 
@@ -587,8 +599,23 @@ impl EditingWorkerService for FakeEditingWorker {
         _document_id: &str,
         _document_token: &DocumentPermissionToken,
         _request: &crate::domain::spreadsheet::SpreadsheetRequest,
-    ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetResponse,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
         panic!("unexpected spreadsheet call")
+    }
+
+    async fn spreadsheet_instructions(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _instructions: &str,
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetWriterResult,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        panic!("unexpected spreadsheet instructions call")
     }
 
     async fn word_document(
@@ -598,6 +625,24 @@ impl EditingWorkerService for FakeEditingWorker {
         _request: &crate::domain::word_document::WordDocumentRequest,
     ) -> anyhow::Result<crate::domain::word_document::WordDocumentResponse> {
         panic!("unexpected word document call")
+    }
+
+    async fn read_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::markdown_body::DocumentMarkdown> {
+        panic!("unexpected read_markdown call")
+    }
+
+    async fn write_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _expected_revision: &str,
+        _markdown: &str,
+    ) -> anyhow::Result<crate::domain::ports::editing::MarkdownWrite> {
+        panic!("unexpected write_markdown call")
     }
 
     async fn add_comment_mark(

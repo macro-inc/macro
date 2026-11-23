@@ -23,6 +23,7 @@ fn is_property_target(entity_type: model_entity::EntityType) -> bool {
         EntityType::Document
             | EntityType::EmailThread
             | EntityType::CrmCompany
+            | EntityType::CrmContact
             | EntityType::Call
             | EntityType::Chat
             | EntityType::Channel
@@ -143,6 +144,82 @@ impl<P, A: EntityAccessService> PropertiesEntityPropertyReader<P, A> {
         .map(Some)
         .map_err(|err| rootcause::report!(err))?)
     }
+
+    /// Mint a view receipt per entity; entities the caller cannot view are
+    /// skipped and keep their empty property list. Database rows and
+    /// documents share access lookups; the rest are checked one at a time.
+    async fn view_receipts(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        keys: &[model_entity::Entity<'static>],
+    ) -> Vec<EntityAccessReceipt<ViewAccessLevel>> {
+        let span = tracing::info_span!(
+            "graphql_properties.authorize",
+            entity_count = keys.len(),
+            document_bulk_failed = tracing::field::Empty,
+        );
+        async {
+            let mut row_ids = Vec::new();
+            let mut document_keys = Vec::new();
+            let mut other_keys = Vec::new();
+            for key in keys {
+                match key.entity_type {
+                    model_entity::EntityType::DatabaseRow => {
+                        row_ids.push(key.entity_id.to_string());
+                    }
+                    model_entity::EntityType::Document => document_keys.push(key.clone()),
+                    _ => other_keys.push(key.clone()),
+                }
+            }
+            let document_ids = document_keys
+                .iter()
+                .map(|key| key.entity_id.to_string())
+                .collect::<Vec<_>>();
+            let mut receipts = self
+                .entity_access_service
+                .generate_database_row_view_access_receipts(user_id, &row_ids)
+                .await
+                .into_values()
+                .filter_map(Result::ok)
+                .collect::<Vec<_>>();
+            match self
+                .entity_access_service
+                .generate_document_view_access_receipts(user_id, &document_ids)
+                .await
+            {
+                Ok(document_receipts) => {
+                    tracing::Span::current().record("document_bulk_failed", false);
+                    receipts.extend(document_receipts.into_values());
+                }
+                // One failed lookup must not cost every document its
+                // properties: check those documents one at a time instead.
+                Err(error) => {
+                    tracing::Span::current().record("document_bulk_failed", true);
+                    tracing::warn!(
+                        document_count = document_ids.len(),
+                        error = ?error,
+                        "document access lookup failed, checking documents one at a time"
+                    );
+                    other_keys.append(&mut document_keys);
+                }
+            }
+            receipts.extend(
+                load_view_receipts(&other_keys, |key| {
+                    self.entity_access_service
+                        .generate_entity_access_receipt::<ViewAccessLevel>(
+                            user_id,
+                            None,
+                            &key.entity_id,
+                            key.entity_type,
+                        )
+                })
+                .await,
+            );
+            receipts
+        }
+        .instrument(span)
+        .await
+    }
 }
 
 impl<P, A> EntityPropertyReader for PropertiesEntityPropertyReader<P, A>
@@ -203,43 +280,7 @@ where
             .map(|key| (key, Vec::new()))
             .collect::<HashMap<_, _>>();
 
-        // Mint a view receipt per entity; entities the caller cannot view are
-        // skipped and keep their empty property list.
-        let receipts = async {
-            let (row_keys, other_keys): (Vec<_>, Vec<_>) = keys
-                .iter()
-                .cloned()
-                .partition(|key| key.entity_type == model_entity::EntityType::DatabaseRow);
-            let row_ids = row_keys
-                .iter()
-                .map(|key| key.entity_id.to_string())
-                .collect::<Vec<_>>();
-            let mut receipts = self
-                .entity_access_service
-                .generate_database_row_view_access_receipts(user_id, &row_ids)
-                .await
-                .into_values()
-                .filter_map(Result::ok)
-                .collect::<Vec<_>>();
-            receipts.extend(
-                load_view_receipts(&other_keys, |key| {
-                    self.entity_access_service
-                        .generate_entity_access_receipt::<ViewAccessLevel>(
-                            user_id,
-                            None,
-                            &key.entity_id,
-                            key.entity_type,
-                        )
-                })
-                .await,
-            );
-            receipts
-        }
-        .instrument(tracing::info_span!(
-            "graphql_properties.authorize",
-            entity_count = keys.len()
-        ))
-        .await;
+        let receipts = self.view_receipts(user_id, keys).await;
 
         if receipts.is_empty() {
             return Ok(result);

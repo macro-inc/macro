@@ -9,6 +9,7 @@ export type CallControlsProps = {
   /** Leave / hang up — parent supplies tab switch, `leaveCall()`, etc. */
   onLeave: () => void | Promise<void>;
   onSettingsOpenChange?: (open: boolean) => void;
+  compact?: boolean;
   when?: boolean | Accessor<boolean>;
   children?: JSX.Element;
 };
@@ -48,6 +49,7 @@ export function CallControls(props: CallControlsProps) {
       </Show>
       <Show when={!nativeCall?.snapshot()}>
         <CallControlsDefaultAndPanelRow
+          compact={props.compact}
           onLeave={props.onLeave}
           onSettingsOpenChange={props.onSettingsOpenChange}
         >

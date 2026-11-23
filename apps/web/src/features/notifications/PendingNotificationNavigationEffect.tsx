@@ -1,4 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { closeSheetsForNavigation } from '@components/app/mobile/close-on-navigation';
 import type {
   SplitEventWithType,
   SplitManager,
@@ -30,7 +31,9 @@ type NavigationAttempt = {
 
 export function usePendingNotificationNavigationEffect(
   notificationSource: Pick<NotificationSource, 'notifications'>,
-  recipientId: Accessor<string | undefined>
+  recipientId: Accessor<string | undefined>,
+  /** Flag-gated handlers would read a still-loading flag as off and drop the tap. */
+  flagsLoaded: Accessor<boolean>
 ) {
   const [retryRevision, setRetryRevision] = createSignal(0);
   let disposed = false;
@@ -61,6 +64,7 @@ export function usePendingNotificationNavigationEffect(
       !notificationId ||
       !layoutManager ||
       !navigationReady ||
+      !flagsLoaded() ||
       (intent.recipientId && !account)
     ) {
       activeAttempt = undefined;
@@ -123,7 +127,9 @@ export function usePendingNotificationNavigationEffect(
         }
       );
     const span = notificationOpenSpan(notificationId);
-    fireAndForget(
+    // The tap may land on the page already shown (its channel is open), which
+    // closes no sheet by itself, so close them as it starts.
+    const navigate = () =>
       (span ? span.run(open) : open()).match(
         () => {
           if (!isCurrentAttempt() || attempt.applied) return;
@@ -152,7 +158,9 @@ export function usePendingNotificationNavigationEffect(
           finishNotificationNavigation(intent, 'failed');
           toast.failure('Failed to open notification.');
         }
-      ),
+      );
+    fireAndForget(
+      closeSheetsForNavigation(navigate),
       'notification-navigation'
     );
   });

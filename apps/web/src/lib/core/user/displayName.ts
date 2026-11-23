@@ -1,15 +1,13 @@
-import { debounce } from '@core/util/debounce';
-
-import { authServiceClient } from '@service-auth/client';
-import { batch } from 'solid-js';
-import { createStore, unwrap } from 'solid-js/store';
+import {
+  normalizeUserNameQueryId,
+  USER_NAME_CACHE_LIMITS,
+} from '@queries/auth/user-name-cache';
+import { userNameCache } from '@queries/auth/user-name-cache-runtime';
+import { getOwner, onCleanup } from 'solid-js';
 import { type MacroId, macroIdToEmail } from './macroId';
 import type { UserNameItem, UserNamePreviewFetcher } from './types';
 
-/**
- * Initials from a structured name, falling back to the email's first letter.
- * Two letters when both names are present, otherwise one.
- */
+/** Initials from structured names, falling back to the email's first letter. */
 export function getInitials(
   firstName: string,
   lastName: string,
@@ -17,227 +15,116 @@ export function getInitials(
 ): string {
   const first = firstName.trim();
   const last = lastName.trim();
-
-  if (first && last) {
-    return (first[0] + last[0]).toUpperCase();
-  }
-  if (first) {
-    return first[0].toUpperCase();
-  }
+  if (first && last) return (first[0] + last[0]).toUpperCase();
+  if (first) return first[0].toUpperCase();
   return email.substring(0, 1).toUpperCase();
 }
 
-/**
- * Initials from a free-form display name (split on whitespace into first/last
- * tokens), falling back to the email's first letter. For data sources that
- * carry a single name string rather than structured first/last fields.
- */
+/** First/last tokens of a free-form label, preserving the email fallback. */
 export function getInitialsFromName(
   name: string | null | undefined,
   email: string
 ): string {
   const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
-  const last = parts.length > 1 ? (parts.at(-1) ?? '') : '';
-  return getInitials(parts[0] ?? '', last, email);
+  return getInitials(
+    parts[0] ?? '',
+    parts.length > 1 ? (parts.at(-1) ?? '') : '',
+    email
+  );
 }
 
-const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;
-const FAILED_FETCH_RETRY_SECONDS = 30;
-
-type DisplayNameStore = Record<string, UserNameItem>;
-
-const [userDisplayNames, setUserDisplayNames] = createStore<DisplayNameStore>(
-  {}
-);
-
-const displayNameFetchQueue = new Set<string>();
-
-/** Adds items to fetch queue and schedules processing */
-function queueItemsForFetch(items: string[]) {
-  let addedItem = false;
-  for (const item of items) {
-    if (displayNameFetchQueue.has(item)) continue;
-    displayNameFetchQueue.add(item);
-    addedItem = true;
-  }
-
-  if (addedItem) processFetchQueue();
-}
-
-type DisplayNameOptions = {
-  emailFallback?: 'full' | 'local-part';
-};
-
+type DisplayNameOptions = { emailFallback?: 'full' | 'local-part' };
 type DisplayNamePartStrings = {
   firstName: string;
   lastName: string;
   fullName: string;
 };
 
-function formatEmailFallback(email: string, options?: DisplayNameOptions) {
-  if (options?.emailFallback !== 'local-part') return email;
-  return email.split('@')[0] || email;
+function fallbackItem(id: MacroId): UserNameItem {
+  return { id, loading: false, _createdAt: new Date(0) };
 }
-
-function defaultNameTransform(
+function getUserNameItem(id: MacroId): UserNameItem {
+  const value = userNameCache().read(id);
+  return {
+    id,
+    loading: value.loading,
+    _createdAt: new Date(value.updatedAt),
+    firstName: value.name?.first_name ?? undefined,
+    lastName: value.name?.last_name ?? undefined,
+    isAgent: value.name?.is_agent,
+  };
+}
+function display(
   item: UserNameItem,
+  id: MacroId,
   options?: DisplayNameOptions
 ): string {
-  // TODO: UserNameItem needs to be ported to use MacroId
-  const email = macroIdToEmail(item.id as MacroId);
-
-  if (item.loading) return formatEmailFallback(email, options);
-
-  if (item.lastName || item.firstName) {
-    let name: string[] = [];
-
-    // HACK: filter out default field "N/A"
-    if (item.firstName && item.firstName !== 'N/A') {
-      name.push(item.firstName);
-    }
-
-    // HACK: filter out default field "N/A"
-    if (item.lastName && item.lastName !== 'N/A') {
-      name.push(item.lastName);
-    }
-
-    if (name.length === 0) return formatEmailFallback(email, options);
-
-    let nameStringified = name.join(' ');
-    return nameStringified;
-  }
-
-  return formatEmailFallback(email, options);
+  const email = macroIdToEmail(id);
+  const fallback =
+    options?.emailFallback === 'local-part'
+      ? email.split('@')[0] || email
+      : email;
+  if (item.loading) return fallback;
+  const parts = [item.firstName, item.lastName].filter(
+    (value) => value && value !== 'N/A'
+  );
+  return parts.length ? parts.join(' ') : fallback;
 }
 
-async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
-  const result = await authServiceClient.getUserNamesWithEmail({
-    user_ids: ids,
-  });
-  if (result.isErr()) {
-    console.error('Failed to fetch user display names');
-    // Labels read this store in tracked scopes, so an entry written already
-    // expired re-queues the failed request the moment it lands. Backdate it to
-    // expire after FAILED_FETCH_RETRY_SECONDS so a later access retries
-    // instead of the label sticking on the email fallback.
-    const expiresSoon = new Date(
-      Date.now() -
-        (DEFAULT_CACHE_TIME_SECONDS - FAILED_FETCH_RETRY_SECONDS) * 1000
-    );
-    return ids.map((id) => ({ _createdAt: expiresSoon, id, loading: false }));
-  }
-
-  const data = result.value;
-  return data.names.map((name) => {
-    return {
-      _createdAt: new Date(),
-      id: name.id,
-      firstName: name.first_name as string,
-      lastName: name.last_name as string,
-      isAgent: name.is_agent,
-      loading: false,
-    };
-  });
-}
-
-const processFetchQueue = debounce(async () => {
-  const items = [...displayNameFetchQueue];
-  if (items.length === 0) return;
-
-  displayNameFetchQueue.clear();
-  await batchFetchNames(items);
-}, 10);
-
-async function batchFetchNames(ids: string[]) {
-  const [nameResults] = await Promise.all([
-    ids.length > 0 ? fetchDisplayNames(ids) : Promise.resolve([]),
-  ]);
-
-  batch(() => {
-    for (const result of nameResults) {
-      setUserDisplayNames(result.id, result);
-    }
-  });
-}
-
-function ensureUserNameItem(id: MacroId) {
-  const cached = userDisplayNames[id];
-  const cacheExpired =
-    cached &&
-    !cached.loading &&
-    Date.now() - cached._createdAt.getTime() >
-      DEFAULT_CACHE_TIME_SECONDS * 1000;
-
-  if (!cached || cacheExpired) {
-    setUserDisplayNames(id, {
-      loading: true,
-      _createdAt: new Date(),
-      id: id,
-    });
-    queueItemsForFetch([id]);
-  }
-}
-
-function getUserNameItem(id: MacroId): UserNameItem {
-  ensureUserNameItem(id);
-  return unwrap(userDisplayNames[id]);
-}
-
-/** Resolves a display name from the shared reactive cache. */
+/** Reactive, non-suspending reads of the account-scoped bounded query cache. */
 export function getDisplayName(
   id: MacroId | undefined | null,
   options?: DisplayNameOptions
 ): string {
-  if (!id) return '';
-  return defaultNameTransform(getUserNameItem(id), options);
+  return id ? display(getUserNameItem(id), id, options) : '';
 }
-
-/** Whether this user is an agent account, from the shared reactive cache. */
+/** Agent metadata shares the same bounded, account-scoped name value owner. */
 export function isAgentAccount(id: MacroId | undefined | null): boolean {
-  if (!id) return false;
-  return getUserNameItem(id).isAgent === true;
+  return !!id && getUserNameItem(id).isAgent === true;
 }
 
-/** Resolves structured display name parts from the shared reactive cache. */
 export function getDisplayNameParts(
   id: MacroId | undefined | null,
   options?: DisplayNameOptions
 ): DisplayNamePartStrings {
   if (!id) return { firstName: '', lastName: '', fullName: '' };
-
   const item = getUserNameItem(id);
-  const fullName = defaultNameTransform(item, options);
-
-  if (item.loading) return { firstName: '', lastName: '', fullName };
-
-  const firstName =
-    item.firstName && item.firstName !== 'N/A' ? item.firstName : '';
-  const lastName =
-    item.lastName && item.lastName !== 'N/A' ? item.lastName : '';
-
-  return { firstName, lastName, fullName };
+  return {
+    firstName:
+      !item.loading && item.firstName && item.firstName !== 'N/A'
+        ? item.firstName
+        : '',
+    lastName:
+      !item.loading && item.lastName && item.lastName !== 'N/A'
+        ? item.lastName
+        : '',
+    fullName: display(item, id, options),
+  };
 }
-
-/** Shared hook that handles caching/fetching and returns the underlying UserNameItem */
 function useUserNameItem(id: MacroId) {
-  ensureUserNameItem(id);
-
-  const getItem = () => unwrap(userDisplayNames[id]);
-
-  const refetch = () => {
-    setUserDisplayNames(id, {
-      loading: true,
-      _createdAt: new Date(),
-      id: id,
+  getUserNameItem(id);
+  const controls = userNameCache().control(id);
+  let active = true;
+  if (getOwner())
+    onCleanup(() => {
+      active = false;
     });
-    queueItemsForFetch([id]);
+  return {
+    getItem: () => (active ? getUserNameItem(id) : fallbackItem(id)),
+    refetch: controls.refetch,
+    mutate: (value: UserNameItem) => {
+      if (normalizeUserNameQueryId(value.id) !== normalizeUserNameQueryId(id))
+        return;
+      if (value.loading) controls.refetch();
+      else
+        controls.mutate({
+          id: value.id,
+          first_name: value.firstName,
+          last_name: value.lastName,
+          is_agent: value.isAgent,
+        });
+    },
   };
-
-  const mutate = (value: UserNameItem) => {
-    setUserDisplayNames(id, value);
-  };
-
-  return { getItem, refetch, mutate };
 }
 
 type DisplayNameParts = {
@@ -246,84 +133,58 @@ type DisplayNameParts = {
   fullName: () => string;
   refetch: () => void;
 };
-
-/**
- * @deprecated Prefer `getDisplayNameParts` inside a reactive accessor so the
- * current id is resolved when props/list rows change.
- */
+/** @deprecated Prefer getDisplayNameParts inside a reactive accessor for changing IDs. */
 export function useDisplayNameParts(
   id: MacroId | undefined | null,
   options?: DisplayNameOptions
 ): DisplayNameParts {
-  if (!id) {
+  if (!id)
     return {
       firstName: () => '',
       lastName: () => '',
       fullName: () => '',
       refetch: () => {},
     };
-  }
-
   const { getItem, refetch } = useUserNameItem(id);
-
-  const firstName = () => {
-    const item = getItem();
-    if (item?.loading) return '';
-    const name = item?.firstName;
-    return name && name !== 'N/A' ? name : '';
+  return {
+    firstName: () => {
+      const item = getItem();
+      return !item.loading && item.firstName && item.firstName !== 'N/A'
+        ? item.firstName
+        : '';
+    },
+    lastName: () => {
+      const item = getItem();
+      return !item.loading && item.lastName && item.lastName !== 'N/A'
+        ? item.lastName
+        : '';
+    },
+    fullName: () => display(getItem(), id, options),
+    refetch,
   };
-
-  const lastName = () => {
-    const item = getItem();
-    if (item?.loading) return '';
-    const name = item?.lastName;
-    return name && name !== 'N/A' ? name : '';
-  };
-
-  const fullName = () => defaultNameTransform(getItem(), options);
-
-  return { firstName, lastName, fullName, refetch };
 }
-
-/**
- * @deprecated Prefer `getDisplayName` inside a reactive accessor so the
- * current id is resolved when props/list rows change.
- */
+/** @deprecated Prefer getDisplayName inside a reactive accessor for changing IDs. */
 export function useDisplayName(
   id: MacroId | undefined | null,
   options?: DisplayNameOptions
 ): UserNamePreviewFetcher {
-  if (!id) {
-    return [
-      () => '',
-      {
-        refetch: () => {},
-        mutate: (_value: UserNameItem) => {},
-      },
-    ];
-  }
-
+  if (!id) return [() => '', { refetch: () => {}, mutate: () => {} }];
   const { getItem, refetch, mutate } = useUserNameItem(id);
-
-  const accessor = () => defaultNameTransform(getItem(), options);
-
-  return [accessor, { refetch, mutate }];
+  return [() => display(getItem(), id, options), { refetch, mutate }];
 }
 
-/**
- * Seeds the display name cache with mock user data.
- * Useful for debug views and testing.
- */
+/** Seed only the current authenticated session; call from a mounted debug view,
+ * never module initialization. Seeds cannot create membership or name evidence. */
 export function seedMockDisplayNames(
   users: Array<{ id: string; firstName?: string; lastName?: string }>
 ) {
-  for (const user of users) {
-    setUserDisplayNames(user.id, {
-      _createdAt: new Date(),
+  if (users.length > USER_NAME_CACHE_LIMITS.batch)
+    throw new Error('Too many mock names');
+  const cache = userNameCache();
+  for (const user of users)
+    cache.control(user.id).mutate({
       id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      loading: false,
+      first_name: user.firstName,
+      last_name: user.lastName,
     });
-  }
 }

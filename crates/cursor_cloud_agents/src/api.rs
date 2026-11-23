@@ -235,7 +235,22 @@ const TURN_START_RETRY_BACKOFF: [std::time::Duration; 3] = [
     std::time::Duration::from_secs(30),
 ];
 
-/// Whether a failed POST is worth simply asking again.
+/// How long to wait before each retry of a read Cursor answered with a
+/// transient status; its length is the retry budget.
+///
+/// A GET changes nothing on cursor.com, so asking again is always safe.
+/// Sized for Cursor's own capacity blips: a run listing answered `503
+/// Server at capacity` once, right after the agent it lists was created
+/// (prod, 2026-11-12), and failed a turn whose run had already started.
+/// Twelve seconds rides out a blip without holding a turn hostage to a real
+/// outage.
+const READ_RETRY_BACKOFF: [std::time::Duration; 3] = [
+    std::time::Duration::from_secs(1),
+    std::time::Duration::from_secs(3),
+    std::time::Duration::from_secs(8),
+];
+
+/// Whether a failed request is worth simply asking again.
 ///
 /// Status alone, deliberately. Every provider states its transients in its
 /// own dialect — Cursor's 429 arrives as a `connect` envelope wrapping a
@@ -296,6 +311,40 @@ fn classify_usage_limit(body: &str) -> Option<crate::domain::error::UsageLimitEx
         })
 }
 
+/// Whether a failed request is Cursor refusing the key itself.
+///
+/// Status first, like [`is_transient`]: any 401 or 403 is the key, whatever
+/// the body says, unless a Connect body explicitly marks it retryable. An
+/// unparseable body (a proxy's HTML) still counts, since the status is
+/// Cursor's or its gateway's verdict on the credential either way.
+fn classify_credential_rejection(
+    method: &'static str,
+    path: &str,
+    status: reqwest::StatusCode,
+    body: &str,
+) -> Option<crate::domain::error::CredentialRejected> {
+    if status != reqwest::StatusCode::UNAUTHORIZED && status != reqwest::StatusCode::FORBIDDEN {
+        return None;
+    }
+    let retryable = serde_json::from_str::<crate::api::wire::ConnectErrorEnvelope>(body).is_ok_and(
+        |envelope| {
+            envelope
+                .details
+                .into_iter()
+                .filter_map(|detail| {
+                    serde_json::from_value::<crate::api::wire::ConnectErrorDetail>(detail).ok()
+                })
+                .any(|detail| detail.debug.details.is_retryable)
+        },
+    );
+    (!retryable).then(|| crate::domain::error::CredentialRejected {
+        method,
+        path: path.to_owned(),
+        status: status.as_u16(),
+        detail: body.to_owned(),
+    })
+}
+
 /// The Cursor cloud API client.
 #[derive(Debug, Clone)]
 pub struct CursorClient {
@@ -306,6 +355,9 @@ pub struct CursorClient {
     /// exercise the retry without sleeping through the production schedule.
     branch_retry_backoff: Vec<std::time::Duration>,
     turn_start_retry_backoff: Vec<std::time::Duration>,
+    /// Delays before each retry of a transiently failed GET; see
+    /// [`READ_RETRY_BACKOFF`].
+    read_retry_backoff: Vec<std::time::Duration>,
 }
 
 impl CursorClient {
@@ -337,6 +389,7 @@ impl CursorClient {
             config,
             branch_retry_backoff: BRANCH_UNVERIFIABLE_RETRY_BACKOFF.to_vec(),
             turn_start_retry_backoff: TURN_START_RETRY_BACKOFF.to_vec(),
+            read_retry_backoff: READ_RETRY_BACKOFF.to_vec(),
         })
     }
 
@@ -353,6 +406,14 @@ impl CursorClient {
     #[must_use]
     pub fn with_turn_start_retry_backoff(mut self, backoff: Vec<std::time::Duration>) -> Self {
         self.turn_start_retry_backoff = backoff;
+        self
+    }
+
+    /// Replace the retry schedule for GETs. An empty schedule disables the
+    /// retry.
+    #[must_use]
+    pub fn with_read_retry_backoff(mut self, backoff: Vec<std::time::Duration>) -> Self {
+        self.read_retry_backoff = backoff;
         self
     }
 
@@ -478,23 +539,61 @@ impl CursorClient {
     where
         Reply: serde::de::DeserializeOwned,
     {
-        let response = self
-            .http
-            .get(self.url(path))
-            .basic_auth(self.config.api_key.expose(), Some(""))
-            .send()
-            .await
-            .map_err(|error| rootcause::report!(error))?;
-        let status = response.status();
-        let text = response
-            .text()
-            .await
-            .map_err(|error| rootcause::report!(error))?;
+        let (status, text) = self.get_for_text(path, &[]).await?;
         if !status.is_success() {
+            if let Some(rejected) = classify_credential_rejection("GET", path, status, &text) {
+                return Err(rootcause::report!(rejected).into_dynamic());
+            }
             return Err(rootcause::report!("cursor GET {path} -> {status}: {text}"));
         }
         serde_json::from_str(&text)
             .map_err(|error| rootcause::report!("cursor GET {path}: bad response body: {error}"))
+    }
+
+    /// GET a path and read the response back as status plus raw text,
+    /// riding out transient failures.
+    ///
+    /// JSON reads and the run list take this path (the run poll and the SSE
+    /// stream have recovery of their own): a GET starts and stops nothing, so a
+    /// second one cannot duplicate work, and a turn that already started a
+    /// run must not fail because a listing of that run hit a capacity blip.
+    /// A budget spent without success returns the last answer, so an
+    /// exhausted retry is reported exactly as the same failure is today.
+    async fn get_for_text(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+    ) -> Result<(reqwest::StatusCode, String), rootcause::Report> {
+        let mut retries = self.read_retry_backoff.iter();
+        loop {
+            let response = self
+                .http
+                .get(self.url(path))
+                .basic_auth(self.config.api_key.expose(), Some(""))
+                .query(query)
+                .send()
+                .await
+                .map_err(|error| rootcause::report!(error))?;
+            let status = response.status();
+            let text = response
+                .text()
+                .await
+                .map_err(|error| rootcause::report!(error))?;
+            if !is_transient(status) {
+                return Ok((status, text));
+            }
+            let Some(delay) = retries.next() else {
+                return Ok((status, text));
+            };
+            tracing::warn!(
+                path,
+                status = status.as_u16(),
+                retry_in_ms = delay.as_millis() as u64,
+                detail = %text,
+                "cursor read failed transiently; retrying"
+            );
+            tokio::time::sleep(*delay).await;
+        }
     }
 
     /// Fetch one agent's durable record.
@@ -810,24 +909,13 @@ impl CursorAgents for CursorClient {
         let mut listings = Vec::new();
         let mut cursor = None;
         let mut seen_cursors = std::collections::HashSet::new();
+        let path = format!("/v1/agents/{agent}/runs");
         loop {
-            let mut request = self
-                .http
-                .get(self.url(&format!("/v1/agents/{agent}/runs")))
-                .basic_auth(self.config.api_key.expose(), Some(""))
-                .query(&[("limit", "100")]);
+            let mut query = vec![("limit", "100")];
             if let Some(cursor) = cursor.as_deref() {
-                request = request.query(&[("cursor", cursor)]);
+                query.push(("cursor", cursor));
             }
-            let response = request
-                .send()
-                .await
-                .map_err(|error| rootcause::report!(error))?;
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .map_err(|error| rootcause::report!(error))?;
+            let (status, text) = self.get_for_text(&path, &query).await?;
             if !status.is_success() {
                 return Err(rootcause::report!(
                     "cursor GET /v1/agents/{agent}/runs -> {status}: {text}"

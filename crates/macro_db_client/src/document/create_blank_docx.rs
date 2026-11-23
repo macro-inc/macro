@@ -144,6 +144,7 @@ pub async fn create_blank_docx(
     let parts_json: serde_json::Value = serde_json::to_value(document_bom_parts)?;
 
     Ok(DocumentMetadata {
+        appearance: None,
         document_id: document.id,
         document_version_id: document_version.id,
         owner: Owner::User(user_id),

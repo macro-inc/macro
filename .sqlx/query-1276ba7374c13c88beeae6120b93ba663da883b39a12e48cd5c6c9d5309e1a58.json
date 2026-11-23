@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT snapshot, observed_at FROM stripe_objects WHERE id = ANY($1) AND kind = 'subscription'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "snapshot",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "observed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1276ba7374c13c88beeae6120b93ba663da883b39a12e48cd5c6c9d5309e1a58"
+}

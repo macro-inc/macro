@@ -44,30 +44,53 @@ const TOAST_STYLES: Record<
 interface ToastAction {
   label: string;
   icon?: Component<{ class?: string }>;
+  /** Directional actions place their icon after the label. */
+  trailingIcon?: boolean;
+  variant?: 'primary' | 'secondary' | 'danger' | 'accent';
   onClick: () => void;
 }
 
 type ToastActionLayout = 'stacked' | 'inline';
+export type ToastDismissStyle = 'button' | 'icon';
 
 /**
  * Common options for all toast calls.
  */
 interface ToastOptions {
   subtext?: string;
+  /** Entity glyph beside the title, separate from the toast's status icon. */
+  titleIcon?: Component<{ class?: string }>;
   /** Auto-dismiss duration in ms. When omitted, the toast uses a default 4.5s timer. */
   duration?: number;
   /** When true, don't render this toast on mobile. */
   hideOnMobile?: boolean;
   /** Hide the visible dismissal control; Escape, swipe, and expiry stay unchanged. */
   showCloseButton?: boolean;
-  /** Place actions beside the title; defaults to a stacked action row. */
+  /** Replace an action toast's Dismiss button with a desktop close icon. */
+  dismissStyle?: ToastDismissStyle;
+  /** Inline multiple actions on notices without a description; single actions inline automatically. */
   actionLayout?: ToastActionLayout;
+  /**
+   * Runs once the toast closes, however it closes: expiry, its close
+   * control, Escape, a swipe, or `toast.dismiss`.
+   */
+  onDismiss?: () => void;
+  /**
+   * A toast this one takes the place of: while that toast is still open it
+   * changes in place and keeps its id, so one process (a send, say) shows one
+   * toast through each of its states. Its options, `onDismiss` included,
+   * replace the earlier ones, and a timed toast starts its timer again. A
+   * closed toast leaves this one to open as usual.
+   */
+  replace?: number;
 }
 
 interface ToastActionOptions extends ToastOptions {
   actions?: ToastAction[];
   /** When true, bypasses the 3s duplicate-message throttle. */
   stack?: boolean;
+  /** Stays until dismissed or, on mobile, until the next notice replaces it. */
+  persistent?: boolean;
 }
 
 /**
@@ -81,8 +104,12 @@ export interface CustomToastConfig {
   icon?: Component<{ class?: string }>;
   /** Any CSS color value, e.g. 'var(--color-success)' or '#ff6600' */
   color?: string;
+  /** Optional title color; descriptions and action colors stay independent. */
+  titleColor?: string;
   actions?: ToastAction[];
   actionLayout?: ToastActionLayout;
+  /** Label for the secondary dismissal action; defaults to Dismiss. */
+  dismissLabel?: string;
 }
 
 interface ToastMessage {
@@ -129,7 +156,7 @@ function dismissActiveToast(region: string): boolean {
   if (activeId === undefined) return false;
 
   setActiveToastId(region, undefined);
-  toaster.dismiss(activeId);
+  dismiss(activeId);
   return true;
 }
 
@@ -175,7 +202,7 @@ function dismissIfRecent(message: string, type: ToastType): void {
     now - existingToast.timestamp < THROTTLE_DURATION &&
     existingToast.toastId != null
   ) {
-    toaster.dismiss(existingToast.toastId);
+    dismiss(existingToast.toastId);
   }
 }
 
@@ -184,21 +211,24 @@ function success(
   message: string,
   options?: ToastActionOptions
 ): number | undefined {
-  if (!options?.stack) dismissIfRecent(message, ToastType.SUCCESS);
   return createToast(message, ToastType.SUCCESS, options);
 }
 
 function dismiss(toastId: number) {
+  // A toast queued past its region's limit never mounts, so its cleanup
+  // can't be what closes it.
+  const open = openToasts.get(toastId);
+  openToasts.delete(toastId);
+  if (open && !open.mounted()) open.close();
   toaster.dismiss(toastId);
 }
 
 // Tell users that an action has failed, because of us
 function failure(
   message: string,
-  options?: ToastOptions & { actions?: ToastAction[] }
-) {
-  dismissIfRecent(message, ToastType.FAILURE);
-  createToast(message, ToastType.FAILURE, options);
+  options?: ToastActionOptions
+): number | undefined {
+  return createToast(message, ToastType.FAILURE, options);
 }
 
 // Tell users that an action has failed, because of them
@@ -206,13 +236,13 @@ function alert(
   message: string,
   options?: ToastActionOptions
 ): number | undefined {
-  if (!options?.stack) dismissIfRecent(message, ToastType.ALERT);
   return createToast(message, ToastType.ALERT, options);
 }
 
 function ActionButtons(props: {
   actions: ToastAction[];
   showDismiss: boolean;
+  dismissLabel: string;
   onDismiss?: () => void;
 }) {
   return (
@@ -222,10 +252,10 @@ function ActionButtons(props: {
           as={Button}
           size="sm"
           variant="secondary"
-          aria-label={t('common.dismiss')}
+          aria-label={props.dismissLabel}
           onClick={() => props.onDismiss?.()}
         >
-          {t('common.dismiss')}
+          {props.dismissLabel}
         </Toast.CloseButton>
       </Show>
       <For each={props.actions}>
@@ -233,12 +263,18 @@ function ActionButtons(props: {
           <Button
             size="sm"
             onClick={action.onClick}
-            variant="primary"
+            variant={action.variant ?? 'primary'}
             class="max-w-full"
           >
             <Show when={action.icon}>
-              {(icon) => (
-                <Dynamic component={icon()} class="size-3.5 shrink-0" />
+              {(Icon) => (
+                <Dynamic
+                  component={Icon()}
+                  class={cn(
+                    'size-4 shrink-0',
+                    action.trailingIcon && 'order-last'
+                  )}
+                />
               )}
             </Show>
             <span class="min-w-0 whitespace-normal break-words">
@@ -251,12 +287,12 @@ function ActionButtons(props: {
   );
 }
 
-/** Shared presentation for the app service and isolated gallery regions. */
-export function ToastContent(props: {
+type ToastContentProps = {
   toastId: number;
   toastType?: ToastType;
   message?: string;
   subtext?: string;
+  titleIcon?: Component<{ class?: string }>;
   actions?: ToastAction[];
   actionLayout?: ToastActionLayout;
   persistent?: boolean;
@@ -264,9 +300,39 @@ export function ToastContent(props: {
   embed?: Component;
   custom?: CustomToastConfig;
   showCloseButton?: boolean;
+  dismissStyle?: ToastDismissStyle;
   onDismiss?: () => void;
   onUserDismiss?: () => void;
-}) {
+  /** Counts in-place replacements; each one restarts a timed toast's timer. */
+  revision?: number;
+};
+
+/** Shared presentation for the app service and isolated gallery regions. */
+export function ToastContent(props: ToastContentProps) {
+  onCleanup(() => props.onDismiss?.());
+
+  // Kobalte's close timer doesn't follow a change to `persistent`, nor start
+  // again for new content, so a toast updated in place to new timing (a
+  // persistent "Sending…" becoming a timed "Sent"), or a timed toast given
+  // new content, mounts a fresh frame, without the entrance animation.
+  let mounted = false;
+  const timing = () =>
+    props.persistent
+      ? 'persistent'
+      : `${props.duration}:${props.revision ?? 0}`;
+  return (
+    <Show when={timing()} keyed>
+      {/* Show re-renders only a child that takes the value. */}
+      {(_timing) => {
+        const replaced = mounted;
+        mounted = true;
+        return <ToastFrame {...props} replaced={replaced} />;
+      }}
+    </Show>
+  );
+}
+
+function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
   const styles = () =>
     props.toastType ? TOAST_STYLES[props.toastType] : undefined;
   const icon = () => props.custom?.icon ?? styles()?.icon;
@@ -275,30 +341,45 @@ export function ToastContent(props: {
   const hasActions = () => actions().length > 0;
   const inlineActions = () =>
     !props.embed &&
+    !hasBody() &&
     hasActions() &&
-    (props.custom?.actionLayout ?? props.actionLayout) === 'inline';
+    (actions().length === 1 ||
+      (props.custom?.actionLayout ?? props.actionLayout) === 'inline');
   const singleRow = () =>
     !props.embed && !hasBody() && (!hasActions() || inlineActions());
+  const dismissLabel = () => props.custom?.dismissLabel ?? t('common.dismiss');
   const showDismiss = () => props.showCloseButton !== false;
-  const showCloseButton = () => showDismiss() && !hasActions() && !isMobile();
+  const showDismissAction = () =>
+    showDismiss() && props.dismissStyle !== 'icon';
+  const showCloseButton = () =>
+    showDismiss() &&
+    (!hasActions() || props.dismissStyle === 'icon') &&
+    !isMobile();
   const [height, setHeight] = createSignal<number>();
   let surface!: HTMLDivElement;
 
   // Keep the natural height while older cards are tucked into the stack.
+  // Read it once at mount, so the entrance keyframes start from the real
+  // height rather than their fallback, then from the observer's entries:
+  // reading layout in the callback would force a style and layout pass of
+  // whatever an earlier callback in that frame dirtied, in every frame the
+  // card resizes.
   onMount(() => {
-    const measure = () => setHeight(surface.offsetHeight);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(surface);
+    setHeight(surface.offsetHeight);
+    const observer = new ResizeObserver(([entry]) => {
+      const size = entry?.borderBoxSize[0];
+      if (size) setHeight(size.blockSize);
+    });
+    observer.observe(surface, { box: 'border-box' });
     onCleanup(() => observer.disconnect());
   });
-  onCleanup(() => props.onDismiss?.());
 
   return (
     <Toast
       toastId={props.toastId}
       data-macro-toast
       data-toast-id={props.toastId}
+      data-replaced={props.replaced ? '' : undefined}
       data-mobile={isMobile() ? '' : undefined}
       data-single-row={singleRow() ? '' : undefined}
       class="macro-toast"
@@ -314,71 +395,80 @@ export function ToastContent(props: {
         <div
           class={cn(
             'macro-toast-content min-w-0',
-            showCloseButton() && 'pr-10'
+            showCloseButton() && (hasActions() ? 'pr-8' : 'pr-10')
           )}
         >
           <Show
             when={props.embed}
             fallback={
-              <div
-                class={cn(
-                  'flex min-w-0 gap-2',
-                  singleRow() ? 'items-center' : 'items-start'
-                )}
-              >
-                <Show when={icon()}>
-                  {(Icon) => (
-                    <span
-                      aria-hidden="true"
-                      class={cn(
-                        'flex size-5 shrink-0 items-center justify-center',
-                        !singleRow() && 'mt-0.5',
-                        props.custom ? 'text-ink-muted' : styles()?.iconClass
+              <div class={cn('min-w-0', icon() && 'pl-7')}>
+                <div class="macro-toast-heading flex min-w-0 flex-wrap items-center gap-2">
+                  <Toast.Title
+                    class="relative min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere"
+                    style={{ color: props.custom?.titleColor }}
+                  >
+                    <Show when={icon()}>
+                      {(Icon) => (
+                        <span
+                          aria-hidden="true"
+                          class={cn(
+                            'absolute top-0.5 -left-7 flex size-5 items-center justify-center',
+                            props.custom
+                              ? 'text-ink-muted'
+                              : styles()?.iconClass
+                          )}
+                          style={
+                            props.custom
+                              ? { color: props.custom.color }
+                              : undefined
+                          }
+                        >
+                          <Dynamic
+                            component={Icon()}
+                            class={props.custom ? 'size-4' : 'size-5'}
+                          />
+                        </span>
                       )}
-                      style={
-                        props.custom ? { color: props.custom.color } : undefined
-                      }
-                      data-icon-motion="none"
-                    >
-                      <Dynamic
-                        component={Icon()}
-                        class={props.custom ? 'size-4' : 'size-5'}
-                      />
-                    </span>
-                  )}
-                </Show>
-                <div class="min-w-0 flex-1">
-                  <div class="macro-toast-heading flex min-w-0 flex-wrap items-center gap-2">
-                    <Toast.Title class="min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere">
-                      {props.custom?.title ?? props.message}
-                    </Toast.Title>
-                    <Show when={inlineActions()}>
-                      <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
-                        <ActionButtons
-                          actions={actions()}
-                          showDismiss={showDismiss()}
-                          onDismiss={props.onUserDismiss}
-                        />
-                      </div>
                     </Show>
-                  </div>
-                  <Show when={hasBody()}>
-                    <Toast.Description class="mt-0.5 text-sm leading-normal text-ink-muted wrap-anywhere">
-                      {props.custom?.content
-                        ? props.custom.content()
-                        : props.subtext}
-                    </Toast.Description>
-                  </Show>
-                  <Show when={hasActions() && !inlineActions()}>
-                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <Show when={props.titleIcon}>
+                      {(Icon) => (
+                        <Dynamic
+                          component={Icon()}
+                          class="mr-1 inline-block size-4 align-text-bottom text-ink-muted"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </Show>
+                    {props.custom?.title ?? props.message}
+                  </Toast.Title>
+                  <Show when={inlineActions()}>
+                    <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
                       <ActionButtons
                         actions={actions()}
-                        showDismiss={showDismiss()}
+                        showDismiss={showDismissAction()}
+                        dismissLabel={dismissLabel()}
                         onDismiss={props.onUserDismiss}
                       />
                     </div>
                   </Show>
                 </div>
+                <Show when={hasBody()}>
+                  <Toast.Description class="mt-0.5 text-sm leading-normal text-ink-muted wrap-anywhere">
+                    {props.custom?.content
+                      ? props.custom.content()
+                      : props.subtext}
+                  </Toast.Description>
+                </Show>
+                <Show when={hasActions() && !inlineActions()}>
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <ActionButtons
+                      actions={actions()}
+                      showDismiss={showDismissAction()}
+                      dismissLabel={dismissLabel()}
+                      onDismiss={props.onUserDismiss}
+                    />
+                  </div>
+                </Show>
               </div>
             }
           >
@@ -389,7 +479,8 @@ export function ToastContent(props: {
                   <div class="mt-3 flex flex-wrap items-center gap-2">
                     <ActionButtons
                       actions={actions()}
-                      showDismiss={showDismiss()}
+                      showDismiss={showDismissAction()}
+                      dismissLabel={dismissLabel()}
                       onDismiss={props.onUserDismiss}
                     />
                   </div>
@@ -492,6 +583,85 @@ async function promise<T>(
     });
 }
 
+// ─── showToast (internal) ────────────────────────────────────────────────────
+
+type ShownToast = Omit<ToastContentProps, 'toastId' | 'revision'>;
+
+/** Open toasts by id, with their region and the setter `replace` changes them through. */
+const openToasts = new Map<
+  number,
+  {
+    region: string;
+    update: (content: ShownToast) => void;
+    mounted: () => boolean;
+    close: () => void;
+  }
+>();
+
+/**
+ * Show a toast in `region`, or change the open toast `replace` names in place.
+ * A toast that `holdsSlot` is the one the next mobile notice replaces.
+ */
+function showToast(
+  region: string,
+  content: ShownToast,
+  replace: number | undefined,
+  holdsSlot: boolean
+): number {
+  const open = replace === undefined ? undefined : openToasts.get(replace);
+  if (replace !== undefined && open) {
+    open.update(content);
+    // The throttle must not dismiss this toast for a message it no longer shows.
+    for (const [key, recent] of recentToasts) {
+      if (recent.toastId !== replace) continue;
+      clearTimeout(recent.timeoutId);
+      recentToasts.delete(key);
+    }
+    if (!holdsSlot) {
+      clearTrackedToast(open.region, replace);
+    } else {
+      if (getActiveToastId(open.region) !== replace)
+        dismissActiveToast(open.region);
+      setActiveToastId(open.region, replace);
+    }
+    return replace;
+  }
+
+  replaceActiveToast(region, !holdsSlot);
+  const [current, setCurrent] = createSignal({ ...content, revision: 0 });
+  let mounted = false;
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    openToasts.delete(toastId);
+    clearTrackedToast(region, toastId);
+    current().onDismiss?.();
+  };
+  const toastId = toaster.show(
+    (props) => {
+      mounted = true;
+      return (
+        <ToastContent
+          {...current()}
+          toastId={props.toastId}
+          onDismiss={close}
+        />
+      );
+    },
+    { region }
+  );
+  openToasts.set(toastId, {
+    region,
+    update: (next) =>
+      setCurrent((previous) => ({ ...next, revision: previous.revision + 1 })),
+    mounted: () => mounted,
+    close,
+  });
+  trackActiveToast(region, toastId, !holdsSlot);
+  return toastId;
+}
+
 // ─── createToast (internal) ──────────────────────────────────────────────────
 
 function createToast(
@@ -501,17 +671,26 @@ function createToast(
 ) {
   const {
     subtext,
+    titleIcon,
     actions,
     actionLayout,
     duration,
     stack,
     hideOnMobile,
     showCloseButton,
+    dismissStyle,
+    onDismiss,
+    persistent,
+    replace,
   } = options ?? {};
 
   if (isMobile() && hideOnMobile) return undefined;
 
-  if (!stack) {
+  // A toast changing in place may already show this message, and its later
+  // states are not new messages to throttle.
+  const replacing = replace !== undefined && openToasts.has(replace);
+  if (!stack && !replacing) {
+    dismissIfRecent(message, toastType);
     const key = createToastKey(message, toastType);
     const existingToast = recentToasts.get(key);
     if (existingToast?.timeoutId) {
@@ -521,30 +700,26 @@ function createToast(
 
   const useMobile = isMobile();
   const region = useMobile ? 'mobile-toast-region' : 'toast-region';
-  dismissActiveToast(region);
-
-  const toastId = toaster.show(
-    (props) => (
-      <ToastContent
-        toastId={props.toastId}
-        toastType={toastType}
-        message={message}
-        subtext={subtext}
-        actions={actions}
-        actionLayout={actionLayout}
-        duration={duration}
-        showCloseButton={showCloseButton}
-        onDismiss={() => {
-          clearTrackedToast(region, props.toastId);
-        }}
-      />
-    ),
-    { region }
+  const toastId = showToast(
+    region,
+    {
+      toastType,
+      message,
+      subtext,
+      titleIcon,
+      actions,
+      actionLayout,
+      duration,
+      persistent,
+      showCloseButton,
+      dismissStyle,
+      onDismiss,
+    },
+    replace,
+    true
   );
 
-  setActiveToastId(region, toastId);
-
-  if (!stack) {
+  if (!stack && !replacing) {
     const key = createToastKey(message, toastType);
     const timeoutId = setTimeout(() => {
       recentToasts.delete(key);
@@ -611,31 +786,28 @@ function custom(
     onDismiss?: () => void;
     onUserDismiss?: () => void;
     showCloseButton?: boolean;
+    dismissStyle?: ToastDismissStyle;
+    /** See `ToastOptions.replace`. */
+    replace?: number;
   }
 ): number {
   const useMobile = isMobile();
   const region =
     options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
-  replaceActiveToast(region, options?.persistent);
-  const toastId = toaster.show(
-    (props) => (
-      <ToastContent
-        toastId={props.toastId}
-        custom={config}
-        persistent={options?.persistent}
-        duration={options?.duration}
-        onUserDismiss={options?.onUserDismiss}
-        showCloseButton={options?.showCloseButton}
-        onDismiss={() => {
-          clearTrackedToast(region, props.toastId);
-          options?.onDismiss?.();
-        }}
-      />
-    ),
-    { region }
+  return showToast(
+    region,
+    {
+      custom: config,
+      persistent: options?.persistent,
+      duration: options?.duration,
+      onUserDismiss: options?.onUserDismiss,
+      showCloseButton: options?.showCloseButton,
+      dismissStyle: options?.dismissStyle,
+      onDismiss: options?.onDismiss,
+    },
+    options?.replace,
+    !options?.persistent
   );
-  trackActiveToast(region, toastId, options?.persistent);
-  return toastId;
 }
 
 // ─── public API ──────────────────────────────────────────────────────────────

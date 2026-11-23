@@ -1,7 +1,7 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Check from '@phosphor/check.svg';
-import Plus from '@phosphor/plus.svg';
-import Tray from '@phosphor/tray.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Check from '@icon/system/regular/check.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Tray from '@icon/system/regular/tray.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {

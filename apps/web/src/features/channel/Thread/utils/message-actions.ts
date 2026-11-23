@@ -7,6 +7,7 @@ import {
   type ReplyTargetParent,
   stripLeadingReplyTargetMarkdown,
 } from '@macro-inc/lexical-core';
+import type { Message } from '@service-storage/messages';
 import type { MessageData } from '../../Message';
 
 export const DEFAULT_REACTION_EMOJI = '👍';
@@ -17,6 +18,7 @@ export type ActionableMessage = Pick<
   MessageData,
   'id' | 'sender_id' | 'deleted_at' | 'reactions' | 'content'
 > & {
+  kind?: Message['kind'];
   thread_id?: string | null;
 };
 
@@ -35,14 +37,15 @@ export function isBotMessage(
 }
 
 export function canEditMessage(
-  message: Pick<ActionableMessage, 'sender_id' | 'deleted_at'>,
+  message: Pick<ActionableMessage, 'sender_id' | 'deleted_at' | 'kind'>,
   currentUserId: string | undefined
 ): boolean {
+  if (message.kind === 'call_root') return false;
   return isOwnMessage(message, currentUserId) && !message.deleted_at;
 }
 
 export function canDeleteMessage(
-  message: Pick<ActionableMessage, 'sender_id' | 'deleted_at'>,
+  message: Pick<ActionableMessage, 'sender_id' | 'deleted_at' | 'kind'>,
   currentUserId: string | undefined,
   /**
    * Document owners may delete comments they did not write. Channel members
@@ -50,7 +53,7 @@ export function canDeleteMessage(
    */
   canModerate = false
 ): boolean {
-  if (message.deleted_at) return false;
+  if (message.deleted_at || message.kind === 'call_root') return false;
   return (
     canModerate || isOwnMessage(message, currentUserId) || isBotMessage(message)
   );

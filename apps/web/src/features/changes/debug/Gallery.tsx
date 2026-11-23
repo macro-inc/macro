@@ -135,13 +135,13 @@ export default function ChangesGallery() {
             <Show when={queued()}>
               <QueuedPrompts
                 items={queueItems()}
-                onEdit={(id, prompt) =>
+                onEdit={(id, prompt) => {
                   setQueueItems((items) =>
                     items.map((item) =>
                       item.actionId === id ? { ...item, prompt } : item
                     )
-                  )
-                }
+                  );
+                }}
                 onRemove={(id) => {
                   const remaining = queueItems().filter(
                     (item) => item.actionId !== id

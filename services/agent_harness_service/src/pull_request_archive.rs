@@ -1,4 +1,5 @@
-//! Archives sessions whose pull requests merged, from the pull request topic.
+//! Archives sessions whose pull requests merged and ends the work registrations of sessions whose
+//! pull requests finished, from the pull request topic.
 //!
 //! Every stored pull request change is published after it commits, so the status this reads is
 //! at least as new as the event. Offsets are committed after each event; a lookup that keeps
@@ -7,6 +8,7 @@
 use std::time::Duration;
 
 use agent_session::domain::auto_archive::AutoArchive;
+use agent_session::domain::work_registration::WorkRegistrations;
 use github_pull_requests::broker::{GithubPullRequestMacroEvent, GithubPullRequestTopicEvent};
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use macro_event_broker::{
@@ -35,10 +37,12 @@ type ArchiveConsumer = MacroEventConsumerService<DeclaredMacroEvent, ArchiveKafk
 
 const LOOKUP_ATTEMPTS: usize = 3;
 
-/// Consume pull request changes until `shutdown`, archiving the sessions they finish.
+/// Consume pull request changes until `shutdown`, archiving the sessions they finish and ending
+/// their work registrations.
 pub async fn run(
     brokers: &str,
     auto_archive: &impl AutoArchive,
+    work_registrations: &impl WorkRegistrations,
     shutdown: CancellationToken,
 ) -> anyhow::Result<()> {
     let consumer = KafkaEventConsumer::<PullRequestArchiveConsumerGroup>::from_env(brokers)?;
@@ -72,6 +76,10 @@ pub async fn run(
                             tracing::Span::current()
                                 .record("macro.event.id", tracing::field::display(event.event().event_id));
                             let GithubPullRequestTopicEvent::Updated(update) = &event.event().event;
+                            // Before archiving, so these end for their pull requests rather than
+                            // for the archive that follows from them.
+                            end_finished_work_registrations(work_registrations, &update.github_key)
+                                .await;
                             archive_finished_sessions(auto_archive, &update.github_key).await;
                         }
                         Err(error) => {
@@ -104,6 +112,30 @@ async fn archive_finished_sessions(auto_archive: &impl AutoArchive, github_key: 
             );
         })
         .ok();
+}
+
+async fn end_finished_work_registrations(
+    work_registrations: &impl WorkRegistrations,
+    github_key: &str,
+) {
+    let retries = ExponentialBackoff::from_millis(2)
+        .factor(100)
+        .max_delay(Duration::from_secs(5))
+        .take(LOOKUP_ATTEMPTS - 1);
+    // The sweep catches up on anything skipped here.
+    Retry::start(retries, || {
+        work_registrations.pull_request_changed(github_key)
+    })
+    .await
+    .inspect_err(|error| {
+        tracing::error!(
+            error = ?error,
+            %github_key,
+            attempts = LOOKUP_ATTEMPTS,
+            "skipping work registrations for a pull request after lookup retries"
+        );
+    })
+    .ok();
 }
 
 fn commit(consumer: &ArchiveConsumer, message: &BorrowedMessage<'_>) {

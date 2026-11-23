@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CrmTeamRole } from '../core/team-config';
 import { Crm } from './crm-settings';
@@ -12,7 +13,16 @@ const DEFAULT_STAGES = [
 const state = vi.hoisted(() => ({
   role: 'admin' as CrmTeamRole,
   crmEnabled: true,
+  canAccess: (): boolean => true,
+  accessState: undefined as
+    | (() => 'pending' | 'allowed' | 'denied' | 'error')
+    | undefined,
+  retryAccess: vi.fn(async () => {}),
   customized: false,
+  sourceMounted: vi.fn(),
+  sourceDisposed: vi.fn(),
+  privacyMounted: vi.fn(),
+  privacyDisposed: vi.fn(),
   patch: vi.fn(),
   replace: vi.fn(),
   reset: vi.fn(),
@@ -21,12 +31,32 @@ const state = vi.hoisted(() => ({
   blocked: [] as string[],
 }));
 
+vi.mock('./email-privacy', () => ({
+  CrmEmailPrivacySettings: (props: {
+    renderOverview: (content: JSX.Element) => JSX.Element;
+  }) => {
+    state.privacyMounted();
+    onCleanup(state.privacyDisposed);
+    return props.renderOverview(<div>Email contribution settings</div>);
+  },
+}));
 vi.mock('../components/stage-icon', () => ({ CrmStageIcon: () => null }));
 vi.mock('../context/crm-context', () => ({
-  useCrmContext: () => ({ feedback: { success: vi.fn() } }),
+  useCrmContext: () => ({
+    canAccess: () => state.canAccess(),
+    accessState: () =>
+      state.accessState?.() ?? (state.canAccess() ? 'allowed' : 'denied'),
+    retryAccess: state.retryAccess,
+    feedback: { success: vi.fn() },
+    MemberAccess: () => <p>Who can use CRM</p>,
+  }),
 }));
 vi.mock('./use-crm', () => {
   const canEdit = () => state.role !== 'member';
+  const trackSource = (name: string) => {
+    state.sourceMounted(name);
+    onCleanup(() => state.sourceDisposed(name));
+  };
   return {
     useCurrentTeamQuery: () => ({
       data: {
@@ -47,28 +77,37 @@ vi.mock('./use-crm', () => {
         deleteRecords: 'admin',
       }),
     }),
-    useTeamCrmConfig: () => ({
-      config: () => ({ excludePersonalEmails: true }),
-      isLoading: () => false,
-      isError: () => false,
-      update: { mutate: state.updateConfig, isPending: false },
-    }),
-    useBlockedDomains: () => ({
-      domains: () => state.blocked,
-      isPending: () => false,
-      isError: () => false,
-      setBlocked: { mutate: state.setBlocked, isPending: false },
-    }),
+    useTeamCrmConfig: () => {
+      trackSource('team settings');
+      return {
+        config: () => ({ excludePersonalEmails: true }),
+        isLoading: () => false,
+        isError: () => false,
+        update: { mutate: state.updateConfig, isPending: false },
+      };
+    },
+    useBlockedDomains: () => {
+      trackSource('blocked domains');
+      return {
+        domains: () => state.blocked,
+        isPending: () => false,
+        isError: () => false,
+        setBlocked: { mutate: state.setBlocked, isPending: false },
+      };
+    },
     useQuickAccessCrmCompaniesQuery: () => ({
       companies: () => [],
       query: { isLoading: false },
     }),
-    useDealStages: () => ({
-      stages: () => DEFAULT_STAGES,
-      isCustomized: () => state.customized,
-      isLoading: () => false,
-      isError: () => false,
-    }),
+    useDealStages: () => {
+      trackSource('stages');
+      return {
+        stages: () => DEFAULT_STAGES,
+        isCustomized: () => state.customized,
+        isLoading: () => false,
+        isError: () => false,
+      };
+    },
     useReplaceCrmStagesMutation: () => ({
       mutate: state.replace,
       isPending: false,
@@ -84,7 +123,14 @@ beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
   state.role = 'admin';
   state.crmEnabled = true;
+  state.canAccess = () => true;
+  state.accessState = undefined;
+  state.retryAccess.mockClear();
   state.customized = false;
+  state.sourceMounted.mockReset();
+  state.sourceDisposed.mockReset();
+  state.privacyMounted.mockReset();
+  state.privacyDisposed.mockReset();
   state.patch.mockReset();
   state.replace.mockReset();
   state.reset.mockReset();
@@ -95,52 +141,116 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-function teamCrmSwitch() {
-  return screen.getByRole('switch', { name: 'Team CRM' });
-}
-
-it('asks an admin how to start the CRM before turning it on', async () => {
-  state.crmEnabled = false;
+it('opens with who can use CRM, above email contribution', () => {
   render(() => <Crm />);
 
-  fireEvent.click(teamCrmSwitch());
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Backfill existing emails' })
-  );
-
-  expect(state.patch).toHaveBeenCalledWith(
-    { enabled: true, backfill: true },
-    expect.anything()
-  );
-  expect(screen.queryByText('Stages')).toBeNull();
+  const access = screen.getByText('Who can use CRM');
+  const contribution = screen.getByText('Email contribution settings');
+  expect(
+    access.compareDocumentPosition(contribution) &
+      Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy();
 });
 
-it('turns the CRM off only after the phrase is typed', async () => {
+it('does not construct protected settings sources for a denied member', () => {
+  state.role = 'member';
+  state.canAccess = () => false;
   render(() => <Crm />);
 
-  fireEvent.click(teamCrmSwitch());
-  const confirm = await screen.findByRole('button', { name: 'Disable CRM' });
-  expect(confirm).toHaveProperty('disabled', true);
+  expect(state.sourceMounted).not.toHaveBeenCalled();
+  expect(state.privacyMounted).toHaveBeenCalledOnce();
+  expect(screen.getByText('Email contribution settings')).toBeTruthy();
+});
 
-  fireEvent.input(screen.getByPlaceholderText('Disable CRM'), {
-    target: { value: 'Disable CRM' },
-  });
-  fireEvent.click(confirm);
+it.each(['pending', 'error'] as const)(
+  'keeps stage and email sync settings while the access check is %s',
+  (access) => {
+    state.canAccess = () => false;
+    state.accessState = () => access;
+    render(() => <Crm />);
 
-  expect(state.patch).toHaveBeenCalledWith(
-    { enabled: false, backfill: false },
-    expect.anything()
+    expect(state.sourceMounted.mock.calls.map(([name]) => name)).toEqual(
+      expect.arrayContaining(['stages', 'team settings', 'blocked domains'])
+    );
+    expect(screen.getByText('Demo')).toBeTruthy();
+  }
+);
+
+it('reports a failed access check in a settings row with its retry', () => {
+  state.canAccess = () => false;
+  state.accessState = () => 'error';
+  render(() => <Crm />);
+
+  expect(screen.getByRole('alert').textContent).toBe(
+    "Couldn't check your CRM access."
   );
+  // The list views' full-pane empty state would push the settings off screen.
+  expect(
+    screen.queryByText('Please try again to reload this view.')
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(state.retryAccess).toHaveBeenCalledOnce();
+});
+
+it.each(['pending', 'allowed', 'denied'] as const)(
+  'shows no access failure while the check is %s',
+  (access) => {
+    state.canAccess = () => access === 'allowed';
+    state.accessState = () => access;
+    render(() => <Crm />);
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  }
+);
+
+it('disposes protected settings sources on revocation and keeps contribution mounted', () => {
+  state.role = 'member';
+  const [allowed, setAllowed] = createSignal(true);
+  state.canAccess = allowed;
+  render(() => <Crm />);
+  const contribution = screen.getByText('Email contribution settings');
+  const mounted = state.sourceMounted.mock.calls.map(([name]) => name);
+  expect(mounted).toEqual(
+    expect.arrayContaining(['stages', 'team settings', 'blocked domains'])
+  );
+  expect(state.sourceDisposed).not.toHaveBeenCalled();
+
+  setAllowed(false);
+
+  expect(state.sourceDisposed.mock.calls.map(([name]) => name).sort()).toEqual(
+    [...mounted].sort()
+  );
+  expect(state.sourceMounted).toHaveBeenCalledTimes(mounted.length);
+  expect(screen.queryByText('Demo')).toBeNull();
+  expect(
+    screen.queryByRole('switch', { name: 'Keep personal emails out' })
+  ).toBeNull();
+  expect(screen.getByText('Email contribution settings')).toBe(contribution);
+  expect(state.privacyDisposed).not.toHaveBeenCalled();
+
+  setAllowed(true);
+
+  expect(state.sourceMounted).toHaveBeenCalledTimes(mounted.length * 2);
+  expect(screen.getByText('Demo')).toBeTruthy();
+  expect(state.privacyMounted).toHaveBeenCalledOnce();
+  expect(state.privacyDisposed).not.toHaveBeenCalled();
+});
+
+it('keeps records and stage settings available without legacy team enablement', () => {
+  state.crmEnabled = false;
+  render(() => <Crm />);
+  expect(screen.getByText('Email contribution settings')).toBeTruthy();
+  expect(screen.getByText('Demo')).toBeTruthy();
+  expect(screen.queryByRole('switch', { name: 'Team CRM' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Disable CRM' })).toBeNull();
+  expect(state.patch).not.toHaveBeenCalled();
 });
 
 it('shows members the stages without letting them change anything', () => {
   state.role = 'member';
   render(() => <Crm />);
 
-  expect(teamCrmSwitch()).toHaveProperty('disabled', true);
-  expect(
-    screen.getByText(/Only team admins can turn it on or off/)
-  ).toBeTruthy();
   expect(screen.getByText(/Only team admins can change them/)).toBeTruthy();
   expect(screen.getByText('Demo')).toBeTruthy();
   expect(screen.queryByRole('textbox')).toBeNull();

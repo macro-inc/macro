@@ -30,7 +30,9 @@ and to WebAssembly for the browser presentation editor.
 
 ## Recipes
 
-- Add an edit operation: `src/edit/ops.rs` (variant + schema) →
+- Add an edit operation: `src/edit/ops.rs` (variant + schema; new types
+  derive both `schemars::JsonSchema` under `schema` and `utoipa::ToSchema`
+  under `openapi`, which the storage routes and SDK types use) →
   `src/edit.rs`/the relevant `src/edit/<area>.rs` (apply logic) →
   `src/edit/test.rs` → corpus round-trip check.
 - Add a render feature: `src/model/` (data) → `src/render/` (scene/paint) →

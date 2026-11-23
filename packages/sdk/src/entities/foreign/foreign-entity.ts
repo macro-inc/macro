@@ -50,7 +50,11 @@ export class ForeignEntity extends FavoritableEntity<ForeignEntityDetail> {
   /** When the record was last updated (ISO timestamp). */
   readonly updatedAt = this.field('updatedAt');
 
-  /** Arbitrary source-specific metadata stored with the mapping. */
+  /**
+   * Arbitrary source-specific metadata stored with the mapping.
+   *
+   * @readonly
+   */
   async metadata(): Promise<unknown> {
     return (await this.detail.get()).metadata;
   }

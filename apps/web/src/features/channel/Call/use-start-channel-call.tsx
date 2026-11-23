@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import {
+  channelMemberIds,
   useChannel,
   useChannelName,
   useChannelType,
@@ -33,11 +34,12 @@ export function useStartChannelCall(channelId: () => string) {
   const userId = useUserId();
   const participantIds = createMemo(() => {
     const currentUser = userId();
+    const current = channel();
     return [
       ...(currentUser ? [currentUser] : []),
-      ...(channel()?.participants ?? [])
-        .filter((participant) => participant.user_id !== currentUser)
-        .map((participant) => participant.user_id),
+      ...(current ? channelMemberIds(current) : []).filter(
+        (id) => id !== currentUser
+      ),
     ];
   });
   const channelName = useChannelName(channelId());
@@ -68,7 +70,12 @@ export function useStartChannelCall(channelId: () => string) {
       isExistingCall: wasExistingCall,
     });
     try {
-      await call.joinCall();
+      const callId = activeCallQuery.data?.callId;
+      if (wasExistingCall && callId) {
+        await call.joinCall('user', { kind: 'join', callId });
+      } else {
+        await call.startCall();
+      }
       // A successful join with no call previously in progress means this user
       // started the call. Fires once, from the starter's client.
       if (!wasExistingCall) {
@@ -112,6 +119,7 @@ export function useStartChannelCall(channelId: () => string) {
   return {
     start,
     isCallInProgress,
+    isJoining: call.isJoining,
     isInThisChannel: call.isInThisChannel,
   };
 }

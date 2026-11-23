@@ -27,9 +27,9 @@ type TimelineMenuItemProps = {
 /** The timeline's settings: the dates its bars span, their label and fields, their grouping and their color. */
 export function TimelineMenu(props: TimelineMenuItemProps) {
   return (
-    <Dropdown>
+    <Dropdown placement="bottom-end">
       <Dropdown.Trigger
-        variant="ghost"
+        variant="secondary"
         size="icon-md"
         aria-label="Timeline menu"
         tooltip="Timeline menu"

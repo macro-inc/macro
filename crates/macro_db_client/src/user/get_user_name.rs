@@ -74,7 +74,7 @@ pub async fn get_user_names(
 }
 
 /// gets macro user names for passed user profile ids, falling back to the user's email contacts if they have any
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(skip_all, err)]
 pub async fn get_user_names_with_email(
     db: &sqlx::PgPool,
     macro_user_id: &str,
@@ -82,59 +82,19 @@ pub async fn get_user_names_with_email(
 ) -> anyhow::Result<Vec<UserName>> {
     let user_profile_ids_str: Vec<&str> = user_profile_ids.iter().map(|id| id.as_ref()).collect();
 
-    let user_names = sqlx::query!(
-        r#"
-        WITH requested_ids AS (
-            SELECT DISTINCT id
-            FROM UNNEST($2::text[]) AS requested(id)
-        )
-        SELECT
-            req.id as "user_profile_id!",
-            CASE
-                WHEN NULLIF(mui.first_name, 'N/A') IS NOT NULL
-                  OR NULLIF(mui.last_name, 'N/A') IS NOT NULL
-                THEN NULLIF(mui.first_name, 'N/A')
-                ELSE SPLIT_PART(contact.name, ' ', 1)
-            END as "first_name",
-            CASE
-                WHEN NULLIF(mui.first_name, 'N/A') IS NOT NULL
-                  OR NULLIF(mui.last_name, 'N/A') IS NOT NULL
-                THEN NULLIF(mui.last_name, 'N/A')
-                ELSE CASE
-                    WHEN POSITION(' ' IN contact.name) > 0
-                    THEN NULLIF(TRIM(SUBSTRING(contact.name FROM POSITION(' ' IN contact.name) + 1)), '')
-                    ELSE NULL
-                END
-            END as "last_name",
-            COALESCE(u."isAgent", FALSE) as "is_agent!"
-        FROM requested_ids req
-        LEFT JOIN "User" u ON u.id = req.id
-        LEFT JOIN macro_user_info mui ON mui.macro_user_id = u.macro_user_id
-        LEFT JOIN LATERAL (
-            SELECT ec.name
-            FROM email_links li
-            JOIN email_contacts ec
-                ON ec.link_id = li.id
-                AND ec.email_address = REPLACE(req.id, 'macro|', '')
-                AND ec.name IS NOT NULL
-            WHERE li.macro_id = $1
-              AND NULLIF(mui.first_name, 'N/A') IS NULL
-              AND NULLIF(mui.last_name, 'N/A') IS NULL
-            LIMIT 1
-        ) contact ON TRUE
-        WHERE u.id IS NOT NULL OR contact.name IS NOT NULL
-        "#,
+    let user_names = sqlx::query_file!(
+        "src/user/get_user_name/names_with_email.sql",
         macro_user_id,
         &user_profile_ids_str as &[&str]
     )
-        .map(|row| UserName {
-            id: row.user_profile_id,
-            first_name: row.first_name,
-            last_name: row.last_name,
-            is_agent: row.is_agent,
-        })
-        .fetch_all(db)
-        .await?;
+    .map(|row| UserName {
+        id: row.user_profile_id,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        is_agent: row.is_agent,
+    })
+    .fetch_all(db)
+    .await?;
 
     Ok(user_names)
 }

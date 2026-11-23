@@ -5,14 +5,12 @@ import {
   listCompaniesHandler,
 } from '@app/features/crm/crm-tool-renderers';
 import { pipelineToolHandlers } from '@app/features/crm/pipeline-tool-renderers';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableDatabases } from '@core/constant/featureFlags';
 import {
   deserializeToolCall,
   deserializeToolResponse,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
-import { createMemo, Show } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   createAgentSessionHandler,
@@ -99,11 +97,7 @@ import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createSkillHandler } from './CreateSkill';
 import { createTagHandler } from './CreateTag';
-import {
-  DatabaseToolPlaceholder,
-  isToolShown,
-  lazyDatabaseToolHandlers,
-} from './DatabaseToolHandlers';
+import { lazyDatabaseToolHandlers } from './DatabaseToolHandlers';
 import { deleteTagHandler } from './DeleteTag';
 import { readDesignHandler } from './Design';
 import {
@@ -406,7 +400,6 @@ export function hasToolRenderer(name: string): boolean {
 }
 
 export function RenderTool(props: ToolProps) {
-  const databasesEnabled = useFeatureFlag(enableDatabases);
   const maybeTool = deserializeToolCall({
     id: props.tool_id,
     json: props.json,
@@ -486,24 +479,19 @@ export function RenderTool(props: ToolProps) {
           return undefined;
         }}
       >
-        <Show
-          when={isToolShown(tool.name, databasesEnabled().enabled)}
-          fallback={<DatabaseToolPlaceholder />}
-        >
-          <Dynamic
-            component={handler.render}
-            {...context}
-            response={response()}
-            renderContext={{
-              isStreaming: props.renderContext.renderContext.isStreaming,
-              grouped: props.renderContext.renderContext.grouped,
-              running:
-                !props.isComplete &&
-                props.renderContext.renderContext.isStreaming,
-              followedBy: props.renderContext.renderContext.followedBy,
-            }}
-          />
-        </Show>
+        <Dynamic
+          component={handler.render}
+          {...context}
+          response={response()}
+          renderContext={{
+            isStreaming: props.renderContext.renderContext.isStreaming,
+            grouped: props.renderContext.renderContext.grouped,
+            running:
+              !props.isComplete &&
+              props.renderContext.renderContext.isStreaming,
+            followedBy: props.renderContext.renderContext.followedBy,
+          }}
+        />
       </ToolErrorContext.Provider>
     </LegacyGeneratedImage>
   );

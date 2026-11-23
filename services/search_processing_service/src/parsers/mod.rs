@@ -2,6 +2,8 @@ pub mod ai;
 pub mod docx;
 pub mod fig;
 pub mod markdown;
-#[cfg(feature = "pdf")]
+pub mod message_text;
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 pub mod pdf;
 pub mod psd;
+pub mod text;

@@ -1,8 +1,8 @@
-import Building from '@phosphor/buildings.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import List from '@phosphor/list-bullets.svg';
-import Table from '@phosphor/table.svg';
-import Users from '@phosphor/users.svg';
+import Building from '@icon/system/regular/buildings.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import List from '@icon/system/regular/list-bullets.svg';
+import Table from '@icon/system/regular/table.svg';
+import Users from '@icon/system/regular/users.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { ViewSidebar } from '../DemoViewSidebar';
 import { crmHeroLists, crmHeroPipelines } from './crm-hero-data';

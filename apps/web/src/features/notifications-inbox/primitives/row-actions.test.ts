@@ -56,6 +56,7 @@ const row = (
 ): NotificationInboxRow => ({
   id: 'document:doc-a#access_requested:req-1',
   type: 'access_requested',
+  alsoListedAs: [],
   revision: 'rev',
   latestAt: 1,
   actions,
@@ -64,7 +65,6 @@ const row = (
   content: {
     entity: { type: 'document', id: 'doc-a', name: 'Plan' } as never,
     notifications,
-    entityAt: () => ({}) as never,
   },
 });
 

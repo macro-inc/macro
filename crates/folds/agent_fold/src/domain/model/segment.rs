@@ -32,6 +32,8 @@ mod test;
 
 mod code_execution;
 
+pub use code_execution::UNNAMED_STEP_LABELS;
+
 /// Longest detail a row keeps, in characters.
 const DETAIL_MAX_CHARS: usize = 80;
 
@@ -140,8 +142,9 @@ pub struct ProjectedSegment {
 ///
 /// `closed` is whether the reply's turn has ended; until it has, the last
 /// segment stays open. Thoughts, attachments and controls belong to no
-/// segment, and whitespace-only prose is not a passage: a newline the agent
-/// emitted between two tool calls must not split their activity in two.
+/// segment, nor does the agent looking up its own tools, and whitespace-only
+/// prose is not a passage: a newline the agent emitted between two tool calls
+/// must not split their activity in two.
 #[must_use]
 pub fn segments(parts: &[MessagePart], closed: bool) -> Vec<Segment> {
     let mut out: Vec<Segment> = Vec::new();
@@ -254,6 +257,7 @@ fn part_kind(part: &MessagePart) -> Option<SegmentKind> {
     match part {
         MessagePart::Text { text } if text.trim().is_empty() => None,
         MessagePart::Text { .. } => Some(SegmentKind::Prose),
+        MessagePart::ToolUse { name, .. } if code_execution::is_tool_lookup(name) => None,
         MessagePart::ToolUse { .. } | MessagePart::Plan { .. } => Some(SegmentKind::Activity),
         MessagePart::Permission { .. }
         | MessagePart::Elicitation { .. }
@@ -280,7 +284,7 @@ fn activity_rows(parts: &[MessagePart], closed: bool) -> Vec<ActivityRow> {
                 name,
                 status,
                 detail,
-            } => code_execution::rows(&id.0, name, detail, closed)
+            } => code_execution::rows(&id.0, name, *status, detail, closed)
                 .unwrap_or_else(|| vec![tool_row(id.0.clone(), name, *status, detail, closed)]),
             MessagePart::Plan { entries } => {
                 let done = entries

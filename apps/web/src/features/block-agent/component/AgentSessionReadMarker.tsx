@@ -1,9 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markNotificationsForEntityAsRead } from '@notifications/notification-helpers';
 import type { NotificationSource } from '@notifications/notification-source';
-import { compositeEntity } from '@notifications/types';
 import { debounce } from '@solid-primitives/scheduled';
-import { createEffect, Show } from 'solid-js';
+import { Show } from 'solid-js';
 
 /** Mark only the loaded conversation in the active split, never sidebar rows. */
 export function AgentSessionReadMarker(props: {
@@ -28,18 +27,8 @@ function ActiveSessionReadMarker(props: {
   notificationSource: NotificationSource;
 }) {
   const entity = { type: 'agent_session', id: props.sessionId } as const;
-  const unread = () =>
-    (
-      props.notificationSource.notificationsByEntity()[
-        compositeEntity(entity)
-      ] ?? []
-    ).filter((notification) => notification.state === 'unseen');
-  const attempted = new Set<string>();
-  let markedInitialView = false;
 
   const markRead = async () => {
-    markedInitialView = true;
-    for (const notification of unread()) attempted.add(notification.id);
     try {
       await markNotificationsForEntityAsRead(props.notificationSource, entity);
     } catch (error) {
@@ -54,23 +43,10 @@ function ActiveSessionReadMarker(props: {
     2_000
   );
 
-  // Notification loading and incoming updates can happen after the session
-  // mounts. Observe those external events for the lifetime of the active view;
-  // an optimistic seen update must not schedule another mutation.
-  createEffect(() => {
-    if (props.notificationSource.isLoading()) {
-      scheduleRead.clear();
-      return;
-    }
-    const notifications = unread();
-    if (
-      markedInitialView &&
-      !notifications.some((notification) => !attempted.has(notification.id))
-    ) {
-      return;
-    }
-    scheduleRead();
-  });
+  // The notification feed never holds agent sessions and reading it would
+  // load it, so the opened session is marked once without observing the feed.
+  // Leaving the session before the debounce fires cancels the mark.
+  scheduleRead();
 
   return null;
 }

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_threads t\n        SET has_pdf_attachment = t.has_pdf_attachment OR kinds.has_pdf,\n            has_image_attachment = t.has_image_attachment OR kinds.has_image,\n            has_document_attachment = t.has_document_attachment OR kinds.has_document\n        FROM (\n            SELECT\n                m.thread_id,\n                COALESCE(bool_or(a.mime_type LIKE ANY($2::text[])), false) AS has_pdf,\n                COALESCE(bool_or(a.mime_type LIKE ANY($3::text[])), false) AS has_image,\n                COALESCE(bool_or(a.mime_type LIKE ANY($4::text[])), false) AS has_document\n            FROM email_messages m\n            JOIN email_attachments a ON a.message_id = m.id\n            WHERE m.link_id = $1\n            GROUP BY m.thread_id\n        ) kinds\n        WHERE t.id = kinds.thread_id\n          AND ((kinds.has_pdf AND NOT t.has_pdf_attachment)\n               OR (kinds.has_image AND NOT t.has_image_attachment)\n               OR (kinds.has_document AND NOT t.has_document_attachment))\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "acb961f5b1be06bf56dfee3f540b2983c6307fa9f2bdcd7c7ef7d2b2284d120e"
+}

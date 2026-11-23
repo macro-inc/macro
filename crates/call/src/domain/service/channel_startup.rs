@@ -3,7 +3,7 @@
 use super::*;
 use tracing::Instrument;
 
-pub(super) struct ChannelCallStartup<R, C, Cn, E, N, V> {
+pub(super) struct ChannelCallStartup<R, C, Cn, E, N, V, B> {
     pub repo: R,
     pub rtc_client: Arc<C>,
     pub connection_service: Arc<Cn>,
@@ -13,6 +13,7 @@ pub(super) struct ChannelCallStartup<R, C, Cn, E, N, V> {
     pub server_url: String,
     pub ring_status_base_url: Option<String>,
     pub egress_s3_config: Option<EgressS3Config>,
+    pub event_broker: B,
 }
 
 impl<
@@ -22,7 +23,8 @@ impl<
     E: EntityAccessService,
     N: NotificationIngress,
     V: VoipPushSender,
-> ChannelCallStartup<R, C, Cn, E, N, V>
+    B: MacroEventBroker,
+> ChannelCallStartup<R, C, Cn, E, N, V, B>
 {
     pub fn spawn(
         self,
@@ -72,6 +74,12 @@ impl<
             .is_none()
         {
             return Ok(());
+        }
+        for recipient in &recipient_ids {
+            let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+            metadata.created_by = Some(user_id.to_string());
+            metadata.recipient_user_id = Some(recipient.to_string());
+            publish_call_notification(&self.event_broker, CallNotificationEvent::Ringing(metadata));
         }
         let users: Vec<_> = recipient_ids.iter().map(CowLike::copied).collect();
         self.connection_service

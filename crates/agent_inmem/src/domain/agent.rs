@@ -34,6 +34,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
+use agent_code_mode::domain::ExecutionStatus;
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use agent_session::domain::model::AgentSessionId;
@@ -50,7 +51,7 @@ use crate::domain::admission::admit_turn;
 use crate::domain::engine::{
     AgentIdentity, AwaitingUser, ReplyDelivery, TurnEngine, TurnPurpose, TurnRequest,
 };
-use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
+use crate::domain::mcp::{DynMcpToolConnector, dialable_servers, has_code_mode_tools};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
 use crate::domain::tool_stream::StreamingCalls;
@@ -77,7 +78,7 @@ const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 /// What a failed turn says to the person it answers, wherever its reply is
 /// read. The failure itself goes to the prompt's error, not to them.
-const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
+pub(crate) const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
 
 /// Whole milliseconds since `started`, saturating; a span field, not a clock.
 fn elapsed_ms(started: Instant) -> u64 {
@@ -90,10 +91,7 @@ pub const AGENT_NAME: &str = "macro-inmem";
 
 /// The `_meta` namespace this agent writes its own keys under, mirroring
 /// Claude Code's `claudeCode` layout so the fold reads both the same way.
-pub const META_NAMESPACE: &str = "macro";
-
-/// The one tool in the Macro toolset that delegates to another agent.
-const SUBAGENT_TOOL: &str = "Subagent";
+pub const META_NAMESPACE: &str = agent_session::domain::model::META_NAMESPACE;
 
 /// Slash command that asks the user a question through `elicitation/create`
 /// instead of running the model: `/ask <question>` for free text, or
@@ -129,6 +127,8 @@ pub struct AgentState {
     pub session_id: AgentSessionId,
     /// The session's owner; turns run on their behalf.
     pub owner: Owner,
+    /// What the session's turns are admitted and metered as.
+    pub feature: ai_usage::AiFeature,
     /// How the session's replies reach their reader.
     pub delivery: ReplyDelivery,
     /// Runs the actual turns.
@@ -157,6 +157,9 @@ pub struct AgentState {
     /// handshake does not join it; the first turn does, so SearchTools still
     /// sees the catalog.
     pub mcp_connect: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// The servers the last `session/new` / `session/resume` handed over,
+    /// redialed by a turn whose tools lack the code-mode ones.
+    pub mcp_servers: Mutex<Vec<AcpMcpServer>>,
     /// Whether the client advertised `elicitation.form` on `initialize`. The
     /// protocol forbids asking a mode the client did not advertise.
     pub client_renders_forms: AtomicBool,
@@ -191,6 +194,12 @@ impl AgentState {
     /// Start [`Self::connect_mcp`] without joining it. `session/new` and
     /// `session/resume` call this so create can return while listing runs.
     fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
+        servers.clone_into(
+            &mut self
+                .mcp_servers
+                .lock()
+                .expect("mcp servers lock should not be poisoned"),
+        );
         let state = Arc::clone(self);
         let handle = tokio::spawn(async move {
             state.connect_mcp(servers).await;
@@ -208,7 +217,10 @@ impl AgentState {
     }
 
     /// The tools the next turn should compose, waiting out an in-flight
-    /// connect so the searchable catalog is not empty on turn one.
+    /// connect so the searchable catalog is not empty on turn one. Every turn
+    /// runs code mode, so a session whose connect left out the code-mode
+    /// tools (a failed or slow handshake) redials its servers first instead
+    /// of failing every turn until it is released.
     async fn mcp_tools_for_turn(&self) -> Option<RemoteMcpToolSet> {
         let handle = self
             .mcp_connect
@@ -218,6 +230,24 @@ impl AgentState {
         if let Some(handle) = handle {
             let _ = handle.await;
         }
+        let tools = self.cached_mcp_tools();
+        if has_code_mode_tools(tools.as_ref()) {
+            return tools;
+        }
+        let servers = self
+            .mcp_servers
+            .lock()
+            .expect("mcp servers lock should not be poisoned")
+            .clone();
+        if servers.is_empty() {
+            return tools;
+        }
+        tracing::warn!("the session's MCP tools lack code mode; redialing its servers");
+        self.connect_mcp(servers).await;
+        self.cached_mcp_tools()
+    }
+
+    fn cached_mcp_tools(&self) -> Option<RemoteMcpToolSet> {
         self.mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned")
@@ -738,6 +768,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         agent.turn.text_chars = tracing::field::Empty,
                         agent.turn.tool_calls = tracing::field::Empty,
                         agent.turn.replied = tracing::field::Empty,
+                        agent.turn.tool_failures = tracing::field::Empty,
+                        agent.turn.code_executions = tracing::field::Empty,
+                        agent.turn.code_failures = tracing::field::Empty,
+                        agent.turn.compaction_wait_ms = tracing::field::Empty,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = UserPrompt::from_request(&request);
@@ -833,7 +867,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             }
                             state.set_model(value.to_string());
                         }
-                        "speed" => {
+                        crate::domain::model_options::SPEED_CONFIG_ID => {
                             let speed = ModelSpeed::parse(&value.to_string());
                             let Some(speed) = speed else {
                                 return responder.respond_with_error(
@@ -952,7 +986,7 @@ async fn run_turn(
         tokio::select! {
             biased;
             _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-            result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
+            result = admit_turn(state.admission.as_ref(), &state.owner, state.feature) => result.map_err(|error|
                 AcpError::new(-32603, error.to_string()).data(serde_json::json!({
                     "code": error.code(), "retryable": error.is_retryable(),
                 }))
@@ -968,10 +1002,14 @@ async fn run_turn(
             "This message is too long. Split it into smaller messages or attach it as a file.",
         ));
     }
-    if compaction::before_turn(state, connection, &acp_session_id, &prompt, &cancel)
-        .await
-        .is_err()
-    {
+    let compaction_started = Instant::now();
+    let compacted =
+        compaction::before_turn(state, connection, &acp_session_id, &prompt, &cancel).await;
+    span.record(
+        "agent.turn.compaction_wait_ms",
+        elapsed_ms(compaction_started),
+    );
+    if compacted.is_err() {
         return Ok(StopReason::Cancelled);
     }
     let mcp_tools = tokio::select! {
@@ -1027,6 +1065,7 @@ async fn run_turn(
         session_id: state.session_id,
         awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),
+        feature: state.feature,
         model,
         reasoning_effort,
         speed,
@@ -1158,6 +1197,12 @@ async fn run_turn(
     result
 }
 
+/// The code-mode tool, whose failed programs come back as results: native, or
+/// reached through the internal MCP server under its mangled name.
+fn is_execute_code(name: &str) -> bool {
+    matches!(name, "ExecuteCode" | "mcp__macro_internal__ExecuteCode")
+}
+
 /// What a turn said, recorded on its `agent.acp.prompt` span so a turn that
 /// ended without answering is found by query, not by reading its log.
 #[derive(Default)]
@@ -1166,6 +1211,12 @@ struct TurnOutput {
     tool_calls: i64,
     /// Text after the last tool call: the answer the reader is left with.
     replied: bool,
+    /// Tool calls that errored, `ExecuteCode` runs that did not succeed
+    /// included.
+    tool_failures: i64,
+    /// `ExecuteCode` runs, and how many of them did not succeed.
+    code_executions: i64,
+    code_failures: i64,
 }
 
 impl TurnOutput {
@@ -1180,9 +1231,30 @@ impl TurnOutput {
                 self.replied = false;
             }
             StreamPart::ToolCallStarted(_) => self.replied = false,
+            StreamPart::ToolResponse(ToolResponse::Err { name, .. }) => {
+                self.tool_failures += 1;
+                if is_execute_code(name) {
+                    self.code_executions += 1;
+                    self.code_failures += 1;
+                }
+            }
+            // A program that failed is still a result the tool returns.
+            StreamPart::ToolResponse(ToolResponse::Json { name, json, .. })
+                if is_execute_code(name) =>
+            {
+                self.code_executions += 1;
+                let status = json
+                    .get("status")
+                    .cloned()
+                    .and_then(|status| serde_json::from_value(status).ok());
+                if status != Some(ExecutionStatus::Succeeded) {
+                    self.tool_failures += 1;
+                    self.code_failures += 1;
+                }
+            }
             StreamPart::ToolCallArgs { .. }
             | StreamPart::Thinking(_)
-            | StreamPart::ToolResponse(_)
+            | StreamPart::ToolResponse(ToolResponse::Json { .. })
             | StreamPart::Usage(_) => {}
         }
     }
@@ -1199,6 +1271,9 @@ impl TurnOutput {
         span.record("agent.turn.text_chars", self.text_chars);
         span.record("agent.turn.tool_calls", self.tool_calls);
         span.record("agent.turn.replied", self.replied);
+        span.record("agent.turn.tool_failures", self.tool_failures);
+        span.record("agent.turn.code_executions", self.code_executions);
+        span.record("agent.turn.code_failures", self.code_failures);
         if stop_reason == "end_turn" && !self.replied {
             tracing::warn!(
                 tool_calls = self.tool_calls,
@@ -1402,8 +1477,7 @@ fn update_for_part(
 
 /// The `_meta` this agent stamps on a tool call so the fold can read it by
 /// name rather than guess from the title: `macro.toolName` (an MCP tool as
-/// `mcp__<server>__<tool>`, the convention Claude Code set) and
-/// `macro.subagent` on a delegation.
+/// `mcp__<server>__<tool>`, the convention Claude Code set).
 fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
     let tool_name = match mcp {
         Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
@@ -1411,9 +1485,6 @@ fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
     };
     let mut ours = serde_json::Map::new();
     ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
-    if mcp.is_none() && name == SUBAGENT_TOOL {
-        ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
-    }
     let mut meta = Meta::new();
     meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
     meta

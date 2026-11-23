@@ -18,9 +18,13 @@ use crate::predicate::{
 };
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
-    MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, QueuedMutation,
+    MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, PersistedOptimisticLayer,
+    QueuedMutation,
 };
-use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
+use crate::search::{
+    SearchCursor, SearchDocument, SearchDocumentRef, SearchProfile, SearchQuery,
+    project_search_documents,
+};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
 use predicate_index::{
@@ -55,10 +59,115 @@ pub struct QueueDiagnostics {
     pub oldest_created_at_ms: Option<i64>,
 }
 
+/// Where a storage stands in its history of commits. Two equal positions
+/// from one storage mean it committed nothing in between.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WritePosition {
+    /// Changes whenever the storage starts its history over, such as a new log.
+    pub epoch: u64,
+    /// Advances with every commit within an epoch.
+    pub offset: u64,
+}
+
+/// The durable reads a projection pass makes before a write. Every
+/// [`Storage`] serves them; [`crate::engine::PassReads`] serves them through
+/// the engine's hot tier and reads each key once, so the write that follows
+/// does not read again.
+pub trait DurableRead {
+    type Error: std::error::Error + MaybeSend + 'static;
+    /// The storage underneath, for the reads this trait does not cover.
+    type Storage: crate::predicate::PredicateIndexStorage<Error = Self::Error>;
+
+    /// The storage underneath.
+    fn storage(&self) -> &Self::Storage;
+
+    /// Durable records aligned with `keys`, as [`Storage::get_batch`].
+    fn read_records(
+        &self,
+        keys: &[EntityKey<'_>],
+    ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend;
+
+    /// Projection states aligned with `keys`, as
+    /// [`Storage::load_projection_states`].
+    fn read_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend;
+
+    /// The queued mutations, as [`Storage::load_mutation_queue`].
+    fn read_mutation_queue(
+        &self,
+    ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend;
+}
+
+impl<S: crate::predicate::PredicateIndexStorage> DurableRead for S {
+    type Error = S::Error;
+    type Storage = S;
+
+    fn storage(&self) -> &S {
+        self
+    }
+
+    fn read_records(
+        &self,
+        keys: &[EntityKey<'_>],
+    ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend {
+        self.get_batch(keys)
+    }
+
+    fn read_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend {
+        self.load_projection_states(keys)
+    }
+
+    fn read_mutation_queue(
+        &self,
+    ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend {
+        self.load_mutation_queue()
+    }
+}
+
 /// Async KV over normalized records. Batch-oriented by design: the engine
 /// issues one `get_batch` per denormalization round, never per record.
 pub trait Storage: MaybeSend {
     type Error: std::error::Error + MaybeSend + 'static;
+
+    /// The current [`WritePosition`], or `None` when this storage does not
+    /// track one. Engines reuse what they read for a write only while it
+    /// holds still, so `None` turns that off.
+    fn write_position(&self) -> Option<WritePosition> {
+        None
+    }
+
+    /// Atomically replace copied layers and recomposed shadows for affected keys.
+    /// Preserve all other shadows and authored command metadata.
+    fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(MutationId, PersistedOptimisticLayer)],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Enumerate raw normalized keys of one type, including hidden, partial and
+    /// unprojected records. The exclusive cursor is the entity ID; at most 500
+    /// keys are returned. Mutation commands are separate and remain untouched.
+    fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<EntityKey<'static>>, Self::Error>> + MaybeSend;
+
+    /// Enumerate authoritative predicate keys even when their normalized record
+    /// is absent. Uses the same exclusive ID cursor and 500-key page bound.
+    fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<EntityKey<'static>>, Self::Error>> + MaybeSend;
 
     /// Fetches records; result is aligned with `keys` (`None` = absent).
     fn get_batch(
@@ -79,21 +188,65 @@ pub trait Storage: MaybeSend {
         projections: Vec<ProjectionMutation>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// [`Self::put_batch_with_projections`] with borrowed records, for a caller
+    /// that keeps them. The default clones them.
+    fn put_records_with_projections(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+        self.put_batch_with_projections(entries.to_vec(), projections)
+    }
+
     /// Deletes records (absent keys are ignored).
     fn delete_batch(
         &mut self,
         keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Loads one compact bucket for text search. Must use the profile/bucket
-    /// index, never unrelated buckets or normalized record payloads.
-    fn load_search_documents(
+    /// Streams compact text matches from one indexed profile/bucket, without
+    /// collecting the bucket or decoding normalized records. May return a
+    /// superset of matches; must not omit matches or limit before ranking.
+    fn visit_search_documents(
         &self,
-        _profile: SearchProfile,
-        _bucket: &str,
-    ) -> impl Future<Output = Result<Vec<SearchDocument>, Self::Error>> + MaybeSend {
-        async { Ok(Vec::new()) }
-    }
+        profile: SearchProfile,
+        bucket: &str,
+        query: &SearchQuery,
+        visit: impl FnMut(SearchDocumentRef<'_>) + MaybeSend,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Streams normalized contact records after the existing text prefilter.
+    /// Extra ranking/exclusion facts are evaluated before any result limit.
+    fn visit_contact_records(
+        &self,
+        query: &SearchQuery,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Execute the name-policy read into its bounded core collector. Indexed
+    /// adapters may probe then fall back to a complete matching stream; a work
+    /// budget is never completion evidence. The engine owns scope admission.
+    fn visit_name_search(
+        &self,
+        read: &mut crate::people::name_search::reader::NameSearchRead<'_>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Visit one raw contact-record page in key order. Return its last visited
+    /// position only when more records exist. Never accumulate the corpus.
+    fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
+    ) -> impl Future<Output = Result<Option<String>, Self::Error>> + MaybeSend;
+
+    /// Execute filtering, aggregation and limits in local storage. Unsupported
+    /// implementations must refuse; collecting the directory is not a fallback.
+    fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &crate::people::sql::PeopleSqlPlan,
+    ) -> impl Future<Output = Result<crate::people::sql::PeopleSqlResult, Self::Error>> + MaybeSend;
 
     /// Reads one bucket in indexed recent order. `after` is exclusive.
     fn browse_search_documents(
@@ -296,8 +449,8 @@ pub struct InMemoryStorage {
     mutations: BTreeMap<MutationId, InMemoryQueuedMutation>,
     next_mutation_id: MutationId,
     record_get_count: Arc<AtomicUsize>,
-    search_catalog_load_count: Arc<AtomicUsize>,
-    search_catalog_rows_loaded: Arc<AtomicUsize>,
+    search_query_count: Arc<AtomicUsize>,
+    search_rows_visited: Arc<AtomicUsize>,
     mutation_queue_load_count: Arc<AtomicUsize>,
     calendar_ranges: HashMap<EntityKey<'static>, CalendarRangeRow>,
     calendar_coverage: Vec<CalendarSpan>,
@@ -392,14 +545,14 @@ impl InMemoryStorage {
         self.record_get_count.load(Ordering::Relaxed)
     }
 
-    /// Number of compact catalog loads (test diagnostics).
-    pub fn search_catalog_load_count(&self) -> usize {
-        self.search_catalog_load_count.load(Ordering::Relaxed)
+    /// Number of text queries against storage (test diagnostics).
+    pub fn search_query_count(&self) -> usize {
+        self.search_query_count.load(Ordering::Relaxed)
     }
 
-    /// Number of compact rows loaded across bucket reads (test diagnostics).
-    pub fn search_catalog_rows_loaded(&self) -> usize {
-        self.search_catalog_rows_loaded.load(Ordering::Relaxed)
+    /// Number of matching compact rows passed to visitors (test diagnostics).
+    pub fn search_rows_visited(&self) -> usize {
+        self.search_rows_visited.load(Ordering::Relaxed)
     }
 
     /// Number of full mutation-queue loads (test diagnostics).
@@ -410,6 +563,108 @@ impl InMemoryStorage {
 
 impl Storage for InMemoryStorage {
     type Error = Infallible;
+
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        let mut keys: Vec<_> = self
+            .projections
+            .keys()
+            .map(|key| EntityKey(key.as_str().to_owned().into()))
+            .filter(|key| {
+                key.typename() == Some(typename)
+                    && key
+                        .id()
+                        .is_some_and(|id| after_id.is_none_or(|after| id > after))
+            })
+            .collect();
+        keys.sort();
+        keys.truncate(limit.min(500));
+        Ok(keys)
+    }
+
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        let mut keys: Vec<_> = self
+            .records
+            .keys()
+            .filter(|key| {
+                key.typename() == Some(typename)
+                    && key
+                        .id()
+                        .is_some_and(|id| after_id.is_none_or(|after| id > after))
+            })
+            .cloned()
+            .collect();
+        keys.sort();
+        keys.truncate(limit.min(500));
+        Ok(keys)
+    }
+
+    async fn visit_name_search(
+        &self,
+        read: &mut crate::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        for (key, record) in &self.records {
+            read.push(key, record, None);
+        }
+        if !read.prior_dm_targets().is_empty() {
+            for (key, record) in &self.records {
+                read.note_prior_alias(key, record);
+            }
+        }
+        Ok(())
+    }
+
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        let mut selected = BTreeMap::new();
+        for (key, record) in &self.records {
+            if key.typename() != Some("GraphqlContact") {
+                continue;
+            }
+            let Some(id) = key.id() else {
+                continue;
+            };
+            if after.is_some_and(|after| id <= after) {
+                continue;
+            }
+            selected.insert(id, (key, record));
+            if selected.len() > limit + 1 {
+                selected.pop_last();
+            }
+        }
+        let more = selected.len() > limit;
+        if more {
+            selected.pop_last();
+        }
+        let next = more
+            .then(|| selected.last_key_value().map(|(id, _)| (*id).to_owned()))
+            .flatten();
+        for (_, (key, record)) in selected {
+            visit(key, record);
+        }
+        Ok(next)
+    }
+
+    async fn read_people_sql(
+        &self,
+        _viewer: &str,
+        _plan: &crate::people::sql::PeopleSqlPlan,
+    ) -> Result<crate::people::sql::PeopleSqlResult, Self::Error> {
+        Ok(crate::people::sql::PeopleSqlResult::Unsupported)
+    }
 
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         self.record_get_count.fetch_add(1, Ordering::Relaxed);
@@ -448,22 +703,40 @@ impl Storage for InMemoryStorage {
         Ok(())
     }
 
-    async fn load_search_documents(
+    async fn visit_search_documents(
         &self,
         profile: SearchProfile,
         bucket: &str,
-    ) -> Result<Vec<SearchDocument>, Self::Error> {
-        self.search_catalog_load_count
-            .fetch_add(1, Ordering::Relaxed);
-        let documents: Vec<_> = self
-            .search_documents
-            .values()
-            .filter(|document| document.profile == profile && document.bucket == bucket)
-            .cloned()
-            .collect();
-        self.search_catalog_rows_loaded
-            .fetch_add(documents.len(), Ordering::Relaxed);
-        Ok(documents)
+        query: &SearchQuery,
+        mut visit: impl FnMut(SearchDocumentRef<'_>) + MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.search_query_count.fetch_add(1, Ordering::Relaxed);
+        for document in self.search_documents.values().filter(|document| {
+            document.profile == profile
+                && document.bucket == bucket
+                && query.matches(&document.search_text)
+        }) {
+            self.search_rows_visited.fetch_add(1, Ordering::Relaxed);
+            visit(document.as_borrowed());
+        }
+        Ok(())
+    }
+
+    async fn visit_contact_records(
+        &self,
+        query: &SearchQuery,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
+    ) -> Result<(), Self::Error> {
+        for document in self.search_documents.values().filter(|document| {
+            document.profile == SearchProfile::QuickAccessV1
+                && document.bucket == "person"
+                && query.matches(&document.search_text)
+        }) {
+            if let Some(record) = self.records.get(&document.record_key) {
+                visit(&document.record_key, record);
+            }
+        }
+        Ok(())
     }
 
     async fn browse_search_documents(
@@ -599,6 +872,27 @@ impl Storage for InMemoryStorage {
             .iter()
             .map(|key| self.optimistic_projections.get(key).cloned())
             .collect())
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(MutationId, PersistedOptimisticLayer)],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> Result<(), Self::Error> {
+        for (id, layer) in layers {
+            if let Some(entry) = self.mutations.get_mut(id) {
+                entry.optimistic = layer.clone();
+            }
+        }
+        for key in affected_projection_keys {
+            self.optimistic_projections.remove(key);
+        }
+        for projection in projections {
+            self.optimistic_projections
+                .insert(projection.state.record_key().clone(), projection.clone());
+        }
+        Ok(())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

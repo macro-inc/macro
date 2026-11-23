@@ -4,6 +4,8 @@
 use super::*;
 
 mod call_session;
+mod entity_audiences;
+mod telemetry;
 use crate::domain::models::{
     AdminParticipantRole, AdminTeamRole, AnyEntityPermission, BotAccessScope, BotId,
     BotReceiptScope, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
@@ -48,6 +50,7 @@ struct MockRepo {
     form_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     external_chat_access: Arc<Mutex<Option<AccessLevel>>>,
     external_chat_access_callers: Arc<Mutex<Vec<Option<String>>>>,
+    harness_access: Arc<Mutex<Option<AccessLevel>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -75,6 +78,7 @@ struct MockRepo {
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
     call_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
+    grant_audience_lookups: Arc<AtomicUsize>,
 }
 
 impl MockRepo {
@@ -108,6 +112,7 @@ impl MockRepo {
             form_access_list: Arc::default(),
             external_chat_access: Arc::default(),
             external_chat_access_callers: Arc::default(),
+            harness_access: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_agent_session_access: Arc::default(),
@@ -135,6 +140,7 @@ impl MockRepo {
             call_channel: Arc::new(Mutex::new(None)),
             call_users: Arc::default(),
             user_team: Arc::new(Mutex::new(None)),
+            grant_audience_lookups: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -348,6 +354,18 @@ impl AccessRepository for MockRepo {
         Ok(*self.document_access.lock().await)
     }
 
+    async fn get_documents_access(
+        &self,
+        document_ids: &[String],
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<String, AccessLevel>, AccessError> {
+        let level = *self.document_access.lock().await;
+        Ok(document_ids
+            .iter()
+            .filter_map(|id| level.map(|level| (id.clone(), level)))
+            .collect())
+    }
+
     async fn get_chat_access(
         &self,
         _chat_id: &str,
@@ -452,6 +470,20 @@ impl AccessRepository for MockRepo {
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         Ok(self.pipeline_access_list.lock().await.clone())
     }
+    async fn get_pipelines_access(
+        &self,
+        ids: &[Uuid],
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        Ok(self
+            .pipeline_access_list
+            .lock()
+            .await
+            .iter()
+            .filter(|(id, _)| ids.contains(id))
+            .copied()
+            .collect())
+    }
 
     async fn get_database_access(
         &self,
@@ -480,7 +512,14 @@ impl AccessRepository for MockRepo {
         Ok(*self.form_access.lock().await)
     }
 
-    /// Resolve ordinary shares on an external chat.
+    async fn get_harness_access(
+        &self,
+        _harness_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.harness_access.lock().await)
+    }
+
     async fn get_external_chat_access(
         &self,
         _group_id: &str,
@@ -657,6 +696,21 @@ impl AccessRepository for MockRepo {
         }
     }
 
+    async fn get_entity_grant_audiences(
+        &self,
+        entity_ids: &[Uuid],
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityAudience>, AccessError> {
+        self.grant_audience_lookups.fetch_add(1, Ordering::SeqCst);
+        let Some(first) = entity_ids.first() else {
+            return Ok(Vec::new());
+        };
+        Ok(vec![EntityAudience {
+            entity_ids: entity_ids.iter().map(Uuid::to_string).collect(),
+            users: self.get_entity_users(first, entity_type).await?,
+        }])
+    }
+
     async fn get_direct_entity_users(
         &self,
         _entity_id: &Uuid,
@@ -667,6 +721,13 @@ impl AccessRepository for MockRepo {
     }
 
     async fn get_channel_users(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(self.channel_users.lock().await.clone())
+    }
+
+    async fn get_current_channel_users(
         &self,
         _channel_id: &Uuid,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
@@ -991,6 +1052,33 @@ async fn test_get_entity_permission_document_returns_access_level() {
 
     let result = service
         .get_entity_permission(Some(&user_id), "doc-1", EntityType::Document, None)
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+}
+
+/// A runtime someone else owns, reached through a grant: the grant's level,
+/// not a refusal for an unsupported type.
+#[tokio::test]
+async fn get_entity_permission_harness_returns_a_granted_level() {
+    let repo = MockRepo::new();
+    *repo.harness_access.lock().await = Some(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::Harness,
+            None,
+        )
         .await
         .unwrap();
 

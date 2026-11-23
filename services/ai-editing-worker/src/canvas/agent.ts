@@ -13,9 +13,10 @@ import { z } from 'zod';
 import { TokenTracker } from '../ai-editing/token-tracker';
 import { runCanvasInSandbox } from '../sandbox';
 import type { CanvasPresentation } from './animation';
+import ARTIFACT_GUIDE from './artifact-prompt.md';
 import { dependencies } from './dependencies';
 import { canvasOverview } from './overview';
-import SYSTEM from './prompt.md';
+import BASE_SYSTEM from './prompt.md';
 import {
   type CanvasMeasurer,
   type CanvasRender,
@@ -31,6 +32,8 @@ import {
 } from './session';
 
 export type CanvasAgentOptions = {
+  /** The requesting user has artifacts: adds their SDK and allows their operations. */
+  artifacts?: boolean;
   render?: CanvasRenderer;
   createSource?: () => CanvasSource;
   measure?: CanvasMeasurer;
@@ -122,6 +125,9 @@ export async function editCanvas(
   editorName = 'Macro',
   options: CanvasAgentOptions = {}
 ) {
+  const SYSTEM = options.artifacts
+    ? `${BASE_SYSTEM}\n\n${ARTIFACT_GUIDE}`
+    : BASE_SYSTEM;
   const uncertainWrite = new AbortController();
   const editSignal = AbortSignal.any([signal, uncertainWrite.signal]);
   let operationsApplied = 0;
@@ -188,7 +194,11 @@ export async function editCanvas(
                 context = session.snapshot();
                 return format === 'overview'
                   ? JSON.stringify(canvasOverview(context.document, itemIds))
-                  : describeCanvas(context.document, itemIds);
+                  : describeCanvas(
+                      context.document,
+                      itemIds,
+                      context.artifactLibrary
+                    );
               },
             }),
             renderCanvas: tool({
@@ -300,7 +310,8 @@ export async function editCanvas(
                 options.createSource(),
                 editSignal,
                 async (writer) => run(writer.present),
-                `${editorName} · Writer ${index}`
+                `${editorName} · Writer ${index}`,
+                options.artifacts
               );
             },
             { signal: editSignal }
@@ -440,7 +451,8 @@ export async function editCanvas(
           await Promise.allSettled([...pendingOperations]);
         }
       },
-      editorName
+      editorName,
+      options.artifacts
     );
   } catch (error) {
     return {

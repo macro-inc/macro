@@ -60,6 +60,27 @@ for await (const doc of macro.documents.search('roadmap', { pageSize: 5 })) {
 }
 ```
 
+## Manage bots from code
+
+An API key can do everything the settings page does: create and configure bots,
+grant channels, read webhook URLs and mint or revoke tokens. An agent's program
+(ExecuteCode, a routine) cannot mint a token or an API key, since the secret
+would reach the model; it presents a `botCredential` card instead.
+
+```ts
+const macro = new Macro({ token: process.env.MACRO_API_KEY! });
+
+const bot = await macro.bots.create({ name: 'Release bot', handle: 'release-bot' });
+await bot.grantChannel(macro.channels.byId('<channel-id>'));
+const { secret } = await bot.createToken({ label: 'ci' });
+const [webhook] = await bot.webhooks();
+```
+
+`secret` is shown only once. POST `{ "content": "..." }` to `webhook.url` with
+the token in `x-macro-bot-token` and `x-macro-bot-scope: user`. Add
+`"notification_policy": "Silent"` to post without notifying anyone; the SDK's
+`channel.send(text, { silent: true })` does the same on any credential.
+
 ## What a bot can do
 
 - **Personal bot** (the default): owned by you. It acts only as you, through

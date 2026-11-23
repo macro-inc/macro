@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO harness_known_models (harness_id, options, observed_at)\n            VALUES ($1, $2, now())\n            ON CONFLICT (harness_id)\n            DO UPDATE SET options = EXCLUDED.options, observed_at = EXCLUDED.observed_at\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "23810def19efe5c50d4d64f2dbdc700b1551b14e3be28efb0ba49fed8c051078"
+}

@@ -6,6 +6,9 @@ use std::collections::{HashMap, HashSet};
 
 use futures::{FutureExt, StreamExt, stream};
 use import_notion::domain::inventory::{all_rows, full_markdown};
+use import_notion::domain::macro_cells::{
+    ColumnNames, ColumnPlan, PeopleMap, capped_name, derived_id,
+};
 use import_notion::domain::model::{
     NotionDataSource, NotionId, NotionPage, NotionPropertyKind, NotionPropertySchema, NotionValue,
 };
@@ -13,21 +16,16 @@ use import_notion::domain::ports::NotionApi;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_databases::{
     CellValue, CellWrite, ColumnChange, ColumnId, ColumnKind, DatabaseId, DatabaseOp, EntityKind,
-    EntityRef, NewColumn, NewOption, OpResult, RowChange, RowChanges, RowId, RowsChange,
-    RowsResult, TableChange, TableId,
+    EntityRef, NewColumn, OpResult, RowChange, RowChanges, RowId, RowsChange, RowsResult,
+    TableChange, TableId,
 };
 use uuid::Uuid;
 
 use super::{BODY_CONCURRENCY, Cancel, Progress, WriteItem, folder_once};
 use crate::domain::models::{WrittenKind, WrittenObject};
 use crate::domain::ports::{
-    ImportedDocumentProperties, NewDatabase, NotionLinks, SharedEntity, SourceDates,
-    WorkspaceWriter, WrittenObjects,
-};
-
-use super::super::values::{
-    ColumnNames, ColumnShape, PeopleMap, PlannedColumn, capped_name, cell, derived_id,
-    planned_column,
+    ImportVisibility, ImportedDocumentProperties, NewDatabase, NotionLinks, SharedEntity,
+    SourceDates, WorkspaceWriter, WrittenObjects,
 };
 
 #[cfg(test)]
@@ -104,9 +102,10 @@ pub(in super::super) async fn write_database<
     folder: Uuid,
     share: bool,
     people: &PeopleMap,
-    links: &NotionLinks,
+    links: &tokio::sync::RwLock<NotionLinks>,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
+    personal_folder: Option<Uuid>,
 ) -> anyhow::Result<WrittenDatabase> {
     let source = api.data_source(&item.notion_id).await?;
     let created = database_once(writer, user, item, progress).await?;
@@ -117,36 +116,35 @@ pub(in super::super) async fn write_database<
             .share_with_team(user, SharedEntity::Database(created.database_id))
             .await?;
     }
+    if share {
+        for document in progress.all(WrittenKind::Body).values() {
+            cancel.ensure_running()?;
+            writer
+                .share_with_team(user, SharedEntity::Document(*document))
+                .await?;
+        }
+    }
     let table = created.table;
-    let names = ColumnNames::new(&source.properties);
-    let columns: Vec<PlannedColumn> = source
-        .properties
-        .iter()
-        .filter_map(|property| planned_column(property, &names, created.database_id))
-        .collect();
+    let plan = ColumnPlan::new(&source, created.database_id);
     let page_column = PageColumn {
         id: ColumnId::from_uuid(derived_id(created.database_id, "column/page")),
         name: page_column_name(&source.properties),
         // First, then the title and the data source's own columns.
         order: std::iter::once(created.title_column)
-            .chain(columns.iter().map(|column| column.id))
+            .chain(plan.columns.iter().map(|column| column.id))
             .collect(),
     };
 
     if progress.get(WrittenKind::Schema).is_none() {
         writer
-            .apply_database_ops(
-                user,
-                created.database_id,
-                schema_ops(item, &source, &names, &created, &columns),
-            )
+            .apply_database_ops(user, created.database_id, schema_ops(item, &plan, &created))
             .await?;
         progress
             .record(WrittenKind::Schema, created.database_id)
             .await?;
     }
 
-    let rows = all_rows(api, &item.notion_id).await?;
+    let rows = all_rows(api, &item.notion_id).await?.rows;
     let database = DatabaseId::from_uuid(created.database_id);
     let mut written = WrittenDatabase {
         import_id: item.import_id,
@@ -164,7 +162,7 @@ pub(in super::super) async fn write_database<
         cancel.ensure_running()?;
         let cells: Vec<Vec<CellWrite>> = batch
             .iter()
-            .map(|row| row_cells(row, created.title_column, &columns, people))
+            .map(|row| plan.row_cells(row, created.title_column, people))
             .collect();
         let results = writer
             .apply_database_ops(
@@ -172,7 +170,10 @@ pub(in super::super) async fn write_database<
                 created.database_id,
                 vec![DatabaseOp::Rows {
                     table,
-                    change: RowsChange::Insert { rows: cells },
+                    change: RowsChange::Insert {
+                        rows: cells,
+                        ids: None,
+                    },
                 }],
             )
             .await?;
@@ -226,6 +227,7 @@ pub(in super::super) async fn write_database<
         links,
         progress,
         cancel,
+        personal_folder,
     )
     .await?;
     Ok(written)
@@ -273,62 +275,16 @@ async fn database_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
 
 /// Rename the starter table and title column and create the data source's
 /// columns, in order.
-fn schema_ops(
-    item: &WriteItem,
-    source: &NotionDataSource,
-    names: &ColumnNames,
-    created: &NewDatabase,
-    columns: &[PlannedColumn],
-) -> Vec<DatabaseOp> {
-    let table = created.table;
-    let mut ops = vec![DatabaseOp::Table {
-        table,
+fn schema_ops(item: &WriteItem, plan: &ColumnPlan, created: &NewDatabase) -> Vec<DatabaseOp> {
+    std::iter::once(DatabaseOp::Table {
+        table: created.table,
         change: TableChange::Rename {
             name: capped_name(&item.title),
             previous_name: None,
         },
-    }];
-    if let Some(title) = source
-        .properties
-        .iter()
-        .find(|property| property.kind == NotionPropertyKind::Title)
-    {
-        ops.push(DatabaseOp::Column {
-            table,
-            column: created.title_column,
-            change: ColumnChange::Rename {
-                name: names.of(title),
-                previous_name: None,
-            },
-        });
-    }
-    let mut after = created.title_column;
-    for column in columns {
-        ops.push(DatabaseOp::Column {
-            table,
-            column: column.id,
-            change: ColumnChange::Create {
-                definition: NewColumn::New {
-                    name: column.name.clone(),
-                    kind: column.shape.kind(),
-                    options: match &column.shape {
-                        ColumnShape::Select { options, .. } => options
-                            .iter()
-                            .map(|(id, label)| NewOption {
-                                id: *id,
-                                label: label.clone(),
-                            })
-                            .collect(),
-                        _ => Vec::new(),
-                    },
-                    infer_type: false,
-                },
-                after: Some(after),
-            },
-        });
-        after = column.id;
-    }
-    ops
+    })
+    .chain(plan.column_ops(created.table, created.title_column))
+    .collect()
 }
 
 /// The rows earlier attempts inserted, by Notion row.
@@ -425,38 +381,10 @@ pub(in super::super) async fn recorded_database<Api: NotionApi, Store: WrittenOb
     });
     // Only a database with relations left to link needs its rows again.
     if unlinked {
-        let rows = all_rows(api, &item.notion_id).await?;
+        let rows = all_rows(api, &item.notion_id).await?.rows;
         written.relations = pending_relations(&source, &rows, &written);
     }
     Ok(Some(written))
-}
-
-fn row_cells(
-    row: &NotionPage,
-    title_column: ColumnId,
-    columns: &[PlannedColumn],
-    people: &PeopleMap,
-) -> Vec<CellWrite> {
-    let mut cells = Vec::with_capacity(columns.len() + 1);
-    if !row.title.trim().is_empty() {
-        cells.push(CellWrite {
-            column: title_column,
-            value: CellValue::Text(row.title.trim().to_string()),
-        });
-    }
-    for column in columns {
-        if let Some(value) = row
-            .properties
-            .get(&column.property)
-            .and_then(|value| cell(value, column, people))
-        {
-            cells.push(CellWrite {
-                column: column.id,
-                value,
-            });
-        }
-    }
-    cells
 }
 
 fn inserted_rows(results: &[OpResult]) -> Vec<RowId> {
@@ -490,11 +418,14 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
     rows: &[NotionPage],
     written: &WrittenDatabase,
     page_column: PageColumn,
-    links: &NotionLinks,
+    links: &tokio::sync::RwLock<NotionLinks>,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
+    personal_folder: Option<Uuid>,
 ) -> anyhow::Result<()> {
-    let bodies_folder: tokio::sync::OnceCell<Uuid> = tokio::sync::OnceCell::new();
+    let visibility = ImportVisibility::from_shared(item.shared);
+    let bodies_folder: tokio::sync::OnceCell<Uuid> =
+        tokio::sync::OnceCell::new_with(personal_folder);
     let bodies_name = capped_name(&format!("{} pages", item.title));
     let linked: Vec<anyhow::Result<Option<RowChange>>> = stream::iter(rows.iter().cloned())
         .map(|row| {
@@ -531,6 +462,7 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                             WrittenKind::BodiesFolder,
                             bodies_name,
                             folder,
+                            visibility,
                         )
                         .await?;
                         // A shared database's row bodies are shared with it,
@@ -549,16 +481,18 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                     row.title.trim().to_string()
                 };
                 let id = derived_id(item.import_id, &format!("body/{}", row.id.as_str()));
+                let links = links.read().await.clone();
                 let document: Uuid = writer
                     .create_document(
                         user,
                         id,
                         &title,
                         &markdown,
-                        links,
+                        &links,
                         &ImportedDocumentProperties::default(),
                         Some(folder),
                         Some(SourceDates::from(&row)),
+                        visibility,
                     )
                     .await?
                     .parse()?;

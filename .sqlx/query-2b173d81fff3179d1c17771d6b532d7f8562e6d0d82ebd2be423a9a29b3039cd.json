@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(h.owner_user_id, h.created_by) AS \"user!\"\n            FROM agent_configs ac\n            JOIN harnesses h ON h.id = ac.harness_id\n            WHERE ac.bot_id = $1 AND h.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2b173d81fff3179d1c17771d6b532d7f8562e6d0d82ebd2be423a9a29b3039cd"
+}

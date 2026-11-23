@@ -190,6 +190,12 @@ export function auditStandalone(websiteRoot: string) {
     glob = false
   ) => {
     referencesChecked++;
+    // Build-owned content module compiles apps/docs; it never imports app code.
+    if (
+      specifier === 'virtual:macro-docs' ||
+      specifier === 'virtual:macro-search'
+    )
+      return;
     if (APP_ALIASES.test(specifier)) {
       add(
         file,

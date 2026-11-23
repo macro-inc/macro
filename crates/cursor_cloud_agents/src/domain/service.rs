@@ -629,6 +629,11 @@ pub struct CursorSessionService<Cursor, Notifier, Chooser, Store> {
     /// A model id this deployment pins, applied to every new session. `None`
     /// leaves the choice to Cursor's own default resolution.
     default_model_id: Option<String>,
+    /// The reasoning effort a session on [`Self::default_model_id`] starts
+    /// on: the owner's account default, which belongs to that model alone.
+    /// `None`, or a value the model does not offer, keeps the model's own
+    /// default variant.
+    default_effort: Option<String>,
     /// The model this one session runs on, from the host's own session record:
     /// what its owner picked for it, or the slug the host seeded it with.
     /// Outranks [`Self::default_model_id`], which is only what a session gets
@@ -668,6 +673,7 @@ where
             sessions: Mutex::new(HashMap::new()),
             next_session: Mutex::new(0),
             default_model_id: None,
+            default_effort: None,
             host_model_id: None,
             models: tokio::sync::Mutex::new(None),
             images: Arc::new(NoPromptImageFetcher),
@@ -689,6 +695,17 @@ where
     #[must_use]
     pub fn with_default_model(mut self, model_id: Option<String>) -> Self {
         self.default_model_id = model_id;
+        self
+    }
+
+    /// The reasoning effort sessions on the default model start on.
+    ///
+    /// Applied only when a session resolves to [`Self::with_default_model`]'s
+    /// model, since effort values differ per model. A per-session choice still
+    /// replaces it through [`Self::set_reasoning_effort`].
+    #[must_use]
+    pub fn with_default_effort(mut self, effort: Option<String>) -> Self {
+        self.default_effort = effort;
         self
     }
 
@@ -833,41 +850,22 @@ where
                     "current cursor model is no longer offered"
                 ))
             })?;
-        let parameter_id = current
+        if !current
             .params
             .iter()
-            .find(|param| REASONING_PARAMETER_IDS.contains(&param.id.as_str()))
-            .map(|param| param.id.as_str())
-            .ok_or_else(|| {
-                SessionError::Cursor(rootcause::report!(
-                    "cursor model {} has no reasoning effort parameter",
-                    current.id
-                ))
-            })?;
-        let choice = model
-            .variants
-            .iter()
-            .find(|variant| {
-                variant
-                    .params
-                    .iter()
-                    .any(|param| param.id == parameter_id && param.value == effort)
-                    && super::model_options::model_params_match_except(
-                        &variant.params,
-                        &current.params,
-                        parameter_id,
-                    )
-            })
-            .map(|variant| ModelChoice {
-                id: model.id.clone(),
-                params: variant.params.clone(),
-            })
-            .ok_or_else(|| {
-                SessionError::Cursor(rootcause::report!(
-                    "cursor model {} has no compatible reasoning effort {effort}",
-                    current.id
-                ))
-            })?;
+            .any(|param| REASONING_PARAMETER_IDS.contains(&param.id.as_str()))
+        {
+            return Err(SessionError::Cursor(rootcause::report!(
+                "cursor model {} has no reasoning effort parameter",
+                current.id
+            )));
+        }
+        let choice = model.with_effort(&current, effort).ok_or_else(|| {
+            SessionError::Cursor(rootcause::report!(
+                "cursor model {} has no compatible reasoning effort {effort}",
+                current.id
+            ))
+        })?;
         session.state.lock().expect("session state poisoned").model = Some(choice);
         Ok(())
     }
@@ -947,7 +945,12 @@ where
             );
             return Ok(None);
         };
-        Ok(Some(model.default_choice()))
+        // The account's effort belongs to the account's model alone.
+        let default_effort = self
+            .default_effort
+            .as_deref()
+            .filter(|_| self.default_model_id.as_deref() == Some(model_id));
+        Ok(Some(model.choice_with_preferred_effort(default_effort)))
     }
 
     /// Replace the session's MCP servers with the client's current list.

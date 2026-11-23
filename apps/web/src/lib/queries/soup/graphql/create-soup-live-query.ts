@@ -1,3 +1,4 @@
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
@@ -50,6 +51,7 @@ import {
 } from '../../../service-clients/service-storage/graphql-soup';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
+import { createHiddenDeferral } from '../../visible-refresh';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
 import { createPredicateQuery } from './create-predicate-query';
@@ -106,6 +108,7 @@ export function createSoupLiveQuery(
 ) {
   const owner = getOwner();
   const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
+  const pendingAppearance = usePendingEntityAppearance();
   const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
   // The position of the last local Mail row loaded (a page's `endCursor`).
@@ -320,6 +323,13 @@ export function createSoupLiveQuery(
         // Keep network data usable while the local cache is unavailable.
       }
     };
+    let latestRevision: CacheRevision | undefined;
+    // Every open tab shares one cache engine. A hidden tab keeps a dirty bit
+    // instead of evaluating this list on each revision or engine replacement.
+    const deferral = createHiddenDeferral(() => {
+      if (latestRevision !== undefined) setCurrentCacheRevision(latestRevision);
+      else fireAndForget(observeCurrentRevision(), 'soup-live-query');
+    });
     const unsubscribeChanges = host.onCacheChanged(
       (revision) => {
         cacheObservation += 1;
@@ -331,7 +341,8 @@ export function createSoupLiveQuery(
           staleFallbackStartedAt = performance.now();
           recordAuthority('stale-fallback');
         }
-        setCurrentCacheRevision(revision);
+        latestRevision = revision;
+        deferral.request();
       },
       // The authority watermark must observe the same writes as the live view.
       { includeHydration: true }
@@ -340,12 +351,14 @@ export function createSoupLiveQuery(
       soupCacheTelemetry.record('generation');
       cacheGeneration += 1;
       invalidateGeneration();
-      fireAndForget(observeCurrentRevision(), 'soup-live-query');
+      latestRevision = undefined;
+      deferral.request();
     });
     fireAndForget(observeCurrentRevision(), 'soup-live-query');
     onCleanup(() => {
       finishStaleFallback(true);
       cacheGeneration += 1;
+      deferral.dispose();
       unsubscribeChanges();
       unsubscribeGeneration();
     });
@@ -487,8 +500,6 @@ export function createSoupLiveQuery(
       select: selectPages,
     };
   });
-
-  usePending('soup.network', () => query.isLoading);
 
   const isEnabled = () =>
     cacheFirstEntities()
@@ -687,7 +698,12 @@ export function createSoupLiveQuery(
       (cacheStatus === 'idle' || cacheStatus === 'loading')
     )
       return;
-    const known = new Set(liveRecords().map(soupItemKey));
+    // Resubscribing after a network page can clear the predicate snapshot.
+    // Use the scoped display projection so a failed read does not refetch rows
+    // that are already resolved and still visible.
+    const known = new Set(
+      (displayLocalProjection()?.records ?? liveRecords()).map(soupItemKey)
+    );
     const requested = sameScope ? current.entities : [];
     const requestedKeys = new Set(requested.map(soupEntityRefKey));
     const missing = entities.filter((entity) => {
@@ -1085,6 +1101,15 @@ export function createSoupLiveQuery(
     })
   );
 
+  const isLoading = () => {
+    if (!query.isLoading) return false;
+    const local = displayLocalProjection();
+    if (!local) return true;
+    // A partial local index cannot prove an empty list. Keep a true cold load
+    // pending, but never make already visible cache rows wait for revalidation.
+    return local.records.length === 0 && !offline() && !options().networkPaused;
+  };
+  usePending('soup.network', isLoading);
   return {
     cacheMaintained,
     revalidationQueries,
@@ -1100,7 +1125,21 @@ export function createSoupLiveQuery(
       const records = displayData();
       return (
         records &&
-        withoutPendingSoupEntities(records, pendingDeleteKeys(), soupItemKey)
+        withoutPendingSoupEntities(
+          records.map((record) => {
+            const type =
+              record.__typename === 'GraphqlSoupDocument'
+                ? 'document'
+                : record.__typename === 'GraphqlSoupInitiative'
+                  ? 'initiative'
+                  : undefined;
+            const appearance =
+              type && pendingAppearance(type, record.id, Boolean(query.error));
+            return appearance ? { ...record, appearance } : record;
+          }),
+          pendingDeleteKeys(),
+          soupItemKey
+        )
       );
     }),
     fetchedRecords: () => query.data?.records() ?? [],
@@ -1109,19 +1148,11 @@ export function createSoupLiveQuery(
     fetchError: () => query.error ?? undefined,
     isSupported,
     isEnabled,
-    isLoading: () => {
-      if (!query.isLoading) return false;
-      const local = displayLocalProjection();
-      if (!local) return true;
-      // An empty local Mail page does not establish complete mailbox coverage.
-      // Wait for the first query response before showing an online empty state.
-      return (
-        local.mail !== undefined &&
-        local.records.length === 0 &&
-        !offline() &&
-        !options().networkPaused
-      );
-    },
+    hasPageData: () =>
+      baselineInputKey() === inputKey() &&
+      baselineGeneration() === cacheGeneration &&
+      query.data !== undefined,
+    isLoading,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () =>
       fetchingMailPage() || (!cachedMail() && query.isFetchingNextPage),

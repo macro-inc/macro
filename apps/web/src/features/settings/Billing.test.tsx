@@ -22,9 +22,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@core/auth', () => ({ useHasPaidAccess: () => () => false }));
-vi.mock('@core/constant/featureFlags', () => ({
-  LOCAL_ONLY: false,
-  enableAiUsageBilling: {},
+vi.mock('@core/constant/featureFlags', () => ({ LOCAL_ONLY: false }));
+vi.mock('@queries/computers/computers', () => ({
+  useMacroComputersRollout: () => () => ({ enabled: false, loading: false }),
 }));
 vi.mock('@core/context/user', () => ({
   usePermissions: () => () => ['write:stripe_subscription'],
@@ -46,12 +46,15 @@ vi.mock('@queries/auth', () => ({
   useSubscriptionStatusQuery: () => ({ isPending: true }),
   useTrialEligibilityQuery: () => mocks.eligibility,
   useChangePlanMutation: () => ({ isPending: false }),
+  useCreateBillingPortalMutation: () => ({ mutateAsync: vi.fn() }),
   useCreateCheckoutSessionMutation: () => ({
     isPending: false,
     mutateAsync: mocks.checkout,
   }),
 }));
-vi.mock('@service-stripe/client', () => ({ stripeServiceClient: {} }));
+vi.mock('./computers/views/BillingComputers', () => ({
+  BillingComputers: () => null,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 
 beforeEach(() => {

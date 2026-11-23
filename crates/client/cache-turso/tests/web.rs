@@ -13,6 +13,269 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+#[path = "common/contact_sync.rs"]
+mod contact_sync;
+#[path = "common/contacts.rs"]
+mod contacts;
+#[path = "common/name_search.rs"]
+mod name_search;
+#[path = "common/people.rs"]
+mod people;
+#[path = "common/people_sql.rs"]
+mod people_sql;
+
+#[wasm_bindgen_test(async)]
+async fn indexed_name_windows_match_the_streaming_reference_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-name-search.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage");
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "name-search").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    let scope = people_sql::seed(&mut engine, 1_000).await;
+    name_search::contract(&mut engine, &scope).await;
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+async fn authoritative_contact_removal_is_scoped_and_fenced_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-contact-sync.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage");
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "contact-sync").unwrap();
+    let storage = contact_sync::contract(storage).await;
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+async fn local_people_sql_executes_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-people-sql.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage");
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "local-people-sql").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    let scope = people_sql::seed(&mut engine, 1_000).await;
+    let engine = people_sql::contract(engine, &scope, 1_000).await;
+    let engine = contact_sync::verify(engine, &scope, 1_000).await;
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+#[ignore = "100k local SQL execution over persisted OPFS"]
+async fn local_people_sql_100k_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-people-sql-100k.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage");
+    };
+    let session = session.connect().unwrap();
+    let clock = session.connection().prepare("SELECT 1").unwrap();
+    let start = clock._io().current_time_monotonic();
+    let storage = TursoStorage::from_opfs_session(session, "local-people-sql").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    let scope = people_sql::seed(&mut engine, 100_000).await;
+    console_log!(
+        "100k OPFS SQL hydration: {:?}",
+        clock._io().current_time_monotonic().duration_since(start)
+    );
+    let start = clock._io().current_time_monotonic();
+    let engine = people_sql::contract(engine, &scope, 100_000).await;
+    console_log!(
+        "100k OPFS SQL contract: {:?}",
+        clock._io().current_time_monotonic().duration_since(start)
+    );
+    drop(clock);
+    let owner = healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("persisted storage");
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "local-people-sql").unwrap();
+    let engine = Engine::with_capacity(storage, 16);
+    let engine = people_sql::contract(engine, &scope, 100_000).await;
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+async fn people_policy_filters_and_ranks_before_limiting_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-people-policy.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage")
+    };
+    let mut storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "people-policy").unwrap();
+    people::seed(&mut storage, 2_000).await;
+    let storage = people::assert_policy(storage).await;
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+#[path = "common/search.rs"]
+mod search_streaming;
+
+#[wasm_bindgen_test(async)]
+async fn bounded_contact_hydration_and_search_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-turso-contacts.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh contact storage must open")
+    };
+    let storage = TursoStorage::from_opfs_session(session.connect().unwrap(), "contacts").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    contacts::hydrate_contacts(&mut engine, 3).await;
+    let generation = engine.current_storage_generation().await.unwrap();
+    let owner = healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("contact storage must reopen")
+    };
+    let storage = TursoStorage::from_opfs_session(session.connect().unwrap(), "contacts").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    assert_eq!(
+        engine.current_storage_generation().await.unwrap(),
+        generation
+    );
+    contacts::assert_contact_search(&mut engine, 1_500).await;
+    contacts::assert_contact_top_up(&mut engine).await;
+    contacts::assert_account_reset(&mut engine).await;
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+async fn streaming_sql_search_matches_reference_ranking_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-turso-streamed-search.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh search storage must open")
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "search-scope").unwrap();
+    let storage = search_streaming::assert_search_contract(storage).await;
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+#[ignore = "100k-row OPFS search measurement; run with --include-ignored --nocapture"]
+async fn search_100k_rows_over_opfs() {
+    use cache_core::search::{SearchProfile, SearchRequest};
+    let owner = OpfsOwner::acquire("cache-turso-search-100k.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh search storage must open")
+    };
+    let session = session.connect().unwrap();
+    // Use the OPFS clock: std::time::Instant is unavailable on browser WASM.
+    let clock = session.connection().prepare("SELECT 1").unwrap();
+    let mut storage = TursoStorage::from_opfs_session(session, "search-100k").unwrap();
+    search_streaming::seed_100k(&mut storage).await;
+    let mut engine = Engine::new(storage);
+    for query in ["contact", "99999", "no-match", "contact", "99999"] {
+        let start = clock._io().current_time_monotonic();
+        let result = engine
+            .search(&SearchRequest {
+                profile: SearchProfile::QuickAccessV1,
+                buckets: vec!["document".into()],
+                query: query.into(),
+                cursor: None,
+                limit: 50,
+                now_ms: 2_000,
+            })
+            .await
+            .unwrap();
+        console_log!(
+            "100k OPFS search: query={query:?}, elapsed={:?}, results={}",
+            clock._io().current_time_monotonic().duration_since(start),
+            result.documents.len()
+        );
+        assert!(result.documents.len() <= 50);
+        assert_eq!(result.documents.is_empty(), query == "no-match");
+    }
+    drop(clock);
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
 fn key(value: &str) -> EntityKey<'static> {
     EntityKey(value.to_owned().into())
 }
@@ -205,6 +468,123 @@ async fn incompatible_opfs_initialization_exposes_reset_only_and_cannot_preserve
     assert_eq!(
         storage.get_batch(&[key("Type:9")]).await.unwrap(),
         vec![None]
+    );
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+/// About 3 KB that payload compression cannot shrink, distinct per record.
+fn incompressible(write: usize, index: usize) -> String {
+    let mut state = (write as u64) << 32 | index as u64;
+    (0..375)
+        .map(|_| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            format!("{:08x}", (state >> 32) as u32)
+        })
+        .collect()
+}
+
+fn checkpoint_write(write: usize) -> Vec<(EntityKey<'static>, Record)> {
+    (0..50)
+        .map(|index| {
+            (
+                key(&format!("Document:{index}")),
+                record(&incompressible(write, index)),
+            )
+        })
+        .collect()
+}
+
+#[wasm_bindgen_test(async)]
+async fn the_idle_checkpoint_copies_the_wal_and_survives_a_reopen_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-turso-idle-checkpoint.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("recovery wipe must produce a complete fresh pair")
+    };
+    let mut storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "checkpoint-scope").unwrap();
+    // About 27 frames a write: due after some 19 writes.
+    let mut writes = 0;
+    let checkpoint = loop {
+        storage.put_batch(checkpoint_write(writes)).await.unwrap();
+        writes += 1;
+        let checkpoint = storage.checkpoint_if_due().unwrap();
+        if checkpoint.ran {
+            break checkpoint;
+        }
+        assert!(checkpoint.wal_frames < 500, "{checkpoint:?}");
+        assert!(writes < 40, "never due");
+    };
+    assert!(checkpoint.wal_frames >= 500, "{checkpoint:?}");
+    assert_eq!(checkpoint.backfilled_frames, checkpoint.wal_frames);
+    let last = checkpoint_write(writes - 1);
+    let owner = healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap();
+
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("a checkpointed database must reopen")
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "checkpoint-scope").unwrap();
+    let keys = last.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
+    assert_eq!(
+        storage.get_batch(&keys).await.unwrap(),
+        last.into_iter()
+            .map(|(_, record)| Some(record))
+            .collect::<Vec<_>>()
+    );
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[cfg(feature = "browser-test-hooks")]
+#[wasm_bindgen_test(async)]
+async fn reopened_opfs_database_skips_checks_it_would_pass() {
+    let owner = OpfsOwner::acquire("cache-turso-schema-digest.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("recovery wipe must produce a complete fresh pair")
+    };
+    let mut storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "schema-digest").unwrap();
+    storage
+        .put_batch(vec![(key("Type:1"), record("kept"))])
+        .await
+        .unwrap();
+    storage.enqueue_mutation(queued()).await.unwrap();
+    let owner = healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap();
+
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("preserved complete pair must reopen")
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "schema-digest").unwrap();
+    assert!(storage.browser_test_run_skippable_open_checks().unwrap());
+    assert_eq!(
+        storage.get_batch(&[key("Type:1")]).await.unwrap(),
+        vec![Some(record("kept"))]
     );
     healthy_close(storage.try_close().unwrap())
         .preserve()

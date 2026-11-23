@@ -1,3 +1,4 @@
+import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
@@ -63,8 +64,9 @@ export class DraftPersistRejected extends Error {
 
 /**
  * Client-minted identity for a draft the server has not confirmed. Carried
- * apart from `draft.db_id` (a server id) because only the durable queue can
- * resolve handles; a REST save ignores them and mints server ids instead.
+ * apart from `draft.db_id` (a server id) because only the GraphQL save, queued
+ * or foreground, resolves handles to the server's row; a REST save ignores
+ * them and mints server ids instead.
  */
 export interface DraftClientHandles {
   draftId: string;
@@ -250,6 +252,9 @@ export type EmailSendProgress =
   | { state: 'unconfirmed' }
   | { state: 'untracked' };
 
+/** A send the outbox holds, keyed as the server knows its attempt. */
+export type QueuedSend = { sendAttemptId: string; inboxId: string };
+
 export interface EmailDelivery {
   /** Whether sends can be persisted and replayed without connectivity. */
   queueActive?: (inboxId?: string) => boolean;
@@ -261,6 +266,11 @@ export interface EmailDelivery {
   watchSend?(
     sendAttemptId: string,
     changed: (progress: EmailSendProgress) => void
+  ): () => void;
+  /** Reports the server's id for the send's thread once the server accepts it. */
+  watchSentThread?(
+    send: QueuedSend,
+    found: (threadId: string) => void
   ): () => void;
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: {
@@ -292,6 +302,12 @@ export interface EmailDelivery {
   }): Promise<void>;
 }
 
+/**
+ * The working-copy version a send from this browser carried. Absent when the
+ * draft was sent from another device.
+ */
+export type SentWorkingCopy = Pick<LocalDraft, 'generation' | 'revision'>;
+
 export type EmailDraftLifecycleState =
   | {
       type: 'editing';
@@ -314,6 +330,7 @@ export type EmailDraftLifecycleState =
       draftId: string;
       threadId: string;
       inboxId: string;
+      sentCopy?: SentWorkingCopy;
       observedAt: number;
     }
   | {
@@ -352,7 +369,7 @@ export interface EmailComposeFeedback {
       message: string,
       options?: ComposeNoticeOptions
     ): number | undefined;
-    alert(message: string, options?: ComposeNoticeOptions): void;
+    alert(message: string, options?: ComposeNoticeOptions): number | undefined;
     dismiss(id: number): void;
   };
   /** A modal notice with a single acknowledgement; resolves when dismissed. */
@@ -386,7 +403,6 @@ export interface EmailComposePresentation {
   isTouch: Accessor<boolean>;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
-  signaturesEnabled: Accessor<boolean>;
 }
 
 /** A file stored as a Macro document, as a body link names it. */
@@ -415,9 +431,12 @@ export interface EmailEditorFiles {
 
 /** Opens a calendar event drafted from an email. */
 export interface EmailCalendarEvents {
-  enabled: Accessor<boolean>;
   open(email: { subject: string; guests: string[]; text: string }): boolean;
 }
+
+export type EmailRecipientSourceFactory = RecipientSourceFactory<
+  EmailRecipient['kind']
+>;
 
 /** Production composition groups capabilities for views to wire into their consumers. */
 export interface EmailComposeContext {
@@ -434,7 +453,10 @@ export interface EmailComposeContext {
   presentation: EmailComposePresentation;
   editorFiles: EmailEditorFiles;
   viewerEmail: Accessor<string | undefined>;
+  /** Explicit host-scoped extras, never the full personal directory. */
   recipients: Accessor<EmailRecipient[]>;
+  /** Each open To/Cc/Bcc selector owns its personal suggestion source. */
+  createRecipientSource: EmailRecipientSourceFactory | undefined;
   recipientName(id: string): string;
   hasPaidAccess: Accessor<boolean>;
   recordMention(sourceId: string, targetId: string): void;
@@ -444,11 +466,22 @@ export interface ComposeNoticeOptions {
   subtext?: string;
   duration?: number;
   persistent?: boolean;
+  /** An open notice this one changes in place, keeping its id. */
+  replace?: number;
+  /** Keeps an earlier notice with the same message instead of replacing it. */
+  stack?: boolean;
+  /** Runs once the notice closes, however it closes. */
+  onDismiss?: () => void;
   /** `kind` picks the action's icon; actions default to undo. */
-  actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
+  actions?: {
+    label: string;
+    onClick: () => void;
+    kind?: 'undo' | 'open' | 'save';
+    variant?: 'primary' | 'secondary';
+  }[];
 }
 export interface EmailComposeHost {
-  focusSibling?: (direction: 'next' | 'prev') => boolean | void;
+  focusSibling?: (direction: 'next' | 'prev') => boolean;
   showThread?: (id: string) => void;
   showDraft?: (id: string) => void;
   /** A From switch moved the draft to a new id and thread; the old ones are gone. */

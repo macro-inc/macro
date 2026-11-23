@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import {
   type DatabaseQueryChart,
   type DatabaseQueryDisplayMode,
@@ -37,11 +38,12 @@ export function QueryResults(props: {
       : undefined
   );
   return (
-    <div class="min-w-0" aria-label="Question results">
+    <div class="min-w-0" aria-label={t('databaseAnswers.questionResults')}>
       <Show when={props.answer.truncatedTables.length > 0}>
         <p class="mb-3 rounded-md border border-edge-muted bg-hover px-3 py-2 text-xs text-ink-muted">
-          Partial answer: {props.answer.truncatedTables.join(', ')} exceeded the
-          data limit. Totals may be incomplete.
+          {t('databaseAnswers.partialAnswer', {
+            tables: props.answer.truncatedTables.join(', '),
+          })}
         </p>
       </Show>
       <Show when={chart()?.error}>
@@ -90,7 +92,7 @@ export function QueryResults(props: {
             <QueryChart data={data()} />
             <details class="mt-3 text-xs text-ink-muted">
               <summary class="rounded outline-none focus-visible:ring-2 focus-visible:ring-ink/25">
-                View data
+                {t('databaseAnswers.viewData')}
               </summary>
               <div class="mt-2">
                 <QueryResultTable
@@ -163,7 +165,7 @@ function QueryResultTable(props: {
                         class="max-w-64 truncate border-b border-edge-muted/60 px-3 py-2 text-ink"
                         title={
                           cell().kind === 'empty'
-                            ? 'Empty'
+                            ? t('databaseAnswers.empty')
                             : resultCellText(cell(), props.names)
                         }
                       >
@@ -183,13 +185,13 @@ function QueryResultTable(props: {
       </table>
       <Show when={rows().length === 0}>
         <p class="px-3 py-6 text-center text-sm text-ink-muted">
-          No matching records. Try a broader question.
+          {t('databaseAnswers.noMatchingRecords')}
         </p>
       </Show>
       <div class="px-3 py-2 text-[11px] text-ink-muted">
         {rows().length > 100
-          ? `Showing 100 of ${rows().length} results`
-          : `${rows().length} ${rows().length === 1 ? 'record' : 'records'}`}
+          ? t('databaseAnswers.showingFirstResults', { count: rows().length })
+          : t('databaseAnswers.recordCount', { count: rows().length })}
       </div>
     </div>
   );

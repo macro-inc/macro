@@ -6,6 +6,7 @@ use futures::FutureExt;
 
 use super::condition::{ConditionError, ConditionVerdict, EventConditionCheck, NoConditionCheck};
 use super::*;
+use crate::domain::event_rollout::EventRoutineRollout;
 use crate::domain::event_trigger::ConditionRequirement;
 use crate::domain::models::{ConditionResult, MAX_ACTION_TIME};
 
@@ -40,37 +41,41 @@ pub trait EventRunDispatch: Send + Sync + 'static {
     ) -> impl Future<Output = Result<DispatchResult, Report>> + Send;
 }
 
-pub struct EventDispatchService<R, A, E, C = NoConditionCheck> {
+pub struct EventDispatchService<R, A, E, O, C = NoConditionCheck> {
     repository: Arc<R>,
     access: Arc<A>,
     executor: Arc<E>,
+    rollout: O,
     conditions: Arc<C>,
 }
 
-impl<R, A, E> EventDispatchService<R, A, E> {
+impl<R, A, E, O> EventDispatchService<R, A, E, O> {
     /// Without [`Self::with_conditions`], conditional runs are skipped as unavailable.
-    pub fn new(repository: Arc<R>, access: Arc<A>, executor: Arc<E>) -> Self {
+    /// Runs only for owners `rollout` enables; the rest are cancelled.
+    pub fn new(repository: Arc<R>, access: Arc<A>, executor: Arc<E>, rollout: O) -> Self {
         Self {
             repository,
             access,
             executor,
+            rollout,
             conditions: Arc::new(NoConditionCheck),
         }
     }
 }
 
-impl<R, A, E, C> EventDispatchService<R, A, E, C> {
-    pub fn with_conditions<D>(self, conditions: Arc<D>) -> EventDispatchService<R, A, E, D> {
+impl<R, A, E, O, C> EventDispatchService<R, A, E, O, C> {
+    pub fn with_conditions<D>(self, conditions: Arc<D>) -> EventDispatchService<R, A, E, O, D> {
         EventDispatchService {
             repository: self.repository,
             access: self.access,
             executor: self.executor,
+            rollout: self.rollout,
             conditions,
         }
     }
 }
 
-impl<R: EventRunRepository, A, E, C> EventDispatchService<R, A, E, C> {
+impl<R: EventRunRepository, A, E, O, C> EventDispatchService<R, A, E, O, C> {
     async fn cancel(
         &self,
         pending: &PendingEventRun,
@@ -99,8 +104,13 @@ impl<R: EventRunRepository, A, E, C> EventDispatchService<R, A, E, C> {
     }
 }
 
-impl<R: EventRunRepository, A: CurrentOwnerAccess, E: EventExecutor, C: EventConditionCheck>
-    EventRunDispatch for EventDispatchService<R, A, E, C>
+impl<
+    R: EventRunRepository,
+    A: CurrentOwnerAccess,
+    E: EventExecutor,
+    O: EventRoutineRollout,
+    C: EventConditionCheck,
+> EventRunDispatch for EventDispatchService<R, A, E, O, C>
 {
     async fn pending(&self, limit: PageSize) -> Result<Vec<PendingEventRun>, Report> {
         self.repository.pending_runs(limit).await
@@ -130,6 +140,24 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, E: EventExecutor, C: EventCon
                 .cancel(&pending, CancellationReason::NotUserOwned)
                 .await;
         };
+        match self.rollout.enabled_for(owner).await {
+            Ok(true) => {}
+            Ok(false) => return self.cancel(&pending, CancellationReason::NotEnabled).await,
+            // An unreadable flag leaves the run pending, like authorization
+            // below, until the retry window closes.
+            Err(error) if Utc::now() < pending.admitted_at + CONDITION_RETRY_WINDOW => {
+                return Err(error);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    action_id = %pending.action_id,
+                    ?error,
+                    outcome = "rollout_unavailable",
+                    "cancelling event run whose rollout flag could not be read"
+                );
+                return self.cancel(&pending, CancellationReason::NotEnabled).await;
+            }
+        }
         // Unavailability propagates without cancelling or claiming queued work.
         let Some(access) = self.access.authorize(owner, &pending.event).await? else {
             return self

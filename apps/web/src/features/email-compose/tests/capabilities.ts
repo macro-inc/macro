@@ -48,6 +48,7 @@ export function createComposeContext(): EmailComposeContext & {
     viewerEmail: () => 'me@example.com',
     connectivity: { looksOffline: vi.fn(() => false) },
     recipients: () => [],
+    createRecipientSource: undefined,
     hasPaidAccess: () => true,
     presentation: {
       viewerLoading: () => false,
@@ -56,7 +57,6 @@ export function createComposeContext(): EmailComposeContext & {
       isTouch: () => false,
       isMobile: () => false,
       scheduleEnabled: true,
-      signaturesEnabled: () => false,
     },
     editorFiles: {
       readDroppedFiles: vi.fn(),

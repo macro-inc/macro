@@ -1,4 +1,5 @@
 interface ImportMetaEnv {
+  readonly VITE_ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION?: string;
   readonly __APP_VERSION__: string;
   /** When this build was made, in ms since the epoch. Unset outside app builds. */
   readonly __APP_BUILD_TIME__?: number;
@@ -10,15 +11,37 @@ interface ImportMetaEnv {
 
   /** `true` in bundles `just stack` builds, which count as local (`LOCAL_ONLY`). */
   readonly VITE_LOCAL_ONLY?: string;
+  /**
+   * `true` when `run_local` / `just stack` serves the app: the backend is a
+   * self-contained local stack whose proxy keeps each instance's cookies apart.
+   * Unset for `run_dev`, whose proxy shares cookies with the dev gateway.
+   */
+  readonly VITE_LOCAL_STACK?: string;
   readonly VITE_OTEL_EXPORTER_URL?: string;
   readonly VITE_OTEL_ENV?: string;
   readonly VITE_ENABLE_BROWSER_OTEL?: string;
   /** `true` logs each `perfMark` as a `[perf]` console line. */
   readonly VITE_PERF_LOG?: string;
   readonly VITE_ENABLE_REMINDERS?: string;
+  readonly VITE_ENABLE_TASK_TEMPLATES?: string;
+  readonly VITE_ENABLE_TASK_START_DATE?: string;
+  readonly VITE_ENABLE_TIME_TRACKING?: string;
+  readonly VITE_ENABLE_ENTITY_APPEARANCE?: string;
+  readonly VITE_ENABLE_AGENT_NOTIFICATIONS?: string;
   readonly VITE_ENABLE_ROUTINE_SHARING?: string;
+  readonly VITE_ENABLE_EVENT_ROUTINES?: string;
+  readonly VITE_ENABLE_ROUTINE_STARTER_TEMPLATES?: string;
+  readonly VITE_ENABLE_ROUTINE_CODE_STEPS?: string;
+  readonly VITE_ENABLE_ROUTINE_BACKGROUND_DRAFTS?: string;
+  readonly VITE_ENABLE_ROUTINE_SUGGESTIONS?: string;
+  readonly VITE_ENABLE_SUGGESTIONS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTIONS?: string;
+  readonly VITE_ENABLE_CHANNEL_NOTIFICATION_SETTINGS?: string;
+  readonly VITE_ENABLE_CHAT_SIDEBAR_SECTION_RESIZE?: string;
+  readonly VITE_ENABLE_CHANNEL_NOTIFICATION_GUTTER?: string;
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;
+  readonly VITE_DISABLE_CRM_CONTACT_SEARCH?: string;
+  readonly VITE_ENABLE_CONTACT_LISTS?: string;
   readonly VITE_ENABLE_WHATSAPP_LINKED?: string;
 }
 

@@ -75,6 +75,7 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
             IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
+                routine_id: envelope.routine_id,
                 payload: EventPayload::Document(envelope.event.clone()),
             }
         }
@@ -83,6 +84,7 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
             IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
+                routine_id: envelope.routine_id,
                 payload: EventPayload::Channel(envelope.event.clone()),
             }
         }
@@ -91,6 +93,7 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
             IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
+                routine_id: envelope.routine_id,
                 payload: EventPayload::Message(message_fact(&envelope.event)),
             }
         }
@@ -99,6 +102,7 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
             IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
+                routine_id: envelope.routine_id,
                 payload: EventPayload::Property(envelope.event.clone()),
             }
         }
@@ -107,6 +111,7 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
             IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
+                routine_id: envelope.routine_id,
                 payload: EventPayload::Email(envelope.event.clone()),
             }
         }
@@ -115,6 +120,7 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
             IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
+                routine_id: envelope.routine_id,
                 payload: EventPayload::Call(envelope.event.clone()),
             }
         }
@@ -123,6 +129,7 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
             IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
+                routine_id: envelope.routine_id,
                 payload: EventPayload::Github(envelope.event.clone()),
             }
         }

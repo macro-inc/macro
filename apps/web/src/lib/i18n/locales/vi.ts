@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Dự án',
     newProject: 'Dự án mới',
     contentAlreadyOpen: 'Nội dung đã được mở',
-    unableToOpenConversation: 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.',
     mobileSearchPlaceholder: 'Tìm kiếm…',
     closeSearch: 'Đóng tìm kiếm',
     searchFullTextFor: 'Tìm toàn văn “{{query}}”',
@@ -104,7 +103,6 @@ export default {
     close: 'Đóng',
     delete: 'Xóa',
     rename: 'Đổi tên',
-    more: 'Thêm',
     search: 'Tìm kiếm',
     settings: 'Cài đặt',
   },
@@ -512,6 +510,9 @@ export default {
       other: 'Đã xóa {{count}} mục',
     },
     toastDeleteFailed: 'Không thể xóa',
+    toastPropertySet: {
+      other: 'Đã đặt {{property}} cho {{count}} mục',
+    },
     toastAddedToFavorites: 'Đã thêm vào mục yêu thích',
     toastAddedCountToFavorites: {
       other: 'Đã thêm {{count}} mục vào mục yêu thích',
@@ -570,10 +571,6 @@ export default {
       other: 'Đã đánh dấu {{accepted}}/{{count}} mục là chưa xong',
     },
     toastMarkNotDoneFailed: 'Không thể đánh dấu là chưa xong',
-    toastThreadStaysDone:
-      'Chuỗi này chưa nhận được tin nhắn nào nên vẫn ở trạng thái xong',
-    toastThreadsStayDone:
-      'Các chuỗi này chưa nhận được tin nhắn nào nên vẫn ở trạng thái xong',
     toastCountNotRestored: {
       other: 'Không thể khôi phục {{count}} mục.',
     },
@@ -667,8 +664,6 @@ export default {
     create: 'Tạo',
     getMobileApp: 'Tải ứng dụng di động',
     signedInAs: 'Đã đăng nhập với tên {{name}}',
-    commandMenu: 'Menu lệnh',
-    searchEverything: 'Tìm kiếm mọi thứ',
     customizeSidebar: 'Tùy chỉnh thanh bên',
     customizeSidebarDescription:
       'Chọn ứng dụng hiển thị trên thanh bên và kéo để sắp xếp lại. Trang chủ luôn ở đầu tiên.',
@@ -736,7 +731,7 @@ export default {
     tabMobileApp: 'Ứng dụng di động',
     tabTags: 'Thẻ',
     tabIntegrations: 'Tích hợp',
-    tabRuntimes: 'Môi trường chạy',
+    tabRuntimes: 'Máy',
     tabMcpServer: 'Máy chủ MCP',
     tabApiKeys: 'Khóa API',
     tabBots: 'Bot',
@@ -753,7 +748,6 @@ export default {
       'Không tìm thấy cài đặt nào. Hãy thử “chữ ký”, “giao diện” hoặc “lịch”.',
     backToSettings: 'Quay lại cài đặt',
     closeSettings: 'Đóng cài đặt',
-    goToTab: 'Đi tới thẻ cài đặt {{number}}',
     editProfile: 'Chỉnh sửa hồ sơ',
     logOut: 'Đăng xuất',
     yourAccount: 'Tài khoản của bạn',

@@ -12,6 +12,7 @@ import {
 } from '../home/home-preview-navigation';
 import { homePreviewLegacyTarget, homePreviewTarget } from '../home/home-route';
 import { homeProjectSearch } from '../home/home-route-schema';
+import { applyGraphqlDoneOptimistic } from './actions/graphql-done-optimism';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -48,7 +49,6 @@ const operationMocks = vi.hoisted(() => {
     },
   });
   return {
-    graphql: false,
     archive: vi.fn(
       async (_args: {
         id: string;
@@ -61,10 +61,6 @@ const operationMocks = vi.hoisted(() => {
     bulkMarkNotificationsAsDone: vi.fn(async () => {}),
     bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
     cancelQueries: vi.fn(async () => {}),
-    flagArchived: vi.fn(async () => ({
-      isErr: () => false,
-      value: undefined,
-    })),
     invalidateQueries: vi.fn(
       async (_options: { queryKey?: readonly unknown[] }) => {}
     ),
@@ -118,17 +114,10 @@ vi.mock('@queries/notification/entity-mutations', () => ({
 vi.mock('@queries/notification/user-notifications', () => ({
   bulkMarkNotificationsAsDone: operationMocks.bulkMarkNotificationsAsDone,
   bulkMarkNotificationsAsUndone: operationMocks.bulkMarkNotificationsAsUndone,
-  restoreUserNotifications: vi.fn(),
-  snapshotUserNotifications: vi.fn(() => []),
 }));
 vi.mock('@queries/soup/cache', () => ({
-  getSoupEntityById: vi.fn(),
   invalidateSoupEntity: operationMocks.invalidateSoupEntity,
-  optimisticUpdateSoupEntity: vi.fn(() => ({ rollback: vi.fn() })),
   removeSoupEntities: vi.fn(() => ({ rollback: vi.fn() })),
-  removeSoupEntitiesFromDoneFilteredQueries: vi.fn(() => ({
-    rollback: vi.fn(),
-  })),
 }));
 const hideGraphqlSoupEntitiesAsDone = vi.hoisted(() =>
   vi.fn(() => ({ release: vi.fn(), setDone: vi.fn(), settle: vi.fn() }))
@@ -139,24 +128,16 @@ vi.mock('@queries/soup/graphql/optimistic-done', () => ({
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: operationMocks.refreshGraphqlSoup,
 }));
-vi.mock('@service-email/client', () => ({
-  emailClient: { flagArchived: operationMocks.flagArchived },
-}));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@core/constant/featureFlags')>();
   return {
     ...actual,
-    enableCalendarUi: { key: 'enable-calendar-ui' },
     enableReminders: { key: 'enable-reminders' },
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) => {
-      if ('key' in flag && flag.key === 'enable-graphql-soup')
-        return operationMocks.graphql;
-      return 'key' in flag &&
-        (flag.key === 'enable-calendar-ui' || flag.key === 'enable-reminders')
+    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
+      'key' in flag && flag.key === 'enable-reminders'
         ? true
-        : actual.isFeatureEnabled(flag);
-    },
+        : actual.isFeatureEnabled(flag),
   };
 });
 
@@ -175,18 +156,7 @@ import {
 } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
-import { queryClient } from '@queries/client';
 import {
-  restoreUserNotifications,
-  snapshotUserNotifications,
-} from '@queries/notification/user-notifications';
-import {
-  getSoupEntityById,
-  optimisticUpdateSoupEntity,
-  removeSoupEntitiesFromDoneFilteredQueries,
-} from '@queries/soup/cache';
-import {
-  applyEntitiesDoneOptimistic,
   applyEntitiesNotDoneOptimistic,
   type CalendarPreviewSelection,
   type ChannelPreviewSelection,
@@ -198,6 +168,7 @@ import {
   getDocumentCommentTarget,
   getRowClickFallbackLocation,
   markChannelNotificationsSeenOnOpen,
+  openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
 } from './utils';
@@ -213,7 +184,6 @@ function targetSearch(
 }
 
 afterEach(() => {
-  operationMocks.graphql = false;
   setGlobalSplitManager(undefined);
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
@@ -959,39 +929,6 @@ describe('mark-done orchestration', () => {
         JSON.stringify(options.queryKey) === JSON.stringify(queryKeys.all.email)
     );
 
-  for (const [label, execute] of [
-    ['Done', executeMarkEntitiesDone],
-    ['Undo', executeMarkEntitiesUndone],
-  ] as const) {
-    it(`${label} does not invalidate REST email caches while the archive is queued`, async () => {
-      operationMocks.archive.mockResolvedValueOnce('queued');
-      await execute({ emailIds: ['queued'], notificationIds: [] });
-      expect(invalidatedEmailList()).toBe(false);
-      expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
-    });
-    it(`${label} still reconciles committed and rejected archive writes`, async () => {
-      await execute({ emailIds: ['committed'], notificationIds: [] });
-      expect(invalidatedEmailList()).toBe(true);
-      operationMocks.invalidateQueries.mockClear();
-      operationMocks.archive.mockRejectedValueOnce(new Error('archive failed'));
-      await expect(
-        execute({ emailIds: ['failed'], notificationIds: [] })
-      ).rejects.toThrow('archive failed');
-      expect(invalidatedEmailList()).toBe(true);
-      expect(operationMocks.invalidateSoupEntity).toHaveBeenCalledWith(
-        'failed'
-      );
-    });
-    it(`${label} defers shared-list refresh for mixed committed/queued writes`, async () => {
-      operationMocks.archive
-        .mockResolvedValueOnce('committed')
-        .mockResolvedValueOnce('queued');
-      await execute({ emailIds: ['committed', 'queued'], notificationIds: [] });
-      expect(invalidatedEmailList()).toBe(false);
-      expect(operationMocks.invalidateSoupEntity).not.toHaveBeenCalled();
-    });
-  }
-
   for (const [label, execute, notify] of [
     [
       'Done',
@@ -1005,9 +942,8 @@ describe('mark-done orchestration', () => {
     ],
   ] as const) {
     it.each(['committed', 'queued', 'rejected'] as const)(
-      `GraphQL ${label} never cancels or invalidates REST caches (%s)`,
+      `${label} never cancels or invalidates REST caches (%s)`,
       async (outcome) => {
-        operationMocks.graphql = true;
         if (outcome === 'rejected') {
           operationMocks.archive.mockRejectedValueOnce(
             new Error('write failed')
@@ -1034,7 +970,6 @@ describe('mark-done orchestration', () => {
   it.each([false, true])(
     'GraphQL mixed rejection does not refetch accepted email state (per-thread=%s)',
     async (perThread) => {
-      operationMocks.graphql = true;
       const failure = new Error('cannot unarchive');
       operationMocks.archive
         .mockResolvedValueOnce('committed')
@@ -1061,7 +996,6 @@ describe('mark-done orchestration', () => {
   );
 
   it('leaves GraphQL success reconciliation to the normalized writer', async () => {
-    operationMocks.graphql = true;
     await expect(
       executeMarkEntitiesUndone({ emailIds: ['accepted'], notificationIds: [] })
     ).resolves.toBe('committed');
@@ -1071,28 +1005,7 @@ describe('mark-done orchestration', () => {
     expect(operationMocks.cancelQueries).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])(
-    'preserves REST notification-only cancellation and reconciliation (failure=%s)',
-    async (failure) => {
-      if (failure)
-        operationMocks.bulkMarkNotificationsAsUndone.mockRejectedValueOnce(
-          new Error('failed')
-        );
-      const write = executeMarkEntitiesUndone({
-        emailIds: [],
-        notificationIds: ['notification'],
-      });
-      if (failure) await expect(write).rejects.toThrow('failed');
-      else await write;
-      expect(operationMocks.cancelQueries).toHaveBeenCalledWith({
-        queryKey: queryKeys.all.email,
-      });
-      expect(invalidatedEmailList()).toBe(true);
-    }
-  );
-
   it('reports every unarchive outcome without refreshing over a queued sibling', async () => {
-    operationMocks.graphql = true;
     const failure = new Error('thread has no received messages');
     operationMocks.archive
       .mockResolvedValueOnce('committed')
@@ -1136,7 +1049,6 @@ describe('mark-done orchestration', () => {
   it.each([false, true])(
     'GraphQL notification-only reversal never refreshes shared email lists (failure=%s)',
     async (failure) => {
-      operationMocks.graphql = true;
       if (failure)
         operationMocks.bulkMarkNotificationsAsUndone.mockRejectedValueOnce(
           new Error('notification failed')
@@ -1156,7 +1068,6 @@ describe('mark-done orchestration', () => {
   );
 
   it('reports every GraphQL write receipt before throwing a sibling failure', async () => {
-    operationMocks.graphql = true;
     const archiveError = new Error('archive failed');
     operationMocks.archive
       .mockResolvedValueOnce('queued')
@@ -1198,7 +1109,6 @@ describe('mark-done orchestration', () => {
   });
 
   it('reports accepted GraphQL reversals even when notification reversal fails', async () => {
-    operationMocks.graphql = true;
     const failure = new Error('notification failed');
     operationMocks.bulkMarkNotificationsAsUndone.mockRejectedValueOnce(failure);
     const onWriteSettled = vi.fn();
@@ -1222,7 +1132,7 @@ describe('mark-done orchestration', () => {
     ]);
   });
 
-  it('executes entity notification writes directly and returns exact ids', async () => {
+  it('executes entity notification writes directly', async () => {
     operationMocks.updateNotificationsForEntities.mockResolvedValueOnce([
       { id: 'entity-notification' },
     ]);
@@ -1233,7 +1143,7 @@ describe('mark-done orchestration', () => {
         notificationIds: [],
         notificationEntities: [{ type: 'document', id: 'document-1' }],
       })
-    ).resolves.toEqual(['entity-notification']);
+    ).resolves.toBeUndefined();
 
     expect(operationMocks.updateNotificationsForEntities).toHaveBeenCalledWith({
       entities: [{ type: 'document', id: 'document-1' }],
@@ -1243,27 +1153,12 @@ describe('mark-done orchestration', () => {
 });
 
 describe('mark-done optimism', () => {
-  const expectNoRestCacheAccess = () => {
-    for (const operation of [
-      queryClient.getQueriesData,
-      getSoupEntityById,
-      optimisticUpdateSoupEntity,
-      removeSoupEntitiesFromDoneFilteredQueries,
-      snapshotUserNotifications,
-      restoreUserNotifications,
-    ])
-      expect(operation).not.toHaveBeenCalled();
-  };
-
-  it('keeps GraphQL Done, Undo, Redo and rollback independent of REST caches', () => {
-    operationMocks.graphql = true;
-    const context = applyEntitiesDoneOptimistic({
+  it('drives GraphQL Done, Undo, Redo and rollback through display intent', () => {
+    const context = applyGraphqlDoneOptimistic({
       entityIds: ['email-1', 'document-1'],
-      emailIds: ['email-1'],
       notificationIds: ['notification-1'],
       scopeChannelThreads: true,
     });
-    expectNoRestCacheAccess();
     expect(hideGraphqlSoupEntitiesAsDone).toHaveBeenCalledWith({
       entityIds: ['email-1', 'document-1'],
       notificationIds: ['notification-1'],
@@ -1290,14 +1185,11 @@ describe('mark-done optimism', () => {
     context.releaseGraphql();
     expect(lease.release).toHaveBeenCalledOnce();
     expect(intent.settle).toHaveBeenCalledWith(['exact-id']);
-    expectNoRestCacheAccess();
   });
 
   it('unwinds the initial GraphQL Done lease when the write fails after early Undo', () => {
-    operationMocks.graphql = true;
-    const context = applyEntitiesDoneOptimistic({
+    const context = applyGraphqlDoneOptimistic({
       entityIds: ['document-1'],
-      emailIds: [],
       notificationIds: ['notification-1'],
     });
     const doneLease = operationMocks.doneOverride.mock.results[0].value;
@@ -1309,11 +1201,9 @@ describe('mark-done optimism', () => {
     expect(undoneLease.mock.invocationCallOrder[0]).toBeLessThan(
       doneLease.mock.invocationCallOrder[0]
     );
-    expectNoRestCacheAccess();
   });
 
-  it('keeps GraphQL Not Done and rollback independent of REST caches', () => {
-    operationMocks.graphql = true;
+  it('drives GraphQL Not Done and rollback through display intent', () => {
     const context = applyEntitiesNotDoneOptimistic({
       emailIds: ['email-1'],
       notificationIds: ['notification-1'],
@@ -1330,48 +1220,11 @@ describe('mark-done optimism', () => {
     expect(
       hideGraphqlSoupEntitiesAsDone.mock.results[0].value.release
     ).toHaveBeenCalledOnce();
-    expectNoRestCacheAccess();
-  });
-
-  it('keeps REST Done rollback behavior without creating GraphQL display intent', () => {
-    const context = applyEntitiesDoneOptimistic({
-      entityIds: ['document-1'],
-      emailIds: [],
-      notificationIds: ['notification-1'],
-    });
-    const lease = operationMocks.doneOverride.mock.results[0].value;
-    context.rollback();
-    context.releaseGraphql();
-    expect(hideGraphqlSoupEntitiesAsDone).not.toHaveBeenCalled();
-    expect(operationMocks.doneOverride).toHaveBeenLastCalledWith(
-      ['notification-1'],
-      undefined
-    );
-    expect(lease).not.toHaveBeenCalled();
-    expect(lease.release).not.toHaveBeenCalled();
-  });
-
-  it('keeps REST Not Done rollback behavior without creating GraphQL display intent', () => {
-    const context = applyEntitiesNotDoneOptimistic({
-      emailIds: ['email-1'],
-      notificationIds: ['notification-1'],
-    });
-    const lease = operationMocks.doneOverride.mock.results[0].value;
-    context.rollback();
-    context.settle();
-    expect(hideGraphqlSoupEntitiesAsDone).not.toHaveBeenCalled();
-    expect(operationMocks.doneOverride).toHaveBeenLastCalledWith(
-      ['notification-1'],
-      undefined
-    );
-    expect(lease).not.toHaveBeenCalled();
   });
 
   it('hides GraphQL rows until a rollback or undo releases them', () => {
-    operationMocks.graphql = true;
-    const context = applyEntitiesDoneOptimistic({
+    const context = applyGraphqlDoneOptimistic({
       entityIds: ['document-1'],
-      emailIds: [],
       notificationIds: ['notification-1'],
     });
     expect(hideGraphqlSoupEntitiesAsDone).toHaveBeenCalledWith({
@@ -1794,6 +1647,28 @@ describe('getChannelEntityTarget', () => {
       expect(notificationsByEntity).not.toHaveBeenCalled();
     }
   );
+
+  it('marks an unseen invite seen when Chat opens the channel', () => {
+    const invite = {
+      ...sendNotification('invite', 'unused'),
+      notification_event_type: 'channel_invite',
+      notification_metadata: {
+        tag: 'channel_invite',
+        content: {
+          invitedBy: 'macro|inviter@example.com',
+          channelName: 'Team',
+        },
+      },
+    } as UnifiedNotification;
+    const seenInvite = asRead({ ...invite, id: 'seen-invite' });
+    const bulkMarkAsRead = vi.fn(async () => {});
+    markChannelNotificationsSeenOnOpen(
+      channelRow({ notifications: [invite, seenInvite] }),
+      notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      { channelReadScope: 'top-level' }
+    );
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([invite]);
+  });
 
   it('marks top-level notifications on repeated Chat opens, skipping replies and local reads', () => {
     const send = sendNotification('send', 'top-level');
@@ -2624,4 +2499,23 @@ describe('call navigation', () => {
       });
     }
   );
+});
+
+it('notification-only Team cannot open a generic split or construct a generic URL', async () => {
+  const team: EntityData = {
+    type: 'team',
+    id: 'team-1',
+    name: 'Synthetic team',
+    ownerId: 'viewer',
+  };
+  setGlobalSplitManager(undefined);
+  const missingManager = vi.spyOn(console, 'error');
+  try {
+    await openEntityInSplitFromUnifiedList(team, {});
+    openEntityInNewTab({ entity: team });
+    expect(missingManager).not.toHaveBeenCalled();
+    expect(operationMocks.openExternalUrl).not.toHaveBeenCalled();
+  } finally {
+    missingManager.mockRestore();
+  }
 });

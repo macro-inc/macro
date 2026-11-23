@@ -14,7 +14,7 @@ impl FusionAuthClient {
     /// starts from nothing. `token` is an access or refresh token of the grant.
     #[tracing::instrument(name = "google.revoke_grant", skip(self, token), err)]
     pub async fn revoke_google_grant(&self, token: &str) -> Result<()> {
-        oauth::revoke_token(&self.unauth_client, oauth::GOOGLE_REVOKE_URL, token).await
+        oauth::revoke_token(&self.unauth_client, &self.google_revoke_url, token).await
     }
 
     /// Refreshes a Google OAuth2 access token using a refresh token.
@@ -25,6 +25,7 @@ impl FusionAuthClient {
     ) -> Result<oauth::GoogleTokenResponse> {
         oauth::refresh_google_token(
             &self.unauth_client,
+            &self.google_token_url,
             &self.google_client_id,
             &self.google_client_secret,
             refresh_token,
@@ -41,6 +42,7 @@ impl FusionAuthClient {
     ) -> Result<oauth::GoogleExchangeTokenResponse> {
         oauth::exchange_code_for_tokens(
             &self.unauth_client,
+            &self.google_token_url,
             &self.google_client_id,
             &self.google_client_secret,
             redirect_uri,

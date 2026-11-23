@@ -7,7 +7,7 @@ import {
 } from '@solidjs/testing-library';
 import { createComponent, createSignal } from 'solid-js';
 import { insert } from 'solid-js/web';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Gantt } from './gantt';
 import { useGantt } from './gantt-context';
 import { toGanttDay } from './gantt-date';
@@ -15,6 +15,18 @@ import {
   MAX_GANTT_PIXELS_PER_DAY,
   MIN_GANTT_PIXELS_PER_DAY,
 } from './gantt-interaction';
+
+// Bars watch their label's size, which jsdom cannot measure.
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 
 afterEach(() => {
   cleanup();

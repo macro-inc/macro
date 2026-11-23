@@ -17,6 +17,10 @@
 /// Domain layer: models, ports, and service.
 pub mod domain;
 
+pub use agent_correlation::AgentVerb;
+#[doc(hidden)]
+pub use uuid::Uuid as EventUuid;
+
 pub use domain::models::{Event, EventBrokerError, MacroEvent, MessageWrapper, TopicEvent};
 pub use macro_event_topics::{
     MacroChannelsTopic, MacroDocumentsTopic, MacroEmailTopic, MacroExampleTopic,

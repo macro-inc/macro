@@ -1,5 +1,5 @@
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import X from '@phosphor/x.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
@@ -147,7 +147,7 @@ export function TaskProjectView(props: {
             sharingDescription="Shared with #sales"
             relatedContent={
               <div class="mt-6 md">
-                <h2 class="text-[1.125em] font-semibold mb-2">Next step</h2>
+                <h2 class="text-[1.125em] font-medium mb-2">Next step</h2>
                 <For each={w.data.tasks}>
                   {(task) => (
                     <p>

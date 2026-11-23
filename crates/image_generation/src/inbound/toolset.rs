@@ -6,6 +6,7 @@ use ai_toolset::AsyncToolCollection;
 use bot_id::BotId;
 use generate_image::GenerateImage;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Services and delegated bot identity used by the image-generation tool.
 pub struct ImageGenerationToolContext<Svc> {
@@ -13,6 +14,8 @@ pub struct ImageGenerationToolContext<Svc> {
     pub service: Arc<Svc>,
     /// Bot creating images on behalf of the requesting user.
     pub actor: BotId,
+    /// Agent session the tool runs in, recorded on the image's usage.
+    pub agent_session_id: Option<Uuid>,
 }
 
 impl<Svc> Clone for ImageGenerationToolContext<Svc> {
@@ -20,6 +23,7 @@ impl<Svc> Clone for ImageGenerationToolContext<Svc> {
         Self {
             service: self.service.clone(),
             actor: self.actor,
+            agent_session_id: self.agent_session_id,
         }
     }
 }
@@ -30,12 +34,19 @@ impl<Svc> ImageGenerationToolContext<Svc> {
         Self {
             service: Arc::new(service),
             actor,
+            agent_session_id: None,
         }
     }
 
     /// Set the bot acting on behalf of the requesting user.
     pub fn with_actor(mut self, actor: BotId) -> Self {
         self.actor = actor;
+        self
+    }
+
+    /// Set the agent session the tool runs in.
+    pub fn with_agent_session(mut self, agent_session_id: Option<Uuid>) -> Self {
+        self.agent_session_id = agent_session_id;
         self
     }
 }

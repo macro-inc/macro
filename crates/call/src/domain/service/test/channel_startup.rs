@@ -218,6 +218,28 @@ async fn existing_and_race_losing_joins_do_not_start_background_services() {
 }
 
 #[tokio::test]
+async fn a_person_rejoining_resets_program_attendance() {
+    let repo = mock_get_or_create_repo(
+        GetOrCreateScenario::ExistingCall,
+        started_event_call(STARTED_EVENT_CREATOR),
+    );
+    let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
+        repo,
+        MockRtcClient::new(),
+        StubConnectionService,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://example.com",
+    );
+
+    service
+        .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn ended_call_does_not_ring_recipients() {
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_id()
@@ -242,6 +264,7 @@ async fn ended_call_does_not_ring_recipients() {
         server_url: "wss://example.com".into(),
         ring_status_base_url: None,
         egress_s3_config: None,
+        event_broker: macro_event_broker::NoopMacroEventBroker,
     };
     startup
         .spawn(

@@ -64,6 +64,60 @@ describe('CoordinatorCore', () => {
     );
   });
 
+  it('hands a new engine the held typed search before the reads replayed around a restart, never past a clear', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    const search = (id: number, query: string): CacheRequest => ({
+      id,
+      kind: 'search',
+      request: {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query,
+        limit: 20,
+        nowMs: 1,
+      },
+    });
+    const held: CacheRequest[] = [
+      {
+        id: 1,
+        kind: 'hydrate',
+        query: 'query Backfill { backfill }',
+        data: { backfill: true },
+      },
+      {
+        id: 2,
+        kind: 'read',
+        query: 'query List { list }',
+        priority: 'user-visible',
+      },
+      search(3, ''),
+      search(4, 'todo'),
+      clear(5),
+      search(6, 'after clear'),
+    ];
+    for (const request of held) {
+      expect(core.request('tab-a', request)).toEqual([]);
+    }
+
+    const routed = ready(core, 'tab-a', 1, 'opened-existing')
+      .filter((candidate) => candidate.kind === 'route-request')
+      .map(({ request }) =>
+        request.kind === 'search'
+          ? `search:${request.request.query}`
+          : request.kind
+      );
+
+    expect(routed).toEqual([
+      'search:todo',
+      'hydrate',
+      'read',
+      'search:',
+      'clear',
+      'search:after clear',
+    ]);
+  });
+
   it('fails closed when another context keeps the owner lock', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
@@ -202,7 +256,7 @@ describe('CoordinatorCore', () => {
       expect.objectContaining({
         kind: 'reject-request',
         requestId: 2,
-        errorCode: 'owner-lock-unavailable',
+        errorCode: 'cache-superseded',
       }),
     ]);
 
@@ -228,6 +282,7 @@ describe('CoordinatorCore', () => {
         kind: 'notify-cache-unavailable',
         tabId: 'tab-c',
         reason: expect.stringContaining('newer version of the app'),
+        superseded: true,
       },
     ]);
   });
@@ -312,6 +367,7 @@ describe('CoordinatorCore', () => {
         kind: 'notify-cache-unavailable',
         tabId: 'tab-c',
         reason: expect.stringContaining('newer version of the app'),
+        superseded: true,
       },
     ]);
   });

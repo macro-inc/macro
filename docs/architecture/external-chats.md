@@ -14,7 +14,8 @@ accounts are linked and its messages reach Macro is in
 | Provider | `model_entity::ExternalChatProvider` (`whatsapp`); `label()` names it for people |
 | Kind | `model_entity::ExternalChatKind` (`group`, `direct`) |
 | Chat | `external_chat`: `provider`, `remote_id` (the provider's id; WhatsApp: a JID), `kind`, name, owner, `state`, history import (`backfill_*`) |
-| People | `external_chat_person` (display name, verified Macro user) |
+| People | `external_chat_person` (the provider's display name, verified Macro user); the provider names them and gives their picture for reads (`ChatProvider::people`) |
+| Pictures | `picture_file_id` (a static file) on senders, people, members and the chat (`ChatProvider::pictures`): what the chat owner's provider account sees, `null` for initials. WhatsApp: `whatsapp_profile_picture`, imported to static files in DSS (`whatsapp_linked::domain::pictures`) |
 | Messages | `external_chat_message`: one row per `(chat, person, source id)`; `origin` is `remote`, `macro` or `history`; `kind` `message` or `system`; structured `rich` content and `mentions` (provider ids) |
 | Reactions, poll votes | `external_chat_reaction`, `external_chat_poll_vote` (per person, latest revision wins) |
 | Attachments | `external_chat_attachment` (one per source ordinal, a static file once `ready`); staged bytes in `external_chat_media_blob`; released files in `external_chat_file_deletion` |
@@ -63,7 +64,9 @@ send, `sendReason` says why: `no_account`, `disconnected`, `not_added` (their
 account hasn't added this chat), `not_allowed` (not in it, or may not post
 now) or `unavailable` (removed). Sends, uploads and adds take the person's
 session or their own API credential; bots, harnesses and internal callers
-never send.
+never send. An agent's program (an agent-signed token or a code-mode
+request) sends only with `userConfirmation` quoting the user's approval, as
+for email; otherwise the send answers 403 `confirmation_required`.
 
 ## Live updates
 

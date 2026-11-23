@@ -6,6 +6,7 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { cn } from '../utils/classname';
+import { buttonControlFrames } from '../utils/control-sizes';
 import {
   Button,
   type ButtonFinish,
@@ -75,6 +76,8 @@ export function ButtonGroup(props: ButtonGroupProps) {
         data-finish={local.finish}
         class={cn(
           buttonGroupVariants,
+          orientation() === 'horizontal' && buttonControlFrames[size()],
+          orientation() === 'horizontal' && 'touch:min-h-9',
           buttonFrameClasses({ variant: variant(), finish: local.finish }),
           local.class
         )}
@@ -110,6 +113,7 @@ function GroupButton<T extends ValidComponent = 'button'>(
       finish={group ? 'flat' : local.finish}
       class={cn(
         group && 'self-stretch rounded-none border-0 shadow-none',
+        group?.orientation === 'horizontal' && 'h-auto touch:min-h-0',
         group && variant() === group.variant && 'bg-transparent',
         group?.orientation === 'vertical' && 'w-full',
         local.class

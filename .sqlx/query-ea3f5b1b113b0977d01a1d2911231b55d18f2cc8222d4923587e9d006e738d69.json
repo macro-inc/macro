@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT consumer::text AS \"consumer!\", count(*) AS \"count!\"\n            FROM stripe_event_cursor\n            WHERE state = 'dead'\n            GROUP BY consumer\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "consumer!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "ea3f5b1b113b0977d01a1d2911231b55d18f2cc8222d4923587e9d006e738d69"
+}

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-macro-icon="address-book" aria-hidden="true" focusable="false">
+  <rect x="5" y="3" width="15" height="18" rx="2.5"/>
+  <path d="M3 8h3m-3 8h3"/>
+  <circle cx="12.5" cy="9" r="2"/>
+  <path d="M8.5 17v-.5a4 4 0 0 1 8 0v.5"/>
+</svg>

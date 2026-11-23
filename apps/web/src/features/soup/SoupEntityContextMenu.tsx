@@ -9,6 +9,7 @@ import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done
 import {
   ContextMenuContent,
   ContextMenuTrigger,
+  dismissContextMenu,
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
@@ -71,6 +72,11 @@ export const SoupEntityContextMenu: FlowComponent<
 > = (props) => {
   const drawerManager = useSoupEntityActionDrawer();
   const [menuPosition, setMenuPosition] = createSignal<SoupEntityMenuAnchor>();
+  const [open, setOpen] = createSignal(false);
+  const changeOpen = (value: boolean) => {
+    setOpen(value);
+    props.onOpenChange?.(value);
+  };
 
   const menuEntities = () =>
     getSoupMenuEntities(props.entity, props.selectedEntities());
@@ -127,6 +133,7 @@ export const SoupEntityContextMenu: FlowComponent<
                   createActionNavigationHandler:
                     props.createActionNavigationHandler,
                   viewedProjectId: props.viewedProjectId,
+                  onClose: () => props.onOpenChange?.(false),
                 });
               },
             }));
@@ -136,7 +143,7 @@ export const SoupEntityContextMenu: FlowComponent<
         </div>
       </Match>
       <Match when={true}>
-        <ContextMenu onOpenChange={props.onOpenChange}>
+        <ContextMenu onOpenChange={changeOpen}>
           <ContextMenuTrigger
             as={props.as}
             ref={(element: HTMLElement) => {
@@ -162,6 +169,9 @@ export const SoupEntityContextMenu: FlowComponent<
                   entities={menuEntities()}
                   list={props.list}
                   viewContext={props.viewContext}
+                  onActionComplete={() => {
+                    if (open()) dismissContextMenu();
+                  }}
                   onSetProject={pickers.openProjectPicker}
                   onEditTags={pickers.openTagPicker()}
                   extraItems={props.extraItems}

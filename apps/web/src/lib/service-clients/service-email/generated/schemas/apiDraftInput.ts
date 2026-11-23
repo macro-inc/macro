@@ -10,6 +10,7 @@ import type { ApiDraftInputBodyMacro } from './apiDraftInputBodyMacro';
 import type { ApiDraftInputBodyText } from './apiDraftInputBodyText';
 import type { ApiDraftInputCc } from './apiDraftInputCc';
 import type { ApiDraftInputDbId } from './apiDraftInputDbId';
+import type { ApiDraftInputFrom } from './apiDraftInputFrom';
 import type { ApiDraftInputHeadersJson } from './apiDraftInputHeadersJson';
 import type { ApiDraftInputIncludeSignature } from './apiDraftInputIncludeSignature';
 import type { ApiDraftInputProviderId } from './apiDraftInputProviderId';
@@ -36,6 +37,10 @@ export interface ApiDraftInput {
   db_id?: ApiDraftInputDbId;
   /** Generation from the last loaded draft; legacy clients begin at zero. */
   draft_generation?: number;
+  /** The address to send from: the selected inbox's own address or one of
+its verified Gmail send-as aliases, which sends under the alias's
+display name. Omit it to send from the inbox's own address. */
+  from?: ApiDraftInputFrom;
   headers_json?: ApiDraftInputHeadersJson;
   /** Per-message override for whether to include the signature on send:
 `Some(false)` to exclude (user dismissed it). Omit to use the inbox's

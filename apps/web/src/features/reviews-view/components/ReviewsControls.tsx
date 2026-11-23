@@ -189,9 +189,10 @@ export function ReviewsControls(
 
   return (
     <>
-      <HeaderActionGroup label="Review filters">
+      <HeaderActionGroup label="Review filters" size="md">
         <ListFilterDropdown
           grouped
+          size={activeCount() ? 'md' : 'icon-md'}
           label="Filter pull requests"
           activeCount={activeCount()}
           groups={filterGroups(props)}
@@ -204,12 +205,12 @@ export function ReviewsControls(
           onClear={props.onClearFilters}
         />
       </HeaderActionGroup>
-      <HeaderActionGroup label="Review layout">
+      <HeaderActionGroup label="Review layout" size="md">
         <ButtonGroup.Button
           aria-label="List"
           tooltip="List"
           variant="ghost"
-          size="icon-sm"
+          size="icon-md"
           aria-pressed={props.layout === 'list'}
           onClick={() => props.onLayoutChange('list')}
         >
@@ -219,16 +220,17 @@ export function ReviewsControls(
           aria-label="Board"
           tooltip="Board"
           variant="ghost"
-          size="icon-sm"
+          size="icon-md"
           aria-pressed={props.layout === 'board'}
           onClick={() => props.onLayoutChange('board')}
         >
           <BoardIcon class="size-4" />
         </ButtonGroup.Button>
       </HeaderActionGroup>
-      <HeaderActionGroup label="Review view options">
+      <HeaderActionGroup label="Review view options" size="md">
         <ListSortDropdown
           grouped
+          size="icon-md"
           label="Sort pull requests"
           value={props.sort}
           options={SORT_OPTIONS}

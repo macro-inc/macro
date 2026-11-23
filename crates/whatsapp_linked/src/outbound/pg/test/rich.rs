@@ -24,6 +24,7 @@ fn person(name: &str, user: Option<&str>) -> ExternalChatPersonRef {
     ExternalChatPersonRef {
         name: name.to_owned(),
         user_id: user.map(str::to_owned),
+        picture_file_id: None,
     }
 }
 

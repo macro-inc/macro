@@ -162,6 +162,8 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
             search_on: models_search::SearchOn::Content,
             include_crm: false,
             calendar_event_scope: Default::default(),
+            // The tool description promises every term is ANDed.
+            term_matching: models_search::TermMatching::All,
             collapse: None,
         };
 

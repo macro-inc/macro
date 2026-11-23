@@ -2,6 +2,7 @@
 
 mod helpers;
 mod options;
+mod start_and_due;
 mod task_properties;
 
 use std::collections::{HashMap, HashSet};
@@ -55,7 +56,8 @@ use super::ports::{
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 
 use helpers::{
-    extract_option_ids_from_property_value, is_property_applicable_to, retain_caller_visible_tags,
+    extract_option_ids_from_property_value, is_property_applicable_to, reject_derived_property,
+    retain_caller_visible_tags,
 };
 
 // Database cells must commit with their table version and change journal.
@@ -259,6 +261,7 @@ where
         previous_value: &Option<PropertyValue>,
         access: &EditReceipt,
         source: Option<&PropertyChangeSource>,
+        inherited_from_project: Option<Uuid>,
     ) -> PropertyMacroEvent {
         let PublishedEventActors {
             actor,
@@ -274,6 +277,7 @@ where
             actor,
             on_behalf_of,
             source: source.cloned(),
+            inherited_from_project,
             value: value.clone(),
             previous_value: previous_value.clone(),
             updated_at: property.updated_at,
@@ -295,6 +299,7 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                None,
                 None,
             ));
         }
@@ -472,6 +477,7 @@ where
         for mutation in mutations {
             self.publish_property_event(PropertyMacroEvent::entity_property_updated(
                 EntityPropertyUpdatedMetadata {
+                    inherited_from_project: None,
                     entity_property_id: mutation.property.id,
                     entity_id: mutation.property.entity_id.clone(),
                     entity_type: mutation.property.entity_type,
@@ -655,6 +661,7 @@ where
         value: Option<SetPropertyValue>,
         source: Option<PropertyChangeSource>,
     ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        reject_derived_property(property_definition_id)?;
         require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_id = access.entity_id();
@@ -747,6 +754,7 @@ where
                 &None,
                 access,
                 source.as_ref(),
+                None,
             ));
             return Ok(EntityPropertyWithDefinition {
                 property,
@@ -778,6 +786,16 @@ where
                 .await?;
         }
 
+        let property_value = self
+            .keep_start_on_or_before_due(
+                access,
+                entity_type,
+                property_definition_id,
+                property_value,
+                source.as_ref(),
+            )
+            .await?;
+
         let snapshot = self
             .repository
             .upsert_entity_property(
@@ -795,6 +813,7 @@ where
             &snapshot.previous_value,
             access,
             source.as_ref(),
+            None,
         ));
 
         Ok(EntityPropertyWithDefinition {
@@ -869,6 +888,7 @@ where
                 &mutation.previous_value,
                 task,
                 None,
+                Uuid::parse_str(project.entity_id()).ok(),
             ));
         }
         Ok(())
@@ -889,6 +909,7 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        reject_derived_property(property_definition_id)?;
         require_generic_property_target(access.entity_type())?;
         let property_definition = self
             .repository
@@ -935,6 +956,7 @@ where
             &mutation.previous_value,
             access,
             None,
+            None,
         ));
 
         Ok(())
@@ -955,6 +977,7 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        reject_derived_property(property_definition_id)?;
         require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let mutation = self
@@ -974,6 +997,7 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                None,
                 None,
             ));
         }
@@ -995,6 +1019,9 @@ where
         access: &EditReceipt,
         updates: Vec<EntityPropertyOptionUpdate>,
     ) -> Result<Vec<EntityPropertyOptionSelection>, PropertiesErr> {
+        for update in &updates {
+            reject_derived_property(update.property_definition_id)?;
+        }
         require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_type = subject.storage_entity_type;
@@ -1065,6 +1092,7 @@ where
         add_option_ids: Vec<Uuid>,
         remove_option_ids: Vec<Uuid>,
     ) -> Result<Vec<EntityOptionUpdateOutcome>, PropertiesErr> {
+        reject_derived_property(property_definition_id)?;
         // Validate the shared delta once. A missing property, a single-select
         // property, or an invalid added option is a client error in the request
         // itself, so it fails the whole call rather than producing per-entity
@@ -1230,7 +1258,7 @@ where
             .collect())
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn list_property_definitions_with_options(
         &self,
         team: Option<&TeamReceipt>,
@@ -1275,6 +1303,10 @@ where
 
         if let Err(err) = request.validate() {
             return Err(PropertiesErr::Validation(err.to_string()));
+        }
+
+        if let Some(built_in) = built_in_property_named(&request.display_name) {
+            return Err(PropertiesErr::ReservedName(built_in));
         }
 
         let property_options = match &request.data_type {
@@ -1965,6 +1997,7 @@ where
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(PropertiesErr::EntityPropertyNotFound)?;
+        reject_derived_property(property_info.property_definition_id)?;
 
         let subject = self.resolve_subject(access).await?;
 
@@ -2021,6 +2054,21 @@ where
 
         Ok(())
     }
+}
+
+/// The built-in property that owns `name`, spelled as that property spells it.
+///
+/// Built-in names are reserved for user and team definitions, and the
+/// database's `check_property_name_not_system` trigger refuses them with a
+/// bare exception. This compares the way that trigger does (the whole name,
+/// ignoring case), so the caller hears why before the insert is tried.
+fn built_in_property_named(name: &str) -> Option<&'static str> {
+    let name = name.to_lowercase();
+    SystemPropertyKey::all_system_property_keys()
+        .iter()
+        .filter_map(|id| SystemPropertyKey::from_uuid(*id))
+        .map(|key| key.display_name())
+        .find(|built_in| built_in.to_lowercase() == name)
 }
 
 /// Validate the color rules for a property option: colors are only supported

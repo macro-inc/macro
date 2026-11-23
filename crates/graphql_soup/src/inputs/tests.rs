@@ -20,6 +20,7 @@ fn maps_email_view_to_soup_request() {
         email_view: Some(GraphqlEmailView::Sent),
         filters: None,
         sort_direction: None,
+        channel_reads: None,
     }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -37,6 +38,7 @@ fn defaults_email_view_to_inbox() {
         email_view: None,
         filters: None,
         sort_direction: None,
+        channel_reads: None,
     }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -60,6 +62,7 @@ fn maps_soup_cursor_continuation() {
         expand: Some(false),
         email_view: Some(GraphqlEmailView::Sent),
         sort_direction: None,
+        channel_reads: None,
     })
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -80,6 +83,7 @@ fn maps_notified_at_to_notified_soup_request() {
         email_view: None,
         filters: None,
         sort_direction: None,
+        channel_reads: None,
     }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -104,6 +108,7 @@ fn continues_a_notified_cursor_as_a_notified_request() {
         expand: None,
         email_view: None,
         sort_direction: None,
+        channel_reads: None,
     })
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -122,6 +127,7 @@ fn rejects_ascending_notified_at() {
         email_view: None,
         filters: None,
         sort_direction: Some(GraphqlSortDirection::Asc),
+        channel_reads: None,
     }))
     .into_request(test_macro_user_id(), vec![]);
 
@@ -312,6 +318,7 @@ fn property_sort_keeps_null_position_without_a_query_context() {
         email_view: None,
         filters: None,
         sort_direction: Some(GraphqlSortDirection::Asc),
+        channel_reads: None,
     }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -324,7 +331,7 @@ fn property_sort_keeps_null_position_without_a_query_context() {
         limit: 10,
         val: models_pagination::CursorVal {
             sort_type: sort,
-            last_val: sort.position(None, chrono::DateTime::default()),
+            last_val: sort.position(None, None, chrono::DateTime::default()),
         },
         filter: EntityFilterAst::default(),
     })
@@ -334,6 +341,7 @@ fn property_sort_keeps_null_position_without_a_query_context() {
         expand: None,
         email_view: None,
         sort_direction: None,
+        channel_reads: None,
     })
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -344,4 +352,43 @@ fn property_sort_keeps_null_position_without_a_query_context() {
         matches!(query.sort_method(), DynamicSort::Property { property_definition_id, direction: SoupSortDirection::Asc } if *property_definition_id == definition)
     );
     assert_eq!(query.vals().1.unwrap().key(), None);
+}
+
+#[test]
+fn channel_reads_default_to_the_replica_and_follow_each_page() {
+    let initial = |channel_reads| {
+        SoupInput::Initial(Box::new(SoupInitialInput {
+            sort_property_definition_id: None,
+            limit: None,
+            expand: None,
+            sort_method: None,
+            email_view: None,
+            filters: None,
+            sort_direction: None,
+            channel_reads,
+        }))
+    };
+    let continuation = |channel_reads| {
+        SoupInput::Continuation(SoupContinuationInput {
+            cursor: "cursor".to_string(),
+            expand: None,
+            email_view: None,
+            sort_direction: None,
+            channel_reads,
+        })
+    };
+
+    assert_eq!(initial(None).channel_reads(), SoupChannelReads::Replica);
+    assert_eq!(
+        initial(Some(SoupChannelReads::Primary)).channel_reads(),
+        SoupChannelReads::Primary
+    );
+    assert_eq!(
+        continuation(None).channel_reads(),
+        SoupChannelReads::Replica
+    );
+    assert_eq!(
+        continuation(Some(SoupChannelReads::Primary)).channel_reads(),
+        SoupChannelReads::Primary
+    );
 }

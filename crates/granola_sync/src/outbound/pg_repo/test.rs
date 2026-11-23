@@ -8,7 +8,6 @@ fn connection() -> Connection {
         user_id: MacroUserIdStr::parse_from_str("macro|granola-a@test.com")
             .unwrap()
             .into_owned(),
-        account_id: "apn_test".into(),
         scope: Scope::Personal,
         enabled: false,
         endpoint_id: None,
@@ -108,54 +107,38 @@ async fn encryption_is_bound_to_the_connection() {
     );
 }
 
-use crate::domain::{
-    ports::{Accounts, Granola},
-    service::{Service, SyncService},
-};
+use crate::domain::service::{Service, SyncService};
+use crate::outbound::{accounts::ConnectedAccounts, api::GranolaApi};
 use call::domain::{
-    imports::{CallImportService, ImportedCall, ImportedCallPreview},
-    records::CallEntityRecord,
+    imports::{CallImportService, ImportedCall, ImportedCallPreview, ImportedCallRecord},
+    records::{CallEntityRecord, CallProvider},
 };
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use connectors::fake::{FakeConnection, FakeConnectors};
+use connectors::{ConnectionManagementService, ConnectorId, ConnectorKey, Connectors};
+use std::sync::Arc;
 
-struct Account(Arc<AtomicBool>);
-#[async_trait]
-impl Accounts for Account {
-    async fn account(&self, _: &MacroUserIdStr<'static>) -> Result<Option<String>> {
-        Ok(self.0.load(Ordering::SeqCst).then(|| "apn_test".into()))
-    }
-    async fn connected(&self) -> Result<Vec<(MacroUserIdStr<'static>, String)>> {
-        Ok(self
-            .0
-            .load(Ordering::SeqCst)
-            .then(|| (connection().user_id, "apn_test".to_string()))
-            .into_iter()
-            .collect())
-    }
-}
-/// A personal key: Granola rejects the workspace scope.
-struct Provider;
-#[async_trait]
-impl Granola for Provider {
-    async fn register(&self, _: &Connection, _: &str, scope: Scope) -> Result<Registration> {
-        if scope == Scope::Workspace {
-            return Ok(Registration::ScopeRejected);
-        }
-        Ok(Registration::Registered(Webhook {
-            id: "whe_test".into(),
-            secret: SigningSecret("whsec_c2VjcmV0".into()),
-        }))
-    }
-    async fn unregister(&self, _: &Connection) -> Result<()> {
-        Ok(())
-    }
-    async fn meeting(&self, _: &Connection, _: &NoteId) -> Result<Option<ImportedCall>> {
-        panic!("webhook receipt must not fetch provider content")
+/// Granola's answer to every call: a webhook registered for a personal key.
+const REGISTERED: &str = r#"{"id":"whe_test","signing_secret":"whsec_c2VjcmV0"}"#;
+
+fn service(
+    pool: PgPool,
+    connectors: Arc<Connectors>,
+) -> Service<
+    PgSyncRepository,
+    GranolaApi<Connectors>,
+    ConnectedAccounts<Connectors>,
+    crate::outbound::signature::StandardWebhooks,
+> {
+    Service {
+        repo: PgSyncRepository::new(pool, &[7; 32]),
+        granola: GranolaApi(connectors.clone()),
+        accounts: ConnectedAccounts(connectors),
+        verifier: crate::outbound::signature::StandardWebhooks,
+        calls: Arc::new(Calls),
+        public_url: "https://macro.test".into(),
     }
 }
+
 struct Calls;
 #[async_trait]
 impl CallImportService for Calls {
@@ -163,6 +146,13 @@ impl CallImportService for Calls {
         panic!("webhook receipt must only enqueue")
     }
     async fn list(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ImportedCallPreview>> {
+        Ok(vec![])
+    }
+    async fn list_source_records(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: CallProvider,
+    ) -> Result<Vec<ImportedCallRecord>> {
         Ok(vec![])
     }
     async fn read(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<Option<CallEntityRecord>> {
@@ -179,16 +169,13 @@ async fn connecting_starts_sync_and_disconnecting_stops_it_without_leaking_deliv
 ) {
     use base64::Engine;
     use hmac::{Hmac, Mac};
-    let enabled = Arc::new(AtomicBool::new(true));
-    let service = Service {
-        repo: PgSyncRepository::new(pool, &[7; 32]),
-        granola: Provider,
-        accounts: Account(enabled.clone()),
-        verifier: crate::outbound::signature::StandardWebhooks,
-        calls: Arc::new(Calls),
-        public_url: "https://macro.test".into(),
-    };
     let user = connection().user_id;
+    let fake = FakeConnectors::new().with_connection(
+        &user,
+        FakeConnection::app("granola").answering(http::StatusCode::OK, REGISTERED),
+    );
+    let connectors = Arc::new(fake.build());
+    let service = service(pool, connectors.clone());
     // Connecting the account is enough; no user action starts sync.
     service.reconcile().await.unwrap();
     let connection = service.repo.by_user(&user).await.unwrap().unwrap();
@@ -220,7 +207,13 @@ async fn connecting_starts_sync_and_disconnecting_stops_it_without_leaking_deliv
         signature: &signature,
         body: &body,
     };
+    let calls_before = fake.api_calls().len();
     service.receive(connection.id, delivery()).await.unwrap();
+    assert_eq!(
+        fake.api_calls().len(),
+        calls_before,
+        "webhook receipt must only enqueue, never fetch provider content"
+    );
     let job = service.repo.claim().await.unwrap().unwrap();
     assert_eq!(job.event.event_id.to_string(), id); // accepted despite provider clock skew
     service.repo.finish(&job, true).await.unwrap();
@@ -233,10 +226,14 @@ async fn connecting_starts_sync_and_disconnecting_stops_it_without_leaking_deliv
         Err(SyncError::InvalidDelivery)
     ));
     // Disconnecting stops sync; reconnecting restarts it with the same namespace.
-    enabled.store(false, Ordering::SeqCst);
+    let granola = ConnectorKey::App(ConnectorId::parse("granola").unwrap());
+    connectors
+        .set_enabled(&user, &granola, false)
+        .await
+        .unwrap();
     service.reconcile().await.unwrap();
     assert!(!service.repo.by_user(&user).await.unwrap().unwrap().enabled);
-    enabled.store(true, Ordering::SeqCst);
+    connectors.set_enabled(&user, &granola, true).await.unwrap();
     service.reconcile().await.unwrap();
     let renewed = service.repo.by_user(&user).await.unwrap().unwrap();
     assert!(renewed.enabled);
@@ -246,4 +243,24 @@ async fn connecting_starts_sync_and_disconnecting_stops_it_without_leaking_deliv
         service.receive(connection.id, delivery()).await,
         Err(SyncError::InvalidDelivery)
     ));
+}
+
+/// Macro Connect holds Granola as tools only, so a user on it gets no sync:
+/// reconciling registers nothing and calls nothing.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn users_on_macro_connect_get_no_granola_sync(pool: PgPool) {
+    let user = connection().user_id;
+    let fake = FakeConnectors::new()
+        .with_connect_app("granola", false)
+        .with_macro_connect_enabled(&user)
+        .with_connection(&user, FakeConnection::app("granola"));
+    let service = service(pool, Arc::new(fake.build()));
+
+    service.reconcile().await.unwrap();
+
+    assert!(service.repo.by_user(&user).await.unwrap().is_none());
+    assert!(fake.api_calls().is_empty());
 }

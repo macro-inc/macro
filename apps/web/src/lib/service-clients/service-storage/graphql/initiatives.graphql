@@ -1,9 +1,13 @@
 # Chips and previews must not select counts, task ids, members, or sharing:
 # those fields check access to every task in the project.
 fragment InitiativeIdentityFields on GraphqlSoupInitiative {
+  appearance
   __typename
   id
   displayName
+  metadata {
+    ownerId
+  }
   viewerPermission {
     __typename
     ... on GraphqlAccessLevelPermission {
@@ -12,10 +16,37 @@ fragment InitiativeIdentityFields on GraphqlSoupInitiative {
   }
 }
 
+# Lists select only server-backed initiative fields. General Soup's local Mail
+# and projection fields can make an otherwise loaded initiative page incomplete.
+fragment InitiativeListFields on GraphqlSoupInitiative {
+  ...InitiativeIdentityFields
+  metadata {
+    createdAt
+    updatedAt
+  }
+  properties {
+    ...SoupPropertyFields
+  }
+}
+
+query Initiatives($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        ...InitiativeListFields
+      }
+      nextCursor
+    }
+  }
+}
+
 # Quick Access reads cached projects by key after a cache search hit. Select
 # only fields every initiative write includes (create and update replies carry
 # no viewedAt), so a new or renamed project stays complete.
 fragment InitiativeQuickAccessFields on GraphqlSoupInitiative {
+  appearance
   __typename
   displayName
   metadata {
@@ -26,6 +57,7 @@ fragment InitiativeQuickAccessFields on GraphqlSoupInitiative {
 }
 
 fragment InitiativeDetailFields on GraphqlSoupInitiative {
+  appearance
   __typename
   id
   displayName
@@ -67,8 +99,9 @@ query ProjectSoup($input: SoupInput!) {
     id
     soup(input: $input) {
       items {
-        ...SoupItemFields
+        __typename
         ... on GraphqlSoupInitiative {
+          ...InitiativeListFields
           taskCount
           completedTaskCount
         }
@@ -80,7 +113,7 @@ query ProjectSoup($input: SoupInput!) {
 query Initiative($initiativeId: ID!) {
   user {
     id
-    initiative(initiativeId: $initiativeId) {
+    visibleInitiative(initiativeId: $initiativeId) {
       ...InitiativeDetailFields
     }
   }
@@ -89,7 +122,7 @@ query Initiative($initiativeId: ID!) {
 query InitiativeIdentity($initiativeId: ID!) {
   user {
     id
-    initiative(initiativeId: $initiativeId) {
+    visibleInitiative(initiativeId: $initiativeId) {
       ...InitiativeIdentityFields
     }
   }

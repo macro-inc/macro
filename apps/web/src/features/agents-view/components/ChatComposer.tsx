@@ -30,12 +30,7 @@ import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
-import {
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  $isTextNode,
-} from 'lexical';
+import { $getRoot, $setSelection } from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -46,12 +41,22 @@ import {
   Show,
 } from 'solid-js';
 import { IMAGE_INPUT_WARNING } from '../../block-agent/state/image-input';
-import { AgentComposerAddMenu } from '../views/ComposerAddMenu';
+import { AgentComposerAddMenu } from '../../block-agent/ui/AgentComposerAddMenu';
+import { openComposerTypeahead } from '../../block-agent/ui/open-composer-typeahead';
+import { createComposerExpansion } from '../primitives/composer-expansion';
+import { MobileComposerAttachments } from './mobile-composer/attachments';
+import { MobileComposerControls } from './mobile-composer/controls';
+import { MobileComposerDrawer } from './mobile-composer/drawer';
+import { MobileComposerEditor } from './mobile-composer/editor';
+import { MobileComposerRoot } from './mobile-composer/root';
+import { MobileComposerSend } from './mobile-composer/send';
 
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
   autoFocus?: boolean;
   collapseOnBlur?: boolean;
+  /** Phone accessory geometry, not the Home or session composer. */
+  phoneLayout?: boolean;
   /** Portaled controls retain their anchor when focus leaves the composer. */
   controlsOpen?: boolean;
   registerFocus?: (focus: () => void) => void;
@@ -62,11 +67,15 @@ export function ChatComposer(props: {
   modelName?: string;
   selector: JSX.Element;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
+  /** A person or agent picked from the @ menu, by principal id. */
+  onMentionUser?: (userId: string) => void;
   session?: AgentInputProps;
   attachments?: InputAttachmentData[];
   onAttachFiles?: (files: File[]) => void;
   onRemoveAttachment?: (attachment: InputAttachmentData) => void;
   drawer?: JSX.Element;
+  /** Home retains its settings drawer below the desktop composer. */
+  settingsPlacement?: 'inside' | 'below';
   drawerOpen?: boolean;
   placeholder?: string;
 }) {
@@ -98,6 +107,7 @@ export function ChatComposer(props: {
   const [content, setContent] = createSignal<HTMLDivElement>();
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [height, setHeight] = createSignal<number>();
+  const [addMenuOpen, setAddMenuOpen] = createSignal(false);
   createResizeObserver(content, (_, element) => {
     // Content held offscreen by a pending Suspense reports 0; pinning that
     // would animate the surface up from nothing once it attaches.
@@ -105,25 +115,41 @@ export function ChatComposer(props: {
     setHeight(element.getBoundingClientRect().height);
   });
   let container: HTMLDivElement | undefined;
-  const [focused, setFocused] = createSignal(false);
-  const [hasFocused, setHasFocused] = createSignal(false);
-  const collapsed = () =>
-    isTouchDevice() &&
-    props.collapseOnBlur &&
-    !focused() &&
-    !props.controlsOpen;
+  const { focused, hasFocused, collapsed, focus, blur } =
+    createComposerExpansion(
+      () => props.collapseOnBlur,
+      () => props.controlsOpen || addMenuOpen()
+    );
   const drawerOpen = () => props.drawerOpen && !collapsed();
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
+  // The editor reports a host draft back as its own export, which can differ
+  // (a code block loses trailing blank lines). Passing that on would rewrite
+  // the draft under another composer showing it while someone types there.
+  // That covers the export it reports while connecting with the draft, too.
+  let hostMarkdown: string | undefined;
+  let editorConnected = false;
+  const reportDraft = (markdown: string) => {
+    if (!editorConnected || markdown === hostMarkdown) return;
+    hostMarkdown = undefined;
+    props.onDraftChange(markdown);
+  };
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
-    .withMentions({ showOpenTabs: true, block: 'agent' })
+    .withMentions({
+      showOpenTabs: true,
+      block: 'agent',
+      onUserMention: (mention) => {
+        for (const userId of mention.mentions) props.onMentionUser?.(userId);
+      },
+    })
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
-    .withRestoreFocus()
+    // Focusing the composer without a selection continues the draft.
+    .withRestoreFocus('rootEnd')
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
         fireAndForget(
@@ -149,7 +175,7 @@ export function ChatComposer(props: {
       },
       onEnd: () => {},
     })
-    .onChange(props.onDraftChange);
+    .onChange(reportDraft);
 
   if (props.session) {
     editor.withAgentCommands({
@@ -171,13 +197,30 @@ export function ChatComposer(props: {
           : 'auto',
   });
 
+  // Markdown import leaves the selection at the start, and focusing the editor
+  // restores it there. After a seeded draft (Ask AI's mentions), put the caret
+  // at its end when the editor has focus. Otherwise clear the selection, so
+  // the next focus lands at the end (withRestoreFocus('rootEnd')) without this
+  // update moving the DOM selection or taking focus.
+  const placeCaretAfterDraft = () => {
+    const focused = editor.lexical
+      .getRootElement()
+      ?.contains(document.activeElement);
+    editor.lexical.update(() => {
+      if (focused) $getRoot().selectEnd();
+      else $setSelection(null);
+    });
+  };
+
   // Only host draft changes should replace the editor contents.
   createEffect(
     on(
       () => props.draft,
       (draft) => {
-        if (draft !== editor.controls.getMarkdown())
-          editor.controls.setMarkdown(draft);
+        if (draft === editor.controls.getMarkdown()) return;
+        editor.controls.setMarkdown(draft);
+        hostMarkdown = editor.controls.getMarkdown();
+        placeCaretAfterDraft();
       }
     )
   );
@@ -186,7 +229,7 @@ export function ChatComposer(props: {
     if (props.collapseOnBlur) {
       makeEventListener(document, 'pointerdown', (event) => {
         if (event.target instanceof Node && !container?.contains(event.target))
-          setFocused(false);
+          blur();
       });
     }
     props.registerFocus?.(() => editor.controls.focus());
@@ -236,49 +279,35 @@ export function ChatComposer(props: {
     if (event.type === 'pointerdown') editor.controls.focus();
   };
 
-  const openTypeahead = (kind: 'library' | 'skills') => {
-    editor.lexical.focus(() => {
-      editor.lexical.update(
-        () => {
-          if (!$isRangeSelection($getSelection())) $getRoot().selectEnd();
-          const selection = $getSelection();
-          if (!$isRangeSelection(selection)) return;
-          const node = selection.anchor.getNode();
-          const preceding = $isTextNode(node)
-            ? node
-                .getTextContent()
-                .slice(selection.anchor.offset - 1, selection.anchor.offset)
-            : '';
-          if (preceding && !/\s/.test(preceding)) selection.insertText(' ');
-        },
-        {
-          discrete: true,
-          onUpdate: () =>
-            editor.lexical.dispatchCommand(
-              kind === 'library'
-                ? TYPE_AT_SYMBOL_COMMAND
-                : props.session
-                  ? TYPE_AGENT_COMMAND_SYMBOL_COMMAND
-                  : TYPE_SKILL_SYMBOL_COMMAND,
-              undefined
-            ),
-        }
-      );
-    });
-  };
+  const openTypeahead = (kind: 'library' | 'skills') =>
+    openComposerTypeahead(
+      editor.lexical,
+      kind === 'library'
+        ? TYPE_AT_SYMBOL_COMMAND
+        : props.session
+          ? TYPE_AGENT_COMMAND_SYMBOL_COMMAND
+          : TYPE_SKILL_SYMBOL_COMMAND
+    );
 
   const editorRow = () => (
     <div
+      data-composer-scroll
       classList={{
-        'max-h-6 overflow-hidden': !!collapsed(),
+        'max-h-6 overflow-hidden': !!collapsed() && !props.phoneLayout,
+        'max-h-9 overflow-hidden': !!collapsed() && !!props.phoneLayout,
+        'py-1.5': !!props.phoneLayout,
         'max-h-[min(15rem,30dvh)]': !collapsed(),
       }}
-      class="min-w-0 flex-1 self-center overflow-y-auto px-[9.375px] not-touch:group-data-[composer-compact=false]/composer:px-1.5 group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px] touch:group-data-[composer-compact=false]/composer:min-h-18 group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full"
+      class="min-w-0 flex-1 self-center overflow-y-auto px-[9.375px] touch:group-data-[phone-composer=true]/composer:!px-2.5 touch:group-data-[phone-composer=true]/composer:!min-h-0 not-touch:group-data-[composer-compact=false]/composer:px-1.5 group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px] touch:group-data-[composer-compact=false]/composer:min-h-18 group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full"
     >
       <MarkdownShell
-        class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p:first-child]:mt-0 [&_[data-markdown-editable]>.md-p:last-child]:mb-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+        class="h-auto min-h-6 text-base leading-6 touch:caret-accent [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p:first-child]:mt-0 [&_[data-markdown-editable]>.md-p:last-child]:mb-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
         config={editor}
         initialValue={props.draft}
+        onConnect={() => {
+          editorConnected = true;
+          if (props.draft) placeCaretAfterDraft();
+        }}
         placeholder={
           isTouchDevice()
             ? // Phones are too narrow for the full mention and skills hint.
@@ -317,6 +346,78 @@ export function ChatComposer(props: {
     </Show>
   );
 
+  const attachControl = () => (
+    <Input.AttachFilesAction
+      accept={null}
+      disabled={disabled()}
+      trigger={(openFiles, openImages) => (
+        <AgentComposerAddMenu
+          openFiles={openFiles}
+          openImages={openImages}
+          imageUnsupportedReason={
+            props.supportsImages === false
+              ? t('common.imagesUnsupported', {
+                  model: props.modelName ?? t('common.selectedModel'),
+                })
+              : undefined
+          }
+          openLibrary={() => openTypeahead('library')}
+          openSkills={() => openTypeahead('skills')}
+          getEditor={() => editor.lexical.getRootElement()}
+          session={!!props.session}
+          disabled={disabled()}
+          onOpenChange={setAddMenuOpen}
+        />
+      )}
+    />
+  );
+  const sendControl = () => (
+    <Show
+      when={props.session?.busy && props.session.onStop && !hasContent()}
+      fallback={
+        <Show
+          when={props.phoneLayout}
+          fallback={
+            <SendButton
+              appearance="composer"
+              class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
+              aria-label="Send"
+              title={props.blockedReason}
+              disabled={
+                !hasContent() ||
+                hasPendingAttachments() ||
+                hasUnsupportedImages() ||
+                disabled()
+              }
+              onClick={() => send()}
+            />
+          }
+        >
+          <MobileComposerSend
+            blockedReason={props.blockedReason}
+            disabled={
+              !hasContent() ||
+              hasPendingAttachments() ||
+              hasUnsupportedImages() ||
+              !!disabled()
+            }
+            onSend={() => send()}
+          />
+        </Show>
+      }
+    >
+      <Button
+        aria-label="Stop"
+        tooltip="Stop"
+        variant="secondary"
+        size="icon-md"
+        disabled={disabled()}
+        onClick={() => props.session?.onStop?.()}
+      >
+        <div class="size-3.5 rounded-sm bg-current" />
+      </Button>
+    </Show>
+  );
   return (
     <InputProvider
       value={{
@@ -332,7 +433,10 @@ export function ChatComposer(props: {
       <div
         ref={container}
         data-keep-keyboard
-        class="relative w-full min-w-0 touch:island touch:rounded-[32px]"
+        class="relative w-full min-w-0 touch:rounded-[32px]"
+        classList={{
+          'touch:island': !props.phoneLayout,
+        }}
         onFocusIn={(event) => {
           // Focusing a control before its click must not move it into the
           // expanded layout midway through a tap.
@@ -343,8 +447,7 @@ export function ChatComposer(props: {
             )
           )
             return;
-          setFocused(true);
-          setHasFocused(true);
+          focus();
           fireAndForget(preloadAgentFold(), 'agents-view');
         }}
         onFocusOut={(event) => {
@@ -354,147 +457,155 @@ export function ChatComposer(props: {
             event.relatedTarget instanceof Node &&
             !event.currentTarget.contains(event.relatedTarget)
           )
-            setFocused(false);
+            blur();
         }}
       >
-        <Show when={isTouchDevice()}>{repositoryDrawer()}</Show>
-        <ComposerSurface
-          as="div"
-          data-agent-composer="chat"
-          data-composer-expanded={
-            (isTouchDevice() && !collapsed()) || undefined
-          }
-          class="relative z-10 min-w-0 rounded-[28px] touch:rounded-[32px] transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
-          style={{
-            height: height() === undefined ? undefined : `${height()}px`,
-          }}
-          onPointerDown={focusEditor}
-          onMouseDown={focusEditor}
-        >
-          <Input.DropZone
-            onDragStart={(valid) => canAttach() && setIsDraggedOver(valid)}
-            onDragEnd={() => setIsDraggedOver(false)}
-          >
-            <Show when={canAttach()}>
-              <Input.DropOverlay
-                class="rounded-[28px] touch:rounded-[32px]"
-                hint="Drop files here to send them to the agent"
-              />
-            </Show>
-            <div
-              ref={setContent}
-              data-composer-content
-              inert={dictation.active()}
-              classList={{ invisible: dictation.active() }}
-            >
-              <Input.Attachments kind="media" class="pb-0" />
-              <Input.Attachments kind="document" class="pb-0" />
-              {/* Desktop expanded text uses an 18px horizontal inset and 16px
-                  top padding; touch keeps the compact row's vertical inset. */}
-              <div
-                ref={setLayout}
-                data-composer-compact={!drawerOpen() && isCompact()}
-                data-composer-coding={drawerOpen() || undefined}
-                data-composer-collapsed={collapsed() || undefined}
-                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-compact=false]:pt-[calc(7.5px_+_(33.75px_-_1.5rem)/2)] not-touch:data-[composer-compact=false]:pt-4 data-[composer-collapsed=true]:h-(--mobile-chrome-button-size) data-[composer-collapsed=true]:items-center data-[composer-collapsed=true]:py-0 data-[composer-collapsed=true]:pl-3.5 data-[composer-collapsed=true]:pr-[9.5px]"
+        <Show
+          when={props.phoneLayout}
+          fallback={
+            <>
+              <Show when={isTouchDevice()}>{repositoryDrawer()}</Show>
+              <ComposerSurface
+                as="div"
+                data-agent-composer="chat"
+                data-composer-expanded={
+                  (isTouchDevice() && !collapsed()) || undefined
+                }
+                class="relative z-10 min-w-0 rounded-[28px] touch:rounded-[32px] transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
+                style={{
+                  height: height() === undefined ? undefined : `${height()}px`,
+                }}
+                onPointerDown={focusEditor}
+                onMouseDown={focusEditor}
               >
-                <Show when={props.onAttachFiles}>
-                  <div
-                    data-composer-controls
-                    classList={{ hidden: !!collapsed() }}
-                    class="shrink-0 group-data-[composer-compact=false]/composer:order-1"
-                  >
-                    <Input.AttachFilesAction
-                      accept={null}
-                      disabled={disabled()}
-                      trigger={(openFiles, openImages) => (
-                        <AgentComposerAddMenu
-                          openFiles={openFiles}
-                          openImages={openImages}
-                          imageUnsupportedReason={
-                            props.supportsImages === false
-                              ? t('common.imagesUnsupported', {
-                                  model:
-                                    props.modelName ??
-                                    t('common.selectedModel'),
-                                })
-                              : undefined
-                          }
-                          openLibrary={() => openTypeahead('library')}
-                          openSkills={() => openTypeahead('skills')}
-                          getEditor={() => editor.lexical.getRootElement()}
-                          session={!!props.session}
-                          disabled={disabled()}
-                        />
-                      )}
-                    />
-                  </div>
-                </Show>
-                {editorRow()}
-                <div
-                  data-composer-controls
-                  class="order-2 flex min-w-0 max-w-[55%] group-data-[composer-compact=false]/composer:max-w-none group-data-[composer-compact=false]/composer:flex-1 shrink-0 items-center gap-2"
-                  role="group"
-                  aria-label="Composer settings"
+                <Input.DropZone
+                  onDragStart={(valid) =>
+                    canAttach() && setIsDraggedOver(valid)
+                  }
+                  onDragEnd={() => setIsDraggedOver(false)}
                 >
-                  <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
+                  <Show when={canAttach()}>
+                    <Input.DropOverlay
+                      class="rounded-[28px] touch:rounded-[32px]"
+                      hint="Drop files here to send them to the agent"
+                    />
+                  </Show>
+                  <div
+                    ref={setContent}
+                    data-composer-content
+                    inert={dictation.active()}
+                    classList={{ invisible: dictation.active() }}
+                  >
+                    <Input.Attachments kind="media" class="pb-0" />
+                    <Input.Attachments kind="document" class="pb-0" />
+                    {/* Desktop expanded text uses an 18px horizontal inset and 16px
+                  top padding; touch keeps the compact row's vertical inset. */}
                     <div
-                      class={
-                        collapsed() || (isTouchDevice() && !hasFocused())
-                          ? 'hidden'
-                          : 'flex min-w-0 items-center gap-2'
+                      ref={setLayout}
+                      data-composer-compact={
+                        !(props.session && !isTouchDevice()) &&
+                        !drawerOpen() &&
+                        isCompact()
                       }
+                      data-composer-coding={drawerOpen() || undefined}
+                      data-composer-collapsed={collapsed() || undefined}
+                      class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-compact=false]:pt-[calc(7.5px_+_(33.75px_-_1.5rem)/2)] not-touch:data-[composer-compact=false]:pt-4 data-[composer-collapsed=true]:h-(--mobile-chrome-button-size) data-[composer-collapsed=true]:items-center data-[composer-collapsed=true]:py-0 data-[composer-collapsed=true]:pl-3.5 data-[composer-collapsed=true]:pr-[9.5px]"
                     >
-                      {props.selector}
-                      <div class={collapsed() ? 'hidden' : 'contents'}>
-                        <DictationButton
-                          dictation={dictation}
-                          disabled={disabled()}
-                        />
+                      <Show when={props.onAttachFiles}>
+                        <div
+                          data-composer-controls
+                          classList={{ hidden: !!collapsed() }}
+                          class="shrink-0 group-data-[composer-compact=false]/composer:order-1"
+                        >
+                          {attachControl()}
+                        </div>
+                      </Show>
+                      {editorRow()}
+                      <div
+                        data-composer-controls
+                        class="order-2 ml-auto flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2"
+                        role="group"
+                        aria-label="Composer settings"
+                      >
+                        <Show
+                          when={
+                            !isTouchDevice() &&
+                            props.settingsPlacement !== 'below' &&
+                            props.drawer
+                          }
+                        >
+                          <div
+                            class="min-w-0 max-w-full"
+                            role="group"
+                            aria-label="Conversation settings"
+                            hidden={!drawerOpen()}
+                          >
+                            {props.drawer}
+                          </div>
+                        </Show>
+                        <div class="flex min-w-0 max-w-full items-center gap-2">
+                          <div
+                            class={
+                              collapsed() || (isTouchDevice() && !hasFocused())
+                                ? 'hidden'
+                                : 'contents'
+                            }
+                          >
+                            <div class="min-w-0">{props.selector}</div>
+                            <DictationButton
+                              dictation={dictation}
+                              disabled={disabled()}
+                            />
+                          </div>
+                          {sendControl()}
+                        </div>
                       </div>
                     </div>
-                    <Show
-                      when={
-                        props.session?.busy &&
-                        props.session.onStop &&
-                        !hasContent()
-                      }
-                      fallback={
-                        <SendButton
-                          appearance="composer"
-                          class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
-                          aria-label="Send"
-                          title={props.blockedReason}
-                          disabled={
-                            !hasContent() ||
-                            hasPendingAttachments() ||
-                            hasUnsupportedImages() ||
-                            disabled()
-                          }
-                          onClick={() => send()}
-                        />
-                      }
-                    >
-                      <Button
-                        aria-label="Stop"
-                        tooltip="Stop"
-                        variant="secondary"
-                        class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
-                        size="icon-md"
-                        disabled={disabled()}
-                        onClick={() => props.session?.onStop?.()}
-                      >
-                        <div class="size-3.5 rounded-sm bg-current" />
-                      </Button>
-                    </Show>
                   </div>
-                </div>
+                </Input.DropZone>
+                <DictationPanel dictation={dictation} />
+              </ComposerSurface>
+              <Show
+                when={!isTouchDevice() && props.settingsPlacement === 'below'}
+              >
+                {repositoryDrawer()}
+              </Show>
+            </>
+          }
+        >
+          <MobileComposerDrawer open={!!drawerOpen()}>
+            {props.drawer}
+          </MobileComposerDrawer>
+          <MobileComposerRoot
+            collapsed={!!collapsed()}
+            height={height()}
+            dictating={dictation.active()}
+            canAttach={canAttach()}
+            onContentRef={setContent}
+            onLayoutRef={setLayout}
+            onDragChange={setIsDraggedOver}
+            onPointerDown={focusEditor}
+            onMouseDown={focusEditor}
+          >
+            <MobileComposerAttachments>
+              <Input.Attachments
+                appearance="chips"
+                class="gap-1.5 px-2.5 py-0"
+              />
+            </MobileComposerAttachments>
+            <MobileComposerEditor>{editorRow()}</MobileComposerEditor>
+            <MobileComposerControls>
+              {/* File pickers and portaled menus must survive focus leaving the editor. */}
+              <Show when={props.onAttachFiles}>{attachControl()}</Show>
+              <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1">
+                <div class="min-w-0">{props.selector}</div>
+                <DictationButton dictation={dictation} disabled={disabled()} />
+                {sendControl()}
               </div>
-            </div>
-          </Input.DropZone>
+            </MobileComposerControls>
+          </MobileComposerRoot>
           <DictationPanel dictation={dictation} />
-        </ComposerSurface>
-        <Show when={!isTouchDevice()}>{repositoryDrawer()}</Show>
+        </Show>
         <DictationFeedback dictation={dictation} />
       </div>
     </InputProvider>

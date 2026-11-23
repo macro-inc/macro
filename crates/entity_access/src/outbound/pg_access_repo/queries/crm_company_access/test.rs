@@ -79,3 +79,5 @@ async fn team_crm_company_access_denies_other_team(pool: PgPool) -> anyhow::Resu
     assert_eq!(access, None);
     Ok(())
 }
+
+mod member_access;

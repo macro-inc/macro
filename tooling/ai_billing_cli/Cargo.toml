@@ -19,3 +19,7 @@ sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[package.metadata.cargo-shear]
+# `macro_env_var` macros expand to `#[tracing::instrument]`.
+ignored = ["tracing"]

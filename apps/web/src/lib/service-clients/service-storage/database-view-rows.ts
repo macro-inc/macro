@@ -1,9 +1,20 @@
 import type { ViewQuery } from '@core/database-sql/generated/types';
+import { abortedBy } from '@core/util/abort-signal';
 import { isTauri } from '@core/util/platform';
-import type { Client, RequestPolicy } from '@urql/core';
+import type { Client, OperationResult, RequestPolicy } from '@urql/core';
 import { err, errAsync, ok, type Result, ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
-import { filter, pipe, take, tap, toPromise } from 'wonka';
+import {
+  concat,
+  filter,
+  fromValue,
+  map,
+  merge,
+  pipe,
+  take,
+  tap,
+  toPromise,
+} from 'wonka';
 import {
   type DatabaseViewFilterGroup,
   type DatabaseViewFilterTest,
@@ -179,6 +190,15 @@ export function databaseViewQueryInput(
   });
 }
 
+/** How a page read settled: answered, ended without an answer, or aborted. */
+type PageReadSettled =
+  | {
+      kind: 'answered';
+      result: OperationResult<DatabaseViewRowsQuery>;
+    }
+  | { kind: 'ended' }
+  | { kind: 'aborted' };
+
 export function readDatabaseViewPage(
   request: DatabaseViewPageRequest,
   client: Client = getGraphqlSoupClient()
@@ -190,28 +210,43 @@ export function readDatabaseViewPage(
   const native = isTauri();
   return ResultAsync.fromPromise(
     pipe(
-      client.query(
-        DatabaseViewRowsDocument,
-        {
-          databaseId: request.databaseId,
-          input: {
-            tableId: request.tableId,
-            query: query.value,
-            cursor: request.cursor,
-            limit: 500,
-          },
-        },
-        {
-          requestPolicy: native ? 'network-only' : request.requestPolicy,
-          persistResult: native ? false : undefined,
-          fetchOptions: { signal: request.signal, headers: request.headers },
-        }
-      ),
-      tap((result) => {
-        if (result.stale && result.data && !result.error)
-          request.onCachedPage?.(result.data.user.databaseViewRows);
-      }),
-      filter((result) => !result.stale && !result.hasNext),
+      merge<PageReadSettled>([
+        concat<PageReadSettled>([
+          pipe(
+            client.query(
+              DatabaseViewRowsDocument,
+              {
+                databaseId: request.databaseId,
+                input: {
+                  tableId: request.tableId,
+                  query: query.value,
+                  cursor: request.cursor,
+                  limit: 500,
+                },
+              },
+              {
+                requestPolicy: native ? 'network-only' : request.requestPolicy,
+                persistResult: native ? false : undefined,
+                fetchOptions: {
+                  signal: request.signal,
+                  headers: request.headers,
+                },
+              }
+            ),
+            tap((result) => {
+              if (result.stale && result.data && !result.error)
+                request.onCachedPage?.(result.data.user.databaseViewRows);
+            }),
+            filter((result) => !result.stale && !result.hasNext),
+            map((result) => ({ kind: 'answered' as const, result }))
+          ),
+          fromValue({ kind: 'ended' as const }),
+        ]),
+        pipe(
+          abortedBy(request.signal),
+          map(() => ({ kind: 'aborted' as const }))
+        ),
+      ]),
       take(1),
       toPromise
     ),
@@ -219,20 +254,23 @@ export function readDatabaseViewPage(
       kind: 'fetch',
       message: error instanceof Error ? error.message : String(error),
     })
-  ).andThen(
-    ({ data, error }): Result<DatabaseViewPage, DatabaseViewPageFailure> => {
-      if (error || !data)
-        return err({
-          kind: 'fetch',
-          message: error?.message ?? 'This view is not cached.',
-          stale: error?.graphQLErrors.some(
-            (error) => error.extensions.code === 'DATABASE_VIEW_STALE'
-          ),
-          staleSchema: error?.graphQLErrors.some(
-            (error) => error.extensions.code === 'DATABASE_VIEW_INVALID'
-          ),
-        });
-      return ok(data.user.databaseViewRows);
-    }
-  );
+  ).andThen((settled): Result<DatabaseViewPage, DatabaseViewPageFailure> => {
+    if (settled.kind === 'aborted')
+      return err({ kind: 'fetch', message: 'The read was cancelled.' });
+    if (settled.kind === 'ended')
+      return err({ kind: 'fetch', message: 'The read ended without rows.' });
+    const { data, error } = settled.result;
+    if (error || !data)
+      return err({
+        kind: 'fetch',
+        message: error?.message ?? 'This view is not cached.',
+        stale: error?.graphQLErrors.some(
+          (error) => error.extensions.code === 'DATABASE_VIEW_STALE'
+        ),
+        staleSchema: error?.graphQLErrors.some(
+          (error) => error.extensions.code === 'DATABASE_VIEW_INVALID'
+        ),
+      });
+    return ok(data.user.databaseViewRows);
+  });
 }

@@ -43,14 +43,6 @@ afterEach(() => {
 
 const spendingActions = [
   [
-    'chat send',
-    () =>
-      cognitionApiServiceClient.sendStreamChatMessage({
-        content: 'Hello',
-        model: 'test',
-      }),
-  ],
-  [
     'structured completion',
     () =>
       cognitionApiServiceClient.structuredCompletion({

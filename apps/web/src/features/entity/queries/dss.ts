@@ -11,14 +11,16 @@ import {
   moveToFolder,
 } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
 import { callKeys } from '@queries/call/keys';
+import { refreshChannelDirectory } from '@queries/channel/directory';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import {
@@ -41,9 +43,7 @@ import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
 import { databasesKeys, formsKeys } from '@queries/storage/keys';
-import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
-import { storageServiceClient } from '@service-storage/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
@@ -52,9 +52,38 @@ import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
 
-function invalidateDeletedDssItems(entities: EntityData[]): void {
-  if (entities.some((e) => e.type === 'channel')) {
-    queryClient.invalidateQueries({ queryKey: channelKeys._def });
+function invalidateDeletedDssItems(
+  entities: EntityData[],
+  writer: QueryAccount | undefined
+): void {
+  // A deleted folder's databases and forms return to the root on the server.
+  if (entities.some((e) => e.type === 'project')) {
+    queryClient.invalidateQueries({ queryKey: databasesKeys.list.queryKey });
+    queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey });
+  }
+  const channelIds = entities.flatMap((e) =>
+    e.type === 'channel' ? [e.id] : []
+  );
+  if (channelIds.length > 0) {
+    const deleted = new Set(channelIds);
+    // A deletion settling after another sign-in leaves that sign-in's
+    // channel reads alone: it reads everything again itself.
+    if (!writer || isCurrentQueryAccount(writer))
+      queryClient.invalidateQueries({
+        queryKey: channelKeys._def,
+        // The deleted channels' own reads. The directory refresh below reads
+        // the directory again itself, and Quick Access rereads its cached
+        // channels when the cache drops them: both are account-wide reads one
+        // deletion should not repeat.
+        predicate: ({ queryKey }) =>
+          typeof queryKey[2] === 'string' && deleted.has(queryKey[2]),
+      });
+    // The channel directory rereads its pages, or waits for the soup update:
+    // the deleted channels come out at once, with no read of each.
+    fireAndForget(
+      refreshChannelDirectory([], { removed: channelIds, writer }),
+      'channel-delete'
+    );
   }
   if (entities.some((e) => e.type === 'call')) {
     queryClient.invalidateQueries({ queryKey: callKeys._def });
@@ -72,8 +101,29 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
         );
       }
     );
+    // A sub-routine is listed under its parent, and goes with it.
+    queryClient.setQueryData(
+      scheduledActionKeys.subRoutines.queryKey,
+      (current: unknown) => {
+        if (!Array.isArray(current)) return current;
+        return current.filter(
+          (item: { id?: string; sub_routine?: { parent_id?: string } }) =>
+            !(item.id && deletedIds.has(item.id)) &&
+            !(
+              item.sub_routine?.parent_id &&
+              deletedIds.has(item.sub_routine.parent_id)
+            )
+        );
+      }
+    );
     queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
+    });
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.subRoutines.queryKey,
+    });
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.children._def,
     });
     for (const scheduleId of deletedIds) {
       queryClient.removeQueries({
@@ -88,7 +138,8 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
 
 async function settleDssDeletes(
   entities: EntityData[],
-  deletions: Promise<boolean>[]
+  deletions: Promise<boolean>[],
+  writer: QueryAccount | undefined
 ): Promise<boolean[]> {
   const outcomes = await Promise.allSettled(deletions);
   const results = outcomes.map(
@@ -97,7 +148,10 @@ async function settleDssDeletes(
   // Process confirmed successes before surfacing sibling failures. Never remove
   // failed schedules or skip call invalidation because another API threw.
   try {
-    invalidateDeletedDssItems(entities.filter((_, index) => results[index]));
+    invalidateDeletedDssItems(
+      entities.filter((_, index) => results[index]),
+      writer
+    );
   } catch (error) {
     console.error('Failed to reconcile deleted item caches', error);
   }
@@ -109,7 +163,7 @@ async function settleDssDeletes(
   return results;
 }
 
-function removeDssEntityCaches(entities: EntityData[], typeScoped: boolean) {
+function removeDssEntityCaches(entities: EntityData[]) {
   const ids = new Set(entities.map((entity) => entity.id));
   const keys = new Set(
     entities.flatMap((entity) => {
@@ -117,12 +171,6 @@ function removeDssEntityCaches(entities: EntityData[], typeScoped: boolean) {
       return key ? [key] : [];
     })
   );
-  if (!typeScoped)
-    return {
-      keys,
-      soupSnapshot: removeSoupEntities(ids),
-      searchSnapshot: removeSearchEntities(ids),
-    };
   return {
     keys,
     soupSnapshot: removeSoupEntities(ids, (item, id) =>
@@ -135,7 +183,6 @@ function removeDssEntityCaches(entities: EntityData[], typeScoped: boolean) {
 }
 
 export function createBulkDeleteDssItemsMutation() {
-  const graphqlSoupEnabled = isFeatureEnabled(enableGraphqlSoup);
   const isDeletable = (entity: EntityData) => {
     const type = entity.type;
     return (
@@ -155,13 +202,12 @@ export function createBulkDeleteDssItemsMutation() {
       .getAll()
       .some((mutation) => mutation.state.context === context);
   return useMutation(() => ({
-    ...(graphqlSoupEnabled
-      ? {
-          mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
-          gcTime: GRAPHQL_SOUP_DELETE_RETENTION_MS,
-        }
-      : {}),
+    mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+    gcTime: GRAPHQL_SOUP_DELETE_RETENTION_MS,
     mutationFn: async (entities: EntityData[]) => {
+      // The sign-in that deletes: a deletion settling after another sign-in
+      // holds nothing in its directory.
+      const writer = currentQueryAccount();
       const deletable = entities.filter(isDeletable);
       const deletions = deletable.map(async (e) => {
         if (e.type === 'agent_session') {
@@ -169,23 +215,12 @@ export function createBulkDeleteDssItemsMutation() {
           return true;
         }
         if (e.type === 'channel') {
-          if (graphqlSoupEnabled) {
-            await permanentlyDeleteEntity({ type: 'CHANNEL', id: e.id });
-          } else {
-            await throwOnErr(() =>
-              storageServiceClient.deleteChannel({ channel_id: e.id })
-            );
-          }
+          await permanentlyDeleteEntity({ type: 'CHANNEL', id: e.id });
           return true;
         }
         if (e.type === 'call') {
-          if (isFeatureEnabled(enableGraphqlSoup)) {
-            await permanentlyDeleteEntity({ type: 'CALL', id: e.id });
-            return true;
-          }
-          return throwOnErr(() =>
-            callServiceClient.deleteCallRecord(e.id)
-          ).then(() => true);
+          await permanentlyDeleteEntity({ type: 'CALL', id: e.id });
+          return true;
         }
         if (e.type === 'routine') {
           return throwOnErr(() =>
@@ -205,46 +240,39 @@ export function createBulkDeleteDssItemsMutation() {
         }
         return deleteItem({ id: e.id, itemType: e.type });
       });
-      return settleDssDeletes(deletable, deletions);
+      return settleDssDeletes(deletable, deletions, writer);
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
-      const { keys, ...snapshots } = removeDssEntityCaches(
-        deletable,
-        graphqlSoupEnabled
-      );
+      const { keys, ...snapshots } = removeDssEntityCaches(deletable);
       return {
         ...snapshots,
-        ...(graphqlSoupEnabled
-          ? { graphqlDeletion: createGraphqlSoupDeletion([...keys]) }
-          : {}),
+        graphqlDeletion: createGraphqlSoupDeletion([...keys]),
       };
     },
-    onSettled: graphqlSoupEnabled
-      ? (results, error, entities, context) => {
-          if (!context?.graphqlDeletion) return;
-          // Logout/cache clearing can outlive an in-flight API call. Do not
-          // repopulate session-local tombstones after their mutation was cleared.
-          if (!isCurrentContext(context)) {
-            context.graphqlDeletion.release();
-            return;
-          }
-          const outcomes =
-            error instanceof BulkDeleteFailure ? error.results : results;
-          const deletedKeys = entities
-            .filter(isDeletable)
-            .flatMap((entity, index) => {
-              const key = soupEntityKey(entity);
-              return outcomes?.[index] === true && key ? [key] : [];
-            });
-          // API completion closes the mutation; display state survives it and
-          // independently retries revalidation. Failed keys are restored now.
-          context?.graphqlDeletion?.settle(deletedKeys);
-        }
-      : undefined,
+    onSettled: (results, error, entities, context) => {
+      if (!context?.graphqlDeletion) return;
+      // Logout/cache clearing can outlive an in-flight API call. Do not
+      // repopulate session-local tombstones after their mutation was cleared.
+      if (!isCurrentContext(context)) {
+        context.graphqlDeletion.release();
+        return;
+      }
+      const outcomes =
+        error instanceof BulkDeleteFailure ? error.results : results;
+      const deletedKeys = entities
+        .filter(isDeletable)
+        .flatMap((entity, index) => {
+          const key = soupEntityKey(entity);
+          return outcomes?.[index] === true && key ? [key] : [];
+        });
+      // API completion closes the mutation; display state survives it and
+      // independently retries revalidation. Failed keys are restored now.
+      context.graphqlDeletion.settle(deletedKeys);
+    },
     onError: (error, entities, context) => {
-      if (graphqlSoupEnabled && context && !isCurrentContext(context)) {
-        context.graphqlDeletion?.release();
+      if (context && !isCurrentContext(context)) {
+        context.graphqlDeletion.release();
         return;
       }
       const partialFailure =
@@ -256,7 +284,7 @@ export function createBulkDeleteDssItemsMutation() {
         batch(() => {
           context?.soupSnapshot.rollback();
           context?.searchSnapshot.rollback();
-          removeDssEntityCaches(error.deletedEntities, graphqlSoupEnabled);
+          removeDssEntityCaches(error.deletedEntities);
         });
       } else {
         context?.soupSnapshot.rollback();
@@ -374,9 +402,7 @@ function invalidateAfterMove(
       queryKey: ['project'],
     });
   }
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return refreshActiveGraphqlSoupQueries();
-  }
+  return refreshActiveGraphqlSoupQueries();
 }
 
 export function createMoveToProjectDssEntityMutation() {
@@ -513,9 +539,7 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
       if (entities.some((e) => e.type === 'project')) {
         queryClient.invalidateQueries({ queryKey: ['project'] });
       }
-      if (isFeatureEnabled(enableGraphqlSoup)) {
-        return refreshActiveGraphqlSoupQueries();
-      }
+      return refreshActiveGraphqlSoupQueries();
     },
   }));
 }
@@ -590,9 +614,7 @@ export function createBulkCopyDssEntityMutation() {
         queryKey: soupKeys.astItems._def,
       });
       queryClient.invalidateQueries({ queryKey: ['entity'] });
-      if (isFeatureEnabled(enableGraphqlSoup)) {
-        return refreshActiveGraphqlSoupQueries();
-      }
+      return refreshActiveGraphqlSoupQueries();
     },
   }));
 }

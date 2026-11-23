@@ -8,6 +8,9 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupInitiative<T = ()> {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Initiative identifier.
     pub id: Uuid,
     /// Initiative display name.

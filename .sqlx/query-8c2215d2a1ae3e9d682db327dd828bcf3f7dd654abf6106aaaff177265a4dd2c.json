@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT b.id, b.name, b.handle\n            FROM agent_configs ac\n            JOIN bots b ON b.id = ac.bot_id\n            WHERE ac.harness_id = $1\n              AND b.deleted_at IS NULL\n              AND b.has_agent\n              -- A resident runs only while its owner may run agents here, the\n              -- rule `authorize_runtime` applies per turn. A coding agent is\n              -- checked against whoever prompts it, so it always loads.\n              AND (ac.is_coding OR agent_owner_can_run(ac.bot_id))\n            ORDER BY b.created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "handle",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8c2215d2a1ae3e9d682db327dd828bcf3f7dd654abf6106aaaff177265a4dd2c"
+}

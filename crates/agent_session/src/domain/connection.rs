@@ -147,6 +147,30 @@ fn acp_session_of(frame: &RawJsonRpcMessage) -> Option<SessionId> {
     Some(SessionId::from(session_id))
 }
 
+/// One dial of a harness's runtime; a redial is a new connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RuntimeConnectionId(macro_uuid::Uuid);
+
+impl RuntimeConnectionId {
+    /// Mint the identity of a new dial.
+    #[must_use]
+    pub fn generate() -> Self {
+        Self(macro_uuid::generate_uuid_v7())
+    }
+
+    /// The raw uuid, for persistence.
+    #[must_use]
+    pub fn as_uuid(self) -> macro_uuid::Uuid {
+        self.0
+    }
+}
+
+impl std::fmt::Display for RuntimeConnectionId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
 /// A transport for one session, plus the handshake gate it shares with every
 /// other session on the same connection.
 ///
@@ -177,6 +201,9 @@ pub struct RuntimeAttachment<Connector> {
     pub(crate) permission_policy: PermissionPolicy,
     /// Model to select after creating a fresh ACP session, before any prompt.
     pub(crate) initial_model: Option<String>,
+    /// The shared runtime connection this attachment rides on; `None` for a
+    /// transport of its own ([`Self::solo`]).
+    pub(crate) connection: Option<RuntimeConnectionId>,
 }
 
 /// Activate attachment-owned resources with the exact acquired ownership claim.
@@ -198,6 +225,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             closed: None,
             permission_policy: PermissionPolicy::default(),
             initial_model: None,
+            connection: None,
         }
     }
 
@@ -229,6 +257,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             closed: self.closed,
             permission_policy: self.permission_policy,
             initial_model: self.initial_model,
+            connection: self.connection,
         }
     }
 
@@ -267,6 +296,7 @@ type ProbeAnswers = watch::Sender<Option<ModelProbeResult>>;
 /// Holds the carrier's sending half only: the receiving half belongs to the
 /// router task, which is the sole reader of a connection by definition.
 pub struct RuntimeConnection<Sender> {
+    id: RuntimeConnectionId,
     outbound: Sender,
     handshake: watch::Sender<HandshakeStatus>,
     /// Whether the runtime has reported its agent ready.
@@ -311,6 +341,7 @@ where
         let (outbound, inbound) = carrier.split();
         let (handshake, _) = watch::channel(HandshakeStatus::Pending);
         let connection = Arc::new(Self {
+            id: RuntimeConnectionId::generate(),
             outbound,
             handshake,
             runtime_ready: watch::channel(false).0,
@@ -324,6 +355,12 @@ where
         let router = tokio::spawn(Arc::clone(&connection).route_inbound(inbound));
         let _ = connection.router.set(router.abort_handle());
         connection
+    }
+
+    /// This dial's identity, which every session bound to it carries.
+    #[must_use]
+    pub fn id(&self) -> RuntimeConnectionId {
+        self.id
     }
 
     /// Stop serving this connection: it has been displaced by a newer dial.
@@ -348,6 +385,26 @@ where
     /// holder has to be told rather than discover it on the next send.
     pub async fn closed(&self) {
         self.closed.cancelled().await;
+    }
+
+    /// Tell the runtime the agents bound to it may have changed.
+    pub async fn agents_changed(&self) -> std::result::Result<(), TransportError> {
+        self.outbound.send(ToRuntimeMessage::AgentsChanged).await
+    }
+
+    /// Hand the runtime an agent teammate's environment to run. Nothing
+    /// answers; the agent's own online report confirms it.
+    pub async fn apply_agent(
+        &self,
+        environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+        traceparent: Option<String>,
+    ) -> Result<(), TransportError> {
+        self.outbound
+            .send(ToRuntimeMessage::ApplyAgent {
+                environment,
+                traceparent,
+            })
+            .await
     }
 
     /// Ask the runtime to inspect a separate fresh ACP process and await the
@@ -393,7 +450,7 @@ where
     /// every session shares - or, when a session already claimed it, waits
     /// for that one. An agent that does not advertise
     /// `sessionCapabilities.list` lists nothing. The caller owns the deadline.
-    pub async fn list_sessions(&self) -> Result<Vec<SessionId>, ListSessionsError> {
+    pub async fn list_sessions(&self) -> Result<Vec<ListedSession>, ListSessionsError> {
         let mut ready = self.runtime_ready.subscribe();
         tokio::select! {
             ready = ready.wait_for(|ready| *ready) => {
@@ -431,7 +488,16 @@ where
             let (_, result) = self.request(method, params).await?;
             let page = serde_json::from_value::<ListSessionsResponse>(result)
                 .map_err(|error| ListSessionsError::Runtime(error.to_string()))?;
-            sessions.extend(page.sessions.into_iter().map(|session| session.session_id));
+            sessions.extend(page.sessions.into_iter().map(|session| {
+                ListedSession {
+                    updated_at: session
+                        .updated_at
+                        .as_deref()
+                        .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                        .map(|at| at.with_timezone(&chrono::Utc)),
+                    id: session.session_id,
+                }
+            }));
             match page.next_cursor {
                 Some(next) => cursor = Some(next),
                 None => return Ok(sessions),
@@ -599,6 +665,7 @@ where
             // The caller knows whose agent this is; the connection does not.
             permission_policy: PermissionPolicy::default(),
             initial_model: None,
+            connection: Some(self.id),
         }
     }
 
@@ -767,6 +834,16 @@ where
             }
         }
     }
+}
+
+/// One ACP session a runtime's agent listed as live.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedSession {
+    /// The agent's id for it.
+    pub id: SessionId,
+    /// When the agent last saw activity in it, when it says (`updatedAt`):
+    /// the only sign of work done outside Macro, such as in a terminal.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Why a runtime could not list the sessions it serves.

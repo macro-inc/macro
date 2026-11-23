@@ -81,6 +81,16 @@ where
         // A call created moments ago may not have anyone connected yet.
         if settled(call.created_at) {
             self.finish_empty_call(call).await?;
+        } else if now - call.created_at >= TimeDelta::seconds(60) {
+            let has_participants = self
+                .repo
+                .get_participant_count(&call.id)
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?
+                > 0;
+            if has_participants {
+                self.finish_empty_call(call).await?;
+            }
         }
         Ok(())
     }

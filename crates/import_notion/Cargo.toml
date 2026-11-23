@@ -11,7 +11,8 @@ http = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 lazy-regex = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
-pipedream_mcp = { path = "../pipedream_mcp" }
+models_databases = { path = "../models_databases" }
+connectors = { path = "../connectors" }
 rand = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
@@ -19,8 +20,9 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-anyhow = { workspace = true }
+connectors = { path = "../connectors", features = ["test-fakes"] }
 tokio = { workspace = true, features = ["test-util"] }

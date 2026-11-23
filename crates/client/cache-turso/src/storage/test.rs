@@ -1,7 +1,10 @@
 use super::*;
 
+mod cold_writes;
 mod conjunction_cost;
 mod conjunction_semantics;
+mod contact_search;
+mod derived_sorts;
 mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
@@ -9,19 +12,40 @@ mod filter_scope_semantics;
 mod mutation_retry;
 mod optimistic_atomicity;
 mod page_retention;
+mod permission_retirement;
 mod predicate_cost;
 mod projection_writes;
 mod search_bucket_cost;
+mod search_options;
+mod search_prefilter;
 mod search_projection;
+mod search_streaming;
 mod startup;
+mod wal_checkpoint;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use turso_core::io::{FileId, FileSyncType};
 use turso_core::{
     Buffer, Clock, Completion, CompletionError, File, IO, LimboError, MemoryIO, MonotonicInstant,
     OpenFlags, WallClockInstant,
 };
+
+// Projection inspection only: production text search never collects this list.
+impl TursoStorage {
+    async fn load_search_documents(
+        &self,
+        profile: SearchProfile,
+        bucket: &str,
+    ) -> Result<Vec<SearchDocument>, TursoStorageError> {
+        let mut rows = Vec::new();
+        self.visit_search_documents(profile, bucket, &SearchQuery::new(""), |row| {
+            rows.push(row.into_owned())
+        })
+        .await?;
+        Ok(rows)
+    }
+}
 
 fn key(value: &str) -> EntityKey<'static> {
     EntityKey(value.to_owned().into())
@@ -492,7 +516,7 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
         let mut storage = TursoStorage::open_in_memory("schema-scope").unwrap();
         assert_eq!(raw_scalar(&storage, "PRAGMA foreign_keys"), 1);
         storage.check_integrity().unwrap();
-        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 6);
+        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 7);
 
         let violation = driver::execute(
             &storage.connection(),
@@ -1007,6 +1031,7 @@ fn semantically_equivalent_schema_formatting_is_accepted_on_reopen() {
             -- UNIQUE(value), CHECK(id), and COLLATE NOCASE are only comment text.
             primary key ([__typename], `id`)
         )"#,
+        super::contact_search::CREATE_INDEX,
         r#"create table 'mutation_queue' (
             'id' integer /* AUTOINCREMENT UNIQUE CHECK COLLATE */ primary key autoincrement,
             "uuid" text not null,
@@ -1282,6 +1307,9 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
         let storage = database.open("scope").unwrap();
         for sql in statements {
             raw_execute(&storage, sql, Vec::new());
+        }
+        if name.starts_with("records-") {
+            raw_execute(&storage, super::contact_search::CREATE_INDEX, Vec::new());
         }
         assert_eq!(
             storage.try_close().unwrap(),
@@ -1946,7 +1974,7 @@ fn corruption_quota_io_and_uncertain_transactions_have_payload_free_classes() {
     assert!(!error.to_string().contains("secret"));
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 enum IoFault {
     None = 0,
@@ -1954,11 +1982,15 @@ enum IoFault {
     Sync = 2,
     CommitCompletion = 3,
     RollbackIoStep = 4,
+    /// The next sync of the main database file, not of its WAL.
+    DatabaseSync = 5,
 }
 
 struct FaultIo {
     inner: MemoryIO,
     fault: Arc<AtomicU8>,
+    /// Reads from every file, so a test can tell a cached page from a read one.
+    reads: Arc<AtomicU64>,
 }
 
 impl FaultIo {
@@ -1966,6 +1998,7 @@ impl FaultIo {
         Arc::new(Self {
             inner: MemoryIO::new(),
             fault: Arc::new(AtomicU8::new(IoFault::None as u8)),
+            reads: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -1986,6 +2019,10 @@ impl FaultIo {
 
     fn is_clear(&self) -> bool {
         self.fault.load(Ordering::SeqCst) == IoFault::None as u8
+    }
+
+    fn reads(&self) -> u64 {
+        self.reads.load(Ordering::SeqCst)
     }
 }
 
@@ -2008,6 +2045,8 @@ impl IO for FaultIo {
     ) -> turso_core::Result<Arc<dyn File>> {
         Ok(Arc::new(FaultFile {
             fault: self.fault.clone(),
+            database: !path.ends_with("-wal"),
+            reads: self.reads.clone(),
             inner: self.inner.open_file(path, flags, direct)?,
         }))
     }
@@ -2040,6 +2079,9 @@ impl IO for FaultIo {
 
 struct FaultFile {
     fault: Arc<AtomicU8>,
+    /// The main database file rather than its WAL.
+    database: bool,
+    reads: Arc<AtomicU64>,
     inner: Arc<dyn File>,
 }
 
@@ -2082,6 +2124,7 @@ impl File for FaultFile {
     }
 
     fn pread(&self, pos: u64, completion: Completion) -> turso_core::Result<Completion> {
+        self.reads.fetch_add(1, Ordering::SeqCst);
         self.inner.pread(pos, completion)
     }
 
@@ -2123,7 +2166,7 @@ impl File for FaultFile {
         if self.deliver_commit_completion_error(&completion) {
             return Ok(completion);
         }
-        if self.take(IoFault::Sync) {
+        if self.take(IoFault::Sync) || (self.database && self.take(IoFault::DatabaseSync)) {
             return Err(CompletionError::IOError(std::io::ErrorKind::Other, "sync").into());
         }
         self.inner.sync(completion, sync_type)
@@ -2156,13 +2199,84 @@ fn fault_storage(io: Arc<FaultIo>) -> TursoStorage {
     let io_trait: Arc<dyn IO> = io;
     let database =
         Database::open(io_trait, &path, OpenOptions::new(Arc::new(SqliteDialect))).unwrap();
-    let connection = database.connect().unwrap();
+    let connection = Db::cached(database.connect().unwrap());
     initialize(&connection, "fault-scope", true).unwrap();
     TursoStorage {
         health: AtomicU8::new(0),
         database,
         connection,
         fault: Mutex::new(None),
+    }
+}
+
+#[test]
+fn incomplete_scope_check_seeks_to_incomplete_states() {
+    let storage = TursoStorage::open_in_memory("incomplete-scope-plan").unwrap();
+    let details = driver::query(
+        &storage.connection(),
+        &format!("EXPLAIN QUERY PLAN {INCOMPLETE_SCOPE_DOCUMENT}"),
+        vec![text("soup-flat-v1"), text("document")],
+    )
+    .unwrap()
+    .into_iter()
+    .map(|row| required_text(&row, 3).unwrap())
+    .collect::<Vec<_>>();
+    for bound in ["state>?", "state<?"] {
+        assert!(
+            details.iter().any(|detail| detail.contains(&format!(
+                "index_documents_scope_idx (profile=? AND partition=? AND {bound})"
+            ))),
+            "{details:#?}"
+        );
+    }
+}
+
+#[test]
+fn any_state_but_complete_makes_the_scope_incomplete() {
+    let storage = TursoStorage::open_in_memory("incomplete-scope-states").unwrap();
+    let token = |value| Token::new(value).unwrap();
+    let owner = || PredicateExpr::Exact {
+        attribute: token("owner"),
+        value: predicate_index::ExactValue::utf8("owner-1").unwrap(),
+    };
+    let query = ValidatedIndexQuery::new(predicate_index::IndexQuery {
+        profile: Profile::new(token("soup-flat-v1")),
+        partitions: vec![
+            predicate_index::PartitionPredicate {
+                partition: token("document"),
+                predicate: owner(),
+            },
+            predicate_index::PartitionPredicate {
+                partition: token("chat"),
+                predicate: owner(),
+            },
+        ],
+        sort_attribute: token("updated-at"),
+        sort_direction: SortDirection::Desc,
+        tie_break_direction: SortDirection::Desc,
+        limit: 20,
+    })
+    .unwrap();
+    let connection = storage.connection();
+    driver::execute(
+        &connection,
+        "INSERT INTO index_documents (record_key, profile, partition, state) VALUES ('GraphqlSoupDocument:1', 'soup-flat-v1', 'document', 0), ('GraphqlSoupChat:1', 'soup-flat-v1', 'chat', 0)",
+        Vec::new(),
+    )
+    .unwrap();
+    assert!(!predicate_scope_is_incomplete(&connection, &query).unwrap());
+    // 1 to 3 are what writers store; the others only a malformed file holds.
+    for state in [1, 2, 3, 7, -1] {
+        driver::execute(
+            &connection,
+            "UPDATE index_documents SET state = ?1 WHERE record_key = 'GraphqlSoupChat:1'",
+            vec![Value::from_i64(state)],
+        )
+        .unwrap();
+        assert!(
+            predicate_scope_is_incomplete(&connection, &query).unwrap(),
+            "state {state}"
+        );
     }
 }
 
@@ -2261,5 +2375,73 @@ fn injected_memory_io_quota_and_sync_failures_require_reset() {
                 TursoStorageCloseOutcome::ResetRequired(expected)
             );
         }
+    });
+}
+
+#[test]
+fn raw_record_keys_include_unprojected_records_and_preserve_queued_writes() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("permission-retirement").unwrap();
+        let typename = "GraphqlSoupCrmContact";
+        let mut records: Vec<_> = (0..1001)
+            .map(|index| {
+                // Intentionally incomplete: there is no searchable name or timestamp.
+                (
+                    key(&format!("{typename}:{index:04}")),
+                    record("private snapshot"),
+                )
+            })
+            .collect();
+        records.push((key("GraphqlSoupDocument:kept"), record("document")));
+        storage.put_batch(records).await.unwrap();
+        storage
+            .enqueue_mutation(queued("PendingDraft"))
+            .await
+            .unwrap();
+        let mut after = None;
+        let mut removed = 0;
+        loop {
+            let keys = storage
+                .record_keys(typename, after.as_deref(), 1000)
+                .await
+                .unwrap();
+            assert!(keys.len() <= 500);
+            let Some(last) = keys.last() else {
+                break;
+            };
+            after = Some(last.id().unwrap().to_owned());
+            removed += keys.len();
+            storage.delete_batch(&keys).await.unwrap();
+        }
+        assert_eq!(removed, 1001);
+        assert!(
+            storage
+                .record_keys(typename, None, 500)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            storage
+                .get_batch(&[key("GraphqlSoupDocument:kept")])
+                .await
+                .unwrap()[0]
+                .is_some()
+        );
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 1);
+        let plan = driver::query(&storage.connection(),
+            "EXPLAIN QUERY PLAN SELECT id FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3",
+            vec![text(typename), text(""), Value::from_i64(500)]).unwrap();
+        let details = plan
+            .iter()
+            .map(|row| required_text(row, 3).unwrap())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            details.contains("SEARCH")
+                && !details.contains("SCAN records")
+                && !details.contains("TEMP B-TREE"),
+            "{details}"
+        );
     });
 }

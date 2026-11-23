@@ -5,7 +5,7 @@
 //! request forgery vector against the internal network.
 
 use std::error::Error;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use reqwest::StatusCode;
 use thiserror::Error;
@@ -80,7 +80,7 @@ pub(super) async fn assert_not_internal(url: &Url) -> Result<(), FetchError> {
         .map_err(FetchError::DnsLookupFailed)?;
 
     for addr in addrs {
-        if is_private_ip(&addr.ip()) {
+        if is_non_public_ip(&addr.ip()) {
             tracing::warn!(host, ip = %addr.ip(), "blocked request to private/internal IP");
             return Err(FetchError::PrivateIp);
         }
@@ -89,27 +89,72 @@ pub(super) async fn assert_not_internal(url: &Url) -> Result<(), FetchError> {
     Ok(())
 }
 
-pub(super) fn is_private_ip(ip: &IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            v4.is_loopback()
-                || v4.is_private()
-                || v4.is_link_local()
-                || v4.is_unspecified()
-                || v4.is_broadcast()
-        }
-        IpAddr::V6(v6) => {
-            if let Some(mapped_v4) = v6.to_ipv4_mapped() {
-                return is_private_ip(&IpAddr::V4(mapped_v4));
-            }
-            v6.is_loopback()
-                || v6.is_unspecified()
-                // fc00::/7 — Unique Local Addresses (IPv6 equivalent of RFC1918).
-                || v6.is_unique_local()
-                // fe80::/10 — Link-local; reachable on the local segment only.
-                || v6.is_unicast_link_local()
-        }
+pub(super) fn is_non_public_ip(ip: &IpAddr) -> bool {
+    match *ip {
+        IpAddr::V4(v4) => is_blocked_ipv4(v4),
+        IpAddr::V6(v6) => match embedded_ipv4(v6) {
+            Some(embedded) => is_blocked_ipv4(embedded),
+            None => is_blocked_ipv6(v6),
+        },
     }
+}
+
+fn is_blocked_ipv4(ip: Ipv4Addr) -> bool {
+    let [first, second, third, _] = ip.octets();
+
+    // 0.0.0.0/8: "this network".
+    first == 0
+        || ip.is_private()
+        || ip.is_loopback()
+        // 169.254.0.0/16, including the 169.254.169.254 metadata service.
+        || ip.is_link_local()
+        // 100.64.0.0/10: carrier-grade NAT and Tailscale.
+        || (first == 100 && (second & 0xc0) == 64)
+        // 192.0.0.0/24: IETF protocol assignments.
+        || (first == 192 && second == 0 && third == 0)
+        // 198.18.0.0/15: benchmarking.
+        || (first == 198 && (second & 0xfe) == 18)
+        || ip.is_documentation()
+        || ip.is_multicast()
+        // 240.0.0.0/4 reserved, and the broadcast address.
+        || first >= 240
+}
+
+fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
+    let segments = ip.segments();
+
+    // Only global unicast (2000::/3) is public. Outside it are loopback,
+    // multicast, unique-local (including the fd00:ec2::254 metadata
+    // service), link-local, local-use NAT64, and the unassigned space.
+    (segments[0] & 0xe000) != 0x2000
+        // 2001::/32: Teredo, which tunnels to an obfuscated IPv4 address.
+        || (segments[0] == 0x2001 && segments[1] == 0)
+        // 2001:db8::/32 and 3fff::/20: documentation.
+        || (segments[0] == 0x2001 && segments[1] == 0x0db8)
+        || (segments[0] == 0x3fff && (segments[1] & 0xf000) == 0)
+}
+
+/// The IPv4 address an IPv6 address carries: IPv4-mapped (`::ffff:0:0/96`),
+/// NAT64 (`64:ff9b::/96`), IPv4-compatible (`::/96`), or 6to4 (`2002::/16`).
+fn embedded_ipv4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    if let Some(mapped) = ip.to_ipv4_mapped() {
+        return Some(mapped);
+    }
+
+    let segments = ip.segments();
+    let low_bits = Ipv4Addr::from((u32::from(segments[6]) << 16) | u32::from(segments[7]));
+
+    if segments[..6] == [0x64, 0xff9b, 0, 0, 0, 0] || segments[..6] == [0; 6] {
+        return Some(low_bits);
+    }
+
+    if segments[0] == 0x2002 {
+        return Some(Ipv4Addr::from(
+            (u32::from(segments[1]) << 16) | u32::from(segments[2]),
+        ));
+    }
+
+    None
 }
 
 /// Issue a GET against `url`. The response is returned without inspecting its
@@ -215,21 +260,21 @@ mod tests {
 
     #[test]
     fn ipv6_loopback_is_blocked() {
-        assert!(is_private_ip(&IpAddr::V6(Ipv6Addr::LOCALHOST)));
+        assert!(is_non_public_ip(&IpAddr::V6(Ipv6Addr::LOCALHOST)));
     }
 
     #[test]
     fn ipv6_unspecified_is_blocked() {
-        assert!(is_private_ip(&IpAddr::V6(Ipv6Addr::UNSPECIFIED)));
+        assert!(is_non_public_ip(&IpAddr::V6(Ipv6Addr::UNSPECIFIED)));
     }
 
     #[test]
     fn ipv6_unique_local_is_blocked() {
         // fc00::/7 — IPv6 equivalent of RFC1918.
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "fc00::1".parse::<Ipv6Addr>().unwrap()
         )));
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "fd12:3456:789a::1".parse::<Ipv6Addr>().unwrap()
         )));
     }
@@ -237,10 +282,10 @@ mod tests {
     #[test]
     fn ipv6_link_local_is_blocked() {
         // fe80::/10 — only reachable on the local link.
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "fe80::1".parse::<Ipv6Addr>().unwrap()
         )));
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
                 .parse::<Ipv6Addr>()
                 .unwrap()
@@ -250,11 +295,11 @@ mod tests {
     #[test]
     fn ipv6_mapped_v4_loopback_is_blocked() {
         // ::ffff:127.0.0.1 should be treated as 127.0.0.1.
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "::ffff:127.0.0.1".parse::<Ipv6Addr>().unwrap()
         )));
         // ::ffff:10.0.0.1 should be treated as RFC1918 10.0.0.0/8.
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "::ffff:10.0.0.1".parse::<Ipv6Addr>().unwrap()
         )));
     }
@@ -262,23 +307,111 @@ mod tests {
     #[test]
     fn ipv6_public_is_allowed() {
         // 2001:4860:4860::8888 — Google public DNS.
-        assert!(!is_private_ip(&IpAddr::V6(
+        assert!(!is_non_public_ip(&IpAddr::V6(
             "2001:4860:4860::8888".parse::<Ipv6Addr>().unwrap()
         )));
     }
 
     #[test]
     fn ipv4_public_is_allowed() {
-        assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
+        assert!(!is_non_public_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
     }
 
     #[test]
     fn ipv4_private_ranges_blocked() {
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::LOCALHOST)));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::UNSPECIFIED)));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::BROADCAST)));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1))));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1))));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1))));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::LOCALHOST)));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::UNSPECIFIED)));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::BROADCAST)));
+    }
+
+    #[test]
+    fn blocks_every_non_public_range() {
+        let blocked = [
+            // 0.0.0.0/8, not just 0.0.0.0.
+            "0.1.2.3",
+            // 100.64.0.0/10: carrier-grade NAT and Tailscale.
+            "100.64.0.1",
+            "100.127.255.254",
+            "192.0.0.1",
+            "198.18.0.1",
+            "198.19.255.255",
+            "192.0.2.1",
+            "224.0.0.1",
+            "240.0.0.1",
+            "255.255.255.255",
+            "ff02::1",
+            "fec0::1",
+            "2001:db8::1",
+            "64:ff9b:1::1",
+            "100::1",
+            "3fff::1",
+            // SIIT IPv4-translated ::ffff:0:127.0.0.1, and unassigned space.
+            "::ffff:0:7f00:1",
+            "4000::1",
+            // fd00:ec2::254: the EC2 metadata service over IPv6.
+            "fd00:ec2::254",
+            // NAT64 wrapping 127.0.0.1 and 169.254.169.254.
+            "64:ff9b::7f00:1",
+            "64:ff9b::a9fe:a9fe",
+            // IPv4-compatible ::127.0.0.1 and ::10.0.0.1.
+            "::7f00:1",
+            "::a00:1",
+            // 6to4 wrapping 127.0.0.1 and 100.64.0.1.
+            "2002:7f00:1::",
+            "2002:6440:1::",
+            // Teredo.
+            "2001::1",
+            "2001:0:4136:e378:8000:63bf:3fff:fdd2",
+            // IPv4-mapped CGNAT.
+            "::ffff:100.64.0.1",
+        ];
+        for ip in blocked {
+            assert!(
+                is_non_public_ip(&ip.parse().unwrap()),
+                "{ip} should be blocked"
+            );
+        }
+    }
+
+    #[test]
+    fn allows_public_addresses_including_wrapped_public_v4() {
+        let allowed = [
+            "8.8.8.8",
+            "100.63.255.255",
+            "100.128.0.1",
+            "198.20.0.1",
+            "2606:4700:4700::1111",
+            "64:ff9b::808:808",
+            "2002:808:808::",
+            "::ffff:1.1.1.1",
+        ];
+        for ip in allowed {
+            assert!(
+                !is_non_public_ip(&ip.parse().unwrap()),
+                "{ip} should be allowed"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn assert_not_internal_blocks_wrapped_and_cgnat_literals() {
+        for raw in [
+            "http://100.64.0.1/",
+            "http://0.1.2.3/",
+            "http://[64:ff9b::7f00:1]/",
+            "http://[::127.0.0.1]/",
+            "http://[::ffff:169.254.169.254]/",
+            "http://[2002:7f00:1::]/",
+            "http://[fd00:ec2::254]/",
+        ] {
+            let url = Url::parse(raw).unwrap();
+            assert!(
+                matches!(assert_not_internal(&url).await, Err(FetchError::PrivateIp)),
+                "{raw} should be refused"
+            );
+        }
     }
 }

@@ -1,5 +1,6 @@
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import { cn } from '@ui';
 import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { ComposeRecipientInput } from '../components/compose-recipient-input';
@@ -177,11 +178,14 @@ export function ComposeRecipients(props: {
     extraFocusIn?: () => void
   ): RowFocusHandlers => ({
     onRowFocusIn: () => {
+      // A tap can focus the summary before the click that opens the editor.
+      if (showSummary(field)) return;
       clearTimeout(collapseTimer);
       setActiveField(field);
       extraFocusIn?.();
     },
     onRowFocusOut: (e) => {
+      if (activeField() !== field) return;
       const row = e.currentTarget as HTMLElement;
       if (e.relatedTarget instanceof Node && row.contains(e.relatedTarget))
         return;
@@ -204,6 +208,7 @@ export function ComposeRecipients(props: {
       }}
       inputId={opts?.inputId}
       options={ctx.recipientOptions}
+      createSource={ctx.createRecipientSource}
       selfEmail={ctx.fromAddress?.()}
       selectedOptions={ctx.recipients()[field]}
       setSelectedOptions={(next) => {
@@ -237,7 +242,10 @@ export function ComposeRecipients(props: {
         <button
           type="button"
           class="ph-no-capture w-full min-h-9 flex items-center text-base text-ink text-left"
-          onClick={() => activate(field)}
+          onClick={() => {
+            setActiveField(field);
+            triggerFocusInput(() => inputEls[field]);
+          }}
         >
           <span class="truncate">{summaryParts(field).names}</span>
           <Show when={summaryParts(field).extra > 0}>

@@ -52,6 +52,7 @@ view_rows = ["ports"]
 # Postgres persistence for databases/tables/columns/rows, and cells through
 # the properties adapter.
 postgres = [
+  "activity/outbound",
   "dep:anyhow",
   "dep:entity_access_db_utils",
   "dep:properties",

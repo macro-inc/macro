@@ -18,8 +18,11 @@ export function buildCrmViewShareUrl(config: CrmViewConfig): string {
   return url.toString();
 }
 
-export async function copyCrmViewLink(config: CrmViewConfig) {
-  await copyCrmLink(buildCrmViewShareUrl(config));
+export async function copyCrmViewLink(
+  config: CrmViewConfig,
+  options: { silent?: boolean } = {}
+) {
+  return copyCrmLink(buildCrmViewShareUrl(config), options);
 }
 /** A pipeline's link opens Customers on it. */
 export async function copyCrmPipelineLink(pipelineId: string) {
@@ -30,12 +33,14 @@ export async function copyCrmPipelineLink(pipelineId: string) {
     ).toString()
   );
 }
-async function copyCrmLink(url: string) {
+async function copyCrmLink(url: string, options: { silent?: boolean } = {}) {
   try {
     await navigator.clipboard.writeText(url);
-    toast.success('Link copied to clipboard');
+    if (!options.silent) toast.success('Link copied to clipboard');
+    return true;
   } catch {
     toast.failure('Failed to copy link');
+    return false;
   }
 }
 export async function copyCrmRecordLink(target: {

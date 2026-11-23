@@ -1,9 +1,9 @@
-import Reply from '@phosphor/arrow-bend-up-left.svg';
-import Envelope from '@phosphor/envelope.svg';
-import File from '@phosphor/file.svg';
-import Hash from '@phosphor/hash.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Table from '@phosphor/table.svg';
+import Reply from '@icon/system/regular/arrow-bend-up-left.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import File from '@icon/system/regular/file.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Table from '@icon/system/regular/table.svg';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { WorkspaceView } from '../../core/dummy-workspace';

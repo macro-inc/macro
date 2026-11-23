@@ -60,7 +60,7 @@ pub(super) async fn thread_metadata_by_ids(
     .await
 }
 
-#[tracing::instrument(err, skip(pool, thread_ids))]
+#[tracing::instrument(err, skip(pool, viewer, thread_ids))]
 pub(super) async fn thread_mail_projections_by_ids(
     pool: &PgPool,
     viewer: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -245,7 +245,7 @@ pub(super) async fn messages_by_thread_id_paginated(
             headers_jsonb, created_at, updated_at
         FROM email_messages
         WHERE thread_id = $1
-          AND NOT (is_draft AND COALESCE((mailbox_state->>'provider_missing')::boolean, false))
+          AND NOT COALESCE((mailbox_state->>'provider_missing')::boolean, false)
         ORDER BY COALESCE(internal_date_ts, sent_at, created_at) DESC, id DESC
         LIMIT $2 OFFSET $3
         "#,
@@ -307,37 +307,57 @@ pub(super) async fn latest_content_message_rows(
 }
 
 /// Find macro drafts that reply to any of the given messages but live in a
-/// different thread within one of the accessible inboxes. These are reply drafts
-/// the user moved to another of their inboxes by switching the sender; surfacing
-/// them lets the original conversation reopen the draft with its sender.
+/// different thread within one of the accessible inboxes. This includes replies
+/// from a shared conversation and replies moved by switching the sender.
 pub(super) async fn cross_inbox_reply_drafts(
     pool: &PgPool,
     replying_to_ids: &[Uuid],
     link_ids: &[Uuid],
     exclude_thread_id: Uuid,
 ) -> Result<Vec<MessageRow>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
+
+    // Outlook assigns a provider ID to a Macro draft. Its mailbox draft row
+    // still identifies it as Macro-authored, as in the thread's draft projection.
+    // Look up each inbox and parent pair together so the reply index can use
+    // both keys. Check the draft marker only for rows from that bounded set.
     let rows = sqlx::query_as!(
         DbMessageRow,
         r#"
-        SELECT
-            draft_generation, id, provider_id, thread_id, provider_thread_id, replying_to_id,
-            global_id, link_id, provider_history_id, internal_date_ts, snippet,
-            size_estimate, subject, sent_at, has_attachments, is_read, is_starred,
-            is_sent, is_draft, body_text, body_html_sanitized, body_macro,
-            headers_jsonb, created_at, updated_at
-        FROM email_messages
-        WHERE is_draft = true
-          AND provider_id IS NULL
-          AND replying_to_id = ANY($1)
-          AND link_id = ANY($2)
-          AND thread_id <> $3
+        SELECT m.*
+        FROM (SELECT DISTINCT id FROM unnest($2::uuid[]) AS links(id)) inbox
+        CROSS JOIN (SELECT DISTINCT id FROM unnest($1::uuid[]) AS messages(id)) parent
+        CROSS JOIN LATERAL (
+            SELECT
+                draft_generation, m.id, provider_id, thread_id, provider_thread_id, replying_to_id,
+                global_id, link_id, provider_history_id, internal_date_ts, snippet,
+                size_estimate, subject, sent_at, has_attachments, is_read, is_starred,
+                is_sent, is_draft, body_text, body_html_sanitized, body_macro,
+                headers_jsonb, created_at, updated_at
+            FROM email_messages m
+            WHERE m.link_id = inbox.id
+              AND m.replying_to_id = parent.id
+              AND m.thread_id <> $3
+              AND m.is_draft
+              AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
+            OFFSET 0
+        ) m
+        WHERE m.provider_id IS NULL OR EXISTS (
+            SELECT 1 FROM email_mailbox_drafts d
+            WHERE d.message_id = m.id AND NOT d.delete_requested
+            OFFSET 0
+        )
         "#,
         replying_to_ids,
         link_ids,
         exclude_thread_id,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     Ok(rows.into_iter().map(MessageRow::from).collect())
 }
@@ -403,6 +423,15 @@ pub(super) async fn update_thread_metadata(
     thread_id: Uuid,
     link_id: Uuid,
 ) -> Result<(), sqlx::Error> {
+    // User writes share the link lock, so two in one thread can run at once.
+    // Taking the thread row first makes the later recompute read what the
+    // earlier one committed, not the snapshot from before it waited.
+    sqlx::query!(
+        "SELECT id FROM email_threads WHERE id = $1 FOR NO KEY UPDATE",
+        thread_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
     email_db_client::threads::update::recompute_thread_metadata(tx, thread_id, link_id).await
 }
 
@@ -448,6 +477,7 @@ pub(super) async fn update_thread_project(
     thread_id: Uuid,
     project_id: Option<&str>,
 ) -> Result<bool, sqlx::Error> {
+    let mut transaction = pool.begin().await?;
     let result = sqlx::query!(
         r#"
         UPDATE email_threads
@@ -457,10 +487,20 @@ pub(super) async fn update_thread_project(
         thread_id,
         project_id,
     )
-    .execute(pool)
+    .execute(transaction.as_mut())
     .await?;
-
-    Ok(result.rows_affected() > 0)
+    if result.rows_affected() == 0 {
+        return Ok(false);
+    }
+    entity_access_db_utils::project_grants::refuse_filing_in(
+        &mut transaction,
+        &thread_id,
+        model_entity::EntityType::EmailThread,
+        project_id,
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok(true)
 }
 
 /// Get the current project_id for a thread.

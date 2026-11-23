@@ -2,7 +2,7 @@ import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
 import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { SoupChatInput } from '@app/features/chat/SoupChatInput';
+import { MobileAgentComposer } from '@app/features/agents-view/mobile-agent-composer';
 import {
   makeMarkDoneAction,
   resolveEntityActionViewContext,
@@ -41,7 +41,6 @@ import {
   CollapsedSoupViewTabs,
   MobileSoupViewTabs,
   SoupViewTabs,
-  useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { useIsHomeView } from '@app/features/next-soup/soup-view/use-is-home-view';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
@@ -250,6 +249,10 @@ interface SoupViewProps {
   header?: JSX.Element;
   /** Compose a detail outlet while keeping the list's state initialized. */
   renderContent?: (list: () => JSX.Element) => JSX.Element;
+  /** Optional composed destination for ordinary row and keyboard activation. */
+  onOpenEntity?: SoupViewListProps['onOpenEntity'];
+  /** Pinned above the list's rows, such as a block's tutorial row. */
+  listStart?: JSX.Element;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -393,69 +396,88 @@ export const SoupView = (props: SoupViewProps) => {
 
   const content = () => (
     <div
-      class="size-full flex flex-col @container"
+      class="relative size-full flex flex-col @container"
+      style={
+        isTouchDevice() && props.header === undefined
+          ? {
+              '--mobile-content-inset-top':
+                'calc(var(--safe-top, 0px) + 3.75rem)',
+            }
+          : undefined
+      }
       data-list-view={activeListView()}
     >
       <Show when={props.header === undefined} fallback={props.header}>
         <div class="flex flex-col w-full">
-          <SplitHeaderLeft>
-            <div
-              class={cn(
-                'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
-                {
-                  'shrink-0': !isTouchDevice(),
-                  'w-full flex-1 min-w-0': isTouchDevice(),
-                }
-              )}
-            >
-              {/* On mobile/tablet the header strip hosts the filter pills instead of
+          <Show
+            when={!isTouchDevice()}
+            fallback={
+              <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex min-w-0 pt-[calc(var(--safe-top,0px)+0.5rem)]">
+                <MobileSoupViewTabs />
+              </header>
+            }
+          >
+            <SplitHeaderLeft>
+              <div
+                class={cn(
+                  'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
+                  {
+                    'shrink-0': !isTouchDevice(),
+                    'w-full flex-1 min-w-0': isTouchDevice(),
+                  }
+                )}
+              >
+                {/* On mobile/tablet the header strip hosts the filter pills instead of
                 the view title (the bottom accessory region now belongs to the
                 global views row). */}
-              <Show when={isTouchDevice()}>
-                <MobileSoupViewTabs />
-              </Show>
-              <Show when={!isTouchDevice()}>
-                <div class="flex items-center gap-1">
-                  <span class="text-sm font-semibold">{props.viewName}</span>
-                  <Show when={docsUrl()}>
-                    {(url) => (
-                      <Button
-                        aria-label="View documentation"
-                        tooltip="View documentation"
-                        size="icon-sm"
-                        variant="ghost"
-                        class="@max-[380px]/split-header:hidden"
-                        onClick={() => openExternalUrl(url())}
-                      >
-                        <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-                      </Button>
-                    )}
-                  </Show>
-                </div>
-              </Show>
-              <Show when={!isComponentListView('search')}>
-                <Show when={!isTouchDevice()}>
-                  <CollapsibleHeaderItem
-                    id="tabs"
-                    priority={1}
-                    containerClass="h-full"
-                  >
-                    {(isCollapsed) => (
-                      <Show
-                        when={!isCollapsed()}
-                        fallback={props.customTabs ?? <CollapsedSoupViewTabs />}
-                      >
-                        {props.customTabs ?? <SoupViewTabs />}
-                      </Show>
-                    )}
-                  </CollapsibleHeaderItem>
+                <Show when={isTouchDevice()}>
+                  <MobileSoupViewTabs />
                 </Show>
-              </Show>
-              <Show when={!isTouchDevice() && isComponentListView('mail')}>
-                <InboxSelector />
-              </Show>
-            </div>
-          </SplitHeaderLeft>
+                <Show when={!isTouchDevice()}>
+                  <div class="flex items-center gap-1">
+                    <span class="text-sm font-semibold">{props.viewName}</span>
+                    <Show when={docsUrl()}>
+                      {(url) => (
+                        <Button
+                          aria-label="View documentation"
+                          tooltip="View documentation"
+                          size="icon-sm"
+                          variant="ghost"
+                          class="@max-[380px]/split-header:hidden"
+                          onClick={() => openExternalUrl(url())}
+                        >
+                          <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                        </Button>
+                      )}
+                    </Show>
+                  </div>
+                </Show>
+                <Show when={!isComponentListView('search')}>
+                  <Show when={!isTouchDevice()}>
+                    <CollapsibleHeaderItem
+                      id="tabs"
+                      priority={1}
+                      containerClass="h-full"
+                    >
+                      {(isCollapsed) => (
+                        <Show
+                          when={!isCollapsed()}
+                          fallback={
+                            props.customTabs ?? <CollapsedSoupViewTabs />
+                          }
+                        >
+                          {props.customTabs ?? <SoupViewTabs />}
+                        </Show>
+                      )}
+                    </CollapsibleHeaderItem>
+                  </Show>
+                </Show>
+                <Show when={!isTouchDevice() && isComponentListView('mail')}>
+                  <InboxSelector />
+                </Show>
+              </div>
+            </SplitHeaderLeft>
+          </Show>
           <Show when={!isTouchDevice()}>
             <SplitHeaderRight>
               <Show
@@ -476,7 +498,7 @@ export const SoupView = (props: SoupViewProps) => {
                 }
               >
                 <Show when={props.filterBarVariant !== 'tag'}>
-                  <HeaderActionGroup label="Filters">
+                  <HeaderActionGroup label="Filters" size="md">
                     <UnifiedFilterDropdown
                       grouped
                       hideLabel
@@ -486,7 +508,7 @@ export const SoupView = (props: SoupViewProps) => {
                     />
                   </HeaderActionGroup>
                 </Show>
-                <HeaderActionGroup label="View options">
+                <HeaderActionGroup label="View options" size="md">
                   <Show when={!isComponentListView('home')}>
                     <SoupViewContextSort grouped />
                   </Show>
@@ -499,7 +521,7 @@ export const SoupView = (props: SoupViewProps) => {
                   label={`Search ${props.viewName}`}
                   value={soupView.searchText()}
                   onValueChange={soupView.setSearchText}
-                  onEscape={() => panel.panelRef()?.focus()}
+                  focusResults={() => panel.panelRef()?.focus()}
                   registerFocus={(focus) => (focusSearch = focus)}
                 />
               </Show>
@@ -516,7 +538,10 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <SoupViewList />
+          <SoupViewList
+            listStart={props.listStart}
+            onOpenEntity={props.onOpenEntity}
+          />
         </Suspense>
       </div>
       <Suspense>
@@ -531,7 +556,7 @@ export const SoupView = (props: SoupViewProps) => {
         >
           <div class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none">
             <div class="pointer-events-auto w-full min-w-0 max-w-3xl">
-              <SoupChatInput />
+              <MobileAgentComposer />
             </div>
           </div>
         </Show>
@@ -544,6 +569,8 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   rowEntry?: SoupRowEntry;
   listHeader?: JSX.Element;
+  /** Scrolls above the rows, outside them, so list focus skips it. */
+  listStart?: JSX.Element;
   groupHeader?: import('solid-js').Component<
     GroupHeaderProps & { highlighted?: boolean }
   >;
@@ -564,7 +591,6 @@ interface SoupViewListProps {
     event?: KeyboardEvent | MouseEvent
   ) => boolean;
   uploadProjectId?: string;
-  disableTabHotkeys?: boolean;
   customScrollbarHidden?: boolean;
   scopeId?: string;
 }
@@ -578,13 +604,13 @@ export const SoupViewList = (props: SoupViewListProps) => (
     <SoupViewListContent
       rowEntry={props.rowEntry}
       listHeader={props.listHeader}
+      listStart={props.listStart}
       groupHeader={props.groupHeader}
       customScrollbarHidden={props.customScrollbarHidden}
       scopeId={props.scopeId}
       onOpenProject={props.onOpenProject}
       onOpenEntity={props.onOpenEntity}
       uploadProjectId={props.uploadProjectId}
-      disableTabHotkeys={props.disableTabHotkeys}
       timestamp={props.timestamp}
       navigationKey={props.navigationKey}
       emptyState={props.emptyState}
@@ -757,7 +783,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
-  const { applyTabPreset } = useApplyPreset();
 
   // Resolve imported components at mount, not during module evaluation: the
   // legacy block registry can import Soup while the entity barrel is loading.
@@ -784,12 +809,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     splitHandle: panel.handle,
     virtualizerHandle,
     currentView,
-    activeTab,
-    applyTabPreset,
     fetchNextGroupPage,
     onOpenProject: props.onOpenProject,
     onOpenEntity: props.onOpenEntity,
-    disableTabHotkeys: props.disableTabHotkeys,
   });
 
   // Create markDone action for swipe/click handlers
@@ -1239,6 +1261,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         scrollerRef={setListScrollerRef}
                         virtualizerClass="scrollbar-hidden"
                         class="overflow-hidden flex min-w-0"
+                        start={props.listStart}
                         virtualizerRef={registerVirtualizerHandler}
                         onScrollBottom={debouncedFetchMore}
                         scrollBottomOffset={300}
@@ -1500,6 +1523,8 @@ interface SoupListProps {
   rows: SoupRow[];
   isSticky?: (row: SoupRow) => boolean;
   cache?: CacheSnapshot;
+  /** Scrolls above the rows, below the touch inset. */
+  start?: JSX.Element;
 }
 
 const SoupList = (props: SoupListProps) => {
@@ -1510,12 +1535,16 @@ const SoupList = (props: SoupListProps) => {
 
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
+  const [topInsetRef, setTopInsetRef] = createSignal<HTMLDivElement>();
+  const topInsetSize = createElementSize(topInsetRef);
 
   // Full-frame touch devices: rows under-scroll the status bar; this in-scroll
   // spacer is their resting inset (safe-top — list views have no header).
   // Keyed on touch, not width: an iPad is a full-frame native app but is wider
   // than the mobile breakpoint, so a width check would leave it at 0.
-  const topInset = () => (isTouchDevice() ? (topSpacerSize.height ?? 0) : 0);
+  const topInset = () => (isTouchDevice() ? (topInsetSize.height ?? 0) : 0);
+  // Rows start below the inset and any leading content.
+  const startMargin = () => topSpacerSize.height ?? 0;
 
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
@@ -1572,15 +1601,18 @@ const SoupList = (props: SoupListProps) => {
         }}
         {...soupListContainerAttribute}
       >
-        <div
-          ref={setTopSpacerRef}
-          aria-hidden
-          class="h-0 block touch:h-(--mobile-content-inset-top)"
-        />
+        <div ref={setTopSpacerRef}>
+          <div
+            ref={setTopInsetRef}
+            aria-hidden
+            class="h-0 block touch:h-(--mobile-content-inset-top)"
+          />
+          {props.start}
+        </div>
         <StickyVirtualizer
           cache={props.cache}
           ref={registerVirtualizerHandler}
-          startMargin={topInset()}
+          startMargin={startMargin()}
           data={props.rows}
           isSticky={props.isSticky}
           stickyInset={topInset()}

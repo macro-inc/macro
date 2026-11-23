@@ -64,6 +64,8 @@ fn record(user_id: &MacroUserIdStr<'static>) -> ActivityRecord {
         Utc::now(),
     );
     ActivityRecord {
+        agent_correlation_id: activity.agent_correlation_id,
+        agent_verb: activity.agent_verb,
         id: activity.id,
         actor: activity.actor.clone(),
         subject_id: activity.subject_id.clone(),
@@ -81,7 +83,20 @@ async fn activity_updates_streams_recorded_events() {
     let service = TestSubscriptionService {
         subscriptions: Mutex::new(VecDeque::from([subscription])),
     };
-    let schema = Schema::new(Query, EmptyMutation, ActivitySubscriptionRoot::new(service));
+    let schema = Schema::build(
+        Query,
+        EmptyMutation,
+        ActivitySubscriptionRoot::<
+            _,
+            entity_access::domain::ports::NoOpEntityAccessService,
+            Arc<entity_access::domain::ports::NoOpEntityAccessService>,
+        >::new(service),
+    );
+    let schema = schema
+        .data(Arc::new(
+            entity_access::domain::ports::NoOpEntityAccessService,
+        ))
+        .finish();
     let mut responses = Box::pin(schema.execute_stream(
         async_graphql::Request::new(
             "subscription { activityUpdates { __typename ... on GraphqlActivityEvent { id entityType entityId action { __typename } } } }",
@@ -117,7 +132,20 @@ async fn activity_updates_streams_content_free_invalidation() {
     let service = TestSubscriptionService {
         subscriptions: Mutex::new(VecDeque::from([subscription])),
     };
-    let schema = Schema::new(Query, EmptyMutation, ActivitySubscriptionRoot::new(service));
+    let schema = Schema::build(
+        Query,
+        EmptyMutation,
+        ActivitySubscriptionRoot::<
+            _,
+            entity_access::domain::ports::NoOpEntityAccessService,
+            Arc<entity_access::domain::ports::NoOpEntityAccessService>,
+        >::new(service),
+    );
+    let schema = schema
+        .data(Arc::new(
+            entity_access::domain::ports::NoOpEntityAccessService,
+        ))
+        .finish();
     let mut responses = Box::pin(schema.execute_stream(
         async_graphql::Request::new(
             "subscription { activityUpdates { __typename ... on GraphqlActivityInvalidation { refresh } } }",
@@ -150,7 +178,20 @@ async fn activity_updates_reports_slow_consumers() {
     let service = TestSubscriptionService {
         subscriptions: Mutex::new(VecDeque::from([subscription])),
     };
-    let schema = Schema::new(Query, EmptyMutation, ActivitySubscriptionRoot::new(service));
+    let schema = Schema::build(
+        Query,
+        EmptyMutation,
+        ActivitySubscriptionRoot::<
+            _,
+            entity_access::domain::ports::NoOpEntityAccessService,
+            Arc<entity_access::domain::ports::NoOpEntityAccessService>,
+        >::new(service),
+    );
+    let schema = schema
+        .data(Arc::new(
+            entity_access::domain::ports::NoOpEntityAccessService,
+        ))
+        .finish();
     let mut responses = Box::pin(
         schema.execute_stream(
             async_graphql::Request::new("subscription { activityUpdates { __typename } }")
@@ -176,7 +217,20 @@ async fn activity_updates_requires_an_authenticated_user() {
     let service = TestSubscriptionService {
         subscriptions: Mutex::new(VecDeque::new()),
     };
-    let schema = Schema::new(Query, EmptyMutation, ActivitySubscriptionRoot::new(service));
+    let schema = Schema::build(
+        Query,
+        EmptyMutation,
+        ActivitySubscriptionRoot::<
+            _,
+            entity_access::domain::ports::NoOpEntityAccessService,
+            Arc<entity_access::domain::ports::NoOpEntityAccessService>,
+        >::new(service),
+    );
+    let schema = schema
+        .data(Arc::new(
+            entity_access::domain::ports::NoOpEntityAccessService,
+        ))
+        .finish();
     let mut responses = Box::pin(schema.execute_stream(async_graphql::Request::new(
         "subscription { activityUpdates { __typename } }",
     )));

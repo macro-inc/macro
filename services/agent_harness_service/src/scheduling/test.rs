@@ -129,6 +129,49 @@ async fn one_deadline_bounds_stalled_background_work() {
     assert!(task.await.unwrap_err().is_cancelled());
 }
 
+#[tokio::test(start_paused = true)]
+async fn a_stalled_sweep_holds_up_no_other() {
+    let lifecycle = ServiceLifecycle::default();
+    let interval = Duration::from_secs(60);
+    spawn_sweep(&lifecycle, interval, std::future::pending::<()>);
+    let runs = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&runs);
+    spawn_sweep(&lifecycle, interval, move || {
+        counted.fetch_add(1, Ordering::SeqCst);
+        std::future::ready(())
+    });
+    tokio::time::sleep(interval * 2 + Duration::from_secs(1)).await;
+    // At once, then each minute.
+    assert_eq!(runs.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_slow_sweep_is_followed_by_a_full_interval() {
+    let lifecycle = ServiceLifecycle::default();
+    let interval = Duration::from_secs(60);
+    let slow = interval * 5 / 2;
+    let started = tokio::time::Instant::now();
+    let starts = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&starts);
+    spawn_sweep(&lifecycle, interval, move || {
+        let mut starts = recorded.lock().unwrap();
+        starts.push(started.elapsed());
+        // Only the first sweep runs past its next two ticks.
+        let length = if starts.len() == 1 {
+            slow
+        } else {
+            Duration::ZERO
+        };
+        tokio::time::sleep(length)
+    });
+    tokio::time::sleep(interval * 4).await;
+    // The missed ticks make one late sweep, not a burst of them.
+    assert_eq!(
+        *starts.lock().unwrap(),
+        [Duration::ZERO, slow, slow + interval]
+    );
+}
+
 fn docs_router() -> Router {
     mount_router(Router::new().route(
         "/health",
@@ -181,4 +224,53 @@ async fn health_is_served_at_gateway_prefix() {
             .unwrap();
         assert_eq!(response.status(), expected, "health at {uri}");
     }
+}
+
+/// The suggestions brief names the SDK symbols a session reads in its one
+/// documentation call; a renamed symbol would leave the session guessing.
+#[test]
+fn the_suggestions_brief_names_only_real_sdk_symbols() {
+    let missing: Vec<_> = suggestions::domain::prompt::SYMBOLS
+        .iter()
+        .filter(|symbol| agent_code_mode::domain::symbol_reference(symbol).is_none())
+        .collect();
+    assert!(missing.is_empty(), "unknown SDK symbols: {missing:?}");
+    let reference = agent_code_mode::domain::index_digest(
+        suggestions::domain::prompt::SYMBOLS,
+        suggestions::domain::prompt::FIELDS_OF,
+    );
+    for symbol in suggestions::domain::prompt::SYMBOLS {
+        assert!(
+            reference.contains(&format!("- `{symbol}`:")),
+            "{symbol} isn't in the reference"
+        );
+    }
+    for class in suggestions::domain::prompt::FIELDS_OF {
+        assert!(
+            reference.contains(&format!("### {class}\nFields:")),
+            "{class}'s fields aren't in the reference"
+        );
+    }
+}
+
+/// A live check's error reaches `routine.unusable_knobs`'s span, so a stored
+/// owner that doesn't parse, which carries the raw principal, stays out of it
+/// however the lookup wraps it; other errors keep their detail.
+#[test]
+fn live_check_errors_leave_out_a_stored_owner() {
+    let principal = "someone-stored-wrongly";
+    let decode = || {
+        let Err(error) = model_owner::Owner::from_principal_str(principal) else {
+            panic!("{principal} parsed");
+        };
+        sqlx::Error::Decode(Box::new(error))
+    };
+    let chat = chat::domain::models::ChatErr::Unknown(anyhow::Error::from(decode()));
+    for report in [live_check_error(&decode()), live_check_error(&chat)] {
+        let text = format!("{report:?} {report}");
+        assert!(!text.contains("someone"), "{text}");
+        assert!(text.contains("stored owner doesn't parse"), "{text}");
+    }
+    let timeout = live_check_error(&sqlx::Error::PoolTimedOut);
+    assert!(format!("{timeout}").contains("PoolTimedOut"), "{timeout}");
 }

@@ -6,6 +6,7 @@ use async_graphql::{Context, Enum, SimpleObject, dataloader::DataLoader, dataloa
 use email::domain::focus::{FocusCategory, FocusQueries, FocusStore, ImportanceTrend, ThreadFocus};
 use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
+use tracing::Instrument;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -127,14 +128,17 @@ pub struct GraphqlEmailThreadFocus {
     /// Someone else sent the latest message and it waits on the owner's answer.
     /// Never true together with `needs_follow_up`.
     needs_reply: bool,
-    /// The owner sent the latest message and should come back to the thread: it
-    /// has an open loop or has waited for an answer. Never true together with
-    /// `needs_reply`.
+    /// The owner sent the latest message and the thread is back to follow up:
+    /// no answer came in the wait, or its due day has come. Never true together
+    /// with `needs_reply`.
     needs_follow_up: bool,
     /// When the classification was made, in RFC 3339 format.
     classified_at: String,
     /// Which way `importance` is moving.
     importance_trend: GraphqlEmailImportanceTrend,
+    /// The day the thread's mail says it is due, as `YYYY-MM-DD`: a calendar date
+    /// the viewer's time zone never shifts. Absent when it names no open deadline.
+    due_on: Option<String>,
 }
 
 impl From<ThreadFocus> for GraphqlEmailThreadFocus {
@@ -147,6 +151,9 @@ impl From<ThreadFocus> for GraphqlEmailThreadFocus {
             needs_follow_up: focus.needs_follow_up,
             classified_at: focus.classified_at.to_rfc3339(),
             importance_trend: focus.importance_trend.into(),
+            due_on: focus
+                .due_on
+                .map(|due_on| due_on.format("%Y-%m-%d").to_string()),
         }
     }
 }
@@ -178,8 +185,10 @@ pub fn email_thread_focus_loader(
     user_id: MacroUserIdStr<'static>,
     reader: Arc<dyn EmailFocusReader>,
 ) -> DataLoader<EmailThreadFocusLoader> {
-    let loader = DataLoader::new(EmailThreadFocusLoader { user_id, reader }, tokio::spawn)
-        .max_batch_size(MAX_FOCUS_KEYS);
+    let loader = DataLoader::new(EmailThreadFocusLoader { user_id, reader }, |batch| {
+        tokio::spawn(batch.in_current_span())
+    })
+    .max_batch_size(MAX_FOCUS_KEYS);
     // Subscription connection data outlives one payload; never serve a stale verdict.
     loader.enable_all_cache(false);
     loader

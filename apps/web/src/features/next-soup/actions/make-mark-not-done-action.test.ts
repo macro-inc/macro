@@ -6,8 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type UndoneArgs = Parameters<typeof executeMarkEntitiesUndone>[0];
 const mocks = vi.hoisted(() => ({
-  graphql: true,
-  threadCanBeMarkedNotDone: vi.fn(async (_id: string) => true),
   executeMarkEntitiesUndone:
     vi.fn<(args: UndoneArgs) => Promise<EmailArchiveDisposition>>(),
   outcomes: new Map<string, EmailArchiveDisposition | Error>(),
@@ -26,8 +24,6 @@ const mocks = vi.hoisted(() => ({
   fetchDoneNotificationIds: vi.fn(async (ids: string[]) =>
     ids.map((id) => `server-${id}`)
   ),
-  invalidateAllSoup: vi.fn(),
-  refetchSoupEntity: vi.fn(async () => {}),
   resolveMarkEntitiesDoneVariables: vi.fn(
     ({ entities }: { entities: EntityData[] }) => ({
       emailIds: entities.map((e) => e.id),
@@ -39,22 +35,11 @@ const mocks = vi.hoisted(() => ({
   success: vi.fn(),
 }));
 
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => mocks.graphql,
-}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: mocks.alert, failure: mocks.failure, success: mocks.success },
 }));
-vi.mock('@queries/email/thread', () => ({
-  threadCanBeMarkedNotDone: mocks.threadCanBeMarkedNotDone,
-}));
 vi.mock('@queries/notification/user-notifications', () => ({
   fetchDoneNotificationIdsByEventItemIds: mocks.fetchDoneNotificationIds,
-}));
-vi.mock('@queries/soup/cache', () => ({
-  invalidateAllSoup: mocks.invalidateAllSoup,
-  refetchSoupEntity: mocks.refetchSoupEntity,
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   applyEntitiesNotDoneOptimistic: mocks.applyOptimistic,
@@ -80,15 +65,12 @@ function optimisticFor(id: string) {
 describe('makeMarkNotDoneAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.graphql = true;
     mocks.outcomes.clear();
     mocks.writeGate = undefined;
     mocks.notificationFailure = undefined;
-    mocks.threadCanBeMarkedNotDone.mockImplementation(async () => true);
     mocks.fetchDoneNotificationIds.mockImplementation(async (ids) =>
       ids.map((id) => `server-${id}`)
     );
-    mocks.refetchSoupEntity.mockReset().mockResolvedValue(undefined);
     mocks.executeMarkEntitiesUndone.mockImplementation(async (args) => {
       if (args.emailIds.length === 0) {
         if (mocks.notificationFailure) throw mocks.notificationFailure;
@@ -114,26 +96,22 @@ describe('makeMarkNotDoneAction', () => {
     });
   });
 
-  it.each([true, false])(
-    'never unarchives a done thread with no received mail (GraphQL=%s)',
-    async (graphql) => {
-      mocks.graphql = graphql;
-      const action = createAction();
-      const sentOnly = {
-        ...doneEmail('sent-only'),
-        hasReceivedMail: false,
-      } as EntityData;
-      expect(action.canExecute(sentOnly)).toBe(false);
-      await action.execute([sentOnly]);
-      expect(mocks.executeMarkEntitiesUndone).not.toHaveBeenCalled();
-      expect(
-        action.canExecute({
-          ...doneEmail('received'),
-          hasReceivedMail: true,
-        } as EntityData)
-      ).toBe(true);
-    }
-  );
+  it('never unarchives a done thread with no received mail', async () => {
+    const action = createAction();
+    const sentOnly = {
+      ...doneEmail('sent-only'),
+      hasReceivedMail: false,
+    } as EntityData;
+    expect(action.canExecute(sentOnly)).toBe(false);
+    await action.execute([sentOnly]);
+    expect(mocks.executeMarkEntitiesUndone).not.toHaveBeenCalled();
+    expect(
+      action.canExecute({
+        ...doneEmail('received'),
+        hasReceivedMail: true,
+      } as EntityData)
+    ).toBe(true);
+  });
 
   it('unarchives a thread and restores only its notifications', async () => {
     await expect(createAction().execute([doneEmail('inbound')])).resolves.toBe(
@@ -151,17 +129,13 @@ describe('makeMarkNotDoneAction', () => {
     expect(optimisticFor('inbound').settle).toHaveBeenCalledOnce();
     expect(optimisticFor('inbound').rollback).not.toHaveBeenCalled();
     expect(mocks.alert).not.toHaveBeenCalled();
-    expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
-    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
   });
 
-  it('does not refetch REST caches after a queued unarchive', async () => {
+  it('resolves with the queued disposition of a queued unarchive', async () => {
     mocks.outcomes.set('inbound', 'queued');
     await expect(createAction().execute([doneEmail('inbound')])).resolves.toBe(
       'queued'
     );
-    expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
-    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
   });
 
   it.each(['committed', 'queued'] as const)(
@@ -189,8 +163,6 @@ describe('makeMarkNotDoneAction', () => {
         expect.objectContaining({ hideOnMobile: false })
       );
       expect(mocks.failure).not.toHaveBeenCalled();
-      expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
-      expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
     }
   );
 
@@ -204,8 +176,6 @@ describe('makeMarkNotDoneAction', () => {
       'committed',
       'queued',
     ]);
-    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
-    expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
     expect(optimisticFor('committed').rollback).not.toHaveBeenCalled();
     expect(optimisticFor('queued').rollback).not.toHaveBeenCalled();
   });
@@ -239,19 +209,6 @@ describe('makeMarkNotDoneAction', () => {
       'queued'
     );
     expect(optimisticFor('inbound').rollback).not.toHaveBeenCalled();
-    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
-    expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
-  });
-
-  it('does not start a replica-backed REST refresh after GraphQL commits', async () => {
-    mocks.refetchSoupEntity.mockRejectedValueOnce(new Error('must not fetch'));
-    await expect(createAction().execute([doneEmail('inbound')])).resolves.toBe(
-      'committed'
-    );
-    expect(optimisticFor('inbound').rollback).not.toHaveBeenCalled();
-    expect(mocks.refetchSoupEntity).not.toHaveBeenCalled();
-    expect(mocks.invalidateAllSoup).not.toHaveBeenCalled();
-    expect(mocks.alert).not.toHaveBeenCalled();
   });
 
   it('still rejects a completely failed selection for single-thread cache wrappers', async () => {
@@ -296,34 +253,10 @@ describe('makeMarkNotDoneAction', () => {
     await action;
   });
 
-  it('preserves REST notification lookup, single batch and post-success refetch', async () => {
-    mocks.graphql = false;
-    await expect(
-      createAction().execute([doneEmail('a'), doneEmail('b')])
-    ).resolves.toBe('committed');
-    expect(mocks.applyOptimistic).toHaveBeenCalledOnce();
-    expect(mocks.applyOptimistic).toHaveBeenCalledWith({
-      emailIds: ['a', 'b'],
-      notificationIds: ['local-a', 'local-b'],
-    });
-    expect(mocks.executeMarkEntitiesUndone).toHaveBeenCalledOnce();
-    expect(mocks.executeMarkEntitiesUndone).toHaveBeenCalledWith({
-      emailIds: ['a', 'b'],
-      notificationIds: ['local-a', 'local-b', 'server-a', 'server-b'],
-    });
-    expect(
-      mocks.fetchDoneNotificationIds.mock.invocationCallOrder[0]
-    ).toBeLessThan(mocks.executeMarkEntitiesUndone.mock.invocationCallOrder[0]);
-    expect(mocks.refetchSoupEntity).toHaveBeenCalledWith('a', 'emailThread');
-    expect(mocks.refetchSoupEntity).toHaveBeenCalledWith('b', 'emailThread');
-    expect(mocks.invalidateAllSoup).toHaveBeenCalledOnce();
-  });
-
-  it('does not resolve threads when nothing is done', async () => {
+  it('does nothing when nothing is done', async () => {
     await createAction().execute([
       { type: 'email', id: 'not-done', done: false } as EntityData,
     ]);
-    expect(mocks.threadCanBeMarkedNotDone).not.toHaveBeenCalled();
     expect(mocks.executeMarkEntitiesUndone).not.toHaveBeenCalled();
   });
 });

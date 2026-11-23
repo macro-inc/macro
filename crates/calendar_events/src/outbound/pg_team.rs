@@ -1,7 +1,8 @@
 //! PostgreSQL facts for source-scoped team reads.
 //!
-//! Only directly owned/delegated Google sources enter these queries. Neither
-//! channel grants nor team-derived grants can recursively expand access.
+//! Only directly owned/delegated Google and Outlook sources enter these
+//! queries. Neither channel grants nor team-derived grants can recursively
+//! expand access.
 
 use crate::domain::{
     models::{CalendarEvent, CalendarEventOverride, OccurrenceRange},
@@ -164,8 +165,7 @@ impl CalendarTeamRepository for PgCalendarTeamRepository {
             ), authorized_sources AS MATERIALIZED (
                 SELECT eligible.user_id AS shared_by, source.id AS source_id,
                     calendar.id AS calendar_id, calendar.name AS calendar_name, calendar.time_zone,
-                    COALESCE(preference.contributes_to_availability,
-                        account.owner_id = eligible.user_id AND calendar.is_primary) AS contributes,
+                    COALESCE(preference.contributes_to_availability, true) AS contributes,
                     source.normalized_payload
                 FROM visible_accounts eligible
                 JOIN calendar_accounts account ON account.id = eligible.account_id
@@ -271,8 +271,7 @@ impl CalendarTeamRepository for PgCalendarTeamRepository {
     ) -> Result<Vec<AvailabilityCalendar>, Report> {
         let rows = sqlx::query!(r#"
             SELECT calendar.id, calendar.name, calendar.is_primary,
-                COALESCE(preference.contributes_to_availability,
-                    account.owner_id = $1 AND calendar.is_primary) AS "contributes!"
+                COALESCE(preference.contributes_to_availability, true) AS "contributes!"
             FROM calendars calendar JOIN calendar_accounts account ON account.id = calendar.account_id
             LEFT JOIN calendar_availability_preferences preference ON preference.calendar_id = calendar.id AND preference.user_id = $1
             WHERE NOT calendar.is_deleted AND account.sync_status <> 'disabled'

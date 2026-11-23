@@ -4,6 +4,7 @@
 //! transaction. They do not infer consent, authorize users, or commit transactions.
 //! Use `share_permission_db_utils::team_share` for canonical mutations.
 
+use crate::scoped_grants::{Grant, refuse_added_access, refuse_grant};
 use crate::{AccessLevel, EntityAccessSourceType, EntityType, get_nested_project_entities};
 use macro_uuid::Uuid;
 use sqlx::{PgConnection, Postgres, QueryBuilder, Transaction};
@@ -85,6 +86,13 @@ pub async fn upsert_direct(
     team_id: Uuid,
     level: AccessLevel,
 ) -> Result<(), sqlx::Error> {
+    let team = team_id.to_string();
+    let grant = Grant {
+        source_id: &team,
+        source_type: EntityAccessSourceType::Team,
+        access_level: level,
+    };
+    refuse_added_access(&mut *connection, entity_id, entity_type, &[grant]).await?;
     sqlx::query!(
         r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
         VALUES ($1, $2, $3, 'team', $4)
@@ -102,13 +110,14 @@ pub async fn upsert_direct(
 }
 
 /// Delete only the recorded managed team's direct grant, independent of membership.
+/// A scope that may not share removes nothing (see [`crate::scoped_grants`]).
 pub async fn delete_direct(
     connection: &mut PgConnection,
     entity_id: &Uuid,
     entity_type: EntityType,
     managed_team_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(
+    let removed = sqlx::query!(
         r#"DELETE FROM entity_access
         WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'team'
           AND source_id = $3 AND granted_from_project_id IS NULL"#,
@@ -118,7 +127,7 @@ pub async fn delete_direct(
     )
     .execute(connection)
     .await?;
-    Ok(())
+    refuse_grant(removed.rows_affected() > 0)
 }
 
 /// Bind parameters per nested `entity_access` row in the inherited-grant upsert.

@@ -9,19 +9,20 @@ import { match } from 'ts-pattern';
 
 type KeyedEntry =
   | { type: 'message'; message: { id: string } }
+  | { type: 'call'; message: { id: string } }
   | { type: 'activity'; activity: { id: string } };
 
 /** Row identity; activity ids live in their own namespace. */
 export function timelineEntryKey(entry: KeyedEntry): string {
   return match(entry)
-    .with({ type: 'message' }, ({ message }) => message.id)
+    .with({ type: 'message' }, { type: 'call' }, ({ message }) => message.id)
     .with({ type: 'activity' }, ({ activity }) => `activity:${activity.id}`)
     .exhaustive((unknown) => JSON.stringify(unknown));
 }
 
 function timelineEntryPosition(entry: MessageTimelineEntry) {
   return match(entry)
-    .with({ type: 'message' }, ({ message }) => ({
+    .with({ type: 'message' }, { type: 'call' }, ({ message }) => ({
       id: message.id,
       createdAt: message.created_at,
     }))
@@ -37,7 +38,7 @@ export function timelineMessages(
   page: Pick<MessageTimelinePage, 'entries'>
 ): MessageListItem[] {
   return page.entries.flatMap((entry) =>
-    entry.type === 'message' ? [entry.message] : []
+    entry.type === 'activity' ? [] : [entry.message]
   );
 }
 

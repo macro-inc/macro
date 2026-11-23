@@ -1,9 +1,6 @@
-import { createDistancePointerSensor } from '@app/components/drag-drop/create-distance-pointer-sensor';
 import { CollapsibleSection } from '@app/components/view-shell';
-import { t } from '@app/lib/i18n';
-import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
-import { createDraggable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { Button, cn, Tooltip } from '@ui';
+import { SidebarSectionDragHandle } from '@app/components/view-shell/SidebarSectionDragHandle';
+import { cn, Tooltip } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { ChannelSectionKey } from '../../../types';
 import type { useSectionReorder } from './useSectionReorder';
@@ -58,89 +55,21 @@ export function ChannelSectionHeading(props: {
   );
 }
 
-/** Drag from the heading or its grip without toggling disclosure after a drop. */
+/** Drag from the heading; reveal the icon-free reorder control on keyboard focus. */
 export function DraggableChannelSectionHeading(props: {
   section: ChannelSectionKey;
   label: string;
   reorder: ReturnType<typeof useSectionReorder>;
   children: JSX.Element;
 }) {
-  const dragId = `${props.reorder.scope}:${props.section}`;
-  const draggable = createDraggable(dragId, {
-    dragType: 'channel-section',
-    dndScope: props.reorder.scope,
-    section: props.section,
-    get name() {
-      return props.label;
-    },
-    overlayContent: () => (
-      <div class="w-56 p-1">
-        <div class="flex min-w-0 items-center gap-2 text-xs font-medium text-ink">
-          <DotsSixVerticalIcon class="size-3.5 shrink-0 text-ink-muted" />
-          <span class="truncate">{props.label}</span>
-        </div>
-        <p class="mt-2 border-t border-edge-muted pt-2 text-xs text-ink-muted">
-          {t('channelSections.reorderingSection')}
-        </p>
-      </div>
-    ),
-  });
-
-  const pointer = createDistancePointerSensor(8, props.reorder.cancel, {
-    id: `${dragId}:pointer`,
-    manual: true,
-  });
-  const [, actions] = useDragDropContext() ?? [];
-  let didDrag = false;
-
-  actions?.onDragStart(({ draggable: source }) => {
-    if (source.id === dragId) {
-      didDrag = true;
-    }
-  });
-
-  const preventToggleAfterDrag = (event: MouseEvent) => {
-    if (!didDrag || event.detail === 0) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
   return (
-    <div
-      ref={draggable.ref}
-      class="group/section-heading relative cursor-grab active:cursor-grabbing"
-      onMouseDown={(event) => pointer.start(event, dragId)}
-      onPointerDown={() => {
-        didDrag = false;
-      }}
-      on:click={{ capture: true, handleEvent: preventToggleAfterDrag }}
+    <SidebarSectionDragHandle
+      section={props.section}
+      label={props.label}
+      reorder={props.reorder}
+      dragType="channel-section"
     >
-      <Button
-        variant="ghost"
-        appearance="bare"
-        size="icon-xs"
-        data-icon-motion="none"
-        class="absolute -left-(--sidebar-gutter) top-1 z-10 cursor-grab opacity-0 group-hover/section-heading:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
-        aria-label={t('channelSections.reorderSection', { name: props.label })}
-        tooltip={t('channelSections.reorderSectionHint')}
-        onClick={(event: MouseEvent) => event.stopPropagation()}
-        onKeyDown={(event: KeyboardEvent) => {
-          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-          event.stopImmediatePropagation();
-          props.reorder.move(props.section, event.key === 'ArrowUp' ? -1 : 1);
-        }}
-      >
-        <DotsSixVerticalIcon class="-ml-2 size-3" />
-      </Button>
       {props.children}
-    </div>
+    </SidebarSectionDragHandle>
   );
 }

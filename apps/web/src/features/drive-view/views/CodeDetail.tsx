@@ -8,6 +8,7 @@ import { isHtmlFileType } from '@block-code/util/fileMode';
 import { SidePanel } from '@components/app/side-panel';
 import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { Rerun } from '@solid-primitives/keyed';
 import { ok } from 'neverthrow';
 import {
@@ -140,6 +141,7 @@ export function CodeDetail(props: {
 }) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="code"
       label="code document"

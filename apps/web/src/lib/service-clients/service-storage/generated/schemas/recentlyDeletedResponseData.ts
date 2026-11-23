@@ -5,8 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Item } from './item';
+import type { RecentlyDeletedResponseDataNextCursor } from './recentlyDeletedResponseDataNextCursor';
 
 export interface RecentlyDeletedResponseData {
-  /** The items returned from the call */
+  /** The items returned from the call, most recently trashed first */
   items: Item[];
+  /** Pass as `cursor` to get the next page; absent on the last page */
+  next_cursor?: RecentlyDeletedResponseDataNextCursor;
 }

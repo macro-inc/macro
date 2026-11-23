@@ -15,15 +15,13 @@ use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
-/// The shared ingredients fetched for any thread query: thread row, message rows,
-/// senders, recipients, labels, and whether the caller is the owner.
+/// The thread page and its sub-resources, scoped to the viewer.
 struct ThreadFetchResult {
     thread_row: ThreadRow,
     message_rows: Vec<MessageRow>,
     senders: HashMap<Uuid, ContactInfo>,
     recipients: RecipientsByMessageId,
     labels: HashMap<Uuid, Vec<MessageLabel>>,
-    is_owner: bool,
 }
 
 impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B>
@@ -96,6 +94,9 @@ where
                     access_level: AccessLevel::Owner
                 }
             );
+        if !is_owner {
+            message_rows.retain(|row| !row.is_draft);
+        }
 
         let mut message_ids: Vec<Uuid> = message_rows.iter().map(|m| m.db_id).collect();
 
@@ -106,26 +107,29 @@ where
                 senders: HashMap::new(),
                 recipients: HashMap::new(),
                 labels: HashMap::new(),
-                is_owner,
             }));
         }
 
-        // Surface a reply draft the caller moved to another of their inboxes by
-        // switching the sender: it lives in a different thread, so pull it in here
-        // (matched by the message it replies to) and let the reply reopen with it.
-        if let Ok(macro_id) = receipt.get_authenticated_user() {
+        // A reply in another inbox can reopen here when the viewer can edit
+        // the conversation and the reply belongs to an inbox in their Drafts.
+        if (is_owner
+            || receipt
+                .entity_permission()
+                .allows_access_level(AccessLevel::Edit))
+            && let Ok(macro_id) = receipt.get_authenticated_user()
+        {
             let accessible = self
                 .email_repo
                 .inboxes_for_macro_id(macro_id.clone())
                 .await
                 .map_err(anyhow::Error::from)?;
             let link_ids: Vec<Uuid> = accessible.iter().map(|l| l.id).collect();
-            let moved_drafts = self
+            let reply_drafts = self
                 .email_repo
                 .cross_inbox_reply_drafts(&message_ids, &link_ids, thread_id)
                 .await
                 .map_err(anyhow::Error::from)?;
-            for draft in moved_drafts {
+            for draft in reply_drafts {
                 message_ids.push(draft.db_id);
                 message_rows.push(draft);
             }
@@ -158,7 +162,6 @@ where
             senders,
             recipients,
             labels,
-            is_owner,
         }))
     }
 
@@ -168,11 +171,11 @@ where
         mut senders: HashMap<Uuid, ContactInfo>,
         mut recipients: RecipientsByMessageId,
         mut labels: HashMap<Uuid, Vec<MessageLabel>>,
-        is_owner: bool,
+        include_drafts: bool,
     ) -> Result<Vec<Message>, EmailErr> {
         let message_rows: Vec<MessageRow> = message_rows
             .into_iter()
-            .filter(|row| is_owner || !row.is_draft)
+            .filter(|row| include_drafts || !row.is_draft)
             .collect();
         let message_ids: Vec<Uuid> = message_rows.iter().map(|row| row.db_id).collect();
         let message_ids_with_attachments: Vec<Uuid> = message_rows
@@ -288,14 +291,14 @@ where
             senders,
             recipients,
             labels,
-            is_owner,
         }) = self.fetch_thread_core(&receipt, offset, limit).await?
         else {
             return Ok(None);
         };
 
+        // Draft visibility was decided before collecting the page's rows.
         let messages = self
-            .hydrate_full_messages(message_rows, senders, recipients, labels, is_owner)
+            .hydrate_full_messages(message_rows, senders, recipients, labels, true)
             .await?;
 
         Ok(Some(thread_from_row(thread_row, messages)))
@@ -314,7 +317,6 @@ where
             mut senders,
             mut recipients,
             mut labels,
-            is_owner,
         }) = self.fetch_thread_core(&receipt, offset, limit).await?
         else {
             return Ok(None);
@@ -322,7 +324,6 @@ where
 
         let messages: Vec<ParsedMessage> = message_rows
             .into_iter()
-            .filter(|row| is_owner || !row.is_draft)
             .map(|row| {
                 let message_id = row.db_id;
                 parsed_message_from_row(

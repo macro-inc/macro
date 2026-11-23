@@ -153,3 +153,8 @@
 @media (prefers-reduced-motion: reduce) {
   .feature-overview .feature-flow-icon { transition: none; }
 }
+
+/* Public feature links keep the same surfaces as the onboarding illustration. */
+a.feature-flow-node { color: inherit; text-decoration: none; }
+a.feature-flow-node:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 8px; border-radius: 50%; }
+a.feature-flow-node:hover .feature-flow-icon { background-color: color-mix(in srgb, var(--color-ink) 8%, transparent); }

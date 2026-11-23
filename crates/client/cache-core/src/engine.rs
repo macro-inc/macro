@@ -2,7 +2,16 @@
 //! and dependency tracking together behind the API the hosts (wasm worker /
 //! Tauri) expose over RPC.
 
+pub mod authority;
 mod calendar;
+mod hydration;
+mod pass_reads;
+mod people;
+mod retirement;
+mod staged_hydrate;
+pub use hydration::HydrationScope;
+pub use pass_reads::{PassReadSet, PassReads};
+pub use staged_hydrate::StagedHydrate;
 #[cfg(test)]
 mod test;
 
@@ -23,8 +32,8 @@ use crate::link_patch::{
     deduplicate_patches, missing_patch_records,
 };
 use crate::normalize::{
-    DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
-    project_hydration_response,
+    DependencyCompleteness, NormalizeError, NormalizeResult, RecordUpdates, normalize,
+    normalize_with_dependencies, project_hydration_response,
 };
 use crate::predicate::reconciliation::{
     MAX_RECONCILIATION_BASELINE, PredicateBaselineEntry, PredicateReconciliation,
@@ -52,8 +61,8 @@ use crate::record_selection::{
 };
 use crate::revision::{CacheRevision, Revisioned};
 use crate::search::{
-    SearchCatalogs, SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile,
-    SearchRequest, collect_search_changes, project_search_documents, rank_documents,
+    SearchCursor, SearchDocument, SearchDocumentRef, SearchError, SearchPage, SearchProfile,
+    SearchQuery, SearchRanker, SearchRequest, collect_search_changes, project_search_documents,
     snapshot_search_fields, validate_search_request,
 };
 use crate::store::{QueueDiagnostics, Storage};
@@ -63,6 +72,7 @@ use predicate_index::{
     OptimisticProjectionMutation, RecordKey as PredicateRecordKey, ValidatedIndexQuery,
 };
 use serde_json::Value as Json;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use thiserror::Error;
@@ -86,6 +96,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     RecordSelection(#[from] RecordSelectionError),
     #[error(transparent)]
     Search(#[from] SearchError),
+    /// Context-aware person lookup input or publication error.
+    #[error(transparent)]
+    People(#[from] crate::people::PeopleError),
     #[error(transparent)]
     Calendar(#[from] CalendarError),
     #[error("unknown or already-settled optimistic transaction {0}")]
@@ -110,6 +123,28 @@ pub enum EngineError<S: std::error::Error + 'static> {
     Storage(#[source] S),
     #[error("cache revision overflow")]
     RevisionOverflow,
+    /// The local people SQL compiler rejected a read.
+    #[error(transparent)]
+    PeopleSql(#[from] database_sql::local_people::PeopleSqlError),
+    /// The background response belongs to an obsolete account or generation.
+    #[error("cache hydration scope changed")]
+    StaleHydrationScope,
+    /// The response or cache operation belongs to an obsolete permission scope.
+    #[error("cache authority changed; obtain a new permission proof")]
+    StaleAuthority,
+    /// A present permission marker cannot be decoded; never treat it as a fresh cache.
+    #[error("cache authority metadata is malformed")]
+    InvalidAuthority,
+    /// Contact observations predate another accepted contact write or engine.
+    #[error("contact write fence changed")]
+    StaleContactFence,
+    /// Membership may only be written after a captured, scoped network read.
+    #[error("contact writes require a scoped read fence")]
+    UnfencedContactWrite,
+    /// A response normalized by [`Engine::normalize_network`] before another
+    /// schema was installed; normalize it again.
+    #[error("response was normalized under a schema that has since changed")]
+    StaleNormalization,
 }
 
 /// Result of a cache read.
@@ -119,6 +154,14 @@ pub enum ReadResult {
     Hit { data: Json },
     /// Not answerable; forward to the network.
     Miss,
+}
+
+/// A response's payload and how to resolve its entities, for normalizing.
+#[derive(Clone, Copy)]
+struct NetworkData<'a> {
+    variables: &'a serde_json::Map<String, Json>,
+    data: &'a Json,
+    entity_resolvers: &'a EntityResolverLookup,
 }
 
 /// Borrowed inputs for one network response write.
@@ -134,6 +177,33 @@ pub struct NetworkWrite<'a> {
     pub data: &'a Json,
     /// Optional opaque session identity witness.
     pub identity: Option<&'a str>,
+}
+
+/// A network response normalized before its write, so a host can derive its
+/// projections from the same records instead of normalizing the response again.
+/// Made by [`Engine::normalize_network`]; the write that takes it must be given
+/// the same response.
+pub struct NormalizedResponse {
+    result: NormalizeResult,
+    registered: Option<OpId>,
+    /// The schema it was normalized under; a write under another refuses it.
+    schema: std::sync::Arc<crate::meta::Schema>,
+}
+
+impl NormalizedResponse {
+    /// The records the response normalizes to, before the engine adds
+    /// host-derived records or omits hydration pages.
+    pub fn updates(&self) -> &RecordUpdates {
+        &self.result.updates
+    }
+}
+
+/// Whether a write still has to normalize its response.
+enum Normalization<'a> {
+    /// Normalize inside the write, for this registration.
+    Pending(Option<QueryRegistration<'a>>),
+    /// Already normalized by [`Engine::normalize_network`].
+    Done(NormalizedResponse),
 }
 
 /// An active query whose dependencies should be installed by a network write.
@@ -184,6 +254,23 @@ struct PersistedChanges {
     revision_advanced: bool,
     search_changed_buckets: BTreeSet<String>,
     viewer_fields: ViewerFields,
+}
+
+/// A merge of normalized updates into stored records, computed but not
+/// written.
+struct PersistPlan {
+    field_changes: Vec<crate::field_changes::RecordFieldChange>,
+    changed: BTreeSet<EntityKey<'static>>,
+    search_changed_buckets: BTreeSet<String>,
+    viewer_fields: ViewerFields,
+    /// Changed records, for storage and then the hot tier.
+    to_persist: Vec<(EntityKey<'static>, Record)>,
+    /// Unchanged records, for the hot tier only, each noting whether it was
+    /// taken from there.
+    unchanged: Vec<(EntityKey<'static>, Record, bool)>,
+    /// For each update in order, whether its record is in `to_persist`.
+    persisted: Vec<bool>,
+    revision_advanced: bool,
 }
 
 /// Result of hydrating a query while returning only non-`@cacheOnly` fields.
@@ -327,10 +414,34 @@ struct BegunOptimisticWrite {
 /// Reserved storage key holding the identity bound to this cache. The
 /// `__meta:` prefix can never collide with entity keys (typenames can't
 /// contain `:`).
-const IDENTITY_META_KEY: &str = "__meta:identity";
-const IDENTITY_VALUE_FIELD: &str = "identity";
+/// Stored account witness shared by the engine and scoped storage projections.
+pub const IDENTITY_META_KEY: &str = "__meta:identity";
+/// Account identity field in the stored witness.
+pub const IDENTITY_VALUE_FIELD: &str = "identity";
 const STORAGE_GENERATION_META_KEY: &str = "__meta:storage-generation";
 const STORAGE_GENERATION_VALUE_FIELD: &str = "generation";
+/// Prefix of the engine's own metadata keys, which no entity key can carry.
+const METADATA_KEY_PREFIX: &str = "__meta:";
+
+/// `keys` without the engine's metadata. Deleting the account witness
+/// while its records stay would let the next account bind over them, and the
+/// engine keeps the witness and authority in memory besides; only a reset or
+/// clear removes them.
+fn without_metadata<'k>(keys: &'k [EntityKey<'static>]) -> Cow<'k, [EntityKey<'static>]> {
+    if keys
+        .iter()
+        .any(|key| key.0.starts_with(METADATA_KEY_PREFIX))
+    {
+        Cow::Owned(
+            keys.iter()
+                .filter(|key| !key.0.starts_with(METADATA_KEY_PREFIX))
+                .cloned()
+                .collect(),
+        )
+    } else {
+        Cow::Borrowed(keys)
+    }
+}
 
 /// Hydration/binding state of the session identity tag for this cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -355,6 +466,16 @@ const MAX_UNCERTAIN_CALENDAR_EVENTS: usize = 256;
 // leaving room for the production operation catalog and fragment variants.
 const DOCUMENT_CACHE_CAPACITY: usize = 128;
 
+/// Application metadata derived from an authoritative normalized response.
+/// Returned records commit in the response's existing storage transaction.
+pub type ResponseRecords = fn(
+    &crate::meta::Schema,
+    &crate::document::Operation,
+    &serde_json::Map<String, Json>,
+    &Json,
+    &RecordUpdates,
+) -> Result<RecordUpdates, NormalizeError>;
+
 pub struct Engine<S: Storage> {
     schema: std::sync::Arc<crate::meta::Schema>,
     live_queries: live_query::LiveQueries,
@@ -362,16 +483,20 @@ pub struct Engine<S: Storage> {
     query_watches: watch_query::QueryWatches,
     storage: S,
     revision: CacheRevision,
+    contact_fence: Uuid,
+    people_context_fence: Uuid,
     hot: LruCache<EntityKey<'static>, Record>,
     docs: LruCache<String, Document>,
     deps: DepIndex,
     identity: IdentityState,
+    /// Single-owner authority cache, invalidated alongside the identity witness.
+    authority: std::sync::OnceLock<Option<authority::CacheAuthority>>,
+    response_records: Option<ResponseRecords>,
     /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
     optimistic_hydrated: bool,
-    /// Compact durable catalogs are loaded lazily for text search. Empty
-    /// queries use the storage index directly and do not populate this map.
-    search_catalogs: SearchCatalogs,
+    /// What the last projection passes read, for the write that follows.
+    kept_reads: Option<pass_reads::KeptReads>,
 }
 
 impl<S: Storage> Engine<S> {
@@ -396,14 +521,24 @@ impl<S: Storage> Engine<S> {
             query_watches: watch_query::QueryWatches::default(),
             storage,
             revision: CacheRevision::ZERO,
+            contact_fence: Uuid::now_v7(),
+            people_context_fence: Uuid::now_v7(),
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
             docs: LruCache::new(NonZeroUsize::new(DOCUMENT_CACHE_CAPACITY).unwrap()),
             deps: DepIndex::new(),
             identity: IdentityState::NotHydrated,
+            authority: std::sync::OnceLock::new(),
+            response_records: None,
             optimistic: Vec::new(),
             optimistic_hydrated: false,
-            search_catalogs: SearchCatalogs::default(),
+            kept_reads: None,
         }
+    }
+
+    /// Compose host-owned metadata with each admitted response, without another write.
+    pub fn with_response_records(mut self, records: ResponseRecords) -> Self {
+        self.response_records = Some(records);
+        self
     }
 
     /// Returns the current effective-view revision of this engine generation.
@@ -430,15 +565,9 @@ impl<S: Storage> Engine<S> {
         &self.schema
     }
 
-    /// Returns the durable identity of the currently stored cache data.
-    ///
-    /// A fresh generation is installed when the marker is absent or malformed.
-    /// Existing records are preserved when upgrading a cache without this marker.
-    /// Logical clears, identity changes, and physical resets
-    /// remove the marker with the data, so old hydration checkpoints cannot resume.
-    /// Read storage each time: engine replacement and external resets must not
-    /// leave an in-memory generation that outlives its records.
-    pub async fn current_storage_generation(&mut self) -> Result<Uuid, EngineError<S::Error>> {
+    /// Reads without creating metadata so rejected background responses do not
+    /// change cleared storage. Do not memoize a generation beyond its records.
+    async fn stored_storage_generation(&self) -> Result<Option<Uuid>, EngineError<S::Error>> {
         let key = EntityKey(STORAGE_GENERATION_META_KEY.into());
         let fetched = self
             .storage
@@ -450,9 +579,23 @@ impl<S: Storage> Engine<S> {
                 record.fields.get(STORAGE_GENERATION_VALUE_FIELD)
             && let Ok(generation) = Uuid::parse_str(value)
         {
+            return Ok(Some(generation));
+        }
+        Ok(None)
+    }
+
+    /// Returns the durable identity of the currently stored cache data.
+    ///
+    /// A fresh generation is installed when the marker is absent or malformed.
+    /// Existing records are preserved when upgrading a cache without this marker.
+    /// Logical clears, identity changes, and physical resets remove the marker
+    /// with the data, so old hydration checkpoints cannot resume. Engine
+    /// replacement with preserved data retains the same generation.
+    pub async fn current_storage_generation(&mut self) -> Result<Uuid, EngineError<S::Error>> {
+        if let Some(generation) = self.stored_storage_generation().await? {
             return Ok(generation);
         }
-
+        let key = EntityKey(STORAGE_GENERATION_META_KEY.into());
         let generation = Uuid::now_v7();
         let mut record = Record::default();
         record.fields.insert(
@@ -627,6 +770,12 @@ impl<S: Storage> Engine<S> {
                 &identities,
             );
             identity::apply_record_lifecycle(&mut updates, &source.identity_bindings, &identities);
+            if updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+            {
+                return Err(EngineError::UnfencedContactWrite);
+            }
             let patches =
                 deduplicate_patches(&self.schema, &source.link_patches).map_err(|error| {
                     EngineError::InvalidQueuedMutation {
@@ -651,6 +800,12 @@ impl<S: Storage> Engine<S> {
                 &patches,
                 strict_tail != Some(queued.id),
             )?;
+            if updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+            {
+                return Err(EngineError::UnfencedContactWrite);
+            }
             let revalidations = deduplicate_revalidations(
                 source.revalidations.iter().cloned().chain(
                     source
@@ -779,11 +934,18 @@ impl<S: Storage> Engine<S> {
             IDENTITY_VALUE_FIELD.to_string(),
             crate::value::CacheValue::String(identity.to_string()),
         );
+        let authority = self
+            .stored_authority()
+            .await?
+            .map(|authority| authority.for_account(Some(identity.to_owned())));
+        let mut records = vec![(EntityKey(IDENTITY_META_KEY.into()), record)];
+        records.extend(authority.as_ref().map(authority::CacheAuthority::record));
         self.storage
-            .put_batch(vec![(EntityKey(IDENTITY_META_KEY.into()), record)])
+            .put_batch(records)
             .await
             .map_err(EngineError::Storage)?;
         self.identity = IdentityState::Bound(identity.to_string());
+        self.authority = std::sync::OnceLock::from(authority);
         Ok(())
     }
 
@@ -1190,7 +1352,7 @@ impl<S: Storage> Engine<S> {
     /// decoding normalized-record payloads.
     ///
     /// Empty queries fan out over the per-profile/per-bucket timestamp index.
-    /// Text queries lazily load only requested buckets and rank borrowed entries.
+    /// Text queries stream storage-filtered rows into one bounded ranker.
     /// Active optimistic layers are projected from their fully composed record
     /// values and overlaid explicitly on either durable path.
     pub async fn search(
@@ -1211,68 +1373,54 @@ impl<S: Storage> Engine<S> {
         };
         let bucket_set: BTreeSet<_> = buckets.iter().map(String::as_str).collect();
         let overlay = self.optimistic_search_overlay(request.profile).await?;
-        let trimmed_query = request.query.trim();
-
-        let browse_candidates: HashMap<EntityKey<'static>, SearchDocument> =
-            if trimmed_query.is_empty() {
-                // Fetch enough extra durable rows to compensate for optimistic
-                // replacements/removals without turning this into a record scan.
+        let query = SearchQuery::new(&request.query);
+        let mut ranker = SearchRanker::new(request, &query);
+        for bucket in &buckets {
+            if !request.profile.buckets().contains(&bucket.as_str()) {
+                continue;
+            }
+            // A shadow removes its durable counterpart even if its new value
+            // is deleted, moved to another bucket, or no longer matches.
+            let mut visit = |document: SearchDocumentRef<'_>| {
+                if !overlay.contains_key(document.record_key)
+                    && cursor_allows(request.cursor.as_ref(), document)
+                {
+                    ranker.push(document);
+                }
+            };
+            if request.query.trim().is_empty() {
                 let per_bucket_limit = request
                     .limit
                     .saturating_add(overlay.len())
                     .saturating_add(1);
-                let mut candidates = HashMap::new();
-                for bucket in &buckets {
-                    let rows = self
-                        .storage
-                        .browse_search_documents(
-                            request.profile,
-                            bucket,
-                            request.cursor.as_ref(),
-                            per_bucket_limit,
-                        )
-                        .await
-                        .map_err(EngineError::Storage)?;
-                    for document in rows {
-                        candidates.insert(document.record_key.clone(), document);
-                    }
+                let rows = self
+                    .storage
+                    .browse_search_documents(
+                        request.profile,
+                        bucket,
+                        request.cursor.as_ref(),
+                        per_bucket_limit,
+                    )
+                    .await
+                    .map_err(EngineError::Storage)?;
+                for document in rows {
+                    visit(document.as_borrowed());
                 }
-                candidates
             } else {
-                for bucket in &buckets {
-                    // Unknown (but syntactically valid) buckets have no projection.
-                    // Do not grow the catalog map with arbitrary empty names.
-                    if !request.profile.buckets().contains(&bucket.as_str()) {
-                        continue;
-                    }
-                    if self.search_catalogs.get(request.profile, bucket).is_none() {
-                        let documents = self
-                            .storage
-                            .load_search_documents(request.profile, bucket)
-                            .await
-                            .map_err(EngineError::Storage)?;
-                        self.search_catalogs
-                            .insert(request.profile, bucket.clone(), documents);
-                    }
-                }
-                HashMap::new()
-            };
-
-        let cached = buckets
-            .iter()
-            .filter(|_| !trimmed_query.is_empty())
-            .filter_map(|bucket| self.search_catalogs.get(request.profile, bucket))
-            .flat_map(|catalog| catalog.values());
-        // A shadow removes its durable counterpart even when the optimistic
-        // value is deleted, moved to another bucket, or excluded by the cursor.
-        let candidates = browse_candidates
-            .values()
-            .chain(cached)
-            .filter(|document| !overlay.contains_key(&document.record_key))
-            .chain(overlay.values().filter_map(Option::as_ref))
-            .filter(|document| bucket_set.contains(document.bucket.as_str()))
-            .filter(|document| cursor_allows(request.cursor.as_ref(), document));
-        Ok(rank_documents(request, candidates))
+                self.storage
+                    .visit_search_documents(request.profile, bucket, &query, visit)
+                    .await
+                    .map_err(EngineError::Storage)?;
+            }
+        }
+        for document in overlay.values().filter_map(Option::as_ref) {
+            if bucket_set.contains(document.bucket.as_str())
+                && cursor_allows(request.cursor.as_ref(), document.as_borrowed())
+            {
+                ranker.push(document.as_borrowed());
+            }
+        }
+        Ok(ranker.finish())
     }
 
     async fn optimistic_search_overlay(
@@ -1295,10 +1443,6 @@ impl<S: Storage> Engine<S> {
                 (key, document)
             })
             .collect())
-    }
-
-    fn update_loaded_search_catalogs(&mut self, entries: &[(EntityKey<'static>, Record)]) {
-        self.search_catalogs.update(entries);
     }
 
     /// Normalizes and stores a network response. Returns changed records and
@@ -1357,18 +1501,142 @@ impl<S: Storage> Engine<S> {
         input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
-        self.write_network(origin_op, registration, input, projections, true)
-            .await
-            .map(|(result, _)| result)
+        self.write_network(
+            origin_op,
+            input,
+            Normalization::Pending(registration),
+            projections,
+            true,
+            false,
+        )
+        .await
+        .map(|(result, _)| result)
+    }
+
+    /// Normalizes a network response for a later write, capturing the
+    /// dependencies `registration` would install. Reads only the schema and the
+    /// parsed-document cache: no storage, so a host may call it before taking
+    /// whatever it needs for the write.
+    pub fn normalize_network(
+        &mut self,
+        registration: Option<QueryRegistration<'_>>,
+        input: NetworkWrite<'_>,
+    ) -> Result<NormalizedResponse, EngineError<S::Error>> {
+        let entity_resolvers = EntityResolverLookup::compile(
+            &self.schema,
+            registration.map_or(&[][..], |registration| registration.entity_resolvers),
+        )?;
+        let doc = Self::document(&mut self.docs, input.query)?;
+        let op = doc.operation(input.operation_name)?;
+        if registration.is_some() && op.kind != OperationKind::Query {
+            return Err(EngineError::Document(
+                DocumentError::UnsupportedOperationType(format!(
+                    "{:?} (dependency registration is query-only)",
+                    op.kind
+                )),
+            ));
+        }
+        let result = normalize_with_dependencies(
+            &self.schema,
+            op,
+            input.variables,
+            input.data,
+            &entity_resolvers,
+        )?;
+        Ok(NormalizedResponse {
+            result,
+            registered: registration.map(|registration| registration.op_id),
+            schema: std::sync::Arc::clone(&self.schema),
+        })
+    }
+
+    /// Writes a response [`Self::normalize_network`] normalized, installing the
+    /// dependencies of the registration it was normalized for. Refuses one
+    /// normalized before the current schema was installed.
+    pub async fn write_normalized_query(
+        &mut self,
+        origin_op: Option<OpId>,
+        input: NetworkWrite<'_>,
+        normalized: NormalizedResponse,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.write_network(
+            origin_op,
+            input,
+            Normalization::Done(normalized),
+            projections,
+            true,
+            false,
+        )
+        .await
+        .map(|(result, _)| result)
+    }
+
+    /// Normalizes a network response into the records it writes.
+    fn network_records(
+        schema: &crate::meta::Schema,
+        response_records: Option<ResponseRecords>,
+        op: &crate::document::Operation,
+        input: NetworkData<'_>,
+        retain_pages: bool,
+        allow_contacts: bool,
+    ) -> Result<crate::normalize::NormalizeResult, EngineError<S::Error>> {
+        let NetworkData {
+            variables,
+            data,
+            entity_resolvers,
+        } = input;
+        let mut normalized =
+            normalize_with_dependencies(schema, op, variables, data, entity_resolvers)?;
+        Self::complete_network_records(
+            schema,
+            response_records,
+            op,
+            (variables, data),
+            &mut normalized.updates,
+            retain_pages,
+            allow_contacts,
+        )?;
+        Ok(normalized)
+    }
+
+    /// Turns a response's normalized records into those it writes: adds the
+    /// records the host derives from it, refuses an unfenced contact, and
+    /// drops hydration pages unless they are kept.
+    fn complete_network_records(
+        schema: &crate::meta::Schema,
+        response_records: Option<ResponseRecords>,
+        op: &crate::document::Operation,
+        (variables, data): (&serde_json::Map<String, Json>, &Json),
+        updates: &mut RecordUpdates,
+        retain_pages: bool,
+        allow_contacts: bool,
+    ) -> Result<(), EngineError<S::Error>> {
+        if let Some(records) = response_records {
+            let extra = records(schema, op, variables, data, updates)?;
+            updates.extend(extra);
+        }
+        if !allow_contacts
+            && updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
+        if !retain_pages {
+            crate::page_retention::omit_hydration_pages(updates);
+        }
+        Ok(())
     }
 
     async fn write_network(
         &mut self,
         origin_op: Option<OpId>,
-        registration: Option<QueryRegistration<'_>>,
         input: NetworkWrite<'_>,
+        normalization: Normalization<'_>,
         projections: Vec<ProjectionMutation>,
         retain_pages: bool,
+        allow_contacts: bool,
     ) -> Result<(WriteResult, BTreeSet<String>), EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         let NetworkWrite {
@@ -1379,27 +1647,36 @@ impl<S: Storage> Engine<S> {
             identity,
         } = input;
         self.hydrate_optimistic().await?;
-        let entity_resolvers = EntityResolverLookup::compile(
-            &self.schema,
-            registration.map_or(&[][..], |registration| registration.entity_resolvers),
-        )?;
+        let normalized = match normalization {
+            Normalization::Pending(registration) => self.normalize_network(registration, input)?,
+            Normalization::Done(normalized) => {
+                if !std::sync::Arc::ptr_eq(&normalized.schema, &self.schema) {
+                    return Err(EngineError::StaleNormalization);
+                }
+                normalized
+            }
+        };
+        let registered = normalized.registered;
+        let normalized = normalized.result;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
-        if registration.is_some() && op.kind != OperationKind::Query {
-            return Err(EngineError::Document(
-                DocumentError::UnsupportedOperationType(format!(
-                    "{:?} (dependency registration is query-only)",
-                    op.kind
-                )),
-            ));
-        }
         let is_query = op.kind == OperationKind::Query;
-        let normalized =
-            normalize_with_dependencies(&self.schema, op, variables, data, &entity_resolvers)?;
+        // A subscription event is a network snapshot of its records like a
+        // query response, so the same before/after comparison is exact for it.
+        // Leaving it unscoped made every open Quick Access list replay its
+        // search on each event, whatever the event touched.
+        let reports_search_changes = is_query || op.kind == OperationKind::Subscription;
+        let mut normalized = normalized;
+        Self::complete_network_records(
+            &self.schema,
+            self.response_records,
+            op,
+            (variables, data),
+            &mut normalized.updates,
+            retain_pages,
+            allow_contacts,
+        )?;
         let mut updates = normalized.updates;
-        if !retain_pages {
-            crate::page_retention::omit_hydration_pages(&mut updates);
-        }
 
         if let Some(observed) = identity {
             match self.bound_identity().await? {
@@ -1414,6 +1691,16 @@ impl<S: Storage> Engine<S> {
                         crate::value::CacheValue::String(observed.into()),
                     );
                     updates.insert(EntityKey(IDENTITY_META_KEY.into()), witness);
+                    // The new authority commits with the account reset. Native
+                    // publication then needs no fallible post-commit storage IO.
+                    let authority = self.stored_authority().await?.map(|mut authority| {
+                        authority.account = Some(observed.to_owned());
+                        authority.generation = Uuid::now_v7();
+                        authority.policy = None;
+                        authority.ready = false;
+                        authority
+                    });
+                    updates.extend(authority.as_ref().map(authority::CacheAuthority::record));
                     let entries: Vec<_> = updates.into_iter().collect();
                     // Identity, records, and old queue removal are one transaction.
                     // There is no reset to publish if any part of it fails.
@@ -1423,6 +1710,7 @@ impl<S: Storage> Engine<S> {
                         .map_err(EngineError::Storage)?;
                     self.external_reset()?;
                     self.identity = IdentityState::Bound(observed.into());
+                    self.authority = std::sync::OnceLock::from(authority);
                     self.optimistic_hydrated = true;
                     for (key, record) in entries {
                         self.hot.put(key, record);
@@ -1431,12 +1719,11 @@ impl<S: Storage> Engine<S> {
                     if let Some(origin) = origin_op {
                         affected_ops.remove(&origin);
                     }
-                    if let Some(registration) = registration {
+                    if let Some(op_id) = registered {
                         if normalized.completeness == DependencyCompleteness::Exact {
-                            self.deps
-                                .set_query_deps(registration.op_id, normalized.dependencies);
+                            self.deps.set_query_deps(op_id, normalized.dependencies);
                         } else {
-                            self.deps.set_op_broad(registration.op_id);
+                            self.deps.set_op_broad(op_id);
                         }
                     }
                     return Ok((
@@ -1540,14 +1827,13 @@ impl<S: Storage> Engine<S> {
         if let Some(origin) = origin_op {
             affected_ops.remove(&origin);
         }
-        if let Some(registration) = registration {
+        if let Some(op_id) = registered {
             if normalized.completeness == DependencyCompleteness::Exact
                 && self.optimistic.is_empty()
             {
-                self.deps
-                    .set_query_deps(registration.op_id, normalized.dependencies);
+                self.deps.set_query_deps(op_id, normalized.dependencies);
             } else {
-                self.deps.set_op_broad(registration.op_id);
+                self.deps.set_op_broad(op_id);
             }
         }
         Ok((
@@ -1557,7 +1843,8 @@ impl<S: Storage> Engine<S> {
                 mutation_uuid: None,
                 revision,
                 revision_advanced,
-                search_changed_buckets: is_query.then(|| search_changed_buckets.clone()),
+                search_changed_buckets: reports_search_changes
+                    .then(|| search_changed_buckets.clone()),
                 changed,
                 affected_ops,
                 reset: false,
@@ -1570,7 +1857,7 @@ impl<S: Storage> Engine<S> {
     /// Stores a network response and returns only fields not marked
     /// `@cacheOnly`. Projection is taken directly from the validated network
     /// payload, so hydration never denormalizes the response back out of
-    /// storage. Soup page wrappers are transient; their normalized descendants
+    /// storage. Soup/contact page wrappers are transient; their normalized descendants
     /// and projections are persisted without retaining cursor-qualified pages.
     pub async fn hydrate_query(
         &mut self,
@@ -1601,6 +1888,50 @@ impl<S: Storage> Engine<S> {
         identity: Option<&str>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        self.hydrate_query_fenced(
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+            },
+            Normalization::Pending(None),
+            projections,
+            None,
+        )
+        .await
+    }
+
+    /// Hydrates a response [`Self::normalize_network`] normalized without a
+    /// registration, atomically maintaining generic projections.
+    pub async fn hydrate_normalized_query(
+        &mut self,
+        input: NetworkWrite<'_>,
+        normalized: NormalizedResponse,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        self.hydrate_query_fenced(input, Normalization::Done(normalized), projections, None)
+            .await
+    }
+
+    async fn hydrate_query_fenced(
+        &mut self,
+        input: NetworkWrite<'_>,
+        normalization: Normalization<'_>,
+        projections: Vec<ProjectionMutation>,
+        fence: Option<Uuid>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        if fence.is_some_and(|fence| fence != self.contact_fence) {
+            return Err(EngineError::StaleContactFence);
+        }
+        let NetworkWrite {
+            query,
+            operation_name,
+            variables,
+            data,
+            identity,
+        } = input;
         let projected = {
             let doc = Self::document(&mut self.docs, query)?;
             let op = doc.operation(operation_name)?;
@@ -1614,9 +1945,17 @@ impl<S: Storage> Engine<S> {
             }
             project_hydration_response(&self.schema, &op.prepare(variables)?, data)?
         };
+        // Hydration installs no dependencies, whatever the response was
+        // normalized for.
+        let normalization = match normalization {
+            Normalization::Done(normalized) => Normalization::Done(NormalizedResponse {
+                registered: None,
+                ..normalized
+            }),
+            Normalization::Pending(_) => Normalization::Pending(None),
+        };
         let (write_result, search_changed_buckets) = self
             .write_network(
-                None,
                 None,
                 NetworkWrite {
                     query,
@@ -1625,10 +1964,15 @@ impl<S: Storage> Engine<S> {
                     data,
                     identity,
                 },
+                normalization,
                 projections,
                 false,
+                fence.is_some(),
             )
             .await?;
+        if fence.is_some() {
+            self.contact_fence = Uuid::now_v7();
+        }
         Ok(HydrationWriteResult {
             write_result,
             search_changed_buckets,
@@ -1643,20 +1987,37 @@ impl<S: Storage> Engine<S> {
         updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
     ) -> Result<PersistedChanges, EngineError<S::Error>> {
-        let projection_keys = projections
-            .iter()
-            .map(|mutation| mutation.record_key().clone())
-            .collect();
+        let plan = self.plan_persist(updates, &projections).await?;
+        self.apply_persist(plan, projections).await
+    }
+
+    /// Reads what [`Self::persist_updates`] merges into and computes the
+    /// merge, writing nothing. The plan holds while storage is unchanged.
+    async fn plan_persist(
+        &mut self,
+        updates: RecordUpdates,
+        projections: &[ProjectionMutation],
+    ) -> Result<PersistPlan, EngineError<S::Error>> {
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
         // records mid-merge and overwrite storage with partial updates.
-        let mut staging: HashMap<EntityKey<'static>, Record> = HashMap::new();
+        // Each staged record notes whether it came from the hot tier.
+        let mut staging: HashMap<EntityKey<'static>, (Record, bool)> =
+            HashMap::with_capacity(updates.len());
         let mut missing: Vec<EntityKey<'static>> = Vec::new();
+        let mut kept = self.take_kept_reads();
+        let mut from_kept: Vec<EntityKey<'static>> = Vec::new();
+        let mut from_hot: Vec<EntityKey<'static>> = Vec::new();
         for key in updates.keys() {
-            match self.hot.peek(key) {
+            if self.hot.contains(key) {
+                from_hot.push(key.clone());
+                continue;
+            }
+            match kept.as_mut().and_then(|kept| kept.record(key)) {
                 Some(record) => {
-                    staging.insert(key.clone(), record.clone());
+                    staging.extend(record.map(|record| (key.clone(), (record, false))));
+                    from_kept.push(key.clone());
                 }
                 None => missing.push(key.clone()),
             }
@@ -1667,10 +2028,38 @@ impl<S: Storage> Engine<S> {
                 .get_batch(&missing)
                 .await
                 .map_err(EngineError::Storage)?;
-            for (key, record) in missing.into_iter().zip(fetched) {
+            for (key, record) in missing.iter().zip(fetched) {
                 if let Some(r) = record {
-                    staging.insert(key, r);
+                    staging.insert(key.clone(), (r, false));
                 }
+            }
+        }
+        // The kept records stand for reading storage now, alongside the batch
+        // above. Once storage has committed since the passes read them, read
+        // every record this write takes from storage again, in one batch, as
+        // the write does without kept reads.
+        if !from_kept.is_empty() && !kept.as_ref().is_some_and(|kept| self.kept_reads_hold(kept)) {
+            kept = None;
+            from_kept.extend(missing);
+            let fetched = self
+                .storage
+                .get_batch(&from_kept)
+                .await
+                .map_err(EngineError::Storage)?;
+            for (key, record) in from_kept.into_iter().zip(fetched) {
+                match record {
+                    Some(record) => staging.insert(key, (record, false)),
+                    None => staging.remove(&key),
+                };
+            }
+        }
+        // Hot records are taken out rather than cloned, once the reads above
+        // have succeeded. The plan holds them until it is applied: reads in
+        // between find them in storage, which still has them. A plan that is
+        // dropped leaves them out, since storage may have moved on by then.
+        for key in from_hot {
+            if let Some(record) = self.hot.pop(&key) {
+                staging.insert(key, (record, true));
             }
         }
 
@@ -1679,10 +2068,11 @@ impl<S: Storage> Engine<S> {
         let mut search_changed_buckets = BTreeSet::new();
         let mut viewer_fields = ViewerFields::new();
         let mut to_persist: Vec<(EntityKey<'static>, Record)> = Vec::new();
-        let mut touched = Vec::with_capacity(updates.len());
+        let mut unchanged: Vec<(EntityKey<'static>, Record, bool)> = Vec::new();
+        let mut persisted = Vec::with_capacity(updates.len());
         for (key, update) in updates {
-            let (merged, did_change) = match staging.remove(&key) {
-                Some(mut existing) => {
+            let (merged, did_change, was_hot) = match staging.remove(&key) {
+                Some((mut existing, was_hot)) => {
                     // Compare only fields supplied by this partial response,
                     // overlaid onto the existing row, without cloning its body.
                     let before = snapshot_search_fields(&key, &existing);
@@ -1702,35 +2092,82 @@ impl<S: Storage> Engine<S> {
                             &mut search_changed_buckets,
                         );
                     }
-                    (existing, did_change)
+                    (existing, did_change, was_hot)
                 }
                 None => {
                     field_changes.push(crate::field_changes::RecordFieldChange::Invalidate {
                         key: key.clone(),
                     });
                     collect_search_changes(&key, None, Some(&update), &mut search_changed_buckets);
-                    (update, true)
+                    (update, true, false)
                 }
             };
             if did_change {
                 changed.insert(key.clone());
-                to_persist.push((key.clone(), merged.clone()));
+                to_persist.push((key, merged));
+            } else {
+                unchanged.push((key, merged, was_hot));
             }
-            touched.push((key, merged));
+            persisted.push(did_change);
         }
 
         // Unchanged bases are already durable, including those fetched after
         // hot-tier eviction. Still apply every projection mutation: a partial
         // response can change projection authority without changing records.
         let revision_advanced = if changed.is_empty() {
-            self.projection_mutations_change(&projections).await?
+            match self
+                .projection_mutations_change(projections, kept.as_ref())
+                .await
+            {
+                Ok(advanced) => advanced,
+                Err(error) => return Err(self.restore_unchanged(unchanged, error)),
+            }
         } else {
             true
         };
-        self.storage
-            .put_batch_with_projections(to_persist, projections)
-            .await
-            .map_err(EngineError::Storage)?;
+        Ok(PersistPlan {
+            field_changes,
+            changed,
+            search_changed_buckets,
+            viewer_fields,
+            to_persist,
+            unchanged,
+            persisted,
+            revision_advanced,
+        })
+    }
+
+    /// Writes a [`PersistPlan`] and publishes it to the hot tier.
+    async fn apply_persist(
+        &mut self,
+        plan: PersistPlan,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<PersistedChanges, EngineError<S::Error>> {
+        let PersistPlan {
+            field_changes,
+            changed,
+            search_changed_buckets,
+            viewer_fields,
+            to_persist,
+            unchanged,
+            persisted,
+            revision_advanced,
+        } = plan;
+        let projection_keys = projections
+            .iter()
+            .map(|mutation| mutation.record_key().clone())
+            .collect();
+        // A refetch that changes no record and no projection authority has
+        // nothing to store. Pending layers still get their shadows rebased in
+        // the storage write, as before.
+        if (revision_advanced || !self.optimistic.is_empty())
+            && let Err(error) = self
+                .storage
+                .put_records_with_projections(&to_persist, projections)
+                .await
+        {
+            return Err(self.restore_unchanged(unchanged, EngineError::Storage(error)));
+        }
         let revision = if revision_advanced {
             self.advance_revision()?
         } else {
@@ -1747,9 +2184,19 @@ impl<S: Storage> Engine<S> {
         }
         // Publish only after the atomic write succeeds. Otherwise a failed
         // write could poison the hot tier and make its retry look unchanged.
-        self.update_loaded_search_catalogs(&touched);
-        for (key, record) in touched {
-            self.hot.put(key, record);
+        // Records go in in update order, so the LRU ends as it did when every
+        // record was cloned into one list.
+        let mut to_persist = to_persist.into_iter();
+        let mut unchanged = unchanged.into_iter();
+        for persisted in persisted {
+            let next = if persisted {
+                to_persist.next()
+            } else {
+                unchanged.next().map(|(key, record, _)| (key, record))
+            };
+            if let Some((key, record)) = next {
+                self.hot.put(key, record);
+            }
         }
         Ok(PersistedChanges {
             field_changes,
@@ -1761,9 +2208,29 @@ impl<S: Storage> Engine<S> {
         })
     }
 
+    /// Puts back the hot records a failed plan or write left unchanged, and
+    /// returns its error. A record already back in the hot tier, because a
+    /// read put it there since the plan took it, stays as it is. Records read
+    /// from storage stay out, so the failed write evicts nothing. Changed
+    /// records taken from the hot tier stay out too: they hold the merge, and
+    /// storage still has the value before it, which the next read loads.
+    fn restore_unchanged(
+        &mut self,
+        unchanged: Vec<(EntityKey<'static>, Record, bool)>,
+        error: EngineError<S::Error>,
+    ) -> EngineError<S::Error> {
+        for (key, record, was_hot) in unchanged {
+            if was_hot && !self.hot.contains(&key) {
+                self.hot.put(key, record);
+            }
+        }
+        error
+    }
+
     async fn projection_mutations_change(
         &self,
         mutations: &[ProjectionMutation],
+        kept: Option<&pass_reads::KeptReads>,
     ) -> Result<bool, EngineError<S::Error>> {
         if mutations.is_empty() {
             return Ok(false);
@@ -1772,19 +2239,49 @@ impl<S: Storage> Engine<S> {
             .iter()
             .map(ProjectionMutation::record_key)
             .cloned()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let states = self
-            .storage
-            .load_projection_states(&keys)
-            .await
-            .map_err(EngineError::Storage)?;
-        let mut projected = keys
-            .into_iter()
-            .zip(states)
-            .filter_map(|(key, state)| state.map(|state| (key, state)))
-            .collect::<HashMap<_, _>>();
+            .collect::<BTreeSet<_>>();
+        let mut projected = HashMap::new();
+        let mut missing = Vec::new();
+        let mut from_kept = Vec::new();
+        for key in keys {
+            match kept.and_then(|kept| kept.state(&key)) {
+                Some(state) => {
+                    projected.extend(state.map(|state| (key.clone(), state)));
+                    from_kept.push(key);
+                }
+                None => missing.push(key),
+            }
+        }
+        if !missing.is_empty() {
+            let states = self
+                .storage
+                .load_projection_states(&missing)
+                .await
+                .map_err(EngineError::Storage)?;
+            projected.extend(
+                missing
+                    .iter()
+                    .cloned()
+                    .zip(states)
+                    .filter_map(|(key, state)| state.map(|state| (key, state))),
+            );
+        }
+        // As for records: the kept states stand for reading storage now, and
+        // once they do not, every state is read again in one batch.
+        if !from_kept.is_empty() && !kept.is_some_and(|kept| self.kept_reads_hold(kept)) {
+            from_kept.extend(missing);
+            let states = self
+                .storage
+                .load_projection_states(&from_kept)
+                .await
+                .map_err(EngineError::Storage)?;
+            for (key, state) in from_kept.into_iter().zip(states) {
+                match state {
+                    Some(state) => projected.insert(key, state),
+                    None => projected.remove(&key),
+                };
+            }
+        }
         let before = projected.clone();
         apply_authoritative_projection_mutations(&mut projected, mutations);
         Ok(projected != before)
@@ -2438,6 +2935,33 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         projections: Vec<ProjectionMutation>,
     ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
+        self.settle_optimistic_response(
+            transaction,
+            claim,
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity: None,
+            },
+            projections,
+            true,
+        )
+        .await
+    }
+
+    /// Finalizes a server outcome, optionally omitting copied response content.
+    /// Callers serialize cache retirement with publication; a stale outcome still
+    /// settles its queue claim and canonical identities without replaying HTTP.
+    pub async fn settle_optimistic_response(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        response: NetworkWrite<'_>,
+        projections: Vec<ProjectionMutation>,
+        publish_snapshot: bool,
+    ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
         let layer = self
             .optimistic
@@ -2456,15 +2980,7 @@ impl<S: Storage> Engine<S> {
             None
         };
         let write_result = match self
-            .commit_optimistic_write_with_projections(
-                transaction,
-                claim,
-                query,
-                operation_name,
-                variables,
-                data,
-                projections,
-            )
+            .commit_optimistic_response(transaction, claim, response, projections, publish_snapshot)
             .await
         {
             Ok(result) => result,
@@ -2496,6 +3012,40 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.commit_optimistic_response(
+            transaction,
+            claim,
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity: None,
+            },
+            projections,
+            true,
+        )
+        .await
+    }
+
+    async fn commit_optimistic_response(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        response: NetworkWrite<'_>,
+        mut projections: Vec<ProjectionMutation>,
+        publish_snapshot: bool,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        let NetworkWrite {
+            query,
+            operation_name,
+            variables,
+            data,
+            ..
+        } = response;
+        if !publish_snapshot {
+            projections.clear();
+        }
         self.ensure_revision_can_advance()?;
         let mut live_projection_keys = live_query::projection_keys(&self.optimistic);
         live_projection_keys.extend(
@@ -2559,15 +3109,28 @@ impl<S: Storage> Engine<S> {
                 )));
             }
         };
+        if publish_snapshot && let Some(records) = self.response_records {
+            updates.extend(records(&self.schema, op, variables, data, &updates)?);
+        }
+        if updates
+            .keys()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
         // Recipes and revalidation variables may contain unresolved local IDs.
         // On a binding error, commit only authoritative data and valid aliases.
-        let (mut recipes, mut revalidations) = if identity_errors.is_empty() {
-            (
-                self.optimistic[index].link_patches.clone(),
-                self.optimistic[index].revalidations.clone(),
-            )
+        let mut recipes = if identity_errors.is_empty() && publish_snapshot {
+            self.optimistic[index].link_patches.clone()
         } else {
-            (Vec::new(), Vec::new())
+            Vec::new()
+        };
+        // A retired link recipe cannot repair a parent cache edge. Its authored
+        // query descriptor must still request fresh, server-authorized content.
+        let mut revalidations = if identity_errors.is_empty() {
+            self.optimistic[index].revalidations.clone()
+        } else {
+            Vec::new()
         };
         for patch in &mut recipes {
             identity::remap_patch(patch, &bindings, &identities);
@@ -2597,6 +3160,21 @@ impl<S: Storage> Engine<S> {
         let mut settled_identities = stored_identities;
         settled_identities.extend(identities.clone());
         identity::apply_record_lifecycle(&mut updates, &bindings, &settled_identities);
+        if !publish_snapshot {
+            // The server already accepted this command. Preserve its canonical
+            // IDs and delete tombstones while refusing the obsolete response
+            // content; otherwise a lost response can strand the strict queue.
+            updates.retain(|key, record| {
+                record.fields.retain(|field, _| {
+                    field == identity::ALIAS_FIELD
+                        || field == identity::MUTATION_UUID_FIELD
+                        || field == identity::DELETED_FIELD
+                        || ((field == "id" || field == "__typename")
+                            && settled_identities.values().any(|target| target == key))
+                });
+                !record.fields.is_empty()
+            });
+        }
         let mut candidates = layer_keys(&self.optimistic);
         candidates.extend(updates.keys().cloned());
         let (mut candidates, bases) = self
@@ -2613,6 +3191,12 @@ impl<S: Storage> Engine<S> {
             apply_link_patches(&self.schema, &mut effective, &mut updates, &recipes, true)?;
         revalidations
             .retain(|query| !query.only_on_link_failure || recipes.is_empty() || !links_applied);
+        if updates
+            .keys()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
         let (durable_changed, entries) = stage_updates(&bases, updates);
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &projections, &identities)
@@ -2646,7 +3230,6 @@ impl<S: Storage> Engine<S> {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
         let revision = self.advance_revision()?;
-        self.update_loaded_search_catalogs(&entries);
         for (key, record) in entries {
             self.hot.put(key, record);
         }
@@ -2941,19 +3524,29 @@ impl<S: Storage> Engine<S> {
     pub fn external_reset(&mut self) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
+        self.kept_reads = None;
         self.live_queries = live_query::LiveQueries::default();
         self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
         self.docs.clear();
         self.optimistic.clear();
-        self.search_catalogs.clear();
         // Another engine may have rebound the shared storage and changed the
         // durable queue, so both identity and optimism must re-hydrate.
         self.optimistic_hydrated = false;
         self.identity = IdentityState::NotHydrated;
+        self.authority = std::sync::OnceLock::new();
         let affected = self.deps.all_ops();
         self.advance_revision()?;
         Ok(self.revisioned(affected))
+    }
+
+    /// Registers an active operation against every visible change, until its
+    /// next read registers the records it depends on, and drops its retained
+    /// watch view, so its next watch reads it whole: for a host that gave up a
+    /// read of the operation before it ran.
+    pub fn register_operation_broadly(&mut self, op_id: OpId) {
+        self.deps.set_op_broad(op_id);
+        self.query_watches.remove(op_id);
     }
 
     /// Unregisters an active operation (urql teardown).
@@ -2962,10 +3555,10 @@ impl<S: Storage> Engine<S> {
         self.query_watches.remove(op_id);
     }
 
-    /// Handles records changed *outside* this engine instance (another tab's
-    /// engine in the dedicated-worker fallback topology, or push-driven
-    /// invalidation): evicts them from the hot tier so the next read hits
-    /// storage, and returns the local active operations that depend on them.
+    /// Handles records invalidated from outside a write, such as a push:
+    /// evicts them from the hot tier so the next read hits storage, and returns
+    /// the local active operations that depend on them. One engine owns a
+    /// database at a time, so no other engine instance changes its records.
     pub fn invalidate_keys<'k>(
         &mut self,
         keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
@@ -2982,12 +3575,15 @@ impl<S: Storage> Engine<S> {
     ) -> BTreeSet<OpId> {
         let mut affected = BTreeSet::new();
         for key in keys {
+            if key.typename() == Some("GraphqlContact") {
+                self.contact_fence = Uuid::now_v7();
+            }
+            if key.as_ref() == crate::people::CONTEXT_META {
+                self.people_context_fence = Uuid::now_v7();
+            }
             self.hot.pop(key);
             affected.extend(self.deps.ops_for_keys([key]));
         }
-        // The durable projection was updated by the writing context. Reload
-        // only the compact catalog on the next text search.
-        self.search_catalogs.clear();
         affected
     }
 
@@ -2997,20 +3593,27 @@ impl<S: Storage> Engine<S> {
     /// Use this for an explicit server-provided cache-deletion effect.
     /// Cross-engine notifications for records already written to shared
     /// storage should use
-    /// [`Self::invalidate_keys`] instead.
+    /// [`Self::invalidate_keys`] instead. Engine metadata keys (`__meta:`) are
+    /// left in place.
     pub async fn delete_keys(
         &mut self,
         keys: &[EntityKey<'static>],
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
             .delete_batch(keys)
             .await
             .map_err(EngineError::Storage)?;
+        if keys
+            .iter()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            self.contact_fence = Uuid::now_v7();
+        }
         for key in keys {
             self.hot.pop(key);
-            self.search_catalogs.remove(key);
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3021,16 +3624,18 @@ impl<S: Storage> Engine<S> {
     pub async fn clear(&mut self) -> Result<CacheRevision, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         self.storage.clear().await.map_err(EngineError::Storage)?;
+        self.contact_fence = Uuid::now_v7();
         self.hot.clear();
+        self.kept_reads = None;
         self.live_queries = live_query::LiveQueries::default();
         self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
         self.optimistic.clear();
         self.optimistic_hydrated = true;
-        self.search_catalogs.clear();
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
+        self.authority = std::sync::OnceLock::from(None);
         self.advance_revision()
     }
 
@@ -3081,6 +3686,9 @@ impl<S: PredicateIndexStorage> Engine<S> {
         self.ensure_revision_can_advance()?;
         let mut updates = RecordUpdates::new();
         for (key, record) in entries {
+            if key.typename() == Some("GraphqlContact") {
+                return Err(EngineError::UnfencedContactWrite);
+            }
             updates.entry(key).or_default().merge(record);
         }
         let PersistedChanges {
@@ -3156,20 +3764,27 @@ impl<S: PredicateIndexStorage> Engine<S> {
     }
 
     /// Atomically delete records and update projections that depend on them.
+    /// Engine metadata keys (`__meta:`) are left in place.
     pub async fn delete_keys_with_projection_changes(
         &mut self,
         keys: &[EntityKey<'static>],
         projections: Vec<ProjectionMutation>,
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
             .delete_batch_with_projection_changes(keys, projections)
             .await
             .map_err(EngineError::Storage)?;
+        if keys
+            .iter()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            self.contact_fence = Uuid::now_v7();
+        }
         for key in keys {
             self.hot.pop(key);
-            self.search_catalogs.remove(key);
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3330,11 +3945,12 @@ fn layer_keys(layers: &[OptimisticLayer]) -> BTreeSet<EntityKey<'static>> {
         .collect()
 }
 
-fn cursor_allows(cursor: Option<&SearchCursor>, document: &SearchDocument) -> bool {
+fn cursor_allows(cursor: Option<&SearchCursor>, document: SearchDocumentRef<'_>) -> bool {
     cursor.is_none_or(|cursor| {
         document.timestamp_ms < cursor.timestamp_ms
             || (document.timestamp_ms == cursor.timestamp_ms
-                && document.record_key > cursor.record_key)
+                && crate::search::compare_record_keys(document.record_key, &cursor.record_key)
+                    .is_gt())
     })
 }
 

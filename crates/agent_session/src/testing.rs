@@ -74,6 +74,8 @@ pub struct InMemoryAgentSessionRepo {
     log_transaction: Arc<Mutex<()>>,
     history_boundaries: Arc<Mutex<HashMap<AgentSessionId, macro_uuid::Uuid>>>,
     turn_states: Arc<Mutex<HashMap<AgentSessionId, agent_fold::domain::model::TurnState>>>,
+    /// Sessions whose turn was open when they last disconnected.
+    interrupted_turns: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     working_branches: Arc<Mutex<HashMap<AgentSessionId, String>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     user_coding_preferences: Arc<Mutex<HashMap<String, CodingPreferences>>>,
@@ -95,6 +97,49 @@ pub struct InMemoryAgentSessionRepo {
     conversation_sessions: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     /// Sessions whose name was generated, mirroring `name_is_generated`.
     generated_names: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
+    /// Session -> whether it is billed, mirroring `agent_session.billing`.
+    billings: Arc<Mutex<HashMap<AgentSessionId, crate::domain::model::SessionBilling>>>,
+    /// While set, appends of a `disconnected` event wait here; see
+    /// [`InMemoryAgentSessionRepo::hold_disconnects`].
+    disconnect_hold: Arc<Mutex<Option<DisconnectHold>>>,
+}
+
+/// Shared state of a [`InMemoryAgentSessionRepo::hold_disconnects`] hold.
+#[derive(Debug, Clone)]
+struct DisconnectHold {
+    released: tokio::sync::watch::Receiver<bool>,
+    parked: tokio::sync::watch::Sender<usize>,
+}
+
+/// Holds `disconnected` appends until [`Self::release`].
+#[derive(Debug)]
+pub struct HeldDisconnects {
+    release: tokio::sync::watch::Sender<bool>,
+    parked: tokio::sync::watch::Receiver<usize>,
+}
+
+impl HeldDisconnects {
+    /// Wait until `count` appends of a `disconnected` event are held.
+    pub async fn parked(&mut self, count: usize) {
+        self.parked
+            .wait_for(|parked| *parked >= count)
+            .await
+            .expect("the repo keeps the hold");
+    }
+
+    /// Let every held append, and any later one, through.
+    pub fn release(&self) {
+        self.release.send_replace(true);
+    }
+}
+
+fn is_disconnect(log: &AgentSessionLog) -> bool {
+    matches!(
+        log.content,
+        Message::ToServer(ToServerMessage::Event {
+            event: agent_runtime_protocol::domain::schema::v0::SystemEvent::Disconnected,
+        })
+    )
 }
 
 impl InMemoryAgentSessionRepo {
@@ -104,6 +149,36 @@ impl InMemoryAgentSessionRepo {
         Self::default()
     }
 
+    /// Make appends of a `disconnected` event, for every session, wait until
+    /// the returned hold is released, as a slow store would, so a test can catch a session
+    /// actor in the middle of winding down.
+    #[must_use]
+    pub fn hold_disconnects(&self) -> HeldDisconnects {
+        let (release, released) = tokio::sync::watch::channel(false);
+        let (parked_tx, parked) = tokio::sync::watch::channel(0);
+        *self.disconnect_hold.lock().unwrap() = Some(DisconnectHold {
+            released,
+            parked: parked_tx,
+        });
+        HeldDisconnects { release, parked }
+    }
+
+    /// Wait out a [`Self::hold_disconnects`] hold if any of `logs` is a
+    /// `disconnected` event.
+    async fn wait_for_disconnect_hold<'a>(
+        &self,
+        mut logs: impl Iterator<Item = &'a AgentSessionLog>,
+    ) {
+        if !logs.any(is_disconnect) {
+            return;
+        }
+        let Some(mut hold) = self.disconnect_hold.lock().unwrap().clone() else {
+            return;
+        };
+        hold.parked.send_modify(|parked| *parked += 1);
+        let _ = hold.released.wait_for(|released| *released).await;
+    }
+
     /// Seed a session, bypassing [`AgentSessionRepo::create`] so a test can
     /// choose the id and channel it will query by.
     pub fn insert_session(&self, session: AgentSession) {
@@ -111,6 +186,19 @@ impl InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .insert(session.id, session);
+    }
+
+    /// Backdate `session`'s last user-visible activity, as if nobody had
+    /// touched it since `at`.
+    pub fn set_modified_at(&self, session: AgentSessionId, at: chrono::DateTime<chrono::Utc>) {
+        if let Some(stored) = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get_mut(&session)
+        {
+            stored.modified_at = at;
+        }
     }
 
     /// Who prompted `session` directly, in the order they first did.
@@ -204,6 +292,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
         let session = AgentSession {
+            origin: params.origin.clone(),
             repo_branch: params.repo_branch,
             pull_request_url: None,
             task_id: None,
@@ -231,6 +320,10 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             source: params.purpose.source(),
             visibility: params.purpose.visibility(params.thread_id, false),
         };
+        self.billings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .insert(session.id, params.billing);
         if let Some(hash) = params.egress_token_hash {
             self.egress_token_hashes
                 .lock()
@@ -293,6 +386,44 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&id)
+        {
+            return Err(AgentSessionError::NotFound(id));
+        }
+        Ok(match self.turn_states.lock().unwrap().get(&id) {
+            Some(agent_fold::domain::model::TurnState::Disconnected) => {
+                self.interrupted_turns.lock().unwrap().contains(&id)
+            }
+            Some(turn) => crate::domain::turn_state::moves_session_list(*turn),
+            None => false,
+        })
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&id)
+        {
+            return Err(AgentSessionError::NotFound(id));
+        }
+        // A session inserted directly, not through `create`, is billed as
+        // the column defaults.
+        Ok(self
+            .billings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(&id)
+            .copied()
+            .unwrap_or_default())
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
@@ -954,6 +1085,8 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         if entries.is_empty() {
             return Ok(entries);
         }
+        self.wait_for_disconnect_hold(entries.iter().map(|stored| &stored.entry))
+            .await;
         if entries
             .iter()
             .any(|stored| stored.entry.agent_session_id != claim.session)
@@ -1009,6 +1142,7 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         if boundary.is_some() && claim.is_none() {
             return Err(AgentSessionError::FencedOut(log.agent_session_id));
         }
+        self.wait_for_disconnect_hold(std::iter::once(&log)).await;
         let _transaction = self.log_transaction.lock().unwrap();
         let leases = self.leases.lock().unwrap();
         if claim.is_some_and(|claim| {
@@ -1048,7 +1182,13 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .insert(session, boundary.initialization_log_id);
         }
         if let Some(turn_state) = turn_state {
-            self.turn_states.lock().unwrap().insert(session, turn_state);
+            let previous = self.turn_states.lock().unwrap().insert(session, turn_state);
+            let mut interrupted = self.interrupted_turns.lock().unwrap();
+            if turn_state != agent_fold::domain::model::TurnState::Disconnected {
+                interrupted.remove(&session);
+            } else if previous.is_some_and(crate::domain::turn_state::moves_session_list) {
+                interrupted.insert(session);
+            }
         }
         Ok(stored)
     }
@@ -1106,6 +1246,7 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
 pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
+        origin: Default::default(),
         repo_branch: None,
         pull_request_url: None,
         task_id: None,

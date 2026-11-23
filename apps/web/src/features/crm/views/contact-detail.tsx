@@ -1,9 +1,13 @@
+import { EntityPropertiesSection } from '@app/features/property/side-panel/properties/EntityPropertiesSection';
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
+import { contactEmails } from '../core/contact';
 import {
   type ContactSection,
   type CrmRecordScope,
@@ -14,18 +18,17 @@ import { ContactEmailsSection } from './contact-emails-section';
 import { ContactHeader } from './contact-header';
 import {
   RecordCallsSection,
-  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
 import { RecordDetailsSection } from './record-details-section';
-import { useContactQuery } from './use-crm';
+import { useContactQuery, useCrmPermissions } from './use-crm';
 
 /**
  * Root of the contact detail view, laid out like a project: the host's top
  * bar picks the section, Overview shows the contact and its discussion, and
- * the other sections list its emails, files, tasks and calls. References
- * stay in the floating information panel.
+ * the other sections list its emails, files, tasks and calls. Properties and
+ * references stay in the floating information panel.
  */
 type ContactProps = {
   contactId: string;
@@ -36,6 +39,7 @@ type ContactProps = {
 };
 
 export function Contact(props: ContactProps) {
+  const context = useCrmContext();
   return (
     <TraceFlow
       name="crm.contact"
@@ -45,17 +49,28 @@ export function Contact(props: ContactProps) {
         'crm.section': props.section ?? 'overview',
       }}
     >
-      <ContactContent {...props} />
+      <Show
+        when={context.canAccess()}
+        fallback={
+          <CrmAccessFallback
+            state={context.accessState()}
+            onRetry={context.retryAccess}
+          />
+        }
+      >
+        <ContactContent {...props} />
+      </Show>
     </TraceFlow>
   );
 }
 
 function ContactContent(props: ContactProps) {
   const context = useCrmContext();
-  const pipelinesEnabled = context.pipelinesEnabled();
+  const { canEditCrm } = useCrmPermissions();
   const contactQuery = useContactQuery(() => props.contactId);
   usePending('crm.record', () => contactQuery.isLoading);
   const contact = () => contactQuery.data;
+  createOpenTracker('contact', () => contact()?.id);
   onCleanup(
     context.registerTaskComposerRecord(() => ({
       type: 'contact',
@@ -71,7 +86,7 @@ function ContactContent(props: ContactProps) {
       return {
         type: 'contact',
         id: current.id,
-        email: current.email,
+        emails: contactEmails(current),
         companyId: current.companyId,
       };
     },
@@ -94,12 +109,10 @@ function ContactContent(props: ContactProps) {
                   contact={contact()}
                   onOpenCompany={props.onOpenCompany}
                 />
-                <Show when={pipelinesEnabled()}>
-                  <context.PipelineEntries
-                    record={{ type: 'contact', id: props.contactId }}
-                    onOpenPipeline={props.onOpenPipeline}
-                  />
-                </Show>
+                <context.PipelineEntries
+                  record={{ type: 'contact', id: props.contactId }}
+                  onOpenPipeline={props.onOpenPipeline}
+                />
                 <ContactDiscussionSection contactId={props.contactId} />
               </RecordOverview>
             </Match>
@@ -119,9 +132,6 @@ function ContactContent(props: ContactProps) {
                 </Show>
               </Suspense>
             </Match>
-            <Match when={section() === 'databases'}>
-              <RecordDatabasesSection scope={scope()} />
-            </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />
             </Match>
@@ -132,6 +142,20 @@ function ContactContent(props: ContactProps) {
       <RecordDetailsSection
         contact={contact()}
         onOpenCompany={props.onOpenCompany}
+      />
+      <SidePanel.Section
+        id="contact-properties"
+        title="Properties"
+        order={30}
+        defaultOpen
+        render={(renderSection) => (
+          <EntityPropertiesSection
+            entityId={props.contactId}
+            entityType="CONTACT"
+            canEdit={canEditCrm()}
+            renderSection={renderSection}
+          />
+        )}
       />
       <SidePanel.Section id="contact-references" title="References" order={20}>
         <RecordReferencesSection scope={scope()} />

@@ -16,7 +16,7 @@ export default defineConfig({
     tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
   ],
   optimizeDeps: {
-    esbuildOptions: { target: 'esnext' },
+    rolldownOptions: { transform: { target: 'esnext' } },
     exclude: ['loro-crdt'],
   },
   resolve: {

@@ -1,24 +1,14 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useContacts } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
-import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
 import { useInboxEmail } from '@queries/email/inbox-email';
-import type { ThreadQueryTransport } from '@queries/email/thread';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  onCleanup,
-  Suspense,
-} from 'solid-js';
+import { Suspense } from 'solid-js';
 import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
-import { convertContactInfoToEmailRecipient } from '../email-compose/core/recipient-conversion';
 import {
   createEmailAttachmentOpener,
   downloadEmailAttachment,
@@ -34,6 +24,7 @@ import { EmailMessageOperation } from '../email-message/email-message-operation'
 import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
 import type { InvitationRenderOptions } from '../email-message/views/email-message';
+import { SuggestionDraftOrigin } from '../suggestions/draft-origin';
 import {
   type CalendarInvitationOpenTarget,
   EmailCalendarInvitation,
@@ -57,7 +48,6 @@ export type EmailThreadProps = Omit<
   'context' | 'emailRendering'
 > & {
   source: EmailThreadSource;
-  threadTransport: Accessor<ThreadQueryTransport>;
   openCalendar?: (target: CalendarInvitationOpenTarget) => void;
 };
 
@@ -66,11 +56,8 @@ export function EmailThread(props: EmailThreadProps) {
   // The host's load gate already owns the live query. Reuse its source so
   // mounting the body does not start a second disk read/network request.
   const [calendarPreferences] = useCalendarPreferences();
-  const contacts = useContacts();
   const user = useUserContext();
-  const compose = createEmailComposeContext({
-    threadTransport: props.threadTransport,
-  });
+  const compose = createEmailComposeContext();
   const source = createOptimisticThreadSend(props.source, compose);
   const viewerEmail = useInboxEmail(() => source.thread()?.link_id);
   const threadContext: EmailThreadContext = {
@@ -78,9 +65,9 @@ export function EmailThread(props: EmailThreadProps) {
     viewerEmail,
     viewerLoading: user.isLoading,
     isTouch: isTouchDevice,
-    recipients: createMemo(() =>
-      contacts().map((contact) => convertContactInfoToEmailRecipient(contact))
-    ),
+    // Thread addresses remain scoped to the thread; personal suggestions come
+    // from each open composer's directory source, not a retained address book.
+    recipients: () => [],
     createCommands: (snapshot) =>
       createThreadActionAdapter(source.id, snapshot),
   };
@@ -109,6 +96,12 @@ export function EmailThread(props: EmailThreadProps) {
         message.operation && !operationSettled(message.operation) ? (
           <EmailMessageOperation message={message} />
         ) : undefined,
+      renderDraftOrigin: (draftId: string) => (
+        <SuggestionDraftOrigin
+          draftId={draftId}
+          thread={{ id: props.threadId(), name: props.title }}
+        />
+      ),
       renderTags: () => (
         <Suspense
           fallback={
@@ -118,7 +111,6 @@ export function EmailThread(props: EmailThreadProps) {
           <InlineFetchedEntityTagsPill
             entityId={props.threadId()}
             entityType="THREAD"
-            class="bg-surface-2"
             showAddButton
           />
         </Suspense>
@@ -163,10 +155,6 @@ export function EmailThread(props: EmailThreadProps) {
         void source.refresh().catch(compose.notices.reportError);
     }
   );
-  createEffect(() => {
-    const id = props.threadId();
-    onCleanup(() => clearSavedDraftThreadCache(id));
-  });
   return (
     <EmailThreadSurface
       {...props}

@@ -101,7 +101,12 @@ export class PropertyDefinition {
     return this.detail.get().then((r) => r.updated_at);
   }
 
-  /** Delete this property definition. */
+  /**
+   * Delete this property definition.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     return unwrap(
       await this.client.properties.deletePropertyDefinition({
@@ -110,7 +115,11 @@ export class PropertyDefinition {
     );
   }
 
-  /** The selectable options for this definition (select-type properties). */
+  /**
+   * The selectable options for this definition (select-type properties).
+   *
+   * @readonly
+   */
   async options(): Promise<PropertyOption[]> {
     const records = unwrap(
       await this.client.properties.getPropertyOptions({
@@ -120,7 +129,11 @@ export class PropertyDefinition {
     return records.map((r) => PropertyOption.from(this.client, this.id, r));
   }
 
-  /** Add an option to this select-type property. */
+  /**
+   * Add an option to this select-type property.
+   *
+   * @write
+   */
   async addOption(option: AddPropertyOptionRequest): Promise<PropertyOption> {
     const record = unwrap(
       await this.client.properties.addPropertyOption({
@@ -131,7 +144,13 @@ export class PropertyDefinition {
     return PropertyOption.from(this.client, this.id, record);
   }
 
-  /** Update an option (label, color, display order). */
+  /**
+   * Update an option (label, color, display order).
+   *
+   * @write
+   * @idempotent
+   * @mcp-exclude Takes a handle built from a listing record, which an MCP call can't reference.
+   */
   async updateOption(
     option: PropertyOption,
     updates: UpdatePropertyOptionRequest,
@@ -145,7 +164,13 @@ export class PropertyDefinition {
     return PropertyOption.from(this.client, this.id, record);
   }
 
-  /** Delete an option from this property. */
+  /**
+   * Delete an option from this property.
+   *
+   * @destructive
+   * @idempotent
+   * @mcp-exclude Takes a handle built from a listing record, which an MCP call can't reference.
+   */
   async deleteOption(option: PropertyOption): Promise<void> {
     return unwrap(
       await this.client.properties.deletePropertyOption({

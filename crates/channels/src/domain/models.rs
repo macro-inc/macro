@@ -794,6 +794,76 @@ pub struct ReferenceShareResult {
     pub outcome: ReferenceShareOutcome,
 }
 
+/// Entity types a channel grant can cover.
+///
+/// Values are the stored entity types. `calendar` is accepted for a calendar
+/// chip, whose stored type is `calendar_event`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelShareEntityType {
+    /// A calendar event. A calendar chip's `documentId` is this id.
+    #[serde(alias = "calendar")]
+    CalendarEvent,
+    /// A document.
+    Document,
+    /// A project.
+    Project,
+    /// A database.
+    Database,
+    /// A form.
+    Form,
+    /// A call.
+    Call,
+    /// An email thread.
+    #[serde(rename = "thread", alias = "email", alias = "email_thread")]
+    EmailThread,
+    /// An agent session.
+    AgentSession,
+    /// An external chat (such as WhatsApp) added to Macro.
+    ExternalChat,
+}
+
+impl ChannelShareEntityType {
+    /// The referenced-item type the grant is written for.
+    pub fn to_domain(self) -> ReferencedShareItemType {
+        match self {
+            Self::CalendarEvent => ReferencedShareItemType::CalendarEvent,
+            Self::Document => ReferencedShareItemType::Document,
+            Self::Project => ReferencedShareItemType::Project,
+            Self::Database => ReferencedShareItemType::Database,
+            Self::Form => ReferencedShareItemType::Form,
+            Self::Call => ReferencedShareItemType::Call,
+            Self::EmailThread => ReferencedShareItemType::EmailThread,
+            Self::AgentSession => ReferencedShareItemType::AgentSession,
+            Self::ExternalChat => ReferencedShareItemType::ExternalChat,
+        }
+    }
+
+    /// Why sharing this kind of item was refused.
+    pub fn not_permitted(self) -> &'static str {
+        match self {
+            Self::CalendarEvent => {
+                "you can only share a calendar event you hold on your own calendar, and private or confidential events are not shared"
+            }
+            Self::AgentSession => "you can only share an agent session you own",
+            _ => "you need access to this item before it can be shared with the channel",
+        }
+    }
+}
+
+/// Request to share one item with a channel's current members.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ShareWithChannelRequest {
+    /// Stored entity type of the item.
+    pub entity_type: ChannelShareEntityType,
+    /// Id of the item to share. For a calendar event, the event id.
+    pub entity_id: Uuid,
+}
+
 /// Request to add participants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -818,6 +888,21 @@ pub struct ChannelMetadata {
     pub channel_type: ChannelType,
     /// Resolved display name.
     pub channel_name: String,
+    /// Whether the channel has a name of its own. DMs and group chats have
+    /// none and show their members' names.
+    pub named: bool,
+}
+
+impl ChannelMetadata {
+    /// A DM or an unnamed group chat: a conversation its first message creates,
+    /// as opposed to a channel people are invited to.
+    pub fn is_dm_or_group_chat(&self) -> bool {
+        match self.channel_type {
+            ChannelType::DirectMessage => true,
+            ChannelType::Private => !self.named,
+            ChannelType::Public | ChannelType::Team => false,
+        }
+    }
 }
 
 /// Persisted channel message returned by mutation operations.
@@ -860,6 +945,16 @@ pub struct ChannelInfo {
     pub org_id: Option<i64>,
     /// Team id.
     pub team_id: Option<Uuid>,
+}
+
+impl ChannelInfo {
+    /// Whether the channel has a name of its own. A blank name counts as none,
+    /// as it does for display names.
+    pub fn named(&self) -> bool {
+        self.name
+            .as_deref()
+            .is_some_and(|name| !name.trim().is_empty())
+    }
 }
 
 /// Request for a batched channel preview lookup.

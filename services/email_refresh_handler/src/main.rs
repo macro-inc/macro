@@ -1,6 +1,9 @@
+mod composition;
 mod config;
 mod context;
+mod domain;
 mod handler;
+mod outbound;
 #[cfg(test)]
 mod test;
 
@@ -27,17 +30,14 @@ async fn main() -> Result<(), Error> {
         .await
         .context("could not connect to db")?;
 
-    let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    // Everything the sweep sends goes to the link manager's maintenance lane.
+    let link_maintenance_queue = macro_queues::LinkMaintenanceQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
-    .email_link_manager_queue(&link_manager_queue);
+    .email_link_maintenance_queue(&link_maintenance_queue);
 
-    let ctx = context::Context {
-        db,
-        sqs_client: Arc::new(sqs_client),
-        config,
-    };
+    let ctx = composition::context(db, Arc::new(sqs_client), config);
 
     let func = service_fn(move |event: LambdaEvent<EventBridgeEvent>| {
         let ctx = ctx.clone();

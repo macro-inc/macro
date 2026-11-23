@@ -171,7 +171,6 @@ export function SentEmailResponse(props: {
           initialData={props.args}
           messageId={props.messageId}
           toolCallId={props.toolCallId}
-          readOnly
           header={<div class="text-xs text-ink-extra-muted/60">Email sent</div>}
         />
       </div>
@@ -249,14 +248,10 @@ const handler = createToolRenderer({
               initialData={ctx.tool.data}
               messageId={ctx.message_id}
               toolCallId={ctx.tool.id}
-              streamLocked={ctx.renderContext.isStreaming}
               header={
-                ctx.renderContext.isStreaming ? (
-                  <div class="text-xs text-ink-extra-muted/60">
-                    Waiting for the response to finish before this email can be
-                    edited.
-                  </div>
-                ) : undefined
+                <div class="text-xs text-ink-extra-muted/60">
+                  Email not sent
+                </div>
               }
             />
           </Match>

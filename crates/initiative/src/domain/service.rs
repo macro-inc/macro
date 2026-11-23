@@ -12,12 +12,14 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
+mod lifecycle;
 mod reads;
 
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
     EntityType, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_access::domain::telemetry::{SOURCE_ID_COUNT_FIELD, observe_source_ids, span_count};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::SharePermissionV2;
@@ -75,7 +77,8 @@ where
 
     /// Create a project for a reviewed import using a stable ledger-derived
     /// identity. A replay may reuse only an existing project with this owner;
-    /// attribution is checked before either creation or reuse.
+    /// attribution is checked before either creation or reuse. An exact
+    /// `initial_link_share` overrides entity/team defaults only on creation.
     #[tracing::instrument(skip_all, fields(%id), err)]
     pub async fn create_imported(
         &self,
@@ -83,8 +86,9 @@ where
         request: CreateInitiativeRequest,
         attribution: activity::Attribution,
         id: InitiativeId,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> Result<InitiativeDetail, InitiativeError> {
-        self.create_with_id(user_id, request, attribution, id, true)
+        self.create_with_id(user_id, request, attribution, id, true, initial_link_share)
             .await
     }
 
@@ -111,6 +115,7 @@ where
         attribution: activity::Attribution,
         id: InitiativeId,
         reuse: bool,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> Result<InitiativeDetail, InitiativeError> {
         let authorized = match &attribution {
             activity::Attribution::Direct { actor } => {
@@ -144,7 +149,14 @@ where
             .get_team_default_link_share(&owner_id)
             .await
             .map_err(Into::into)?;
-        let share_permission = SharePermissionV2::new_initiative_share_permission(team_default);
+        let share_permission = match initial_link_share {
+            models_permissions::share_permission::InitialLinkShare::Exact(state) => {
+                SharePermissionV2::from_link_share_state(state)
+            }
+            models_permissions::share_permission::InitialLinkShare::EntityDefault => {
+                SharePermissionV2::new_initiative_share_permission(team_default)
+            }
+        };
         let team_share = if request.share_with_team.unwrap_or(true) {
             TeamShareCreation::Initiative
         } else {
@@ -286,7 +298,17 @@ where
         self.summarize(&read).await
     }
 
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(
+        name = "initiative.read",
+        err,
+        skip_all,
+        fields(
+            initiative_id = %receipt.entity().entity_id,
+            task_count = tracing::field::Empty,
+            visible_task_count = tracing::field::Empty,
+            source_id_count = tracing::field::Empty,
+        )
+    )]
     async fn read(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -299,9 +321,18 @@ where
             .map_err(Into::into)?
             .ok_or(InitiativeError::NotFound)?;
         detail.user_access_level = receipt_access_level(&receipt)?;
-        let tasks = self
-            .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
-            .await?;
+        let task_ids = self.resources.project_tasks(id).await?;
+        let span = tracing::Span::current();
+        span.record("task_count", span_count(task_ids.len()));
+        // Each task's check binds the viewer's source ids, so their count
+        // predicts what this read costs.
+        let (tasks, source_ids) =
+            observe_source_ids(self.visible_tasks(receipt.auth(), task_ids)).await;
+        if let Some(count) = source_ids {
+            span.record(SOURCE_ID_COUNT_FIELD, span_count(count));
+        }
+        let tasks = tasks?;
+        span.record("visible_task_count", span_count(tasks.len()));
         Ok(InitiativeRead::new(receipt, detail, tasks))
     }
 
@@ -359,6 +390,7 @@ where
             attribution,
             InitiativeId::generate(),
             false,
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
         )
         .await
     }
@@ -409,6 +441,48 @@ where
             .list_accessible(&user_id)
             .await
             .map_err(Into::into)
+    }
+
+    #[tracing::instrument(skip_all, fields(initiative_id = %receipt.entity().entity_id), err)]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, InitiativeError> {
+        let id = initiative_id_from_receipt(&receipt)?;
+        appearance.validate().map_err(InitiativeError::BadRequest)?;
+        let attribution = receipt_attribution(&receipt);
+        let update = activity::AppearanceUpdate {
+            appearance: appearance.clone(),
+            attribution: attribution
+                .clone()
+                .map(|actor| activity::Attribution::new(actor.actor, actor.on_behalf_of)),
+            event_id: uuid::Uuid::now_v7(),
+            occurred_at: Utc::now(),
+        };
+        if let Some(previous) = self
+            .repo
+            .set_appearance(id, &update)
+            .await
+            .map_err(Into::into)?
+        {
+            self.publish(
+                id,
+                InitiativeTopicEvent::AppearanceChanged {
+                    change: InitiativeChange {
+                        initiative_id: id,
+                        attribution,
+                        occurred_at: update.occurred_at,
+                    },
+                    appearance: activity::AppearanceChange {
+                        from: (!previous.is_default()).then_some(previous),
+                        to: (!appearance.is_default()).then(|| appearance.clone()),
+                    },
+                },
+            )
+            .await;
+        }
+        Ok(appearance)
     }
 
     #[tracing::instrument(err, skip_all)]

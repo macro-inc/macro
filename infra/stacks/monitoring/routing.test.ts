@@ -1,5 +1,6 @@
 import { beforeAll, expect, test } from 'bun:test';
 import * as pulumi from '@pulumi/pulumi';
+import { evictStackModules } from './evict-stack-modules';
 
 const resources: pulumi.runtime.MockResourceArgs[] = [];
 
@@ -33,6 +34,7 @@ beforeAll(async () => {
     'prod',
     false
   );
+  evictStackModules();
   await import('./index');
   await pulumi.runtime.waitForRPCs();
 });
@@ -164,7 +166,78 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
   const prod = monitors().filter((r) =>
     r.inputs.message.includes('Runbook: https://github.com/macro-inc/macro/')
   );
-  expect(prod).toHaveLength(31);
+  expect(prod.map((monitor) => monitor.name).sort()).toEqual([
+    'agent-harness-runtime-starvation',
+    'agent-harness-task-memory',
+    'agent-runtime-reattach-dials',
+    'agent-runtime-reattach-sessions',
+    'agent-tool-failures',
+    'ai-editing-provider-account-unavailable',
+    'ai-fireworks-spend-nearing-cap',
+    'ai-fireworks-spend-reached-cap',
+    'ai-provider-account-unavailable',
+    'apm-consumer-error-anomaly',
+    'apm-internal-error-anomaly',
+    'apm-latency-anomaly',
+    'apm-server-error-anomaly',
+    'computer-fleet-capacity',
+    'computer-host-capacity',
+    'error-logs-anomaly',
+    'firecracker-create-failures',
+    'firecracker-golden-failures',
+    'firecracker-golden-secret-refused',
+    'firecracker-hibernate-failures',
+    'firecracker-host-memory',
+    'firecracker-host-unhealthy',
+    'firecracker-reconcile-drift',
+    'firecracker-restore-latency',
+    'firecracker-wake-failures',
+    'kafka-consumer-lag-high',
+    'kafka-consumer-not-caught-up',
+    'macrodb-blocked-connections',
+    'macrodb-cpu',
+    'macrodb-free-storage',
+    'macrodb-free-storage-forecast',
+    'macrodb-io-credits',
+    'macrodb-load',
+    'macrodb-long-transactions',
+    'macrodb-primary-connections',
+    'macrodb-primary-freeable-memory',
+    'macrodb-read-latency',
+    'macrodb-replica-connections',
+    'macrodb-replica-freeable-memory',
+    'macrodb-replica-lag',
+    'macrodb-swap',
+    'outlook-graph-throttling',
+    'outlook-mailbox-stalled',
+    'outlook-message-parked-too-long',
+    'outlook-persistence-errors',
+    'outlook-reauthorization-spike',
+    'outlook-token-failures',
+    'redis-evictions',
+    'redis-memory',
+    'redis-memory-forecast',
+    'routine-suggestions-failures',
+    'search-dropped-events',
+    'search-email-backlog',
+    'search-email-indexer-silent',
+    'search-email-near-retention',
+    'search-failed-bulk-items',
+    'search-indexer-silent',
+    'search-live-backlog',
+    'search-near-retention',
+    'search-offset-reset',
+    'search-probe-failing',
+    'search-probe-late',
+    'search-probe-prefix-unseen',
+    'search-probe-unseen',
+    'sqs-dlq-inflow',
+    'sqs-email-backfill-age',
+    'sqs-email-backfill-backlog-anomaly',
+    'sqs-link-maintenance-age',
+    'sqs-work-queue-age',
+    'storage-pool-wait',
+  ]);
   for (const monitor of prod) {
     const linked = monitor.inputs.message.match(
       /Dashboard: https:\/\/us5\.datadoghq\.com\/dashboard\/([\w-]+)\//
@@ -194,4 +267,188 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
         : [`y = ${critical}`, ...(warning ? [`y = ${warning}`] : [])],
     });
   }
+});
+
+test('routine suggestion failures notify over an hour, above a floor', () => {
+  const failures = monitors().find(
+    (r) => r.name === 'routine-suggestions-failures'
+  );
+  expect(failures?.inputs.query).toBe(
+    'sum(last_1h):sum:macro.routine_suggestions.generation{env:prod,outcome:failed}.as_count() / (sum:macro.routine_suggestions.generation{env:prod,!outcome:cancelled}.as_count() + 20) > 0.1'
+  );
+  expect(failures?.inputs.priority).toBe('3');
+  expect(failures?.inputs.message).not.toContain('@webhook-goalert ');
+});
+
+test('instance I/O credits alert per instance, well before they run out', () => {
+  const credits = monitors().find((r) => r.name === 'macrodb-io-credits');
+  expect(credits?.inputs.query).toBe(
+    'avg(last_15m):min:aws.rds.ebsiobalance{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier} < 40'
+  );
+  expect(credits?.inputs.monitorThresholds).toEqual({
+    critical: '40',
+    warning: '70',
+  });
+  expect(credits?.inputs.message).toContain('{{dbinstanceidentifier.name}}');
+  expect(credits?.inputs.message).toContain('macrodb.md#io-credits');
+});
+
+test('Kafka lag alerts per prod consumer group and topic, without paging', () => {
+  const lag =
+    'max:aws.kafka.sum_offset_lag{cluster_name:prod-macro-event-kafka-cluster,!topic:_amazon_msk_canary} by {consumer_group,topic}';
+  const high = monitors().find((r) => r.name === 'kafka-consumer-lag-high');
+  expect(high?.inputs.query).toBe(`avg(last_15m):${lag} > 5000000`);
+  expect(high?.inputs.monitorThresholds).toEqual({
+    critical: '5000000',
+    warning: '2000000',
+  });
+  const behind = monitors().find(
+    (r) => r.name === 'kafka-consumer-not-caught-up'
+  );
+  expect(behind?.inputs.query).toBe(
+    `min(last_1d):${lag}.rollup(min, 300) > 100`
+  );
+  expect(behind?.inputs.requireFullWindow).toBe(true);
+  expect(high?.inputs.requireFullWindow).toBe(false);
+  for (const monitor of [high, behind]) {
+    expect(monitor?.inputs.name).toStartWith('[PROD] Kafka consumer ');
+    expect(monitor?.inputs.priority).toBe('3');
+    expect(monitor?.inputs.message).toContain('{{consumer_group.name}}');
+    expect(monitor?.inputs.message).toContain('{{topic.name}}');
+    expect(monitor?.inputs.message).toContain(
+      'Runbook: https://github.com/macro-inc/macro/blob/main/docs/runbooks/queues.md#kafka-consumer-lag\nDashboard: https://us5.datadoghq.com/dashboard/queue-alerts/title'
+    );
+    expect(monitor?.inputs.message).not.toContain('Paging on-call');
+  }
+});
+
+test('pool waits alert names the environment and the pool', () => {
+  const wait = monitors().find((r) => r.name === 'storage-pool-wait');
+  expect(wait?.inputs.name).toStartWith('[PROD] ');
+  expect(wait?.inputs.query).toBe(
+    'avg(last_10m):default_zero(max:db.client.connection.wait_time{env:prod,service:cloud-storage-service} by {db.client.connection.pool.name}) > 5'
+  );
+  expect(wait?.inputs.onMissingData).toBe('default');
+  expect(wait?.inputs.message).toContain(
+    '{{[db.client.connection.pool.name].name}}'
+  );
+  expect(wait?.inputs.message).toContain('macrodb.md#pool-waits');
+  expect(wait?.inputs.message).toContain(
+    'Dashboard: https://us5.datadoghq.com/dashboard/storage-pool-saturation/title'
+  );
+});
+
+test('pool graphs never sum or take percentiles across tasks', () => {
+  const dashboard = dashboards().find(
+    (d) => d.name === 'storage-pool-saturation'
+  );
+  const queries: string[] = dashboard?.inputs.widgets
+    .flatMap(
+      (group: { groupDefinition: { widgets: unknown[] } }) =>
+        group.groupDefinition.widgets
+    )
+    .flatMap(
+      (widget: { timeseriesDefinition?: { requests: { q?: string }[] } }) =>
+        widget.timeseriesDefinition?.requests.map((request) => request.q) ?? []
+    )
+    .filter((q: string | undefined) => q?.includes('db.client.connection'));
+  expect(queries.length).toBeGreaterThan(4);
+  for (const q of queries) {
+    expect(q).not.toMatch(/(sum|avg|p\d+):db\.client\.connection/);
+  }
+  expect(queries.join()).toContain(
+    'max:db.client.connection.used{env:$env.value,service:cloud-storage-service} by {db.client.connection.pool.name,availability-zone}, max:db.client.connection.max{'
+  );
+});
+
+test('Firecracker readiness detects lost telemetry without paging idle operations', () => {
+  const host = monitors().find((r) => r.name === 'firecracker-host-unhealthy');
+  expect(host?.inputs.notifyNoData).toBe(true);
+  expect(host?.inputs.noDataTimeframe).toBe(5);
+  expect(host?.inputs.query).toContain('by {host}.fill(null) < 1');
+  for (const resource of monitors().filter(
+    (r) => r.name.startsWith('firecracker-') && r !== host
+  )) {
+    expect(resource.inputs.notifyNoData).not.toBe(true);
+  }
+});
+
+test('a heartbeat uses one missing-data mode', () => {
+  const heartbeats = monitors().filter((r) => r.inputs.notifyNoData === true);
+  expect(heartbeats.map((r) => r.name).sort()).toEqual([
+    'firecracker-host-unhealthy',
+    'search-email-indexer-silent',
+    'search-indexer-silent',
+  ]);
+  for (const resource of heartbeats) {
+    expect({
+      name: resource.name,
+      onMissingData: resource.inputs.onMissingData,
+    }).toEqual({ name: resource.name, onMissingData: undefined });
+  }
+  for (const name of ['search-indexer-silent', 'search-email-indexer-silent']) {
+    const silent = heartbeats.find((r) => r.name === name);
+    expect(silent?.inputs.noDataTimeframe).toBe(10);
+  }
+});
+
+test('Firecracker restore percentiles use an enabled distribution of successful snapshot launches', () => {
+  const duration = resources.find(
+    (r) => r.name === 'firecracker-restore-duration'
+  );
+  expect(duration?.inputs.compute).toEqual({
+    aggregationType: 'distribution',
+    path: '@duration',
+    includePercentiles: true,
+  });
+  expect(duration?.inputs.filter.query).toContain(
+    '@source:(golden OR hibernation) status:ok'
+  );
+  expect(duration?.inputs.groupBies).toEqual([
+    { path: 'env', tagName: 'env' },
+    { path: 'host', tagName: 'host' },
+    { path: '@source', tagName: 'source' },
+  ]);
+});
+
+test('Firecracker memory follows admission policy and unresolved drift persists before alerting', () => {
+  const memory = monitors().find((r) => r.name === 'firecracker-host-memory');
+  expect(memory?.inputs.query).toContain(
+    'computer.host.memory.used_ratio{env:prod}'
+  );
+  expect(memory?.inputs.query).toContain(
+    '/ min:computer.host.memory.high_watermark_ratio{env:prod}'
+  );
+  const drift = monitors().find(
+    (r) => r.name === 'firecracker-reconcile-drift'
+  );
+  expect(drift?.inputs.query).toBe(
+    'min(last_5m):max:firecracker_host.reconcile.drift{env:prod,service:firecracker-host} by {host} > 0'
+  );
+});
+
+test('the probe judges rotation rounds per type, the crowded prefix apart and failures per operation', () => {
+  const query = (name: string) =>
+    monitors().find((r) => r.name === name)?.inputs.query as string;
+
+  for (const name of ['search-probe-late', 'search-probe-unseen']) {
+    expect(query(name)).toContain('!operation:crowded_prefix');
+    expect(query(name)).toContain('by {entity_type}.as_count()');
+  }
+  expect(query('search-probe-prefix-unseen')).toBe(
+    'sum(last_30m):sum:search.freshness.probe_rounds{env:prod,service:search-freshness-probe,operation:crowded_prefix,outcome:unseen} by {entity_type}.as_count() >= 2'
+  );
+  expect(query('search-probe-failing')).toContain(
+    'by {entity_type,operation}.as_count()'
+  );
+});
+
+test('failed bulk items alert only when they last, on complete buckets', () => {
+  const failed = monitors().find((r) => r.name === 'search-failed-bulk-items');
+  expect(failed?.inputs.query).toBe(
+    'min(last_30m):default_zero(sum:search.index.failed_bulk_items{env:prod,service:search-processing-service} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300 > 0'
+  );
+  // An unfinished 5-minute bucket reads as none; the delay keeps the alert
+  // from recovering every 5 minutes.
+  expect(failed?.inputs.evaluationDelay).toBe(420);
 });

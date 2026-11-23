@@ -9,7 +9,7 @@ use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
 use macro_auth::InternalApiKey;
 use macro_env::Environment;
-use macro_env_var::{env_var, env_vars, maybe_env_var};
+use macro_env_var::{env_var, env_vars, maybe_env_vars};
 
 env_vars! {
     #[derive(Debug, Clone)]
@@ -27,9 +27,19 @@ env_vars! {
     pub(crate) struct KafkaBrokers;
 }
 
-maybe_env_var! {
+maybe_env_vars! {
     #[derive(Debug, Clone)]
     pub(crate) struct SnsApnsVoipPlatformArn;
+    /// SES configuration set that publishes email delivery events. Unset sends without one.
+    #[derive(Debug, Clone)]
+    pub(crate) struct SesConfigurationSet;
+    /// PostHog project key for per-user feature flags. Unset leaves flagged
+    /// features off outside a local stack.
+    #[derive(Debug, Clone)]
+    pub(crate) struct PosthogApiKey;
+    /// PostHog ingestion origin. Unset uses the US cloud.
+    #[derive(Debug, Clone)]
+    pub(crate) struct PosthogHost;
 }
 
 env_var!(
@@ -88,6 +98,18 @@ pub struct Config {
 
     /// The SNS iOS VoIP platform ARN (APNS_VOIP). Optional locally.
     pub(crate) sns_apns_voip_platform_arn: SnsApnsVoipPlatformArn,
+
+    /// The SES configuration set every notification email is sent through, so delivery
+    /// events are published per notification type. Optional: the set must exist in SES
+    /// before this is configured, or sends fail.
+    pub(crate) ses_configuration_set: SesConfigurationSet,
+
+    /// PostHog project key for per-user feature flags. Optional: without it
+    /// flagged features stay off outside a local stack.
+    pub(crate) posthog_api_key: PosthogApiKey,
+
+    /// PostHog ingestion origin. Optional: defaults to the US cloud.
+    pub(crate) posthog_host: PosthogHost,
 }
 
 impl Config {

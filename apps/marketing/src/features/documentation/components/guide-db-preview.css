@@ -1,0 +1,210 @@
+/* Retained from the published docs previews; scoped to guide content. */
+.documentation-body .db-preview {
+  margin: 1.25rem auto;
+  border: 1px solid rgb(3 7 18 / 0.1);
+  border-radius: 12px;
+  background: #fff;
+  color: #18181b;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow: hidden;
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview {
+  background: #141414;
+  border-color: rgb(255 255 255 / 0.1);
+  color: #f4f4f5;
+}
+
+.documentation-body .db-preview-top,
+.documentation-body .db-preview-views {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.documentation-body .db-preview-top {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgb(3 7 18 / 0.08);
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview-top,
+html[data-theme-light='false'] .documentation-body .db-preview-row {
+  border-color: rgb(255 255 255 / 0.08);
+}
+
+.documentation-body .db-preview-close,
+.documentation-body .db-preview-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 1px solid rgb(3 7 18 / 0.12);
+  border-radius: 8px;
+  color: #52525b;
+}
+
+.documentation-body .db-preview-icon {
+  border-radius: 999px;
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview-close,
+html[data-theme-light='false'] .documentation-body .db-preview-icon {
+  border-color: rgb(255 255 255 / 0.14);
+  color: #d4d4d8;
+  background: rgb(255 255 255 / 0.04);
+}
+
+.documentation-body .db-preview-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.documentation-body .db-preview-db {
+  color: #3d9a32;
+  flex: none;
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview-db {
+  color: oklch(76.8% 0.233 130.85);
+}
+
+.documentation-body .db-preview-tab,
+.documentation-body .db-preview-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgb(3 7 18 / 0.08);
+  border-radius: 999px;
+  background: #fafafa;
+  color: #52525b;
+  white-space: nowrap;
+}
+
+.documentation-body .db-preview-tab.is-on,
+.documentation-body .db-preview-view.is-on {
+  background: #f4f4f5;
+  border-color: rgb(3 7 18 / 0.12);
+  color: #18181b;
+  font-weight: 500;
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview-tab,
+html[data-theme-light='false'] .documentation-body .db-preview-view {
+  border-color: rgb(255 255 255 / 0.1);
+  background: #242426;
+  color: #d4d4d8;
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview-tab.is-on,
+html[data-theme-light='false'] .documentation-body .db-preview-view.is-on {
+  background: #3a3a3c;
+  border-color: rgb(255 255 255 / 0.08);
+  color: #f4f4f5;
+}
+
+.documentation-body .db-preview-views {
+  padding: 12px 12px 4px 52px;
+}
+
+.documentation-body .db-preview-view {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+}
+
+.documentation-body .db-preview-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: #71717a;
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview-plus {
+  color: #a1a1aa;
+}
+
+.documentation-body .db-preview-table {
+  padding: 8px 8px 4px;
+}
+
+.documentation-body .db-preview-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1.7fr) minmax(7rem, 0.9fr) minmax(8rem, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 8px;
+  border-top: 1px solid rgb(3 7 18 / 0.08);
+}
+
+.documentation-body .db-preview-row.is-head {
+  min-height: 32px;
+  border-top: 0;
+  color: #71717a;
+  font-size: 12px;
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview-row.is-head,
+.documentation-body .db-preview-num {
+  color: #71717a;
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview-num {
+  color: #a1a1aa;
+}
+
+.documentation-body .db-preview-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.documentation-body .db-preview-caret {
+  margin-left: auto;
+  flex: none;
+}
+
+.documentation-body .db-preview-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgb(3 7 18 / 0.14);
+  border-radius: 999px;
+  color: #3f3f46;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+html[data-theme-light='false'] .documentation-body .db-preview-pill {
+  border-color: rgb(255 255 255 / 0.16);
+  color: #e4e4e7;
+}
+
+.documentation-body .db-preview-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.documentation-body .db-preview-dot.is-blue {
+  background: #0091ff;
+}
+
+.documentation-body .db-preview-dot.is-purple {
+  background: #8e4ec6;
+}

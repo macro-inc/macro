@@ -20,10 +20,6 @@ import {
   DictationPanel,
 } from '@app/features/dictation/components/dictation-controls';
 import { createComposerDictation } from '@app/features/dictation/composer-dictation';
-import {
-  ComposerAddDrawer,
-  ComposerAddMenu,
-} from '@channel/Input/ComposerAddMenu';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -31,7 +27,11 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import { preloadAgentFold } from '@core/agent-fold/client';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
-import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import {
+  type AgentCommandItem,
+  TYPE_AGENT_COMMAND_SYMBOL_COMMAND,
+  TYPE_AT_SYMBOL_COMMAND,
+} from '@core/component/LexicalMarkdown/plugins';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -48,7 +48,8 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { agentAttachmentItems } from './attachment-menu';
+import { AgentComposerAddMenu } from './AgentComposerAddMenu';
+import { openComposerTypeahead } from './open-composer-typeahead';
 
 /**
  * Id of the agent input's text-area wrapper. Exposed so callers (e.g. the
@@ -99,7 +100,7 @@ export interface AgentInputProps {
   /** Files the user dropped, pasted, or picked. Absent means no attaching. */
   onAttachFiles?: (files: File[]) => void;
   onRemoveAttachment?: (attachment: InputAttachmentData) => void;
-  /** Model control: a pill above the box on desktop, footer-left on touch. */
+  /** Model control in the bottom row, immediately before Send or Stop. */
   modelControl?: JSX.Element;
   /**
    * Ref-style: receives the quote-insert function once the editor mounts
@@ -120,7 +121,6 @@ export interface AgentInputProps {
 }
 
 export function AgentInput(props: AgentInputProps) {
-  const [attachDrawerOpen, setAttachDrawerOpen] = createSignal(false);
   const imageUnsupportedReason = () =>
     props.supportsImages === false
       ? t('common.imagesUnsupported', {
@@ -316,10 +316,6 @@ export function AgentInput(props: AgentInputProps) {
         class="flex flex-col gap-1.5"
         classList={{ 'opacity-50': props.readOnly }}
       >
-        {/* Desktop: the model pill sits above the box, as it always has. */}
-        <Show when={!isTouchDevice() && props.modelControl}>
-          <div class="flex items-center px-0.5">{props.modelControl}</div>
-        </Show>
         {/* h-auto beats Surface's size-full so the in-flow controls are not
             clipped over the editor (that was Auto sitting on the placeholder). */}
         <ComposerSurface
@@ -350,19 +346,19 @@ export function AgentInput(props: AgentInputProps) {
                   exactly as the channel composer lays them out. */}
               <Input.Attachments kind="media" class="pb-0" />
               <Input.Attachments kind="document" class="pb-0" />
-              {/* Desktop: one row, send right of the text. Touch: the text gets
-                  the whole width and the controls drop to a footer row (model
-                  left, send right) — the chat-tall / channel footer shape. */}
+              {/* The editor takes the full width on desktop and touch; controls
+                  sit below it, with add on the left and model beside send. */}
               <div
                 ref={setLayout}
                 data-composer-compact={isCompact()}
-                class="group/composer flex items-end data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch gap-[3.75px] p-[7.5px] min-h-[48.75px] touch:min-h-0 touch:flex-col touch:items-stretch touch:gap-0 touch:p-0"
+                class="flex flex-col items-stretch gap-[3.75px] p-[7.5px] min-h-[48.75px] touch:min-h-0 touch:gap-0 touch:p-0"
                 onPointerDown={focusEditor}
                 onMouseDown={focusEditor}
               >
                 <div
                   id={AGENT_INPUT_TEXT_AREA_ID}
-                  class="min-w-0 flex-1 group-data-[composer-compact=false]/composer:flex-none text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
+                  data-composer-scroll
+                  class="min-w-0 flex-1 text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
                   classList={{
                     // While empty only the placeholder renders; keep it to one clipped
                     // line so it doesn't wrap into the single-line height.
@@ -392,9 +388,6 @@ export function AgentInput(props: AgentInputProps) {
 
                 {/* In-flow — never absolute over the text. */}
                 <div class="flex shrink-0 items-center gap-[3.75px] touch:h-8 touch:gap-2 touch:p-2 touch:mb-2">
-                  <Show when={isTouchDevice() && props.modelControl}>
-                    <div class="min-w-0">{props.modelControl}</div>
-                  </Show>
                   <Show when={props.onAttachFiles}>
                     {/* The picker accepts whatever the drop zone does: an
                         agent's reason to attach a file is usually a source
@@ -402,35 +395,34 @@ export function AgentInput(props: AgentInputProps) {
                     <Input.AttachFilesAction
                       accept={null}
                       disabled={props.disabled || props.readOnly}
-                      trigger={(openFiles, openImages) => {
-                        const groups = () => [
-                          {
-                            items: agentAttachmentItems(
-                              openFiles,
-                              openImages,
-                              imageUnsupportedReason()
-                            ),
-                          },
-                        ];
-                        return (
-                          <>
-                            <ComposerAddMenu
-                              groups={groups()}
-                              disabled={props.disabled || props.readOnly}
-                              onOpenDrawer={() => setAttachDrawerOpen(true)}
-                            />
-                            <ComposerAddDrawer
-                              groups={groups()}
-                              open={attachDrawerOpen()}
-                              onOpenChange={setAttachDrawerOpen}
-                              getEditor={() => editor.lexical.getRootElement()}
-                            />
-                          </>
-                        );
-                      }}
+                      trigger={(openFiles, openImages) => (
+                        <AgentComposerAddMenu
+                          openFiles={openFiles}
+                          openImages={openImages}
+                          imageUnsupportedReason={imageUnsupportedReason()}
+                          openLibrary={() =>
+                            openComposerTypeahead(
+                              editor.lexical,
+                              TYPE_AT_SYMBOL_COMMAND
+                            )
+                          }
+                          openSkills={() =>
+                            openComposerTypeahead(
+                              editor.lexical,
+                              TYPE_AGENT_COMMAND_SYMBOL_COMMAND
+                            )
+                          }
+                          getEditor={() => editor.lexical.getRootElement()}
+                          session
+                          disabled={props.disabled || props.readOnly}
+                        />
+                      )}
                     />
                   </Show>
                   <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">
+                    <Show when={props.modelControl}>
+                      <div class="min-w-0">{props.modelControl}</div>
+                    </Show>
                     <DictationButton
                       dictation={dictation}
                       disabled={props.disabled || props.readOnly}

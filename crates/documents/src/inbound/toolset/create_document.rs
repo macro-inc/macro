@@ -95,7 +95,14 @@ where
         service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(params=?self, "Create content");
+        // The name and content are the user's; log only their shape.
+        tracing::info!(
+            file_extension = %self.file_extension,
+            is_task = self.is_task,
+            in_project = self.project_id.is_some(),
+            content_bytes = self.file_content.len(),
+            "Create content"
+        );
 
         let parsed_file_type =
             FileType::from_str(&self.file_extension).map_err(|e| ToolCallError {

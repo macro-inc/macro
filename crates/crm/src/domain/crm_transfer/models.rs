@@ -84,6 +84,20 @@ pub struct PipelineImportOutcome {
     pub added_options: Vec<(String, Vec<String>)>,
 }
 
+/// A pipeline's entries as CSV text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PipelineCsv {
+    /// The pipeline's name, for a file holding the text.
+    pub name: String,
+    /// The CSV.
+    pub text: String,
+    /// Entries written.
+    pub rows: usize,
+    /// Whether every entry was written; a pipeline beyond the read limit
+    /// is cut there.
+    pub complete: bool,
+}
+
 /// A pipeline saved as a CSV file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PipelineExport {

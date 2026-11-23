@@ -14,6 +14,8 @@ import type { ChannelType } from './channelType';
  * Channel metadata in soup payloads.
  */
 export interface Channel {
+  /** Whether members of the channel's team join it automatically. */
+  auto_join_team?: boolean;
   /** Channel type. */
   channel_type: ChannelType;
   /** Creation timestamp. */

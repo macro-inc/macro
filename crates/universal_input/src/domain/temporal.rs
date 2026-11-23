@@ -1,6 +1,7 @@
 //! Model-selected temporal expressions resolved against the caller's clock in Rust.
 mod models;
 mod resolve;
+pub mod thread_due_date;
 pub use models::*;
 
 use super::{ExtractInputRequest, FieldExtractor, InputError, InputIntent, InputSuggestions};

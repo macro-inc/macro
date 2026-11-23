@@ -1,9 +1,9 @@
+import IconCheck from '@icon/system/regular/check.svg';
+import IconFunnel from '@icon/system/regular/funnel-simple.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconSparkle from '@icon/system/regular/sparkle.svg';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
-import IconCheck from '../../../assets/icons/phosphor/check.svg';
-import IconFunnel from '../../../assets/icons/phosphor/funnel-simple.svg';
-import IconSearch from '../../../assets/icons/phosphor/magnifying-glass.svg';
 import IconPaperPlaneTilt from '../../../assets/icons/phosphor/paper-plane-tilt-fill.svg';
-import IconSparkle from '../../../assets/icons/phosphor/sparkle.svg';
 import avatarJacobWork from '../../../assets/people/jacob-work.webp';
 import { PhoneFrame, PhoneScreenContent } from '../utils/UtilPhoneFrame';
 
@@ -349,7 +349,7 @@ export function AiComposeGraphic(props: { onExpand?: () => void } = {}) {
                 style={{
                   ...bodyText,
                   color: 'var(--c1)',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 How you can help:
@@ -402,7 +402,7 @@ export function AiComposeGraphic(props: { onExpand?: () => void } = {}) {
                     display: 'flex',
                     'font-family': "'Inter', body",
                     'font-size': '11px',
-                    'font-weight': '700',
+                    'font-weight': '500',
                     gap: '8px',
                     'letter-spacing': '0.1em',
                     'text-transform': 'uppercase',
@@ -462,7 +462,7 @@ export function AiComposeGraphic(props: { onExpand?: () => void } = {}) {
                 display: 'inline-flex',
                 'font-family': 'body',
                 'font-size': '13px',
-                'font-weight': '700',
+                'font-weight': '500',
                 gap: '7px',
                 height: '30px',
                 'justify-content': 'center',

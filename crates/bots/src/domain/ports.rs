@@ -4,8 +4,8 @@ use super::models::{
     Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
     BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
     CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchAgentRequest, PatchBotRequest,
-    UpdateAgentRequest,
+    CreateChannelScopedBotResponse, DeletedHarnessAgents, HarnessFacts, HarnessId,
+    PatchAgentRequest, PatchBotRequest, ReplacedAgent, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -20,7 +20,8 @@ pub trait BotRepo: Send + Sync + 'static {
     /// Repository error.
     type Err: Into<anyhow::Error> + Send;
 
-    /// Create an owned agent and its selected channel memberships atomically.
+    /// Create an owned agent and its selected channel memberships atomically,
+    /// with `has_agent` enabled.
     fn create_agent(
         &self,
         owner: BotOwner,
@@ -28,7 +29,8 @@ pub trait BotRepo: Send + Sync + 'static {
         req: CreateAgentRequest,
     ) -> impl Future<Output = Result<Agent, Self::Err>> + Send;
 
-    /// Replace an owned agent and its selected channel memberships atomically.
+    /// Replace an owned agent and its selected channel memberships atomically,
+    /// enabling `has_agent` even if it was previously disabled.
     /// The direct agent conversations it takes part in are not among them and
     /// are left as they are.
     fn update_agent(
@@ -36,7 +38,7 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_id: BotId,
         owner: BotOwner,
         req: UpdateAgentRequest,
-    ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<ReplacedAgent>, Self::Err>> + Send;
 
     /// List active agents the caller can manage or start a managed session as.
     ///
@@ -99,6 +101,14 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_ids: &[BotId],
     ) -> impl Future<Output = Result<HashMap<BotId, BotOwnerProfile>, Self::Err>> + Send;
 
+    /// Users who see the bot's name and picture: its owner, its team's
+    /// members, and the people in the channels it takes part in. For a
+    /// deleted bot, those channels are the ones its deletion removed it from.
+    fn bot_audience(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+
     /// Get an active persisted agent by bot id. Its channels are the ones it
     /// was put in, without the direct agent conversations it takes part in.
     fn get_agent(
@@ -113,7 +123,22 @@ pub trait BotRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Get ownership and permission capabilities of an active registered harness.
+    /// Whether a team's every member may use a harness.
+    fn harness_granted_to_team(
+        &self,
+        harness_id: HarnessId,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Whether a user may run agents on a harness: its owner, or a user through
+    /// a live grant. Readers may not.
+    fn user_may_use_harness(
+        &self,
+        harness_id: HarnessId,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Get the permission capabilities of an active registered harness.
     fn get_harness_facts(
         &self,
         harness_id: HarnessId,
@@ -168,8 +193,26 @@ pub trait BotRepo: Send + Sync + 'static {
         req: PatchBotRequest,
     ) -> impl Future<Output = Result<Option<Bot>, Self::Err>> + Send;
 
-    /// Soft-delete an active bot.
-    fn delete_bot(&self, bot_id: BotId) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    /// Soft-delete an active bot and take it out of its channels, returning
+    /// the channels it left, or `None` when no active bot has that id.
+    fn delete_bot(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<Vec<Uuid>>, Self::Err>> + Send;
+
+    /// Soft-delete every active agent bound to `harness` in one transaction,
+    /// returning the deleted bots, their owners and the channels they left.
+    fn delete_harness_agents(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<DeletedHarnessAgents, Self::Err>> + Send;
+
+    /// The stored names of the channels that exist among `channel_ids`
+    /// (`None` for a channel without one, such as a direct message).
+    fn channel_names(
+        &self,
+        channel_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<(Uuid, Option<String>)>, Self::Err>> + Send;
 
     /// Add bot reach to a channel.
     fn add_bot_to_channel(
@@ -429,12 +472,13 @@ pub trait BotService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
 }
 
-/// Whether a Pipedream app slug is one an agent may pin.
+/// Whether a connector catalog slug is one an agent may pin.
 ///
-/// The directory is Pipedream's. `Ok(false)` is a definite miss. `Err` means
-/// the directory could not be asked, and the slug must not be stored.
+/// The catalog is Pipedream's app directory plus the apps overlaid onto the
+/// native MCP stack. `Ok(false)` is a definite miss. `Err` means the catalog
+/// could not be asked, and the slug must not be stored.
 pub trait McpAppCatalog: Send + Sync + 'static {
-    /// `true` when `slug` is a connectable Pipedream app.
+    /// `true` when `slug` is a connectable catalog app.
     fn is_connectable_app(&self, slug: &str)
     -> impl Future<Output = Result<bool, BotError>> + Send;
 }
@@ -452,6 +496,23 @@ pub trait TeamBotRoster: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<BotId>, Report>> + Send;
 }
 
+/// Pushes a bot's current profile to the people who see it, so their open
+/// views show its new name and picture without a reload.
+pub trait BotProfilePublisher: Send + Sync + 'static {
+    /// Send `profile` to every user in `recipients`.
+    fn publish_profile(
+        &self,
+        profile: BotOwnerProfile,
+        recipients: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// The harness an agent was being bound to was deleted first, e.g. by its
+/// Macro computer's release. Repositories return it inside their error.
+#[derive(Debug, thiserror::Error)]
+#[error("that runtime was removed; choose another one")]
+pub struct HarnessRemoved;
+
 /// Bot service error.
 #[derive(Debug, thiserror::Error)]
 pub enum BotError {
@@ -464,10 +525,45 @@ pub enum BotError {
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,
+    /// The harness is an agent teammate's computer. People message the agent;
+    /// no other agent runs there.
+    #[error("This computer belongs to an agent teammate. Message them instead.")]
+    AgentTeammateComputer,
     /// The MCP app directory could not answer, so a slug was not stored.
     #[error("{0}")]
     Unavailable(String),
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),
+}
+
+/// Trusted deletion of the agents bound to a harness that is going away, so
+/// none is left pointing at a machine that no longer exists.
+///
+/// Trusted in-process callers only (the hosted runtime control plane): it
+/// checks no caller and must never back a route.
+pub trait HarnessAgentDeletion: Send + Sync {
+    /// Delete every agent bound to `harness`, recording `actor` as the user
+    /// on whose behalf they went. Returns how many were deleted; none is fine.
+    fn delete_harness_agents(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<usize, BotError>> + Send;
+}
+
+/// Trusted runtime-routing lookups for agent harness assignments.
+pub trait HarnessAssignments: Send + Sync {
+    /// Lookup the registered harness selected by an agent.
+    fn harness_for(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = Result<Option<HarnessId>, Self::Err>> + Send;
+    /// List every agent assigned to a harness, including retired bots.
+    fn bots_on_harness(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<Vec<BotId>, Self::Err>> + Send;
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
 }

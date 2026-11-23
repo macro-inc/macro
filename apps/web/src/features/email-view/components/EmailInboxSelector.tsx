@@ -1,8 +1,6 @@
 import { MobileFilterDrawer, ViewSidebar } from '@app/components/view-shell';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon, type UserIconSize } from '@core/component/UserIcon';
-import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -37,16 +35,15 @@ type InboxOption = {
 };
 
 /**
- * Single-select over the user's linked inboxes: one inbox, or all of them.
- * `undefined` in view state means all; a chosen inbox is stored as `[id]`.
- * Legacy multi-id selections are normalized to their first inbox on restore.
- * Send-as aliases (which Gmail can add on its own, e.g. for a Gmailify
+ * The user's linked inboxes: all of them, or any chosen set. `undefined` in
+ * view state means all. The account pickers choose one inbox at a time; the
+ * Filters menu and the mobile drawer can choose several, which the pickers
+ * then name by count. Send-as aliases (which Gmail can add on its own, e.g. for a Gmailify
  * account) filter their inbox by address; they are never counted as inboxes.
  */
 function useInboxSelection() {
   const { state, setInboxIds, setAliasFilter } = useEmailView();
   const linksQuery = useMailAccountsQuery();
-  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
   const options = createMemo((): InboxOption[] => {
@@ -69,7 +66,9 @@ function useInboxSelection() {
   // A persisted alias still needs a clear/switch control if it disappears.
   const hasMultipleInboxes = () => inboxes().length > 1 || !!state.aliasFilter;
   const isSelected = (id: string) =>
-    (!state.aliasFilter && soleInbox()?.id === id) || selectedId() === id;
+    state.aliasFilter
+      ? selectedId() === id
+      : soleInbox()?.id === id || !!state.inboxIds?.includes(id);
   const selectedId = () => {
     if (state.aliasFilter)
       return `${state.aliasFilter.inboxId}:${state.aliasFilter.emailAddress.toLowerCase()}`;
@@ -93,15 +92,30 @@ function useInboxSelection() {
   return {
     options,
     soleInbox,
-    /** Keep the connected account visible even when there is no choice to make. */
-    visible: () => multiInboxFlag().enabled || options().length > 0,
     hasMultipleInboxes,
-    canAddInbox: () => multiInboxFlag().enabled,
     addInbox: () => fireAndForget(addInbox(), 'add-inbox'),
     isAll,
     isSelected,
     selectedOption,
     selectAll: () => setInboxIds(undefined),
+    /** Adds or removes one inbox; an alias still replaces the selection. */
+    toggle: (id: string) => {
+      const option = options().find((option) => option.id === id);
+      if (!option) return;
+      if (option.aliasAddress && option.inboxId) {
+        setAliasFilter({
+          inboxId: option.inboxId,
+          emailAddress: option.aliasAddress,
+        });
+        return;
+      }
+      const current = state.aliasFilter ? [] : (state.inboxIds ?? []);
+      setInboxIds(
+        current.includes(id)
+          ? current.filter((inbox) => inbox !== id)
+          : [...current, id]
+      );
+    },
     select: (id: string) => {
       const option = options().find((option) => option.id === id);
       if (!option) return;
@@ -202,16 +216,21 @@ function InboxAccountGroup(props: {
     (selection.options().length ? selection.label() : 'No inboxes connected');
 
   return (
-    <section
+    <ViewSidebar.Section
+      id="accounts"
+      label="Accounts"
       aria-label="Email accounts"
+      pinned
       class={cn(
         'shrink-0 rounded-xl border border-edge-button bg-control not-touch:elevated p-1',
         props.class
       )}
     >
-      <h2 class="px-2 pt-1 pb-1.5 text-xs font-medium text-ink-muted">
-        Accounts
-      </h2>
+      <ViewSidebar.SectionHeader>
+        <h2 class="px-2 pt-1 pb-1.5 text-xs font-medium text-ink-muted">
+          Accounts
+        </h2>
+      </ViewSidebar.SectionHeader>
       <Dropdown placement="bottom-start">
         <Dropdown.Trigger
           variant="ghost"
@@ -266,20 +285,18 @@ function InboxAccountGroup(props: {
           </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>
-      <Show when={selection.canAddInbox()}>
-        <div class="mt-1 border-t border-edge-divider pt-1">
-          <Button
-            variant="ghost"
-            size="md"
-            class="w-full justify-start gap-2 rounded-lg px-2 text-xs"
-            onClick={selection.addInbox}
-          >
-            <PlusIcon class="size-4" />
-            Connect another account
-          </Button>
-        </div>
-      </Show>
-    </section>
+      <div class="mt-1 border-t border-edge-divider pt-1">
+        <Button
+          variant="ghost"
+          size="md"
+          class="w-full justify-start gap-2 rounded-lg px-2 text-xs"
+          onClick={selection.addInbox}
+        >
+          <PlusIcon class="size-4" />
+          Connect another account
+        </Button>
+      </div>
+    </ViewSidebar.Section>
   );
 }
 
@@ -337,14 +354,12 @@ function InboxAccountList(props: {
           )}
         </For>
       </ViewSidebar.Nav>
-      <Show when={selection.canAddInbox()}>
-        <ViewSidebar.Item {...pressHandlers(selection.addInbox)}>
-          <ViewSidebar.Icon>
-            <PlusIcon class="size-4" />
-          </ViewSidebar.Icon>
-          <span class="truncate">Connect another account</span>
-        </ViewSidebar.Item>
-      </Show>
+      <ViewSidebar.Item {...pressHandlers(selection.addInbox)}>
+        <ViewSidebar.Icon>
+          <PlusIcon class="size-4" />
+        </ViewSidebar.Icon>
+        <span class="truncate">Connect another account</span>
+      </ViewSidebar.Item>
     </div>
   );
 }
@@ -354,15 +369,11 @@ export function EmailInboxList(props: { class?: string }) {
   const selection = useInboxSelection();
 
   return (
-    <Show when={selection.visible()}>
-      <Show
-        when={!isTouchDevice()}
-        fallback={
-          <InboxAccountList selection={selection} class={props.class} />
-        }
-      >
-        <InboxAccountGroup selection={selection} class={props.class} />
-      </Show>
+    <Show
+      when={!isTouchDevice()}
+      fallback={<InboxAccountList selection={selection} class={props.class} />}
+    >
+      <InboxAccountGroup selection={selection} class={props.class} />
     </Show>
   );
 }
@@ -487,19 +498,17 @@ export function EmailInboxMenu(props: { class?: string; grouped?: boolean }) {
               </For>
             </Dropdown.RadioGroup>
           </Dropdown.Group>
-          <Show when={selection.canAddInbox()}>
-            <Dropdown.Group>
-              <Dropdown.Item closeOnSelect onSelect={selection.addInbox}>
-                <span
-                  aria-hidden="true"
-                  class="flex size-4 shrink-0 items-center justify-center"
-                >
-                  <PlusIcon class="size-4" />
-                </span>
-                <span class="flex-1">Connect another account</span>
-              </Dropdown.Item>
-            </Dropdown.Group>
-          </Show>
+          <Dropdown.Group>
+            <Dropdown.Item closeOnSelect onSelect={selection.addInbox}>
+              <span
+                aria-hidden="true"
+                class="flex size-4 shrink-0 items-center justify-center"
+              >
+                <PlusIcon class="size-4" />
+              </span>
+              <span class="flex-1">Connect another account</span>
+            </Dropdown.Item>
+          </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>
     </Show>
@@ -529,7 +538,8 @@ function InboxRadioItem(props: {
 
 /**
  * Inbox section of the mobile filter drawer; must render inside the drawer's
- * `Accordion`. Radio semantics match the sidebar list: one inbox or all.
+ * `Accordion`. Inboxes are checkboxes, as in the Filters menu; an alias
+ * replaces the selection, and All inboxes clears it.
  */
 export function EmailInboxDrawerSection(props: { value: string }) {
   const selection = useInboxSelection();
@@ -541,9 +551,9 @@ export function EmailInboxDrawerSection(props: { value: string }) {
         label="Inbox"
         activeCount={selection.isAll() ? 0 : 1}
       >
-        <div role="radiogroup" aria-label="Inbox">
+        <div role="group" aria-label="Inbox">
           <MobileFilterDrawer.Option
-            selectionMode="single"
+            selectionMode="multiple"
             checked={selection.isAll()}
             onChange={selection.selectAll}
             icon={<TrayIcon class="size-4" />}
@@ -553,9 +563,9 @@ export function EmailInboxDrawerSection(props: { value: string }) {
           <For each={selection.options()}>
             {(option) => (
               <MobileFilterDrawer.Option
-                selectionMode="single"
+                selectionMode="multiple"
                 checked={selection.isSelected(option.id)}
-                onChange={() => selection.select(option.id)}
+                onChange={() => selection.toggle(option.id)}
                 icon={<InboxAvatar option={option} size="sm" />}
               >
                 <InboxOptionLabel option={option} />

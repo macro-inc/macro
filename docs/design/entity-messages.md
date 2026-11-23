@@ -32,6 +32,10 @@ The store re-checks the live-root rule inside the write transaction. The schema 
 a composite thread foreign key, a `CHECK` that forbids anchors on channel threads, and
 a partial unique index for one live Markdown discussion per mark per document.
 
+A channel root may have `kind = 'call_root'`, standing for a channel call; see
+[call chat in the channel](call-chat-in-channel.md). Nobody can change one, and it triggers nothing a
+post does.
+
 ### Transitional shape
 
 Until the last PR of the rollout removes them, the schema keeps:

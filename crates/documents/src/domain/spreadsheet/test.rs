@@ -73,8 +73,10 @@ async fn reads_mint_only_view_access_and_preserve_delegated_actor() {
     service
         .read(
             receipt(AccessLevel::View),
-            &user(),
-            "macro|ai@macro.com",
+            SpreadsheetCaller::Agent {
+                user: &user(),
+                actor: "macro|ai@macro.com",
+            },
             request(),
         )
         .await
@@ -98,8 +100,10 @@ async fn edits_forward_exact_revision_with_edit_token() {
     service
         .edit(
             receipt(AccessLevel::Edit),
-            &user(),
-            "macro|ai@macro.com",
+            SpreadsheetCaller::Agent {
+                user: &user(),
+                actor: "macro|ai@macro.com",
+            },
             "seen".into(),
             vec![SpreadsheetOperation::AddSheet {
                 name: "Forecast".into(),
@@ -117,8 +121,10 @@ async fn imported_files_cannot_enter_native_spreadsheet_worker() {
     let error = service
         .read(
             receipt(AccessLevel::View),
-            &user(),
-            "macro|ai@macro.com",
+            SpreadsheetCaller::Agent {
+                user: &user(),
+                actor: "macro|ai@macro.com",
+            },
             request(),
         )
         .await
@@ -136,8 +142,10 @@ async fn read_receipt_cannot_smuggle_an_edit_request() {
     let error = service
         .read(
             receipt(AccessLevel::View),
-            &user(),
-            "macro|ai@macro.com",
+            SpreadsheetCaller::Agent {
+                user: &user(),
+                actor: "macro|ai@macro.com",
+            },
             SpreadsheetRequest::Edit {
                 expected_revision: "r".into(),
                 operations: vec![],
@@ -159,8 +167,10 @@ async fn missing_revision_or_empty_batch_never_calls_ports() {
         service
             .edit(
                 receipt(AccessLevel::Edit),
-                &user(),
-                "macro|ai@macro.com",
+                SpreadsheetCaller::Agent {
+                    user: &user(),
+                    actor: "macro|ai@macro.com",
+                },
                 "".into(),
                 vec![]
             )
@@ -171,8 +181,10 @@ async fn missing_revision_or_empty_batch_never_calls_ports() {
         service
             .edit(
                 receipt(AccessLevel::Edit),
-                &user(),
-                "macro|ai@macro.com",
+                SpreadsheetCaller::Agent {
+                    user: &user(),
+                    actor: "macro|ai@macro.com",
+                },
                 "r".into(),
                 vec![]
             )
@@ -434,4 +446,128 @@ fn indented_cells_read_back_with_their_level() {
         operation,
         SpreadsheetOperation::FormatCells { style, .. } if style.indent == Some(1)
     ));
+}
+
+#[tokio::test]
+async fn sdk_edits_name_the_receipts_user_and_bot() {
+    let receipt = EntityAccessReceipt::<EditAccessLevel>::try_new_bot(
+        bot_id::MACRO_AI_BOT_ID.into_storage_id(),
+        entity_access::domain::models::BotReceiptScope::User {
+            acting_user: user(),
+        },
+        Entity {
+            entity_id: DOCUMENT.to_owned(),
+            entity_type: EntityType::Document,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit,
+        },
+    )
+    .unwrap();
+    let mut worker = MockEditingWorkerService::new();
+    worker
+        .expect_spreadsheet()
+        .times(1)
+        .returning(|_, token, _| {
+            let claims: serde_json::Value =
+                macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+            assert_eq!(claims["access_level"], "edit");
+            assert_eq!(claims["user_id"], "macro|sheets@macro.com");
+            assert_eq!(claims["actor"], "bot|00000000-0000-0000-0000-00000000a1a1");
+            Box::pin(async { Ok(response()) })
+        });
+    let service = SpreadsheetService::new(
+        Arc::new(lookup("spreadsheet")),
+        Arc::new(worker),
+        SECRET.into(),
+    );
+
+    service
+        .edit(
+            receipt,
+            SpreadsheetCaller::Receipt,
+            "seen".into(),
+            vec![SpreadsheetOperation::AddSheet {
+                name: "Forecast".into(),
+            }],
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn sdk_reads_by_a_user_carry_no_actor() {
+    let mut worker = MockEditingWorkerService::new();
+    worker
+        .expect_spreadsheet()
+        .times(1)
+        .returning(|_, token, _| {
+            let claims: serde_json::Value =
+                macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+            assert_eq!(claims["access_level"], "view");
+            assert_eq!(claims["user_id"], "macro|sheets@macro.com");
+            assert!(claims.get("actor").is_none());
+            Box::pin(async { Ok(response()) })
+        });
+    let service = SpreadsheetService::new(
+        Arc::new(lookup("spreadsheet")),
+        Arc::new(worker),
+        SECRET.into(),
+    );
+
+    service
+        .read(
+            receipt(AccessLevel::View),
+            SpreadsheetCaller::Receipt,
+            request(),
+        )
+        .await
+        .unwrap();
+}
+
+#[test]
+fn set_cells_carries_typed_values_to_the_worker_unchanged() {
+    let json = serde_json::json!({
+        "type": "set_cells", "sheetId": "sheet1",
+        "cells": [
+            {"address": "A1", "value": "Item"},
+            {"address": "B1", "value": 42},
+            {"address": "B2", "value": -0.25},
+            {"address": "C1", "value": true},
+            {"address": "D1", "value": "=SUM(B1:B2)"},
+            {"address": "E1", "value": null}
+        ]
+    });
+    let operation: SpreadsheetOperation = serde_json::from_value(json.clone()).unwrap();
+    let SpreadsheetOperation::SetCells { cells, .. } = &operation else {
+        panic!("expected set_cells");
+    };
+    assert!(matches!(&cells[0].value, SpreadsheetCellValue::Text(text) if text == "Item"));
+    assert!(
+        matches!(&cells[1].value, SpreadsheetCellValue::Number(number) if number.as_i64() == Some(42))
+    );
+    assert!(
+        matches!(&cells[2].value, SpreadsheetCellValue::Number(number) if number.as_f64() == Some(-0.25))
+    );
+    assert!(matches!(
+        cells[3].value,
+        SpreadsheetCellValue::Boolean(true)
+    ));
+    assert!(matches!(&cells[4].value, SpreadsheetCellValue::Text(text) if text == "=SUM(B1:B2)"));
+    assert!(matches!(cells[5].value, SpreadsheetCellValue::Empty));
+    assert_eq!(serde_json::to_value(&operation).unwrap(), json);
+
+    assert!(
+        serde_json::from_value::<SpreadsheetOperation>(serde_json::json!({
+            "type": "set_cells", "sheetId": "sheet1",
+            "cells": [{"address": "A1", "value": {"formula": "=1"}}]
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<SpreadsheetOperation>(serde_json::json!({
+            "type": "set_cells", "sheetId": "sheet1", "cells": [{"address": "A1"}]
+        }))
+        .is_err()
+    );
 }

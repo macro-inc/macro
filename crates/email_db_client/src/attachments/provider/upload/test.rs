@@ -326,9 +326,12 @@ async fn insertable_attachments_condition_1_user_sent_message(pool: Pool<Postgre
 
     // Should return 1 attachment (sent_message_doc.pdf)
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, Some("sent_message_doc.pdf".to_string()));
-    assert_eq!(res[0].mime_type, "application/pdf");
-    assert_eq!(res[0].email_provider_id, "target-msg-101");
+    assert_eq!(
+        res[0].metadata.filename,
+        Some("sent_message_doc.pdf".to_string())
+    );
+    assert_eq!(res[0].metadata.mime_type, "application/pdf");
+    assert_eq!(res[0].metadata.email_provider_id, "target-msg-101");
 
     Ok(())
 }
@@ -354,9 +357,12 @@ async fn insertable_attachments_condition_2_important_label(pool: Pool<Postgres>
 
     // Should return 1 attachment (important_doc.pdf)
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, Some("important_doc.pdf".to_string()));
-    assert_eq!(res[0].mime_type, "application/pdf");
-    assert_eq!(res[0].email_provider_id, "target-msg-201");
+    assert_eq!(
+        res[0].metadata.filename,
+        Some("important_doc.pdf".to_string())
+    );
+    assert_eq!(res[0].metadata.mime_type, "application/pdf");
+    assert_eq!(res[0].metadata.email_provider_id, "target-msg-201");
 
     Ok(())
 }
@@ -410,9 +416,12 @@ async fn insertable_attachments_condition_3_same_domain(pool: Pool<Postgres>) ->
 
     // Should return 1 attachment (same_domain_doc.pdf)
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, Some("same_domain_doc.pdf".to_string()));
-    assert_eq!(res[0].mime_type, "application/pdf");
-    assert_eq!(res[0].email_provider_id, "target-msg-301");
+    assert_eq!(
+        res[0].metadata.filename,
+        Some("same_domain_doc.pdf".to_string())
+    );
+    assert_eq!(res[0].metadata.mime_type, "application/pdf");
+    assert_eq!(res[0].metadata.email_provider_id, "target-msg-301");
 
     Ok(())
 }
@@ -460,7 +469,7 @@ async fn insertable_attachments_matches_domain_case_insensitively(
 
     assert_eq!(res.len(), 1);
     assert_eq!(
-        res[0].filename,
+        res[0].metadata.filename,
         Some("mixed_case_domain_doc.pdf".to_string())
     );
 
@@ -489,11 +498,11 @@ async fn insertable_attachments_condition_4_whitelisted_domain(pool: Pool<Postgr
     // Should return 1 attachment (whitelisted_domain_doc.pdf)
     assert_eq!(res.len(), 1);
     assert_eq!(
-        res[0].filename,
+        res[0].metadata.filename,
         Some("whitelisted_domain_doc.pdf".to_string())
     );
-    assert_eq!(res[0].mime_type, "application/pdf");
-    assert_eq!(res[0].email_provider_id, "target-msg-801");
+    assert_eq!(res[0].metadata.mime_type, "application/pdf");
+    assert_eq!(res[0].metadata.email_provider_id, "target-msg-801");
 
     Ok(())
 }
@@ -520,11 +529,11 @@ async fn insertable_attachments_condition_5_contacted_participant_claims(
 
     assert_eq!(res.len(), 1);
     assert_eq!(
-        res[0].filename,
+        res[0].metadata.filename,
         Some("previously_contacted_doc.pdf".to_string())
     );
-    assert_eq!(res[0].mime_type, "application/pdf");
-    assert_eq!(res[0].email_provider_id, "target-msg-401");
+    assert_eq!(res[0].metadata.mime_type, "application/pdf");
+    assert_eq!(res[0].metadata.email_provider_id, "target-msg-401");
 
     Ok(())
 }
@@ -633,7 +642,10 @@ async fn insertable_attachments_condition_5_missing_self_contact_allows_contacte
     .await?;
 
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename.as_deref(), Some("missing_self_contact.pdf"));
+    assert_eq!(
+        res[0].metadata.filename.as_deref(),
+        Some("missing_self_contact.pdf")
+    );
 
     Ok(())
 }
@@ -684,15 +696,21 @@ async fn insertable_attachments_filters_mime_types(pool: Pool<Postgres>) -> Resu
 
     // Should only return PDF, not image or zip
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, Some("sent_message_doc.pdf".to_string()));
-    assert_eq!(res[0].mime_type, "application/pdf");
+    assert_eq!(
+        res[0].metadata.filename,
+        Some("sent_message_doc.pdf".to_string())
+    );
+    assert_eq!(res[0].metadata.mime_type, "application/pdf");
 
     // Verify no filtered mime types are present
     for attachment in &res {
-        assert!(!attachment.mime_type.starts_with("image/"));
-        assert!(!attachment.mime_type.contains("zip"));
-        assert_ne!(attachment.mime_type, "application/ics");
-        assert_ne!(attachment.mime_type, "application/x-sharing-metadata-xml");
+        assert!(!attachment.metadata.mime_type.starts_with("image/"));
+        assert!(!attachment.metadata.mime_type.contains("zip"));
+        assert_ne!(attachment.metadata.mime_type, "application/ics");
+        assert_ne!(
+            attachment.metadata.mime_type,
+            "application/x-sharing-metadata-xml"
+        );
     }
 
     Ok(())
@@ -747,7 +765,10 @@ async fn insertable_attachments_thread_exists_logic(pool: Pool<Postgres>) -> Res
     .await?;
 
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, Some("important_doc.pdf".to_string()));
+    assert_eq!(
+        res[0].metadata.filename,
+        Some("important_doc.pdf".to_string())
+    );
 
     Ok(())
 }
@@ -778,7 +799,10 @@ async fn insertable_attachments_returns_first_query_when_available(
 
     // Should return result from first query
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].filename, Some("sent_message_doc.pdf".to_string()));
+    assert_eq!(
+        res[0].metadata.filename,
+        Some("sent_message_doc.pdf".to_string())
+    );
 
     Ok(())
 }
@@ -906,13 +930,13 @@ async fn new_email_media_includes_non_inline_attachments(pool: Pool<Postgres>) -
 
     let filenames: Vec<&str> = res
         .iter()
-        .map(|a| a.filename.as_ref().map(|s| s.as_str()).unwrap())
+        .map(|a| a.metadata.filename.as_ref().map(|s| s.as_str()).unwrap())
         .collect();
     assert!(filenames.contains(&"new_photo.jpg"));
     assert!(filenames.contains(&"new_video.mp4"));
 
     // Verify mime types
-    let mime_types: Vec<&str> = res.iter().map(|a| a.mime_type.as_str()).collect();
+    let mime_types: Vec<&str> = res.iter().map(|a| a.metadata.mime_type.as_str()).collect();
     assert!(mime_types.contains(&"image/jpeg"));
     assert!(mime_types.contains(&"video/mp4"));
 
@@ -954,10 +978,16 @@ async fn new_email_media_filters_inline_images(pool: Pool<Postgres>) -> Result<(
     // Should return 2 attachment: attachment_image.png
     // Should include inline_image.png (has content_id)
     assert_eq!(res.len(), 2);
-    assert_eq!(res[0].filename, Some("inline_image.png".to_string()));
-    assert_eq!(res[0].mime_type, "image/png");
-    assert_eq!(res[1].filename, Some("attachment_image.png".to_string()));
-    assert_eq!(res[1].mime_type, "image/png");
+    assert_eq!(
+        res[0].metadata.filename,
+        Some("inline_image.png".to_string())
+    );
+    assert_eq!(res[0].metadata.mime_type, "image/png");
+    assert_eq!(
+        res[1].metadata.filename,
+        Some("attachment_image.png".to_string())
+    );
+    assert_eq!(res[1].metadata.mime_type, "image/png");
 
     Ok(())
 }
@@ -1136,18 +1166,14 @@ async fn new_email_document_atts_claims_attachments(pool: Pool<Postgres>) -> Res
     .await?;
     assert_eq!(res.len(), 2);
 
-    // Verify the attachments were claimed (upload_claimed_at is now set)
-    let attachment_ids: Vec<Uuid> = res.iter().map(|a| a.attachment_db_id).collect();
-    for attachment_id in &attachment_ids {
+    // Each comes back with the claim it set, so a write guarded on it applies.
+    for claimed in &res {
         let row: (Option<chrono::DateTime<chrono::Utc>>,) =
             sqlx::query_as(r#"SELECT upload_claimed_at FROM email_attachments WHERE id = $1"#)
-                .bind(attachment_id)
+                .bind(claimed.metadata.attachment_db_id)
                 .fetch_one(&pool)
                 .await?;
-        assert!(
-            row.0.is_some(),
-            "Attachment should have upload_claimed_at set after being returned"
-        );
+        assert_eq!(row.0, Some(claimed.claimed_at));
     }
 
     // Second call should return empty (attachments already claimed)
@@ -1184,18 +1210,14 @@ async fn new_email_media_atts_claims_attachments(pool: Pool<Postgres>) -> Result
     .await?;
     assert_eq!(res.len(), 2);
 
-    // Verify the attachments were claimed (upload_claimed_at is now set)
-    let attachment_ids: Vec<Uuid> = res.iter().map(|a| a.attachment_db_id).collect();
-    for attachment_id in &attachment_ids {
+    // Each comes back with the claim it set, so a write guarded on it applies.
+    for claimed in &res {
         let row: (Option<chrono::DateTime<chrono::Utc>>,) =
             sqlx::query_as(r#"SELECT upload_claimed_at FROM email_attachments WHERE id = $1"#)
-                .bind(attachment_id)
+                .bind(claimed.metadata.attachment_db_id)
                 .fetch_one(&pool)
                 .await?;
-        assert!(
-            row.0.is_some(),
-            "Attachment should have upload_claimed_at set after being returned"
-        );
+        assert_eq!(row.0, Some(claimed.claimed_at));
     }
 
     // Second call should return empty (attachments already claimed)
@@ -1297,5 +1319,151 @@ async fn cloud_reference_documents_are_never_claimed_as_files(pool: Pool<Postgre
             .is_empty()
     );
     assert!(!attachment_is_claimed(&pool, attachment.attachment_db_id).await?);
+    Ok(())
+}
+
+/// A claimed attachment that the query doesn't return is never uploaded, and
+/// its claim keeps the message's projection waiting forever.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn senderless_message_returns_every_attachment_it_claims(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000c01")?;
+    let document_id = Uuid::parse_str("00000000-0000-0000-0000-00000c5a0501")?;
+    let media_id = Uuid::parse_str("00000000-0000-0000-0000-00000c5a0502")?;
+
+    let documents = new_email_document_atts(&pool, link_id, "claim-test-senderless-msg").await?;
+    let media = new_email_media_atts(&pool, link_id, "claim-test-senderless-msg").await?;
+
+    assert!(attachment_is_claimed(&pool, document_id).await?);
+    assert!(attachment_is_claimed(&pool, media_id).await?);
+    assert_eq!(
+        documents
+            .iter()
+            .map(|a| (a.metadata.attachment_db_id, a.metadata.sender_email.clone()))
+            .collect::<Vec<_>>(),
+        [(document_id, None)]
+    );
+    assert_eq!(
+        media
+            .iter()
+            .map(|a| (a.metadata.attachment_db_id, a.metadata.sender_email.clone()))
+            .collect::<Vec<_>>(),
+        [(media_id, None)]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn pending_upload_claim_names_the_claim_until_its_file_is_stored(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-0000000ec401")?;
+    let attachment_id = Uuid::parse_str("00000000-0000-0000-0000-00000c4a0401")?;
+    sqlx::query!(
+        "UPDATE email_attachments SET upload_claimed_at = now() - interval '5 minutes' WHERE id = $1",
+        attachment_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let claim = oldest_pending_upload_claim(&pool, message_id)
+        .await?
+        .expect("the claim has stored nothing yet");
+    assert_eq!(claim.attachment_id, attachment_id);
+    assert!(
+        (300..360).contains(&claim.claim_age_seconds),
+        "claim age {}",
+        claim.claim_age_seconds
+    );
+
+    sqlx::query!(
+        "INSERT INTO email_attachments_sfs (id, attachment_id, sfs_id) VALUES ($1, $2, $3)",
+        Uuid::from_u128(1),
+        attachment_id,
+        Uuid::from_u128(2)
+    )
+    .execute(&pool)
+    .await?;
+
+    assert_eq!(oldest_pending_upload_claim(&pool, message_id).await?, None);
+
+    Ok(())
+}
+
+const DRAFTER_LINK: &str = "00000000-0000-0000-0000-000000000d01";
+const DRAFTER_THREAD: &str = "00000000-0000-0000-0000-00000000d101";
+const DRAFT_ATTACHMENT: &str = "00000000-0000-0000-0000-00000d5a0103";
+
+/// A draft is replaced or deleted when it is saved again, sent or discarded,
+/// which leaves a document imported from its attachment without its link.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("draft_document_attachments"))
+)]
+async fn new_mail_import_skips_draft_attachments(pool: Pool<Postgres>) -> Result<()> {
+    let link_id = Uuid::parse_str(DRAFTER_LINK)?;
+
+    let documents = new_email_document_atts(&pool, link_id, "draft-test-draft-msg").await?;
+
+    assert!(documents.is_empty());
+    assert!(!attachment_is_claimed(&pool, Uuid::parse_str(DRAFT_ATTACHMENT)?).await?);
+
+    let received = new_email_document_atts(&pool, link_id, "draft-test-received-msg").await?;
+    assert_eq!(
+        received
+            .iter()
+            .map(|a| a.metadata.filename.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("received_doc.pdf")]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("draft_document_attachments"))
+)]
+async fn thread_backfill_skips_draft_attachments(pool: Pool<Postgres>) -> Result<()> {
+    let documents =
+        thread_document_atts_for_backfill(&pool, Uuid::parse_str(DRAFTER_THREAD)?).await?;
+
+    assert_eq!(
+        documents
+            .iter()
+            .map(|a| a.filename.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("received_doc.pdf")]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("draft_document_attachments"))
+)]
+async fn mailbox_backfill_skips_draft_attachments(pool: Pool<Postgres>) -> Result<()> {
+    let documents =
+        fetch_job_attachments_for_backfill(&pool, Uuid::parse_str(DRAFTER_LINK)?).await?;
+
+    assert_eq!(
+        documents
+            .iter()
+            .map(|a| a.filename.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("received_doc.pdf")]
+    );
+
     Ok(())
 }

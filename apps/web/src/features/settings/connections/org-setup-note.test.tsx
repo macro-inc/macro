@@ -6,9 +6,9 @@ import { OrgSetupNote } from './org-setup-note';
 const setup = {
   summary: 'An admin allows it once.',
   steps: ['Open settings.', 'Add the URL below.'],
-  settings_url: 'https://vendor.example/settings',
+  settingsUrl: 'https://vendor.example/settings',
   required: true,
-  allowlist_url: 'https://connect.example/v1/oauth/callback',
+  allowlistUrl: 'https://connect.example/v1/oauth/callback',
 };
 
 afterEach(cleanup);
@@ -21,8 +21,8 @@ it('opens to the steps, the URL to add, and the settings link', () => {
 
   expect(screen.getByText(setup.summary)).toBeTruthy();
   expect(screen.getByText(setup.steps[1])).toBeTruthy();
-  expect(screen.getByText(setup.allowlist_url)).toBeTruthy();
+  expect(screen.getByText(setup.allowlistUrl)).toBeTruthy();
   expect(screen.getByText('Where to do this').getAttribute('href')).toBe(
-    setup.settings_url
+    setup.settingsUrl
   );
 });

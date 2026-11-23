@@ -21,6 +21,7 @@ mod groups;
 mod ingest;
 mod lookups;
 mod media;
+mod pictures;
 mod sends;
 mod session;
 #[cfg(test)]
@@ -153,5 +154,6 @@ pub(crate) async fn end_consent_in(
         .execute(&mut **tx)
         .await
         .map_err(failure)?;
+    pictures::recheck_pictures_in(tx, account).await?;
     Ok(())
 }

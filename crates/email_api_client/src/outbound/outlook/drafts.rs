@@ -12,7 +12,11 @@ use sha2::{Digest, Sha256};
 use url::Url;
 use uuid::Uuid;
 
-use super::{OutlookApiClientRepository, transport::invalid_response, wire::Page};
+use super::{
+    OutlookApiClientRepository,
+    transport::{invalid_response, read_json},
+    wire::Page,
+};
 use crate::domain::{models::*, ports::MailboxDraftClient};
 
 #[cfg(test)]
@@ -138,14 +142,16 @@ struct Upload {
 
 impl OutlookApiClientRepository {
     fn upload_url(&self, value: &UploadUrl) -> Result<Url, EmailApiError> {
-        let url = Url::parse(value.expose()).map_err(|_| invalid_response())?;
+        let url =
+            Url::parse(value.expose()).map_err(|_| invalid_response("upload URL is not a URL"))?;
         let allowed = url.scheme() == "https"
             && url.port_or_known_default() == Some(443)
             && matches!(
                 url.host_str(),
                 Some("outlook.office.com" | "outlook.office365.com" | "graph.microsoft.com")
             );
-        #[cfg(test)]
+        // The configured Graph root is Microsoft's own unless it was
+        // overridden to an emulator, which serves its upload URLs itself.
         let allowed = allowed || url.origin() == self.root.origin();
         if !allowed
             || !url.username().is_empty()
@@ -168,16 +174,20 @@ impl OutlookApiClientRepository {
             .upload_url
             .map(UploadUrl::new)
             .or_else(|| previous_url.cloned())
-            .ok_or_else(invalid_response)?;
+            .ok_or_else(|| invalid_response("upload session has no uploadUrl"))?;
         self.upload_url(&url)?;
         // Outlook requires sequential ranges. Multiple holes are not silently skipped.
         let [range] = upload.next_expected_ranges.as_slice() else {
-            return Err(invalid_response());
+            return Err(invalid_response(
+                "upload session nextExpectedRanges is not one range",
+            ));
         };
         let start = range
             .split_once('-')
             .map_or(range.as_str(), |(start, _)| start);
-        let next_offset = start.parse().map_err(|_| invalid_response())?;
+        let next_offset = start
+            .parse()
+            .map_err(|_| invalid_response("upload session range start is not a number"))?;
         Ok(AttachmentUploadSession {
             url,
             expires_at: upload.expiration_date_time,
@@ -219,7 +229,7 @@ impl MailboxDraftClient for OutlookApiClientRepository {
         let mut seen = HashSet::new();
         loop {
             if !seen.insert(url.to_string()) {
-                return Err(invalid_response());
+                return Err(invalid_response("draft lookup pages repeat"));
             }
             let page: Page<Draft> = self.get(token, url).await?;
             for draft in page.value {
@@ -338,7 +348,7 @@ impl MailboxDraftClient for OutlookApiClientRepository {
         let mut seen = HashSet::new();
         loop {
             if !seen.insert(url.to_string()) {
-                return Err(invalid_response());
+                return Err(invalid_response("draft attachment pages repeat"));
             }
             let page: Page<Attachment> = self.get(token, url).await?;
             for attachment in page.value {
@@ -449,7 +459,7 @@ impl MailboxDraftClient for OutlookApiClientRepository {
         let response = self
             .gated_request(self.client.get(self.upload_url(url)?))
             .await?;
-        let value = response.json().await.map_err(|_| invalid_response())?;
+        let value = read_json(response).await?;
         self.upload_checkpoint(value, Some(url))
     }
 
@@ -462,7 +472,7 @@ impl MailboxDraftClient for OutlookApiClientRepository {
     ) -> Result<UploadProgress, EmailApiError> {
         let end = offset
             .checked_add(bytes.len() as u64)
-            .ok_or_else(invalid_response)?;
+            .ok_or_else(|| invalid_response("upload range overflows"))?;
         if bytes.is_empty()
             || bytes.len() >= MAX_RANGE_SIZE
             || total > MAX_ATTACHMENT_SIZE as u64
@@ -492,7 +502,9 @@ impl MailboxDraftClient for OutlookApiClientRepository {
             .upload_checkpoint(written_json(response).await?, Some(url))
             .map_err(uncertain_write)?;
         if checkpoint.next_offset > total {
-            return Err(uncertain_write(invalid_response()));
+            return Err(uncertain_write(invalid_response(
+                "upload checkpoint passes the end of the file",
+            )));
         }
         Ok(UploadProgress::Continue(checkpoint))
     }
@@ -582,10 +594,7 @@ fn recipients(contacts: Option<&[ContactInfo]>) -> Vec<Value> {
 async fn written_json<T: serde::de::DeserializeOwned>(
     response: Response,
 ) -> Result<T, EmailApiError> {
-    response
-        .json()
-        .await
-        .map_err(|_| uncertain_write(invalid_response()))
+    read_json(response).await.map_err(uncertain_write)
 }
 
 fn uncertain_write(_: EmailApiError) -> EmailApiError {

@@ -77,6 +77,7 @@ type Trigger = AgentTriggerService<
         entity_access::domain::service::EntityAccessServiceImpl<
             entity_access::outbound::PgAccessRepository,
         >,
+        PgPeopleDirectory<PgBotsRepo>,
     >,
 >;
 type Publisher = MacroEventBrokerService<KafkaEventPublisher, macro_event_broker::GlobalSpawner>;
@@ -221,6 +222,7 @@ async fn run() -> anyhow::Result<()> {
             entity_access::domain::service::EntityAccessServiceImpl::new(
                 entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
+            PgPeopleDirectory::new(pool.clone(), PgBotsRepo::new(pool.clone())),
         ),
     )
     .with_admission(admission);

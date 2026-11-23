@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT suggestion_id, role, entity_type, entity_id, part_id\n               FROM suggestion_target\n               WHERE suggestion_id = ANY($1)\n               ORDER BY suggestion_id, role, position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "suggestion_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "part_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "6fda63285354f5fe8efc4d98532a3a90d1d1d14f1411ed618d947ef15c8c7c6a"
+}

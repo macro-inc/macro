@@ -1,17 +1,6 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
-import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
-import {
-  nextNotificationState,
-  notificationStatesForFilter,
-} from '@notifications/notification-state';
 import type { UnifiedNotification } from '@notifications/types';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
@@ -19,13 +8,8 @@ import type { NotificationUpdateOperation } from '@service-storage/graphql/gener
 import { updateNotifications } from '@service-storage/graphql-notifications';
 import { graphqlCacheEnabled } from '@service-storage/graphql-soup';
 import { createLazyMemo } from '@solid-primitives/memo';
-import {
-  type InfiniteData,
-  useInfiniteQuery,
-  useMutation,
-} from '@tanstack/solid-query';
+import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createSignal, untrack } from 'solid-js';
-import { z } from 'zod';
 import { queryClient } from '../client';
 import {
   createGraphqlNotificationsQuery,
@@ -33,7 +17,6 @@ import {
   type UpdateNotificationsResult,
 } from './graphql/user-notifications';
 import { notificationKeys } from './keys';
-import { updateSoupForNotification } from './notification-soup';
 
 function stripOwnerId({
   owner_id: _,
@@ -50,94 +33,7 @@ function selectNotificationItems(
 }
 
 const DEFAULT_NOTIFICATION_LIMIT = 20;
-const NOTIFICATION_STALE_TIME = 5 * 60 * 1000; // 5 minutes
 const NOTIFICATION_GC_TIME = 10 * 60 * 1000; // 10 minutes
-
-// Websocket-inserted notifications young enough that a fetch snapshot may
-// predate them: a full refetch reads its pages over several seconds and
-// commits atomically, so a snapshot begun before the insert lands without
-// the row and would silently drop it from the cache. A query-cache
-// subscription re-prepends tracked rows after every non-manual success
-// commit (solid-query hard-disables structuralSharing, so a commit-time
-// merge hook is not available). Entries retire by TTL, realtime delete, or
-// done removal — not by cache containment, since our own optimistic writes
-// also contain the row and are not server confirmation.
-const UNCONFIRMED_INSERT_TTL_MS = 5 * 60 * 1000;
-const MAX_UNCONFIRMED_INSERTS = 200;
-const unconfirmedInserts = new Map<
-  string,
-  { item: NotificationItem; insertedAt: number }
->();
-
-let unconfirmedInsertsSubscribed = false;
-
-// Subscribed lazily on the first tracked insert so importing this module
-// never touches the query client (test setups mock it after import).
-function ensureUnconfirmedInsertReapply() {
-  if (unconfirmedInsertsSubscribed || typeof window === 'undefined') return;
-  unconfirmedInsertsSubscribed = true;
-  queryClient.getQueryCache().subscribe((event) => {
-    if (event.type !== 'updated') return;
-    const action = event.action as { type: string; manual?: boolean };
-    if (action.type !== 'success' || action.manual) return;
-    const key = event.query.queryKey;
-    if (!Array.isArray(key) || key[0] !== 'notification' || key[1] !== 'user')
-      return;
-    reapplyUnconfirmedInserts(key);
-  });
-}
-
-function trackUnconfirmedInsert(item: NotificationItem) {
-  ensureUnconfirmedInsertReapply();
-  unconfirmedInserts.delete(item.id);
-  unconfirmedInserts.set(item.id, { item, insertedAt: Date.now() });
-  while (unconfirmedInserts.size > MAX_UNCONFIRMED_INSERTS) {
-    const oldest = unconfirmedInserts.keys().next().value;
-    if (oldest === undefined) break;
-    unconfirmedInserts.delete(oldest);
-  }
-}
-
-function retireUnconfirmedInserts(ids: Iterable<string>) {
-  for (const id of ids) unconfirmedInserts.delete(id);
-}
-
-function pruneExpiredUnconfirmedInserts() {
-  const now = Date.now();
-  for (const [id, entry] of unconfirmedInserts) {
-    if (now - entry.insertedAt > UNCONFIRMED_INSERT_TTL_MS) {
-      unconfirmedInserts.delete(id);
-    }
-  }
-}
-
-function reapplyUnconfirmedInserts(queryKey: readonly unknown[]) {
-  pruneExpiredUnconfirmedInserts();
-  if (unconfirmedInserts.size === 0) return;
-  queryClient.setQueryData<NotificationData<UserNotificationsPageParam>>(
-    queryKey,
-    (data) => {
-      if (!data?.pages?.length) return data;
-      const presentIds = new Set(
-        data.pages.flatMap((page) => page.items.map((n) => n.id))
-      );
-      const missing = [...unconfirmedInserts.values()]
-        .map((entry) => entry.item)
-        .filter(
-          (item) =>
-            !presentIds.has(item.id) &&
-            (item.state === 'done') === notificationQueryWantsDone(queryKey)
-        );
-      if (missing.length === 0) return data;
-      return {
-        ...data,
-        pages: data.pages.map((page, index) =>
-          index === 0 ? { ...page, items: [...missing, ...page.items] } : page
-        ),
-      };
-    }
-  );
-}
 
 function normalizeLimit(limit?: number): number {
   return limit && limit > 0 && limit <= 500
@@ -145,37 +41,9 @@ function normalizeLimit(limit?: number): number {
     : DEFAULT_NOTIFICATION_LIMIT;
 }
 
-type UserNotificationsPageParam = { limit: number; cursor?: string };
-
-function userNotificationsQueryOptions(limit: number, done?: boolean) {
-  return {
-    queryKey: notificationKeys.user({ limit, done }).queryKey,
-    queryFn: async ({
-      pageParam,
-    }: {
-      pageParam: UserNotificationsPageParam;
-    }) => {
-      return await throwOnErr(
-        async () =>
-          await notificationServiceClient.userNotifications({
-            limit: pageParam.limit,
-            cursor: pageParam.cursor,
-            states: notificationStatesForFilter('done', done ?? false),
-          })
-      );
-    },
-    initialPageParam: { limit } as UserNotificationsPageParam,
-    getNextPageParam: (lastPage: GetAllUserNotificationsResponse) =>
-      lastPage.next_cursor ? { cursor: lastPage.next_cursor, limit } : null,
-    staleTime: NOTIFICATION_STALE_TIME,
-    gcTime: NOTIFICATION_GC_TIME,
-  };
-}
-
 /** Arguments for the current user's notification query. */
 export type UserNotificationsQueryArgs = {
   limit?: number;
-  done?: boolean;
 };
 
 /** Reactive options for the current user's notification query. */
@@ -183,9 +51,9 @@ export type UserNotificationsQueryOptions = {
   enabled?: boolean;
 };
 
-/** Query state exposed by the transport-neutral notification facade. */
+/** Query state exposed by the notification feed facade. */
 export type UserNotificationsQuery = {
-  /** Reactively reports data/status activation of the GraphQL feed (REST is eager). */
+  /** Reactively reports whether a data/status reader has started the feed. */
   readonly isStarted: boolean;
   readonly data: UnifiedNotification[] | undefined;
   readonly error: Error | null;
@@ -193,110 +61,61 @@ export type UserNotificationsQuery = {
   readonly isFetching: boolean;
   readonly isFetchingNextPage: boolean;
   readonly hasNextPage: boolean;
-  readonly transport: 'rest' | 'graphql';
   fetchNextPage(): Promise<void>;
   refetch(): Promise<void>;
 };
 
-/** REST implementation kept private behind {@link useUserNotificationsQuery}. */
-function useRestUserNotificationsQuery(
-  args: Accessor<UserNotificationsQueryArgs>,
-  options?: Accessor<UserNotificationsQueryOptions>
-) {
-  return useInfiniteQuery(() => {
-    const queryArgs = args();
-    const limit = normalizeLimit(queryArgs.limit);
-    return {
-      ...userNotificationsQueryOptions(limit, queryArgs.done),
-      select: selectNotificationItems,
-      enabled: options?.().enabled,
-      // Always refetch in the case of a stale browser tab
-      refetchOnWindowFocus: 'always' as const,
-    };
-  });
-}
-
 /**
- * Paginated query for the current user's notifications.
- *
- * Active notifications come from the GraphQL Soup query's notification
- * fragment. Done-history queries retain REST pagination because Soup
- * notification edges only return active records.
+ * Paginated query for the current user's active notifications, read from the
+ * GraphQL Soup query's notification fragment. The feed is built only when a
+ * data/status reader first needs it.
  */
 export function useUserNotificationsQuery(
   args: Accessor<UserNotificationsQueryArgs>,
   options?: Accessor<UserNotificationsQueryOptions>
 ): UserNotificationsQuery {
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
-  const queryEnabled = () => options?.().enabled !== false;
-
-  // Cold-start flags can arrive after the observers mount. Enabling and
-  // reading a transport must react to the same flag, not an imperative snapshot.
-  const usesGraphql = () => graphqlSoupFlag().enabled && args().done !== true;
-
-  const [graphqlStarted, setGraphqlStarted] = createSignal(false);
-  const graphqlQuery = createLazyMemo(() =>
+  const [started, setStarted] = createSignal(false);
+  const query = createLazyMemo(() =>
     untrack(() => {
-      const query = createGraphqlNotificationsQuery(args, () => ({
-        enabled: queryEnabled() && usesGraphql(),
+      const graphqlQuery = createGraphqlNotificationsQuery(args, () => ({
+        enabled: options?.().enabled !== false,
       }));
-      setGraphqlStarted(true);
-      return query;
+      setStarted(true);
+      return graphqlQuery;
     })
   );
 
-  const restQuery = useRestUserNotificationsQuery(args, () => ({
-    enabled: queryEnabled() && !usesGraphql(),
-  }));
-
-  const refetch = async () => {
-    if (usesGraphql()) {
-      await graphqlQuery().refetch({
+  return {
+    get isStarted() {
+      return started();
+    },
+    get data() {
+      return query().data;
+    },
+    get error() {
+      return query().error;
+    },
+    get isLoading() {
+      return query().isLoading;
+    },
+    get isFetching() {
+      return query().isFetching;
+    },
+    get isFetchingNextPage() {
+      return query().isFetchingNextPage;
+    },
+    get hasNextPage() {
+      return query().hasNextPage;
+    },
+    async fetchNextPage() {
+      await query().fetchNextPage();
+    },
+    async refetch() {
+      await query().refetch({
         requestPolicy: 'network-only',
         throwOnError: true,
       });
-    } else {
-      const result = await restQuery.refetch();
-      if (result.error) throw result.error;
-    }
-  };
-
-  return {
-    get isStarted() {
-      return !usesGraphql() || graphqlStarted();
     },
-    get data() {
-      return usesGraphql() ? graphqlQuery().data : restQuery.data;
-    },
-    get error() {
-      return usesGraphql()
-        ? graphqlQuery().error
-        : ((restQuery.error as Error | null) ?? null);
-    },
-    get isLoading() {
-      return usesGraphql() ? graphqlQuery().isLoading : restQuery.isLoading;
-    },
-    get isFetching() {
-      return usesGraphql() ? graphqlQuery().isFetching : restQuery.isFetching;
-    },
-    get isFetchingNextPage() {
-      return usesGraphql()
-        ? graphqlQuery().isFetchingNextPage
-        : restQuery.isFetchingNextPage;
-    },
-    get hasNextPage() {
-      return usesGraphql()
-        ? graphqlQuery().hasNextPage
-        : (restQuery.hasNextPage ?? false);
-    },
-    get transport() {
-      return usesGraphql() ? 'graphql' : 'rest';
-    },
-    async fetchNextPage() {
-      if (usesGraphql()) await graphqlQuery().fetchNextPage();
-      else await restQuery.fetchNextPage();
-    },
-    refetch,
   };
 }
 
@@ -397,14 +216,8 @@ function _useEntitiesNotificationsQuery(args: {
   }));
 }
 
-export function invalidateUserNotifications() {
-  return queryClient.invalidateQueries({
-    queryKey: notificationKeys.user._def,
-  });
-}
-
 async function refreshSoupAfterUncachedGraphqlWrite(): Promise<void> {
-  if (isFeatureEnabled(enableGraphqlSoup) && !graphqlCacheEnabled()) {
+  if (!graphqlCacheEnabled()) {
     await refreshActiveGraphqlSoupQueries();
   }
 }
@@ -469,127 +282,7 @@ type NotificationsMutationParams = {
   notificationIds: string[];
 };
 
-type NotificationData<T> = InfiniteData<GetAllUserNotificationsResponse, T>;
-
-function notificationQueryWantsDone(key: readonly unknown[]): boolean {
-  return key.some(
-    (part) =>
-      !!part && typeof part === 'object' && 'done' in part && part.done === true
-  );
-}
-
-function updateUserNotificationQueries(
-  update: (
-    data: NotificationData<UserNotificationsPageParam> | undefined,
-    wantsDone: boolean
-  ) => NotificationData<UserNotificationsPageParam> | undefined
-) {
-  for (const [key] of queryClient.getQueriesData<
-    NotificationData<UserNotificationsPageParam>
-  >({ queryKey: notificationKeys.user._def })) {
-    queryClient.setQueryData<NotificationData<UserNotificationsPageParam>>(
-      key,
-      (data) => update(data, notificationQueryWantsDone(key))
-    );
-  }
-}
-
-type NotificationsMutationContext = {
-  /**
-   * Snapshot of all cached `notificationKeys.user(...)` queries so we can rollback
-   * optimistic updates regardless of what limit a caller used.
-   */
-  previousData: Array<
-    readonly [unknown, NotificationData<UserNotificationsPageParam> | undefined]
-  >;
-};
-
-type UpdaterWithParams<T, P> = (
-  input: Maybe<T>,
-  params: P,
-  wantsDone: boolean
-) => Maybe<T>;
-
-type NotificationsUpdater = UpdaterWithParams<
-  NotificationData<UserNotificationsPageParam>,
-  NotificationsMutationParams
->;
-
-type NotificationsMutationCallbacks = MutationCallbacks<
-  UpdateNotificationsResult,
-  Error,
-  NotificationsMutationParams,
-  NotificationsMutationContext
->;
-
-type NotificationsOnMutateFn = (
-  variables: NotificationsMutationParams
-) => Promise<NotificationsMutationContext>;
-
-function notificationsMutationSuccessCallback(
-  _: UpdateNotificationsResult,
-  _params: NotificationsMutationParams
-) {
-  queryClient.invalidateQueries({
-    queryKey: notificationKeys.user._def,
-    refetchType: 'none',
-  });
-}
-
-/**
- * Creates an optimistic update handler that snapshots previous data for
- * rollback. In-flight fetches are deliberately left alone: seen/done
- * overrides and unconfirmed-insert preservation make a completing stale
- * snapshot harmless, so refetches always run to completion and freshness is
- * never sacrificed for write consistency.
- */
-function createNotificationsMutateFn(
-  updaterFn: NotificationsUpdater
-): NotificationsOnMutateFn {
-  return async (params) => {
-    const previousData = queryClient.getQueriesData<
-      NotificationData<UserNotificationsPageParam>
-    >({
-      queryKey: notificationKeys.user._def,
-    });
-
-    updateUserNotificationQueries((input, wantsDone) =>
-      updaterFn(input, params, wantsDone)
-    );
-
-    return { previousData };
-  };
-}
-
-async function updateRestNotifications(
-  params: NotificationsMutationParams,
-  operation: NotificationUpdateOperation
-): Promise<UpdateNotificationsResult> {
-  const request = { notificationIds: params.notificationIds };
-  switch (operation) {
-    case 'MARK_SEEN':
-      await throwOnErr(
-        async () =>
-          await notificationServiceClient.bulkMarkNotificationAsSeen(request)
-      );
-      break;
-    case 'MARK_DONE':
-      await throwOnErr(
-        async () =>
-          await notificationServiceClient.bulkMarkNotificationAsDone(request)
-      );
-      break;
-    case 'MARK_UNDONE':
-      await throwOnErr(
-        async () =>
-          await notificationServiceClient.bulkMarkNotificationAsUndone(request)
-      );
-      break;
-  }
-  return [];
-}
-
-/** Transport-neutral notification status mutation exposed to consumers. */
+/** Notification status mutation exposed to consumers. */
 export type NotificationsMutation = {
   readonly isPending: boolean;
   readonly error: Error | null;
@@ -599,93 +292,27 @@ export type NotificationsMutation = {
   ): Promise<UpdateNotificationsResult>;
 };
 
-function createNotificationsMutation(
-  operation: NotificationUpdateOperation,
-  parentCallbacks?: NotificationsMutationCallbacks
-) {
-  return (
-    callbacks?: NotificationsMutationCallbacks
-  ): NotificationsMutation => {
-    // Preserve the existing callback precedence: caller callbacks replace
-    // parent callbacks with the same name, while cache invalidation remains
-    // the outer default lifecycle.
-    const lifecycle = withCallbacks<
-      UpdateNotificationsResult,
-      Error,
-      NotificationsMutationParams,
-      NotificationsMutationContext
-    >(
-      { onSuccess: notificationsMutationSuccessCallback },
-      { ...parentCallbacks, ...callbacks }
-    );
-
-    const restMutation = useMutation(() => ({
-      mutationFn: (variables: NotificationsMutationParams) =>
-        updateRestNotifications(variables, operation),
-      ...lifecycle,
-    }));
-    const graphqlMutation =
-      createGraphqlUpdateNotificationsMutation<NotificationsMutationContext>({
-        operation,
-        onMutate: async (variables) =>
-          (await lifecycle.onMutate?.(
-            variables,
-            undefined as never
-          )) as NotificationsMutationContext,
-        onSuccess: async (data, variables, context) => {
-          await lifecycle.onSuccess?.(
-            data,
-            variables,
-            context as NotificationsMutationContext,
-            undefined as never
-          );
-          // The normalized client propagates the optimistic notification row
-          // into active Soup edges. Its uncached fallback cannot, so refetch
-          // mounted Soup queries after the authoritative mutation succeeds.
-          await refreshSoupAfterUncachedGraphqlWrite();
-        },
-        onError: async (error, variables, context) => {
-          await lifecycle.onError?.(
-            error,
-            variables,
-            context as NotificationsMutationContext,
-            undefined as never
-          );
-        },
-        onSettled: async (data, error, variables, context) => {
-          await lifecycle.onSettled?.(
-            data,
-            error,
-            variables,
-            context as NotificationsMutationContext,
-            undefined as never
-          );
-        },
-      });
+function createNotificationsMutation(operation: NotificationUpdateOperation) {
+  return (): NotificationsMutation => {
+    const graphqlMutation = createGraphqlUpdateNotificationsMutation({
+      operation,
+      // The normalized client propagates the optimistic notification row
+      // into active Soup edges. Its uncached fallback cannot, so refetch
+      // mounted Soup queries after the authoritative mutation succeeds.
+      onSuccess: refreshSoupAfterUncachedGraphqlWrite,
+    });
 
     return {
       get isPending() {
-        return isFeatureEnabled(enableGraphqlSoup)
-          ? graphqlMutation.isPending
-          : restMutation.isPending;
+        return graphqlMutation.isPending;
       },
       get error() {
-        return isFeatureEnabled(enableGraphqlSoup)
-          ? graphqlMutation.error
-          : (restMutation.error ?? null);
+        return graphqlMutation.error;
       },
       mutate(variables) {
-        if (isFeatureEnabled(enableGraphqlSoup)) {
-          graphqlMutation.mutate(variables);
-        } else {
-          restMutation.mutate(variables);
-        }
+        graphqlMutation.mutate(variables);
       },
       async mutateAsync(variables) {
-        if (!isFeatureEnabled(enableGraphqlSoup)) {
-          return await restMutation.mutateAsync(variables);
-        }
-
         const result = await graphqlMutation.mutateAsync(variables);
         if (result.error) throw result.error;
         if (!result.data) {
@@ -697,205 +324,15 @@ function createNotificationsMutation(
   };
 }
 
-function notificationsMutationErrorFn(
-  _: Error,
-  _params: NotificationsMutationParams,
-  context: NotificationsMutationContext | undefined
-) {
-  if (!context) return;
-  for (const [queryKey, data] of context.previousData) {
-    queryClient.setQueryData(
-      queryKey as readonly unknown[],
-      data as NotificationData<UserNotificationsPageParam> | undefined
-    );
-  }
-}
+/** Marks notifications as seen. */
+export const useMarkNotificationsAsSeenMutation =
+  createNotificationsMutation('MARK_SEEN');
 
-const mapNotificationsAsSeen = (
-  input: Maybe<NotificationData<UserNotificationsPageParam>>,
-  params: NotificationsMutationParams
-) => {
-  return (
-    input && {
-      ...input,
-      pages: input.pages.map((page) => ({
-        ...page,
-        items: page.items.map((n) =>
-          params.notificationIds.includes(n.id)
-            ? {
-                ...n,
-                state: nextNotificationState(n.state, 'MARK_SEEN'),
-                viewed_at: n.viewed_at ?? new Date().toISOString(),
-              }
-            : n
-        ),
-      })),
-    }
-  );
-};
-
-/** Marks notifications as seen with optimistic update. */
-export const useMarkNotificationsAsSeenMutation = createNotificationsMutation(
-  'MARK_SEEN',
-  {
-    onMutate: createNotificationsMutateFn(mapNotificationsAsSeen),
-    onError: notificationsMutationErrorFn,
-  }
-);
-
-const filterOutDoneNotifications = (
-  input: Maybe<NotificationData<UserNotificationsPageParam>>,
-  params: NotificationsMutationParams,
-  wantsDone: boolean
-) => {
-  return (
-    input && {
-      ...input,
-      pages: input.pages.map((page) => ({
-        ...page,
-        items: wantsDone
-          ? page.items.map((n) =>
-              params.notificationIds.includes(n.id)
-                ? { ...n, state: 'done' as const }
-                : n
-            )
-          : page.items.filter((n) => !params.notificationIds.includes(n.id)),
-      })),
-    }
-  );
-};
-
-const markNotificationsAsDoneMutateFn = createNotificationsMutateFn(
-  filterOutDoneNotifications
-);
-
-/** Marks notifications as done (removes from list) with optimistic update. */
-export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
-  'MARK_DONE',
-  {
-    onMutate: async (params) => {
-      retireUnconfirmedInserts(params.notificationIds);
-      return await markNotificationsAsDoneMutateFn(params);
-    },
-    onError: notificationsMutationErrorFn,
-  }
-);
+/** Marks notifications as done. */
+export const useMarkNotificationsAsDoneMutation =
+  createNotificationsMutation('MARK_DONE');
 
 type NotificationItem = GetAllUserNotificationsResponse['items'][number];
-
-export type NotificationStatusPatch = {
-  id: string;
-  state: NotificationItem['state'];
-  viewed_at: string | null;
-  updated_at: string;
-};
-
-export type NotificationStatusPatchDelete =
-  | { t: 'Patch'; c: NotificationStatusPatch }
-  | { t: 'Delete'; c: { id: string } };
-
-export type NotificationStatusUpdate = {
-  type: 'notification_status_updated';
-  updates: NotificationStatusPatchDelete[];
-};
-
-const jsonStringSchema = z.string().transform((value, ctx) => {
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid JSON' });
-    return z.NEVER;
-  }
-});
-
-export const notificationStatusUpdateSchema = z.object({
-  type: z.literal('notification_status_updated'),
-  updates: z.array(
-    z.discriminatedUnion('t', [
-      z.object({
-        t: z.literal('Patch'),
-        c: z.object({
-          id: z.string(),
-          state: z.enum(['unseen', 'seen', 'done']),
-          viewed_at: z.string().nullable(),
-          updated_at: z.string(),
-        }),
-      }),
-      z.object({
-        t: z.literal('Delete'),
-        c: z.object({
-          id: z.string(),
-        }),
-      }),
-    ])
-  ),
-}) satisfies z.ZodType<NotificationStatusUpdate>;
-
-export const notificationStatusUpdatePayloadSchema = z.union([
-  notificationStatusUpdateSchema,
-  jsonStringSchema.pipe(notificationStatusUpdateSchema),
-]);
-
-function applyNotificationStatusPatch(
-  notification: NotificationItem,
-  patch: NotificationStatusPatch
-): NotificationItem {
-  return {
-    ...notification,
-    state: patch.state,
-    ...(patch.viewed_at !== undefined ? { viewed_at: patch.viewed_at } : {}),
-    ...(patch.updated_at !== undefined ? { updated_at: patch.updated_at } : {}),
-  };
-}
-
-export function applyNotificationStatusUpdate(
-  update: NotificationStatusUpdate
-) {
-  const patches = update.updates
-    .filter((item) => item.t === 'Patch')
-    .map((item) => item.c);
-  const patchById = new Map(patches.map((patch) => [patch.id, patch]));
-  const deleteIds = new Set(
-    update.updates
-      .filter((item) => item.t === 'Delete')
-      .map((item) => item.c.id)
-  );
-  const doneIds = new Set(
-    [...patchById.values()]
-      .filter((patch) => patch.state === 'done')
-      .map((patch) => patch.id)
-  );
-  const removeIds = new Set([...deleteIds, ...doneIds]);
-
-  retireUnconfirmedInserts(removeIds);
-
-  updateUserNotificationQueries((data, wantsDone) => {
-    if (!data) return data;
-
-    return {
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        items: page.items
-          .filter((notification) => !deleteIds.has(notification.id))
-          .map((notification) => {
-            const patch = patchById.get(notification.id);
-            return patch
-              ? applyNotificationStatusPatch(notification, patch)
-              : notification;
-          })
-          .filter(
-            (notification) => (notification.state === 'done') === wantsDone
-          ),
-      })),
-    };
-  });
-
-  queryClient.invalidateQueries({
-    queryKey: notificationKeys.user._def,
-    refetchType: 'none',
-  });
-}
 
 /**
  * Lookup a notification by id via the notification-service.
@@ -911,109 +348,4 @@ export async function getNotificationById(
 
   if (!res) return undefined;
   return stripOwnerId(res as NotificationItem);
-}
-
-/**
- * Snapshot the cached notification objects for the given ids. The returned
- * items can later be put back via `restoreUserNotifications`. Optimistic
- * mark-done flows rely on this so undo can resurrect notifications that get
- * dropped from the cache once the server confirms the done — whether by the
- * `notification_status_updated` event or a stale refetch. A plain `done`
- * override can't overlay a notification that is no longer in the cache.
- */
-export function snapshotUserNotifications(ids: string[]): NotificationItem[] {
-  if (ids.length === 0) return [];
-  const idSet = new Set(ids);
-  const found = new Map<string, NotificationItem>();
-  for (const [, data] of queryClient.getQueriesData<
-    NotificationData<UserNotificationsPageParam>
-  >({ queryKey: notificationKeys.user._def })) {
-    if (!data) continue;
-    for (const page of data.pages) {
-      for (const notification of page.items) {
-        if (idSet.has(notification.id) && !found.has(notification.id)) {
-          found.set(notification.id, notification);
-        }
-      }
-    }
-  }
-  return [...found.values()];
-}
-
-/**
- * Re-insert snapshotted notifications that are no longer in the cache (e.g.
- * dropped after a mark-done was confirmed), marking each not-done so it
- * re-enters not-done filtered views. Notifications still present are left
- * untouched.
- */
-export function restoreUserNotifications(notifications: NotificationItem[]) {
-  if (notifications.length === 0) return;
-  const restored = new Map(
-    notifications.map((n) => [n.id, { ...n, state: 'seen' as const }])
-  );
-  updateUserNotificationQueries((data, wantsDone) => {
-    if (!data) return data;
-    const present = new Set(
-      data.pages.flatMap((page) => page.items.map((n) => n.id))
-    );
-    const missing = wantsDone
-      ? []
-      : [...restored.values()].filter((n) => !present.has(n.id));
-    return {
-      ...data,
-      pages: data.pages.map((page, index) => ({
-        ...page,
-        items: [
-          ...(index === 0 ? missing : []),
-          ...page.items.flatMap((n) =>
-            restored.has(n.id)
-              ? wantsDone
-                ? []
-                : [{ ...n, state: 'seen' as const }]
-              : [n]
-          ),
-        ],
-      })),
-    };
-  });
-
-  queryClient.invalidateQueries({
-    queryKey: notificationKeys.user._def,
-    refetchType: 'none',
-  });
-}
-
-export function optimisticInsertNotification(
-  notification: UnifiedNotification
-) {
-  const item = notification as NotificationItem;
-
-  trackUnconfirmedInsert(item);
-
-  updateUserNotificationQueries((data, wantsDone) => {
-    if ((notification.state === 'done') !== wantsDone) return data;
-    if (!data) return data;
-
-    const exists = data.pages.some((page) =>
-      page.items.some((n) => n.id === item.id)
-    );
-    if (exists) return data;
-
-    return {
-      ...data,
-      pages: data.pages.map((page, index) =>
-        index === 0 ? { ...page, items: [item, ...page.items] } : page
-      ),
-    };
-  });
-
-  updateSoupForNotification(notification);
-
-  // Cache is already updated via setQueriesData above. Mark as stale without
-  // refetching — refetchType default would re-fetch every cached page of the
-  // infinite notification query for every incoming websocket notification.
-  queryClient.invalidateQueries({
-    queryKey: notificationKeys.user._def,
-    refetchType: 'none',
-  });
 }

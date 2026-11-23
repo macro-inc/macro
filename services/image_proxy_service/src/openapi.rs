@@ -2,6 +2,8 @@
 
 mod api;
 mod config;
+mod domain;
+mod outbound;
 
 use utoipa::OpenApi;
 

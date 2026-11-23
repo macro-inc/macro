@@ -21,12 +21,14 @@ export interface ToolCardProps {
   title: JSX.Element | string;
   /** Mono, truncated detail next to the title (a path, a command, ...). */
   subtitle?: string;
+  /** A short title that never truncates; the subtitle gives way instead. */
+  fixedTitle?: boolean;
   /** Compact `key=value` details after the subtitle. */
   args?: Record<string, string>;
-  /** Status text or counts after the detail; a failed call says so by default. */
+  /** Status text or counts after the detail. A failure is never named here. */
   trailing?: JSX.Element;
   status: ToolStatus;
-  /** Fade the whole card, the chat block's failed-tool treatment. */
+  /** Fade the whole card, for an outcome the row can't vouch for. */
   muted?: boolean;
   /** Controlled open state; omit to let the card manage its own. */
   open?: boolean;
@@ -51,21 +53,23 @@ export function ToolCard(props: ToolCardProps) {
   // Reading children to inspect them mounts expensive bodies even while closed.
   // Conditional callers supply presence separately; Kobalte mounts the body.
   const hasChildren = () => props.hasContent ?? 'children' in props;
-  const summary = () =>
-    props.trailing ?? (props.status === 'failed' ? 'Failed' : undefined);
 
   const row = (expandable: boolean) => (
     <>
       {/* The detail gives way first: it shrinks a hundredfold faster, so a
           label truncates only once its detail is gone. */}
-      <span class="min-w-0 truncate">
-        {typeof props.title === 'string' ? (
+      <span class={props.fixedTitle ? 'shrink-0' : 'min-w-0 truncate'}>
+        {/* A fixed title never truncates, so a tooltip would only repeat it
+            (and cover the transcript under a row that just settled). */}
+        {typeof props.title === 'string' && props.fixedTitle ? (
+          <TextShimmer text={props.title} active={active()} />
+        ) : typeof props.title === 'string' ? (
           <Tooltip
             label={props.title}
             as="span"
             class="min-w-0 max-w-full truncate"
           >
-            <TextShimmer text={props.title} active={active()} />
+            <TextShimmer text={props.title} active={active()} truncate />
           </Tooltip>
         ) : (
           props.title
@@ -78,7 +82,8 @@ export function ToolCard(props: ToolCardProps) {
             as="span"
             class="min-w-0 shrink-[100] truncate text-ink-disabled"
           >
-            {subtitle()}
+            {/* The trigger is a flex box, which can't draw an ellipsis itself. */}
+            <span class="truncate">{subtitle()}</span>
           </Tooltip>
         )}
       </Show>
@@ -89,15 +94,9 @@ export function ToolCard(props: ToolCardProps) {
           </span>
         )}
       </For>
-      <Show when={summary()}>
-        <span
-          class="shrink-0 whitespace-nowrap tabular-nums"
-          classList={{
-            'text-failure': props.status === 'failed',
-            'text-ink-disabled': props.status !== 'failed',
-          }}
-        >
-          {summary()}
+      <Show when={props.trailing}>
+        <span class="shrink-0 whitespace-nowrap tabular-nums text-ink-disabled">
+          {props.trailing}
         </span>
       </Show>
       <Show when={expandable}>

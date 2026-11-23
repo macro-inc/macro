@@ -1,17 +1,8 @@
 import { analytics } from '@app/lib/analytics';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
-import { usePaywallState } from '@core/constant/PaywallState';
-import { isPaymentError } from '@core/util/handlePaymentError';
 import { catchToResult } from '@core/util/result';
 import { removeHistoryItem } from '@queries/history/history';
 import { duplicateDatabase } from '@queries/storage/databases';
-import {
-  getDeletedTree,
-  optimisticallyRemoveDeletedItem,
-} from '@queries/storage/deleted';
+import { getDeletedTree } from '@queries/storage/deleted';
 import {
   duplicateEntity,
   moveEntity,
@@ -19,18 +10,12 @@ import {
   restoreEntity,
   trashEntity,
 } from '@queries/storage/entity-mutations';
-import { callServiceClient } from '@service-call/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { refetchResources } from '@service-storage/util/refetchResources';
-import {
-  getPermissions,
-  hasPermissions,
-  Permissions,
-} from '../SharePermissions';
 
 const DEFAULT_CHUNK_SIZE = 10;
 const ENTITY_TYPES = {
@@ -90,70 +75,6 @@ export async function getItemAccessLevel({
   }
 }
 
-/** @internal use rename mutation wrappers instead of this */
-export async function renameItem(args: {
-  itemType: ItemType;
-  id: string;
-  newName: string;
-}): Promise<boolean> {
-  const { itemType, id, newName } = args;
-
-  let result;
-
-  switch (itemType) {
-    case 'document': {
-      result = await storageServiceClient.editDocument({
-        documentId: id,
-        documentName: newName,
-      });
-      break;
-    }
-    case 'project': {
-      result = await storageServiceClient.projects.edit({
-        id,
-        name: newName,
-      });
-      break;
-    }
-    case 'chat': {
-      result = await cognitionApiServiceClient.renameChat({
-        chat_id: id,
-        new_name: newName,
-      });
-      break;
-    }
-    case 'channel': {
-      result = await storageServiceClient.patchChannel({
-        channel_id: id,
-        channel_name: newName,
-      });
-      break;
-    }
-    case 'call': {
-      result = await callServiceClient.editCallRecord({
-        callId: id,
-        customName: newName,
-      });
-      break;
-    }
-    default: {
-      return false;
-    }
-  }
-
-  if (result.isErr()) {
-    return false;
-  }
-
-  analytics.track('update_entity', {
-    entityType: itemType,
-    entityId: id,
-    property: 'name',
-  });
-
-  return true;
-}
-
 /** Backend only supports code file changes */
 export async function setFileType(args: {
   id: string;
@@ -182,38 +103,15 @@ export async function deleteItem(args: {
   const accessLevel = await getItemAccessLevel({ itemType, id });
 
   if (accessLevel === 'owner') {
-    let result;
     if (
-      isFeatureEnabled(enableGraphqlSoup) &&
-      (itemType === 'document' || itemType === 'project' || itemType === 'chat')
-    ) {
-      result = await catchToResult(() =>
-        trashEntity({ type: ENTITY_TYPES[itemType], id })
-      );
-    } else
-      switch (itemType) {
-        case 'document': {
-          result = await storageServiceClient.deleteDocument({
-            documentId: id,
-          });
-          break;
-        }
-        case 'project': {
-          result = await storageServiceClient.projects.delete({
-            id,
-          });
-          break;
-        }
-        case 'chat': {
-          result = await cognitionApiServiceClient.deleteChat({
-            chat_id: id,
-          });
-          break;
-        }
-        default: {
-          return false;
-        }
-      }
+      itemType !== 'document' &&
+      itemType !== 'project' &&
+      itemType !== 'chat'
+    )
+      return false;
+    const result = await catchToResult(() =>
+      trashEntity({ type: ENTITY_TYPES[itemType], id })
+    );
     if (result.isErr()) {
       return false;
     }
@@ -296,61 +194,17 @@ export async function moveToFolder(args: {
     trackMovedToFolder(itemType, id, folderId);
     return true;
   }
-  const graphql = isFeatureEnabled(enableGraphqlSoup);
-  if (!graphql) {
-    const accessLevel = await getItemAccessLevel({ itemType, id });
-    if (!accessLevel) return false;
-    if (!hasPermissions(getPermissions(accessLevel), Permissions.CAN_EDIT))
-      return false;
-  }
-
-  let result;
   if (
-    graphql &&
-    (itemType === 'document' ||
-      itemType === 'project' ||
-      itemType === 'chat' ||
-      itemType === 'email')
-  ) {
-    result = await catchToResult(() =>
-      moveEntity({ type: ENTITY_TYPES[itemType], id }, folderId)
-    );
-  } else
-    switch (itemType) {
-      // Storage/chat backends clear the folder on empty string; email on null.
-      case 'document': {
-        result = await storageServiceClient.editDocument({
-          documentId: id,
-          projectId: folderId ?? '',
-        });
-        break;
-      }
-      case 'project': {
-        result = await storageServiceClient.projects.edit({
-          id,
-          projectParentId: folderId ?? '',
-        });
-        break;
-      }
-      case 'chat': {
-        result = await cognitionApiServiceClient.editChatProject({
-          chat_id: id,
-          project_id: folderId ?? '',
-        });
-        break;
-      }
-      case 'email': {
-        result = await emailClient.updateThreadProject({
-          thread_id: id,
-          projectId: folderId,
-        });
-        break;
-      }
-      default: {
-        return false;
-      }
-    }
+    itemType !== 'document' &&
+    itemType !== 'project' &&
+    itemType !== 'chat' &&
+    itemType !== 'email'
+  )
+    return false;
 
+  const result = await catchToResult(() =>
+    moveEntity({ type: ENTITY_TYPES[itemType], id }, folderId)
+  );
   if (result.isErr()) {
     return false;
   }
@@ -411,14 +265,11 @@ export async function bulkMoveToFolder(
   };
 }
 
-/**
- * Whether an item type can be duplicated. Folders copy with their contents
- * only through the GraphQL entity mutation, which has no REST counterpart.
- */
+/** Whether an item type can be duplicated; folders copy with their contents. */
 export function canDuplicateItemType(itemType: ItemType): boolean {
-  if (itemType === 'document' || itemType === 'chat' || itemType === 'database')
-    return true;
-  return itemType === 'project' && isFeatureEnabled(enableGraphqlSoup);
+  return (
+    itemType === 'document' || itemType === 'database' || itemType === 'project'
+  );
 }
 
 export async function copyItem(args: {
@@ -427,7 +278,6 @@ export async function copyItem(args: {
   name: string;
 }): Promise<string | null> {
   const { itemType, id, name } = args;
-  const { showPaywall } = usePaywallState();
   const createCopyName = (originalName: string): string => {
     return `${originalName} copy`;
   };
@@ -439,48 +289,18 @@ export async function copyItem(args: {
     const result = await duplicateDatabase({ id, name: createCopyName(name) });
     if (result.isErr()) return null;
     newId = result.value;
-  } else if (
-    isFeatureEnabled(enableGraphqlSoup) &&
-    (itemType === 'document' || itemType === 'chat' || itemType === 'project')
-  ) {
+  } else if (itemType === 'document' || itemType === 'project') {
     const result = await catchToResult(() =>
       duplicateEntity(
         { type: ENTITY_TYPES[itemType], id },
-        // The REST chat endpoint also ignores the supplied name and names the copy itself.
-        itemType === 'chat' ? undefined : createCopyName(name)
+        createCopyName(name)
       )
     );
-    if (itemType === 'chat' && isPaymentError(result)) showPaywall();
     if (result.isErr()) return null;
     newId = result.value;
-  } else
-    switch (itemType) {
-      case 'document': {
-        const result = await storageServiceClient.copyDocument({
-          documentId: id,
-          documentName: createCopyName(name),
-        });
-        if (result.isErr()) return null;
-        newId = result.value.documentId;
-        break;
-      }
-      case 'chat': {
-        const result = await cognitionApiServiceClient.copyChat({
-          chat_id: id,
-          name: createCopyName(name),
-        });
-        if (isPaymentError(result)) {
-          showPaywall();
-        }
-        if (result.isErr()) {
-          return null;
-        }
-        newId = result.value.id;
-        break;
-      }
-      default:
-        return null;
-    }
+  } else {
+    return null;
+  }
 
   analytics.track('create_entity', {
     entityType: itemType,
@@ -536,39 +356,12 @@ export async function revertDelete(args: {
 }): Promise<boolean> {
   const { itemType, id } = args;
 
-  let result;
-  if (
-    isFeatureEnabled(enableGraphqlSoup) &&
-    (itemType === 'document' || itemType === 'project' || itemType === 'chat')
-  ) {
-    result = await catchToResult(() =>
-      restoreEntity({ type: ENTITY_TYPES[itemType], id })
-    );
-  } else
-    switch (itemType) {
-      case 'document': {
-        result = await storageServiceClient.revertDocumentDelete({
-          documentId: id,
-        });
-        break;
-      }
-      case 'project': {
-        result = await storageServiceClient.projects.revertDelete({
-          id,
-        });
-        break;
-      }
-      case 'chat': {
-        result = await cognitionApiServiceClient.revertDeleteChat({
-          chat_id: id,
-        });
-        break;
-      }
-      default: {
-        return false;
-      }
-    }
+  if (itemType !== 'document' && itemType !== 'project' && itemType !== 'chat')
+    return false;
 
+  const result = await catchToResult(() =>
+    restoreEntity({ type: ENTITY_TYPES[itemType], id })
+  );
   if (result.isErr()) {
     return false;
   }
@@ -582,63 +375,12 @@ export async function permanentlyDelete(args: {
   id: string;
 }): Promise<boolean> {
   const { itemType, id } = args;
+  if (itemType !== 'document' && itemType !== 'project' && itemType !== 'chat')
+    return false;
 
-  let result;
-  switch (itemType) {
-    case 'document': {
-      optimisticallyRemoveDeletedItem(id);
-      result = isFeatureEnabled(enableGraphqlSoup)
-        ? await catchToResult(() =>
-            permanentlyDeleteEntity({ type: 'DOCUMENT', id })
-          )
-        : await storageServiceClient.permanentlyDeleteDocument({
-            documentId: id,
-          });
-      break;
-    }
-    case 'project': {
-      const deleteTree = getDeletedTree();
-      const findAllDescendants = (projectId: string): string[] => {
-        const descendantIds: string[] = [];
-        const node = deleteTree.itemMap[projectId];
-        if (node && node.children) {
-          node.children.forEach((child) => {
-            descendantIds.push(child.id);
-            descendantIds.push(...findAllDescendants(child.id));
-          });
-        }
-        return descendantIds;
-      };
-
-      const descendantIds = findAllDescendants(id);
-      descendantIds.forEach((descendantId) => {
-        optimisticallyRemoveDeletedItem(descendantId);
-      });
-      optimisticallyRemoveDeletedItem(id);
-
-      result = isFeatureEnabled(enableGraphqlSoup)
-        ? await catchToResult(() =>
-            permanentlyDeleteEntity({ type: 'PROJECT', id })
-          )
-        : await storageServiceClient.projects.permanentlyDelete({ id });
-      break;
-    }
-    case 'chat': {
-      optimisticallyRemoveDeletedItem(id);
-      result = isFeatureEnabled(enableGraphqlSoup)
-        ? await catchToResult(() =>
-            permanentlyDeleteEntity({ type: 'CHAT', id })
-          )
-        : await cognitionApiServiceClient.permanentlyDeleteChat({
-            chat_id: id,
-          });
-      break;
-    }
-    default: {
-      return false;
-    }
-  }
-
+  const result = await catchToResult(() =>
+    permanentlyDeleteEntity({ type: ENTITY_TYPES[itemType], id })
+  );
   if (result.isErr()) {
     return false;
   }
@@ -682,11 +424,6 @@ export async function bulkPermanentlyDelete(
     }
 
     return true;
-  });
-
-  // Descendants need to be optimistically removed from history tree
-  descendants.forEach((item) => {
-    optimisticallyRemoveDeletedItem(item.id);
   });
 
   for (let i = 0; i < eldestItemsOnly.length; i += chunkSize) {

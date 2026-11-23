@@ -1,0 +1,56 @@
+item	behaviour	tests	reason
+open	Opening a channel shows its latest messages in order; switching channels shows each one's own	OPEN-01,OPEN-02	
+scroll-history	Scrolling back through a long history shows every message once, in order	SCROLL-01	
+scroll-to-bottom	Scroll to bottom is offered when scrolled up and returns to the latest message	SCROLL-02,NAV-06,KEY-09	
+scroll-live	A new message arrives in view at the end, and does not move a reader who is scrolled up	SCROLL-03,SCROLL-04	
+message-links	A link to a message, a reply or a missing message opens the right place; Copy link gives such a link	NAV-01,NAV-02,NAV-03,NAV-04,NAV-07	
+read-forward	Reading forward from an old message reaches the latest with nothing missing or repeated	NAV-05	
+send	A message sent with Enter or the button shows once, in order, for both people, live and after reload	MSG-01,MSG-02,MSG-03,MSG-16	
+send-at-once	Messages two people send at the same moment end in one order for both	MSG-18	
+content	Line breaks, formatting, links, emoji, other scripts, pasted and long text arrive as written; authors are grouped	MSG-04,MSG-05,MSG-06,CMP-11,CMP-12	
+edit	Editing my message shows the new text and (edited) to everyone; cancel leaves it	MSG-07,MSG-08,MSG-09,KEY-07	
+delete-message	Deleting my message removes it for everyone; one with replies leaves a placeholder	MSG-10,MSG-11,KEY-08,KEY-12	
+own-only	Only a message's author is offered Edit and Delete	MSG-12	
+reactions	Reactions show, count and go for both people, on messages and replies	MSG-13,MSG-14,THR-06	
+live-changes	Another person's edit, reaction and deletion show without reload	MSG-15	
+copy-text	Copy Text copies a message's text	MSG-17	
+threads	Replies show under their message in order for both people, live and after reload; long threads fold and open	THR-01,THR-02,THR-03,THR-07,THR-08,THR-09,KEY-06	
+thread-changes	Editing, deleting and reacting to a reply show to the other person without reload	THR-04,THR-05	
+reply-focus	Reply puts the keyboard in the reply box	THR-10	
+reconnect	After a lost connection or a hidden page, missed messages appear; a message written offline is neither lost nor doubled	REC-01,REC-02,REC-03	
+two-windows	What a person does in one window shows in their other window	TAB-01,TAB-02	
+drafts	A draft stays with its channel, survives reload, and is cleared by sending	CMP-01,CMP-02,CMP-03,CMP-13	
+composer	The send button is off when empty; the composer is ready again after sending and takes the cursor when a channel is chosen	CMP-04,KEY-10	
+mentions	A person or @here picked from the @ menu is sent as a mention, for both people	CMP-05,CMP-06	
+attachments	Files and pictures attach, show before sending, arrive for both people and list under Attachments	CMP-07,CMP-08,CHN-11	
+typing	The other person's typing shows as … is typing, and goes when they send or stop	CMP-09,CMP-10	
+unread	Unread marks, the New divider, the unread chip and Mark as read follow what I have and have not seen	UNR-01,UNR-02,UNR-03,UNR-04,UNR-07,UNR-10	
+mention-count	A mention of me shows a count of mentions on the channel's row	UNR-05	
+mute	A muted channel shows a crossed bell and is not marked unread; unmuting undoes it	UNR-06	
+list-live	A channel I am added to shows in my list at once, or when I next open the app	UNR-08,MEM-08	
+first-unread	The first message in a new channel marks it unread for the other member	UNR-09	
+direct-messages	A direct message or named group I start reaches the others, continues one conversation, and can be answered	DM-01,DM-02,DM-03,DM-04,DM-05	
+dm-by-name	A teammate is offered by name in New direct message	DM-06	
+create	A private or team channel made in the app opens, lists and takes messages; its history starts with a created line	CHN-01,CHN-02,CHN-13,CHN-14	
+rename	Renaming a channel updates header and list for every member and is announced	CHN-03,CHN-04	
+favorites	A channel can be made a favorite and taken out again	CHN-05	
+channel-link	Copy Link on a channel gives an address that opens it for another member	CHN-06	
+delete-channel	Deleting a channel removes it for owner and members at once; only the owner is offered it	CHN-07,CHN-08,CHN-09,CHN-15	
+tabs	Participants lists members with the owner marked; switching tabs keeps the message list where it was	CHN-10,CHN-12	
+members	Inviting and removing people takes effect at once for everyone, with lines between the right messages	MEM-01,MEM-02,MEM-03,MEM-04,MEM-05,MEM-06,MEM-07	
+access	People without access see nothing of a channel; asking to join, approving, denying and withdrawing work; team channels can be found and joined by teammates only	ACC-01,ACC-02,ACC-03,ACC-04,ACC-05,ACC-06,ACC-07,ACC-08,ACC-09	
+find	Find in channel counts matches, steps through them, reaches old messages and closes	KEY-01,KEY-02,KEY-03,KEY-04	
+keys	Arrow keys, Escape and message hotkeys move between composer, messages and list	KEY-05,KEY-11	
+calls	Starting, joining and leaving calls from a channel, the Calls tab		Needs real media devices and the call service's media server, which a local stack does not run; calls have their own backend-free browser suite
+agents	Mentioning an agent, agent replies and task actions in a channel		Needs a model provider; a local stack without secrets has none
+mobile	Phone and tablet layouts, touch gestures, long-press menus		Desktop Chromium only; the phone views are separate components and need their own run
+notifications	Push, email and desktop notifications for messages and mentions; notification sounds		Delivered outside the page (mail, OS); not observable in the browser
+slack-import	Importing Slack channels and history		Needs a Slack workspace
+voice	Dictating a message		Needs a microphone and a transcription provider
+sections	Custom sidebar sections, section sharing, sorting and drag to reorder		Behind enable-chat-sidebar-sections with its own rules; a suite of its own size
+timed-mute	Muting for a set time or until a chosen time		Depends on wall-clock time passing; only mute until turned off is covered
+link-previews	Link previews, document and task mention cards, GIFs, polls in messages		Each renders another feature's card; covered by that feature's browser suites
+attachment-editing	Removing an attachment before sending, drag and drop, pasting an image		Not written; attach by the picker is covered
+reply-details	Reply-to-reply, the reply box's send button, collapsing a thread by pointer		Not written; reply by Enter and by hotkey are covered
+other-browsers	Safari and Firefox		Chromium only
+scale	Channels with tens of thousands of messages, hundreds of members, many channels		The long history is 230 messages; larger volumes stall every open page of their authors

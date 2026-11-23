@@ -1,5 +1,7 @@
 import { EXTERNAL_VIEW_PATH, LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
+import { homeTabSearch } from '@app/features/home/home-tab-search';
+import type { NewHomeMode } from '@app/features/new-home/core/new-home-mode';
 import { t } from '@app/lib/i18n';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -11,7 +13,10 @@ import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@icon/system/fill/house-fill.svg';
+import HousePlusFillIcon from '@icon/system/fill/house-plus-fill.svg';
+import LightbulbFillIcon from '@icon/system/fill/lightbulb-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
+import LockFillIcon from '@icon/system/fill/lock-fill.svg';
 import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
 import PlugFillIcon from '@icon/system/fill/plug-fill.svg';
 import AgentFillIcon from '@icon/system/fill/sparkle-fill.svg';
@@ -24,7 +29,10 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
+import HousePlusIcon from '@icon/system/regular/house-plus.svg';
+import LightbulbIcon from '@icon/system/regular/lightbulb.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import PasswordIcon from '@icon/system/regular/lock.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import PulseIcon from '@icon/system/regular/pulse.svg';
@@ -41,6 +49,8 @@ import type { SidebarPrefs } from './use-sidebar-prefs';
 export type SidebarNextNavItem = Omit<SidebarItem, 'hotkeyToken'> & {
   /** Only destinations with a registered GoTo shortcut expose a key hint. */
   hotkeyToken?: SidebarItem['hotkeyToken'];
+  /** The view the item opens, when it isn't the item's own id. */
+  viewId?: string;
   icon: NavIcon;
   /** Matching active variant of `icon`, shown while the view is active. */
   iconActive: NavIcon;
@@ -73,6 +83,28 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: HouseFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
+  // Right under old Home while both are on the rail; once old Home is off,
+  // New Home is the Home item.
+  {
+    id: 'new-home',
+    get label() {
+      return t('home.newHome');
+    },
+    href: '/new-home',
+    icon: HousePlusIcon,
+    iconActive: HousePlusFillIcon,
+    hotkey: 'h',
+    hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
+  {
+    id: 'for-you',
+    get label() {
+      return t('nav.forYou');
+    },
+    href: '/for-you',
+    icon: LightbulbIcon,
+    iconActive: LightbulbFillIcon,
   },
   {
     id: 'notifications',
@@ -139,6 +171,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: CalendarBlankFillIcon,
     hotkey: 'r',
     hotkeyToken: TOKENS.sidebar.goTo.calendar,
+  },
+  {
+    id: 'passwords',
+    get label() {
+      return t('passwords.title');
+    },
+    href: '/passwords',
+    icon: PasswordIcon,
+    iconActive: LockFillIcon,
   },
   {
     id: 'agents',
@@ -215,16 +256,18 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
 ] satisfies SidebarNextNavItem[];
 
-/** Feature flag gates for sidebar destinations. */
+/** Availability gates for sidebar destinations. */
 export type NavItemGates = {
   showNotifications: boolean;
-  showCalendar: boolean;
-  showScheduling: boolean;
+  /** Which Homes desktop shows; undefined while its flags load. */
+  homeMode: NewHomeMode | undefined;
+  showForYou: boolean;
   showCustomers: boolean;
   showCalls: boolean;
   showReviews: boolean;
   showActivity: boolean;
   showExternal: boolean;
+  showPasswords: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -234,15 +277,58 @@ export const isNavItemAvailable = (
   item: SidebarNextNavItem,
   gates: NavItemGates
 ): boolean => {
-  if (item.id === 'notifications') return gates.showNotifications;
-  if (item.id === 'calendar') return gates.showCalendar;
-  if (item.id === 'booking-links') return gates.showScheduling;
+  if (item.id === 'notifications') {
+    return gates.showNotifications && gates.homeMode === 'off';
+  }
+  if (item.id === 'new-home') return gates.homeMode === 'both';
+  if (item.id === 'for-you') return gates.showForYou;
   if (item.id === 'companies') return gates.showCustomers;
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
+  if (item.id === 'passwords') return gates.showPasswords;
   if (item.id === 'external') return gates.showExternal;
   return true;
+};
+
+/**
+ * Passwords joined the rail after people saved custom orders. A saved order
+ * without it places it right after Calendar, its default slot, instead of last;
+ * every other id keeps the user's order.
+ */
+const withPasswords = (order: readonly string[]): readonly string[] => {
+  if (order.includes('passwords')) return order;
+  const calendar = order.indexOf('calendar');
+  if (calendar === -1) return order;
+  return [
+    ...order.slice(0, calendar + 1),
+    'passwords',
+    ...order.slice(calendar + 1),
+  ];
+};
+
+/**
+ * Beside New Home, old Home gives up `g h`, which opens New Home, and opens
+ * on its own tab: New Home's Recent is `/home` too. Once old Home is off,
+ * the Home item opens New Home on the tab it was left on.
+ */
+const withHomeMode = (
+  item: SidebarNextNavItem,
+  gates: NavItemGates
+): SidebarNextNavItem => {
+  if (item.id !== 'home') return item;
+  if (gates.homeMode === 'both') {
+    return {
+      ...item,
+      hotkey: undefined,
+      hotkeyToken: undefined,
+      search: { [homeTabSearch.namespace]: undefined },
+    };
+  }
+  if (gates.homeMode === 'new-only') {
+    return { ...item, viewId: 'new-home', href: '/new-home' };
+  }
+  return item;
 };
 
 /**
@@ -265,7 +351,22 @@ export const orderNavItems = (
     used.add('home');
   }
 
-  for (const id of order) {
+  // New Home sits right under Home, ahead of an order saved before it
+  // existed, until the person moves it themselves.
+  const newHome = byId.get('new-home');
+  if (newHome && !order.includes('new-home')) {
+    result.push(newHome);
+    used.add('new-home');
+  }
+
+  // For you sits under Home until the person gives it a place of its own.
+  const forYou = byId.get('for-you');
+  if (forYou && !order.includes('for-you')) {
+    result.push(forYou);
+    used.add('for-you');
+  }
+
+  for (const id of withPasswords(order)) {
     if (id === 'home' || used.has(id)) continue;
     const item = byId.get(id);
     if (item) {
@@ -289,7 +390,9 @@ export const customizableNavItems = (
   gates: NavItemGates
 ): SidebarNextNavItem[] =>
   orderNavItems(
-    SIDEBAR_NEXT_NAV_ITEMS.filter((item) => isNavItemAvailable(item, gates)),
+    SIDEBAR_NEXT_NAV_ITEMS.filter((item) =>
+      isNavItemAvailable(item, gates)
+    ).map((item) => withHomeMode(item, gates)),
     gates.prefs.order
   );
 
@@ -302,9 +405,8 @@ export const moreMenuItems = (gates: NavItemGates): SidebarNextMenuItem[] =>
 /**
  * The nav buttons currently on the outer rail.
  *
- * Gates are passed in rather than read here: both are PostHog-backed, and the
- * imperative `ENABLE_CRM()` / `ENABLE_CALENDAR_UI()` readers call
- * `isFeatureEnabled` without tracking it, so a flag that resolves after mount
+ * Gates are passed in rather than read here: they are PostHog-backed, and
+ * `isFeatureEnabled` does not track them, so a flag that resolves after mount
  * would never reach the rendered list. Callers subscribe with `useFeatureFlag`.
  */
 export const visibleNavItems = (gates: NavItemGates): SidebarNextNavItem[] =>

@@ -1,7 +1,10 @@
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { authServiceClient } from '@service-auth/client';
-import type { CursorApiKeyStatus } from '@service-auth/generated/schemas';
+import type {
+  CursorApiKeyStatus,
+  PutCursorDefaultModelRequest,
+} from '@service-auth/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 
 import { authKeys } from './keys';
@@ -24,6 +27,7 @@ function fetchCursorModels() {
 const NOT_CONNECTED: CursorApiKeyStatus = {
   registered: false,
   defaultModelId: null,
+  defaultEffort: null,
   updatedAt: null,
 };
 
@@ -100,16 +104,18 @@ export function useCursorModelsQuery(enabled: () => boolean) {
 }
 
 /**
- * Chooses the model the user's sessions start on.
+ * Chooses the model, and optionally its reasoning effort, the user's sessions
+ * start on. A model saved without an effort clears the previous effort, which
+ * belonged to the previous model.
  *
  * Invalidates the status query so the picker reflects the stored choice from
  * one source of truth, exactly as the key mutations do.
  */
 export function useSetCursorDefaultModel() {
   return useMutation(() => ({
-    mutationFn: async (modelId: string) =>
+    mutationFn: async (request: PutCursorDefaultModelRequest) =>
       throwOnErr(
-        async () => await authServiceClient.putCursorDefaultModel(modelId)
+        async () => await authServiceClient.putCursorDefaultModel(request)
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({

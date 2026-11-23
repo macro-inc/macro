@@ -1,4 +1,8 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
+import { t } from '@app/lib/i18n';
+import { ContextMenuContent, CopyMenuItem } from '@core/component/ContextMenu';
+import LinkIcon from '@icon/system/regular/link.svg';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import { createSignal, For } from 'solid-js';
 import { Dropdown } from './Dropdown';
 
@@ -60,6 +64,45 @@ function UnavailableDemo() {
 }
 // #endregion
 
+// #region demo:copy
+function CopyDemo() {
+  return (
+    <Dropdown>
+      <Dropdown.Trigger>Copy</Dropdown.Trigger>
+      <Dropdown.Content class="min-w-48">
+        <Dropdown.CopyItem
+          icon={<LinkIcon class="size-4" />}
+          onCopy={() => navigator.clipboard.writeText(location.href)}
+        >
+          Copy link
+        </Dropdown.CopyItem>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+// #endregion
+
+// #region demo:context-copy
+function ContextCopyDemo() {
+  return (
+    <ContextMenu>
+      <ContextMenu.Trigger class="rounded-lg border border-edge p-3 text-sm">
+        Right-click to copy
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenuContent>
+          <CopyMenuItem
+            text={t('entityActions.copyLink')}
+            icon={LinkIcon}
+            onCopy={() => navigator.clipboard.writeText(location.href)}
+          />
+        </ContextMenuContent>
+      </ContextMenu.Portal>
+    </ContextMenu>
+  );
+}
+// #endregion
+
 export default defineDoc({
   name: 'Dropdown',
   category: 'Overlays',
@@ -68,13 +111,27 @@ export default defineDoc({
   status: 'stable',
   import: "import { Dropdown } from '@ui';",
   exports: ['Dropdown'],
-  propTypes: ['DropdownMultiSelectItemProps'],
+  propTypes: ['DropdownCopyItemProps', 'DropdownMultiSelectItemProps'],
   demos: [
+    {
+      id: 'copy',
+      title: 'Copy without dismissing',
+      description:
+        'Return the clipboard promise from onCopy. The label stays unchanged and a green check follows successful completion. False and rejection suppress feedback.',
+      render: CopyDemo,
+    },
+    {
+      id: 'context-copy',
+      title: 'Context-menu copy',
+      description:
+        'CopyMenuItem uses the same feedback and stays open after copying.',
+      render: ContextCopyDemo,
+    },
     {
       id: 'multiselect',
       title: 'Multiselect filters',
       description:
-        'Checkbox or Space toggles and stays open. Row or Enter adds and closes. Shift-click, Shift+Enter, or Only selects just one and stays open. Only is always visible on touch.',
+        'Clicking a row or its checkbox, or Space, toggles and stays open. Enter adds and closes. Shift-click, Shift+Enter, or Only selects just one and stays open. Only is always visible on touch.',
       render: MultiselectDemo,
     },
     {

@@ -77,8 +77,26 @@ where
                 status: match transition {
                     NotificationTransition::Seen => NotificationStatus::Seen,
                     NotificationTransition::Done => NotificationStatus::Done(true),
-                    NotificationTransition::Undone => NotificationStatus::Done(false),
                 },
+            })
+            .await?
+            .into_iter()
+            .map(|row| row.notification_id)
+            .collect())
+    }
+
+    async fn reopen(
+        &self,
+        user: MacroUserIdStr<'static>,
+        notification_ids: Vec<Uuid>,
+        unseen: Vec<Uuid>,
+    ) -> Result<Vec<Uuid>, Report> {
+        Ok(self
+            .reader
+            .update_notifications_and_return::<serde_json::Value>(UpdateNotificationsRequest {
+                user_id: user,
+                notification_ids: &notification_ids,
+                status: NotificationStatus::Reopen { unseen },
             })
             .await?
             .into_iter()

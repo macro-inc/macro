@@ -5,6 +5,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::NotifEvent;
 use notification::domain::models::{UserNotificationRow, entity_query::EntityNotificationQuery};
 use rootcause::markers::{Cloneable, Dynamic};
+use tracing::Instrument;
 
 /// Tests for notification entity batching.
 #[cfg(test)]
@@ -135,8 +136,7 @@ pub fn entity_notifications_loader<R>(
 where
     R: SoupNotificationEdgeReader,
 {
-    DataLoader::new(
-        EntityNotificationsLoader::new(user_id, reader),
-        tokio::spawn,
-    )
+    DataLoader::new(EntityNotificationsLoader::new(user_id, reader), |batch| {
+        tokio::spawn(batch.in_current_span())
+    })
 }

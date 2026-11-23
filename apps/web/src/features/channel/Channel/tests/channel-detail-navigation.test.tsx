@@ -1,4 +1,9 @@
 import { createBlockOrchestrator } from '@core/orchestrator';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
+import {
+  directoryChannel,
+  directoryParticipant,
+} from '@queries/channel/tests/directory-channel';
 import { cleanup, render } from '@solidjs/testing-library';
 import { type Accessor, createComputed, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,9 +16,29 @@ const mocks = vi.hoisted(() => ({
   pass: (props: { children?: JSX.Element }) => props.children,
   requests: [] as (ChannelTargetRequest | undefined)[],
   joinRequested: false,
+  channel: undefined as DirectoryChannel | undefined,
+  dmWork: [] as { direct: boolean; members: readonly string[] }[],
 }));
 
 const analytics = vi.hoisted(() => ({ pageView: vi.fn(), track: vi.fn() }));
+vi.mock('@app/features/agent-work/views/dm-work', () => ({
+  DmWorkProvider: (props: {
+    isDirectMessage: boolean;
+    participantIds: readonly string[];
+    children: unknown;
+  }) => {
+    createComputed(() =>
+      mocks.dmWork.push({
+        direct: props.isDirectMessage,
+        members: props.participantIds,
+      })
+    );
+    return props.children;
+  },
+  DmWorkPanel: () => null,
+  DmWorkToggle: () => null,
+}));
+
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => analytics,
 }));
@@ -33,6 +58,7 @@ vi.mock('@app/components/view-shell', () => ({
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   ChatWithAgentButton: () => null,
+  openChatWithAgent: vi.fn(),
 }));
 vi.mock('@channel/Attachments/ChannelAttachmentsTab', () => ({
   ChannelAttachmentsTab: () => null,
@@ -80,12 +106,16 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createElementSize: () => ({ width: 0, height: 0 }),
+}));
 vi.mock('@ui/components/Tabs', () => ({ Tabs: () => null }));
-vi.mock('@core/context/channels', () => ({
-  useChannel: () => () => undefined,
+vi.mock(import('@core/context/channels'), async (importOriginal) => ({
+  channelMemberIds: (await importOriginal()).channelMemberIds,
+  useChannel: () => () => mocks.channel,
   useChannelCanCall: () => () => true,
   useChannelName: () => () => 'channel-name',
-  useChannelType: () => () => 'private',
+  useChannelType: () => () => mocks.channel?.channelType ?? 'private',
 }));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: () => ({ isSuccess: false, data: undefined }),
@@ -125,8 +155,37 @@ beforeEach(() => {
   analytics.track.mockClear();
   mocks.requests.length = 0;
   mocks.joinRequested = false;
+  mocks.channel = undefined;
+  mocks.dmWork.length = 0;
 });
 afterEach(cleanup);
+
+describe('channel detail DM work', () => {
+  // The REST list counted a DM's bot among its participants, and DM Work
+  // decides whose work to show from every member; the directory keeps bots
+  // apart, so the detail adds them back.
+  it('hands DM Work every member of the DM, its bot included', () => {
+    mocks.channel = directoryChannel(CHANNEL_ID, {
+      channelType: 'direct_message',
+      participants: [directoryParticipant('viewer')],
+      botParticipants: [
+        {
+          botId: 'agent-bot',
+          role: 'member',
+          joinedAt: '2026-11-01T00:00:00+00:00',
+          leftAt: null,
+        },
+      ],
+    });
+    render(() => (
+      <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>
+    ));
+    expect(mocks.dmWork.at(-1)).toEqual({
+      direct: true,
+      members: ['viewer', 'bot|agent-bot'],
+    });
+  });
+});
 
 describe('channel detail navigation', () => {
   it('counts one open per channel shown', async () => {

@@ -70,6 +70,8 @@ export type SetupCapabilities = {
   waitForRunning: (
     onPhase: (phase: MacrodStatus['phase']) => void
   ) => Promise<MacrodStatus>;
+  /** Let agents on this runtime bypass permission requests (the web setting). */
+  allowPermissionBypass: (harnessId: string) => Promise<void>;
   listAgents: () => Promise<BoundAgent[]>;
   loadModels: (harnessId: string) => Promise<LoadAgentModelsResponse>;
   createAgent: (agent: NewLocalAgent) => Promise<ReadyAgent>;

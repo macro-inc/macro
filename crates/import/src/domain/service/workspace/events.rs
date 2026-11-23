@@ -12,13 +12,13 @@ use agent_runtime_protocol::domain::notification::{
     NotificationEvent, ReviewSettlement,
 };
 use agent_session::domain::notifications::{PendingNotification, ProduceNotification};
+use connectors::McpConnectionsService;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use uuid::Uuid;
 
 use super::super::ImportServiceImpl;
-use super::super::notion_workspace::report;
+use super::super::notion_workspace::{notice_import_ids, report};
 use crate::domain::models::{
     ImportSource, NotionImportReport, NotionReportItem, ReviewedRun, RunStatus,
 };
@@ -33,7 +33,7 @@ const MAX_TEXT_CHARS: usize = 300;
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -123,7 +123,9 @@ where
             .repo
             .list(user, Some(self.workspace_source), None)
             .await?;
-        let mut report = report(run.as_ref(), &rows);
+        let ids = notice_import_ids(run.as_ref(), &rows);
+        let notices = self.repo.task_notice_counts(user, &ids).await?;
+        let mut report = report(run.as_ref(), &rows, &notices)?;
         report.on_team = self.repo.user_team_id(user).await?.is_some();
         Ok(report)
     }

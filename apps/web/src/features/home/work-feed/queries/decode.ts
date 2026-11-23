@@ -103,6 +103,7 @@ const toGraphqlItemType = (type: WorkFeedItemType): GraphqlWorkFeedItemType =>
     .with('calendar_event', () => 'CALENDAR_EVENT' as const)
     .with('pull_request', () => 'PULL_REQUEST' as const)
     .with('agent_session', () => 'AGENT_SESSION' as const)
+    .with('runtime', () => 'RUNTIME' as const)
     .exhaustive(() => {
       throw new Error(`Unknown work feed item type: ${type}`);
     });

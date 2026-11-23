@@ -24,6 +24,28 @@ import {
   validateTabToCoordinatorEnvelope,
 } from './coordinator-protocol';
 
+it('validates guarded hydration without stripping or weakening its scope', () => {
+  const request = {
+    id: 1,
+    kind: 'hydrate',
+    query: '{ user { id } }',
+    data: {},
+    hydrationScope: {
+      identity: 'viewer',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    },
+  };
+  expect(isCacheRequest(request)).toBe(true);
+  for (const hydrationScope of [
+    { identity: 'viewer' },
+    { ...request.hydrationScope, storageGeneration: 'bad' },
+    { ...request.hydrationScope, identity: '' },
+    null,
+  ]) {
+    expect(isCacheRequest({ ...request, hydrationScope })).toBe(false);
+  }
+});
+
 const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
 } as const;
@@ -194,12 +216,19 @@ describe('coordinator runtime protocol', () => {
       tabId: 'tab',
       ownerEpoch: 2,
     };
-    for (const valid of [cacheUnavailable, superseded, removeStale]) {
+    for (const valid of [
+      cacheUnavailable,
+      { ...cacheUnavailable, superseded: true },
+      superseded,
+      removeStale,
+    ]) {
       expect(validateCoordinatorToTabEnvelope(valid).ok).toBe(true);
     }
     for (const invalid of [
       { ...cacheUnavailable, reason: '' },
+      { ...cacheUnavailable, superseded: false },
       { ...superseded, reason: '' },
+      { ...superseded, superseded: true },
       { ...superseded, buildTime: 1 },
       { ...removeStale, ownerEpoch: 0 },
     ]) {
@@ -548,14 +577,21 @@ describe('coordinator runtime protocol', () => {
       })
     ).toBe(false);
 
-    const selectionRequest = (keys: string[]) =>
+    const selectionRequest = (keys: string[], priority?: string) =>
       isCacheRequest({
         id: 2,
         kind: 'read-records-by-keys',
         document: 'fragment Item on GraphqlSoupDocument { name }',
         fragmentName: 'Item',
         keys,
+        ...(priority ? { priority } : {}),
       });
+    expect(selectionRequest(['GraphqlSoupDocument:one'], 'typed-search')).toBe(
+      true
+    );
+    expect(selectionRequest(['GraphqlSoupDocument:one'], 'user-visible')).toBe(
+      false
+    );
     expect(selectionRequest(['ROOT_QUERY'])).toBe(false);
     expect(selectionRequest([`Thing:${'x'.repeat(1024)}`])).toBe(false);
   });
@@ -618,6 +654,7 @@ describe('coordinator runtime protocol', () => {
 
   it.each([
     { ...version, kind: 'registered', tabId: 'tab' },
+    { ...version, kind: 'registered', tabId: 'tab', ownerElsewhere: true },
     {
       ...version,
       kind: 'become-owner',
@@ -656,6 +693,20 @@ describe('coordinator runtime protocol', () => {
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });
+
+  it.each([false, 'yes', null])(
+    'rejects a registration whose ownerElsewhere is %s',
+    (ownerElsewhere) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'registered',
+          tabId: 'tab',
+          ownerElsewhere,
+        }).ok
+      ).toBe(false);
+    }
+  );
 
   it.each([
     'opened-existing',
@@ -873,10 +924,10 @@ describe('coordinator runtime protocol', () => {
     // The current versions moved past the unversioned name, so the lock
     // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t11'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t12'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t11'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t12'
     );
   });
 
@@ -906,7 +957,7 @@ describe('coordinator runtime protocol', () => {
     });
     expect(CACHE_STORAGE_VERSION).toEqual({
       schemaCompatibilityEpoch: rustConstant(
-        'crates/client/cache-core/src/codec.rs',
+        'crates/client/cache-schema/src/lib.rs',
         'CACHE_SCHEMA_COMPATIBILITY_EPOCH'
       ),
       formatVersion: rustConstant(

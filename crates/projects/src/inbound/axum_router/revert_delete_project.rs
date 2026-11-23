@@ -1,5 +1,7 @@
 //! Handler for restoring soft-deleted projects.
 
+use std::sync::Arc;
+
 use axum::{Extension, Json, extract::State};
 use entity_access::{
     domain::{models::OwnerAccessLevel, ports::EntityAccessService},
@@ -11,7 +13,7 @@ use model::{
     response::{GenericSuccessResponse, SuccessResponse},
 };
 
-use super::ProjectRouterState;
+use super::{ProjectRouterState, delete_project::run_on_own_task};
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
 /// Restore a soft-deleted project and its children.
@@ -39,10 +41,9 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    state
-        .service
-        .revert_delete_project(access.entity_access_receipt, project.0)
-        .await?;
+    let service = Arc::clone(&state.service);
+    let receipt = access.entity_access_receipt;
+    run_on_own_task(async move { service.revert_delete_project(receipt, project.0).await }).await?;
 
     Ok(Json(SuccessResponse {
         error: false,

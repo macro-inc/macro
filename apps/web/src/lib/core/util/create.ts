@@ -1,17 +1,18 @@
 import { analytics } from '@app/lib/analytics';
-import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
-import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { invalidateUserQuota } from '@queries/auth';
+import {
+  assertQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
 import { postNewHistoryItem } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
 import { refetchSoupEntity, type SoupEntityTag } from '@queries/soup/cache';
 import { seedDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
-import { cognitionApiServiceClient } from '@service-cognition/client';
-import type { CreateChatRequest } from '@service-cognition/generated/schemas';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
@@ -19,7 +20,6 @@ import type { PropertyInput } from '@service-storage/generated/schemas/propertyI
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { err, ok } from 'neverthrow';
 import { decodeBase64Bytes } from './base64';
-import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
   getExtensionForLanguage,
@@ -52,6 +52,7 @@ type CreateMarkdownFileArgs = {
 export async function createMarkdownFile(
   args?: CreateMarkdownFileArgs
 ): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.createMarkdownDocument({
     documentName: args?.title ?? '',
     markdown: args?.content ?? '',
@@ -64,13 +65,18 @@ export async function createMarkdownFile(
 
   const { documentId, documentMetadata, token } = result.value;
 
-  seedDocumentLoadBundle(documentId, {
-    documentMetadata,
-    userAccessLevel: AccessLevel.owner,
-    token,
-  });
+  seedDocumentLoadBundle(
+    documentId,
+    {
+      documentMetadata,
+      userAccessLevel: AccessLevel.owner,
+      token,
+    },
+    generation
+  );
 
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args?.title ?? '',
@@ -96,6 +102,7 @@ type CreateTaskArgs = {
   content?: string;
   projectId?: string;
   propertyValues?: PropertyInput[];
+  pinnedPropertyDefinitionIds?: string[];
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 };
@@ -108,6 +115,16 @@ export async function createTask(
   args?: CreateTaskArgs
 ): Promise<string | undefined> {
   return (await createTaskResponse(args))?.documentId;
+}
+
+/** Long-running workflows must supply their captured owner. Unlike an optional
+ * field on createTask, a missing capture cannot silently become an unscoped write. */
+export async function createTaskForAccount(
+  account: QueryAccount,
+  args?: CreateTaskArgs
+): Promise<string | undefined> {
+  assertQueryAccount(account);
+  return (await createTaskResponse(args, account))?.documentId;
 }
 
 /**
@@ -129,7 +146,11 @@ export async function createTaskWithInitialSnapshot(args?: CreateTaskArgs) {
   return { documentId: createdTask.documentId, initialSnapshot };
 }
 
-async function createTaskResponse(args?: CreateTaskArgs) {
+async function createTaskResponse(
+  args?: CreateTaskArgs,
+  account?: QueryAccount
+) {
+  const generation = cacheSessionGeneration.capture();
   // Ensure status is always set, defaulting to NOT_STARTED
   const existingPropertyValues = args?.propertyValues ?? [];
   const hasStatus = existingPropertyValues.some(
@@ -155,7 +176,9 @@ async function createTaskResponse(args?: CreateTaskArgs) {
     markdown: args?.content ?? '',
     projectId: args?.projectId,
     propertyValues,
+    pinnedPropertyDefinitionIds: args?.pinnedPropertyDefinitionIds,
   });
+  if (account) assertQueryAccount(account);
 
   fireAndForget(invalidateUserQuota(), 'create-entity');
 
@@ -163,13 +186,18 @@ async function createTaskResponse(args?: CreateTaskArgs) {
 
   const { documentId, documentMetadata, token, initialSnapshot } = result.value;
 
-  seedDocumentLoadBundle(documentId, {
-    documentMetadata,
-    userAccessLevel: AccessLevel.owner,
-    token,
-  });
+  seedDocumentLoadBundle(
+    documentId,
+    {
+      documentMetadata,
+      userAccessLevel: AccessLevel.owner,
+      token,
+    },
+    generation
+  );
 
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args?.title ?? '',
@@ -217,6 +245,7 @@ type CreateSnippetArgs = {
 export async function createSnippet(
   args?: CreateSnippetArgs
 ): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.createSnippet({
     snippetName: args?.title ?? '',
     markdown: args?.content ?? '',
@@ -230,6 +259,7 @@ export async function createSnippet(
   const { documentId } = result.value;
 
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args?.title ?? '',
@@ -267,6 +297,7 @@ type CreateSkillArgs = {
 export async function createSkill(
   args: CreateSkillArgs
 ): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.createSkill({
     skillName: args.title ?? '',
     description: args.description,
@@ -281,6 +312,7 @@ export async function createSkill(
   const { documentId } = result.value;
 
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args.title ?? '',
@@ -315,6 +347,7 @@ export async function createCodeFileFromText({
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }) {
+  const generation = cacheSessionGeneration.capture();
   const encoder = new TextEncoder();
   const buffer = encoder.encode(code);
   const sha = await contentHash(buffer);
@@ -380,6 +413,7 @@ export async function createCodeFileFromText({
     'create-entity'
   );
   setPreviewOnCreate({
+    generation,
     itemId: document.metadata.documentId,
     itemType: 'document',
     name: title ?? 'New Code File',
@@ -403,6 +437,7 @@ export async function createCanvasFile(args: {
   projectId?: string;
   source?: string;
 }) {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.createCanvasDocument({
     documentName: args.title ?? 'New Canvas',
     projectId: args.projectId,
@@ -410,12 +445,17 @@ export async function createCanvasFile(args: {
   fireAndForget(invalidateUserQuota(), 'create-entity');
   if (result.isErr()) return { error: 'Canvas creation failed.' };
   const { documentId, documentMetadata, token } = result.value;
-  seedDocumentLoadBundle(documentId, {
-    documentMetadata,
-    userAccessLevel: AccessLevel.owner,
-    token,
-  });
+  seedDocumentLoadBundle(
+    documentId,
+    {
+      documentMetadata,
+      userAccessLevel: AccessLevel.owner,
+      token,
+    },
+    generation
+  );
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args.title ?? 'New Canvas',
@@ -438,6 +478,7 @@ export async function createCanvasFileFromJsonString(args: {
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }) {
+  const generation = cacheSessionGeneration.capture();
   const { json, title, projectId, source } = args;
   const encoder = new TextEncoder();
   const buffer = encoder.encode(json);
@@ -467,6 +508,7 @@ export async function createCanvasFileFromJsonString(args: {
     'create-entity'
   );
   setPreviewOnCreate({
+    generation,
     itemId: canvas.metadata.documentId,
     itemType: 'document',
     name: title ?? 'New Canvas',
@@ -482,43 +524,6 @@ export async function createCanvasFileFromJsonString(args: {
   });
 
   return { documentId: canvas.metadata.documentId };
-}
-
-export async function createChat(
-  args?: CreateChatRequest,
-  opts?: {
-    /** UI surface the creation originated from, for analytics. */
-    source?: string;
-  }
-) {
-  const { showPaywall } = usePaywallState();
-
-  const maybeChat = await cognitionApiServiceClient.createChat(args ?? {});
-
-  fireAndForget(invalidateUserQuota(), 'create-entity');
-  if (maybeChat.isErr()) {
-    if (isPaymentError(maybeChat)) {
-      showPaywall(PaywallKey.CHAT_LIMIT);
-    }
-    return { error: 'Failed to create chat.' };
-  }
-  const chat = maybeChat.value;
-  fireAndForget(postNewHistoryItem('chat', chat.id), 'create-entity');
-  setPreviewOnCreate({
-    itemId: chat.id,
-    itemType: 'chat',
-    name: args?.name ?? DEFAULT_CHAT_NAME,
-  });
-  refreshCreatedSoupEntity(chat.id, 'chat');
-
-  analytics.track('create_entity', {
-    entityType: 'chat',
-    entityId: chat.id,
-    projectId: args?.projectId,
-    source: opts?.source,
-  });
-
-  return { chatId: chat.id };
 }
 
 /** Uploads a file to the static file service and returns the id */

@@ -9,9 +9,13 @@ export function createThreadReplyView<T>(options: {
   preview: Accessor<T[]>;
   loaded: Accessor<T[] | undefined>;
   isExpanded: Accessor<boolean>;
+  /** Collapse to the indicator alone, as a call's thread does. */
+  hideCollapsedPreview?: boolean;
 }) {
   const previewCount = () =>
-    Math.min(options.preview().length, COLLAPSED_REPLY_PREVIEW_LIMIT);
+    options.hideCollapsedPreview
+      ? 0
+      : Math.min(options.preview().length, COLLAPSED_REPLY_PREVIEW_LIMIT);
   const activeReplies = () => options.loaded() ?? options.preview();
   const displayReplies = createMemo(() =>
     options.isExpanded()

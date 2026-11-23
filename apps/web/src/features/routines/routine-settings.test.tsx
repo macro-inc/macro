@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   openAgentsPage: vi.fn(),
   popoverSplit: vi.fn(),
+  menuHost: vi.fn(),
 }));
 const layout = { openWithSplit: vi.fn(), popoverSplit: mocks.popoverSplit };
 
@@ -34,14 +35,16 @@ vi.mock('@app/features/agents-view/primitives/open-page', () => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
 }));
-vi.mock('./queries/routine-target-display', () => ({
-  createRoutineTargetDisplay: () => ({
-    targetLabel: () => 'Sonnet 5.5',
-    targetModel: () => undefined,
-  }),
+// The row menu has its own coverage; here, only where it opens a routine.
+vi.mock('./routine-row-menu-actions', () => ({
+  useRoutineRowMenuActions: (_source: unknown, host: unknown) => {
+    mocks.menuHost(host);
+    return undefined;
+  },
 }));
 vi.mock('./queries/routine-sources', () => ({
   createRoutineListSource: (): RoutineListSource => ({
+    subRoutines: () => [],
     routines: () => [
       {
         id: 'briefing',
@@ -60,6 +63,15 @@ vi.mock('./queries/routine-sources', () => ({
     pendingId: () => undefined,
   }),
 }));
+
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
 
 afterEach(() => {
   cleanup();
@@ -81,18 +93,27 @@ describe('routine settings', () => {
     });
   });
 
-  it('opens the composer and the created routine from Create', () => {
+  it('gives the row menu nothing to open beside the sheet', () => {
+    render(() => <RoutineSettings />);
+    const host = mocks.menuHost.mock.calls[0]?.[0];
+    expect(host).toEqual({ open: expect.any(Function) });
+    host.open('briefing');
+    expect(mocks.close).toHaveBeenCalledOnce();
+    expect(mocks.openAgentsPage).toHaveBeenCalledWith(layout, 'routines', {
+      routineId: 'briefing',
+    });
+  });
+
+  it('opens the composer from Create', () => {
     render(() => <RoutineSettings />);
     expect(screen.getAllByRole('heading', { name: 'Routines' })).toHaveLength(
       1
     );
     fireEvent.click(screen.getByRole('button', { name: 'Create Routine' }));
     expect(mocks.close).toHaveBeenCalledOnce();
-    const content = mocks.popoverSplit.mock.calls[0][0];
-    expect(content).toMatchObject({ type: 'component', id: 'routine-compose' });
-    content.params.onCreated('created');
-    expect(mocks.openAgentsPage).toHaveBeenCalledWith(layout, 'routines', {
-      routineId: 'created',
+    expect(mocks.popoverSplit).toHaveBeenCalledWith({
+      type: 'component',
+      id: 'routine-compose',
     });
   });
 });

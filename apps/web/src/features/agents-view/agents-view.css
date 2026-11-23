@@ -1,5 +1,9 @@
 /*
  * Feature-specific Agents layouts, scoped to the workspace and its portals.
+ * Both carry `agents-scope`, the one class every rule here hangs off: Chrome's
+ * ancestor filter skips `:where(.agents-scope) .truncate` for a `.truncate`
+ * anywhere else in the app, but walks to the root for each of them under
+ * `:where(.agents-view, .agents-view-portal)`.
  * Colors inherit the app theme. Composer and sidebar chrome use the shared
  * UI components so changes to those surfaces carry through to this view.
  */
@@ -51,60 +55,58 @@
 		-webkit-font-smoothing: antialiased;
 	}
 
-	:where(.agents-view, .agents-view-portal) *,
-	:where(.agents-view, .agents-view-portal) *::before,
-	:where(.agents-view, .agents-view-portal) *::after {
-		box-sizing: border-box;
-	}
+	/* Tailwind's preflight already gives every element and pseudo-element
+	   border-box sizing. Don't add `… *` rules here: Chrome tests every element
+	   on the page against them on each restyle (see scripts/costly-selectors.ts). */
 
-	:where(.agents-view, .agents-view-portal) button:focus-visible,
-	:where(.agents-view, .agents-view-portal) textarea:focus-visible,
-	:where(.agents-view, .agents-view-portal) input:focus-visible {
+	:where(.agents-scope) button:focus-visible,
+	:where(.agents-scope) textarea:focus-visible,
+	:where(.agents-scope) input:focus-visible {
 		outline: 1.5px solid var(--accent);
 		outline-offset: 1px;
 	}
 
-	:where(.agents-view, .agents-view-portal) svg {
+	:where(.agents-scope) svg {
 		display: block;
 	}
 
-	:where(.agents-view, .agents-view-portal) svg:not([fill]) {
+	:where(.agents-scope) svg:not([fill]) {
 		fill: currentColor;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		:where(.agents-view, .agents-view-portal) * {
+		:where(.agents-scope) * {
 			transition: none !important;
 			animation: none !important;
 		}
 	}
 
-	:where(.agents-view, .agents-view-portal) .ph {
+	:where(.agents-scope) .ph {
 		width: 16px;
 		height: 16px;
 		fill: currentColor;
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .mono {
+	:where(.agents-scope) .mono {
 		font-family: var(--font-mono);
 		font-size: 11px;
 		letter-spacing: 0.01em;
 		font-variant-numeric: tabular-nums;
 	}
 
-	:where(.agents-view, .agents-view-portal) .num {
+	:where(.agents-scope) .num {
 		font-variant-numeric: tabular-nums;
 	}
 
-	:where(.agents-view, .agents-view-portal) .truncate {
+	:where(.agents-scope) .truncate {
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		min-width: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .sr {
+	:where(.agents-scope) .sr {
 		position: absolute;
 		width: 1px;
 		height: 1px;
@@ -114,12 +116,12 @@
 	}
 
 	/* ---------- ViewSidebar ---------- */
-	:where(.agents-view, .agents-view-portal) .ctl {
+	:where(.agents-scope) .ctl {
 		display: inline-flex;
 		gap: 2px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .icon-btn {
+	:where(.agents-scope) .icon-btn {
 		width: 28px;
 		height: 28px;
 		border-radius: 8px;
@@ -128,31 +130,31 @@
 		color: var(--ink-subtle);
 	}
 
-	:where(.agents-view, .agents-view-portal) .icon-btn .ph {
+	:where(.agents-scope) .icon-btn .ph {
 		width: 14px;
 		height: 14px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .icon-btn:hover {
+	:where(.agents-scope) .icon-btn:hover {
 		background: var(--hover);
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .icon-btn[aria-pressed="true"] {
+	:where(.agents-scope) .icon-btn[aria-pressed="true"] {
 		background: var(--active);
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .icon-btn:disabled {
+	:where(.agents-scope) .icon-btn:disabled {
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .open {
+	:where(.agents-scope) .open {
 		color: var(--green);
 	}
 
 	/* Work mode: a stepped, square "cog" rather than a smooth ring */
-	:where(.agents-view, .agents-view-portal)[data-mode="work"] .spin {
+	:where(.agents-scope)[data-mode="work"] .spin {
 		border-radius: 2px;
 		border: 1.5px solid var(--surface-4);
 		border-top-color: var(--ink-subtle);
@@ -171,11 +173,11 @@
 		}
 	}
 
-	:where(.agents-view, .agents-view-portal) .stdot.waiting::after {
+	:where(.agents-scope) .stdot.waiting::after {
 		display: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .stdot {
+	:where(.agents-scope) .stdot {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
@@ -184,7 +186,7 @@
 		white-space: nowrap;
 	}
 
-	:where(.agents-view, .agents-view-portal) .stdot::before {
+	:where(.agents-scope) .stdot::before {
 		content: "";
 		width: 6px;
 		height: 6px;
@@ -192,21 +194,21 @@
 		background: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .stdot.running::before {
+	:where(.agents-scope) .stdot.running::before {
 		background: var(--green);
 		animation: pulse 1.6s ease-in-out infinite;
 	}
 
-	:where(.agents-view, .agents-view-portal) .stdot.waiting::before {
+	:where(.agents-scope) .stdot.waiting::before {
 		background: var(--amber);
 	}
 
-	:where(.agents-view, .agents-view-portal) .stdot.failed::before {
+	:where(.agents-scope) .stdot.failed::before {
 		background: var(--red);
 	}
 
 	/* ---------- Main ---------- */
-	:where(.agents-view, .agents-view-portal) .main {
+	:where(.agents-scope) .main {
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
@@ -214,7 +216,7 @@
 		overflow: hidden;
 	}
 
-	:where(.agents-view, .agents-view-portal) .seg {
+	:where(.agents-scope) .seg {
 		display: inline-flex;
 		padding: 2px;
 		gap: 2px;
@@ -222,7 +224,7 @@
 		background: var(--hover);
 	}
 
-	:where(.agents-view, .agents-view-portal) .seg button {
+	:where(.agents-scope) .seg button {
 		padding: 4px 10px;
 		border-radius: 999px;
 		font-size: 12.5px;
@@ -234,26 +236,26 @@
 		height: 28px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .seg button:hover {
+	:where(.agents-scope) .seg button:hover {
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .seg button[aria-pressed="true"] {
+	:where(.agents-scope) .seg button[aria-pressed="true"] {
 		background: var(--active);
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .seg button kbd {
+	:where(.agents-scope) .seg button kbd {
 		font: 10px var(--font-mono);
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .seg .ph {
+	:where(.agents-scope) .seg .ph {
 		width: 12px;
 		height: 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .seg.side {
+	:where(.agents-scope) .seg.side {
 		display: grid;
 		grid-auto-flow: column;
 		grid-auto-columns: 1fr;
@@ -262,7 +264,7 @@
 		border-radius: 999px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .seg.side button {
+	:where(.agents-scope) .seg.side button {
 		justify-content: center;
 		height: 32px;
 		font-size: 14px;
@@ -272,12 +274,12 @@
 		min-width: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .seg.side button .ph {
+	:where(.agents-scope) .seg.side button .ph {
 		width: 14px;
 		height: 14px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .body {
+	:where(.agents-scope) .body {
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
@@ -285,19 +287,19 @@
 		flex-direction: column;
 	}
 
-	:where(.agents-view, .agents-view-portal) .page {
+	:where(.agents-scope) .page {
 		display: none;
 		flex: 1;
 		min-height: 0;
 		flex-direction: column;
 	}
 
-	:where(.agents-view, .agents-view-portal) .page[data-active] {
+	:where(.agents-scope) .page[data-active] {
 		display: flex;
 	}
 
 	/* New Chat */
-	:where(.agents-view, .agents-view-portal) .newchat {
+	:where(.agents-scope) .newchat {
 		align-items: center;
 		justify-content: center;
 		padding: 24px 24px 64px;
@@ -318,7 +320,7 @@
 		grid-row: 2;
 	}
 
-	:where(.agents-view, .agents-view-portal) .newchat .col {
+	:where(.agents-scope) .newchat .col {
 		width: 100%;
 		max-width: 720px;
 		display: flex;
@@ -326,12 +328,12 @@
 		gap: 20px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .greeting {
+	:where(.agents-scope) .greeting {
 		text-align: center;
 		margin-bottom: 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .greeting-text {
+	:where(.agents-scope) .greeting-text {
 		display: inline-block;
 		transform-origin: center 60%;
 		backface-visibility: hidden;
@@ -347,17 +349,17 @@
 		}
 	}
 
-	:where(.agents-view, .agents-view-portal) .greeting-mark[data-active="true"] > :is(path, g) {
+	:where(.agents-scope) .greeting-mark[data-active="true"] > :is(path, g) {
 		transform-box: fill-box;
 		transform-origin: center;
 		animation: greeting-mark-wave 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
 	}
 
-	:where(.agents-view, .agents-view-portal) .greeting-mark[data-active="true"] > :is(path, g):nth-child(2) {
+	:where(.agents-scope) .greeting-mark[data-active="true"] > :is(path, g):nth-child(2) {
 		animation-delay: 45ms;
 	}
 
-	:where(.agents-view, .agents-view-portal) .greeting-mark[data-active="true"] > :is(path, g):nth-child(3) {
+	:where(.agents-scope) .greeting-mark[data-active="true"] > :is(path, g):nth-child(3) {
 		animation-delay: 90ms;
 	}
 
@@ -373,7 +375,7 @@
 		}
 	}
 
-	:where(.agents-view, .agents-view-portal) .composer-drawer {
+	:where(.agents-scope) .composer-drawer {
 		position: relative;
 		display: grid;
 		grid-template-rows: 0fr;
@@ -386,7 +388,7 @@
 	}
 
 	/* Continue the repository bar behind the input's adjacent rounded corners. */
-	:where(.agents-view, .agents-view-portal) .composer-drawer::after {
+	:where(.agents-scope) .composer-drawer::after {
 		content: '';
 		position: absolute;
 		bottom: 100%;
@@ -397,18 +399,18 @@
 		pointer-events: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .composer-drawer[data-open] {
+	:where(.agents-scope) .composer-drawer[data-open] {
 		grid-template-rows: 1fr;
 		opacity: 1;
 		visibility: visible;
 	}
 
-	:where(.agents-view, .agents-view-portal) .composer-drawer-inner {
+	:where(.agents-scope) .composer-drawer-inner {
 		min-height: 0;
 		overflow: hidden;
 	}
 
-	:where(.agents-view, .agents-view-portal) .composer-drawer-content {
+	:where(.agents-scope) .composer-drawer-content {
 		display: flex;
 		align-items: center;
 		min-height: 52px;
@@ -417,38 +419,38 @@
 		transition: transform 100ms cubic-bezier(0.77, 0, 0.175, 1);
 	}
 
-	:where(.agents-view, .agents-view-portal) .composer-drawer[data-placement="top"] {
+	:where(.agents-scope) .composer-drawer[data-placement="top"] {
 		margin-inline: 0;
 		border-radius: 0;
 		background: transparent;
 	}
 
-	:where(.agents-view, .agents-view-portal) .composer-drawer[data-placement="top"]::before {
+	:where(.agents-scope) .composer-drawer[data-placement="top"]::before {
 		content: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .composer-drawer[data-placement="top"]::after {
+	:where(.agents-scope) .composer-drawer[data-placement="top"]::after {
 		content: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .composer-drawer[data-placement="top"] .composer-drawer-content {
+	:where(.agents-scope) .composer-drawer[data-placement="top"] .composer-drawer-content {
 		min-height: 46px;
 		padding: 6px 12px 4px;
 		transform: translateY(12px);
 	}
 
-	:where(.agents-view, .agents-view-portal) .composer-drawer[data-open] .composer-drawer-content {
+	:where(.agents-scope) .composer-drawer[data-open] .composer-drawer-content {
 		transform: none;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		:where(.agents-view, .agents-view-portal) .composer-drawer,
-		:where(.agents-view, .agents-view-portal) .composer-drawer-content {
+		:where(.agents-scope) .composer-drawer,
+		:where(.agents-scope) .composer-drawer-content {
 			transition: none;
 		}
 	}
 
-	:where(.agents-view, .agents-view-portal) .pill {
+	:where(.agents-scope) .pill {
 		height: 36px;
 		display: inline-flex;
 		align-items: center;
@@ -462,43 +464,43 @@
 		background: transparent;
 	}
 
-	:where(.agents-view, .agents-view-portal) .pill:hover {
+	:where(.agents-scope) .pill:hover {
 		background: var(--hover);
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .pill.empty {
+	:where(.agents-scope) .pill.empty {
 		background: transparent;
 		color: var(--ink-subtle);
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt .sysb {
+	:where(.agents-scope) .menu .opt .sysb {
 		font-size: 9px;
 		padding: 0 5px;
 		margin-left: auto;
 	}
 
-	:where(.agents-view, .agents-view-portal) .pill.empty:hover {
+	:where(.agents-scope) .pill.empty:hover {
 		background: var(--hover);
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt .sub {
+	:where(.agents-scope) .menu .opt .sub {
 		font-size: 11px;
 		color: var(--ink-placeholder);
 		white-space: nowrap;
 	}
 
-	:where(.agents-view, .agents-view-portal) .pill .lbl .k {
+	:where(.agents-scope) .pill .lbl .k {
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .pill .caret {
+	:where(.agents-scope) .pill .caret {
 		width: 14px;
 		height: 14px;
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .pill .av {
+	:where(.agents-scope) .pill .av {
 		width: 18px;
 		height: 18px;
 		border-radius: 50%;
@@ -509,16 +511,16 @@
 		box-shadow: 0 0 0 0.5px var(--edge-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .pill .av .ph {
+	:where(.agents-scope) .pill .av .ph {
 		width: 11px;
 		height: 11px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .bar .grow {
+	:where(.agents-scope) .bar .grow {
 		flex: 1;
 	}
 
-	:where(.agents-view, .agents-view-portal) .logo {
+	:where(.agents-scope) .logo {
 		width: 16px;
 		height: 16px;
 		flex-shrink: 0;
@@ -526,17 +528,17 @@
 		place-items: center;
 	}
 
-	:where(.agents-view, .agents-view-portal) .logo svg {
+	:where(.agents-scope) .logo svg {
 		width: 16px;
 		height: 16px;
 	}
 
 	/* model menu */
-	:where(.agents-view, .agents-view-portal) .menu-anchor {
+	:where(.agents-scope) .menu-anchor {
 		position: relative;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu {
+	:where(.agents-scope) .menu {
 		position: absolute;
 		bottom: calc(100% + 6px);
 		left: 0;
@@ -562,7 +564,7 @@
 		}
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .filter {
+	:where(.agents-scope) .menu .filter {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -575,7 +577,7 @@
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .filter input {
+	:where(.agents-scope) .menu .filter input {
 		flex: 1;
 		background: transparent;
 		border: 0;
@@ -585,7 +587,7 @@
 		min-width: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .grp {
+	:where(.agents-scope) .menu .grp {
 		display: flex;
 		align-items: center;
 		gap: 6px;
@@ -594,21 +596,21 @@
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .grp .logo {
+	:where(.agents-scope) .menu .grp .logo {
 		width: 12px;
 		height: 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .grp .logo svg {
+	:where(.agents-scope) .menu .grp .logo svg {
 		width: 12px;
 		height: 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .grp .logo {
+	:where(.agents-scope) .menu .grp .logo {
 		display: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt {
+	:where(.agents-scope) .menu .opt {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -620,52 +622,52 @@
 		font-size: 13.5px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt:hover {
+	:where(.agents-scope) .menu .opt:hover {
 		background: var(--hover);
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt[aria-checked="true"] {
+	:where(.agents-scope) .menu .opt[aria-checked="true"] {
 		background: var(--active);
 		font-weight: 500;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt .nm {
+	:where(.agents-scope) .menu .opt .nm {
 		flex: 0 1 auto;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt .hint {
+	:where(.agents-scope) .menu .opt .hint {
 		font-size: 12px;
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt .tick {
+	:where(.agents-scope) .menu .opt .tick {
 		color: var(--accent);
 		width: 14px;
 		height: 14px;
 		display: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt[aria-checked="true"] .tick {
+	:where(.agents-scope) .menu .opt[aria-checked="true"] .tick {
 		display: block;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt .hint,
-	:where(.agents-view, .agents-view-portal) .menu .opt .id {
+	:where(.agents-scope) .menu .opt .hint,
+	:where(.agents-scope) .menu .opt .id {
 		margin-left: auto;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .opt .id {
+	:where(.agents-scope) .menu .opt .id {
 		display: none;
 	}
 
-	:where(.agents-view, .agents-view-portal)[data-mode="work"] .menu .opt .hint {
+	:where(.agents-scope)[data-mode="work"] .menu .opt .hint {
 		display: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .foot {
+	:where(.agents-scope) .menu .foot {
 		margin-top: 4px;
 		padding: 8px 8px 4px;
 		border-top: var(--hair) solid var(--edge-muted);
@@ -676,11 +678,11 @@
 	}
 
 	/* ---------- Settings-style pages (Agents) ---------- */
-	:where(.agents-view, .agents-view-portal) .settings {
+	:where(.agents-scope) .settings {
 		overflow-y: auto;
 	}
 
-	:where(.agents-view, .agents-view-portal) .settings .wrap {
+	:where(.agents-scope) .settings .wrap {
 		position: relative;
 		margin: 0 auto;
 		width: 100%;
@@ -690,7 +692,7 @@
 		flex-direction: column;
 	}
 
-	:where(.agents-view, .agents-view-portal) .page-close {
+	:where(.agents-scope) .page-close {
 		position: absolute;
 		top: 18px;
 		right: 34px;
@@ -699,12 +701,12 @@
 		border-radius: 9px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .page-close .ph {
+	:where(.agents-scope) .page-close .ph {
 		width: 16px;
 		height: 16px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .settings header.ph-head {
+	:where(.agents-scope) .settings header.ph-head {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
@@ -712,20 +714,20 @@
 		padding: 0 24px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .settings h1.big {
+	:where(.agents-scope) .settings h1.big {
 		margin: 0;
 		font-size: 24px;
 		line-height: 1.1;
 		font-weight: 600;
 	}
 
-	:where(.agents-view, .agents-view-portal) .settings .desc {
+	:where(.agents-scope) .settings .desc {
 		margin: 6px 0 0;
 		color: var(--ink-muted);
 		font-size: 14px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .cta {
+	:where(.agents-scope) .cta {
 		height: 32px;
 		display: inline-flex;
 		align-items: center;
@@ -740,87 +742,87 @@
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .cta .ph {
+	:where(.agents-scope) .cta .ph {
 		width: 14px;
 		height: 14px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .cta:hover {
+	:where(.agents-scope) .cta:hover {
 		filter: brightness(1.04);
 	}
 
-	:where(.agents-view, .agents-view-portal) .cta:disabled {
+	:where(.agents-scope) .cta:disabled {
 		opacity: 0.5;
 		filter: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .cta.sm {
+	:where(.agents-scope) .cta.sm {
 		height: 28px;
 		padding: 0 10px;
 		font-size: 12.5px;
 		border-radius: 999px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .foot {
+	:where(.agents-scope) .menu .foot {
 		align-items: center;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu .foot .cnt {
+	:where(.agents-scope) .menu .foot .cnt {
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .settings .sections {
+	:where(.agents-scope) .settings .sections {
 		margin-top: 36px;
 		display: flex;
 		flex-direction: column;
 		gap: 40px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .section {
+	:where(.agents-scope) .section {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .section .sh {
+	:where(.agents-scope) .section .sh {
 		padding: 0 24px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .section .sh h2 {
+	:where(.agents-scope) .section .sh h2 {
 		margin: 0;
 		font-size: 14px;
 		font-weight: 600;
 	}
 
-	:where(.agents-view, .agents-view-portal) .section .sh p {
+	:where(.agents-scope) .section .sh p {
 		margin: 2px 0 0;
 		font-size: 14px;
 		color: var(--ink-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .scard {
+	:where(.agents-scope) .scard {
 		border-radius: 16px;
 		border: 1px solid var(--card-edge);
 		background: var(--hover);
 		overflow: hidden;
 	}
 
-	:where(.agents-view, .agents-view-portal) .scard > :not(:first-child) {
+	:where(.agents-scope) .scard > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .runtimes > #runtimeList > :not(:first-child) {
+	:where(.agents-scope) .runtimes > #runtimeList > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow {
+	:where(.agents-scope) .arow {
 		display: flex;
 		align-items: center;
 		gap: 16px;
 		padding: 16px 24px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow .av {
+	:where(.agents-scope) .arow .av {
 		width: 40px;
 		height: 40px;
 		border-radius: 50%;
@@ -832,17 +834,17 @@
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow .av .ph {
+	:where(.agents-scope) .arow .av .ph {
 		width: 20px;
 		height: 20px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow .info {
+	:where(.agents-scope) .arow .info {
 		min-width: 0;
 		flex: 1;
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow .line {
+	:where(.agents-scope) .arow .line {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -850,18 +852,18 @@
 		min-width: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow .nm {
+	:where(.agents-scope) .arow .nm {
 		font-size: 14px;
 		font-weight: 500;
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow .tag {
+	:where(.agents-scope) .arow .tag {
 		font-size: 12px;
 		color: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .badge {
+	:where(.agents-scope) .badge {
 		flex-shrink: 0;
 		border-radius: 999px;
 		border: var(--hair) solid var(--edge-muted);
@@ -873,30 +875,30 @@
 		letter-spacing: 0.02em;
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow .sub {
+	:where(.agents-scope) .arow .sub {
 		margin: 2px 0 0;
 		font-size: 12px;
 		color: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow .acts {
+	:where(.agents-scope) .arow .acts {
 		display: flex;
 		gap: 4px;
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .arow .acts .icon-btn.neg {
+	:where(.agents-scope) .arow .acts .icon-btn.neg {
 		color: var(--red);
 	}
 
-	:where(.agents-view, .agents-view-portal) .badge.system {
+	:where(.agents-scope) .badge.system {
 		color: var(--accent);
 		border-color: color-mix(in oklch, var(--accent) 35%, transparent);
 		background: color-mix(in oklch, var(--accent) 8%, transparent);
 	}
 
 	/* Page tabs: the agents page is split by kind, not by ownership. */
-	:where(.agents-view, .agents-view-portal) .tabs {
+	:where(.agents-scope) .tabs {
 		display: flex;
 		gap: 4px;
 		margin-top: 28px;
@@ -904,7 +906,7 @@
 		border-bottom: var(--hair) solid var(--edge);
 	}
 
-	:where(.agents-view, .agents-view-portal) .tabs button {
+	:where(.agents-scope) .tabs button {
 		position: relative;
 		display: inline-flex;
 		align-items: center;
@@ -917,16 +919,16 @@
 		color: var(--ink-subtle);
 	}
 
-	:where(.agents-view, .agents-view-portal) .tabs button:hover {
+	:where(.agents-scope) .tabs button:hover {
 		color: var(--ink);
 		background: var(--hover);
 	}
 
-	:where(.agents-view, .agents-view-portal) .tabs button[aria-selected="true"] {
+	:where(.agents-scope) .tabs button[aria-selected="true"] {
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .tabs button[aria-selected="true"]::after {
+	:where(.agents-scope) .tabs button[aria-selected="true"]::after {
 		content: "";
 		position: absolute;
 		left: 8px;
@@ -937,12 +939,12 @@
 		background: var(--accent);
 	}
 
-	:where(.agents-view, .agents-view-portal) .tabs button .ph {
+	:where(.agents-scope) .tabs button .ph {
 		width: 14px;
 		height: 14px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .tabs button .n {
+	:where(.agents-scope) .tabs button .n {
 		font-size: 11px;
 		font-variant-numeric: tabular-nums;
 		color: var(--ink-placeholder);
@@ -951,22 +953,22 @@
 		padding: 1px 7px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .tabs button[aria-selected="true"] .n {
+	:where(.agents-scope) .tabs button[aria-selected="true"] .n {
 		color: var(--ink-subtle);
 	}
 
-	:where(.agents-view, .agents-view-portal) .settings .sections {
+	:where(.agents-scope) .settings .sections {
 		margin-top: 28px;
 	}
 
 	/* A coder wears its mark on its avatar, so the kind reads before the label does. --mark-ring matches whatever surface the avatar sits on. */
-	:where(.agents-view, .agents-view-portal) .avw {
+	:where(.agents-scope) .avw {
 		position: relative;
 		display: inline-grid;
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .codemark {
+	:where(.agents-scope) .codemark {
 		position: absolute;
 		right: -3px;
 		bottom: -3px;
@@ -980,28 +982,28 @@
 		box-shadow: 0 0 0 2px var(--mark-ring, var(--surface-2));
 	}
 
-	:where(.agents-view, .agents-view-portal) .codemark .ph {
+	:where(.agents-scope) .codemark .ph {
 		width: 10px;
 		height: 10px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .card {
+	:where(.agents-scope) .card {
 		--mark-ring: var(--surface-0);
 	}
 
-	:where(.agents-view, .agents-view-portal) .avrow .codemark {
+	:where(.agents-scope) .avrow .codemark {
 		width: 18px;
 		height: 18px;
 		right: -2px;
 		bottom: -2px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .avrow .codemark .ph {
+	:where(.agents-scope) .avrow .codemark .ph {
 		width: 11px;
 		height: 11px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .badge.coder {
+	:where(.agents-scope) .badge.coder {
 		display: inline-flex;
 		align-items: center;
 		padding: 2px 5px;
@@ -1010,12 +1012,12 @@
 		background: color-mix(in oklch, var(--accent) 8%, transparent);
 	}
 
-	:where(.agents-view, .agents-view-portal) .badge.coder .ph {
+	:where(.agents-scope) .badge.coder .ph {
 		width: 11px;
 		height: 11px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .scard .empty-row {
+	:where(.agents-scope) .scard .empty-row {
 		margin: 0;
 		padding: 18px 24px;
 		font-size: 13px;
@@ -1024,19 +1026,19 @@
 
 	/* ---------- sidebar: per-mode new button, routines view ---------- */
 	/* ---------- slash menu: skills from the composer ---------- */
-	:where(.agents-view, .agents-view-portal) .composer-anchor {
+	:where(.agents-scope) .composer-anchor {
 		display: block;
 	}
 
 	/* Bring your own agent */
-	:where(.agents-view, .agents-view-portal) .byoa {
+	:where(.agents-scope) .byoa {
 		border-radius: 12px;
 		border: 1px solid var(--card-edge);
 		background: var(--surface-2);
 		padding: 20px 24px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa.footer {
+	:where(.agents-scope) .byoa.footer {
 		border-radius: 0;
 		border: 0;
 		border-top: var(--hair) solid var(--edge-muted);
@@ -1050,7 +1052,7 @@
 		overflow: hidden;
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa::before {
+	:where(.agents-scope) .byoa::before {
 		content: "";
 		position: absolute;
 		inset: -40% -20% auto auto;
@@ -1061,7 +1063,7 @@
 		pointer-events: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa h2 {
+	:where(.agents-scope) .byoa h2 {
 		margin: 0;
 		font-size: 16px;
 		font-weight: 600;
@@ -1071,13 +1073,13 @@
 		gap: 8px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa h2 .ph {
+	:where(.agents-scope) .byoa h2 .ph {
 		width: 16px;
 		height: 16px;
 		color: var(--accent);
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa p {
+	:where(.agents-scope) .byoa p {
 		margin: 6px 0 0;
 		font-size: 13px;
 		line-height: 1.5;
@@ -1085,7 +1087,7 @@
 		max-width: 52ch;
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa p code {
+	:where(.agents-scope) .byoa p code {
 		font: 12px var(--font-mono);
 		background: var(--surface-3);
 		padding: 1px 5px;
@@ -1093,7 +1095,7 @@
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .rot {
+	:where(.agents-scope) .rot {
 		display: inline-grid;
 		vertical-align: baseline;
 		text-align: left;
@@ -1103,30 +1105,30 @@
 		overflow: visible;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rot .measure {
+	:where(.agents-scope) .rot .measure {
 		position: absolute;
 		visibility: hidden;
 		white-space: nowrap;
 		pointer-events: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rot .w {
+	:where(.agents-scope) .rot .w {
 		grid-area: 1 / 1;
 		white-space: nowrap;
 		transition: transform 380ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rot .w.out {
+	:where(.agents-scope) .rot .w.out {
 		transform: translateY(-70%);
 		opacity: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rot .w.in {
+	:where(.agents-scope) .rot .w.in {
 		transform: translateY(70%);
 		opacity: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa .side {
+	:where(.agents-scope) .byoa .side {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
@@ -1136,7 +1138,7 @@
 		justify-content: center;
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa .snippet {
+	:where(.agents-scope) .byoa .snippet {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -1150,26 +1152,26 @@
 		min-width: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa .snippet > span {
+	:where(.agents-scope) .byoa .snippet > span {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	:where(.agents-view, .agents-view-portal) .byoa .snippet .icon-btn {
+	:where(.agents-scope) .byoa .snippet .icon-btn {
 		margin-left: auto;
 		width: 22px;
 		height: 22px;
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .runtimes {
+	:where(.agents-scope) .runtimes {
 		display: flex;
 		flex-direction: column;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt {
+	:where(.agents-scope) .rt {
 		display: grid;
 		grid-template-columns: 32px minmax(0, 1fr) auto auto;
 		gap: 14px;
@@ -1177,7 +1179,7 @@
 		padding: 12px 24px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt .ic {
+	:where(.agents-scope) .rt .ic {
 		width: 32px;
 		height: 32px;
 		border-radius: 8px;
@@ -1188,12 +1190,12 @@
 		box-shadow: 0 0 0 1px var(--edge-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt .ic .ph {
+	:where(.agents-scope) .rt .ic .ph {
 		width: 16px;
 		height: 16px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt .nm {
+	:where(.agents-scope) .rt .nm {
 		font-size: 14px;
 		font-weight: 500;
 		color: var(--ink);
@@ -1202,13 +1204,13 @@
 		gap: 8px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt .sub {
+	:where(.agents-scope) .rt .sub {
 		font-size: 12px;
 		color: var(--ink-disabled);
 		margin-top: 1px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt .conn {
+	:where(.agents-scope) .rt .conn {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
@@ -1217,7 +1219,7 @@
 		white-space: nowrap;
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt .conn::before {
+	:where(.agents-scope) .rt .conn::before {
 		content: "";
 		width: 6px;
 		height: 6px;
@@ -1225,26 +1227,26 @@
 		background: var(--green);
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt .conn.off {
+	:where(.agents-scope) .rt .conn.off {
 		color: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt .conn.off::before {
+	:where(.agents-scope) .rt .conn.off::before {
 		background: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .rt .acts {
+	:where(.agents-scope) .rt .acts {
 		display: flex;
 		gap: 4px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .paircode {
+	:where(.agents-scope) .paircode {
 		display: flex;
 		gap: 8px;
 		justify-content: center;
 	}
 
-	:where(.agents-view, .agents-view-portal) .paircode input {
+	:where(.agents-scope) .paircode input {
 		width: 100%;
 		text-align: center;
 		font: 500 22px/1 var(--font-mono);
@@ -1258,12 +1260,12 @@
 		outline: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .paircode input:focus {
+	:where(.agents-scope) .paircode input:focus {
 		border-color: var(--accent);
 	}
 
 	/* ---------- Dialogs (Panel depth 2, rounded-xl) ---------- */
-	:where(.agents-view, .agents-view-portal) .overlay {
+	:where(.agents-scope) .overlay {
 		position: fixed;
 		inset: 0;
 		z-index: 100;
@@ -1284,7 +1286,7 @@
 		}
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog {
+	:where(.agents-scope) .dialog {
 		width: min(720px, calc(100vw - 16px));
 		max-height: 88vh;
 		display: flex;
@@ -1298,7 +1300,7 @@
 		animation: dialog-content-open 160ms cubic-bezier(0.16, 1, 0.3, 1);
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog.narrow {
+	:where(.agents-scope) .dialog.narrow {
 		width: min(560px, calc(100vw - 16px));
 	}
 
@@ -1314,7 +1316,7 @@
 		}
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog .dh {
+	:where(.agents-scope) .dialog .dh {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -1324,7 +1326,7 @@
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog .dh .t {
+	:where(.agents-scope) .dialog .dh .t {
 		font-size: 14px;
 		font-weight: 500;
 		display: flex;
@@ -1332,28 +1334,28 @@
 		gap: 8px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog .dh .t .ph {
+	:where(.agents-scope) .dialog .dh .t .ph {
 		color: var(--ink-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog .dh .hr {
+	:where(.agents-scope) .dialog .dh .hr {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog .dh .hr .segc {
+	:where(.agents-scope) .dialog .dh .hr .segc {
 		margin-right: 4px;
 	}
 
 	/* connector picker (settings/PipedreamAppPicker) */
-	:where(.agents-view, .agents-view-portal) .picker {
+	:where(.agents-scope) .picker {
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .results {
+	:where(.agents-scope) .picker .results {
 		max-height: 180px;
 		overflow-y: auto;
 		border-radius: 10px;
@@ -1361,12 +1363,12 @@
 		background: var(--surface-1);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .results > :not(:first-child),
-	:where(.agents-view, .agents-view-portal) .picker .picked > :not(:first-child) {
+	:where(.agents-scope) .picker .results > :not(:first-child),
+	:where(.agents-scope) .picker .picked > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .crow {
+	:where(.agents-scope) .picker .crow {
 		display: flex;
 		align-items: center;
 		gap: 12px;
@@ -1375,11 +1377,11 @@
 		text-align: left;
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .crow:hover {
+	:where(.agents-scope) .picker .crow:hover {
 		background: var(--hover);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .crow .mk {
+	:where(.agents-scope) .picker .crow .mk {
 		width: 16px;
 		height: 16px;
 		border-radius: 4px;
@@ -1391,58 +1393,58 @@
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .crow .nm {
+	:where(.agents-scope) .picker .crow .nm {
 		display: block;
 		font-size: 13px;
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .crow .ds {
+	:where(.agents-scope) .picker .crow .ds {
 		display: block;
 		font-size: 11.5px;
 		color: var(--ink-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .crow .add {
+	:where(.agents-scope) .picker .crow .add {
 		margin-left: auto;
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .crow:hover .add {
+	:where(.agents-scope) .picker .crow:hover .add {
 		color: var(--accent);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .picked {
+	:where(.agents-scope) .picker .picked {
 		border-radius: 10px;
 		border: var(--hair) solid var(--edge-muted);
 		background: var(--surface-1);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .picked .crow {
+	:where(.agents-scope) .picker .picked .crow {
 		padding: 9px 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .picked .crow .mk {
+	:where(.agents-scope) .picker .picked .crow .mk {
 		width: 20px;
 		height: 20px;
 		font-size: 9.5px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .picked .crow .icon-btn {
+	:where(.agents-scope) .picker .picked .crow .icon-btn {
 		margin-left: auto;
 		width: 24px;
 		height: 24px;
 		color: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .none {
+	:where(.agents-scope) .picker .none {
 		margin: 0;
 		font-size: 12px;
 		color: var(--ink-disabled);
 	}
 
 	/* routine dialog */
-	:where(.agents-view, .agents-view-portal) .dialog .db {
+	:where(.agents-scope) .dialog .db {
 		padding: 20px;
 		overflow-y: auto;
 		display: flex;
@@ -1450,12 +1452,12 @@
 		gap: 24px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog.narrow .db {
+	:where(.agents-scope) .dialog.narrow .db {
 		padding: 12px;
 		gap: 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog .df {
+	:where(.agents-scope) .dialog .df {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -1465,25 +1467,25 @@
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog.narrow .df {
+	:where(.agents-scope) .dialog.narrow .df {
 		padding: 8px 12px;
 		justify-content: flex-end;
 	}
 
-	:where(.agents-view, .agents-view-portal) .field {
+	:where(.agents-scope) .field {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
 		min-width: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .field > span {
+	:where(.agents-scope) .field > span {
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .sinput {
+	:where(.agents-scope) .sinput {
 		width: 100%;
 		border-radius: 8px;
 		border: var(--hair) solid var(--edge-muted);
@@ -1494,18 +1496,18 @@
 		outline: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .sinput:focus {
+	:where(.agents-scope) .sinput:focus {
 		border-color: var(--accent);
 	}
 
-	:where(.agents-view, .agents-view-portal) textarea.sinput {
+	:where(.agents-scope) textarea.sinput {
 		resize: vertical;
 		min-height: 120px;
 		font: 12px/20px var(--font-mono);
 		padding: 10px 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) select.sinput {
+	:where(.agents-scope) select.sinput {
 		appearance: none;
 		background-image: linear-gradient(45deg, transparent 50%, var(--ink-disabled) 50%), linear-gradient(135deg, var(--ink-disabled) 50%, transparent 50%);
 		background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
@@ -1514,13 +1516,13 @@
 		padding-right: 32px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .grid2 {
+	:where(.agents-scope) .grid2 {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .tagin {
+	:where(.agents-scope) .tagin {
 		display: flex;
 		align-items: center;
 		border-radius: 8px;
@@ -1529,16 +1531,16 @@
 		background: var(--color-input);
 	}
 
-	:where(.agents-view, .agents-view-portal) .tagin:focus-within {
+	:where(.agents-scope) .tagin:focus-within {
 		border-color: var(--accent);
 	}
 
-	:where(.agents-view, .agents-view-portal) .tagin .at {
+	:where(.agents-scope) .tagin .at {
 		font-size: 14px;
 		color: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .tagin input {
+	:where(.agents-scope) .tagin input {
 		min-width: 0;
 		flex: 1;
 		background: transparent;
@@ -1549,7 +1551,7 @@
 		outline: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .avrow {
+	:where(.agents-scope) .avrow {
 		display: flex;
 		align-items: center;
 		gap: 12px;
@@ -1557,7 +1559,7 @@
 		padding-bottom: 16px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .avrow .bigav {
+	:where(.agents-scope) .avrow .bigav {
 		width: 48px;
 		height: 48px;
 		border-radius: 50%;
@@ -1568,12 +1570,12 @@
 		box-shadow: 0 0 0 1px var(--edge-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .avrow .bigav .ph {
+	:where(.agents-scope) .avrow .bigav .ph {
 		width: 22px;
 		height: 22px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .radio {
+	:where(.agents-scope) .radio {
 		display: flex;
 		gap: 10px;
 		align-items: flex-start;
@@ -1585,23 +1587,23 @@
 		width: 100%;
 	}
 
-	:where(.agents-view, .agents-view-portal) .radio[aria-checked="true"] {
+	:where(.agents-scope) .radio[aria-checked="true"] {
 		border-color: color-mix(in oklch, var(--accent) 60%, var(--edge));
 		background: var(--selected);
 	}
 
-	:where(.agents-view, .agents-view-portal) .radio .rt {
+	:where(.agents-scope) .radio .rt {
 		font-size: 13px;
 		font-weight: 500;
 	}
 
-	:where(.agents-view, .agents-view-portal) .radio .rd {
+	:where(.agents-scope) .radio .rd {
 		font-size: 12px;
 		color: var(--ink-muted);
 		margin-top: 1px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .kv {
+	:where(.agents-scope) .kv {
 		display: grid;
 		grid-template-columns: auto 1fr;
 		gap: 6px 16px;
@@ -1613,11 +1615,11 @@
 		border: var(--hair) solid var(--edge-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .kv .k {
+	:where(.agents-scope) .kv .k {
 		color: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn {
+	:where(.agents-scope) .btn {
 		height: 32px;
 		display: inline-flex;
 		align-items: center;
@@ -1630,92 +1632,92 @@
 		background: var(--active);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn:hover {
+	:where(.agents-scope) .btn:hover {
 		background: color-mix(in oklch, var(--ink) 9%, transparent);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn:disabled {
+	:where(.agents-scope) .btn:disabled {
 		opacity: 0.45;
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn:disabled:hover {
+	:where(.agents-scope) .btn:disabled:hover {
 		background: var(--active);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn.quiet {
+	:where(.agents-scope) .btn.quiet {
 		background: transparent;
 		color: var(--ink-subtle);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn.quiet:hover {
+	:where(.agents-scope) .btn.quiet:hover {
 		background: var(--hover);
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn.outline {
+	:where(.agents-scope) .btn.outline {
 		background: transparent;
 		border: var(--hair) solid var(--edge);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn.outline:hover {
+	:where(.agents-scope) .btn.outline:hover {
 		background: var(--hover);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn.danger {
+	:where(.agents-scope) .btn.danger {
 		background: transparent;
 		color: var(--red);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn.danger:hover {
+	:where(.agents-scope) .btn.danger:hover {
 		background: color-mix(in oklch, var(--red) 12%, transparent);
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn .ph {
+	:where(.agents-scope) .btn .ph {
 		width: 14px;
 		height: 14px;
 	}
 
 	/* two-column dialogs */
-	:where(.agents-view, .agents-view-portal) .dialog.wide {
+	:where(.agents-scope) .dialog.wide {
 		width: min(920px, calc(100vw - 16px));
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog.xwide {
+	:where(.agents-scope) .dialog.xwide {
 		width: min(1080px, calc(100vw - 16px));
 	}
 
-	:where(.agents-view, .agents-view-portal) .cols {
+	:where(.agents-scope) .cols {
 		display: grid;
 		grid-template-columns: 300px minmax(0, 1fr);
 		gap: 20px;
 		align-items: start;
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog.fixed {
+	:where(.agents-scope) .dialog.fixed {
 		height: min(860px, 92vh);
 		max-height: 92vh;
 	}
 
-	:where(.agents-view, .agents-view-portal) .dialog.fixed .db {
+	:where(.agents-scope) .dialog.fixed .db {
 		overflow: hidden;
 		flex: 1;
 		min-height: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .cols.agent {
+	:where(.agents-scope) .cols.agent {
 		grid-template-columns: 400px minmax(0, 1fr);
 		align-items: stretch;
 		height: 100%;
 		min-height: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .mdwrap textarea.always {
+	:where(.agents-scope) .mdwrap textarea.always {
 		display: block;
 		font: 13.5px/1.6 var(--font-sans);
 		padding: 14px 18px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .cols.agent .colL {
+	:where(.agents-scope) .cols.agent .colL {
 		min-height: 0;
 		overflow-y: auto;
 		scrollbar-width: none;
@@ -1723,42 +1725,42 @@
 		gap: 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .cols.agent .colL::-webkit-scrollbar {
+	:where(.agents-scope) .cols.agent .colL::-webkit-scrollbar {
 		display: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .cols.agent .colR {
+	:where(.agents-scope) .cols.agent .colR {
 		display: flex;
 		min-height: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .cols.agent .mdwrap {
+	:where(.agents-scope) .cols.agent .mdwrap {
 		height: auto;
 		flex: 1;
 		min-height: 0;
 	}
 
 	/* uniform pick lists (skills, agents, connectors) */
-	:where(.agents-view, .agents-view-portal) .plist {
+	:where(.agents-scope) .plist {
 		border: var(--hair) solid var(--edge-muted);
 		border-radius: 10px;
 		background: var(--surface-1);
 		overflow: hidden;
 	}
 
-	:where(.agents-view, .agents-view-portal) .plist.scroll {
+	:where(.agents-scope) .plist.scroll {
 		max-height: 180px;
 		overflow-y: auto;
 		scrollbar-width: thin;
 		scrollbar-color: var(--surface-4) transparent;
 	}
 
-	:where(.agents-view, .agents-view-portal) .plist > :not(:first-child) {
+	:where(.agents-scope) .plist > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
 	/* scroll affordance: a soft fade at the bottom edge that lifts once you reach the end */
-	:where(.agents-view, .agents-view-portal) .prow {
+	:where(.agents-scope) .prow {
 		display: grid;
 		grid-template-columns: 16px 16px minmax(0, 1fr) auto;
 		gap: 10px;
@@ -1771,25 +1773,25 @@
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow:hover {
+	:where(.agents-scope) .prow:hover {
 		background: var(--hover);
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow .cb.rd {
+	:where(.agents-scope) .prow .cb.rd {
 		border-radius: 50%;
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow[aria-checked="true"] .cb.rd {
+	:where(.agents-scope) .prow[aria-checked="true"] .cb.rd {
 		background: transparent;
 		border-color: var(--accent);
 		box-shadow: inset 0 0 0 3px var(--surface-1), inset 0 0 0 8px var(--accent);
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow[aria-checked="true"] .cb.rd .ph {
+	:where(.agents-scope) .prow[aria-checked="true"] .cb.rd .ph {
 		display: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow .cb {
+	:where(.agents-scope) .prow .cb {
 		width: 14px;
 		height: 14px;
 		border-radius: 4px;
@@ -1799,29 +1801,29 @@
 		color: var(--accent-contrast);
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow[aria-checked="true"] .cb {
+	:where(.agents-scope) .prow[aria-checked="true"] .cb {
 		background: var(--accent);
 		border-color: var(--accent);
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow[aria-checked="true"] .cb .ph {
+	:where(.agents-scope) .prow[aria-checked="true"] .cb .ph {
 		width: 10px;
 		height: 10px;
 		display: block;
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow .cb .ph {
+	:where(.agents-scope) .prow .cb .ph {
 		display: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow > .ph,
-	:where(.agents-view, .agents-view-portal) .prow .mk {
+	:where(.agents-scope) .prow > .ph,
+	:where(.agents-scope) .prow .mk {
 		width: 16px;
 		height: 16px;
 		color: var(--ink-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow .mk {
+	:where(.agents-scope) .prow .mk {
 		border-radius: 4px;
 		display: grid;
 		place-items: center;
@@ -1830,7 +1832,7 @@
 		background: var(--surface-3);
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow .meta {
+	:where(.agents-scope) .prow .meta {
 		font-size: 11.5px;
 		color: var(--ink-placeholder);
 		white-space: nowrap;
@@ -1839,8 +1841,8 @@
 		gap: 6px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow .meta .on::before,
-	:where(.agents-view, .agents-view-portal) .prow .meta .off::before {
+	:where(.agents-scope) .prow .meta .on::before,
+	:where(.agents-scope) .prow .meta .off::before {
 		content: "";
 		display: inline-block;
 		width: 6px;
@@ -1851,18 +1853,18 @@
 		vertical-align: middle;
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow .meta .off::before {
+	:where(.agents-scope) .prow .meta .off::before {
 		background: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .plist .empty {
+	:where(.agents-scope) .plist .empty {
 		padding: 14px;
 		text-align: center;
 		font-size: 12.5px;
 		color: var(--ink-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .csearch {
+	:where(.agents-scope) .csearch {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -1874,7 +1876,7 @@
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .csearch input {
+	:where(.agents-scope) .csearch input {
 		flex: 1;
 		min-width: 0;
 		background: transparent;
@@ -1884,33 +1886,33 @@
 		font: 13px var(--font-sans);
 	}
 
-	:where(.agents-view, .agents-view-portal) .grp-row {
+	:where(.agents-scope) .grp-row {
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
 	}
 
-	:where(.agents-view, .agents-view-portal) .grp-row .cnt {
+	:where(.agents-scope) .grp-row .cnt {
 		font-size: 11px;
 		color: var(--ink-disabled);
 		font-variant-numeric: tabular-nums;
 	}
 
-	:where(.agents-view, .agents-view-portal) .colL {
+	:where(.agents-scope) .colL {
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
 		min-width: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .colR {
+	:where(.agents-scope) .colR {
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
 		min-width: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .grp-h {
+	:where(.agents-scope) .grp-h {
 		font-size: 11px;
 		font-weight: 500;
 		letter-spacing: 0.04em;
@@ -1919,13 +1921,13 @@
 		margin: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .divider {
+	:where(.agents-scope) .divider {
 		height: var(--hair);
 		background: var(--edge-muted);
 	}
 
 	/* markdown surface (fixed height, scrolls) */
-	:where(.agents-view, .agents-view-portal) .mdwrap {
+	:where(.agents-scope) .mdwrap {
 		display: flex;
 		flex-direction: column;
 		border: var(--hair) solid var(--edge-muted);
@@ -1935,7 +1937,7 @@
 		height: 460px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .mdwrap .mdbar {
+	:where(.agents-scope) .mdwrap .mdbar {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -1944,13 +1946,13 @@
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .mdwrap .mdbar .lbl {
+	:where(.agents-scope) .mdwrap .mdbar .lbl {
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .mdwrap textarea {
+	:where(.agents-scope) .mdwrap textarea {
 		flex: 1;
 		min-height: 0;
 		width: 100%;
@@ -1964,7 +1966,7 @@
 	}
 
 	/* compact settings rows */
-	:where(.agents-view, .agents-view-portal) .srow {
+	:where(.agents-scope) .srow {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
@@ -1972,19 +1974,19 @@
 		min-height: 32px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .srow .lab {
+	:where(.agents-scope) .srow .lab {
 		font-size: 13px;
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .srow .lab small {
+	:where(.agents-scope) .srow .lab small {
 		display: block;
 		font-size: 11.5px;
 		color: var(--ink-disabled);
 		margin-top: 1px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .segc {
+	:where(.agents-scope) .segc {
 		display: inline-flex;
 		padding: 2px;
 		gap: 2px;
@@ -1992,7 +1994,7 @@
 		background: var(--active);
 	}
 
-	:where(.agents-view, .agents-view-portal) .segc button {
+	:where(.agents-scope) .segc button {
 		padding: 3px 10px;
 		border-radius: 999px;
 		font-size: 12px;
@@ -2004,24 +2006,24 @@
 		gap: 6px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .segc button .ph {
+	:where(.agents-scope) .segc button .ph {
 		width: 12px;
 		height: 12px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .segc.lg button {
+	:where(.agents-scope) .segc.lg button {
 		height: 28px;
 		padding: 4px 12px;
 		font-size: 12.5px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .segc button[aria-pressed="true"] {
+	:where(.agents-scope) .segc button[aria-pressed="true"] {
 		background: var(--surface-3);
 		color: var(--ink);
 		box-shadow: inset 0 0 0 0.5px var(--edge);
 	}
 
-	:where(.agents-view, .agents-view-portal) .sinput.sm {
+	:where(.agents-scope) .sinput.sm {
 		padding: 6px 10px;
 		font-size: 13px;
 		width: auto;
@@ -2029,7 +2031,7 @@
 	}
 
 	/* routine block page (block-routine/component/Routine.tsx) */
-	:where(.agents-view, .agents-view-portal) .switch {
+	:where(.agents-scope) .switch {
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
@@ -2042,11 +2044,11 @@
 		color: var(--ink-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .switch:hover {
+	:where(.agents-scope) .switch:hover {
 		background: var(--hover);
 	}
 
-	:where(.agents-view, .agents-view-portal) .switch .trk {
+	:where(.agents-scope) .switch .trk {
 		width: 26px;
 		height: 16px;
 		border-radius: 999px;
@@ -2055,7 +2057,7 @@
 		transition: background 160ms ease;
 	}
 
-	:where(.agents-view, .agents-view-portal) .switch .trk::after {
+	:where(.agents-scope) .switch .trk::after {
 		content: "";
 		position: absolute;
 		top: 2px;
@@ -2067,20 +2069,20 @@
 		transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
 	}
 
-	:where(.agents-view, .agents-view-portal) .switch[aria-checked="true"] .trk {
+	:where(.agents-scope) .switch[aria-checked="true"] .trk {
 		background: var(--green);
 	}
 
-	:where(.agents-view, .agents-view-portal) .switch[aria-checked="true"] .trk::after {
+	:where(.agents-scope) .switch[aria-checked="true"] .trk::after {
 		transform: translateX(10px);
 		background: oklch(0.15 0 0);
 	}
 
-	:where(.agents-view, .agents-view-portal) .switch[aria-checked="true"] {
+	:where(.agents-scope) .switch[aria-checked="true"] {
 		color: var(--ink);
 	}
 
-	:where(.agents-view, .agents-view-portal) .bbar {
+	:where(.agents-scope) .bbar {
 		display: inline-flex;
 		align-items: center;
 		gap: 2px;
@@ -2089,36 +2091,36 @@
 		background: var(--active);
 	}
 
-	:where(.agents-view, .agents-view-portal) .bbar .icon-btn {
+	:where(.agents-scope) .bbar .icon-btn {
 		border-radius: 8px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .bbar .sep {
+	:where(.agents-scope) .bbar .sep {
 		width: var(--hair);
 		height: 16px;
 		background: var(--edge);
 		margin: 0 2px;
 	}
 
-	:where(.agents-view, .agents-view-portal):not([data-session]) .bbar .session-only {
+	:where(.agents-scope):not([data-session]) .bbar .session-only {
 		display: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .btn.sm {
+	:where(.agents-scope) .btn.sm {
 		height: 28px;
 		padding: 0 10px;
 		font-size: 12.5px;
 		border-radius: 8px;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu.below {
+	:where(.agents-scope) .menu.below {
 		bottom: auto;
 		top: calc(100% + 6px);
 		width: 200px;
 	}
 
 	/* ---------- Session pane ---------- */
-	:where(.agents-view, .agents-view-portal) .pane .meta {
+	:where(.agents-scope) .pane .meta {
 		display: none;
 		gap: 16px;
 		padding: 6px 16px;
@@ -2127,15 +2129,15 @@
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal)[data-mode="work"] .pane .meta {
+	:where(.agents-scope)[data-mode="work"] .pane .meta {
 		display: flex;
 	}
 
-	:where(.agents-view, .agents-view-portal) .pane .meta .k {
+	:where(.agents-scope) .pane .meta .k {
 		color: var(--ink-disabled);
 	}
 
-	:where(.agents-view, .agents-view-portal) .pane .scroll {
+	:where(.agents-scope) .pane .scroll {
 		flex: 1;
 		overflow: auto;
 		padding: 20px 16px;
@@ -2149,86 +2151,92 @@
 
 	/* Bottom padding matches ChannelInputContainer (pb-2.5) so the composer
 	   sits at the same height as the channel input. */
-	:where(.agents-view, .agents-view-portal) .pane .dock {
+	:where(.agents-scope) .pane .dock {
 		padding: 0 16px 10px;
 		flex-shrink: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .pane .dock .composer-anchor {
+	@container agent-session (min-width: 900px) {
+		:where(.agents-scope) .pane .dock {
+			padding-right: max(16px, var(--details-clearance, 0px));
+		}
+	}
+
+	:where(.agents-scope) .pane .dock .composer-anchor {
 		width: min(100%, 896px);
 		margin: 0 auto;
 	}
 
-	:where(.agents-view, .agents-view-portal) .pane .dock textarea {
+	:where(.agents-scope) .pane .dock textarea {
 		min-height: 60px;
 		padding-top: 14px;
 	}
 
 	/* The session transcript keeps its own scroller. */
-	:where(.agents-view, .agents-view-portal) .pane .transcript-host {
+	:where(.agents-scope) .pane .transcript-host {
 		flex: 1;
 		min-height: 0;
 		display: flex;
 		overflow: hidden;
 	}
 
-	:where(.agents-view, .agents-view-portal) .pane .dock .composer-anchor {
+	:where(.agents-scope) .pane .dock .composer-anchor {
 		width: min(100%, 896px);
 		margin: 0 auto;
 	}
 
 	/* Dialogs render through a portal, above every app layer; menus above the page they anchor to. */
-	:where(.agents-view, .agents-view-portal) .overlay {
+	:where(.agents-scope) .overlay {
 		z-index: 1000;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu {
+	:where(.agents-scope) .menu {
 		z-index: 60;
 	}
 
-	:where(.agents-view, .agents-view-portal) .menu.below {
+	:where(.agents-scope) .menu.below {
 		left: auto;
 		right: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .sinput.sm select {
+	:where(.agents-scope) .sinput.sm select {
 		width: 100%;
 	}
 
-	:where(.agents-view, .agents-view-portal) .icon-btn:disabled {
+	:where(.agents-scope) .icon-btn:disabled {
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .cta:disabled {
+	:where(.agents-scope) .cta:disabled {
 		opacity: 0.5;
 		filter: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) a.link-btn {
+	:where(.agents-scope) a.link-btn {
 		text-decoration: none;
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .crow .ds {
+	:where(.agents-scope) .picker .crow .ds {
 		color: var(--ink-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .prow .mk img,
-	:where(.agents-view, .agents-view-portal) .picker .crow .mk img,
-	:where(.agents-view, .agents-view-portal) .picker .crow .mk svg {
+	:where(.agents-scope) .prow .mk img,
+	:where(.agents-scope) .picker .crow .mk img,
+	:where(.agents-scope) .picker .crow .mk svg {
 		width: 100%;
 		height: 100%;
 		border-radius: inherit;
 	}
 
-	:where(.agents-view, .agents-view-portal) .list-note {
+	:where(.agents-scope) .list-note {
 		margin: 0;
 		padding: 8px 12px;
 		font-size: 13px;
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .av img,
-	:where(.agents-view, .agents-view-portal) .bigav img {
+	:where(.agents-scope) .av img,
+	:where(.agents-scope) .bigav img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
@@ -2236,7 +2244,7 @@
 	}
 
 	/* The view shell sizes the columns; each fills its slot. */
-	:where(.agents-view, .agents-view-portal) .main {
+	:where(.agents-scope) .main {
 		height: 100%;
 	}
 }

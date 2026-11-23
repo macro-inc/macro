@@ -54,7 +54,8 @@ PORT=3004 just android-dev --no-watch --no-dev-server-wait --config '{"build":{"
 
 That address is emulator-only; the host-side server check must be skipped.
 
-Build commands embed the production frontend. Outputs are under
+Build commands embed the production frontend, without its source maps (see
+[building bundles](../../apps/web/tauri/src-tauri/README.md#building-bundles)). Outputs are under
 `tauri/src-tauri/gen/android/app/build/outputs/`. The launcher defaults to ARM64.
 Release builds automatically prepare the signing configuration below and produce
 signed artifacts. Debug builds do not fetch release signing credentials.
@@ -63,6 +64,46 @@ The app's Gradle packaging excludes the duplicate
 `META-INF/versions/9/OSGI-INF/MANIFEST.MF` from JSpecify and OpenTelemetry. This
 OSGi metadata is unused on Android. Keep the exclusion exact: broad `META-INF`
 exclusions can remove service-provider registrations used by OpenTelemetry.
+
+## Native certificate verification
+
+Native HTTP (reqwest) verifies certificates through `rustls-platform-verifier`,
+which calls Android's certificate checker through a Kotlin library (an AAR).
+`MainActivity` initializes it through `src-tauri/src/android_tls.rs` before
+networking starts.
+
+- `app/rustls-verifier.gradle.kts` reads the AAR's version from the resolved
+  `rustls-platform-verifier-android` crate and downloads it from upstream's Maven
+  repository on GitHub. `gradle/verification-metadata.xml` pins its SHA-256;
+  Gradle fails the build when the artifact differs or the version has no pin.
+  After a verifier upgrade, download the new AAR, check it against upstream's
+  published checksum, and add its SHA-256 there.
+- Certificates from CAs that no longer list an OCSP responder (Let's Encrypt,
+  Google Trust Services, SSL.com) are checked against the CA's revocation list,
+  which most CAs serve over plain HTTP. The AAR's merged
+  `network_security_config` allows plain HTTP to those CRL hosts only. Once a
+  network security config is present, Android ignores `usesCleartextTraffic`.
+- Debug builds replace that config with
+  `app/src/debug/res/xml/network_security_config.xml`, which allows plain HTTP
+  everywhere for the dev server and local services. Release builds keep the
+  library's config.
+
+## Performance benchmark
+
+`just android-benchmark --serial <emulator>` (from `apps/web`) times cold start, view
+switches, opening a channel and documents, and going back, on a signed-in benchmark build,
+using the app's own perf spans so lab and Datadog field numbers compare. It navigates and
+reads only. It waits for the boot `view.app` flow to end before the first timed tap, opens
+the first channel of an ordered candidate list that shows no unread (it never opens an
+unread row), and stops the run when a scenario cannot reach its starting list. Building
+the benchmark APK, the emulator settings it was baselined on, the private targets file,
+comparing two runs (`compare.ts`) and how to read its noise figures are in
+[`apps/web/scripts/android-benchmark/README.md`](../../apps/web/scripts/android-benchmark/README.md).
+Measure before and after every Android performance change with it. Add
+`--cpu-throttle 4` to slow the WebView to an Android phone's CPU when judging work on its
+main thread, such as view switches; the README says when to use which profile and what
+throttling does not model (the Android UI thread, Rust, and the emulator's slow software
+rendering, which makes IPC-bound flows such as a cold channel open slower than on phones).
 
 ## Release signing
 
@@ -133,6 +174,28 @@ The upload certificate identifies locally signed artifacts. When Google creates
 the Play App Signing key, Play-delivered APKs use that separate certificate; add
 its fingerprint to production associations before testing Play-installed links.
 
+### APK for sideloading
+
+Each production release gets a signed ARM64 APK,
+`macro-<tag>-android-arm64.apk`, and its `.sha256` as release assets. The
+`Android APK on Release` workflow builds them on the same `released` event as
+`Deploy Production Release`. It is a separate workflow, so the deploy never
+waits on it, and a failed APK build leaves the release in place.
+
+- It runs the App Bundle build with `--apk`, with the same production `VITE_*`
+  environment, which is defined once in the generated workflow sources. Both
+  builds fail when the PostHog key is empty, because without it every feature
+  flag reads false.
+- It signs with the upload key, so an APK updates an earlier APK install in
+  place. A Play-installed app has the Play App Signing certificate: uninstall it
+  before installing an APK, and the reverse.
+- The version code is the one committed at the tag. The installed app then
+  takes web updates over the air like a Play install.
+- To rebuild a release's APK, re-run its build job, or run the workflow with
+  "Use workflow from" set to the release tag. Only tags that contain the
+  workflow can be picked, so releases cut before it have no APK build. Assets
+  stay with their release; nothing prunes them.
+
 ### Releasing to Google Play from a pull request
 
 Android releases are driven from pull requests, like iOS (see
@@ -150,7 +213,8 @@ statuses on the PR's commits: `android-play/release` (set by the publisher
 around the production promotion) and `android-play/live` (set by the watcher
 once the release is live).
 
-**`Android Native Check`** runs on every PR against `main`. Its native tree
+**`Android Native Check`** runs whenever CI runs on a PR against `main` (the
+`run-ci` label), and the release starts only after CI has run on the head. Its native tree
 excludes platform-specific desktop/iOS files and Markdown docs, which do not
 ship in the Android binary (`apps/web/scripts/android-native.mjs` defines
 what counts). When the Android native code changed, it requires a
@@ -160,7 +224,7 @@ The watcher sets that status only once Google has **published** the release
 (through review and available to users; the edit API's `status: completed`
 only describes the rollout, so the watcher also reads the release list's
 `releaseLifecycleState`) with a provenance stamp matching the merge result.
-Until then the check fails and the required `Web App Status Check` fails with
+Until then the check fails and the required `CI gate` status fails with
 it. Web-only pushes after the release keep it valid: the status on an earlier
 commit still matches.
 
@@ -187,7 +251,9 @@ To release:
    it is the release decision: nothing else approves it. The
    **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
    first refuses drafts, PRs with failing checks (pending ones are waited on,
-   up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
+   up to 30 minutes; the native checks and either platform's release checks
+   don't count, so a failed or in-flight iOS release never holds this one
+   back), PRs without a bump, and PRs whose head lacks Android
    native code that landed on `main` since they branched (the gate hashes
    the merge result, so such a bundle could never pass it; the refusal lists
    the native files `main` changed; merge `main`, bump, re-add the label).
@@ -232,8 +298,8 @@ To release:
    and a link to the run.
 3. Wait for Google. The **`Android Release Watch`** workflow (every 30
    minutes) notices the version code being published on production, marks
-   the PR head `android-play/live`, re-runs the PR's failed
-   `Android Native Check` job, and comments; the PR merges if auto-merge is
+   the PR head `android-play/live`, re-runs the failed jobs of the PR's latest
+   `PR CI` run (the `Android Native Check` among them), and comments; the PR merges if auto-merge is
    on.
 4. Pushes after the label: web-only commits need nothing. Native commits make
    the bundle stale: **`Android Release Drift`** cancels an in-progress build,
@@ -845,6 +911,18 @@ and `MIN_NATIVE_BUILD_IOS`; production builds read them from
 raises. See the
 [native compatibility contract](../../apps/web/tauri/src-tauri/README.md).
 
+At startup, the updater rejects a saved or previously downloaded OTA whose bundle
+build is older than the binary's embedded bundle, falling back to the embedded
+assets when needed. That prevents an older cached OTA from automatically surviving every
+native upgrade. It does not prove reverse IPC compatibility: a later-built OTA
+or republished rollback can still contain older JS and satisfy the native floor.
+Preserve the legacy command contract on newer binaries when older bundles omit
+new arguments. The [CRM cache authority contract](../../apps/web/docs/ios-releases.md#crm-cache-command-compatibility)
+uses this rule; an omitted `generation` keeps legacy cache behavior, while a
+supplied stale generation is rejected on response writes. Reads and watches do
+not require an admission claim. Cut the store build from the final
+native tree, including this compatibility behavior.
+
 Android ConnectivityManager reports the validated default network and takes a
 fresh snapshot on resume. Captive/unvalidated networks count as offline. Older
 native binaries lacking the command retain browser connectivity. Neither signal
@@ -999,12 +1077,15 @@ as core functionality;
 check with `adb shell appops get <package> USE_FULL_SCREEN_INTENT`. Once
 notifications are on, Macro shows a toast while the setting is off; **Allow**
 opens Android's per-app setting, and the toast stays until returning to Macro
-finds access granted; **Hide** stops the prompt on that device. The
+finds access granted; **Dismiss** stops the prompt on that device. The return
+check runs when the page becomes visible again: the Android WebView fires no
+window `focus` when the app comes back from Settings. The
 call notification is public, so the lock screen shows the call and its actions.
-Test both permission states. Microphone access is required to join;
-camera access is requested when enabling video, and Bluetooth access when selecting
-that route on Android 12 or newer. A denied permission does not silently enable
-capture.
+Test both permission states. Microphone access is required to join: a denied
+join shows the **Microphone access is off** toast with **Open Settings**, and a
+denied Answer leaves **Open settings** on the call screen. Camera access is
+requested when enabling video, and Bluetooth access when selecting that route on
+Android 12 or newer. A denied permission does not silently enable capture.
 
 While ringing, the native call activity fills the screen with an opaque themed
 background, caller initials and name (or channel name when unavailable), channel

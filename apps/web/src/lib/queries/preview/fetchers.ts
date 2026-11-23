@@ -1,39 +1,29 @@
 import {
-  fetchCrmCompanyPreviews,
-  fetchCrmContactPreviews,
   fetchCrmPipelinePreviews,
+  fetchCrmRecordPreviews,
 } from '@app/features/crm/preview-adapter';
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import type { ResultError } from '@core/util/result';
 import { toSubType } from '@entity/types/entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
-import type { ApiThread } from '@service-email/generated/schemas';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { entityMessagesClient } from '@service-storage/messages';
 import { formatDocumentName } from '@service-storage/util/filename';
-import type { InfiniteData } from '@tanstack/solid-query';
 import { fetchAgentSessionMentionPreviews } from '../agent-session/mention-fetchers';
-import { queryClient } from '../client';
-import { emailKeys } from '../email/keys';
-import { threadQueryOptions } from '../email/thread';
 import { representativeThreadMessage } from '../email/thread-subject';
 import { normalizeMessageSender } from '../messages/message-sender';
+import { fetchCachedDatabaseDetail } from '../storage/databases';
 import { failedReadAccess } from './failed-read';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchSessionPreviews(ids: string[]): Promise<PreviewItem[]> {
-  const previews = await fetchAgentSessionMentionPreviews(
-    ids,
-    isFeatureEnabled(enableGraphqlSoup)
-  );
+  const previews = await fetchAgentSessionMentionPreviews(ids, true);
   return [...previews].map(([id, preview]): PreviewItem => {
     const base = {
       id,
@@ -135,6 +125,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           loading: false,
           rawName: doc.document_name,
           name: doc.document_name,
+          appearance: readEntityAppearance(doc.appearance),
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
@@ -170,7 +161,7 @@ async function fetchCallPreviews(ids: string[]): Promise<PreviewItem[]> {
 
     switch (call.type) {
       case 'exists': {
-        // Match the call block (CallRecordingSplitHeader / CallRecordingBody):
+        // Match the call block (its header views / CallRecordingBody):
         // prefer the user-supplied / AI-generated `customName`, fall back to
         // the channel the call lives in.
         const displayName = call.customName ?? call.channelName;
@@ -287,39 +278,13 @@ async function fetchInitiativePreviews(
             loading: false,
             rawName: item.data.name,
             name: item.data.name,
+            appearance: readEntityAppearance(item.data.appearance),
             owner: item.data.ownerId,
             updatedAt: item.data.updatedAt,
           },
         ]
       : []
   );
-}
-
-/**
- * Reuse the thread-messages query the email block fetches on open: returns
- * cached data (any staleness — previews tolerate 24h), or joins an in-flight
- * fetch, so the preview doesn't issue a separate getThread request.
- */
-async function threadFromOpenThreadQuery(
-  threadId: string
-): Promise<ApiThread | undefined> {
-  const queryKey = emailKeys.threadMessages(threadId).queryKey;
-  const cached =
-    queryClient.getQueryData<InfiniteData<ApiThread, number>>(queryKey);
-  if (cached?.pages[0]) return cached.pages[0];
-
-  if (queryClient.getQueryState(queryKey)?.fetchStatus !== 'fetching') {
-    return undefined;
-  }
-  try {
-    const data = await queryClient.fetchInfiniteQuery(
-      threadQueryOptions(threadId)
-    );
-    return data.pages[0];
-  } catch {
-    // Fall through to the limit=1 fetch so access errors map per-id.
-    return undefined;
-  }
 }
 
 async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
@@ -330,28 +295,24 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         type: 'email',
       } as const;
 
-      let thread = await threadFromOpenThreadQuery(threadId);
+      const result = await emailClient.getThread({
+        thread_id: threadId,
+        offset: 0,
+        // Fetch a page rather than a single message: the newest message can
+        // be a subjectless draft (or, for a non-owner, be filtered out
+        // entirely), so a limit-1 fetch would resolve the thread as "No
+        // Subject" even though a real message in it has one.
+        limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+      });
 
-      if (!thread) {
-        const result = await emailClient.getThread({
-          thread_id: threadId,
-          offset: 0,
-          // Fetch a page rather than a single message: the newest message can
-          // be a subjectless draft (or, for a non-owner, be filtered out
-          // entirely), so a limit-1 fetch would resolve the thread as "No
-          // Subject" even though a real message in it has one.
-          limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-        });
-
-        if (result.isErr()) {
-          return {
-            ...base,
-            access: 'no_access' as const,
-            loading: false as const,
-          };
-        }
-        thread = result.value.thread;
+      if (result.isErr()) {
+        return {
+          ...base,
+          access: 'no_access' as const,
+          loading: false as const,
+        };
       }
+      const thread = result.value.thread;
 
       const representative = representativeThreadMessage(thread.messages);
       const subject = representative?.subject ?? 'No Subject';
@@ -422,13 +383,14 @@ async function fetchCalendarEventPreviews(
 
 /**
  * A database previews as the viewer's own read of it: an owner or anyone it
- * is shared with gets its name; one deleted or trashed is gone.
+ * is shared with gets its name; one deleted or trashed is gone. The read is
+ * the cached schema an open of the database shares.
  */
 async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
   return Promise.all(
     ids.map(async (id): Promise<PreviewItem> => {
       const base = { id, type: 'database', loading: false } as const;
-      const detail = await storageServiceClient.databases.get({ id });
+      const detail = await fetchCachedDatabaseDetail(id);
       if (detail.isErr())
         return { ...base, access: failedReadAccess(detail.error) };
       const { database } = detail.value;
@@ -439,6 +401,7 @@ async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: database.name,
         name: database.name,
+        appearance: readEntityAppearance(database.appearance),
         owner: database.owner_id,
       };
     })
@@ -462,25 +425,43 @@ async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: form.name,
         name: form.name,
+        appearance: readEntityAppearance(form.appearance),
         owner: form.ownerId,
       };
     })
   );
 }
 
-/** A routine previews from its own read; one that is gone reads as deleted. */
+/**
+ * A routine previews from its own read; one that is gone reads as deleted.
+ * The server reads a routine only to its owner, so anyone else previews it
+ * from its shared template, and without one it stays unavailable.
+ */
 async function fetchRoutinePreviews(ids: string[]): Promise<PreviewItem[]> {
   return Promise.all(
     ids.map(async (id): Promise<PreviewItem> => {
       const base = { id, type: 'routine', loading: false } as const;
       const routine = await scheduledActionClient.getRoutine(id);
-      if (routine.isErr())
-        return { ...base, access: failedReadAccess(routine.error) };
+      if (routine.isErr()) {
+        const template = await scheduledActionClient.getTemplate(id);
+        if (template.isErr())
+          return { ...base, access: failedReadAccess(routine.error) };
+        return {
+          ...base,
+          access: 'access',
+          rawName: template.value.name,
+          name: template.value.name,
+          appearance: readEntityAppearance(template.value.appearance),
+          owner: template.value.author,
+          updatedAt: template.value.updated_at,
+        };
+      }
       return {
         ...base,
         access: 'access',
         rawName: routine.value.name,
         name: routine.value.name,
+        appearance: readEntityAppearance(routine.value.appearance),
         owner: routine.value.owner,
         updatedAt: routine.value.updated_at,
       };
@@ -500,10 +481,23 @@ function doFetch(
   return Promise.resolve([]);
 }
 
+/**
+ * A batch's previews by item id, and the items whose request failed, with
+ * its errors. A failed item has no preview: it is not an answer to cache.
+ */
+export type PreviewBatch = {
+  previews: Map<string, PreviewItem>;
+  failed: Map<string, ResultError<string>[]>;
+};
+
 export async function fetchRestPreviewBatch(
   items: ItemEntity[]
-): Promise<Map<string, PreviewItem>> {
-  const results = await Promise.all([
+): Promise<PreviewBatch> {
+  const [records, ...results] = await Promise.all([
+    fetchCrmRecordPreviews(
+      filterMapToId(items, 'crm_company'),
+      filterMapToId(items, 'crm_contact')
+    ),
     doFetch(fetchSessionPreviews, filterMapToId(items, 'agent_session')),
     doFetch(fetchChatPreviews, filterMapToId(items, 'chat')),
     doFetch(fetchCallPreviews, filterMapToId(items, 'call')),
@@ -512,19 +506,17 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
     doFetch(fetchInitiativePreviews, filterMapToId(items, 'initiative')),
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
-    doFetch(fetchCrmCompanyPreviews, filterMapToId(items, 'crm_company')),
-    doFetch(fetchCrmContactPreviews, filterMapToId(items, 'crm_contact')),
     doFetch(fetchCrmPipelinePreviews, filterMapToId(items, 'crm_pipeline')),
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
     doFetch(fetchDatabasePreviews, filterMapToId(items, 'database')),
     doFetch(fetchFormPreviews, filterMapToId(items, 'form')),
     doFetch(fetchRoutinePreviews, filterMapToId(items, 'routine')),
   ]);
-  const resultMap = new Map<string, PreviewItem>();
-  results.flat().forEach((result) => {
-    resultMap.set(result.id, result);
+  const previews = new Map<string, PreviewItem>();
+  [...records.previews, ...results.flat()].forEach((result) => {
+    previews.set(result.id, result);
   });
-  return resultMap;
+  return { previews, failed: records.failed };
 }
 
 export function defaultNameTransform(item: PreviewItem): PreviewItem {

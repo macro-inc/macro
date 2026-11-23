@@ -1,5 +1,5 @@
-import Share from '@phosphor/share.svg';
-import Sidebar from '@phosphor/sidebar-simple.svg';
+import Share from '@icon/share.svg';
+import Sidebar from '@icon/system/regular/sidebar-simple.svg';
 import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { ViewShell } from '../DemoWorkspaceChrome';
@@ -23,7 +23,7 @@ export function AgentSession(props: {
     <>
       <ViewShell.TopBar class="agent-session-header">
         <ModelIcon model={model()} />
-        <h3 class="min-w-0 flex-1 truncate text-sm font-semibold">
+        <h3 class="min-w-0 flex-1 truncate text-sm font-medium">
           {props.title}
         </h3>
         <Button

@@ -1,5 +1,6 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { PropertyApiValues } from '@property/types';
+import { composeDraftInput } from '@queries/email/graphql/compose';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import {
   $createParagraphNode,
@@ -7,7 +8,6 @@ import {
   $getRoot,
   createEditor,
 } from 'lexical';
-import { ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeBase64Utf8 } from '../email-compose/core/decode-base64';
@@ -15,10 +15,8 @@ import { createInputActions } from './actions';
 import { fieldsSchema, type Submission } from './core/input';
 
 const mocks = vi.hoisted(() => ({
-  agents: false,
   attachments: [] as object[],
   replace: vi.fn(),
-  pending: vi.fn(),
   session: vi.fn(),
   history: vi.fn(),
   note: vi.fn(),
@@ -26,8 +24,11 @@ const mocks = vi.hoisted(() => ({
   taskSnapshot: vi.fn(),
   taskValues: {} as Record<string, PropertyApiValues>,
   taskDefinitions: new Map<string, PropertyDefinition>(),
-  chat: vi.fn(),
+  definitionsWait: vi.fn<() => Promise<void>>(),
+  accountCurrent: true,
+  referencesUnavailable: false,
   saveEmail: vi.fn(),
+  deleteEmail: vi.fn(),
   sendEmail: vi.fn(),
   connectGoogle: vi.fn(),
   event: vi.fn(),
@@ -54,12 +55,10 @@ vi.mock('@components/app/split-layout/layout', () => ({
   }),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.agents }),
+  useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableChatV3Agents: {},
-  enableProjects: {},
 }));
 vi.mock('@property/tags', () => ({ useLocalDocTags: vi.fn() }));
 vi.mock('@queries/properties/definitions', () => ({}));
@@ -106,9 +105,6 @@ vi.mock('@core/component/AI/context', () => ({
     },
   }),
 }));
-vi.mock('@core/component/AI/signal/pendingSend', () => ({
-  setPendingSendData: mocks.pending,
-}));
 vi.mock('@app/features/agents-view/queries/composer-prompt', () => ({
   buildAgentPrompt: async ({ content }: { content: string }) => content,
 }));
@@ -122,18 +118,38 @@ vi.mock('@core/context/quickAccess', () => ({
     }),
   }),
 }));
-vi.mock('@core/signal/useCombinedRecipient', () => ({
-  useCombinedRecipients: () => ({
-    users: () => [
-      {
-        id: 'macro|john@example.com',
-        kind: 'user',
-        data: { name: 'John Adams', email: 'john@example.com' },
-      },
-    ],
-    channels: () => [
-      { kind: 'channel', id: 'team-channel', data: { name: 'engineering' } },
-    ],
+vi.mock('@core/context/channels', async () => {
+  const { directoryChannel, directoryParticipant } = await import(
+    '@queries/channel/tests/directory-channel'
+  );
+  const channel = directoryChannel('team-channel', {
+    name: 'engineering',
+    participants: ['a', 'b', 'c'].map((id) => directoryParticipant(id)),
+  });
+  return { useChannelDirectory: () => ({ channels: () => [channel] }) };
+});
+vi.mock('@queries/contacts/use-references', () => ({
+  useContactReferences: () => ({
+    lookup: (label: string) =>
+      mocks.referencesUnavailable
+        ? undefined
+        : [
+              'john',
+              'john adams',
+              'john@example.com',
+              'macro|john@example.com',
+            ].includes(label)
+          ? [
+              {
+                userId: 'macro|john@example.com',
+                name: 'John Adams',
+                email: 'john@example.com',
+              },
+            ]
+          : [],
+    loading: () => mocks.referencesUnavailable,
+    error: () => null,
+    retry: async () => {},
   }),
 }));
 vi.mock('@app/features/block-md/queries/create-document-with-tags', () => ({
@@ -146,7 +162,10 @@ vi.mock('@app/features/block-md/util/taskComposerProperties', () => ({
 vi.mock('./queries/task-field-source', () => ({
   createTaskFieldSource: () => ({
     definitions: async () => [],
-    createDefinitions: async () => mocks.taskDefinitions,
+    createDefinitions: async () => {
+      await mocks.definitionsWait();
+      return mocks.taskDefinitions;
+    },
     values: () => ({ values: mocks.taskValues, unresolved: [] }),
   }),
 }));
@@ -156,13 +175,22 @@ vi.mock('@core/util/create', () => ({
 vi.mock('@app/features/email-compose/compose-adapter', () => ({
   createEmailComposeContext: () => ({
     accounts: {
-      inboxes: () => [{ id: 'inbox', email_address: 'me@example.com' }],
+      inboxes: () => [
+        { id: 'inbox', email_address: 'me@example.com' },
+        { id: 'work', email_address: 'me@work.example.com' },
+      ],
       primaryId: () => 'inbox',
       loading: () => false,
     },
-    drafts: { saveDraft: mocks.saveEmail },
+    drafts: { saveDraft: mocks.saveEmail, deleteDraft: mocks.deleteEmail },
     delivery: { sendMessage: mocks.sendEmail },
   }),
+}));
+vi.mock('@queries/auth/account-scope', () => ({
+  captureQueryAccount: (userId: string) => ({ userId, session: 0 }),
+  assertQueryAccount: () => {
+    if (!mocks.accountCurrent) throw new Error('Query account changed');
+  },
 }));
 vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({
@@ -191,7 +219,7 @@ vi.mock('@queries/history/history', () => ({
   useUpsertToHistoryMutation: () => ({ mutate: mocks.history }),
 }));
 vi.mock('@service-cognition/client', () => ({
-  cognitionApiServiceClient: { createChat: mocks.chat },
+  cognitionApiServiceClient: {},
 }));
 vi.mock('@app/features/calendar-view/calendar-navigation', () => ({
   calendarViewContent: (params: object) => ({
@@ -217,29 +245,42 @@ function input(intent: Submission['intent'], values = {}): Submission {
     }),
   };
 }
-async function execute(snapshot: Submission) {
+const UUID_V7 =
+  /^[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/;
+async function withActions<T>(
+  snapshot: Submission,
+  run: (actions: ReturnType<typeof createInputActions>) => Promise<T>
+) {
   return await createRoot(async (dispose) => {
     try {
-      return await createInputActions(
+      const actions = createInputActions(
         () => snapshot.fields,
         'macro|me@example.com',
-        { navigate: (next) => mocks.replace({ next }) }
-      ).submit(snapshot);
+        {
+          navigate: (next) => mocks.replace({ next }),
+          intent: () => snapshot.intent,
+        }
+      );
+      return await run(actions);
     } finally {
       dispose();
     }
   });
 }
+async function execute(snapshot: Submission) {
+  return await withActions(snapshot, (actions) => actions.submit(snapshot));
+}
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.agents = false;
   mocks.attachments = [];
   mocks.note.mockResolvedValue({ documentId: 'note' });
   mocks.task.mockResolvedValue({ documentId: 'task' });
   mocks.taskSnapshot.mockResolvedValue({ documentId: 'task' });
   mocks.taskValues = {};
   mocks.taskDefinitions = new Map();
-  mocks.chat.mockResolvedValue(ok({ id: 'chat' }));
+  mocks.definitionsWait.mockResolvedValue(undefined);
+  mocks.accountCurrent = true;
+  mocks.referencesUnavailable = false;
   mocks.session.mockReturnValue('session');
   mocks.saveEmail.mockResolvedValue({
     draftId: 'draft',
@@ -259,7 +300,7 @@ describe('destination adapters', () => {
         await createInputActions(
           () => input('email').fields,
           'macro|me@example.com',
-          { navigate: (next) => mocks.replace({ next }) }
+          { navigate: (next) => mocks.replace({ next }), intent: () => 'email' }
         ).connectGoogle();
         expect(mocks.connectGoogle).toHaveBeenCalledWith({
           scopes: 'gmail_and_calendar',
@@ -270,19 +311,7 @@ describe('destination adapters', () => {
       }
     });
   });
-  it('starts legacy AI with the original text and attachments', async () => {
-    const result = await execute(input('ai'));
-    expect(mocks.pending).toHaveBeenCalledWith(
-      expect.objectContaining({ content: 'Original **Markdown**' })
-    );
-    expect(mocks.replace).not.toHaveBeenCalled();
-    result.open?.();
-    expect(mocks.replace).toHaveBeenCalledWith({
-      next: { type: 'chat', id: 'chat' },
-    });
-  });
-  it('starts the existing agent session when enabled', async () => {
-    mocks.agents = true;
+  it('starts an agent session for AI', async () => {
     const result = await execute(input('ai'));
     expect(mocks.session).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -290,7 +319,6 @@ describe('destination adapters', () => {
         submitSurface: 'other',
       })
     );
-    expect(mocks.chat).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
     result.open?.();
     expect(mocks.replace).toHaveBeenCalledOnce();
@@ -378,7 +406,7 @@ describe('destination adapters', () => {
           }),
         })
       )
-    ).rejects.toThrow('Add at least 3 search characters');
+    ).rejects.toThrow('Add search text to search by sender or speaker');
     expect(mocks.replace).not.toHaveBeenCalled();
   });
   it('saves the visible event description through the existing calendar API', async () => {
@@ -483,6 +511,135 @@ describe('destination adapters', () => {
       })
     );
   });
+  it('saves a new email under a draft handle the save accepts', async () => {
+    await execute(input('email'));
+    const { draft, clientHandles, inboxId } = mocks.saveEmail.mock.calls[0][0];
+    // A minted id is a client handle; `db_id` holds only server ids.
+    expect(clientHandles.draftId).toMatch(UUID_V7);
+    expect(draft.db_id).toBeUndefined();
+    // The real save maps the handle; it refuses a draft without one.
+    expect(composeDraftInput(draft, inboxId, clientHandles).draftId).toBe(
+      clientHandles.draftId
+    );
+  });
+  it('sends the draft under the ids its save returned', async () => {
+    await execute(input('email'));
+    const { message, clientHandles } = mocks.sendEmail.mock.calls[0][0];
+    expect(message).toMatchObject({ db_id: 'draft', thread_db_id: 'thread' });
+    expect(clientHandles).toBeUndefined();
+  });
+  it('saves a new draft under a draft handle the save accepts', async () => {
+    const submission = input('email');
+    await withActions(submission, (actions) =>
+      actions.saveEmailDraft(submission)
+    );
+    const { draft, clientHandles, inboxId } = mocks.saveEmail.mock.calls[0][0];
+    expect(clientHandles.draftId).toMatch(UUID_V7);
+    expect(draft.db_id).toBeUndefined();
+    expect(composeDraftInput(draft, inboxId, clientHandles).draftId).toBe(
+      clientHandles.draftId
+    );
+  });
+  it('retries a failed save under the same draft handle', async () => {
+    mocks.saveEmail.mockRejectedValueOnce(new Error('offline'));
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await expect(actions.submit(submission)).rejects.toThrow('offline');
+      await actions.submit(submission);
+    });
+    const [first, second] = mocks.saveEmail.mock.calls.map(
+      ([call]) => call.clientHandles?.draftId
+    );
+    expect(first).toMatch(UUID_V7);
+    expect(second).toBe(first);
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+  });
+  it('retries a failed send by sending the draft it saved', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      submission.fields.body = 'Hello John, see you at one';
+      await actions.submit(submission);
+    });
+    // Saving a confirmed draft again would queue a working copy the send
+    // then refuses; the send carries the whole message instead.
+    expect(mocks.saveEmail).toHaveBeenCalledTimes(1);
+    const [first, retry] = mocks.sendEmail.mock.calls.map(([call]) => call);
+    for (const send of [first, retry])
+      expect(send.message).toMatchObject({
+        db_id: 'draft',
+        thread_db_id: 'thread',
+      });
+    expect(retry.message.body_macro).toBe('Hello John, see you at one');
+  });
+  it('saves into the draft a failed send saved', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      await actions.saveEmailDraft(submission);
+    });
+    const save = mocks.saveEmail.mock.calls[1][0];
+    expect(save.draft).toMatchObject({
+      db_id: 'draft',
+      thread_db_id: 'thread',
+    });
+    expect(save.clientHandles).toBeUndefined();
+  });
+  it('moves a failed send to another inbox by deleting its draft', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      // A draft stays in its inbox: the retry from another one saves anew.
+      submission.fields.inboxId = 'work';
+      await actions.submit(submission);
+    });
+    expect(mocks.deleteEmail).toHaveBeenCalledWith({
+      draftId: 'draft',
+      threadId: 'thread',
+      inboxId: 'inbox',
+    });
+    const retry = mocks.saveEmail.mock.calls[1][0];
+    expect(retry.inboxId).toBe('work');
+    expect(retry.draft.db_id).toBeUndefined();
+    expect(retry.clientHandles.draftId).toMatch(UUID_V7);
+    expect(retry.clientHandles.draftId).not.toBe(
+      mocks.saveEmail.mock.calls[0][0].clientHandles.draftId
+    );
+    expect(mocks.sendEmail.mock.calls[1][0].inboxId).toBe('work');
+  });
+  it('keeps the draft when deleting it from its inbox fails', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    mocks.deleteEmail.mockRejectedValueOnce(new Error('not deleted'));
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      submission.fields.inboxId = 'work';
+      await expect(actions.submit(submission)).rejects.toThrow('not deleted');
+      submission.fields.inboxId = 'inbox';
+      await actions.submit(submission);
+    });
+    expect(mocks.saveEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(2);
+    expect(mocks.sendEmail.mock.calls[1][0].message).toMatchObject({
+      db_id: 'draft',
+      thread_db_id: 'thread',
+    });
+  });
+  it('saves a later submission as a new draft', async () => {
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await actions.submit(submission);
+      await actions.submit({ ...submission, id: 'next-id' });
+    });
+    const [first, second] = mocks.saveEmail.mock.calls.map(
+      ([call]) => call.clientHandles?.draftId
+    );
+    expect(second).toMatch(UUID_V7);
+    expect(second).not.toBe(first);
+  });
   it('explicitly saves an unfinished email through the shared draft adapter without delivery', async () => {
     await createRoot(async (dispose) => {
       try {
@@ -494,7 +651,10 @@ describe('destination adapters', () => {
         const actions = createInputActions(
           () => submission.fields,
           'macro|me@example.com',
-          { navigate: (next) => mocks.replace({ next }) }
+          {
+            navigate: (next) => mocks.replace({ next }),
+            intent: () => submission.intent,
+          }
         );
         expect(mocks.saveEmail).not.toHaveBeenCalled();
         expect(actions.validateEmailDraft(submission)).toBeUndefined();
@@ -552,7 +712,10 @@ describe('destination adapters', () => {
         const actions = createInputActions(
           () => submission.fields,
           'macro|me@example.com',
-          { navigate: (next) => mocks.replace({ next }) }
+          {
+            navigate: (next) => mocks.replace({ next }),
+            intent: () => submission.intent,
+          }
         );
         actions.captureEmailEditor(editor);
         await actions.submit(submission);
@@ -585,6 +748,12 @@ describe('destination adapters', () => {
       })
     );
   });
+  it('acknowledges an event whose committed identity is unavailable without an open action', async () => {
+    mocks.event.mockResolvedValueOnce(undefined);
+    const result = await execute(input('calendar'));
+    expect(result).toEqual({ message: 'Event created', open: undefined });
+    expect(mocks.event).toHaveBeenCalledOnce();
+  });
   it('resolves a DM only at submission and keeps the message retry ID', async () => {
     await execute(input('message'));
     expect(mocks.dm).toHaveBeenCalledWith({
@@ -605,7 +774,10 @@ describe('destination adapters', () => {
         const actions = createInputActions(
           () => snapshot.fields,
           'macro|me@example.com',
-          { navigate: (next) => mocks.replace({ next }) }
+          {
+            navigate: (next) => mocks.replace({ next }),
+            intent: () => snapshot.intent,
+          }
         );
         actions.captureMessageMentions(() => [
           { itemType: 'user', itemId: 'macro|john@example.com' },
@@ -649,6 +821,100 @@ describe('destination adapters', () => {
       expect.any(Map),
       expect.any(Function)
     );
+  });
+  it('keeps the submitted task identities when inference changes while definitions load', async () => {
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    mocks.definitionsWait.mockImplementation(async () => {
+      started.resolve();
+      await release.promise;
+    });
+    mocks.taskValues = {
+      [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
+        valueType: 'ENTITY',
+        refs: [{ entity_id: 'macro|chosen@example.com', entity_type: 'USER' }],
+      },
+    };
+    const submitting = execute(input('task'));
+    await started.promise;
+    mocks.taskValues = {};
+    release.resolve();
+    await submitting;
+    expect(mocks.task.mock.calls[0][2]).toContainEqual([
+      SYSTEM_PROPERTY_IDS.ASSIGNEES,
+      {
+        valueType: 'ENTITY',
+        refs: [{ entity_id: 'macro|chosen@example.com', entity_type: 'USER' }],
+      },
+    ]);
+  });
+  it('does not create a task after the submitting account changes during definition loading', async () => {
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    mocks.definitionsWait.mockImplementation(async () => {
+      started.resolve();
+      await release.promise;
+    });
+    const submitting = execute(input('task'));
+    await started.promise;
+    mocks.accountCurrent = false;
+    const rejected = expect(submitting).rejects.toThrow(
+      'Query account changed'
+    );
+    release.resolve();
+    await rejected;
+    expect(mocks.task).not.toHaveBeenCalled();
+  });
+  it('does not guess inferred names when reference evidence is incomplete', async () => {
+    mocks.referencesUnavailable = true;
+    await expect(execute(input('email'))).rejects.toThrow('specific recipient');
+    await expect(
+      execute(input('message', { recipients: '#engineering' }))
+    ).rejects.toThrow('specific recipient');
+    expect(mocks.saveEmail).not.toHaveBeenCalled();
+    expect(mocks.message).not.toHaveBeenCalled();
+    await execute(input('message', { recipients: 'team-channel' }));
+    expect(mocks.message).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parent: { type: 'channel', id: 'team-channel' },
+      })
+    );
+  });
+  it('does not send a saved email draft after the account changes', async () => {
+    mocks.saveEmail.mockImplementationOnce(async () => {
+      mocks.accountCurrent = false;
+      return { draftId: 'draft', threadId: 'thread', inboxId: 'inbox' };
+    });
+    await expect(execute(input('email'))).rejects.toThrow(
+      'Query account changed'
+    );
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+  it('does not save a moved draft after the account changes during its delete', async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error('refused'));
+    mocks.deleteEmail.mockImplementationOnce(async () => {
+      mocks.accountCurrent = false;
+    });
+    const submission = input('email');
+    await withActions(submission, async (actions) => {
+      await expect(actions.submit(submission)).rejects.toThrow('refused');
+      submission.fields.inboxId = 'work';
+      await expect(actions.submit(submission)).rejects.toThrow(
+        'Query account changed'
+      );
+    });
+    expect(mocks.saveEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+  });
+  it('does not send a message after account replacement during DM creation', async () => {
+    mocks.dm.mockImplementationOnce(async () => {
+      mocks.accountCurrent = false;
+      return { channel_id: 'dm' };
+    });
+    await expect(execute(input('message'))).rejects.toThrow(
+      'Query account changed'
+    );
+    expect(mocks.message).not.toHaveBeenCalled();
   });
   it('posts to an existing channel without creating a DM', async () => {
     await execute(input('message', { recipients: '#engineering' }));

@@ -15,8 +15,9 @@ use std::time::{Duration, Instant};
 use agent_session::domain::model::AgentSessionId;
 use futures::{FutureExt, StreamExt, stream};
 use import_notion::domain::inventory::{all_users, inventory};
+use import_notion::domain::macro_cells::{PeopleMap, Person};
 use import_notion::domain::model::{
-    ImportScope, NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged,
+    ImportScope, NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged, RowsPage,
     SearchHit, SearchObject,
 };
 use import_notion::domain::ports::{NotionApi, NotionConnections, NotionError};
@@ -27,17 +28,18 @@ use uuid::Uuid;
 use super::{ImportServiceImpl, NOTION_IMPORT_MODEL, NotionWorkspaceImporter};
 use crate::domain::models::{
     ImportEntity, ImportKind, ImportSource, ImportStatus, NotionDecision, NotionImportReport,
-    NotionJob, NotionSharing, NotionWriteChoices, RunStatus, ScanCounts, WrittenKind,
+    NotionJob, NotionSharing, NotionWriteChoices, RunStatus, ScanCounts,
 };
 use crate::domain::ports::{
-    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, NotionPlanRepo, NotionRunRepo,
-    Result, SharedEntity, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
+    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionPlanRepo,
+    NotionRunRepo, Result, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
 };
-use mcp_select::ConnectorSelect;
+use connectors::McpConnectionsService;
 use object::{Outcome, Target};
 use run::{IMPORT_STOPPED, JobControl, Stop, WriteSet};
 
 mod object;
+mod personal;
 pub(super) mod plan;
 mod report;
 use super::workspace::Importer;
@@ -48,7 +50,7 @@ pub(super) mod triage;
 mod values;
 pub(super) mod write;
 
-pub(super) use report::report;
+pub(super) use report::{notice_import_ids, report};
 /// How often a running write checks whether the user cancelled it.
 pub(super) const CANCEL_CHECK_EVERY: Duration = Duration::from_secs(3);
 /// How often progress is pushed to the client while a job runs.
@@ -111,7 +113,7 @@ impl NotionApi for NoNotionApi {
         &self,
         _id: &NotionId,
         _cursor: Option<String>,
-    ) -> std::result::Result<Paged<NotionPage>, NotionError> {
+    ) -> std::result::Result<RowsPage, NotionError> {
         match *self {}
     }
 
@@ -157,7 +159,7 @@ impl Throttle {
 impl<R, S, C, W, N> NotionWorkspaceImporter for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -360,7 +362,7 @@ where
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -400,7 +402,6 @@ where
         let span = tracing::info_span!(
             "workspace_import.plan",
             source = self.workspace_source.as_ref(),
-            %user,
             sharing = sharing.as_ref(),
             already_in_macro = tracing::field::Empty,
             stopped = tracing::field::Empty,
@@ -482,13 +483,14 @@ where
         tracing::Span::current().record("already_in_macro", already_imported.len());
         // The whole tree is staged before the decision model answers, so the
         // review shows it while each batch is decided.
-        self.repo
-            .replace_plan(
-                user,
-                self.workspace_source,
-                &tree.staged_rows(sharing, team, &already_imported),
-            )
-            .await?;
+        super::lifecycle::replace_plan(
+            &self.repo,
+            self.creator.as_ref(),
+            user,
+            self.workspace_source,
+            &tree.staged_rows(sharing, team, &already_imported),
+        )
+        .await?;
         self.notify(user).await;
         // Objects already in Macro need no decision, so they cost no model call.
         let items = tree.triage_items(&already_imported);
@@ -568,9 +570,8 @@ where
 
     /// Write the plan's pending objects and record the outcome on the run.
     #[tracing::instrument(
-        skip(self, set),
+        skip(self, user, set),
         fields(
-            %user,
             review_id = %set.review_id,
             items = set.all.len(),
             pending = set.pending.len(),
@@ -597,8 +598,7 @@ where
             Ok(failed) => (
                 RunStatus::Completed,
                 Some(format!(
-                    "{failed} of {} objects could not be imported",
-                    set.pending.len()
+                    "{failed} objects could not be imported. Plan again to retry them."
                 )),
             ),
             Err(error) => {
@@ -654,7 +654,8 @@ where
         let people = self.people(&api, user).await;
         let ids: Vec<Uuid> = set.all.iter().map(|item| item.import_id).collect();
         let written = self.repo.written(user, &ids).await?;
-        let links = self.links(user, &set.all, &people).await?;
+        let (links, unavailable) = self.links(user, &set.all, &people).await?;
+        let links = tokio::sync::RwLock::new(links);
         let root = self.root_folder(user).await?;
 
         // Folders first, parents before children. A folder is shared only
@@ -662,10 +663,7 @@ where
         // attempt, which is harmless, so a stop between creating and sharing
         // it heals on resume.
         let layout = write::folder_layout(&set.all);
-        let shared_folders = match team_id {
-            Some(_) => sharing::shared_folders(&set.all, &layout),
-            None => std::collections::HashSet::new(),
-        };
+        let shared_folders = sharing::shared_folders(&set.all, &layout);
         let by_id: HashMap<Uuid, &write::WriteItem> =
             set.all.iter().map(|item| (item.import_id, item)).collect();
         let parents: HashMap<Uuid, Option<Uuid>> = set
@@ -674,28 +672,34 @@ where
             .map(|item| (item.import_id, item.parent))
             .collect();
         let mut folders: HashMap<Uuid, Uuid> = HashMap::new();
+        let mut folder_paths: HashMap<Uuid, Vec<String>> = [(root, Vec::new())].into();
         for folder_row in &layout.folders {
             let Some(item) = by_id.get(folder_row) else {
                 continue;
             };
             let progress = write::Progress::new(&self.repo, user, item.import_id, &written);
-            let folder = match progress.get(WrittenKind::Folder) {
-                Some(folder) => folder,
-                None => {
-                    let parent = write::folder_for(item, false, &folders, &parents, root);
-                    let folder = self
-                        .creator
-                        .create_folder(user, &item.title, Some(parent))
-                        .await?;
-                    progress.record(WrittenKind::Folder, folder).await?;
-                    folder
-                }
-            };
-            if shared_folders.contains(folder_row) {
-                self.creator
-                    .share_with_team(user, SharedEntity::Folder(folder))
-                    .await?;
-            }
+            let parent = write::folder_for(item, false, &folders, &parents, root);
+            let mut path = folder_paths
+                .get(&parent)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("missing source folder path"))?;
+            path.push(item.title.clone());
+            let folder = self
+                .planned_page_folder(
+                    user,
+                    item,
+                    &personal::FolderPlan {
+                        parent,
+                        path: &path,
+                        visibility: ImportVisibility::from_shared(
+                            shared_folders.contains(folder_row),
+                        ),
+                        team: team_id,
+                    },
+                    &progress,
+                )
+                .await?;
+            folder_paths.insert(folder, path);
             folders.insert(*folder_row, folder);
         }
 
@@ -709,6 +713,7 @@ where
             place: Place {
                 folders: &folders,
                 parents: &parents,
+                paths: &folder_paths,
                 root,
             },
             people: &people,
@@ -739,7 +744,7 @@ where
 
         // Objects a teammate was writing: link to what they finished, take
         // over what they gave up, and wait on the rest.
-        let mut failed = 0;
+        let mut failed = unavailable;
         let mut waiting = Vec::new();
         for (item, outcome) in set.pending.iter().zip(outcomes) {
             match outcome {
@@ -794,7 +799,10 @@ where
 
     /// The user's "Notion" folder: the one earlier imports made while it
     /// still exists, otherwise a new one.
-    async fn root_folder(&self, user: &MacroUserIdStr<'static>) -> Result<Uuid> {
+    pub(in crate::domain::service) async fn root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<Uuid> {
         if let Some(folder) = self.repo.root_folder(user).await?
             && self.creator.folder_exists(user, folder).await?
         {
@@ -802,7 +810,7 @@ where
         }
         let folder = self
             .creator
-            .create_folder(user, write::ROOT_FOLDER, None)
+            .create_folder(user, write::ROOT_FOLDER, None, ImportVisibility::Personal)
             .await?;
         self.repo.set_root_folder(user, folder).await?;
         Ok(folder)
@@ -810,12 +818,12 @@ where
 
     /// Notion users matched to the user's team by email. Empty when Notion
     /// will not share emails; people columns then stay empty.
-    async fn people(&self, api: &N::Api, user: &MacroUserIdStr<'static>) -> values::PeopleMap {
+    async fn people(&self, api: &N::Api, user: &MacroUserIdStr<'static>) -> PeopleMap {
         let notion_users = match all_users(api).await {
             Ok(users) => users,
             Err(error) => {
                 tracing::warn!(error = ?error, "notion users were not read; people stay empty");
-                return values::PeopleMap::new();
+                return PeopleMap::new();
             }
         };
         let members = self
@@ -836,7 +844,7 @@ where
                         .find(|member| &member.email == email)
                         .map(|member| member.user_id.clone())
                 });
-                (notion_user.id, values::Person { email, macro_user })
+                (notion_user.id, Person { email, macro_user })
             })
             .collect()
     }
@@ -859,12 +867,20 @@ where
 struct Place<'a> {
     folders: &'a HashMap<Uuid, Uuid>,
     parents: &'a HashMap<Uuid, Option<Uuid>>,
+    paths: &'a HashMap<Uuid, Vec<String>>,
     root: Uuid,
 }
 
 impl Place<'_> {
     fn folder_for(&self, item: &write::WriteItem, own: bool) -> Uuid {
         write::folder_for(item, own, self.folders, self.parents, self.root)
+    }
+
+    fn path_for(&self, folder: Uuid) -> Result<&[String]> {
+        self.paths
+            .get(&folder)
+            .map(Vec::as_slice)
+            .ok_or_else(|| anyhow::anyhow!("missing source folder path").into())
     }
 }
 

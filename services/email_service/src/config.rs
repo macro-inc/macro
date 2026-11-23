@@ -1,7 +1,7 @@
 use anyhow::Context;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
-use macro_env_var::env_vars;
+use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
 env_vars! {
@@ -18,6 +18,14 @@ env_vars! {
     pub struct EmailServiceCloudfrontSignerPublicKeyId;
 }
 
+maybe_env_vars! {
+    /// PostHog project key the Outlook sync's and the contacts list writes'
+    /// feature flags are read with.
+    pub struct PosthogApiKey;
+    /// PostHog host; defaults to the project's US region.
+    pub struct PosthogHost;
+}
+
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
@@ -30,6 +38,11 @@ pub struct Config {
     /// Pause new provider writes; send outcome reconciliation always continues.
     #[macro_config_default(false)]
     pub outlook_writes_enabled: bool,
+    /// Stop claiming Outlook import work (first imports and re-imports) while
+    /// true; live changes keep importing. Read at startup, so a change takes
+    /// effect when the pubsub workers restart.
+    #[macro_config_default(false)]
+    pub outlook_imports_paused: bool,
     /// Send Gmail label writes as `ModifyMessageLabelsBatch` queue messages.
     /// Enable only after every email-service pubsub worker runs a release that
     /// decodes them; older workers delete the batch form. Off, each message is
@@ -151,10 +164,25 @@ pub struct Config {
 
     /// The internal api key
     pub internal_api_key: InternalApiKey,
+
+    /// PostHog project key (optional). Without one, the Outlook sync's and
+    /// the contacts list writes' feature flags read off.
+    pub posthog_api_key: PosthogApiKey,
+
+    /// PostHog host (optional).
+    pub posthog_host: PosthogHost,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+    }
+
+    /// The PostHog project key, when one is configured. A blank value counts
+    /// as none.
+    pub fn posthog_api_key(&self) -> Option<&str> {
+        self.posthog_api_key
+            .value()
+            .filter(|value| !value.trim().is_empty())
     }
 }

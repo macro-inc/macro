@@ -1,18 +1,17 @@
 //! `Native Check Label` — re-runs the `iOS Native Check` or `Android Native
-//! Check` job of the web app PR checks when the matching `skip-ios-update` /
+//! Check` job of the PR's `PR CI` run when the matching `skip-ios-update` /
 //! `skip-android-update` label is added to or removed from a PR. The gates
-//! live in that workflow (so the required `Web App Status Check` covers
-//! them), and re-running the whole web suite on every label event would be
-//! wasteful, so this re-runs just the one job; GitHub re-runs the status
-//! check that depends on it. A run still in progress saw the labels as they
-//! were when it started, so it is waited for first; a run cancelled by a
-//! later push, or a head that has since moved, is left alone (the newer run
-//! reads the labels itself). This job is not a required check: it can take
-//! up to 25 minutes while waiting, and the release preconditions ignore it.
+//! live in the web workflow that run calls (so the required `CI gate` covers
+//! them), and re-running all of CI on every label event would be wasteful, so
+//! this re-runs just the one job; GitHub re-runs the jobs that depend on it.
+//! A run still in progress saw the labels as they were when it started, so it
+//! is waited for first; a superseded run, or a head that has since moved, is
+//! left alone (the newer run reads the labels itself). This job is not a
+//! required check: it can take up to 25 minutes while waiting, and the release
+//! preconditions ignore it.
 
-use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow,
-};
+use gh_workflow::expr::typed::{Expr, Str, github};
+use gh_workflow::{Event, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow};
 
 use crate::workflows::runners;
 
@@ -28,14 +27,24 @@ pub fn native_check_label() -> Workflow {
         .add_job("rerun", rerun_job())
 }
 
+fn label() -> Expr<Str> {
+    github().event("label.name")
+}
+
 fn rerun_job() -> Job {
     Job::default()
         .name("Re-run the native check")
         // Fork PRs get a read-only token, which cannot re-run jobs.
-        .cond(Expression::new(
-            "(github.event.label.name == 'skip-ios-update' || github.event.label.name == 'skip-android-update') && \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            label()
+                .eq("skip-ios-update")
+                .or(label().eq("skip-android-update"))
+                .and(
+                    github()
+                        .event::<Str>("pull_request.head.repo.full_name")
+                        .eq(github().repository()),
+                ),
+        )
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(30u32)
         .permissions(
@@ -43,17 +52,22 @@ fn rerun_job() -> Job {
                 .actions(Level::Write)
                 .pull_requests(Level::Read),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("HEAD_SHA", github().event::<Str>("pull_request.head.sha")))
+        .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
         .add_env((
             "JOB_NAME",
-            "${{ github.event.label.name == 'skip-ios-update' && 'iOS Native Check' || 'Android Native Check' }}",
+            label()
+                .eq("skip-ios-update")
+                .then_else("iOS Native Check", "Android Native Check"),
         ))
         .add_step(
             Step::new("Re-run the gate job for this head")
-                .run(include_str!("scripts/native_check_rerun.sh"))
+                .run(concat!(
+                    include_str!("scripts/pr_ci_run.sh"),
+                    include_str!("scripts/native_check_rerun.sh")
+                ))
                 .shell("bash"),
         )
 }

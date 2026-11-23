@@ -115,7 +115,7 @@ pub trait StageDefinitionStore: Send + Sync + 'static {
 }
 
 /// The team's CRM settings, as the stage service needs them.
-pub trait TeamSettingsStore: Send + Sync + 'static {
+pub trait TeamSettingsStore: Send + Sync + 'static + super::auth::CrmMemberAccess {
     /// The team's CRM settings, defaults when no row exists.
     fn read_team_settings(
         &self,
@@ -170,6 +170,7 @@ where
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
     ) -> Result<CrmTeamSettings, CrmError> {
+        access.check_access(&self.team_settings).await?;
         let settings = self
             .team_settings
             .read_team_settings(&access.team_id())

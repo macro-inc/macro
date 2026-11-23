@@ -15,39 +15,77 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   to the `macro.bots` Kafka topic (see `README.md` for the wire schema).
 - `src/inbound/axum_router.rs`, `src/inbound/channel_webhook_router.rs`,
   `src/inbound/toolset.rs`: HTTP, channel-webhook, and AI-tool adapters.
+  `PATCH /agents/{id}` and the `ConfigureAgent` tool share `patch_agent`;
+  `PUT` replaces the whole agent, ownership included.
 - `src/outbound/pg_bots_repo.rs`: Postgres repository (feature `outbound`).
+- `src/domain/profile_fanout.rs`, `src/inbound/profile_consumer.rs`,
+  `src/outbound/connection_gateway_profiles.rs` (feature `realtime`, run by
+  DSS): push each changed bot's current profile to its owner, team and channel
+  members as `bot_profile_changed`, so web views update without a reload.
 
 ## Scope
 
-- Owns: bot CRUD, ownership (user or team), and bot lifecycle events.
+- Owns: bot CRUD, ownership (user or team), bot lifecycle events, and the
+  profile push to web clients.
 - Not here: agent sessions, channel message triggers, or trigger detection →
   `crates/agent_session`, `crates/channel_bots`.
 
 ## Boundaries
 
-- Depends on: `channels` (inbound, optional), `entity_access`, `entity_registry`,
-  `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`.
+- Depends on: `harnesses` (ports), `channels` (ports: the channel events it
+  raises; inbound), `entity_access`, `entity_registry`, `messages`,
+  `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
+  `connection_gateway_client` and `kafka_util` (`realtime`).
 - Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
 
 ## Recipes
 
 - Add a bot field or mutation: `src/domain/models.rs` → `src/domain/service.rs`
   → `src/outbound/pg_bots_repo.rs` → `src/inbound/axum_router.rs` → emit/update
-  the matching event in `src/domain/events.rs` if it changes mutable state.
+  the matching event in `src/domain/events.rs` if it changes mutable state; a
+  mutation that changes which bots are in a channel also calls
+  `announce_bot_membership` with the channels it touched, after commit.
 - Add an AI tool over bots: `src/inbound/toolset.rs` (feature `ai_tools`).
 
 ## Checks
 
-- `cargo test -p bots` (`SQLX_OFFLINE` unset).
+- `cargo test -p bots --features realtime` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
+- Agent create/update/patch must persist `has_agent = true` atomically with
+  configuration writes; mention dispatch gates on this flag for every harness.
+- Soft-deleting a harness unbinds its agents (a trigger nulls
+  `agent_configs.harness_id`), leaving `macrod` agents unbound. A Macro
+  computer's harness keeps them bound, and its release then deletes them through
+  the trusted `HarnessAgentDeletion::delete_harness_agents` (no caller check;
+  never a route).
+- Agent create, update and patch refuse an agent teammate's computer
+  (`BotError::AgentTeammateComputer`, a 409), read through harnesses'
+  `HarnessTeamAgents`, the service's `T` parameter.
+- Agent create and update hold a chosen harness's row `FOR SHARE` in their
+  transaction and refuse a deleted one (`HarnessRemoved`, a 400), so no bind
+  slips past a concurrent harness delete.
+- An agent created on a Macro computer's harness without a permission choice
+  gets `auto_accept_permissions = Some(true)` when the harness allows bypass. The
+  `macrod`⇔`harness_id` pairing is checked only for a runtime the request
+  chooses; a patch that omits `harness` keeps an unbound agent editable.
+- `POST /bots/{id}/tokens` and `POST /channels/{id}/bots/scoped` refuse an agent's program
+  (`macro_authorization::is_program_run`, 403): the response carries the
+  secret. Programs present a `botCredential` card instead, which mints from the
+  user's own session.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
-  field serializes as `null` (see `README.md`).
+  field serializes as `null` (see `README.md`). Consumers that need the bot's
+  state read it, as the profile push does.
+- A new way a bot's name or picture becomes visible to more people (a new
+  surface or audience) must be added to `bot_audience`, or those viewers miss
+  live updates.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/observability.md`
 - Docs: [`docs/guides/bots.md`](../../docs/guides/bots.md) (setting up a bot
   in the app and using it from the SDK)
+
+- `HarnessAssignments` exposes trusted agent-config routing reads without reading session or harness tables.

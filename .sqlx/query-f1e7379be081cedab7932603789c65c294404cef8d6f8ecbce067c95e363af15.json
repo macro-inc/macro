@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_email_policy_work SET after_contact_address = $8, received_pass = $9\n                   WHERE team_id = $1 AND user_id = $2 AND work_id = $3\n                     AND consent_incarnation = $4 AND policy_version = $5\n                     AND after_contact_address IS NOT DISTINCT FROM $6 AND received_pass = $7\n                     AND (($9 AND NOT $7) OR ($9 = $7 AND $8::text > COALESCE(after_contact_address, '')))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Bool",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f1e7379be081cedab7932603789c65c294404cef8d6f8ecbce067c95e363af15"
+}

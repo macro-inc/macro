@@ -13,6 +13,8 @@ import type {
 } from '@app/lib/split-router';
 import { claimOf } from '@app/lib/split-router';
 import { trackNavigationLifecycle } from '@app/observability/navigation-lifecycle';
+import { globalTabManager } from '@app/signal/tabLayout';
+import { consumeOpenInNewTabIntent } from '@components/app/tab-layout/open-in-tab-intent';
 import type {
   BlockAlias,
   BlockAliasContext,
@@ -49,7 +51,9 @@ import {
   type ContentInstance,
   createContentInstanceRegistry,
 } from './contentInstanceRegistry';
+import { adjacentPane, type SplitDirection } from './split-direction';
 import { fitsNewColumn, fitsSplit, type TileArea } from './split-geometry';
+import { viewRestorationKey } from './view-restoration-key';
 import { createViewState, type ViewState } from './view-state';
 
 /** Checked on every route change in a pane, so entry state is captured before the pane moves. */
@@ -344,6 +348,7 @@ export type SplitManager = {
   splitState: (id: SplitId) => SplitState | undefined;
   readonly activeSplitId: Accessor<SplitId | undefined>;
   readonly activeSplit: Accessor<SplitHandle | undefined>;
+  /** The split that was active before the active one. */
   readonly lastActiveSplitId: Accessor<SplitId | undefined>;
   readonly events: Accessor<SplitEventWithType | undefined>;
 
@@ -359,6 +364,12 @@ export type SplitManager = {
 
   /** Whether a split group has a neighbor in the requested direction. */
   canSwapSplit: (id: SplitId, direction: 'left' | 'right') => boolean;
+
+  /** The split directional focus moves to from `id`, by where the splits tile. */
+  adjacentSplit: (
+    id: SplitId,
+    direction: SplitDirection
+  ) => SplitId | undefined;
 
   /** Create a new split with the provided initial content and activate it */
   createNewSplit: (options: CreateNewSplitOptions) => SplitHandle | undefined;
@@ -643,7 +654,12 @@ export function createSplitLayout(
     sessionKey: options.sessionKey,
   });
 
-  const contentInstances = createContentInstanceRegistry();
+  // A view in a parked split (a background desktop tab) keeps its selection
+  // but holds nothing, so another tab can open the same content.
+  const contentInstances = createContentInstanceRegistry(
+    ({ split }) =>
+      split === undefined || state.splits.some(({ id }) => id === split)
+  );
   const unregisterContentInstances = contentInstances.register(() => [
     ...state.splits.map((split) => ({
       owner: split.id,
@@ -1150,7 +1166,9 @@ export function createSplitLayout(
   /** Forgets a split whose pane the router removed. */
   function dropSplit(id: SplitId) {
     const index = splitIndexById(id);
-    if (index < 0) return;
+    // A discarded parked split is not open, but its state and captors go too.
+    const parked = state.parked.some((split) => split.id === id);
+    if (index < 0 && !parked) return;
 
     contentChangeListeners.delete(id);
     entryStateCaptors.delete(id);
@@ -1169,7 +1187,9 @@ export function createSplitLayout(
         setState('activeSplitId', front.id);
         viewState.activate(front.id);
       }
-      dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: index });
+      if (index >= 0) {
+        dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: index });
+      }
     });
   }
 
@@ -1202,8 +1222,12 @@ export function createSplitLayout(
       return;
     }
 
+    setActiveSplit(id);
+  }
+
+  function setActiveSplit(id: SplitId) {
     const current = state.activeSplitId;
-    setState('lastActiveSplitId', current);
+    if (current !== id) setState('lastActiveSplitId', current);
     if (state.spotlightId && state.spotlightId !== id) {
       setState('spotlightId', undefined);
     }
@@ -1211,12 +1235,19 @@ export function createSplitLayout(
     viewState.activate(id);
   }
 
-  /** Stacked panes bring a pane behind the front forward; the panes that were in front of it stay, behind it. */
+  /**
+   * Stacked panes bring a pane behind the front forward; the panes that were in
+   * front of it stay, behind it. The router applies the move later while it is
+   * busy, and the splits follow its order only when their computations run, so
+   * neither has happened yet inside an effect, a batch, or a router commit: the
+   * split is activated without waiting. The move targets the end of the panes
+   * as they are when it applies, which the router clamps to the front.
+   */
   function bringToFront(id: SplitId) {
     if (splitIndexById(id) < 0) return;
 
-    router.move(paneOf(id), state.splits.length - 1);
-    activateSplit(id);
+    router.move(paneOf(id), Number.MAX_SAFE_INTEGER);
+    setActiveSplit(id);
   }
 
   function spotlightSplit(id: SplitId) {
@@ -1451,6 +1482,21 @@ export function createSplitLayout(
     router.move(paneOf(id), targetIndex);
   }
 
+  function adjacentSplit(id: SplitId, direction: SplitDirection) {
+    const layout = router.layout();
+    if (!layout) return;
+
+    const previous = state.lastActiveSplitId;
+    const pane = adjacentPane(
+      layout,
+      paneOf(id),
+      direction,
+      previous && paneOf(previous)
+    );
+
+    return pane && splitOf(pane);
+  }
+
   function hasSplit(type: SplitContentType, id: string): boolean {
     return !!state.splits.find(
       (s) => s.content.type === type && s.content.id === id
@@ -1676,7 +1722,9 @@ export function createSplitLayout(
     span.setAttr('view.id', content.id);
     try {
       const snapshot =
-        content.type === 'component' ? viewState.get(content.id) : undefined;
+        content.type === 'component'
+          ? viewState.get(viewRestorationKey(content.id, toLocation(content)))
+          : undefined;
       span.setAttr('view.restored', false);
       if (!snapshot) return;
       const restored = toContent(snapshot.location);
@@ -1715,6 +1763,34 @@ export function createSplitLayout(
     return { ...open, beside: { split: source.id, side: 'below' } };
   }
 
+  /**
+   * Cmd+click and "Open in new tab" open `content` as a new desktop tab here,
+   * before reuse and the current split's leave guards: the current tab is
+   * not navigated, and a tab may show what this one already has open.
+   */
+  function openAsNewTab(
+    content: SplitContent,
+    options: OpenWithSplitOptions
+  ): boolean {
+    const tabManager = globalTabManager();
+    if (!tabManager) return false;
+    const intent = consumeOpenInNewTabIntent();
+    if (!intent) return false;
+
+    const { props, keepProps, meta } = entryOptionsOf(content, {
+      referredFrom: options.referredFrom ?? null,
+    });
+    const entry: Entry = {
+      id: `entry_${crypto.randomUUID()}`,
+      location: toLocation(content),
+      ...(props !== undefined && { props }),
+      ...(keepProps && { keepProps }),
+      ...(meta && { meta }),
+    };
+    tabManager.openEntryInNewTab(entry, intent);
+    return true;
+  }
+
   function openWithSplit(
     content: SplitContent,
     requested: OpenWithSplitOptions = {}
@@ -1739,6 +1815,9 @@ export function createSplitLayout(
     }
     if (options.search || options.routeState !== undefined) {
       openThroughRouter(content, options);
+      return { status: 'navigating', sourceOwner };
+    }
+    if (openAsNewTab(content, options)) {
       return { status: 'navigating', sourceOwner };
     }
     const existing = findOpenView(content);
@@ -1915,6 +1994,7 @@ export function createSplitLayout(
     removeSplit,
     swapSplit,
     canSwapSplit,
+    adjacentSplit,
     createNewSplit,
     activateSplit,
     hasSplit,

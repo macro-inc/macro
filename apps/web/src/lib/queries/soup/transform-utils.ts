@@ -2,7 +2,7 @@ import {
   blockNameToDefaultFile,
   itemToSafeName,
 } from '@core/constant/allBlocks';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { emailToId } from '@core/user';
 import {
   extractSearchSnippet,
@@ -26,13 +26,16 @@ import type {
   EntityData,
   ForeignEntity,
   GithubPullRequestEntity,
+  HarnessEntity,
   InitiativeEntity,
   Notification,
   ProjectEntity,
   SearchData,
+  TeamEntity,
   WithSearch,
 } from '@entity';
 import { type GithubPullRequestLabel, toSubType } from '@entity/types/entity';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
 import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
@@ -53,9 +56,12 @@ import type {
   SoupProperty,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
+import type { SoupItemWithCalendarInvite } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { differenceInMilliseconds } from 'date-fns';
+import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
+import { mapChannelToEntity } from '../channel/list-entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
 
 /** Search sends a property's entity type only when it has one. */
@@ -79,7 +85,7 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-type DisplayableSoupItem = SoupPage['items'][number];
+type DisplayableSoupItem = SoupItemWithCalendarInvite;
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
@@ -95,12 +101,15 @@ type SoupEntity =
   | CrmCompanyEntity
   | CrmContactEntity
   | CalendarEventEntity
-  | ForeignEntity;
+  | ForeignEntity
+  | HarnessEntity
+  | TeamEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
   data: {
     notifications?: Notification[] | null;
     unreadNotifications?: ChannelEntity['unreadNotifications'];
+    unreadMentions?: ChannelEntity['unreadMentions'];
   };
 };
 
@@ -323,18 +332,30 @@ export function mapChannelSearchResultItem(
 const formatDisplayName = (text: string, fileType?: string | null) =>
   formatDocumentName(text, fileType, { fullyQualifiedBlockName: true });
 
+type SearchChannelMetadata = {
+  id: string;
+  name?: string | null;
+  team_id?: string | null;
+};
+
+/** What a search result mapper reads of each joined channel. */
+export const channelSearchMetadata = (
+  channels: readonly DirectoryChannel[]
+): SearchChannelMetadata[] =>
+  channels.map(({ id, name, teamId }) => ({ id, name, team_id: teamId }));
+
 export const useSearchResponseItemMapper = () => {
-  const { channels } = useChannelsContext();
+  const { channels } = useChannelDirectory();
+  // Projected once per directory change, not once per result.
+  const mapper = createMemo(() =>
+    createSearchResponseItemMapper(channelSearchMetadata(channels()))
+  );
   return (result: UnifiedSearchResponseItem, searchQuery: string) =>
-    createSearchResponseItemMapper(channels())(result, searchQuery);
+    mapper()(result, searchQuery);
 };
 
 export const createSearchResponseItemMapper = (
-  channels: ReadonlyArray<{
-    id: string;
-    name?: string | null;
-    team_id?: string | null;
-  }>
+  channels: ReadonlyArray<SearchChannelMetadata>
 ) => {
   return (
     result: UnifiedSearchResponseItem,
@@ -791,6 +812,7 @@ export const mapApiSoupItemToEntity = (
       }));
 
       const hasIcsAttachment =
+        item.hasCalendarInvite ||
         item.data.attachments?.some(isCalendarAttachment);
 
       // Inline images (signature logos, pasted screenshots) carry a Content-ID.
@@ -888,49 +910,10 @@ export const mapApiSoupItemToEntity = (
       };
       return out;
     })
-    .with({ tag: 'channel' }, (item) => {
-      const latestMessage = item.data.latest_message;
-      const latestRootMessage = item.data.latest_non_thread_message;
-
-      const out: ChannelEntity = {
-        type: 'channel',
-        unreadNotifications: (item as SoupItemWithOptionalNotifications).data
-          .unreadNotifications,
-        id: item.data.channel.id,
-        name: item.data.channel.name || 'Unknown Channel',
-        channelType: item.data.channel.channel_type,
-        teamId: item.data.channel.team_id ?? undefined,
-        ownerId: item.data.channel.owner_id,
-        frecencyScore: item.frecency_score ?? 0,
-        updatedAt: item.data.channel.updated_at,
-        createdAt: item.data.channel.created_at,
-        participantIds: item.data.participants.map((p) => p.user_id),
-        isParticipant: item.data.is_participant ?? true,
-        viewedAt: item.data.viewed_at ?? item.data.interacted_at,
-        interactedAt: item.data.interacted_at,
-        latestMessage: latestMessage
-          ? {
-              messageId: latestMessage.message_id,
-              threadId: latestMessage.thread_id ?? undefined,
-              content: latestMessage.content,
-              mentions: latestMessage.mentions,
-              senderId: latestMessage.sender_id,
-              createdAt: latestMessage.created_at,
-            }
-          : undefined,
-        latestRootMessage: latestRootMessage
-          ? {
-              messageId: latestRootMessage.message_id,
-              threadId: latestRootMessage.thread_id ?? undefined,
-              content: latestRootMessage.content,
-              mentions: latestRootMessage.mentions,
-              senderId: latestRootMessage.sender_id,
-              createdAt: latestRootMessage.created_at,
-            }
-          : undefined,
-      };
-      return out;
-    })
+    .with({ tag: 'channel' }, (item) => ({
+      ...mapChannelToEntity(item.data),
+      frecencyScore: item.frecency_score ?? 0,
+    }))
     .with({ tag: 'foreignEntity' }, (item) => {
       // `authorLogin`/`authorId`/`labels` are enrichment-only fields the
       // backend now returns but that aren't on the base generated schema yet.
@@ -982,6 +965,20 @@ export const mapApiSoupItemToEntity = (
 
       return out;
     })
+    .with({ tag: 'harness' }, (item) => ({
+      id: item.data.id,
+      name: item.data.name,
+      ownerId: item.data.ownerId,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      type: 'harness' as const,
+    }))
+    .with({ tag: 'team' }, (item) => ({
+      id: item.data.id,
+      name: item.data.name,
+      ownerId: item.data.ownerId,
+      type: 'team' as const,
+    }))
     .with({ tag: 'document' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,

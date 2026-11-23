@@ -98,6 +98,7 @@ function refusalOf(code: FormErrorCode): FormRefusal {
     .with('fileUploadNeedsSignIn', () => 'file-upload-needs-sign-in')
     .with('invalidLayout', () => 'invalid-layout')
     .with('invalidName', () => 'invalid-name')
+    .with('invalidAppearance', () => 'invalid-appearance')
     .with('invalidSharing', () => 'invalid-sharing')
     .with('tallyHidden', () => 'tally-hidden')
     .with('invalidBranding', () => 'invalid-branding')
@@ -269,10 +270,9 @@ export function createSummarySource(
 }
 
 export function createTallySource(
-  formId: Accessor<string>,
-  enabled: Accessor<boolean>
+  formId: Accessor<string>
 ): ReadSource<QuestionTally[]> {
-  const query = useTallyQuery(() => formId() || undefined, enabled);
+  const query = useTallyQuery(() => formId() || undefined);
   return {
     value: () =>
       query.isSuccess

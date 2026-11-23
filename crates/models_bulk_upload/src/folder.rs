@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::{UploadFolderProgress, UploadFolderStatus};
+
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, ToSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct S3ObjectInfo {
@@ -21,6 +23,17 @@ pub struct UploadExtractFolderRequest {
 pub struct UploadExtractFolderResponseData {
     pub request_id: String,
     pub presigned_url: String,
+}
+
+/// Where a folder upload stands, for the uploader to follow it to the end.
+#[derive(Serialize, Deserialize, Debug, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadExtractStatusResponseData {
+    pub status: UploadFolderStatus,
+    /// The uploaded folder, once it exists.
+    pub project_id: Option<String>,
+    /// Files stored so far, once the extractor has counted them.
+    pub progress: Option<UploadFolderProgress>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]

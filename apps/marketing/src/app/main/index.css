@@ -1,4 +1,5 @@
 @import '../../styles/fonts.css';
+@import '../../styles/site-icons.css';
 
 /* Legacy page aliases use the same variable fonts as the homepage. */
 @font-face {
@@ -152,8 +153,8 @@ html, body, #root, #app-scroll-root { background: #000; }
 .marketing-content > * { max-width: 100%; }
 
 *::selection{
-  background-color: var(--a0);
-  color: var(--b0);
+  background-color: #b8d5ff;
+  color: #101820;
 }
 
 /* Horizontal scroll strips (mobile tab rows, the app-preview rail) should stay
@@ -162,6 +163,7 @@ html, body, #root, #app-scroll-root { background: #000; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 body{
   font-family: 'Inter Variable', Inter, sans-serif;
+  font-weight: 370;
   color: var(--c2);
   font-size: 14px;
   margin: 0px;
@@ -199,7 +201,7 @@ input:not(.dummy-workspace input)::placeholder{
   color: oklch(from var(--c4) l c h / 0.6);
 }
 
-a:not(.dummy-workspace a){
+a:not(.dummy-workspace a, .site-header a, .macro-homepage a){
   transition: color var(--transition);
   text-decoration: none;
   color: var(--c2);

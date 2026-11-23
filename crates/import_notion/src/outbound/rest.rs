@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
 use crate::domain::model::{
-    NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged, SearchHit,
-    SearchObject,
+    NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged, RowsNext, RowsPage,
+    SearchHit, SearchObject,
 };
 use crate::domain::ports::{NotionApi, NotionError};
 
@@ -399,12 +399,13 @@ impl<Transport: NotionTransport> NotionApi for NotionRestClient<Transport> {
     /// Rows oldest first. Notion caps one query at 10,000 rows; past the cap
     /// the cursor restarts the query from the last row's creation time, so
     /// rows created in that same instant come again and callers draining the
-    /// query de-duplicate by id.
+    /// query de-duplicate by id. A cap that makes no progress (more rows
+    /// created in one instant than the cap) truncates the query.
     async fn query_data_source(
         &self,
         id: &NotionId,
         cursor: Option<String>,
-    ) -> Result<Paged<NotionPage>, NotionError> {
+    ) -> Result<RowsPage, NotionError> {
         let cursor = match cursor {
             Some(cursor) => serde_json::from_str::<QueryCursor>(&cursor)
                 .map_err(|error| NotionError::Decode(format!("query cursor: {error}")))?,
@@ -432,32 +433,25 @@ impl<Transport: NotionTransport> NotionApi for NotionRestClient<Transport> {
         let rows = self.pages(&list).await?;
 
         let next = match list.next() {
-            Some(start) => Some(QueryCursor {
+            Some(start) => QueryCursor {
                 start_cursor: Some(start),
                 created_on_or_after: cursor.created_on_or_after,
-            }),
+            }
+            .resume()?,
             None if list.incomplete() => match rows.last() {
-                Some(last) if Some(last.created) != cursor.created_on_or_after => {
-                    Some(QueryCursor {
-                        start_cursor: None,
-                        created_on_or_after: Some(last.created),
-                    })
+                Some(last) if Some(last.created) != cursor.created_on_or_after => QueryCursor {
+                    start_cursor: None,
+                    created_on_or_after: Some(last.created),
                 }
+                .resume()?,
                 _ => {
                     tracing::warn!(data_source = %id, "query stopped at Notion's cap without progress; rows are missing");
-                    None
+                    RowsNext::Truncated
                 }
             },
-            None => None,
+            None => RowsNext::End,
         };
-        let next_cursor = next
-            .map(|next| serde_json::to_string(&next))
-            .transpose()
-            .map_err(|error| NotionError::Decode(format!("query cursor: {error}")))?;
-        Ok(Paged {
-            results: rows,
-            next_cursor,
-        })
+        Ok(RowsPage { rows, next })
     }
 
     async fn users(&self, cursor: Option<String>) -> Result<Paged<NotionUser>, NotionError> {
@@ -494,6 +488,15 @@ struct QueryCursor {
     start_cursor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     created_on_or_after: Option<DateTime<Utc>>,
+}
+
+impl QueryCursor {
+    /// More rows, from this cursor.
+    fn resume(&self) -> Result<RowsNext, NotionError> {
+        let cursor = serde_json::to_string(self)
+            .map_err(|error| NotionError::Decode(format!("query cursor: {error}")))?;
+        Ok(RowsNext::More { cursor })
+    }
 }
 
 enum Failure {

@@ -214,6 +214,30 @@ describe('AssistantMessageParts streaming identity', () => {
       rendered.unmount();
     }
   );
+  it('leaves the agent’s tool lookups out of its activity', () => {
+    const parts: AssistantMessagePart[] = [
+      { type: 'toolCall', id: 'search', name: 'SearchTools', json: {} },
+      { type: 'toolCall', id: 'docs', name: 'ReadCodeDocs', json: {} },
+      { type: 'toolCall', id: 'query-tool', name: 'QueryDatabase', json: {} },
+      { type: 'text', text: 'Here is the result.' },
+    ];
+    const rendered = render(() => (
+      <AssistantMessageParts
+        parts={parts}
+        message={{
+          attachments: [],
+          content: parts,
+          id: 'message-lookups',
+          role: 'assistant',
+        }}
+        isStreaming={false}
+      />
+    ));
+    expect(
+      rendered.getAllByTestId('tool').map((tool) => tool.dataset.name)
+    ).toEqual(['QueryDatabase']);
+    rendered.unmount();
+  });
   it('tells each tool whether a later part of the turn saves the query', () => {
     const parts: AssistantMessagePart[] = [
       { type: 'toolCall', id: 'query-tool', name: 'QueryDatabase', json: {} },
@@ -581,6 +605,42 @@ describe('AssistantMessageParts streaming identity', () => {
         'Review the results'
       )
     );
+    disposeStream();
+  });
+
+  it('previews a code run by how far it got', async () => {
+    let append!: (item: ChatStream) => void;
+    let disposeStream!: () => void;
+    const data = createRoot((dispose) => {
+      disposeStream = dispose;
+      const [items, setItems] = createSignal<ChatStream[]>([]);
+      append = (item) => setItems((prev) => [...prev, item]);
+      return items;
+    });
+    const rendered = render(() => <StreamedAssistantParts data={data} />);
+    const preview = () => rendered.getByTestId('activity-preview').textContent;
+
+    // A group of one shows no preview.
+    append(response({ thinking: 'Need some context', type: 'thinking' }));
+    append(
+      response({
+        id: 'code-1',
+        json: { source: 'main' },
+        name: 'ExecuteCode',
+        type: 'toolCall',
+      })
+    );
+    await waitFor(() => expect(preview()).toBe('Working on it'));
+
+    append(
+      response({
+        id: 'code-1',
+        json: { status: 'timed_out', activity: [] },
+        name: 'ExecuteCode',
+        type: 'toolCallResponseJson',
+      })
+    );
+    await waitFor(() => expect(preview()).toBe('A step failed'));
     disposeStream();
   });
 

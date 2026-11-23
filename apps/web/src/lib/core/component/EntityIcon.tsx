@@ -1,3 +1,8 @@
+import { AppearanceGlyph } from '@app/features/entity-appearance/components/appearance-glyph';
+import {
+  appearanceColor,
+  type EntityAppearance,
+} from '@app/features/entity-appearance/core/appearance';
 import { ICON_SIZE_CLASSES } from './entity-icon-sizes';
 
 export { ICON_SIZE_CLASSES } from './entity-icon-sizes';
@@ -99,8 +104,10 @@ import Spreadsheet from '@icon/system/regular/table.svg';
 import Table from '@icon/system/regular/table.svg';
 import Users from '@icon/system/regular/users.svg';
 import UsersThree from '@icon/system/regular/users-three.svg';
+import BookmarkSimple from '@phosphor/bookmark-simple.svg';
 import ChatsCircle from '@phosphor/chats-circle.svg';
 import FigmaLogo from '@phosphor/figma-logo.svg';
+import BookmarkSimpleBold from '@phosphor-icons/core/bold/bookmark-simple-bold.svg';
 import ChatsCircleBold from '@phosphor-icons/core/bold/chats-circle-bold.svg';
 import FigmaLogoBold from '@phosphor-icons/core/bold/figma-logo-bold.svg';
 import type { PreviewItem } from '@queries/preview';
@@ -142,7 +149,8 @@ export type EntityWithValidIcon =
   | 'html'
   | 'initiative'
   | 'reminder'
-  | 'external_chat';
+  | 'external_chat'
+  | 'saved_view';
 
 const ARCHIVE_EXTENSIONS = new Set(
   Object.values(FileTypeMap)
@@ -151,6 +159,13 @@ const ARCHIVE_EXTENSIONS = new Set(
 );
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
+  saved_view: {
+    icon: BookmarkSimple,
+    boldIcon: BookmarkSimpleBold,
+    foreground: 'text-current',
+    background: 'bg-ink/20',
+    prettyName: 'Saved view',
+  },
   // A chat glyph until the provider is known; see `providerIcon`.
   external_chat: {
     icon: ChatsCircle,
@@ -553,6 +568,8 @@ function validateEntity(entity: string): EntityWithValidIcon {
 }
 
 export type EntityIconProps = {
+  /** Shared per-entity presentation overrides; category icons omit this. */
+  appearance?: EntityAppearance | null;
   /**
    * Either the name of a block itself – like 'chat' or 'write' – or a file
    * type opened by a block – like 'py', 'pdf', etc. Or a set of known types
@@ -611,9 +628,15 @@ export function EntityIcon(props: EntityIconProps) {
         props.useBackground && 'p-[20%]',
         props.class
       )}
+      style={{
+        color: appearanceColor(props.appearance?.color),
+        'container-type': 'inline-size',
+      }}
     >
       {/* size-full: Safari needs a CSS size, not the SVG's % attributes. */}
-      <Dynamic component={config().icon} class="size-full" />
+      <AppearanceGlyph appearance={props.appearance}>
+        <Dynamic component={config().icon} class="size-full" />
+      </AppearanceGlyph>
     </div>
   );
 }
@@ -680,7 +703,7 @@ function providerIcon(
   };
 }
 
-type EntityIconData = Pick<EntityData, 'type'> & {
+type EntityIconData = { type: EntityData['type'] | 'saved_view' } & {
   channelType?: ChannelEntity['channelType'];
   fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
@@ -736,6 +759,9 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
     .with({ type: 'form' }, () => 'form')
+    .with({ type: 'saved_view' }, () => 'saved_view')
+    .with({ type: 'harness' }, () => 'default')
+    .with({ type: 'team' }, () => 'default')
     .exhaustive(() => 'default');
 }
 

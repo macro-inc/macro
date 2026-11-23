@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE scheduled_action\n                SET enabled = false, paused_by_parent = true, updated_at = now()\n                WHERE parent_id = $1 AND parent_id IS NOT NULL AND enabled\n                  AND NOT (trigger_type = 'once' AND next_run_at IS NULL)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "212bb519fdd009098f31ba6d88022b97975ca22d89644aa919cbce362b45d985"
+}

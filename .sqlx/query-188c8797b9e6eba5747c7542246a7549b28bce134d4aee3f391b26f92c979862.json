@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE harness_tokens\n                        SET revoked_at = now()\n                        WHERE harness_id = $1 AND revoked_at IS NULL\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "188c8797b9e6eba5747c7542246a7549b28bce134d4aee3f391b26f92c979862"
+}

@@ -26,7 +26,10 @@ Screenshots from the verified fixture: [desktop](proof/desktop.png) and
 `links.browser.e2e.ts` mounts the production Markdown parser, renderer, composer,
 and link menu over the original App Store message. It checks pointer/keyboard
 navigation, encoded URLs, Markdown punctuation, literal code, and Remove link →
-save → reopen on desktop, tablet touch, and phone touch. Network requests outside
+save → reopen on desktop, tablet touch, and phone touch. It also checks that a
+saved link whose URL a link may not open (see `isAllowedLinkUrl` in
+`packages/lexical-core`) stays text in the renderer, the composer and a resave,
+and that clicking or tapping it opens nothing. Network requests outside
 the local fixture are intercepted. Run just this case by adding
 `links.browser.e2e.ts` to the command above.
 
@@ -81,3 +84,28 @@ images align with their item's text, and that the saved Markdown indents each
 image under its item and renders back as one list, on desktop, tablet touch, and
 phone touch. Run just this case by adding `list-images.browser.e2e.ts` to the
 command above.
+
+## SVG code previews
+
+`svg-preview.browser.e2e.ts` previews an `svg` code block in a message
+(`StaticMarkdown`, preview turned on by the reader) and in a document saved with
+its preview on (`MarkdownShell`, which opens previewed). The SVG carries inline
+handlers on the root, an image, an animation, and HTML inside a
+`foreignObject`; the preview must draw it as an `<img>` at its own size and run
+none of them. A second case checks that an icon drawn in `currentColor` takes
+the text colour around the preview, as it did inline. Run just this case by
+adding `svg-preview.browser.e2e.ts` to the command above. On a machine with
+many network interfaces, run under `bwrap --dev-bind / / --unshare-net`, as
+`apps/web/AGENTS.md` explains.
+
+## Caret after a quick tap
+
+`caret.browser.e2e.ts` mounts a message composer (`MarkdownShell`) with padding
+and taps into a typed two-line draft with the press and release sent together
+(`quick-tap.ts`), as a trackpad tap-to-click or a quick touch tap arrives, then
+types and checks where the text landed. A click that reached the shell before
+Lexical had read the browser's selectionchange used to re-focus the editor and
+write the previous caret back. A tap on the padding must still focus the
+composer on desktop and tablet. Phones never re-focus the composer on a tap,
+so the phone run only checks that the tap lands. Other suites import
+`quick-tap.ts` for the same check (Universal Input's email body).

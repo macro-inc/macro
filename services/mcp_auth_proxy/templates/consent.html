@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Connect an app to Macro</title>
+    <style>
+      {% include "broker_page.css" %}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Allow “{{ client_name }}” to access your Macro account?</h1>
+      {% if manual_delivery %}
+      <p>
+        If you allow it, Macro will sign you in and show you a link that gives
+        access to your account, to use in the app on your other machine.
+      </p>
+      {% else %}
+      <p>
+        If you allow it, Macro will sign you in and send access to your account
+        to:
+      </p>
+      <p class="destination">{{ redirect_host }}</p>
+      {% endif %}
+      <p>
+        That app will be able to read and change your Macro documents,
+        messages and other data, as you, until you disconnect it.
+      </p>
+      <p class="warning">
+        Only allow this if you just started connecting this app to Macro
+        yourself{% if !manual_delivery %} and you recognize the address above{% endif %}. The name
+        “{{ client_name }}” is provided by the app and is not verified by
+        Macro.
+      </p>
+      <form method="post" action="authorize">
+        <input type="hidden" name="response_type" value="{{ request.response_type }}" />
+        <input type="hidden" name="client_id" value="{{ request.client_id }}" />
+        <input type="hidden" name="redirect_uri" value="{{ request.redirect_uri }}" />
+        <input type="hidden" name="state" value="{{ request.state }}" />
+        <input type="hidden" name="code_challenge" value="{{ request.code_challenge }}" />
+        <input type="hidden" name="code_challenge_method" value="{{ request.code_challenge_method }}" />
+        {% if let Some(scope) = request.scope %}
+        <input type="hidden" name="scope" value="{{ scope }}" />
+        {% endif %}
+        {% if let Some(resource) = request.resource %}
+        <input type="hidden" name="resource" value="{{ resource }}" />
+        {% endif %}
+        {% if let Some(sign_in) = request.sign_in %}
+        <input type="hidden" name="sign_in" value="{{ sign_in }}" />
+        {% endif %}
+        {% if let Some(delivery) = request.delivery %}
+        <input type="hidden" name="delivery" value="{{ delivery }}" />
+        {% endif %}
+        <input type="hidden" name="consent_token" value="{{ consent_token }}" />
+        <div class="actions">
+          <button class="deny" type="submit" name="decision" value="deny">Cancel</button>
+          <button class="approve" type="submit" name="decision" value="approve">Allow</button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

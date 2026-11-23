@@ -103,9 +103,10 @@ export function createSessionComposerDraft(
   initial?: Accessor<string | undefined>
 ) {
   const startingId = untrack(sessionId);
-  const [text, setText] = createSignal(
-    readDraft(startingId) ?? untrack(() => initial?.()) ?? ''
-  );
+  const stored = readDraft(startingId);
+  const seed = untrack(() => initial?.());
+  const [text, setText] = createSignal(stored ?? seed ?? '');
+  if (!stored && seed) writeDraft(startingId, seed);
   let currentId = startingId;
 
   const setDraft = (value: string) => {

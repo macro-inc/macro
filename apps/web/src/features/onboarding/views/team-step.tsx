@@ -1,7 +1,17 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import InfoIcon from '@icon/system/regular/info.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
-import { ToggleSwitch } from '@ui';
-import { createMemo, Match, Show, Switch } from 'solid-js';
+import { Popover } from '@kobalte/core/popover';
+import { Button, ToggleSwitch } from '@ui';
+import {
+  createMemo,
+  createSignal,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import {
   ContinueButton,
   SecondaryButton,
@@ -38,14 +48,22 @@ export function TeamStep(props: {
   onSkip: () => void;
 }) {
   const context = useOnboardingContext();
-  const directory = context.createTeamDirectory();
-  const team = createTeamStep(context, directory);
   const record = context.createOnboardingRecord();
   const ownEmail = () => {
     const viewer = context.viewer();
     return viewer.t === 'signed-in' ? viewer.viewer.email : undefined;
   };
-  // Wait for contacts and the domain suggestion so the form mounts once,
+  const directory = context.createTeamDirectory({
+    domain: () => {
+      const current = record();
+      return current.t === 'ready'
+        ? current.value.suggestedTeamDomain
+        : undefined;
+    },
+    ownEmail,
+  });
+  const team = createTeamStep(context, directory);
+  // Wait for bounded suggestions and the domain so the form mounts once,
   // fully formed. Keep the first settled seed so background refreshes cannot
   // replace the form, reset edits, or steal focus from an input.
   const seed = createMemo<TeamFormSeed | undefined>(
@@ -59,6 +77,9 @@ export function TeamStep(props: {
   );
 
   const inviteLink = createTeamInviteLinkCopy(context);
+  // How many teammates this step just emailed, so the confirmation can ask
+  // the creator to give them a heads-up.
+  const [invited, setInvited] = createSignal(0);
   // A personal address has no team to create; it refers friends instead.
   const referring = () => {
     const ready = seed();
@@ -86,6 +107,7 @@ export function TeamStep(props: {
             <OnTeamPanel
               name={name}
               finishing={props.finishing}
+              invited={invited()}
               copyingLink={inviteLink.copying()}
               onCopyLink={() => fireAndForget(inviteLink.copy(), 'onboarding')}
               onContinue={props.onContinue}
@@ -123,6 +145,7 @@ export function TeamStep(props: {
                   finishing={props.finishing}
                   seed={ready()}
                   ownEmail={ownEmail()}
+                  onInvited={setInvited}
                 />
               </Show>
             )}
@@ -141,16 +164,109 @@ const pendingInvites = (
   state: ReturnType<ReturnType<typeof createTeamStep>['state']>
 ) => (state.t === 'invites' ? state.invites : undefined);
 
+/** A full-width team option switch marked recommended, with an info button
+ * between its label and control. The switch root lays its parts into the row
+ * (`contents`) so the info button sits outside the label: pressing it never
+ * toggles the switch or joins its accessible name. */
+function RecommendedSwitch(props: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  info: string;
+  infoLabel: string;
+  children: JSX.Element;
+}) {
+  return (
+    <div class="flex w-full items-center gap-1.5">
+      <ToggleSwitch
+        size="md"
+        class="contents"
+        labelClass="order-1 data-disabled:opacity-50"
+        controlClass="order-3 ml-auto shrink-0 data-disabled:opacity-50"
+        checked={props.checked}
+        disabled={props.disabled}
+        onChange={props.onChange}
+        label={
+          <span class="text-xs text-ink sm:text-sm">
+            {props.children}
+            <span class="ml-1 whitespace-nowrap rounded bg-ink/5 px-1 py-0.5 align-middle text-[9px] text-ink-muted opacity-60 sm:ml-2 sm:px-1.5 sm:text-[10px]">
+              recommended
+            </span>
+          </span>
+        }
+      />
+      <div class="order-2 flex">
+        <InfoHint label={props.infoLabel}>{props.info}</InfoHint>
+      </div>
+    </div>
+  );
+}
+
+/** An (i) button explaining a setting: a tooltip on hover or focus, and on
+ * touch, where tooltips are off, a popover on tap. */
+function InfoHint(props: { label: string; children: string }) {
+  const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
+  return (
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={props.label}
+          aria-description={props.children}
+          class="text-ink-muted"
+          tooltip={{
+            content: (
+              <span class="block max-w-64 text-left leading-relaxed">
+                {props.children}
+              </span>
+            ),
+            placement: 'top',
+          }}
+        >
+          <InfoIcon class="size-3.5" aria-hidden="true" />
+        </Button>
+      }
+    >
+      <Popover placement="top" gutter={8} modal={false}>
+        <Popover.Trigger
+          as={Button}
+          ref={setTrigger}
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={props.label}
+          class="text-ink-muted"
+        >
+          <InfoIcon class="size-3.5" aria-hidden="true" />
+        </Popover.Trigger>
+        <Popover.Portal
+          mount={trigger()?.closest<HTMLElement>('.portal-scope') ?? undefined}
+        >
+          <Popover.Content class="menu-surface z-action-menu w-72 max-w-[min(18rem,var(--kb-popper-content-available-width),calc(100vw-2rem))] p-3 text-xs leading-relaxed whitespace-normal break-words outline-none">
+            <Popover.Title class="sr-only">{props.label}</Popover.Title>
+            <Popover.Description>{props.children}</Popover.Description>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover>
+    </Show>
+  );
+}
+
 /** Creating the team switches the step to the on-team confirmation, where
  * the creator can copy the team's invite link before continuing. */
 function TeamForm(props: {
   finishing: boolean;
   seed: TeamFormSeed;
   ownEmail: string | undefined;
+  onInvited: (count: number) => void;
 }) {
   const context = useOnboardingContext();
   const form = createTeamForm(context, props.seed, {
     ownEmail: props.ownEmail,
+    onCreated: (sent) => props.onInvited(sent.length),
   });
   return (
     <div class="flex flex-col gap-3">
@@ -167,21 +283,27 @@ function TeamForm(props: {
       >
         <Show when={form.domain}>
           {(domain) => (
-            <ToggleSwitch
-              size="md"
-              class="w-full flex-row-reverse justify-between gap-2 border-t border-edge-muted pt-6"
-              controlClass="shrink-0"
-              checked={form.allowDomainJoin()}
-              onChange={form.setAllowDomainJoin}
-              label={
-                <span class="text-xs text-ink sm:text-sm">
-                  Allow @{domain()} emails to join
-                  <span class="ml-1 whitespace-nowrap rounded bg-ink/5 px-1 py-0.5 text-[10px] text-ink-muted sm:ml-2 sm:px-1.5 sm:text-xs">
-                    recommended
-                  </span>
-                </span>
-              }
-            />
+            <div class="flex w-full flex-col gap-4 border-t border-edge-muted pt-6">
+              <RecommendedSwitch
+                checked={form.allowDomainJoin()}
+                onChange={form.setAllowDomainJoin}
+                infoLabel="About domain join"
+                info={`Anyone who signs up with an @${domain()} email joins this team automatically. You can turn this off later in Settings.`}
+              >
+                Allow @{domain()} emails to join
+              </RecommendedSwitch>
+              {/* The notice invites colleagues to join by domain, so it
+                  reads as off and can't be turned on without domain join. */}
+              <RecommendedSwitch
+                checked={form.notifyDomain()}
+                disabled={!form.allowDomainJoin()}
+                onChange={form.setNotifyDomain}
+                infoLabel="About the team email"
+                info={`We'll email your @${domain()} contacts who aren't on Macro yet to let them know the team exists. Needs domain join on.`}
+              >
+                Notify your team via email
+              </RecommendedSwitch>
+            </div>
           )}
         </Show>
       </TeamSetupFields>

@@ -17,6 +17,7 @@ import { callsHostedContent } from '@app/features/calls-view/calls-hosted-conten
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { projectHostedContent } from '@app/features/projects/open-project';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
+import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
   type EntityWithRawNotifications,
@@ -41,12 +42,7 @@ import {
   fileTypeToBlockName,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
-import {
-  enableCalendarUi,
-  enableGraphqlSoup,
-  isFeatureEnabled,
-  USE_MACRO_PR_SUMMARY_BLOCK,
-} from '@core/constant/featureFlags';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
@@ -67,7 +63,6 @@ import {
   type DocumentCommentTarget,
   type DocumentEntity,
   type EntityData,
-  emailQueryKeyExcludesDone,
   getSnippetHit,
   isEmailEntity,
   isGithubPrEntity,
@@ -90,37 +85,29 @@ import {
   getDocumentCommentNotification,
   type NotificationSource,
   notificationIsRead,
-  setDoneOverride,
   type UnifiedNotification,
 } from '@notifications';
-import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
+import { openRuntimesSettings } from '@notifications/notification-navigation';
+import {
+  isTopLevelChannelNotification,
+  isUnseenChannelInvite,
+} from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
 import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
-  archiveEmailThread,
   archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
-import { emailKeys } from '@queries/email/keys';
 import {
   type NotificationEntityRef,
   updateNotificationsForEntities,
 } from '@queries/notification/entity-mutations';
-import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
   bulkMarkNotificationsAsUndone,
-  restoreUserNotifications,
-  snapshotUserNotifications,
 } from '@queries/notification/user-notifications';
-import {
-  getSoupEntityById,
-  invalidateSoupEntity,
-  optimisticUpdateSoupEntity,
-  removeSoupEntities,
-  removeSoupEntitiesFromDoneFilteredQueries,
-} from '@queries/soup/cache';
+import { invalidateSoupEntity, removeSoupEntities } from '@queries/soup/cache';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
@@ -259,6 +246,7 @@ export const openEntityInNewTab = ({
   entity: EntityData;
   location?: SearchLocation;
 }) => {
+  if (entity.type === 'team') return;
   location ??= getRowClickFallbackLocation(entity);
   // Build URL for the entity
   let entityPath: string;
@@ -644,6 +632,8 @@ const openEntity = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
+  // A team is an inbox notification group, never a generic page.
+  if (entity.type === 'team') return;
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
@@ -688,7 +678,6 @@ const openEntity = async (
   if (entity.type === 'foreign') return;
 
   if (entity.type === 'calendar_event') {
-    if (!isFeatureEnabled(enableCalendarUi)) return;
     openCalendarView(calendarViewTargetForEntity(entity), {
       manager: splitManager,
       handle: splitHandle,
@@ -725,6 +714,16 @@ const openEntity = async (
       toast.failure('Unable to open conversation. Please try again.');
       return;
     }
+  }
+
+  // A runtime has no page of its own: Settings → Machines points it out.
+  if (entity.type === 'harness') {
+    requestRuntimeShare(entity.id, false);
+    openRuntimesSettings(splitManager, {
+      newSplit: openInNewSplit,
+      sourceHandle: splitHandle,
+    });
+    return;
   }
 
   const content = getEntitySplitContent(entity);
@@ -897,11 +896,12 @@ export function markChannelNotificationsSeenOnOpen(
 
   const notifications = getEntityNotifications(entity, notificationSource, {
     scopeChannelThreads: channelReadScope === 'inbox-row',
-  }).filter(
-    (notification) =>
-      !notificationIsRead(notification) &&
-      (channelReadScope === 'inbox-row' ||
-        isTopLevelChannelNotification(notification))
+  }).filter((notification) =>
+    channelReadScope === 'inbox-row'
+      ? !notificationIsRead(notification)
+      : isTopLevelChannelNotification(notification) &&
+        (!notificationIsRead(notification) ||
+          isUnseenChannelInvite(notification))
   );
   if (notifications.length === 0) return;
 
@@ -971,7 +971,7 @@ export function calendarViewTargetForEntity(
 }
 
 // TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
-function getEntitySplitContent(entity: EntityData) {
+function getEntitySplitContent(entity: Exclude<EntityData, { type: 'team' }>) {
   return (
     match(entity)
       // The Tasks-hosted route carries the project's own identity, so an open
@@ -1010,72 +1010,15 @@ function getEntitySplitContent(entity: EntityData) {
       .with({ type: 'calendar_event' }, () => {
         return { type: 'component' as const, id: CALENDAR_VIEW_ID };
       })
+      // Runtimes open in Settings → Machines; the open path branches before
+      // reaching here, so this only serves duplicate checks.
+      .with({ type: 'harness' }, () => {
+        return { type: 'component' as const, id: 'settings' };
+      })
       .otherwise((entity) => {
         return { type: entity.type, id: entity.id };
       })
   );
-}
-
-async function _archiveEmail(
-  id: string,
-  options: { archive: boolean; optimisticallyExclude?: boolean }
-) {
-  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
-
-  const previousEmail = queryClient.getQueriesData<{
-    pages: { items: EntityData[] }[];
-  }>({
-    queryKey: queryKeys.all.email,
-  });
-
-  const current = getSoupEntityById(id);
-  const soupTxn = options.optimisticallyExclude
-    ? removeSoupEntities(new Set([id]))
-    : optimisticUpdateSoupEntity({
-        tag: 'emailThread',
-        data: { id, inboxVisible: false },
-        frecency_score: current?.frecency_score ?? 0,
-      });
-
-  // Optimistic update for email queries
-  const applyEmailOptimistic = (data?: {
-    pages: { items: EntityData[] }[];
-  }) => {
-    if (!data) return data;
-
-    return {
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        items: options.optimisticallyExclude
-          ? page.items.filter((item) => item.id !== id)
-          : page.items.map((item) =>
-              item.id === id ? { ...item, inboxVisible: false } : item
-            ),
-      })),
-    };
-  };
-
-  for (const [key, data] of previousEmail) {
-    queryClient.setQueryData(key, applyEmailOptimistic(data));
-  }
-
-  let disposition: EmailArchiveDisposition | undefined;
-  try {
-    disposition = await archiveEmailThread({ value: options.archive, id });
-  } catch (_err) {
-    soupTxn.rollback();
-    for (const [key, data] of previousEmail) {
-      queryClient.setQueryData(key, data);
-    }
-  } finally {
-    if (disposition !== 'queued') {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-        invalidateSoupEntity(id),
-      ]);
-    }
-  }
 }
 
 type TrashEmailsHandle = {
@@ -1171,9 +1114,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
         ...ids.map((id) => invalidateSoupEntity(id)),
-        ...(isFeatureEnabled(enableGraphqlSoup)
-          ? [refreshActiveGraphqlSoupQueries()]
-          : []),
+        refreshActiveGraphqlSoupQueries(),
       ]);
     }
   })();
@@ -1211,26 +1152,11 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
           queryKey: queryKeys.all.email,
           refetchType: 'none',
         });
-        if (isFeatureEnabled(enableGraphqlSoup)) {
-          await refreshActiveGraphqlSoupQueries();
-        }
+        await refreshActiveGraphqlSoupQueries();
       }
     },
   };
 }
-
-export type MarkEntitiesDoneContext = {
-  /** Clears optimistic state — use for mark-done failure (cache is pre-mutation). */
-  rollback: () => void;
-  /** Re-applies the optimistic done state. Use for redo / undo failure. */
-  reapply: () => void;
-  /** Reverts email/soup caches and forces `done=false` override. Use for undo. */
-  applyUndone: () => void;
-  /** Release GraphQL intent only after mounted cache readers acknowledge it. */
-  settle: (notificationIds?: readonly string[]) => void;
-  /** After a partial inverse failure, let authoritative GraphQL state reconcile. */
-  releaseGraphql: () => void;
-};
 
 function notificationsForMarkDone(
   entity: EntityData,
@@ -1298,188 +1224,19 @@ export function resolveMarkEntitiesDoneVariables(args: {
 }
 
 /**
- * Applies the optimistic UI state for marking entities as done — removes the
- * entities from done-filtered soup/email caches, flips surviving email rows
- * to the done state, and sets the notification `done` override. Returns a
- * context the mutation uses for rollback / reapply.
- */
-export function applyEntitiesDoneOptimistic(args: {
-  entityIds: string[];
-  emailIds: string[];
-  notificationIds: string[];
-  scopeChannelThreads?: boolean;
-}): MarkEntitiesDoneContext {
-  const { entityIds, emailIds, notificationIds } = args;
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return applyGraphqlDoneOptimistic({
-      entityIds,
-      notificationIds,
-      scopeChannelThreads: args.scopeChannelThreads,
-    });
-  }
-  const emailIdSet = new Set(emailIds);
-  const entityIdSet = new Set(entityIds);
-
-  // Snapshot the affected notifications before marking done. A done
-  // notification gets dropped from the cache (status-update event or a stale
-  // refetch), so undo re-adds it here so the soup `notDoneFilter` predicate
-  // lets the restored entity through again.
-  const notificationSnapshots = snapshotUserNotifications(notificationIds);
-
-  type EmailQueryKey = readonly unknown[];
-  type EmailCacheData = { pages: { items: EntityData[] }[] };
-  const removedEmails = new Map<EmailQueryKey, Map<string, EntityData>>();
-
-  const filterEmailCache = () => {
-    if (emailIdSet.size === 0) return;
-    for (const [key, data] of queryClient.getQueriesData<EmailCacheData>({
-      queryKey: queryKeys.all.email,
-    })) {
-      if (!data) continue;
-      // Views that show done threads keep their rows.
-      if (!emailQueryKeyExcludesDone(key)) continue;
-      const bucket = removedEmails.get(key) ?? new Map<string, EntityData>();
-      let mutated = false;
-      const pages = data.pages.map((page) => {
-        const items: EntityData[] = [];
-        for (const item of page.items) {
-          if (emailIdSet.has(item.id)) {
-            bucket.set(item.id, item);
-            mutated = true;
-          } else {
-            items.push(item);
-          }
-        }
-        return mutated && items.length !== page.items.length
-          ? { ...page, items }
-          : page;
-      });
-      if (mutated) {
-        removedEmails.set(key, bucket);
-        queryClient.setQueryData(key, { ...data, pages });
-      }
-    }
-  };
-
-  const restoreEmailCache = () => {
-    for (const [key, bucket] of removedEmails) {
-      if (bucket.size === 0) continue;
-      const toRestore = [...bucket.values()];
-      bucket.clear();
-      queryClient.setQueryData<EmailCacheData>(key, (current) => {
-        if (!current) return current;
-        const restoredIds = new Set(toRestore.map((e) => e.id));
-        return {
-          ...current,
-          pages: current.pages.map((page, idx) => {
-            const filtered = page.items.filter((i) => !restoredIds.has(i.id));
-            if (idx === 0) {
-              return { ...page, items: [...toRestore, ...filtered] };
-            }
-            if (filtered.length === page.items.length) {
-              return page;
-            }
-            return { ...page, items: filtered };
-          }),
-        };
-      });
-    }
-  };
-
-  let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
-  let emailRowTxns: { rollback: () => void }[] = [];
-
-  const reapply = () => {
-    // Remove the marked entities from done-filtered soup queries (inbox,
-    // mail Important/Noise); views that show done content (e.g. mail All)
-    // keep their rows. Undo restores them via this transaction's rollback.
-    soupTxn =
-      entityIds.length > 0
-        ? removeSoupEntitiesFromDoneFilteredQueries(entityIdSet)
-        : null;
-    // Rows that remain visible flip to the done state.
-    emailRowTxns = emailIds.map((id) =>
-      optimisticUpdateSoupEntity({
-        tag: 'emailThread',
-        data: { id, inboxVisible: false },
-        frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
-      })
-    );
-    filterEmailCache();
-    setDoneOverride(notificationIds, true);
-  };
-
-  const rollbackSoup = () => {
-    for (const txn of [...emailRowTxns].reverse()) {
-      txn.rollback();
-    }
-    emailRowTxns = [];
-    soupTxn?.rollback();
-    soupTxn = null;
-  };
-
-  const rollback = () => {
-    rollbackSoup();
-    restoreEmailCache();
-    setDoneOverride(notificationIds, undefined);
-  };
-
-  const applyUndone = () => {
-    rollbackSoup();
-    restoreEmailCache();
-    restoreUserNotifications(notificationSnapshots);
-    // Force `done=false` — cache may have reconciled to `done=true` from the
-    // server, so clearing the override would leave the UI hidden after undo.
-    setDoneOverride(notificationIds, false);
-  };
-
-  reapply();
-
-  return {
-    rollback,
-    reapply,
-    applyUndone,
-    settle: () => {},
-    releaseGraphql: () => {},
-  };
-}
-
-/**
- * Optimistic UI for marking entities as not done — flips email rows back to
- * inbox-visible and forces the notification `done` override off. Rows are
- * patched in place; done-filtered views regain the entities when the caller
- * invalidates after the server confirms.
+ * Optimistic UI for marking entities as not done — shows the email rows as not
+ * done in GraphQL Soup lists and forces the notification `done` override off
+ * until the caller settles or rolls back.
  */
 export function applyEntitiesNotDoneOptimistic(args: {
   emailIds: string[];
   notificationIds: string[];
 }): { rollback: () => void; settle: () => void } {
-  const { emailIds, notificationIds } = args;
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return applyGraphqlDoneOptimistic({
-      entityIds: emailIds,
-      notificationIds,
-      done: false,
-    });
-  }
-  const emailRowTxns = emailIds.map((id) =>
-    optimisticUpdateSoupEntity({
-      tag: 'emailThread',
-      data: { id, inboxVisible: true },
-      frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
-    })
-  );
-  setDoneOverride(notificationIds, false);
-
-  return {
-    settle: () => {},
-    rollback: () => {
-      for (const txn of [...emailRowTxns].reverse()) {
-        txn.rollback();
-      }
-      setDoneOverride(notificationIds, undefined);
-    },
-  };
+  return applyGraphqlDoneOptimistic({
+    entityIds: args.emailIds,
+    notificationIds: args.notificationIds,
+    done: false,
+  });
 }
 
 /**
@@ -1506,26 +1263,17 @@ export type MarkDoneWriteOutcome =
     };
 
 /**
- * Fires archive, selective ID-scoped notification, and entity-scoped notification
- * writes. Returns the authoritative notification IDs
- * produced by the entity write. Throws on any failure; the caller owns rollback
- * through the context returned by `applyEntitiesDoneOptimistic`.
+ * Fires archive, selective ID-scoped notification, and entity-scoped
+ * notification writes, reporting each through `onWriteSettled`. Throws on any
+ * failure; the caller owns rollback of its optimistic state.
  */
 export async function executeMarkEntitiesDone(args: {
   emailIds: string[];
   notificationIds: string[];
   notificationEntities?: NotificationEntityRef[];
   onWriteSettled?: (outcome: MarkDoneWriteOutcome) => void;
-}): Promise<string[]> {
+}): Promise<void> {
   const { emailIds, notificationIds, notificationEntities = [] } = args;
-  const graphql = isFeatureEnabled(enableGraphqlSoup);
-  if (!graphql) {
-    await Promise.all([
-      queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-      queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
-    ]);
-  }
-
   const writeNotificationIds = async () => {
     if (notificationIds.length > 0)
       await bulkMarkNotificationsAsDone(notificationIds);
@@ -1552,59 +1300,13 @@ export async function executeMarkEntitiesDone(args: {
   if (notificationEntities.length > 0)
     report({ kind: 'entity-notifications', result: entityResult });
 
-  const authoritativeNotificationIds =
-    entityResult.status === 'fulfilled'
-      ? entityResult.value.map(({ id }) => id)
-      : [];
   const results = [...emailResults, notificationResult, entityResult];
-  const hasQueuedEmail = emailResults.some(
-    (result) => result.status === 'fulfilled' && result.value === 'queued'
-  );
   const rejected = results.find(
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
 
-  if (graphql) {
-    // Email/notification writers own normalized rollback and revalidation.
-    if (rejected) throw rejected.reason ?? new Error('Failed to mark as done');
-    return authoritativeNotificationIds;
-  }
-
-  if (rejected) {
-    // Real refetch to reconcile server state with the UI after the caller
-    // rolls back its optimistic cache writes. Some email or notification
-    // writes may have succeeded before another operation failed.
-    await Promise.all([
-      ...(!hasQueuedEmail
-        ? [
-            queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-            ...emailIds.map((id) => invalidateSoupEntity(id)),
-          ]
-        : []),
-      queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
-    ]);
-    throw rejected.reason ?? new Error('Failed to mark as done');
-  }
-
-  await Promise.all([
-    // A shared REST list can contain both committed and queued threads. Do
-    // not fetch its pre-write server state over any queued optimistic row.
-    ...(!hasQueuedEmail
-      ? [
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.all.email,
-            refetchType: 'none',
-          }),
-          ...emailIds.map((id) => invalidateSoupEntity(id)),
-        ]
-      : []),
-    queryClient.invalidateQueries({
-      queryKey: notificationKeys.user._def,
-      refetchType: 'none',
-    }),
-  ]);
-
-  return authoritativeNotificationIds;
+  // Email/notification writers own normalized rollback and revalidation.
+  if (rejected) throw rejected.reason ?? new Error('Failed to mark as done');
 }
 
 /**
@@ -1623,14 +1325,6 @@ export async function executeMarkEntitiesUndone(args: {
   onWriteSettled?: (outcome: MarkDoneWriteOutcome) => void;
 }): Promise<EmailArchiveDisposition> {
   const { emailIds, notificationIds } = args;
-  const graphql = isFeatureEnabled(enableGraphqlSoup);
-  if (!graphql) {
-    await Promise.all([
-      queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-      queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
-    ]);
-  }
-
   const writeNotificationIds = async () => {
     if (notificationIds.length > 0)
       await bulkMarkNotificationsAsUndone(notificationIds);
@@ -1657,44 +1351,6 @@ export async function executeMarkEntitiesUndone(args: {
     (r): r is PromiseRejectedResult => r.status === 'rejected'
   );
 
-  if (graphql) {
-    if (rejected) throw rejected.reason ?? new Error('Failed to undo');
-    return hasQueuedEmail ? 'queued' : 'committed';
-  }
-
-  if (rejected) {
-    // REST retains its legacy batch rollback/reconciliation.
-    await Promise.all([
-      ...(!hasQueuedEmail
-        ? [
-            queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-            ...emailIds.map((id) => invalidateSoupEntity(id)),
-          ]
-        : []),
-      queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
-    ]);
-    throw rejected.reason ?? new Error('Failed to undo');
-  }
-
-  await Promise.all([
-    ...(!hasQueuedEmail
-      ? [
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.all.email,
-            refetchType: 'none',
-          }),
-          // Refetch open thread views only after the unarchive has committed.
-          ...emailIds.map((id) =>
-            queryClient.invalidateQueries({
-              queryKey: emailKeys.threadMessages(id).queryKey,
-            })
-          ),
-        ]
-      : []),
-    queryClient.invalidateQueries({
-      queryKey: notificationKeys.user._def,
-      refetchType: 'none',
-    }),
-  ]);
+  if (rejected) throw rejected.reason ?? new Error('Failed to undo');
   return hasQueuedEmail ? 'queued' : 'committed';
 }

@@ -1,9 +1,13 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   type AnyVariables,
   type Client,
   CombinedError,
+  createRequest,
+  type DocumentInput,
   type GraphQLRequest,
+  makeOperation,
   type Operation,
   type OperationContext,
   type OperationResult,
@@ -36,6 +40,7 @@ export type FakeMutation = {
 };
 
 export type FakeCacheWrite = {
+  generation?: string;
   variables: Record<string, unknown>;
   data: unknown;
 };
@@ -44,8 +49,9 @@ const variablesKey = (variables: unknown) => JSON.stringify(variables ?? {});
 
 /**
  * A urql client for an attention feed: queries stay pending until answered,
- * subscriptions are driven by the test, and mutations answer from
- * `mutationData` keyed by operation name. Its `host` stands in for the
+ * subscriptions are driven by the test, and mutations and one-shot reads
+ * (`client.query`) answer from `mutationData` keyed by operation name; a
+ * function there is called with the variables. Its `host` stands in for the
  * normalized cache: reads answer with each page's latest data, and a write
  * re-emits the page to its query the way a cache reread does.
  */
@@ -55,6 +61,7 @@ export function createFakeAttentionFeedClient(
   const queries: FakeQuery[] = [];
   const subscriptions: FakeSubscription[] = [];
   const mutations: FakeMutation[] = [];
+  const reads: FakeMutation[] = [];
   const writes: FakeCacheWrite[] = [];
   const cached = new Map<string, unknown>();
 
@@ -76,9 +83,20 @@ export function createFakeAttentionFeedClient(
     return subject.source;
   };
 
-  const subscription = (query: unknown, variables: Record<string, unknown>) => {
+  const subscription = (
+    query: DocumentInput,
+    variables: Record<string, unknown>
+  ) => {
     const subject = makeSubject<OperationResult>();
-    const operation = { kind: 'subscription' } as Operation;
+    const operation = makeOperation(
+      'subscription',
+      createRequest(query, variables),
+      {
+        url: 'http://test',
+        requestPolicy: 'network-only',
+        cacheSessionGeneration: cacheSessionGeneration.capture(),
+      }
+    );
     subscriptions.push({
       variables,
       next: (data) => subject.next({ operation, data } as OperationResult),
@@ -92,12 +110,24 @@ export function createFakeAttentionFeedClient(
     return subject.source;
   };
 
+  const answer = async (name: string, variables: Record<string, unknown>) => {
+    const data = mutationData[name];
+    return {
+      data: await (typeof data === 'function' ? data(variables) : data),
+    };
+  };
+
   const mutation = (query: unknown, variables: Record<string, unknown>) => {
     const name = operationName(query);
     mutations.push({ name, variables });
-    return {
-      toPromise: async () => ({ data: await mutationData[name] }),
-    };
+    return { toPromise: () => answer(name, variables) };
+  };
+
+  // A one-shot read, apart from the paged queries a test answers by hand.
+  const query = (document: unknown, variables: Record<string, unknown>) => {
+    const name = operationName(document);
+    reads.push({ name, variables });
+    return { toPromise: () => answer(name, variables) };
   };
 
   const host = {
@@ -108,11 +138,12 @@ export function createFakeAttentionFeedClient(
         : { kind: 'miss' as const };
     },
     writeQuery: async (args: {
+      generation?: string;
       variables?: Record<string, unknown>;
       data: unknown;
     }) => {
       const variables = args.variables ?? {};
-      writes.push({ variables, data: args.data });
+      writes.push({ variables, data: args.data, generation: args.generation });
       const key = variablesKey(variables);
       queries
         .filter((query) => variablesKey(query.variables) === key)
@@ -122,6 +153,11 @@ export function createFakeAttentionFeedClient(
     },
   } as unknown as Pick<CacheHost, 'readQuery' | 'writeQuery'>;
 
-  const client = { executeQuery, subscription, mutation } as unknown as Client;
-  return { client, host, queries, subscriptions, mutations, writes };
+  const client = {
+    executeQuery,
+    subscription,
+    mutation,
+    query,
+  } as unknown as Client;
+  return { client, host, queries, subscriptions, mutations, reads, writes };
 }

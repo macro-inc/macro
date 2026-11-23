@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use agent_session::domain::model::{AgentSession, AgentSessionId};
 use async_trait::async_trait;
-use code_execution::domain::{ExecuteRequest, Limits, Outcome, ProgramExecutor};
+use code_execution::domain::{ContextShape, ExecuteRequest, Limits, Outcome, ProgramExecutor};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
+use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
@@ -36,6 +37,7 @@ struct Inner {
     credentials: Arc<dyn ExecutionCredentials>,
     store: Arc<dyn ExecutionStore>,
     turns: Arc<dyn ExecutionTurns>,
+    images: Arc<dyn ModelImages>,
     admission: Arc<Semaphore>,
 }
 
@@ -50,6 +52,7 @@ impl CodeModeService {
         credentials: Arc<dyn ExecutionCredentials>,
         store: Arc<dyn ExecutionStore>,
         turns: Arc<dyn ExecutionTurns>,
+        images: Arc<dyn ModelImages>,
     ) -> Self {
         let limits = Limits::default();
         Self(Arc::new(Inner {
@@ -57,17 +60,52 @@ impl CodeModeService {
             credentials,
             store,
             turns,
+            images,
             admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
         }))
     }
 
+    /// Load the images a successful result returned, so the model sees them.
+    /// Saved receipts load them again on a retry; records keep only the ids.
+    #[tracing::instrument(name = "code_mode.result_images", skip_all, fields(agent_session_id = %session, execution_id = %receipt.execution_id, images = tracing::field::Empty, failed_image = tracing::field::Empty))]
+    async fn attach_images(
+        &self,
+        session: AgentSessionId,
+        acting_user: Option<&MacroUserIdStr<'static>>,
+        receipt: &mut ExecutionReceipt,
+    ) {
+        let images = returned_images(receipt);
+        tracing::Span::current().record("images", images.len());
+        for image in images {
+            let loaded = match acting_user {
+                Some(owner) => self.0.images.load_png(&image.id, owner).await,
+                None => Err(anyhow::anyhow!(
+                    "no acting account to check the image owner against"
+                )),
+            };
+            match loaded {
+                Ok(pixels) => receipt.model_media.push(pixels),
+                Err(error) => {
+                    tracing::Span::current().record("failed_image", image.id.as_ref());
+                    tracing::warn!(?error, "could not load a returned image");
+                    receipt.model_media.clear();
+                    receipt.error = Some(format!(
+                        "main succeeded, but image {} could not be shown: return a PNG from the SDK, such as await canvas.render().",
+                        image.id.as_ref()
+                    ));
+                    return;
+                }
+            }
+        }
+    }
+
     async fn run(
         &self,
-        identity: ExecutionIdentity,
+        mut identity: ExecutionIdentity,
         execution: ExecutionId,
         request: ExecuteRequest,
         cancel: CancellationToken,
-    ) -> Result<ExecutionReceipt, CodeModeError> {
+    ) -> Result<(ExecutionReceipt, Option<MacroUserIdStr<'static>>), CodeModeError> {
         let mut record = ExecutionRecord {
             execution_id: execution,
             acting_as: Some(identity.acting_as),
@@ -80,43 +118,64 @@ impl CodeModeService {
             activity: Vec::new(),
             activity_truncated: false,
         };
-        if let Err(error) = self.0.store.create(identity.session, &record).await {
-            if matches!(error, CodeModeError::Duplicate) {
-                let existing = self
-                    .0
-                    .store
-                    .get(identity.session, execution)
-                    .await
-                    .map_err(|error| match error {
-                        // The ID may be unavailable outside this session. Do
-                        // not look up or reveal another session's record.
-                        CodeModeError::NotFound => CodeModeError::Invalid(
-                            "execution ID unavailable; use a fresh UUID".into(),
-                        ),
-                        other => other,
-                    })?;
-                if existing.source == request.source
-                    && existing.acting_as == Some(identity.acting_as)
-                    && existing.turn_id == Some(identity.turn)
-                {
-                    return Ok(receipt(&existing));
+        match self.0.store.create(identity.session, &record).await {
+            Ok(()) => {}
+            Err(CodeModeError::Duplicate) => {
+                match self.0.store.get(identity.session, execution).await {
+                    Ok(existing)
+                        if existing.source == request.source
+                            && existing.acting_as == Some(identity.acting_as)
+                            && existing.turn_id == Some(identity.turn) =>
+                    {
+                        // A saved record keeps no account, only the owner choice.
+                        let acting_user = (identity.acting_as
+                            == ai_toolset::actor::ToolActor::Owner)
+                            .then(|| identity.owner.clone());
+                        return Ok((receipt(&existing), acting_user));
+                    }
+                    // Models reuse example UUIDs, so a taken ID is usually not a
+                    // retry. Run under a fresh ID; the receipt reports it. Never
+                    // read or reveal another session's record.
+                    Ok(_) | Err(CodeModeError::NotFound) => {
+                        let fresh = ExecutionId::mint();
+                        tracing::Span::current()
+                            .record("assigned_execution_id", tracing::field::display(fresh));
+                        record.execution_id = fresh;
+                        identity.execution = fresh;
+                        self.0.store.create(identity.session, &record).await?;
+                    }
+                    Err(error) => return Err(error),
                 }
             }
-            return Err(error);
+            Err(error) => return Err(error),
         }
         if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before authorization.".into());
             self.0.store.save(identity.session, &record).await?;
-            return Ok(receipt(&record));
+            return Ok((receipt(&record), None));
         }
-        let environment = match self
+        let executor = self.0.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
+        // A program with type errors stops here, before the owner is asked
+        // to approve it or a credential is minted for it.
+        if let Err(outcome) = executor
+            .check_program(&request, SESSION_PROGRAM, cancel.clone())
+            .await
+        {
+            (record.status, record.result, record.error) = settle_unrun(outcome, Reviews::Allowed);
+            self.0.store.save(identity.session, &record).await?;
+            return Ok((receipt(&record), None));
+        }
+        let IssuedRun {
+            environment,
+            acting_user,
+        } = match self
             .0
             .credentials
             .issue(&identity, &request.source, cancel.clone())
             .await
         {
-            Ok(environment) => environment,
+            Ok(issued) => issued,
             Err(error) => {
                 record.status = ExecutionStatus::Failed;
                 record.error = Some(error.to_string());
@@ -128,15 +187,11 @@ impl CodeModeService {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before starting.".into());
             self.0.store.save(identity.session, &record).await?;
-            return Ok(receipt(&record));
+            return Ok((receipt(&record), None));
         }
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
-        let execution = self
-            .0
-            .executor
-            .as_ref()
-            .ok_or(CodeModeError::Unavailable)?
-            .execute_program_with_progress(request, environment, cancel.clone(), progress);
+        let execution =
+            executor.execute_program_with_progress(request, environment, cancel.clone(), progress);
         tokio::pin!(execution);
         // Stateless MCP requests can outlive their HTTP caller. Check shared
         // turn state so Stop also cancels work handled by another replica.
@@ -191,7 +246,7 @@ impl CodeModeService {
         record.result = result;
         record.error = error;
         self.0.store.save(identity.session, &record).await?;
-        Ok(receipt(&record))
+        Ok((receipt(&record), Some(acting_user)))
     }
 }
 
@@ -205,11 +260,20 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             "ReadContent"
                 | "ReadMetadata"
                 | "EditDocument"
+                | "ReadCanvas"
+                | "EditCanvas"
+                | "ApplyCanvasEdits"
+                // macro.documents.spreadsheet(document).read(), calculate()
+                // and applyEdits().
+                | "ReadSpreadsheet"
+                | "CalculateSpreadsheet"
+                | "EditSpreadsheet"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"
                 | "ReadDiscussion"
                 | "Comment"
+                // Document.commentOnText().
                 | "CommentOnText"
                 | "DeleteComment"
                 | "EditComment"
@@ -220,31 +284,61 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "GetEntityProperties"
                 | "SetEntityProperty"
                 | "BulkSetEntityPropertyOptions"
+                // macro.properties.tags() and createTag(); PropertyOption edits.
+                | "ListTags"
+                | "CreateTag"
+                | "EditTag"
+                | "DeleteTag"
                 | "ListInboxes"
                 | "ListLabels"
                 | "GetThread"
                 | "ReadThread"
                 | "UpdateThreadLabels"
                 | "SetSenderPolicy"
+                // macro.email.sendConfirmed runs the tool itself.
+                | "SendConfirmedEmail"
                 | "CreateChannel"
+                // Channel.send() and Thread.reply(), with images and documents.
                 | "SendChannelMessage"
                 | "EditChannelMessage"
                 | "DeleteChannelMessage"
                 | "ReactToChannelMessage"
                 | "ReadChannelMessages"
                 | "ReadChannelThread"
+                // Message.context().
+                | "ReadChannelMessageContext"
                 | "RenameChannel"
+                // shareWithChannel() on every shareable item's handle.
+                | "ShareWithChannel"
                 | "ManageChannelParticipants"
+                // macro.channels.dm() and macro.channels.private().
+                | "OpenDirectMessage"
                 | "ReadCallRecord"
                 | "UpdateCallRecord"
                 | "DeleteCallRecord"
                 | "ListCalendars"
                 | "ListCalendarEvents"
+                // macro.calendar.createConfirmed runs the tool itself.
+                | "CreateConfirmedCalendarEvent"
                 | "UpdateCalendarEvent"
                 | "DeleteCalendarEvent"
+                // macro.calendar.teamAvailability().
+                | "GetTeamAvailability"
+                // macro.calendar.booking.
+                | "ReadBookingSettings"
+                | "UpdateBookingSettings"
+                | "ListBookings"
+                | "GetBookingInsights"
+                | "GetBookingRescheduleSlots"
+                | "ChangeBooking"
+                | "ListBookingLinks"
+                | "CreateBookingLink"
+                | "EditBookingLink"
                 | "ListNotifications"
                 | "MarkNotificationsDone"
                 | "MarkNotificationsSeen"
+                // muteNotifications()/unmuteNotifications() on item handles.
+                | "MuteNotifications"
                 | "ListTeamMembers"
                 | "CreateForm"
                 | "EditForm"
@@ -252,11 +346,130 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListForms"
                 | "SetFormAccess"
                 | "CreateSkill"
+                // macro.documents.skills() and SystemSkill.content().
+                | "ListSkills"
+                | "SearchSkills"
+                | "ReadSkill"
                 | "Decide"
                 | "GenerateObject"
-                // macro.agents.list() and macro.agentSessions.createManaged.
+                // macro.documents.upload(), which sends the bytes through Macro.
+                | "UploadFile"
+                // macro.search, macro.workspace and macro.chats.
+                | "ContentSearch"
+                | "NameSearch"
+                | "ListEntities"
+                | "ReadChat"
+                // macro.web.search() and macro.web.fetch().
+                | "WebSearch"
+                | "WebFetch"
+                // macro.bots and Bot; a botCredential view is the card that
+                // mints a token without the model ever reading it.
+                | "IssueBotCredential"
+                | "ListBots"
+                | "CreateBot"
+                | "ConfigureBot"
+                | "DeleteBot"
+                | "GetBotWebhooks"
+                | "ManageBotChannelAccess"
+                // macro.agents.coding(), macro.agents.list() and
+                // macro.agentSessions.createManaged, which prompts an agent
+                // its operator runs as well as a managed one.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
+                | "CreateAgentSession"
+                // macro.connectedApps.discover and .addServer.
+                | "DiscoverConnectors"
+                | "ConnectMcpServer"
+                // macro.agentSessions.byId(): log(), foldedLog(), rename(),
+                // archive(), delete(), prompt(), control() and sharing.
+                | "ReadAgentSession"
+                | "ManageAgentSession"
+                | "ReadAgentSessionSharing"
+                | "UpdateAgentSessionSharing"
+                // macro.databases: list(), schema(), query() and view ops.
+                | "ListDatabases"
+                | "DescribeDatabase"
+                | "QueryDatabase"
+                | "SaveDatabaseView"
+                | "DeleteDatabaseView"
+                // macro.routines.
+                | "CreateRoutine"
+                | "ListRoutines"
+                | "ReadRoutine"
+                | "UpdateRoutine"
+                | "RunRoutine"
+                | "DeleteRoutine"
+                // macro.calendar.event(id).record() and addToCalendar().
+                | "ReadCalendarEvent"
+                | "AddSharedCalendarEvent"
+                // macro.images.generate().
+                | "GenerateImage"
+                // document.copy(), database.duplicate() and project.rename().
+                | "DuplicateItem"
+                | "RenameItem"
+                // macro.memory.read() and macro.memory.edit().
+                | "ReadMemory"
+                | "UpdateMemory"
+                // User.activity(), macro.activity.mine() and Initiative.activity().
+                | "GetUserActivity"
+                | "ReadInitiativeActivity"
+                // Document.readPresentation, editPresentation and copyPresentation.
+                | "ReadPresentation"
+                | "EditPresentation"
+                // Document.readWord and editWord.
+                | "ReadWordDocument"
+                | "EditWordDocument"
+                // Document.readDesign, readPhotoshop and readIllustrator.
+                | "ReadDesign"
+                | "ReadPhotoshopDocument"
+                | "ReadIllustratorDocument"
+                // macro.documents.create(), createSpreadsheet(), createCanvas()
+                // and upload(); macro.tasks.create().
+                | "CreateDocument"
+                // Document.updateSharePermissions() and Project.updateSharePermissions().
+                | "UpdateSharing"
+                // macro.databases.saveQuery(), Database.saveQuery() and
+                // DatabaseTable.saveQuery().
+                | "SaveDatabaseQuery"
+                // macro.crm: companyById(), createCompany(), createContact()
+                // and importCompaniesCsv().
+                | "GetCompany"
+                | "CreateCompany"
+                | "CreateContact"
+                | "ImportCompaniesCsv"
+                // macro.crm.pipelines and CrmPipeline.
+                | "ListPipelines"
+                | "CreatePipeline"
+                | "FindPipelineEntries"
+                | "AddToPipeline"
+                | "UpdatePipelineEntries"
+                | "RemoveFromPipeline"
+                | "EditPipeline"
+                | "ImportPipelineCsv"
+                | "ExportPipelineCsv"
+                // macro.initiatives and Initiative.update() and delete().
+                // ReadInitiative: initiatives.byId() detail, description() and
+                // properties through properties.bulkEntityProperties().
+                | "ListInitiatives"
+                | "ReadInitiative"
+                | "CreateInitiative"
+                | "UpdateInitiative"
+                | "UpdateInitiativeSharing"
+                | "DeleteInitiative"
+                // Canvas.render(), returned in a result's images.
+                | "RenderCanvas"
+                // macro.imports: list(), track(), recordImported(),
+                // importNotionPage() and ImportEntry.decline().
+                | "ListImportEntities"
+                | "CreateImportEntity"
+                | "DeleteImportEntity"
+                | "ImportNotionPage"
+                // macro.agentSessions.updates(), whose cards an agentUpdates
+                // view draws.
+                | "ListAgentUpdates"
+                // macro.agents.list() and Agent.update().
+                | "ListAgents"
+                | "ConfigureAgent"
         )
 }
 
@@ -303,6 +516,7 @@ impl SessionCodeMode for CodeModeService {
             "code_mode.execution",
             agent_session_id = %session.id,
             execution_id = %execution,
+            assigned_execution_id = tracing::field::Empty,
             source_bytes = request.source.len(),
             status = tracing::field::Empty,
             activity = tracing::field::Empty,
@@ -310,10 +524,19 @@ impl SessionCodeMode for CodeModeService {
         );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
+        let session_id = session.id;
         tokio::spawn(
             async move {
                 let _permit = permit;
-                let result = service.run(identity, execution, request, cancel).await;
+                let mut result = service.run(identity, execution, request, cancel).await;
+                // Image reads stay inside the admission budget, and show only
+                // files the account the execution acted as owns.
+                if let Ok((receipt, acting_user)) = &mut result {
+                    service
+                        .attach_images(session_id, acting_user.as_ref(), receipt)
+                        .await;
+                }
+                let result = result.map(|(receipt, _)| receipt);
                 match &result {
                     Ok(receipt) => {
                         let span = tracing::Span::current();
@@ -396,24 +619,37 @@ pub(super) fn settle(
                     )
                 };
             }
-            if let Some(object) = value.as_object_mut()
-                && object.len() == 1
-                && object.contains_key("data")
-            {
-                object.insert("reviews".into(), serde_json::json!([]));
-            }
+            // Omitted reviews default to empty, but only on a result that is
+            // otherwise valid; a rejected result is saved as returned.
             let valid = value.as_object().is_some_and(|object| {
-                object.len() == 2
-                    && object.contains_key("data")
-                    && object.get("reviews").is_some_and(|references| {
+                object.contains_key("data")
+                    && object.get("reviews").is_none_or(|references| {
                         serde_json::from_value::<Vec<reviews::ReviewReference>>(references.clone())
                             .is_ok()
                     })
+                    && object.get("images").is_none_or(|images| {
+                        serde_json::from_value::<Vec<ReturnedImage>>(images.clone())
+                            .is_ok_and(|images| images.len() <= MAX_RESULT_IMAGES)
+                    })
+                    && object
+                        .keys()
+                        .all(|key| matches!(key.as_str(), "data" | "reviews" | "images"))
             });
+            if valid && let Some(object) = value.as_object_mut() {
+                object
+                    .entry("reviews")
+                    .or_insert_with(|| serde_json::json!([]));
+            }
             if valid {
                 (ExecutionStatus::Succeeded, Some(value), None)
             } else {
-                (ExecutionStatus::Failed, Some(value), Some("main must return {data: JSON}; optional reviews must be an array of {kind, id} references.".into()))
+                (
+                    ExecutionStatus::Failed,
+                    Some(value),
+                    Some(format!(
+                        "main must return {{data: JSON}}; optional reviews must be an array of {{kind, id}} references; optional images must be an array of at most {MAX_RESULT_IMAGES} SDK images, such as await canvas.render()."
+                    )),
+                )
             }
         }
         Outcome::Failed { error } => (ExecutionStatus::Failed, None, Some(error.message)),
@@ -430,6 +666,32 @@ pub(super) fn settle(
     }
 }
 
+/// What a session program's `main` receives: the session and this execution.
+const SESSION_PROGRAM: ContextShape = ContextShape {
+    session: true,
+    execution: true,
+};
+
+/// Interpret a program that stopped at its check, before anything ran.
+pub(super) fn settle_unrun(
+    outcome: Outcome,
+    reviews: Reviews,
+) -> (ExecutionStatus, Option<serde_json::Value>, Option<String>) {
+    match outcome {
+        Outcome::Cancelled => (
+            ExecutionStatus::Cancelled,
+            None,
+            Some("Execution cancelled before it started.".into()),
+        ),
+        Outcome::TimedOut => (
+            ExecutionStatus::TimedOut,
+            None,
+            Some("Execution timed out while it was type-checked; nothing ran.".into()),
+        ),
+        outcome => settle(outcome, reviews),
+    }
+}
+
 /// Reject requests the runner would refuse, before minting a credential.
 pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeError> {
     if request.source.trim().is_empty()
@@ -437,7 +699,7 @@ pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeE
         || request.timeout_ms == 0
         || request.timeout_ms > 30_000
     {
-        return Err(CodeModeError::Invalid("Provide a nonempty JavaScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
+        return Err(CodeModeError::Invalid("Provide a nonempty TypeScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
     }
     Ok(())
 }
@@ -449,7 +711,21 @@ fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {
         activity: record.activity.clone(),
         result: record.result.clone(),
         error: execution_error(record),
+        model_media: Vec::new(),
     }
+}
+
+/// The images a succeeded result returned; `settle` already checked them.
+fn returned_images(receipt: &ExecutionReceipt) -> Vec<ReturnedImage> {
+    if receipt.status != ExecutionStatus::Succeeded {
+        return Vec::new();
+    }
+    receipt
+        .result
+        .as_ref()
+        .and_then(|result| result.get("images"))
+        .and_then(|images| serde_json::from_value(images.clone()).ok())
+        .unwrap_or_default()
 }
 
 fn execution_error(record: &ExecutionRecord) -> Option<String> {

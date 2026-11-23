@@ -18,6 +18,8 @@ import type {
   SnippetEntity,
   TaskEntity,
 } from '@entity';
+import type { PeopleSearch } from '@graphql-cache/people/generated';
+import type { ContactListPriority } from '@queries/contacts/list-priority';
 import type { Accessor } from 'solid-js';
 
 // Note (seamus) : Ideally history would return ownerId or we would get actual
@@ -96,8 +98,12 @@ type ItemTimestamps = {
 
 type QuickAccessBase = {
   id: string;
+  /** Stable UI identity while an explicit contact alias resolves asynchronously. */
+  searchKey?: string;
   searchText: string;
   sortTimestamp: number;
+  /** Position in the current matched personal window; never a history index. */
+  personOrder?: number;
   timestamps: ItemTimestamps;
 };
 
@@ -112,6 +118,8 @@ export type UserItem = QuickAccessBase & {
   kind: 'user';
   bucket: 'person';
   data: IUser;
+  /** A bounded ranked hit's existing DM, resolved from the channel source. */
+  commandTarget?: EntityItem<ChannelEntity>;
 };
 
 export type QuickAccessItem = EntityItem | UserItem;
@@ -173,13 +181,19 @@ export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
 
 export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   items: Accessor<T[]>;
+  /** Changes when a bounded result window is replaced, not on label refreshes. */
+  windowKey?: Accessor<string | undefined>;
   /** Number of loaded matching items. Check hasMore for additional cached pages. */
   totalCount: Accessor<number>;
   hasMore: Accessor<boolean>;
   isLoading: Accessor<boolean>;
+  /** The cache has not yet answered the current query; listed rows may be other sources'. */
+  isSearching?: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
   error: Accessor<unknown>;
   loadMore: () => Promise<void>;
+  /** Reads a failed page again, where the list can. */
+  retry?: () => Promise<void>;
 };
 
 export type QuickAccessListOptions<
@@ -190,9 +204,25 @@ export type QuickAccessListOptions<
   searchTerm?: Accessor<string>;
   /** Disable this list without affecting other Quick Access consumers. */
   enabled?: Accessor<boolean>;
+  /** While false, an enabled list keeps its in-memory rows but neither
+   * searches the local cache nor rereads it on cache changes. */
+  readsCache?: Accessor<boolean>;
+  /** Person scoring policy, applied before the native window limit. */
+  peopleMode?: PeopleSearch['mode'];
+  /** Orders the personal people window by contact list within each name
+   * stage. Unset or undefined keeps the order without lists. */
+  peopleListPriority?: Accessor<ContactListPriority | undefined>;
+  /** How long the people window's first page waits for the local cache
+   * before listing the server's people instead. Unset, it waits. */
+  peopleLocalBudgetMs?: number;
+  excludeSelf?: boolean;
+  /** Explicit scoped participants/guests excluded from personal suggestions. */
+  excludedPeople?: Accessor<ReadonlySet<string>>;
 };
 
 export type QuickAccessContextValue = {
+  /** Existing channel activity for an explicit peer, without loading contacts. */
+  interactionForUser: (id: string) => DateValue | undefined;
   /**
    * Get items from specific buckets, cached and reactive.
    * Returns all items if no buckets specified. Passing options scopes search

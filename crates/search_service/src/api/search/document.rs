@@ -17,7 +17,7 @@ use system_properties::SystemPropertyKey;
 use crate::api::context::SearchHandlerState;
 
 /// Enriches document search results with metadata
-#[tracing::instrument(skip(ctx, results), err)]
+#[tracing::instrument(skip(ctx, results, search_term), err)]
 pub(in crate::api::search) async fn enrich_documents(
     ctx: &SearchHandlerState,
     user_id: &str,
@@ -156,11 +156,16 @@ pub fn construct_search_result(
         }
     }
 
-    // now construct the search results in the original search result order
+    // now construct the search results in the original search result order.
+    // The index keeps a trashed document until it is purged, so a hit on a
+    // trashed document is dropped here, like a hit on one that is gone.
     let result: Vec<DocumentSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, hits)| {
-            if let Some(info) = document_histories.get(&entity_id.to_string()) {
+            if let Some(info) = document_histories
+                .get(&entity_id.to_string())
+                .filter(|info| info.deleted_at.is_none())
+            {
                 let info = info.clone();
                 let metadata = models_search::document::DocumentMetadata {
                     created_at: info.created_at,

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT cp.user_id AS \"user_id!\"\n        FROM comms_messages root\n        JOIN call_participants cp ON cp.call_id = root.id\n        WHERE root.id = $1 AND root.kind = 'call_root' AND cp.left_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e99786b98d8bf9df5aacd139b4cbafdb728ed57094918d05672b8c365183562a"
+}

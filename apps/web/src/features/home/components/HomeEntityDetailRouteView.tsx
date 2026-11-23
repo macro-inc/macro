@@ -3,9 +3,14 @@ import {
   type EntityDetailContext,
   entityDetailBlockType,
 } from '@app/components/entity-detail/EntityDetail';
+import { EntityDetailFrame } from '@app/components/entity-detail/EntityDetailFrame';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
+import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
+import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { useMarkdownName } from '@block-md/component/MarkdownNameProvider';
@@ -13,6 +18,7 @@ import { useMarkdownDocumentTools } from '@block-md/component/useMarkdownDocumen
 import { useMarkdownDocument } from '@block-md/context/markdown-document-context';
 import { ChannelDetailTopBar } from '@channel/Channel/ChannelDetail';
 import { ChannelTitleIcon } from '@channel/components/ChannelTopIcon';
+import { arrivalFocusesComposer } from '@channel/composer-arrival-focus';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
@@ -30,6 +36,9 @@ import { getPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { buildEntityData, type EntityData } from '@entity';
 import {
   type Accessor,
   createMemo,
@@ -53,6 +62,9 @@ function HomeEntityBreadcrumb(props: {
   target: EntityDetailTarget;
   value: Accessor<string>;
   fileMenu?: JSX.Element;
+  appearance?: EntityAppearance | null;
+  entity?: Accessor<EntityData | undefined>;
+  canEditAppearance?: Accessor<boolean>;
 }) {
   useSplitDisplayName(props.name);
 
@@ -64,27 +76,44 @@ function HomeEntityBreadcrumb(props: {
     >
       {(item) => (
         <div class="flex min-w-0 items-center">
+          <Show
+            when={props.canEditAppearance?.() ? props.entity?.() : undefined}
+          >
+            {(entity) => (
+              <span class="shrink-0">
+                <EntityAppearanceTrigger
+                  entity={entity()}
+                  editable={props.canEditAppearance?.() ?? false}
+                />
+              </span>
+            )}
+          </Show>
           <ViewBreadcrumbs.Button
             class="gap-1.5"
             isActive={item.isActive()}
             onClick={item.onSelect}
             tooltip={props.name()}
           >
-            <Show
-              when={
-                props.target.type === 'channel' ? props.target.id : undefined
-              }
-              fallback={
-                <EntityIcon
-                  targetType={entityDetailBlockType(props.target) ?? 'unknown'}
-                  size="xs"
-                  class="shrink-0"
-                />
-              }
-            >
-              {(channelId) => (
-                <ChannelTitleIcon channelId={channelId()} suppressClick />
-              )}
+            <Show when={!props.canEditAppearance?.() || !props.entity?.()}>
+              <Show
+                when={
+                  props.target.type === 'channel' ? props.target.id : undefined
+                }
+                fallback={
+                  <EntityIcon
+                    targetType={
+                      entityDetailBlockType(props.target) ?? 'unknown'
+                    }
+                    size="xs"
+                    appearance={props.appearance}
+                    class="shrink-0"
+                  />
+                }
+              >
+                {(channelId) => (
+                  <ChannelTitleIcon channelId={channelId()} suppressClick />
+                )}
+              </Show>
             </Show>
             <span class="truncate">{props.name()}</span>
           </ViewBreadcrumbs.Button>
@@ -100,15 +129,38 @@ function HomeEntityBreadcrumb(props: {
 function HomeMarkdownBreadcrumb(props: {
   target: EntityDetailTarget;
   value: Accessor<string>;
+  hotkeyScope: string;
+  appearance?: EntityAppearance | null;
+  ownerId: string;
+  projectId?: string;
 }) {
   const { displayName } = useMarkdownName();
   const { documentId, kind, permissions } = useMarkdownDocument();
-  const { fileOperations, menuTools } = useMarkdownDocumentTools();
+  const { fileOperations, actions } = useMarkdownDocumentTools();
   const blockType = () => {
     const documentKind = kind();
     return documentKind === 'document' ? 'md' : documentKind;
   };
   const name = () => displayName() || blockNameToDefaultFile(blockType());
+  const userId = useUserId();
+  const appearance = useDocumentAppearance(
+    () =>
+      blockType() === 'md' || blockType() === 'snippet'
+        ? { id: documentId(), appearance: props.appearance }
+        : undefined,
+    () => Boolean(userId())
+  );
+  const headerEntity = () =>
+    blockType() === 'md' || blockType() === 'snippet'
+      ? buildEntityData({
+          id: documentId(),
+          name: name(),
+          blockName: blockType(),
+          ownerId: props.ownerId,
+          projectId: props.projectId,
+          appearance: appearance(),
+        })
+      : undefined;
   const menuPermissions = () => {
     if (permissions.isOwner()) return Permissions.OWNER;
     if (permissions.canEdit()) return Permissions.CAN_EDIT;
@@ -116,19 +168,43 @@ function HomeMarkdownBreadcrumb(props: {
     return Permissions.CAN_VIEW;
   };
 
+  const { closePreview } = useHomeView();
+  useBlockEntityCommands({
+    id: documentId(),
+    scopeId: props.hotkeyScope,
+    onDeleted: closePreview,
+    resolveEntity: () =>
+      buildEntityData({
+        id: documentId(),
+        name: name(),
+        blockName: blockType(),
+        ownerId: props.ownerId,
+        projectId: props.projectId,
+      }),
+  });
+
   return (
     <HomeEntityBreadcrumb
       name={name}
       target={props.target}
       value={props.value}
+      appearance={appearance()}
+      entity={headerEntity}
+      canEditAppearance={permissions.canEdit}
       fileMenu={
         <SplitFileMenu
           id={documentId()}
           itemType="document"
           name={name()}
           ops={fileOperations}
-          tools={menuTools}
+          tools={[
+            actions.history,
+            actions.wideMode,
+            actions.askMacro,
+            actions.codeActions,
+          ]}
           entityKind={blockType()}
+          entity={headerEntity()}
           permissions={menuPermissions()}
         />
       }
@@ -160,6 +236,7 @@ function HomeDocumentBreadcrumb(props: {
       name={name}
       target={props.target}
       value={props.value}
+      appearance={props.context.documentMetadata.appearance}
       fileMenu={
         <SplitFileMenu
           id={props.context.documentMetadata.documentId}
@@ -230,6 +307,14 @@ function HomeEntityDetailBody(props: {
   navigationRequest: number | string;
 }) {
   const panel = useSplitPanelOrThrow();
+  const home = useHomeView();
+  const composerFocusRequest = () => {
+    const request = home.composerFocusRequest();
+    return props.target.type === 'channel' &&
+      request?.channelId === props.target.id
+      ? request.id
+      : 0;
+  };
   const documentShareTarget = () => {
     const blockAlias = entityDetailBlockType(props.target);
     return props.target.type === 'document' && blockAlias
@@ -237,32 +322,47 @@ function HomeEntityDetailBody(props: {
       : undefined;
   };
   const openShare = useDocumentShareModal(documentShareTarget);
-
+  // The list beside the detail registers the same entity keys on the split's
+  // scope, so the detail keeps its own in a child scope, as Mail's reading
+  // pane does; one registration would otherwise replace the other.
+  const [attachHotkeys, detailHotkeyScope] = useHotkeyDOMScope('home-detail');
   return (
-    <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <Show when={props.target.type !== 'channel'}>
-        <ViewShell.TopBar class="touch:flex">
-          <ViewBreadcrumbs.Outlet aria-label="Home location" />
-          <div class="ml-auto flex items-center gap-1">
-            <SidePanel.HeaderActionsOutlet />
-            <Show when={documentShareTarget()}>
-              {(target) => (
-                <ShareTrigger
-                  onClick={openShare}
-                  id={target().documentId}
-                  blockType={target().blockAlias}
-                  hotkeyScope={panel.splitHotkeyScope}
-                />
-              )}
-            </Show>
-            <SidePanel.Toggle />
-          </div>
-        </ViewShell.TopBar>
-      </Show>
-      <div class="relative min-h-0 min-w-0 flex-1">
+    <div ref={attachHotkeys} class="size-full min-h-0 min-w-0">
+      <EntityDetailFrame
+        target={props.target}
+        topBar={
+          <Show when={props.target.type !== 'channel'}>
+            <ViewShell.TopBar class="touch:flex">
+              <ViewShell.TopBarTitle>
+                <ViewBreadcrumbs.Outlet aria-label="Home location" />
+              </ViewShell.TopBarTitle>
+              <ViewShell.TopBarActions>
+                <SidePanel.HeaderActionsOutlet />
+                <Show when={documentShareTarget()}>
+                  {(target) => (
+                    <ShareTrigger
+                      onClick={openShare}
+                      id={target().documentId}
+                      blockType={target().blockAlias}
+                      hotkeyScope={panel.splitHotkeyScope}
+                    />
+                  )}
+                </Show>
+                <SidePanel.Toggle />
+              </ViewShell.TopBarActions>
+            </ViewShell.TopBar>
+          </Show>
+        }
+      >
         <EntityDetail
           target={props.target}
           navigationRequest={props.navigationRequest}
+          channel={{
+            // Read as the composer connects, for the row that opened it.
+            autofocus: arrivalFocusesComposer(panel.handle),
+            composerFocusRequest: composerFocusRequest(),
+            onEscapeToList: home.focusList,
+          }}
         >
           {(context) => {
             const name = () => {
@@ -316,6 +416,12 @@ function HomeEntityDetailBody(props: {
                   <HomeMarkdownBreadcrumb
                     target={props.target}
                     value={props.value}
+                    hotkeyScope={detailHotkeyScope}
+                    appearance={document()?.documentMetadata.appearance}
+                    ownerId={document()?.documentMetadata.owner ?? ''}
+                    projectId={
+                      document()?.documentMetadata.projectId ?? undefined
+                    }
                   />
                 </Show>
                 <Show when={channel()}>
@@ -332,7 +438,7 @@ function HomeEntityDetailBody(props: {
             );
           }}
         </EntityDetail>
-      </div>
+      </EntityDetailFrame>
     </div>
   );
 }

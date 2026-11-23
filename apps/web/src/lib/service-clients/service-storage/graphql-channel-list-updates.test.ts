@@ -1,6 +1,7 @@
 import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { parseCacheRevision } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { Client, Operation } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -12,6 +13,7 @@ import {
   ChannelListSoupDocument,
   ChannelUnreadPresenceDocument,
   SoupDocument,
+  type SoupUpdatesSubscription,
 } from './graphql/generated/graphql';
 import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
 import type { GraphqlNotificationPatch } from './graphql-soup-websocket';
@@ -126,6 +128,27 @@ function setupCached() {
 }
 
 describe('channel unread edge revalidation', () => {
+  it('does not replay queued notification frames into a new session generation', async () => {
+    const { handler, host, writeResult } = setupCached();
+    const entered = Promise.withResolvers<void>();
+    const held = Promise.withResolvers<typeof writeResult>();
+    const generation = cacheSessionGeneration.capture();
+    host.writeQuery.mockImplementationOnce(() => {
+      entered.resolve();
+      return held.promise;
+    });
+    const first = handler.onPatch(newNotification);
+    const second = handler.onPatch(newNotification);
+    await entered.promise;
+    await cacheSessionGeneration.transition(async () => {});
+    held.resolve(writeResult);
+    await Promise.all([first, second]);
+    expect(host.writeQuery).toHaveBeenCalledOnce();
+    expect(host.writeQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ generation })
+    );
+  });
+
   it('writes delivered unread evidence locally before starting background reconciliation', async () => {
     const { handler, query, host } = setupCached();
     await handler.onPatch(newNotification);
@@ -300,5 +323,46 @@ describe('channel unread edge revalidation', () => {
     disposeChannelNotificationRefresh(client);
     await vi.advanceTimersByTimeAsync(1000);
     expect(query).toHaveBeenCalledOnce();
+  });
+});
+
+describe('new channel pushes', () => {
+  const channelPush = (
+    overrides: { createdAt?: string; isParticipant?: boolean } = {}
+  ) =>
+    ({
+      __typename: 'SoupUpdated',
+      item: {
+        __typename: 'GraphqlSoupChannel',
+        id: 'new-dm',
+        channelType: 'direct_message',
+        isParticipant: true,
+        createdAt: new Date().toISOString(),
+        ...overrides,
+      },
+    }) as SoupUpdatesSubscription['soupUpdates'][number];
+
+  it('asks lists to wait for a channel the viewer was just added to', () => {
+    const { handler, coordinator } = setup();
+    const expectChannel = vi.spyOn(coordinator, 'expectChannel');
+
+    handler.onSoupUpdates([channelPush()]);
+
+    expect(expectChannel).toHaveBeenCalledExactlyOnceWith({
+      id: 'new-dm',
+      channelType: 'direct_message',
+    });
+  });
+
+  it('ignores older channels and channels the viewer is not in', () => {
+    const { handler, coordinator } = setup();
+    const expectChannel = vi.spyOn(coordinator, 'expectChannel');
+
+    handler.onSoupUpdates([
+      channelPush({ createdAt: '2026-01-01T00:00:00Z' }),
+      channelPush({ isParticipant: false }),
+    ]);
+
+    expect(expectChannel).not.toHaveBeenCalled();
   });
 });

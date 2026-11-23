@@ -8,14 +8,16 @@ version = "0.1.0"
 base64 = { workspace = true }
 httpdate = { workspace = true }
 jsonwebtoken = { workspace = true }
+macro_service_urls = { path = "../macro_service_urls" }
 models_email = { path = "../models_email" }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
+serde_path_to_error = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 tokio = { workspace = true }
 wiremock = { workspace = true }

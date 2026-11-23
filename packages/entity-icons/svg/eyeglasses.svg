@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-macro-icon="eyeglasses">
+  <circle cx="6.5" cy="14.5" r="3.5"/>
+  <circle cx="17.5" cy="14.5" r="3.5"/>
+  <path d="M10 14.5a2 2 0 0 1 4 0M3 14.5 4.75 7.5A1.5 1.5 0 0 1 6.2 6.35H7M21 14.5l-1.75-7a1.5 1.5 0 0 0-1.45-1.15H17"/>
+</svg>

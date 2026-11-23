@@ -47,7 +47,7 @@ where
     }
 
     /// Lists email addresses covered by blocked-sender rules.
-    #[tracing::instrument(skip(self), fields(retry_count = 0, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
+    #[tracing::instrument(skip(self), fields(retry_count = tracing::field::Empty, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
     pub async fn list_blocked_senders(&self, link_id: Uuid) -> Result<Vec<String>, EmailApiError> {
         self.read_with_token(
             link_id,

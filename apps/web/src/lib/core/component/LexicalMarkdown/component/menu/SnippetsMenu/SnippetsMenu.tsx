@@ -65,6 +65,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   const { entities: snippets } = useEntityMention({
     buckets: ['snippet'],
     searchTerm: activeSearchTerm,
+    enabled: props.menu.isOpen,
   });
   const filteredSnippets = () =>
     snippets().filter((snippet) => snippet.id !== props.sourceDocumentId);

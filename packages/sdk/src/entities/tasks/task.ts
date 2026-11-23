@@ -1,11 +1,23 @@
 import type { PropertyInput } from '../../../generated/storage/types.gen';
-import { unwrap } from '../../utils';
+import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import { Document } from '../documents/document';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
-import { entitySearch } from '../search';
-import type { Team } from '../teams/team';
+import { entitySearch } from '../search/options';
+import { Team } from '../teams/team';
+import {
+  type LogTimeOptions,
+  logTime,
+  type StartTimerOptions,
+  startTimer,
+  type TimeEntriesOptions,
+  type TimerStart,
+  timeEntries,
+  timeLogged,
+} from '../time/task-time';
+import type { TimeEntry } from '../time/time-entry';
 import { User } from '../users/user';
 
 /**
@@ -17,6 +29,7 @@ const ASSIGNEES_PROPERTY_ID = '00000001-0000-0000-0000-000000000001';
 const STATUS_PROPERTY_ID = '00000001-0000-0000-0000-000000000002';
 const DUE_DATE_PROPERTY_ID = '00000001-0000-0000-0000-000000000004';
 const PROJECT_PROPERTY_ID = '00000001-0000-0000-0000-000000000014';
+const START_DATE_PROPERTY_ID = '00000001-0000-0000-0000-000000000015';
 const NOT_STARTED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000001';
 const COMPLETED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000004';
 
@@ -53,8 +66,9 @@ export interface SimilarTask {
 }
 
 /**
- * A Macro task: a document with sub-type `task`. Inherits the full document
- * surface ({@link Document.rename}, move, delete, restore, content, events)
+ * A Macro task: a document with sub-type `task`, so every `Document` method
+ * works on it, including `content` and `edit` for its body. Inherits the full
+ * document surface ({@link Document.rename}, move, delete, restore, events)
  * and adds task-specific state.
  */
 export class Task extends Document {
@@ -64,8 +78,8 @@ export class Task extends Document {
   }
 
   /**
-   * Create a task, with its initiative, assignees and due date in the same
-   * request. The task starts Not started.
+   * Create a task, with its initiative, assignees, start and due dates in the
+   * same request. The task starts Not started.
    */
   static async create(
     client: MacroClient,
@@ -78,13 +92,44 @@ export class Task extends Document {
       initiative?: Initiative;
       /** Assignees; defaults to the creator. Pass `[]` to leave it unassigned. */
       assignees?: User[];
+      /** The day the task is due, kept as a whole day. */
       dueDate?: Date;
+      /**
+       * The day work on the task starts, kept as a whole day. A start after
+       * `dueDate` is saved as the due date.
+       */
+      startDate?: Date;
+      /**
+       * Keeps the time of day of `startDate` and `dueDate`, making each an
+       * exact moment (a 2 to 4 PM block) instead of a whole day. A time the
+       * person gives is in their time zone unless they name another: build the
+       * Date with that zone's UTC offset on that date.
+       */
+      withTimes?: boolean;
       /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
       team?: Team;
-      /** Defaults to true. */
+      /** Defaults to team sharing, or private when the session cannot share. */
       shareWithTeam?: boolean;
     },
   ): Promise<Task> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.create takes an options object, { name, markdown, ... }.',
+      );
+    rejectUnknownOptions('tasks.create', opts, {
+      name: true,
+      markdown: true,
+      project: true,
+      initiative: true,
+      assignees: true,
+      dueDate: true,
+      startDate: true,
+      withTimes: true,
+      team: true,
+      shareWithTeam: true,
+    });
+    if (typeof opts.name !== 'string' || !opts.name.trim())
+      throw new MacroError('tasks.create needs `name`, the task title.');
     const { documentId } = unwrap(
       await client.storage.createTaskHandler({
         body: {
@@ -92,7 +137,7 @@ export class Task extends Document {
           markdown: opts.markdown ?? null,
           projectId: opts.project?.id ?? null,
           teamId: opts.team?.id ?? null,
-          shareWithTeam: opts.shareWithTeam ?? true,
+          shareWithTeam: opts.shareWithTeam,
           propertyValues: await initialProperties(client, opts),
         },
       }),
@@ -144,6 +189,18 @@ export class Task extends Document {
     client: MacroClient,
     opts: { title: string; body?: string },
   ): Promise<SimilarTask[]> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.findSimilar takes an options object, { title, body }.',
+      );
+    rejectUnknownOptions('tasks.findSimilar', opts, {
+      title: true,
+      body: true,
+    });
+    if (typeof opts.title !== 'string' || !opts.title.trim())
+      throw new MacroError(
+        'tasks.findSimilar needs `title`, the title of the task you would create.',
+      );
     const { results } = unwrap(
       await client.storage.taskSimilaritySearchHandler({
         body: { taskName: opts.title, markdown: opts.body ?? null },
@@ -177,6 +234,8 @@ export class Task extends Document {
   /**
    * Whether the task is completed (its Status property is "Completed");
    * `undefined` if the document is not a task.
+   *
+   * @readonly
    */
   async completed(): Promise<boolean | undefined> {
     const { subType } = await this.detail.get();
@@ -191,12 +250,84 @@ export class Task extends Document {
     );
   }
 
-  /** The task's URL in the Macro web app. */
+  /**
+   * The task's team slug, such as `DB-245`, the short name to put in git
+   * branch names. It is the slug of the team the task is numbered in, then
+   * the task's number in that team; `documents.byTeamSlug` resolves a slug of
+   * the caller's current team back to its task. `undefined` when the task has
+   * no team number, or that team is not one of the caller's. `branchName()`
+   * suggests a whole branch name, but takes its prefix from the caller's first
+   * team, so it can differ from this slug.
+   *
+   * @readonly
+   */
+  async slug(): Promise<string | undefined> {
+    const { teamId, teamTaskId } = await this.detail.get();
+    if (!teamId || !teamTaskId) return undefined;
+
+    const teams = await Team.list(this.client);
+    const taskTeam = teams.find((team) => team.id === teamId);
+    if (!taskTeam) return undefined;
+
+    return `${await taskTeam.slug()}-${teamTaskId}`;
+  }
+
+  /**
+   * Log time you spent on this task, as yourself; needs edit access, and an
+   * entry is at most 24 hours. `date` is the day in your own calendar
+   * (`YYYY-MM-DD`, today in UTC when omitted). The task's Time logged grows by
+   * `minutes`.
+   *
+   * @example
+   * await task.logTime({ minutes: 90, date: '2026-11-20', note: 'Review' });
+   *
+   * @write
+   */
+  logTime(opts: LogTimeOptions): Promise<TimeEntry> {
+    return logTime(this.client, this, opts);
+  }
+
+  /**
+   * Everyone's time entries on this task, newest day first, auto-paginated;
+   * `maxItems` caps the total.
+   *
+   * @readonly
+   */
+  timeEntries(opts?: TimeEntriesOptions): AsyncGenerator<TimeEntry> {
+    return timeEntries(this.client, this, opts);
+  }
+
+  /**
+   * The task's Time logged: the minutes of all its entries.
+   *
+   * @readonly
+   */
+  timeLogged(): Promise<number> {
+    return timeLogged(this.client, this);
+  }
+
+  /**
+   * Start your timer on this task, first stopping and saving any timer you
+   * have running, on this task too (`stopped`); check `macro.time.timer()`
+   * first. Needs edit access. A running timer past 8 hours throws
+   * `TimerOverLimitError` instead, naming that timer to resolve first.
+   *
+   * @write
+   */
+  startTimer(opts?: StartTimerOptions): Promise<TimerStart> {
+    return startTimer(this.client, this, opts);
+  }
+
+  /**
+   * The task's URL in the Macro web app.
+   *
+   * @readonly
+   */
   override webUrl(): string {
     return `${this.client.webAppUrl}/app/task/${this.id}`;
   }
 
-  /** Search tasks by name and content, most relevant first, auto-paginated. */
+  /** Search tasks by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { document_filters: { sub_types: ['task'], task_filters: {} } },
     type: 'document',
@@ -209,11 +340,20 @@ export class Task extends Document {
  * (creator assigned, Not started). Sending any value replaces those defaults,
  * so the defaults are spelled out here.
  */
+function dateValue(date: Date, withTime: boolean | undefined) {
+  return {
+    type: 'date' as const,
+    value: date.toISOString(),
+    ...(withTime ? { has_time: true } : {}),
+  };
+}
+
 async function initialProperties(
   client: MacroClient,
   opts: Parameters<typeof Task.create>[1],
 ): Promise<PropertyInput[] | null> {
-  if (!opts.initiative && !opts.assignees && !opts.dueDate) return null;
+  if (!opts.initiative && !opts.assignees && !opts.dueDate && !opts.startDate)
+    return null;
   const assignees = opts.assignees ?? [await User.me(client)];
   const values: PropertyInput[] = [
     {
@@ -245,7 +385,13 @@ async function initialProperties(
   if (opts.dueDate) {
     values.push({
       propertyId: DUE_DATE_PROPERTY_ID,
-      value: { type: 'date', value: opts.dueDate.toISOString() },
+      value: dateValue(opts.dueDate, opts.withTimes),
+    });
+  }
+  if (opts.startDate) {
+    values.push({
+      propertyId: START_DATE_PROPERTY_ID,
+      value: dateValue(opts.startDate, opts.withTimes),
     });
   }
   return values;

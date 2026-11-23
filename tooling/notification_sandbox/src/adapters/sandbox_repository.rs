@@ -1,6 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
+use notification::domain::channel_settings::ChannelNotificationSettings;
 use notification::domain::models::TaggedContent;
 use notification::domain::models::request::{NotificationListFilters, NotificationStatus};
 use notification::domain::models::{
@@ -8,13 +9,14 @@ use notification::domain::models::{
     UserNotificationRow, device::DeviceType,
 };
 use notification::domain::ports::NotificationRepository;
+use notification::domain::section_settings::{ChannelSection, SectionNotificationSettings};
 use notification::outbound::repository::DbNotificationRepository;
 use rootcause::Report;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sqlx::PgPool;
-use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -51,9 +53,32 @@ impl NotificationRepository for SandboxNotificationRepository {
     async fn get_unsubscribed_users<'a>(
         &self,
         item_id: &str,
+        is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        self.inner.get_unsubscribed_users(item_id, user_ids).await
+        self.inner
+            .get_unsubscribed_users(item_id, is_direct_mention, user_ids)
+            .await
+    }
+
+    async fn get_channel_notification_settings<'a>(
+        &self,
+        channel_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report> {
+        self.inner
+            .get_channel_notification_settings(channel_id, user_ids)
+            .await
+    }
+
+    async fn get_channel_section_settings<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<
+        HashMap<MacroUserIdStr<'static>, BTreeMap<ChannelSection, SectionNotificationSettings>>,
+        Report,
+    > {
+        self.inner.get_channel_section_settings(user_ids).await
     }
 
     async fn create_notification<'a, T: Serialize + Send + Sync>(
@@ -114,6 +139,17 @@ impl NotificationRepository for SandboxNotificationRepository {
     ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.inner
             .mark_notifications_done(user_id, notification_ids, done)
+            .await
+    }
+
+    async fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        self.inner
+            .reopen_notifications(user_id, notification_ids, unseen)
             .await
     }
 

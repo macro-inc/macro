@@ -25,8 +25,9 @@ export const EntitySelectionToolbarModal = (
           <div class="menu-surface text-sm font-bold flex flex-wrap flex-row items-center gap-2 p-2">
             <Button
               type="button"
-              size="icon-sm"
+              size="icon-md"
               variant="ghost"
+              aria-label={t('entityActions.clearSelection')}
               onClick={props.onClose}
             >
               <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />

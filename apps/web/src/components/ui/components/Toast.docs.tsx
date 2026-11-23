@@ -1,20 +1,30 @@
+import {
+  TOAST_INVENTORY,
+  type ToastInventoryEntry,
+} from '@app/features/ui-gallery/toast-inventory';
 import { defineDoc } from '@app/features/ui-gallery/types';
+import { t } from '@app/lib/i18n';
 import { createMobileToastSwipe } from '@core/component/Toast/create-mobile-toast-swipe';
 import { ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
 import {
   type ComponentProps,
   createSignal,
   createUniqueId,
+  For,
   Match,
   onCleanup,
+  onMount,
   Show,
   Switch,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { Button } from './Button';
+import { Input } from './Input';
 import { Spinner } from './Spinner';
 import { Tabs } from './Tabs';
 
@@ -119,6 +129,101 @@ function PreviewRegion(props: {
   );
 }
 
+// #region demo:current-toasts
+function CurrentToastPreview(props: { entry: ToastInventoryEntry }) {
+  const preview = createToastPreview();
+  const swipe = createMobileToastSwipe();
+  const replay = () => {
+    preview.clear();
+    let id: number;
+    id = preview.show({
+      ...props.entry.create(() => preview.dismiss(id)),
+      // Keep every specimen visible long enough to compare its presentation.
+      persistent: true,
+    });
+  };
+  onMount(replay);
+
+  return (
+    <article class="flex min-w-0 flex-col gap-3">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-xs text-ink-muted">{props.entry.category}</p>
+          <h4 class="text-sm font-medium text-ink">{props.entry.name}</h4>
+        </div>
+        <Button variant="ghost" size="sm" onClick={replay}>
+          Replay
+        </Button>
+      </div>
+      <p class="text-xs text-ink-muted">{props.entry.trigger}</p>
+      <div
+        on:pointerdown={{ capture: true, handleEvent: swipe.onPointerDown }}
+        on:pointermove={{ capture: true, handleEvent: swipe.onPointerMove }}
+        on:pointerup={{ capture: true, handleEvent: swipe.clearSwipe }}
+        on:pointercancel={{ capture: true, handleEvent: swipe.clearSwipe }}
+      >
+        <Toast.Region
+          regionId={preview.regionId}
+          aria-label={`${props.entry.name} preview`}
+          class="macro-toast-region max-w-full"
+          classList={{ 'w-full': isMobile(), 'w-95': !isMobile() }}
+          swipeDirection={isMobile() ? swipe.direction() : 'right'}
+        >
+          <Toast.List class="macro-toast-list" />
+        </Toast.Region>
+      </div>
+      <div class="mt-auto flex flex-col gap-1">
+        <p class="text-xs text-ink-muted">{props.entry.behavior}</p>
+        <code class="text-[11px] text-ink-extra-muted wrap-anywhere">
+          src/{props.entry.source}
+        </code>
+      </div>
+    </article>
+  );
+}
+
+function CurrentToastsDemo() {
+  const [search, setSearch] = createSignal('');
+  const availableEntries = () =>
+    TOAST_INVENTORY.filter((entry) => !entry.desktopOnly || !isTouchDevice());
+  const entries = () => {
+    const query = search().trim().toLowerCase();
+    if (!query) return availableEntries();
+    return availableEntries().filter((entry) =>
+      `${entry.name} ${entry.category} ${entry.trigger} ${entry.source}`
+        .toLowerCase()
+        .includes(query)
+    );
+  };
+
+  return (
+    <div class="flex w-full flex-col gap-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <Input
+          type="search"
+          aria-label="Filter current app toasts"
+          placeholder="Filter by toast, category, or source…"
+          value={search()}
+          onInput={(event) => setSearch(event.currentTarget.value)}
+          class="w-full max-w-sm"
+        />
+        <span class="text-xs text-ink-muted">
+          {entries().length} of {availableEntries().length} examples
+        </span>
+      </div>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] gap-x-8 gap-y-10">
+        <For
+          each={entries()}
+          fallback={<p class="text-sm text-ink-muted">No matching toasts.</p>}
+        >
+          {(entry) => <CurrentToastPreview entry={entry} />}
+        </For>
+      </div>
+    </div>
+  );
+}
+// #endregion
+
 // #region demo:notifications
 function StatusesDemo(props: ToastDemoProps = {}) {
   const preview = props.preview ?? createToastPreview();
@@ -194,9 +299,11 @@ function ActionsDemo(props: ToastDemoProps = {}) {
       message: 'Email sent',
       duration: 5000,
       actionLayout: 'inline',
+      dismissStyle: 'icon',
       actions: [
         {
           label: 'Undo',
+          icon: ArrowCounterClockwise,
           onClick: () => {
             preview.dismiss(id);
             preview.show({
@@ -212,12 +319,16 @@ function ActionsDemo(props: ToastDemoProps = {}) {
     const id = preview.show({
       persistent: true,
       custom: {
-        title: 'Reconnect email and calendar',
+        title: 'Reconnect inbox',
         content: () => 'Reconnect your account to resume syncing.',
         icon: LinkIcon,
+        color: 'var(--color-failure)',
+        titleColor: 'var(--color-failure)',
+        dismissLabel: t('common.maybeLater'),
         actions: [
           {
             label: 'Reconnect',
+            icon: ArrowCounterClockwise,
             onClick: () => {
               preview.dismiss(id);
               preview.show({
@@ -536,11 +647,20 @@ function AppPositionDemo() {
 
 export default defineDoc({
   name: 'Toast',
+  wide: true,
   category: 'Feedback',
   description:
-    'Standalone status icons, title-aligned content, primary actions with secondary Dismiss buttons, and compact mobile notices. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
+    'Short titles, consistent action icons, actions below descriptions, single-action notices inline, and desktop close controls. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
   import: "import { toast } from '@core/component/Toast/Toast';",
   demos: [
+    {
+      id: 'current-toasts',
+      title: 'Current app toasts',
+      description:
+        'Review representative production toasts with the shared renderer, including setup, recovery, Undo, navigation, routine feedback, send cancellation, imports, downloads, and failures. This is not an exhaustive list of every toast call. Examples stay open for inspection; their normal lifetime and platform are listed below. Actions only dismiss the preview: they never connect accounts, change settings, move files, or reload. Replay restores a dismissed example. Account details and error details are synthetic.',
+      render: CurrentToastsDemo,
+      fill: true,
+    },
     {
       id: 'app-position',
       title: 'App position',
@@ -581,9 +701,14 @@ export default defineDoc({
       'Use a short title and put supporting details in subtext.',
       'Reserve persistent prompts for notices that need a response.',
       'Keep action labels short and retain meaningful content on mobile.',
-      'Use primary actions with a secondary Dismiss button instead of a close icon.',
+      'Keep a single action beside the title when there is no description.',
+      'Use a desktop close icon on navigation notices and put secondary Open split before primary Open.',
+      'Use Not now for optional setup prompts and Maybe later for recovery and update-ready prompts.',
+      'Use danger-colored recovery titles and icons with neutral descriptions and action buttons; keep the default error icon for draft-save failures.',
+      'Keep the standard neutral background and border for app updates, with an accent Macro logo and Reload action.',
       'Omit the close icon on mobile; retain swipe dismissal in either direction.',
-      'Set actionLayout to inline for brief notices; keep stacked actions for longer prompts.',
+      'Place actions below descriptions; use actionLayout inline only for multiple actions without a description.',
+      'Use consistent 16px icons where meaningful; put the Open icon after its label and keep View and generic forward actions text-only.',
       'Use the existing toast service so queueing, timing, and dismissal stay consistent.',
       'Use the shared Spinner for loading; keep the progress bar for known progress.',
     ],

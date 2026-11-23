@@ -195,10 +195,16 @@ export function filterSoupItemByRequestBody(
         !isValueFilteredOut(filters?.owners, data.ownerId)
       );
     })
-    .with({ tag: 'databaseRow' }, { tag: 'crmContact' }, () => {
-      // These partitions are opt-in through the filter AST only.
-      return false;
-    })
+    .with(
+      { tag: 'databaseRow' },
+      { tag: 'crmContact' },
+      { tag: 'harness' },
+      { tag: 'team' },
+      () => {
+        // These partitions are opt-in through the filter AST only.
+        return false;
+      }
+    )
     .exhaustive(() => false);
 }
 

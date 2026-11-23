@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM crm_email_thread_exclusions WHERE team_id = $1 AND user_id = $2 AND thread_id = $3 AND link_id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c9b3f1a1318b8ad682605a7845e23a940536a418a1a2b7fd192939c87526b242"
+}

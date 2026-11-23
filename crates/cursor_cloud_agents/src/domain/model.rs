@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use super::model_options::{REASONING_PARAMETER_IDS, model_params_match_except};
 use serde::{Deserialize, Serialize};
 
 /// The identity of a Cursor cloud agent (`bc-…`), which holds the
@@ -341,6 +342,45 @@ impl CursorModel {
                 .map(|variant| variant.params.clone())
                 .unwrap_or_default(),
         }
+    }
+
+    /// [`Self::default_choice`] with `effort` applied when this model offers
+    /// it. A preferred effort the model does not offer is ignored rather than
+    /// refused: it is a saved preference, and the default variant still runs.
+    #[must_use]
+    pub fn choice_with_preferred_effort(&self, effort: Option<&str>) -> ModelChoice {
+        let choice = self.default_choice();
+        effort
+            .and_then(|effort| self.with_effort(&choice, effort))
+            .unwrap_or(choice)
+    }
+
+    /// `base` with its reasoning effort set to `effort`, keeping every other
+    /// parameter, or `None` when `base` has no effort parameter or this model
+    /// has no variant with that combination.
+    ///
+    /// Cursor accepts only the combinations it lists as variants, so an effort
+    /// is chosen by finding the variant that differs from `base` in effort
+    /// alone, never by editing a parameter in place.
+    #[must_use]
+    pub fn with_effort(&self, base: &ModelChoice, effort: &str) -> Option<ModelChoice> {
+        let parameter_id = base
+            .params
+            .iter()
+            .find(|param| REASONING_PARAMETER_IDS.contains(&param.id.as_str()))?
+            .id
+            .as_str();
+        let variant = self.variants.iter().find(|variant| {
+            variant
+                .params
+                .iter()
+                .any(|param| param.id == parameter_id && param.value == effort)
+                && model_params_match_except(&variant.params, &base.params, parameter_id)
+        })?;
+        Some(ModelChoice {
+            id: self.id.clone(),
+            params: variant.params.clone(),
+        })
     }
 
     /// The family this model belongs to, read off its display name.

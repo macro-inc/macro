@@ -25,6 +25,13 @@ use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::search::{SearchPage, SearchRequest};
+use cache_core::{
+    engine::HydrationScope,
+    people::{
+        ContextState, ContextUpdate, PeopleReferenceRequest, PeopleReferenceResult, PeopleSearch,
+        PeopleSearchResult,
+    },
+};
 use cache_turso::TursoFileDatabase;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
@@ -34,6 +41,17 @@ mod test;
 
 type Variables = serde_json::Map<String, serde_json::Value>;
 
+// This is an opaque correlation field, not a trusted parent context. Never log
+// arbitrary IPC strings as trace metadata.
+fn people_trace_correlation(value: Option<&str>) -> Option<&str> {
+    value.filter(|value| {
+        value.len() == 55
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
+    })
+}
+
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
         .0
@@ -42,6 +60,37 @@ fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> 
         .as_ref()
         .map(|cache| cache.handle.clone())
         .ok_or_else(|| "graphql cache not initialized (call graphql_cache_init first)".to_string())
+}
+
+/// The handle for a read the webview may abandon: given `request_id`, the read
+/// gives the engine back without reading if `graphql_cache_abandon` names it
+/// before its turn.
+fn reading_handle(
+    state: &State<'_, CacheState>,
+    request_id: Option<String>,
+) -> Result<EngineHandle, String> {
+    Ok(engine_handle(state)?.abandonable(request_id))
+}
+
+/// The webview stopped waiting for the read sent with `request_id`: if it has
+/// not got the engine yet, it will skip reading when it does, so reads nobody
+/// waits for do not hold the engine ahead of the ones somebody does. Says
+/// whether the read was still running. Takes no engine lock. Older bundles
+/// never send it; newer ones ignore its absence on older binaries.
+#[tauri::command]
+pub async fn graphql_cache_abandon(
+    state: State<'_, CacheState>,
+    request_id: String,
+) -> Result<bool, String> {
+    // Not through a cloned handle: shutdown fails while another handle lives.
+    Ok(state
+        .0
+        .lock()
+        .map_err(|_| "graphql cache state poisoned".to_string())?
+        .as_ref()
+        .ok_or_else(|| "graphql cache not initialized (call graphql_cache_init first)".to_string())?
+        .handle
+        .abandon(&request_id))
 }
 
 /// Opens (or creates) the cache for `scope`. Idempotent for the same scope;
@@ -107,7 +156,15 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
             let database =
                 TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
             let storage = database.open_or_reset(&scope).map_err(|e| e.to_string())?;
-            let handle = EngineHandle::with_schema(storage, hot_capacity, schema);
+            let events = app.clone();
+            let handle = EngineHandle::with_schema(storage, hot_capacity, schema)
+                .with_authority_listener(scope.clone(), move |authority| {
+                    crate::emit_cache_event(
+                        &events,
+                        "graphql-cache://authority-changed",
+                        authority,
+                    );
+                });
             *guard = Some(InitializedCache {
                 scope,
                 handle: handle.clone(),
@@ -134,12 +191,71 @@ pub async fn graphql_cache_current_storage_generation(
     engine_handle(&state)?.current_storage_generation().await
 }
 
+/// Capture the durable permission generation before obtaining response content.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "current-authority", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
+#[tauri::command]
+pub async fn graphql_cache_current_authority(
+    state: State<'_, CacheState>,
+    identity: String,
+    traceparent: Option<String>,
+    request_id: Option<String>,
+) -> Result<cache_core::engine::authority::CacheAuthority, String> {
+    reading_handle(&state, request_id)?
+        .current_authority(&identity)
+        .await
+}
+
+/// Apply a fresh permission proof under the cache owner's mutation lock.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "transition-authority", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
+#[tauri::command]
+pub async fn graphql_cache_transition_authority<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    identity: String,
+    expected: uuid::Uuid,
+    policy: String,
+    traceparent: Option<String>,
+) -> Result<crate::engine::AuthorityTransitionWire, String> {
+    let result = engine_handle(&state)?
+        .transition_authority(&identity, expected, policy)
+        .await?;
+    if result.changed {
+        emit_ops_affected(
+            &app,
+            &result.affected_ops,
+            None,
+            Some(result.authority.generation.to_string()).as_deref(),
+        );
+        emit_cache_changed(
+            &app,
+            &result.revision,
+            false,
+            Some(result.authority.generation.to_string()).as_deref(),
+        );
+    }
+    Ok(result)
+}
+
 /// Attempts a cache read; registers `op_id` as active when given.
 #[tracing::instrument(
     name = "graphql_cache.ipc.receive",
     skip_all,
     fields(graphql_cache.ipc.command = "read", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
     err
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tauri command fields preserve the existing flat IPC wire contract"
 )]
 #[tauri::command]
 pub async fn graphql_cache_read(
@@ -150,8 +266,9 @@ pub async fn graphql_cache_read(
     variables: Option<Variables>,
     entity_resolvers: Option<Vec<EntityResolver>>,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<ReadResultWire, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .read(
             op_id,
             query,
@@ -183,8 +300,9 @@ pub async fn graphql_cache_watch(
     entity_resolvers: Option<Vec<EntityResolver>>,
     since: Option<String>,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .watch(
             op_id,
             query,
@@ -203,8 +321,9 @@ pub async fn graphql_cache_read_records_by_keys(
     document: String,
     fragment_name: String,
     keys: Vec<String>,
+    request_id: Option<String>,
 ) -> Result<RecordSelectionResultWire, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .read_records_by_keys(document, fragment_name, keys)
         .await
 }
@@ -214,8 +333,121 @@ pub async fn graphql_cache_read_records_by_keys(
 pub async fn graphql_cache_search(
     state: State<'_, CacheState>,
     request: SearchRequest,
+    request_id: Option<String>,
 ) -> Result<SearchPage, String> {
-    engine_handle(&state)?.search(request).await
+    reading_handle(&state, request_id)?.search(request).await
+}
+
+/// Read local person-context publication. A distinct command makes OTA capability explicit.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
+pub async fn graphql_cache_people_context(
+    state: State<'_, CacheState>,
+    scope: HydrationScope,
+    traceparent: Option<String>,
+    request_id: Option<String>,
+) -> Result<ContextState, String> {
+    reading_handle(&state, request_id)?
+        .people_context(scope)
+        .await
+}
+
+/// Persist one scoped local-context batch. JS publishes hydration-only hints.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
+pub async fn graphql_cache_people_update(
+    state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
+    update: ContextUpdate,
+    traceparent: Option<String>,
+) -> Result<WriteResultWire, String> {
+    let result = engine_handle(&state)?
+        .with_generation(generation)
+        .people_update(update)
+        .await?;
+    Ok(result)
+}
+
+/// Rank current-account people before the result limit.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
+pub async fn graphql_cache_people_search(
+    state: State<'_, CacheState>,
+    request: PeopleSearch,
+    traceparent: Option<String>,
+    request_id: Option<String>,
+) -> Result<PeopleSearchResult, String> {
+    reading_handle(&state, request_id)?
+        .people_search(request)
+        .await
+}
+
+/// Read one bounded contact membership window without exposing names.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]
+pub async fn graphql_cache_contact_snapshot(
+    state: State<'_, CacheState>,
+    request: cache_core::people::sync::ContactSnapshotRequest,
+    traceparent: Option<String>,
+) -> Result<cache_core::people::sync::ContactSnapshot, String> {
+    engine_handle(&state)?.contact_snapshot(request).await
+}
+
+/// Apply authoritative requested-ID omissions, never omissions from a page scan.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]
+pub async fn graphql_cache_contact_reconcile<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
+    request: cache_core::people::sync::ContactReconcile,
+    traceparent: Option<String>,
+) -> Result<WriteResultWire, String> {
+    let result = engine_handle(&state)?
+        .with_generation(generation)
+        .contact_reconcile(request)
+        .await?;
+    emit_ops_affected(
+        &app,
+        &result.affected_ops,
+        result.field_changes.as_ref(),
+        generation_tag(generation).as_deref(),
+    );
+    if result.revision_advanced {
+        emit_cache_changed_with_hints(
+            &app,
+            &result.revision,
+            result.reset,
+            result.search_changed_buckets.as_ref(),
+            None,
+            generation_tag(generation).as_deref(),
+        );
+    }
+    Ok(result)
+}
+
+/// Execute a read in local storage; query text and people are never traced.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]
+pub async fn graphql_cache_people_read_sql(
+    state: State<'_, CacheState>,
+    request: cache_core::people::sql::PeopleSqlRequest,
+    traceparent: Option<String>,
+) -> Result<cache_core::people::sql::PeopleSqlResult, String> {
+    engine_handle(&state)?.people_read_sql(request).await
+}
+
+/// Resolve scoped label evidence, never a complete in-memory people catalog.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref()), label_count = request.labels.len()), err)]
+pub async fn graphql_cache_people_resolve_references(
+    state: State<'_, CacheState>,
+    request: PeopleReferenceRequest,
+    traceparent: Option<String>,
+) -> Result<PeopleReferenceResult, String> {
+    engine_handle(&state)?
+        .people_resolve_references(request)
+        .await
 }
 
 /// Evaluates Soup filters over native projections, including cached Mail pages.
@@ -230,8 +462,13 @@ pub async fn graphql_cache_entity_filter(
     state: State<'_, CacheState>,
     request: EntityFilterRequest,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<EntityFilterResult, String> {
-    engine_handle(&state)?.entity_filter(request).await
+    // Releasing a live view frees its slot, so it is never abandoned.
+    let releases = request.live_query.as_ref().is_some_and(|live| live.release);
+    reading_handle(&state, request_id.filter(|_| !releases))?
+        .entity_filter(request)
+        .await
 }
 
 /// Reads a registered live view without resending its selection and predicate.
@@ -248,8 +485,9 @@ pub async fn graphql_cache_entity_filter_resume(
     registration_id: cache_core::engine::live_query::LiveQueryRegistration,
     since: Option<String>,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<Option<crate::engine::LiveQueryResult>, String> {
-    let update = engine_handle(&state)?
+    let update = reading_handle(&state, request_id)?
         .resume_entity_filter(id, registration_id, since)
         .await?;
     tracing::Span::current().record("graphql_cache.live_query.retained", update.is_some());
@@ -261,8 +499,11 @@ pub async fn graphql_cache_entity_filter_resume(
 pub async fn graphql_cache_calendar_range(
     state: State<'_, CacheState>,
     request: CalendarRangeRequest,
+    request_id: Option<String>,
 ) -> Result<CalendarRangeResultWire, String> {
-    engine_handle(&state)?.calendar_range(request).await
+    reading_handle(&state, request_id)?
+        .calendar_range(request)
+        .await
 }
 
 /// Applies fetched coverage, delta deletions, and sync state, then
@@ -271,10 +512,19 @@ pub async fn graphql_cache_calendar_range(
 pub async fn graphql_cache_calendar_commit<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
     commit: CalendarCommit,
 ) -> Result<WriteResultWire, String> {
-    let result = engine_handle(&state)?.calendar_commit(commit).await?;
-    emit_ops_affected(&app, &result.affected_ops, result.field_changes.as_ref());
+    let result = engine_handle(&state)?
+        .with_generation(generation)
+        .calendar_commit(commit)
+        .await?;
+    emit_ops_affected(
+        &app,
+        &result.affected_ops,
+        result.field_changes.as_ref(),
+        generation_tag(generation).as_deref(),
+    );
     if result.revision_advanced {
         emit_cache_changed_with_hints(
             &app,
@@ -282,6 +532,7 @@ pub async fn graphql_cache_calendar_commit<R: Runtime>(
             result.reset,
             result.search_changed_buckets.as_ref(),
             result.unchanged_views.as_ref(),
+            generation_tag(generation).as_deref(),
         );
     }
     Ok(result)
@@ -310,6 +561,7 @@ pub struct WriteRegistrationWire {
 pub async fn graphql_cache_write<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
     origin_op_id: Option<String>,
     registration: Option<WriteRegistrationWire>,
     query: String,
@@ -320,6 +572,7 @@ pub async fn graphql_cache_write<R: Runtime>(
     traceparent: Option<String>,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?
+        .with_generation(generation)
         .write(WriteRequest {
             origin_op_id,
             registration: registration.map(|registration| WriteRegistration {
@@ -333,7 +586,12 @@ pub async fn graphql_cache_write<R: Runtime>(
             identity,
         })
         .await?;
-    emit_ops_affected(&app, &result.affected_ops, result.field_changes.as_ref());
+    emit_ops_affected(
+        &app,
+        &result.affected_ops,
+        result.field_changes.as_ref(),
+        generation_tag(generation).as_deref(),
+    );
     if result.revision_advanced {
         emit_cache_changed_with_hints(
             &app,
@@ -341,6 +599,7 @@ pub async fn graphql_cache_write<R: Runtime>(
             result.reset,
             result.search_changed_buckets.as_ref(),
             result.unchanged_views.as_ref(),
+            generation_tag(generation).as_deref(),
         );
     }
     Ok(result)
@@ -399,6 +658,7 @@ pub enum HydrationResultWire {
 pub async fn graphql_cache_hydrate<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
     query: String,
     operation_name: Option<String>,
     variables: Option<Variables>,
@@ -407,25 +667,78 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
     traceparent: Option<String>,
 ) -> Result<HydrationResultWire, String> {
     let result = engine_handle(&state)?
+        .with_generation(generation)
         .hydrate_query(
             query,
             operation_name,
             variables.unwrap_or_default(),
             data,
             identity,
+            None,
         )
         .await?;
     if result.write_result.reset {
-        emit_ops_affected(&app, &result.write_result.affected_ops, None);
+        emit_ops_affected(
+            &app,
+            &result.write_result.affected_ops,
+            None,
+            generation_tag(generation).as_deref(),
+        );
         if result.write_result.revision_advanced {
             emit_cache_changed(
                 &app,
                 &result.write_result.revision,
                 result.write_result.reset,
+                generation_tag(generation).as_deref(),
             );
         }
     }
-    Ok(match result.data {
+    Ok(hydration_result(result))
+}
+
+/// Required scoped-admission inputs for background responses. Kept separate
+/// from the deployed unscoped command so old binaries cannot ignore a guard.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScopedHydrationRequest {
+    query: String,
+    operation_name: Option<String>,
+    variables: Option<Variables>,
+    data: serde_json::Value,
+    identity: Option<String>,
+    hydration_scope: cache_core::engine::HydrationScope,
+}
+
+/// Admits a background response without switching account or data generation.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "hydrate_scoped", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
+#[tauri::command]
+pub async fn graphql_cache_hydrate_scoped(
+    state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
+    request: ScopedHydrationRequest,
+    traceparent: Option<String>,
+) -> Result<HydrationResultWire, String> {
+    let result = engine_handle(&state)?
+        .with_generation(generation)
+        .hydrate_query(
+            request.query,
+            request.operation_name,
+            request.variables.unwrap_or_default(),
+            request.data,
+            request.identity,
+            Some(request.hydration_scope),
+        )
+        .await?;
+    Ok(hydration_result(result))
+}
+
+fn hydration_result(result: crate::engine::HydrationWriteResultWire) -> HydrationResultWire {
+    match result.data {
         Some(data) => HydrationResultWire::Data {
             unchanged_views: result.unchanged_views,
             search_changed_buckets: result.search_changed_buckets,
@@ -439,7 +752,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             revision: result.write_result.revision,
             revision_advanced: result.write_result.revision_advanced,
         },
-    })
+    }
 }
 
 /// Durably queues an optimistic mutation and attempts to claim the strict
@@ -449,6 +762,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
 pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
     origin_op_id: Option<String>,
     uuid: String,
     query: String,
@@ -466,6 +780,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     uncertain_calendar_event_keys: Option<Vec<String>>,
 ) -> Result<EnqueueOptimisticMutationResultWire, String> {
     let result = engine_handle(&state)?
+        .with_generation(generation)
         .enqueue_optimistic_mutation(
             origin_op_id,
             uuid.clone(),
@@ -488,9 +803,15 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
         &app,
         &result.result.affected_ops,
         result.result.field_changes.as_ref(),
+        generation_tag(generation).as_deref(),
     );
     if result.result.revision_advanced {
-        emit_cache_changed(&app, &result.result.revision, result.result.reset);
+        emit_cache_changed(
+            &app,
+            &result.result.revision,
+            result.result.reset,
+            generation_tag(generation).as_deref(),
+        );
     }
     if let MutationUpsertKindWire::ReplacedPending {
         removed_transaction_id,
@@ -523,8 +844,9 @@ pub async fn graphql_cache_inspect_query_variants(
     query: String,
     operation_name: Option<String>,
     path: Vec<InspectionPathSegment>,
+    request_id: Option<String>,
 ) -> Result<Vec<CachedQueryVariant>, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .inspect_query_variants(
             query,
             operation_name,
@@ -541,8 +863,9 @@ pub async fn graphql_cache_inspect_query(
     operation_name: Option<String>,
     path: Vec<InspectionPathSegment>,
     variable_filters: Option<Vec<serde_json::Map<String, serde_json::Value>>>,
+    request_id: Option<String>,
 ) -> Result<Vec<CachedQueryInstance>, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .inspect_query(
             query,
             operation_name,
@@ -597,9 +920,10 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
             &app,
             &write_result.affected_ops,
             write_result.field_changes.as_ref(),
+            None,
         );
         if write_result.revision_advanced {
-            emit_cache_changed(&app, &write_result.revision, write_result.reset);
+            emit_cache_changed(&app, &write_result.revision, write_result.reset, None);
         }
         emit_mutation_settled(
             &app,
@@ -619,6 +943,7 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
 pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
     transaction_id: String,
     lease_owner: String,
     lease_generation: String,
@@ -629,6 +954,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
 ) -> Result<CommitOptimisticWriteResultWire, String> {
     let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
+        .with_generation(generation)
         .commit_optimistic_write(
             transaction_id,
             lease_owner,
@@ -659,9 +985,15 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
         &app,
         &write_result.affected_ops,
         write_result.field_changes.as_ref(),
+        generation_tag(generation).as_deref(),
     );
     if write_result.revision_advanced {
-        emit_cache_changed(&app, &write_result.revision, write_result.reset);
+        emit_cache_changed(
+            &app,
+            &write_result.revision,
+            write_result.reset,
+            generation_tag(generation).as_deref(),
+        );
     }
     emit_mutation_settled(
         &app,
@@ -704,9 +1036,10 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
                 &app,
                 &write_result.affected_ops,
                 write_result.field_changes.as_ref(),
+                None,
             );
             if write_result.revision_advanced {
-                emit_cache_changed(&app, &write_result.revision, write_result.reset);
+                emit_cache_changed(&app, &write_result.revision, write_result.reset, None);
             }
             emit_mutation_settled(
                 &app,
@@ -726,9 +1059,10 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
                 &app,
                 &write_result.affected_ops,
                 write_result.field_changes.as_ref(),
+                None,
             );
             if write_result.revision_advanced {
-                emit_cache_changed(&app, &write_result.revision, write_result.reset);
+                emit_cache_changed(&app, &write_result.revision, write_result.reset, None);
             }
             emit_mutation_settled(
                 &app,
@@ -750,11 +1084,25 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
 pub async fn graphql_cache_invalidate<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
     keys: Vec<String>,
 ) -> Result<AffectedOperationsResultWire, String> {
-    let affected = engine_handle(&state)?.invalidate(keys).await?;
-    emit_ops_affected(&app, &affected.affected_ops, None);
-    emit_cache_changed(&app, &affected.revision, false);
+    let affected = engine_handle(&state)?
+        .with_generation(generation)
+        .invalidate(keys)
+        .await?;
+    emit_ops_affected(
+        &app,
+        &affected.affected_ops,
+        None,
+        generation_tag(generation).as_deref(),
+    );
+    emit_cache_changed(
+        &app,
+        &affected.revision,
+        false,
+        generation_tag(generation).as_deref(),
+    );
     Ok(affected)
 }
 
@@ -764,11 +1112,25 @@ pub async fn graphql_cache_invalidate<R: Runtime>(
 pub async fn graphql_cache_delete_records<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
     keys: Vec<String>,
 ) -> Result<AffectedOperationsResultWire, String> {
-    let affected = engine_handle(&state)?.delete_records(keys).await?;
-    emit_ops_affected(&app, &affected.affected_ops, None);
-    emit_cache_changed(&app, &affected.revision, false);
+    let affected = engine_handle(&state)?
+        .with_generation(generation)
+        .delete_records(keys)
+        .await?;
+    emit_ops_affected(
+        &app,
+        &affected.affected_ops,
+        None,
+        generation_tag(generation).as_deref(),
+    );
+    emit_cache_changed(
+        &app,
+        &affected.revision,
+        false,
+        generation_tag(generation).as_deref(),
+    );
     Ok(affected)
 }
 
@@ -788,7 +1150,7 @@ pub async fn graphql_cache_clear<R: Runtime>(
     state: State<'_, CacheState>,
 ) -> Result<String, String> {
     let revision = engine_handle(&state)?.clear().await?.to_string();
-    emit_cache_changed(&app, &revision, true);
+    emit_cache_changed(&app, &revision, true, None);
     Ok(revision)
 }
 
@@ -798,4 +1160,8 @@ pub async fn graphql_cache_inspect_mutations(
     state: State<'_, CacheState>,
 ) -> Result<Vec<cache_core::queue::MutationInspection>, String> {
     engine_handle(&state)?.inspect_mutations().await
+}
+
+fn generation_tag(generation: Option<uuid::Uuid>) -> Option<String> {
+    generation.map(|value| value.to_string())
 }

@@ -7,7 +7,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { throwOnErr } from '@core/util/result';
 import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import ExpandIcon from '@icon/system/regular/arrows-out-simple.svg';
-import ClipboardIcon from '@icon/system/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/system/regular/dots-three-vertical.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
@@ -142,7 +141,8 @@ export function ImagePreview(props: ImagePreviewProps) {
     return platformFetch(sfsImageUrl()).then((r) => r.blob());
   };
 
-  const copyToClipboard = () => copyImageToClipboard(getBlob, sfsImageUrl());
+  const copyToClipboard = () =>
+    copyImageToClipboard(getBlob, sfsImageUrl(), { silent: true });
   const downloadImage = () => downloadImageAction(getBlob, props.image.id);
 
   return (
@@ -165,10 +165,9 @@ export function ImagePreview(props: ImagePreviewProps) {
               </Dropdown.Trigger>
               <Dropdown.Content>
                 <Dropdown.Group>
-                  <Dropdown.Item onSelect={copyToClipboard}>
-                    <ClipboardIcon class="size-4 shrink-0" />
+                  <Dropdown.CopyItem onCopy={copyToClipboard}>
                     <span class="flex-1 truncate">Copy image</span>
-                  </Dropdown.Item>
+                  </Dropdown.CopyItem>
                   <Dropdown.Item onSelect={downloadImage}>
                     <DownloadIcon class="size-4 shrink-0" />
                     <span class="flex-1 truncate">Download image</span>

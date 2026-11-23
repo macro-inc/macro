@@ -17,13 +17,19 @@
 //!   thing: replies, mentions in them, and reactions to the message itself.
 //! - **One entity, one stack of comments.** All of an entity's comments stack
 //!   on one row, whichever thread they are in.
+//! - **A ping joins the row of what it is about.** A ping, one
+//!   its sender wrote, has no row of its own: on a channel it joins the
+//!   thread of the message it names, or the channel's top level; on anything
+//!   else it joins that entity's comments, email, event or agent row.
 //! - **Noise is hidden in its natural row:** calls starting, successful
 //!   pull request checks, reminders for events that have ended, and document
 //!   mentions of documents the viewer does not own.
 //!
 //! A row is listed only while it shows something. Team invites, inbox
 //! reconnection notices and external chat messages have no row at all. Each
-//! row also says who it is from and what the viewer can do from it.
+//! row also says who it is from, what the viewer can do from it, and which
+//! other kinds it is listed under, such as a thread whose reply mentions the
+//! viewer, listed under mentions as well.
 
 use std::collections::{HashMap, HashSet};
 
@@ -59,8 +65,12 @@ enum Slot {
     PullRequest,
     CalendarEvent,
     CalendarJoinRequest(Uuid),
+    /// One agent request for a vault item, by its request.
+    PasswordAccessRequested(Uuid),
     AccessRequested(Uuid),
     AccessGranted(Uuid),
+    /// One removal of runtime access, by its notification.
+    AccessRemoved(Uuid),
 }
 
 impl Slot {
@@ -75,8 +85,10 @@ impl Slot {
             Self::PullRequest => "pull_request".to_string(),
             Self::CalendarEvent => "calendar_event".to_string(),
             Self::CalendarJoinRequest(id) => format!("calendar_join_request:{id}"),
+            Self::PasswordAccessRequested(id) => format!("password_access_requested:{id}"),
             Self::AccessRequested(id) => format!("access_requested:{id}"),
             Self::AccessGranted(id) => format!("access_granted:{id}"),
+            Self::AccessRemoved(id) => format!("access_removed:{id}"),
         }
     }
 }
@@ -125,6 +137,9 @@ enum ChannelKind<'a> {
     },
     /// An invite to the channel.
     Invite,
+    /// A ping: about the thread under `root` when it names a
+    /// message, otherwise about the channel.
+    Ping { root: Option<Uuid> },
     /// Anything else filed under the channel, such as a call starting.
     Quiet,
 }
@@ -171,6 +186,11 @@ fn channel_view<'a>(
                 .filter(|thread| !thread.is_empty()),
         },
         NotifEvent::ChannelInvite(_) => ChannelKind::Invite,
+        NotifEvent::Ping(ping) => ChannelKind::Ping {
+            root: ping
+                .message
+                .map(|message| message.thread_id.unwrap_or(message.message_id)),
+        },
         _ => ChannelKind::Quiet,
     };
     ChannelView { notification, kind }
@@ -192,6 +212,16 @@ fn place_channel(
     let views: Vec<ChannelView<'_>> = notifications
         .iter()
         .map(|notification| channel_view(notification, viewer))
+        .collect();
+
+    // A ping about a message makes that message's thread a stack, so the
+    // message itself is not left behind on the channel's row.
+    let noted: HashSet<String> = views
+        .iter()
+        .filter_map(|view| match view.kind {
+            ChannelKind::Ping { root } => root.map(|root| root.to_string()),
+            _ => None,
+        })
         .collect();
 
     // Threads with replies or mentions in their replies absorb their root.
@@ -252,6 +282,7 @@ fn place_channel(
             .filter(|(message, count)| **count > 1 || speakers.contains_key(*message))
             .map(|(message, _)| *message),
     );
+    active.extend(noted.iter().map(String::as_str));
 
     let thread = |root: &str| Slot::Thread(root.to_string());
     views
@@ -286,7 +317,10 @@ fn place_channel(
                     message_id,
                     thread_id: None,
                 } if active.contains(message_id) => (thread(message_id), true, false),
-                ChannelKind::Reaction { .. } | ChannelKind::Invite => (Slot::TopLevel, true, false),
+                ChannelKind::Ping { root: Some(root) } => (thread(&root.to_string()), true, false),
+                ChannelKind::Reaction { .. }
+                | ChannelKind::Invite
+                | ChannelKind::Ping { root: None } => (Slot::TopLevel, true, false),
                 ChannelKind::Quiet => (Slot::TopLevel, false, false),
             };
             Placed {
@@ -359,6 +393,41 @@ fn discussion_view(notification: &FeedNotification) -> Option<DiscussionView<'_>
     })
 }
 
+/// The message or comment a notification is about, when it is about one:
+/// the notifications sharing it present as one, by one-message-one-row.
+fn subject(notification: &FeedNotification, viewer: &MacroUserIdStr<'static>) -> Option<String> {
+    if let ChannelKind::Message { message_id, .. } = channel_view(notification, viewer).kind {
+        return Some(message_id.to_string());
+    }
+    discussion_view(notification).map(|view| view.comment_id)
+}
+
+/// The notifications a done of one shown notification acknowledges: it, and
+/// the hidden ones it speaks for. Other hidden notifications, the row's noise,
+/// stay with the row until its last shown notification is done.
+pub fn speaks_for(
+    row: &InboxRow,
+    notification: Uuid,
+    viewer: &MacroUserIdStr<'static>,
+) -> Vec<Uuid> {
+    let Some(shown) = row
+        .notifications
+        .iter()
+        .find(|shown| shown.notification_id == notification)
+    else {
+        return Vec::new();
+    };
+    let spoken = subject(shown, viewer);
+    std::iter::once(notification)
+        .chain(
+            row.hidden
+                .iter()
+                .filter(|hidden| spoken.is_some() && subject(hidden, viewer) == spoken)
+                .map(|hidden| hidden.notification_id),
+        )
+        .collect()
+}
+
 /// Place an entity's discussion notifications on its one row of comments.
 fn place_discussions(views: Vec<DiscussionView<'_>>) -> Vec<Placed> {
     let mut speakers: HashMap<&str, (MessageRole, Uuid)> = HashMap::new();
@@ -401,6 +470,22 @@ fn occurrence_ended(reminder: &CalendarEventReminderMetadata, now: DateTime<Utc>
     }
 }
 
+/// The row a ping joins outside a channel: the one its
+/// entity's own activity has, so a ping reads as part of what it is about.
+fn ping_slot(entity_type: EntityType) -> Slot {
+    match entity_type {
+        EntityType::EmailThread => Slot::Email,
+        EntityType::CalendarEvent => Slot::CalendarEvent,
+        EntityType::Document
+        | EntityType::Project
+        | EntityType::Initiative
+        | EntityType::CrmCompany
+        | EntityType::CrmContact => Slot::TopLevel,
+        // Chats and agent sessions, and anything without a row of its own.
+        _ => Slot::Agent,
+    }
+}
+
 /// The slot and visibility of a notification that is neither channel
 /// activity nor discussion. `None` for kinds the inbox never shows.
 fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(Slot, bool)> {
@@ -409,6 +494,9 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
             (Slot::AccessRequested(request.request_id), true)
         }
         NotifEvent::EntityAccessGranted(grant) => (Slot::AccessGranted(grant.request_id), true),
+        NotifEvent::RuntimeAccessRemoved(_) => {
+            (Slot::AccessRemoved(notification.notification_id), true)
+        }
         NotifEvent::NewEmail(_) | NotifEvent::Reminder(_) => (Slot::Email, true),
         NotifEvent::TaskAssigned(_) => (Slot::Task, true),
         NotifEvent::CalendarEventReminder(reminder) => {
@@ -417,10 +505,14 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         NotifEvent::CalendarEventJoinRequest(request) => {
             (Slot::CalendarJoinRequest(request.request_id), true)
         }
+        NotifEvent::PasswordAccessRequested(request) => {
+            (Slot::PasswordAccessRequested(request.request_id), true)
+        }
         NotifEvent::AiResponse(_)
         | NotifEvent::AgentSessionSettled(_)
         | NotifEvent::AgentSessionWaitingForInput(_)
         | NotifEvent::AgentSessionMentioned(_) => (Slot::Agent, true),
+        NotifEvent::Ping(_) => (ping_slot(notification.entity.entity_type), true),
         NotifEvent::GithubPrCheckRun(check) => (
             Slot::PullRequest,
             check.state != GithubPrCheckRunState::Completed,
@@ -434,7 +526,9 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         | NotifEvent::InviteToTeam(_)
         | NotifEvent::ExternalChatMessage(_)
         | NotifEvent::ChannelAccessRequested(_)
-        | NotifEvent::RoutineRunFinished(_) => return None,
+        | NotifEvent::RoutineRunFinished(_)
+        | NotifEvent::AgentSignInExpiry(_)
+        | NotifEvent::ComputerSetup(_) => return None,
         // Channel activity and discussions are placed by their own rules; on
         // any other entity they have no row.
         NotifEvent::ChannelMention(_)
@@ -467,13 +561,75 @@ fn row_type(slot: &Slot, channel: bool, mention: bool) -> InboxRowType {
         (Slot::PullRequest, ..) => InboxRowType::PullRequest,
         (Slot::CalendarEvent, ..) => InboxRowType::CalendarEvent,
         (Slot::CalendarJoinRequest(_), ..) => InboxRowType::CalendarJoinRequest,
+        (Slot::PasswordAccessRequested(_), ..) => InboxRowType::PasswordAccessRequested,
         (Slot::AccessRequested(_), ..) => InboxRowType::AccessRequested,
         (Slot::AccessGranted(_), ..) => InboxRowType::AccessGranted,
+        (Slot::AccessRemoved(_), ..) => InboxRowType::AccessRemoved,
     }
 }
 
-/// Who a notification is from: the agent for agent session events, Macro
-/// for reminders and AI chat responses, otherwise the user who sent it.
+/// The kinds besides its own that a row is listed under, because what it
+/// shows is that too. A filter selects the rows with what it names, so a
+/// reply that mentions the viewer lists its thread under mentions as well as
+/// threads, a mention's thread with replies under threads as well, and an
+/// entity's comments that mention the viewer under comments as well. A pull
+/// request or agent session that mentions the viewer is listed under mentions
+/// outside a channel, as comment mentions are.
+fn also_listed_as(
+    row_type: InboxRowType,
+    shown: &[FeedNotification],
+    viewer: &MacroUserIdStr<'static>,
+) -> Vec<InboxRowType> {
+    let channel_kinds = || {
+        shown
+            .iter()
+            .map(|notification| channel_view(notification, viewer).kind)
+    };
+    match row_type {
+        InboxRowType::ChannelThread
+            if channel_kinds().any(|kind| {
+                matches!(
+                    kind,
+                    ChannelKind::Message {
+                        role: MessageRole::Mention,
+                        ..
+                    }
+                )
+            }) =>
+        {
+            vec![InboxRowType::ChannelMention]
+        }
+        InboxRowType::ChannelMention
+            if channel_kinds().any(|kind| {
+                matches!(
+                    kind,
+                    ChannelKind::Message {
+                        thread_id: Some(_),
+                        ..
+                    }
+                )
+            }) =>
+        {
+            vec![InboxRowType::ChannelThread]
+        }
+        InboxRowType::DiscussionMention => vec![InboxRowType::DiscussionMessages],
+        InboxRowType::PullRequest | InboxRowType::Agent
+            if shown.iter().any(|notification| {
+                matches!(
+                    notification.notification_metadata,
+                    NotifEvent::GithubPrMention(_) | NotifEvent::AgentSessionMentioned(_)
+                )
+            }) =>
+        {
+            vec![InboxRowType::DiscussionMention]
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Who a notification is from: the agent for agent session events and
+/// agent-sent pings, Macro for reminders and AI chat
+/// responses, otherwise the user who sent it.
 fn actor(notification: &FeedNotification) -> Option<InboxActor> {
     let agent = |session: &AgentSessionNotificationRef| InboxActor::Agent {
         bot_id: session.bot_id,
@@ -492,6 +648,14 @@ fn actor(notification: &FeedNotification) -> Option<InboxActor> {
         | NotifEvent::Reminder(_)
         | NotifEvent::CalendarEventReminder(_) => Some(InboxActor::Macro),
         NotifEvent::TaskAssigned(task) => Some(InboxActor::User(task.assigned_by.clone())),
+        NotifEvent::Ping(ping) => ping
+            .agent
+            .as_ref()
+            .map(|agent| InboxActor::Agent {
+                bot_id: agent.id,
+                name: agent.name.clone(),
+            })
+            .or_else(|| notification.sender_id.clone().map(InboxActor::User)),
         _ => notification.sender_id.clone().map(InboxActor::User),
     }
 }
@@ -513,11 +677,18 @@ fn actions(slot: &Slot, shown: &[FeedNotification]) -> Vec<InboxRowAction> {
             action(InboxRowActionKind::Accept, Some(request), None),
             action(InboxRowActionKind::Decline, Some(request), None),
         ],
-        Slot::AccessGranted(_) => vec![action(InboxRowActionKind::Open, None, None)],
+        Slot::AccessGranted(_) | Slot::AccessRemoved(_) | Slot::PasswordAccessRequested(_) => {
+            vec![action(InboxRowActionKind::Open, None, None)]
+        }
+        // A ping on the session says nothing about whether it still waits,
+        // so the newest notification that does decides.
         Slot::Agent
             if matches!(
-                shown[0].notification_metadata,
-                NotifEvent::AgentSessionWaitingForInput(_)
+                shown
+                    .iter()
+                    .map(|notification| &notification.notification_metadata)
+                    .find(|metadata| !matches!(metadata, NotifEvent::Ping(_))),
+                Some(NotifEvent::AgentSessionWaitingForInput(_))
             ) =>
         {
             vec![action(InboxRowActionKind::Answer, None, None)]
@@ -603,18 +774,22 @@ pub fn rows(
             sort_newest_first(&mut hidden);
             let unseen = match (&slot, mail) {
                 // Mail is unread while it has unread messages; a reminder
-                // that has not been seen keeps it unread too.
+                // or a ping that has not been seen keeps it unread too.
                 (Slot::Email, Some(mail)) => {
                     !mail.is_read
                         || notifications.iter().any(|n| {
-                            matches!(n.notification_metadata, NotifEvent::Reminder(_))
-                                && counts_as_unseen(n)
+                            matches!(
+                                n.notification_metadata,
+                                NotifEvent::Reminder(_) | NotifEvent::Ping(_)
+                            ) && counts_as_unseen(n)
                         })
                 }
                 _ => notifications.iter().any(|n| counts_as_unseen(n)),
             };
+            let row_type = row_type(&slot, channel, mention);
             Some(InboxRow {
-                row_type: row_type(&slot, channel, mention),
+                row_type,
+                also_listed_as: also_listed_as(row_type, &notifications, viewer),
                 actor: actor(&notifications[0]),
                 actions: actions(&slot, &notifications),
                 thread_id: match &slot {

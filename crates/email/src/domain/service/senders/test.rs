@@ -66,6 +66,9 @@ fn service(provider: Provider) -> EmailServiceImpl<(), (), (), (), (), ()> {
         macro_event_broker: (),
         sent_undo_delay_secs: 10,
         sender_provider: Arc::new(provider),
+        shared_thread_replies: Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
+        ),
     }
 }
 

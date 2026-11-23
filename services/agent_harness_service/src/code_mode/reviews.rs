@@ -141,7 +141,7 @@ where
             owner.clone(),
             agent_session::domain::model::SessionToolPresentation {
                 tool_call_id: format!("review_{}", record.id.0),
-                title: "mcp__macro_internal__PresentReview".into(),
+                title: agent_session::domain::model::PRESENT_REVIEW_TITLE.into(),
                 raw_input: serde_json::json!({"reviewId": record.id, "kind": record.kind(), "title": record.title}),
                 raw_output: serde_json::json!({"reviewId": record.id, "message": "Presented to the user"}),
             },
@@ -169,7 +169,7 @@ where
                 owner.clone(),
                 agent_session::domain::model::SessionToolPresentation {
                     tool_call_id: format!("view_{}", view.id),
-                    title: "mcp__macro_internal__PresentView".into(),
+                    title: agent_session::domain::model::PRESENT_VIEW_TITLE.into(),
                     raw_input: serde_json::json!({"view": view.view}),
                     // Readers render the decoded view from the result, as
                     // they do a DisplayResults result.

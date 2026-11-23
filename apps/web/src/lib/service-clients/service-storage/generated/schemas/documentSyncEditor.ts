@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentSyncEditorAgentCorrelationId } from './documentSyncEditorAgentCorrelationId';
 import type { DocumentSyncEditorOnBehalfOf } from './documentSyncEditorOnBehalfOf';
 
 /**
@@ -12,5 +13,7 @@ import type { DocumentSyncEditorOnBehalfOf } from './documentSyncEditorOnBehalfO
 export interface DocumentSyncEditor {
   /** User or bot that performed the edit. */
   actor: string;
+  /** Invocation from the editor's signed document grant. */
+  agent_correlation_id?: DocumentSyncEditorAgentCorrelationId;
   on_behalf_of?: DocumentSyncEditorOnBehalfOf;
 }

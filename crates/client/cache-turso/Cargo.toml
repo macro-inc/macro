@@ -11,16 +11,17 @@ browser-test-hooks = []
 [dependencies]
 cache-core = { path = "../cache-core" }
 maybe_send = { path = "../../maybe_send" }
+item-filter-index = { path = "../../item_filter_index" }
 predicate-index = { path = "../../predicate_index" }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 turso-opfs = { path = "../turso-opfs" }
-turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
+turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid", "conn_raw_api"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
+turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid", "conn_raw_api"] }
 
 [dev-dependencies]
 chrono = { workspace = true }
@@ -34,3 +35,9 @@ tempfile = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = { workspace = true }
+
+[package.metadata.cargo-shear]
+# Unused, but apps/web/tauri locks this crate by path, and changing its
+# lockfiles trips the native store-release version gates. Remove with the
+# next native release.
+ignored = ["maybe_send"]

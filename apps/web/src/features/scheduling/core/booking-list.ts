@@ -51,14 +51,24 @@ function shareTimeZone(start: Date, end: Date, timeZone: string): boolean {
   return name(start) === name(end);
 }
 
+/** A 12-hour (`true`) or 24-hour (`false`) clock, or the locale's when unset. */
+function clockOptions(hour12: boolean | undefined) {
+  return hour12 === undefined ? {} : { hour12 };
+}
+
 /** Keep clock values and zone labels separate so cards can wrap between endpoints. */
-export function bookingTimeRangeDisplay(booking: Booking, timeZone: string) {
+export function bookingTimeRangeDisplay(
+  booking: Booking,
+  timeZone: string,
+  hour12?: boolean
+) {
   const start = new Date(booking.startsAt);
   const end = new Date(booking.endsAt);
   const clock = new Intl.DateTimeFormat(undefined, {
     timeZone,
     hour: 'numeric',
     minute: '2-digit',
+    ...clockOptions(hour12),
   });
   const zone = new Intl.DateTimeFormat(undefined, {
     timeZone,
@@ -83,7 +93,11 @@ export function bookingTimeRangeDisplay(booking: Booking, timeZone: string) {
   };
 }
 
-export function bookingTimeRange(booking: Booking, timeZone: string): string {
+export function bookingTimeRange(
+  booking: Booking,
+  timeZone: string,
+  hour12?: boolean
+): string {
   const start = new Date(booking.startsAt);
   const end = new Date(booking.endsAt);
   const day = new Intl.DateTimeFormat(undefined, { timeZone });
@@ -93,6 +107,7 @@ export function bookingTimeRange(booking: Booking, timeZone: string): string {
     hour: 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
+    ...clockOptions(hour12),
   });
   const sharedTimeZone = shareTimeZone(start, end, timeZone);
   // Intl range formatting can collapse distinct instants across a DST change.
@@ -102,6 +117,7 @@ export function bookingTimeRange(booking: Booking, timeZone: string): string {
     hour: 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
+    ...clockOptions(hour12),
     ...(differentDays ? { month: 'short', day: 'numeric' } : {}),
   });
   const startTime = sharedTimeZone
@@ -109,6 +125,7 @@ export function bookingTimeRange(booking: Booking, timeZone: string): string {
         timeZone,
         hour: 'numeric',
         minute: '2-digit',
+        ...clockOptions(hour12),
       })
     : time;
   return `${startTime.format(start)} – ${endTime.format(end)}`;
@@ -158,17 +175,22 @@ export function bookingIsPast(booking: Booking, now: number): boolean {
   return new Date(booking.endsAt).getTime() <= now;
 }
 
+/** A failed booking Macro stopped retrying; only cancelling releases it. */
+export function bookingAbandoned(booking: Booking): boolean {
+  return booking.status === 'failed' && !!booking.abandonedAt;
+}
+
 export function canManageBooking(
   booking: Booking,
   canManageBookings: boolean,
   currentUserId: string,
   now: number
 ): boolean {
+  const host = canManageBookings || booking.hosts.includes(currentUserId);
   return (
     (canManageBookings && booking.status === 'pending') ||
-    ((canManageBookings || booking.hosts.includes(currentUserId)) &&
-      booking.status === 'confirmed' &&
-      !bookingIsPast(booking, now))
+    (host && booking.status === 'confirmed' && !bookingIsPast(booking, now)) ||
+    (host && bookingAbandoned(booking))
   );
 }
 

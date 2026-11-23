@@ -2,6 +2,7 @@ import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { useRoutineMentionSource } from '@app/features/routines/routine-mentions';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockName } from '@core/block';
@@ -9,7 +10,7 @@ import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import {
-  enableCrm,
+  disableCrmContactSearch,
   enableWhatsappLinked,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
@@ -19,13 +20,16 @@ import {
   useQuickAccess,
 } from '@core/context/quickAccess';
 import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts';
+import { exclude } from '@core/context/quickAccess/types';
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { debouncedDependent } from '@core/util/debounce';
+import { flushableDebouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
+import { createSteadyFlag } from '@core/util/steady-flag';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
@@ -43,6 +47,7 @@ import {
   createMemo,
   createSignal,
   For,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -62,6 +67,8 @@ import type {
 } from '../../../utils/mentionsUtils';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { ItemBin } from './components/ItemBin';
+import { MentionLoadingRows } from './components/MentionLoadingRows';
+import { MentionRetryRow } from './components/MentionRetryRow';
 import { MentionsMenuItem } from './components/MentionsMenuItem';
 import { createMentionPageLoader } from './hooks/createMentionPageLoader';
 import { useBookingLinkMention } from './hooks/useBookingLinkMention';
@@ -97,8 +104,9 @@ const DEFAULT_DOCUMENT_BUCKETS: EntityBucket[] = [
 
 type MentionsMenuProps = {
   menu: MenuOperations;
-  /** pass in a custom users list if necessary */
-  users?: Accessor<IUser[]>;
+  /** Undefined delegates to personal search; an empty list stays scoped empty. */
+  users?: Accessor<IUser[] | undefined>;
+  transformUsers?: (users: readonly IUser[]) => IUser[];
   /** pass in custom entity items to replace quickAccess data (e.g. sandbox data for onboarding) */
   entities?: Accessor<EntityItem[]>;
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
@@ -145,12 +153,16 @@ export function MentionsMenu(props: MentionsMenuProps) {
 function MentionsMenuInner(props: MentionsMenuProps) {
   const analytics = useAnalytics();
 
-  const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
+  const [searchTerm, flushSearchTerm] = flushableDebouncedDependent(
+    props.menu.searchTerm,
+    60
+  );
   const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const hasCustomEntities = () => !!props.entities;
   const sessionsEnabled = () =>
     !hasCustomEntities() &&
+    props.menu.isOpen() &&
     (!props.sources || props.sources.includes('agentSessions'));
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
   const sessionList = quickAccess?.useList({
@@ -165,18 +177,24 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }))
   );
 
-  const allItems = props.entities ?? quickAccess!.useList().items;
+  const allItems =
+    props.entities ?? quickAccess!.useList(...exclude('person')).items;
 
   const { isKeypressActive } = useIsKeyPressActive();
 
   const legacyBlockId = useMaybeBlockId();
   const blockId = props.sourceDocumentId ?? legacyBlockId;
 
-  const { usersAndGroups, groups } = useUsersMention({
+  const userMention = useUsersMention({
     users: props.users,
+    transformUsers: props.transformUsers,
     searchTerm,
     isChannelBlock: props.block === 'channel',
+    enabled: () =>
+      props.menu.isOpen() &&
+      (!props.sources || props.sources.includes('users')),
   });
+  const { usersAndGroups, groups } = userMention;
 
   const customDocs = props.entities
     ? useEntityMentionFromList({
@@ -194,20 +212,20 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       })
     : undefined;
 
-  const customCompanies =
-    isFeatureEnabled(enableCrm) && props.entities
-      ? useEntityMentionFromList({
-          items: props.entities,
-          buckets: ['crm_company'],
-          searchTerm,
-        })
-      : undefined;
+  const customCompanies = props.entities
+    ? useEntityMentionFromList({
+        items: props.entities,
+        buckets: ['crm_company'],
+        searchTerm,
+      })
+    : undefined;
 
   const docsMention =
     customDocs ??
     useEntityMention({
       buckets: props.documentBuckets ?? DEFAULT_DOCUMENT_BUCKETS,
       searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
     });
   const docs = docsMention.entities;
 
@@ -216,40 +234,45 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     useEntityMention({
       buckets: ['channel', 'dm'],
       searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
     });
   const channels = channelsMention.entities;
 
-  // CRM companies only surface in mentions when the feature is enabled —
-  // the mention hook isn't even wired up otherwise.
-  const companyMention = isFeatureEnabled(enableCrm)
-    ? (customCompanies ??
-      useEntityMention({
-        buckets: ['crm_company'],
-        searchTerm: activeSearchTerm,
-      }))
-    : undefined;
+  const companyMention =
+    customCompanies ??
+    useEntityMention({
+      buckets: ['crm_company'],
+      searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
+    });
   const sourceEnabled = (source: MentionBucketId) =>
     !props.sources || props.sources.includes(source);
+  const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
   const contactsEnabled = () =>
-    props.includeContacts !== false && sourceEnabled('crm');
-  const contactMention = isFeatureEnabled(enableCrm)
-    ? props.entities
-      ? useEntityMentionFromList({
+    props.includeContacts !== false &&
+    sourceEnabled('crm') &&
+    !contactSearchDisabled().enabled;
+  const contactMention = props.entities
+    ? {
+        ...useEntityMentionFromList({
           items: props.entities,
           buckets: ['crm_contact'],
           searchTerm,
-        })
-      : useCrmContactMentionSource(
-          activeSearchTerm,
-          () => props.menu.isOpen() && contactsEnabled()
-        )
-    : undefined;
+        }),
+        users: () => [],
+        windowKey: () => undefined,
+      }
+    : useCrmContactMentionSource(
+        activeSearchTerm,
+        () => props.menu.isOpen() && contactsEnabled(),
+        () => false
+      );
 
   const crmItems = createLazyMemo(() =>
     rankMentions(
       deduplicateContactItems([
-        ...(companyMention?.entities() ?? []),
-        ...(contactsEnabled() ? (contactMention?.entities() ?? []) : []),
+        ...(companyMention.entities() ?? []),
+        ...(contactsEnabled() ? (contactMention.entities() ?? []) : []),
       ]),
       searchTerm(),
       true
@@ -259,15 +282,15 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     entities: crmItems,
     totalCount: () => crmItems().length,
     hasMore: () =>
-      (companyMention?.hasMore() ?? false) ||
-      (contactsEnabled() && (contactMention?.hasMore() ?? false)),
+      (companyMention.hasMore() ?? false) ||
+      (contactsEnabled() && (contactMention.hasMore() ?? false)),
     isLoadingMore: () =>
-      (companyMention?.isLoadingMore() ?? false) ||
-      (contactsEnabled() && (contactMention?.isLoadingMore() ?? false)),
+      (companyMention.isLoadingMore() ?? false) ||
+      (contactsEnabled() && (contactMention.isLoadingMore() ?? false)),
     loadMore: async () => {
       await Promise.all([
-        companyMention?.loadMore(),
-        contactsEnabled() && contactMention?.loadMore(),
+        companyMention.loadMore(),
+        contactsEnabled() && contactMention.loadMore(),
       ]);
     },
   };
@@ -288,7 +311,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       }
     : useEmailSearchMention({
         searchTerm: activeSearchTerm,
-        enabled: () => !props.sources || props.sources.includes('emails'),
+        enabled: () =>
+          props.menu.isOpen() &&
+          (!props.sources || props.sources.includes('emails')),
+        recentWhenShort: () =>
+          props.sources?.length === 1 && props.sources[0] === 'emails',
       });
 
   // A WhatsApp chat mentioned in a channel is shared with its members; only
@@ -397,6 +424,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const setSelectedIndexFromMouse = (index: number) => {
     if (isKeypressActive()) return;
     controller.selectItem(index);
+    selectionAnchor.hold();
   };
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
@@ -405,8 +433,41 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     (usersAndGroups() ?? []).filter(
       (item) => props.includeGroups !== false || item.kind !== 'group'
     );
+  const peopleWindowKey = () => {
+    if (userMention.isLoading()) return;
+    return userMention.windowKey();
+  };
+  // "No results" is a statement about the typed term. Until the list has
+  // caught up with it and the slower sources have answered, say so instead.
+  const stillSearching = () =>
+    searchTerm() !== props.menu.searchTerm() ||
+    (sourceEnabled('users') && userMention.isLoading()) ||
+    (sourceEnabled('emails') && isLoadingMoreEmails()) ||
+    (contactsEnabled() &&
+      'isLoading' in contactMention &&
+      contactMention.isLoading());
+  const waitingForPeople = () =>
+    sourceEnabled('users') && userMention.waitingForPeople();
+  const retryPeople = () =>
+    fireAndForget(userMention.retryPeople(), 'mentions-menu');
+  // People keeps its place while its first answer loads, so the sections
+  // listed below it don't move when people land. A menu whose other sections
+  // can't list anything for the query (Booking Links answer only an empty
+  // one) has nothing to push down and says it is searching instead.
+  const listsOtherSources = () =>
+    !props.sources ||
+    props.sources.some(
+      (source) =>
+        source !== 'users' &&
+        (source !== 'bookingLinks' || searchTerm().trim() === '')
+    );
+  const peopleHolding = () =>
+    userMention.holdsRows() || (waitingForPeople() && listsOtherSources());
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
+    // Phones pin people above every other row and rank the rest around them,
+    // so the list waits for its people instead of moving when they land.
+    if (waitingForPeople()) return users;
     const combined: MentionItem[] = [
       ...(sourceEnabled('bookingLinks') ? bookingLinks() : []),
       ...users,
@@ -433,7 +494,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         {
           id: 'all',
           label: 'All',
+          windowKey: peopleWindowKey,
           getData: mobileAllItems,
+          // Everything below the people waits with them.
+          holding: waitingForPeople,
+          failed: () => sourceEnabled('users') && userMention.peopleFailed(),
+          retry: retryPeople,
           getFullCount: () =>
             (sourceEnabled('bookingLinks') ? bookingLinks().length : 0) +
             (sourceEnabled('users') ? mentionUsers().length : 0) +
@@ -446,18 +512,23 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (sourceEnabled('emails') ? totalEmailCount() : 0) +
             (sourceEnabled('calendarEvents') ? calendarEvents().length : 0) +
             (sourceEnabled('dates') ? (dates()?.length ?? 0) : 0),
+          // Its hidden rows are not paged in while it waits.
           hasMore: () =>
-            (sourceEnabled('documents') && docsMention.hasMore()) ||
-            (sourceEnabled('channels') && channelsMention.hasMore()) ||
-            (sourceEnabled('crm') && crmMention.hasMore()) ||
-            (sourceEnabled('emails') && hasMoreEmails()),
+            !waitingForPeople() &&
+            ((sourceEnabled('users') && userMention.hasMore()) ||
+              (sourceEnabled('documents') && docsMention.hasMore()) ||
+              (sourceEnabled('channels') && channelsMention.hasMore()) ||
+              (sourceEnabled('crm') && crmMention.hasMore()) ||
+              (sourceEnabled('emails') && hasMoreEmails())),
           isLoadingMore: () =>
+            (sourceEnabled('users') && userMention.isLoadingMore()) ||
             (sourceEnabled('documents') && docsMention.isLoadingMore()) ||
             (sourceEnabled('channels') && channelsMention.isLoadingMore()) ||
             (sourceEnabled('crm') && crmMention.isLoadingMore()) ||
             (sourceEnabled('emails') && isLoadingMoreEmails()),
           loadMore: async () => {
             await Promise.all([
+              sourceEnabled('users') && userMention.loadMore(),
               sourceEnabled('documents') && docsMention.loadMore(),
               sourceEnabled('channels') && channelsMention.loadMore(),
               sourceEnabled('crm') && crmMention.loadMore(),
@@ -468,21 +539,31 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ];
     }
 
+    // Booking links arrive from the network after the menu opens; listed below
+    // People they never push down the row Macro leads with. Phones pin People
+    // rows above the rest of their one ranked list instead.
     const buckets: BucketConfig[] = [
       {
-        id: 'bookingLinks',
-        label: 'Booking Links',
-        getData: bookingLinks,
-        getFullCount: () => bookingLinks().length,
-      },
-      {
         id: 'users',
+        windowKey: peopleWindowKey,
         label:
           props.includeGroups !== false && groups().length > 0
             ? 'People & Groups'
             : 'People',
         getData: mentionUsers,
         getFullCount: () => mentionUsers().length,
+        hasMore: userMention.hasMore,
+        isLoadingMore: userMention.isLoadingMore,
+        loadMore: userMention.loadMore,
+        holding: peopleHolding,
+        failed: userMention.peopleFailed,
+        retry: retryPeople,
+      },
+      {
+        id: 'bookingLinks',
+        label: 'Booking Links',
+        getData: bookingLinks,
+        getFullCount: () => bookingLinks().length,
       },
       {
         id: 'documents',
@@ -566,12 +647,52 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id))
       : buckets;
 
-    return filtered.filter((bucket) => bucket.getFullCount() > 0);
+    return filtered.filter(
+      (bucket) =>
+        bucket.getFullCount() > 0 ||
+        bucket.hasMore?.() ||
+        bucket.holding?.() ||
+        bucket.failed?.()
+    );
   });
 
   const controller = useMentionsMenuController(bucketConfigs, {
     ignoredIds: () => (blockId ? [blockId] : []),
     targetItems: TARGET_ITEMS,
+  });
+
+  // Sources answer within tens of milliseconds of most keystrokes. The
+  // searching label appears only for a search that is really taking a while,
+  // then stays long enough to read; until then the previous label stays, so
+  // nothing flashes between keystrokes.
+  const searchingShown = createSteadyFlag(stillSearching);
+  const emptyLabel = createMemo<string>((shown) => {
+    // A label belongs to one run of empty lists. Once rows are listed or the
+    // menu closes, the next empty list starts without it.
+    if (!menuOpen() || controller.combinedItems().length > 0) return '\u00a0';
+    if (searchingShown()) return t('commandMenu.searching');
+    return stillSearching() ? shown : t('commandMenu.noResults');
+  }, '\u00a0');
+
+  // Rows keep arriving from several sources after typing stops. The highlight
+  // follows the row the user moved to; a new search term starts from the top.
+  const selectionAnchor = createSelectionAnchor({
+    items: controller.combinedItems,
+    key: (item) => `${item.kind}:${item.id}`,
+    scope: () => `${controller.viewAllMode() ?? ''}\n${activeSearchTerm()}`,
+    selectedIndex: controller.selectedIndex,
+    setSelectedIndex: (index) => controller.selectItem(index),
+  });
+  createEffect(
+    // Set the index itself: the list is often still empty at this moment.
+    on(activeSearchTerm, () => controller.setSelectedIndex(0), { defer: true })
+  );
+  // While People keeps rows for people still loading, the highlighted row is
+  // held by identity, so the people landing above it don't change what Enter
+  // picks.
+  createEffect(() => {
+    if (controller.loadingRows('users') > 0 && controller.selectedItem())
+      selectionAnchor.hold();
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
@@ -638,9 +759,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     isActive: menuOpen,
     onUp: () => {
       controller.selectPrev();
+      selectionAnchor.hold();
     },
     onDown: () => {
       controller.selectNext();
+      selectionAnchor.hold();
     },
     onLeft: () => {
       if (canExitViewAll()) {
@@ -662,6 +785,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       }
     },
     onSelect: () => {
+      // The list trails the typed term by the debounce. Bring it up to date
+      // and act at once: a deferred pick is lost if the person keeps typing.
+      flushSearchTerm();
       const selectedItem = controller.selectedItem();
       // Keep the menu open on an offline agent so Enter reads as "not that
       // one" rather than silently dismissing with nothing inserted.
@@ -754,6 +880,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const mode = controller.viewAllMode();
     return mode ? controller.getBucket(mode) : undefined;
   };
+  const viewAllHolding = () => activeViewAllBucket()?.holding?.() ?? false;
+  const viewAllFailed = () => activeViewAllBucket()?.failed?.() ?? false;
+  const viewAllEmpty = () =>
+    controller.combinedItems().length === 0 &&
+    !viewAllHolding() &&
+    !viewAllFailed();
 
   const visibleBuckets = createMemo(() => {
     const currentBins = controller.bins();
@@ -761,7 +893,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     let cumulativeIndex = 0;
 
     return bucketConfigs()
-      .filter((config) => (currentBins[config.id] || 0) > 0)
+      .filter(
+        (config) =>
+          (currentBins[config.id] || 0) > 0 ||
+          config.hasMore?.() ||
+          controller.loadingRows(config.id) > 0 ||
+          config.failed?.()
+      )
       .map((config) => {
         const bucketLimit = currentBins[config.id] || 0;
         const bucketItems: ReturnType<typeof config.getData> = [];
@@ -798,6 +936,14 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       MAX_CONTENT_HEIGHT,
       Math.max(0, h - PANEL_DECORATION_HEIGHT)
     );
+  };
+
+  // A list holding rows back fills the rest of its height with loading rows:
+  // a menu above the caret would otherwise grow upward as they land.
+  const viewAllLoadingHeight = () => {
+    if (!viewAllHolding()) return 0;
+    const listed = controller.combinedItems().length * VIRTUAL_ITEM_HEIGHT;
+    return Math.max(0, (contentMaxHeight() ?? MAX_CONTENT_HEIGHT) - listed);
   };
 
   const floatWithElementProps = () =>
@@ -848,9 +994,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
               when={controller.viewAllMode()}
               fallback={
                 <Show
-                  when={controller.combinedItems().length > 0}
+                  when={visibleBuckets().length > 0}
                   fallback={
-                    <div class="px-2 text-ink-extra-muted">No results</div>
+                    <div class="px-2 text-ink-extra-muted">{emptyLabel()}</div>
                   }
                 >
                   <div>
@@ -891,6 +1037,23 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                 />
                               )}
                             </Key>
+                            <Show
+                              when={controller.loadingRows(bucket().config.id)}
+                            >
+                              {(count) => (
+                                <MentionLoadingRows
+                                  count={count()}
+                                  label={t('common.loadingPeople')}
+                                  blank={!userMention.showsLoading()}
+                                />
+                              )}
+                            </Show>
+                            <Show when={bucket().config.failed?.()}>
+                              <MentionRetryRow
+                                message={t('common.peopleUnavailable')}
+                                onRetry={() => bucket().config.retry?.()}
+                              />
+                            </Show>
                           </ItemBin>
                         </>
                       )}
@@ -926,8 +1089,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   </div>
                 </div>
               </Show>
-              <Show when={controller.combinedItems().length === 0}>
-                <div class="px-2 text-ink-extra-muted">No results</div>
+              <Show when={viewAllEmpty()}>
+                <div class="px-2 text-ink-extra-muted">{emptyLabel()}</div>
               </Show>
               <VirtualizedItemList
                 items={controller.combinedItems()}
@@ -937,6 +1100,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setMenuOpen}
                 maxHeight={contentMaxHeight()}
+                windowKey={activeViewAllBucket()?.windowKey?.()}
                 hasMore={activeViewAllBucket()?.hasMore?.() ?? false}
                 isLoadingMore={
                   activeViewAllBucket()?.isLoadingMore?.() ?? false
@@ -948,6 +1112,27 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                   );
                 }}
               />
+              <Show when={viewAllLoadingHeight()}>
+                {(height) => (
+                  <div
+                    class="overflow-hidden"
+                    style={{ height: `${height()}px` }}
+                  >
+                    <MentionLoadingRows
+                      count={Math.ceil(height() / VIRTUAL_ITEM_HEIGHT)}
+                      label={t('common.loading')}
+                      rowClass="h-9 sm:h-9"
+                      blank={!userMention.showsLoading()}
+                    />
+                  </div>
+                )}
+              </Show>
+              <Show when={viewAllFailed()}>
+                <MentionRetryRow
+                  message={t('common.peopleUnavailable')}
+                  onRetry={() => activeViewAllBucket()?.retry?.()}
+                />
+              </Show>
             </Show>
           </Surface>
         </div>
@@ -965,6 +1150,7 @@ function VirtualizedItemList(props: {
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
   maxHeight?: number;
+  windowKey?: string;
   hasMore: boolean;
   isLoadingMore: boolean;
   onEndReached: () => void;
@@ -980,6 +1166,21 @@ function VirtualizedItemList(props: {
     overscan: 5,
   });
 
+  createEffect(
+    on(
+      () => props.windowKey,
+      (key, previous) => {
+        if (
+          key !== undefined &&
+          previous !== undefined &&
+          key !== previous &&
+          scrollContainerRef
+        )
+          scrollContainerRef.scrollTop = 0;
+      }
+    )
+  );
+
   // Scroll selected item into view
   createEffect(() => {
     const index = props.selectedIndex;
@@ -989,16 +1190,32 @@ function VirtualizedItemList(props: {
     }
   });
 
+  // Read the next page when the end of the list is in view: on scroll, and
+  // whenever a page lands still short of the end. A window with only group
+  // headings (no matching people yet) keeps reading until one matches or the
+  // directory ends.
+  const loadNearEnd = () => {
+    if (!scrollContainerRef || !props.hasMore || props.isLoadingMore) return;
+    const target = scrollContainerRef;
+    const remaining =
+      target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (remaining <= VIRTUAL_ITEM_HEIGHT * 5) props.onEndReached();
+  };
+  createEffect(
+    on(
+      [
+        () => props.items.length,
+        () => props.hasMore,
+        () => props.isLoadingMore,
+      ],
+      loadNearEnd
+    )
+  );
+
   return (
     <div
       ref={scrollContainerRef}
-      onScroll={(event) => {
-        if (!props.hasMore || props.isLoadingMore) return;
-        const target = event.currentTarget;
-        const remaining =
-          target.scrollHeight - target.scrollTop - target.clientHeight;
-        if (remaining <= VIRTUAL_ITEM_HEIGHT * 5) props.onEndReached();
-      }}
+      onScroll={loadNearEnd}
       class="overflow-y-auto scrollbar-hidden"
       style={{
         'max-height':

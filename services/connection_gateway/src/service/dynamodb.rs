@@ -92,6 +92,128 @@ struct DynamoDbConnectionGatewayPersistence {
 
 const CONNECTION_ID_GSI: &str = "ConnectionPkIndex";
 
+/// The attributes every connection entry has, besides its keys.
+const ENTRY_ATTRIBUTES: [&str; 5] = [
+    "entity_type",
+    "entity_id",
+    "connection_id",
+    "created_at",
+    "user_id",
+];
+
+/// A row in the table that does not read as a connection entry.
+#[derive(Debug, PartialEq, Eq)]
+struct MalformedRow {
+    pk: String,
+    sk: String,
+    /// The [ENTRY_ATTRIBUTES] the row lacks. A row lacking any can never be
+    /// a live connection: pings wrote rows like that for entries already
+    /// gone, before they checked that their row exists. A row lacking none
+    /// is whole but unreadable here, such as one a newer instance wrote with
+    /// an entity type this one does not know.
+    missing: Vec<&'static str>,
+}
+
+/// Rows read from the table, split into connection entries and the rows that
+/// are not one.
+#[derive(Debug, Default)]
+struct ReadRows {
+    entries: Vec<StoredConnectionEntity>,
+    malformed: Vec<MalformedRow>,
+}
+
+fn read_rows(items: Vec<HashMap<String, AttributeValue>>) -> Result<ReadRows> {
+    let mut rows = ReadRows::default();
+    for item in items {
+        let key = |name: &str| {
+            item.get(name)
+                .and_then(|value| value.as_s().ok())
+                .cloned()
+                .with_context(|| format!("connection row without a {name} key"))
+        };
+        let (pk, sk) = (key("PK")?, key("SK")?);
+        let missing = ENTRY_ATTRIBUTES
+            .into_iter()
+            .filter(|attribute| !item.contains_key(*attribute))
+            .collect();
+        match serde_dynamo::from_item(item) {
+            Ok(entry) => rows.entries.push(entry),
+            Err(_) => rows.malformed.push(MalformedRow { pk, sk, missing }),
+        }
+    }
+    Ok(rows)
+}
+
+impl DynamoDbConnectionGatewayPersistence {
+    /// The connection entries among `items`, deleting the rows that can never
+    /// be one so they stop costing every read of their entity.
+    ///
+    /// A malformed row is left out rather than failing the read: it is one
+    /// connection, and failing would cut off every other connection to the
+    /// entity, and every other entity in a batch send beside it.
+    async fn connection_entries(
+        &self,
+        items: Vec<HashMap<String, AttributeValue>>,
+    ) -> Result<Vec<StoredConnectionEntity>> {
+        let ReadRows { entries, malformed } = read_rows(items)?;
+        for row in malformed {
+            if row.missing.is_empty() {
+                tracing::warn!(
+                    connection_id = %row.sk,
+                    "skipping a connection row this instance cannot read"
+                );
+                continue;
+            }
+            let retired = self.retire(&row).await;
+            tracing::warn!(
+                connection_id = %row.sk,
+                missing = ?row.missing,
+                retired = retired.is_ok(),
+                error = ?retired.err(),
+                "skipping a connection row missing entry attributes"
+            );
+        }
+        Ok(entries)
+    }
+
+    /// Deletes a row missing entry attributes, unless a whole entry has
+    /// replaced it since it was read.
+    async fn retire(&self, row: &MalformedRow) -> Result<()> {
+        let names: HashMap<String, String> = row
+            .missing
+            .iter()
+            .map(|attribute| (format!("#{attribute}"), (*attribute).to_owned()))
+            .collect();
+        let condition = row
+            .missing
+            .iter()
+            .map(|attribute| format!("attribute_not_exists(#{attribute})"))
+            .collect::<Vec<_>>()
+            .join(" AND ");
+
+        match self
+            .client
+            .delete_item()
+            .table_name(self.table_exists.as_ref())
+            .key("PK", AttributeValue::S(row.pk.clone()))
+            .key("SK", AttributeValue::S(row.sk.clone()))
+            .condition_expression(condition)
+            .set_expression_attribute_names(Some(names))
+            .send()
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(e)
+                if e.as_service_error().and_then(|se| se.code())
+                    == Some("ConditionalCheckFailedException") =>
+            {
+                Ok(())
+            }
+            Err(e) => Err(aws_sdk_dynamodb::Error::from(e)).context("failed to delete row"),
+        }
+    }
+}
+
 #[async_trait]
 impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
     async fn insert_connection_entry(
@@ -133,10 +255,7 @@ impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
             .items
             .context("no items found")?;
 
-        let items: Vec<StoredConnectionEntity> =
-            serde_dynamo::from_items(result).context("failed to deserialize items")?;
-
-        Ok(items)
+        self.connection_entries(result).await
     }
 
     async fn get_entries_by_connection_id(
@@ -158,10 +277,7 @@ impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
             .items
             .context("no items found")?;
 
-        let items: Vec<StoredConnectionEntity> =
-            serde_dynamo::from_items(result).context("failed to deserialize items")?;
-
-        Ok(items)
+        self.connection_entries(result).await
     }
 
     async fn get_connection(&self, connection_id: &str) -> Result<StoredConnectionEntity> {
@@ -183,12 +299,11 @@ impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
 
         let items = result.items.context("no items found")?;
 
-        let first = items.first().context("no items found")?;
-
-        let item: StoredConnectionEntity =
-            serde_dynamo::from_item(first.clone()).context("failed to deserialize item")?;
-
-        Ok(item)
+        self.connection_entries(items)
+            .await?
+            .into_iter()
+            .next()
+            .context("no items found")
     }
 
     async fn get_entry_for_connection_entity(
@@ -217,8 +332,7 @@ impl ConnectionRepo for DynamoDbConnectionGatewayPersistence {
             .items
             .context("no items found")?;
 
-        let items: Vec<StoredConnectionEntity> =
-            serde_dynamo::from_items(result).context("failed to deserialize items")?;
+        let items = self.connection_entries(result).await?;
 
         if items.len() > 1 {
             tracing::warn!(
@@ -384,3 +498,6 @@ pub async fn create_dynamo_db_connection_manager(
 
     Ok(ConnectionManager::new(persistence))
 }
+
+#[cfg(test)]
+mod tests;

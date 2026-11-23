@@ -4,9 +4,9 @@ use super::*;
 use cache_core::page_retention::{SOUP_PAGE_OWNER, compact_soup_pages};
 
 const VERSION_KEY: &str = "soup_page_retention_version";
-const VERSION: &str = "1";
+const VERSION: &str = "2";
 
-pub(super) fn save_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn save_version(connection: &Db) -> Result<(), TursoStorageError> {
     driver::execute(
         connection,
         "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
@@ -15,7 +15,7 @@ pub(super) fn save_version(connection: &Arc<Connection>) -> Result<(), TursoStor
     Ok(())
 }
 
-pub(super) fn compact_legacy_pages(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn compact_legacy_pages(connection: &Db) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
         "SELECT value FROM meta WHERE key = ?1",

@@ -186,6 +186,7 @@ export class MockLoroManager implements SyncEngineManager<GenericRootSchema> {
   private _initialized: boolean;
 
   public peerId = BigInt(1);
+  public state: StateUpdate<GenericRootSchema> | undefined = undefined;
   public importUpdate = vi.fn(
     (
       _update: LoroRawUpdate

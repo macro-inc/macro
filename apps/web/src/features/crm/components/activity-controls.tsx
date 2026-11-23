@@ -2,13 +2,13 @@ import {
   ListFilterDropdown,
   ListGroupDropdown,
   ListSortDropdown,
-} from '@app/components/view-shell';
+} from '@app/components/view-shell/ListDropdowns';
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Accordion } from '@kobalte/core/accordion';
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import type { ActivityFilters } from '../context/crm-context';
 import type { CrmActivityViewState } from '../core/activity-view';
 
@@ -34,11 +34,14 @@ export function ActivityControls(props: {
   setDirection(value: CrmActivityViewState['direction']): void;
   setGroupBy(value: CrmActivityViewState['groupBy']): void;
 }) {
+  const [drawerOpen, setDrawerOpen] = createSignal(false);
   return (
     <Show
       when={!isTouchDevice()}
       fallback={
         <MobileFilterDrawer
+          open={drawerOpen()}
+          onOpenChange={setDrawerOpen}
           triggerLabel={`Open ${props.label} filters`}
           label={`${props.label} list controls`}
           activeCount={props.filters.activeCount()}
@@ -104,27 +107,45 @@ export function ActivityControls(props: {
                     }
                     aria-label={group.label}
                   >
-                    <For each={group.options}>
-                      {(option) => (
-                        <MobileFilterDrawer.Option
-                          selectionMode={group.selectionMode}
-                          checked={props.filters.isSelected(
-                            group.id,
-                            option.id
+                    <Show
+                      when={group.createSource}
+                      fallback={
+                        <For each={group.options}>
+                          {(option) => (
+                            <MobileFilterDrawer.Option
+                              selectionMode={group.selectionMode}
+                              checked={props.filters.isSelected(
+                                group.id,
+                                option.id
+                              )}
+                              onChange={(checked) =>
+                                props.filters.setSelected(
+                                  group.id,
+                                  option.id,
+                                  checked
+                                )
+                              }
+                              icon={option.icon?.()}
+                            >
+                              {option.label}
+                            </MobileFilterDrawer.Option>
                           )}
-                          onChange={(checked) =>
-                            props.filters.setSelected(
-                              group.id,
-                              option.id,
-                              checked
-                            )
+                        </For>
+                      }
+                    >
+                      {(createSource) => (
+                        <MobileFilterDrawer.SourceOptions
+                          groupId={group.id}
+                          createSource={createSource()}
+                          enabled={drawerOpen}
+                          activeIds={() => props.filters.selectedIds(group.id)}
+                          placeholder={group.searchPlaceholder}
+                          onChange={(id, checked) =>
+                            props.filters.setSelected(group.id, id, checked)
                           }
-                          icon={option.icon?.()}
-                        >
-                          {option.label}
-                        </MobileFilterDrawer.Option>
+                        />
                       )}
-                    </For>
+                    </Show>
                   </div>
                 </MobileFilterDrawer.Section>
               )}

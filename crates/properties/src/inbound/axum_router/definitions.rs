@@ -124,7 +124,6 @@ pub async fn list_properties<
         scope = ?query.scope,
         include_system = include_system,
         for_entity_type = ?query.for_entity_type,
-        user_id = %user,
         "listing properties"
     );
 
@@ -154,7 +153,6 @@ pub async fn list_properties<
     tracing::info!(
         properties_count = response.len(),
         scope = ?query.scope,
-        user_id = %user,
         "successfully retrieved properties"
     );
 
@@ -194,6 +192,7 @@ impl IntoResponse for CreatePropertyDefinitionErr {
         (status = 201, description = "Property definition created successfully", body = PropertyDefinition),
         (status = 400, description = "Invalid request"),
         (status = 403, description = "Team membership required for team scope"),
+        (status = 409, description = "The name belongs to a built-in property. The body names that property."),
         (status = 500, description = "Internal server error")
     ),
     tags = ["Properties"]

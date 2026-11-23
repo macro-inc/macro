@@ -144,6 +144,14 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
             )
             .await
             .map_err(|e| ChatErr::Unknown(e.into()))?;
+        entity_access_db_utils::project_grants::refuse_filing_in(
+            &mut tx,
+            &chat_uuid,
+            model_entity::EntityType::Chat,
+            args.project_id.as_deref(),
+        )
+        .await
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "create_chat transaction error");
@@ -327,6 +335,16 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
         )
         .await
         .map_err(to_chat_err)?;
+        if let Ok(chat_uuid) = Uuid::parse_str(chat_id) {
+            entity_access_db_utils::project_grants::refuse_filing_in(
+                &mut tx,
+                &chat_uuid,
+                model_entity::EntityType::Chat,
+                args.project_id.as_deref(),
+            )
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
+        }
 
         if let Some(ref share_permission) = args.share_permission {
             queries::edit_share_permission::edit_chat_permission(

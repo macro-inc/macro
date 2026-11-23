@@ -36,6 +36,7 @@ use utoipa::ToSchema;
 
 use super::models::Schedule;
 
+mod describe;
 mod github_selector;
 mod payload_match;
 mod property_selector;
@@ -875,6 +876,9 @@ fn channel_parent(parent: &MessageParent) -> Result<Uuid, EventRejection> {
 pub struct IncomingEvent {
     pub event_id: Uuid,
     pub schema_version: u8,
+    /// The routine whose run wrote this, from the signed token behind the
+    /// write; set even when the routine wrote as its owner.
+    pub routine_id: Option<Uuid>,
     pub payload: EventPayload,
 }
 
@@ -893,6 +897,8 @@ pub enum EventRejection {
     InvalidEntityId,
     #[error("event context does not match its event name")]
     InvalidContext,
+    #[error("event was written by a routine run")]
+    RoutineWrite,
 }
 
 fn require_human(actor: Option<&Actor<'static>>, delegated: bool) -> Result<(), EventRejection> {
@@ -920,8 +926,10 @@ fn document_actor(
 impl IncomingEvent {
     /// Mentions belong to the mentioned user, inbound mail to its inbox owner,
     /// a started call to who created it, and an ended call to who joined it.
-    /// Entity access is checked separately at admission and dispatch. These
-    /// audience restrictions never turn an event into an access grant.
+    /// Admission also gives inbound mail to the inbox's delegates
+    /// (`received_inbox`). Entity access is checked separately at admission
+    /// and dispatch. These audience restrictions never turn an event into an
+    /// access grant.
     pub fn is_for_owner(&self, owner: &MacroUserIdStr<'static>) -> bool {
         match &self.payload {
             EventPayload::Message(MessageFact::Mentioned(data)) => {
@@ -936,6 +944,17 @@ impl IncomingEvent {
         }
     }
 
+    /// The owner and id of the inbox a received email arrived in. Whoever the
+    /// owner delegated that inbox to receives it too, as their own mail.
+    pub fn received_inbox(&self) -> Option<(&MacroUserIdStr<'static>, Uuid)> {
+        match &self.payload {
+            EventPayload::Email(EmailTopicEvent::MessageReceived(data)) => {
+                Some((&data.owner, data.link_id))
+            }
+            _ => None,
+        }
+    }
+
     /// Fail closed on attribution, identity and schema. Wildcard arms are
     /// deliberate: future source variants remain non-triggering by default.
     pub fn normalize(&self) -> Result<EventReference, EventRejection> {
@@ -943,6 +962,11 @@ impl IncomingEvent {
         // version change requires reviewing eligibility before accepting it.
         if self.schema_version != 1 {
             return Err(EventRejection::UnsupportedSchema);
+        }
+        // Like agents' writes, a routine's never start routines, even when it
+        // writes as its owner: any routine, so two can't trigger each other.
+        if self.routine_id.is_some() {
+            return Err(EventRejection::RoutineWrite);
         }
         let event_id = EventId::try_from(self.event_id)?;
         let mut change_source = None;
@@ -971,6 +995,9 @@ impl IncomingEvent {
                         (EventName::DocumentDeleted, &data.document_id)
                     }
                     DocumentTopicEvent::Updated(data) => {
+                        if data.appearance_change.is_some() {
+                            return Err(EventRejection::UnsupportedEvent);
+                        }
                         document_actor(
                             data.actor.as_ref(),
                             data.actor_user_id.as_ref(),

@@ -43,6 +43,9 @@ depended-on crates in the backend.
 
 - Add an entity kind's access check: `src/domain/ports.rs`
   (`AccessRepository` method) → `src/domain/service.rs` → `src/outbound/pg_access_repo.rs`.
+  If its users are exactly its `entity_access` grants, also list it in
+  `GRANT_AUDIENCE_KINDS` (`src/domain/service.rs`) so bulk lookups group it; otherwise
+  it falls back to one lookup per entity.
 - Debug a specific grant: `cargo run -p entity_access --bin explain_access
   --features explain_binary`.
 
@@ -62,10 +65,37 @@ the entity-access domain service.
 - `EntityAccessReceipt<R: RequiredPermission>` is the only proof a caller
   checked access at the right level; domain code downstream (e.g.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
-
+- `get_documents_access` checks many documents in one statement
+  (`queries/document_access/documents_access.sql`) and must answer each one as
+  `get_document_access` does: change their sources together, and extend
+  `test/documents_access.rs` and its fixture, which compare the two.
+- Spans here never record a user id (a `MacroUserId` is an email): skip it.
+  Checks record how many source ids they bound as `source_id_count`, through
+  `user_source_ids` in the Postgres adapter and `domain::telemetry`; a caller
+  wraps its checks in `observe_source_ids` to record the count on its own span,
+  as `initiative.read` does. A new check that fetches source ids goes through
+  `user_source_ids` so its span gets the count.
+- `EntityAudienceLookup::get_entity_audiences` resolves many entities' users at
+  once: kinds whose users are exactly their `entity_access` grants go through
+  one grouped lookup (`queries/entity_audiences.rs`: grants, then team and
+  channel members once per distinct source). CRM audiences always read current
+  membership; other kinds and single ids use the cached per-entity
+  `get_users_by_entity`. Keep it in step with
+  `get_entity_users`. Channel rosters there are cached for 10 s per process
+  (`get_channel_users`); `get_current_channel_users` reads one now, for a
+  caller reacting to a membership change (`soup_realtime`).
+  `tests/current_channel_users.rs` runs with that cache on.
+- `get_user_source_ids` is cached for 10 s per process and concurrent misses
+  for one user share one query through `single_flight`. A failure then arrives
+  as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
+  new callers' errors through it.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
   · Skill: `cloud-storage-hexagonal-architecture`
+
+- CRM company/contact receipts and audiences require current `team_user.crm_access` or an admin/owner role. Single, list and batched pipeline reads resolve fresh sharing sources so CRM denial removes only team grants; direct and channel grants remain. The email thread requester check is separate from contributor consent.
+- Source and grant lookups used by live activity checks have a local 15-second statement timeout. Keep team-bot company/contact lookups fenced by record ID before filtering team ownership; stale statistics otherwise favor team-wide scans.
+- Keep fresh pipeline channel-source lookups parameterized through the fenced viewer row; stale statistics can otherwise choose a scan of all channel memberships.

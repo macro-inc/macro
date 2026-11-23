@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            i.id,\n            i.appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\",\n            i.name,\n            i.owner_user_id,\n            i.created_at,\n            i.updated_at,\n            i.share_permission_id,\n            COALESCE(\n                array_agg(DISTINCT m.user_id) FILTER (WHERE m.user_id IS NOT NULL),\n                '{}'::text[]\n            ) AS \"member_ids!\",\n            sp.\"linkShare\" AS \"link_share?\",\n            sp.\"linkShareAccessLevel\" AS \"link_share_access_level?: AccessLevel\",\n            sp.team_share_access_level AS \"team_share_access_level?: AccessLevel\",\n            COALESCE(\n                (\n                    SELECT json_agg(json_build_object(\n                        'channel_id', channel.\"channel_id\",\n                        'access_level', channel.\"access_level\"\n                    ))\n                    FROM \"ChannelSharePermission\" channel\n                    WHERE channel.\"share_permission_id\" = i.share_permission_id\n                ),\n                '[]'::json\n            ) AS \"channel_share_permissions!\"\n        FROM initiative i\n        JOIN \"SharePermission\" sp ON sp.id = i.share_permission_id\n        LEFT JOIN initiative_member m ON m.initiative_id = i.id\n        WHERE i.id = $1\n        GROUP BY\n            i.id,\n            i.name,\n            i.owner_user_id,\n            i.created_at,\n            i.updated_at,\n            i.share_permission_id,\n            sp.\"linkShare\",\n            sp.\"linkShareAccessLevel\",\n            sp.team_share_access_level\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "appearance: sqlx::types::Json<model_entity::EntityAppearance>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "share_permission_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "member_ids!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 8,
+        "name": "link_share?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "link_share_access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "team_share_access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "channel_share_permissions!",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "b9609e2b996ad4916bfcc5532f81193554d1097f6c0feb153b847e33431dac60"
+}

@@ -4,11 +4,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email::domain::backfill_jobs::BackfillCreateError;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::ErrorResponse;
-use models_email::email::service::backfill::{
-    BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
-};
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
 
@@ -36,157 +34,63 @@ pub async fn handler(
     _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(req_body): Json<BackfillParams>,
 ) -> Result<Response, Response> {
-    let mut link_job_pairs: Vec<LinkJobPair> = Vec::new();
-
-    for link_id in req_body.link_ids {
-        let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id)
-            .await
-            .map_err(|e| {
-                tracing::warn!(error=?e, "error fetching link for backfill");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: format!("error fetching link for id {}", link_id).into(),
-                    }),
-                )
-                    .into_response()
-            })?
-            .ok_or_else(|| {
-                tracing::warn!("link id not found for backfill: {}", link_id);
-                (
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse {
-                        message: "link id does not exist".into(),
-                    }),
-                )
-                    .into_response()
-            })?;
-
-        if !link.is_sync_active {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: format!("sync must be enabled for link {}", link_id).into(),
-                }),
-            )
-                .into_response());
-        }
-
-        let backfill_job = email_db_client::backfill::job::insert::create_backfill_job(
-            &ctx.db,
-            link.id,
-            link.fusionauth_user_id.as_str(),
-            req_body.num_threads,
-            false,
-        )
+    let pairs = ctx
+        .backfill_jobs
+        .create(req_body.link_ids, req_body.num_threads)
         .await
-        .map_err(|e| {
-            tracing::warn!(error=?e, "error creating backfill_job");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: format!("error creating backfill job for link {}", link_id).into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-        let Some(backfill_job) = backfill_job else {
-            // An active backfill already exists for this link; reuse it and skip re-enqueue.
-            let existing =
-                email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
-                    .await
-                    .map_err(|e| {
-                        tracing::warn!(error=?e, "error fetching active backfill_job");
-                        (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(ErrorResponse {
-                                message: format!(
-                                    "error fetching active backfill job for link {}",
-                                    link_id
-                                )
-                                .into(),
-                            }),
-                        )
-                            .into_response()
-                    })?
-                    .ok_or_else(|| {
-                        (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(ErrorResponse {
-                                message: format!(
-                                    "backfill conflict but no active job for link {}",
-                                    link_id
-                                )
-                                .into(),
-                            }),
-                        )
-                            .into_response()
-                    })?;
-            link_job_pairs.push(LinkJobPair {
-                link_id,
-                job_id: existing.id,
-            });
-            continue;
-        };
-
-        link_job_pairs.push(LinkJobPair {
-            link_id,
-            job_id: backfill_job.id,
-        });
-
-        let ps_message = BackfillPubsubMessage {
-            backfill_operation: BackfillOperation::Init(JobScopedPayload {
-                link_id: link.id,
-                job_id: backfill_job.id,
-                payload: InitPayload {},
-            }),
-        };
-
-        if let Err(error) = ctx
-            .sqs_client
-            .enqueue_email_backfill_message(ps_message)
-            .await
-        {
-            tracing::error!(error = ?error, backfill_id = %backfill_job.id, "Failed to enqueue backfill message");
-            email_db_client::backfill::job::update::fail_backfill_job(&ctx.db, backfill_job.id)
-                .await
-                .inspect_err(|update_error| {
-                    tracing::error!(
-                        error = ?update_error,
-                        backfill_id = %backfill_job.id,
-                        "Failed to persist backfill publication failure"
-                    );
-                })
-                .map_err(|_| {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ErrorResponse {
-                            message: format!(
-                                "Failed to clean up backfill job for link {}",
-                                link_id
-                            )
-                            .into(),
-                        }),
-                    )
-                        .into_response()
-                })?;
-
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: format!("Failed to enqueue backfill message for link {}", link_id)
-                        .into(),
-                }),
-            )
-                .into_response());
-        }
-    }
+        .map_err(create_error_response)?;
     Ok((
         StatusCode::OK,
         Json(BackfillResponse {
-            pairs: link_job_pairs,
+            pairs: pairs
+                .into_iter()
+                .map(|(link_id, job_id)| LinkJobPair { link_id, job_id })
+                .collect(),
         }),
     )
         .into_response())
+}
+
+fn create_error_response<E, Q>(error: BackfillCreateError<E, Q>) -> Response {
+    let (status, message) = match error {
+        BackfillCreateError::InboxLookup { link_id, .. } => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("error fetching link for id {}", link_id),
+        ),
+        BackfillCreateError::InboxNotFound(_) => (
+            StatusCode::BAD_REQUEST,
+            "link id does not exist".to_string(),
+        ),
+        BackfillCreateError::SyncDisabled(link_id) => (
+            StatusCode::BAD_REQUEST,
+            format!("sync must be enabled for link {}", link_id),
+        ),
+        BackfillCreateError::Insert { link_id, .. } => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("error creating backfill job for link {}", link_id),
+        ),
+        BackfillCreateError::ActiveLookup { link_id, .. } => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("error fetching active backfill job for link {}", link_id),
+        ),
+        BackfillCreateError::MissingActive(link_id) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("backfill conflict but no active job for link {}", link_id),
+        ),
+        BackfillCreateError::Queue { link_id, .. } => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to enqueue backfill message for link {}", link_id),
+        ),
+        BackfillCreateError::Cleanup { link_id, .. } => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to clean up backfill job for link {}", link_id),
+        ),
+    };
+    (
+        status,
+        Json(ErrorResponse {
+            message: message.into(),
+        }),
+    )
+        .into_response()
 }

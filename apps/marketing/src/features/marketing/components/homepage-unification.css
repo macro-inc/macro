@@ -1,4 +1,7 @@
-.homepage-unification { position: relative; isolation: isolate; overflow-x: clip; width: min(780px, calc(100% - 40px)); margin: 0 auto; padding: 80px 0 28px; color: var(--color-ink); }
+/* Trim the glow at the side edges with a clip path, not `overflow-x: clip`:
+   WebKit on iOS also clips the vertical axis for that until the first repaint,
+   which cuts the glow off in a hard line along the top of the section. */
+.homepage-unification { position: relative; isolation: isolate; clip-path: inset(-100vmax 0); width: min(780px, calc(100% - 40px)); margin: 0 auto; padding: 80px 0 28px; color: var(--color-ink); }
 .homepage-unification .feature-flow { height: clamp(280px, 36vw, 370px); }
 .unification-copy { position: relative; max-width: 680px; margin: 72px auto 0; text-align: center; }
 .unification-copy h2, .unification-before { margin: 0; font-family: 'Roboto Slab Variable', display, serif; font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); font-size: 48px; line-height: 1.12; letter-spacing: -.025em; }
@@ -47,6 +50,15 @@
 @media (max-width: 767px) {
   /* Clip the glow at the viewport edge, while keeping the artwork inset. */
   .homepage-unification { width: 100%; padding-inline: 20px; }
+  /* The halos are wider than the screen. Contain them in the light layer,
+     grown to the viewport's side edges and far enough up and down to hold
+     every halo, so they never widen the page and the layer can clip on both
+     axes. Halos are then placed against the layer's original box. */
+  .homepage-unification .feature-flow-light { inset: -220px -20px; overflow: clip; }
+  .homepage-unification .feature-flow-halo {
+    left: calc(20px + (100% - 40px) * var(--halo-x) / 100) !important;
+    top: calc(220px + (100% - 440px) * var(--halo-y) / 100) !important;
+  }
   .homepage-unification .feature-flow-expanded { height: clamp(340px, 65vw, 400px); margin-bottom: -66px; }
   .homepage-unification .feature-flow-expanded .feature-flow-core { width: 66px; height: 66px; }
   .homepage-unification .feature-flow-expanded .feature-flow-core svg { width: 33px; height: 33px; }

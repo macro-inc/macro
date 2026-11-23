@@ -33,6 +33,7 @@ function fakeCapabilities(
       onPhase('pairing');
       return RUNNING;
     },
+    allowPermissionBypass: async () => {},
     listAgents: async () => [],
     loadModels: async () => ({
       status: 'available',
@@ -59,13 +60,14 @@ function withSetup(caps: SetupCapabilities) {
 describe('createLocalRuntimeSetup', () => {
   it('starts the preferred agent and creates a Macro agent on its runtime', async () => {
     const startDaemon = vi.fn(async () => RUNNING);
+    const allowPermissionBypass = vi.fn(async () => {});
     const createAgent = vi.fn(async (agent: NewLocalAgent) => ({
       botId: 'bot-1',
       name: agent.name,
       handle: agent.handle,
     }));
     const { setup, dispose } = withSetup(
-      fakeCapabilities({ startDaemon, createAgent })
+      fakeCapabilities({ startDaemon, allowPermissionBypass, createAgent })
     );
 
     await setup.run({ workspace: ' /tmp/work ', fullAccess: true });
@@ -73,9 +75,8 @@ describe('createLocalRuntimeSetup', () => {
     expect(startDaemon).toHaveBeenCalledWith({
       agent: 'claude-code',
       workspace: '/tmp/work',
-      scope: 'private',
-      allowPermissionBypass: true,
     });
+    expect(allowPermissionBypass).toHaveBeenCalledWith('harness-1');
     expect(createAgent).toHaveBeenCalledWith({
       name: 'Claude Code',
       handle: 'claude-code',

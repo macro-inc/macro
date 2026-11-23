@@ -34,9 +34,7 @@ function row(importanceTrend: EmailFocus['importanceTrend']): EntityData {
 }
 
 const meterFor = (importanceTrend: EmailFocus['importanceTrend']) => {
-  render(() => (
-    <EmailFocusScore entity={row(importanceTrend)} sort="importance" />
-  ));
+  render(() => <EmailFocusScore entity={row(importanceTrend)} />);
   return screen.getByRole('img');
 };
 
@@ -65,10 +63,5 @@ describe('EmailFocusScore', () => {
   it('reads a trend this build does not know as flat', () => {
     const meter = meterFor(JSON.parse('"NEWLY_ADDED"'));
     expect(meter.getAttribute('aria-label')).toBe('Importance 72 of 100');
-  });
-
-  it('stays off the list unless it is sorted by importance', () => {
-    render(() => <EmailFocusScore entity={row('UP')} sort="recent" />);
-    expect(screen.queryByRole('img')).toBeNull();
   });
 });

@@ -15,13 +15,20 @@
 //! digest also keeps the comparison in the index rather than in a Rust `==`
 //! over secret-derived bytes.
 
+use agent_session::domain::model::AgentSession;
 use agent_session::domain::ports::AgentSessionRepo;
-use agent_session::domain::{credentials::authenticate_session, error::AgentSessionError};
+use agent_session::domain::{
+    credentials::{authenticate_session, open_session},
+    error::AgentSessionError,
+};
 use model_owner::Owner;
 use tracing::Level;
 
 use crate::domain::error::EgressError;
-use crate::domain::model::{McpServerListing, McpServerSlug, RepoSlug, SessionGrant, SessionToken};
+use crate::domain::model::{
+    AgentSessionId, McpServerListing, McpServerSlug, RepoSlug, SessionGrant, SessionToken,
+    agent_selection,
+};
 use crate::domain::ports::SessionAuthority;
 
 /// Resolves a presented session token to its session by the digest stored
@@ -48,16 +55,41 @@ where
     async fn authorize(&self, token: &SessionToken) -> Result<SessionGrant, EgressError> {
         let session = authenticate_session(&self.sessions, &token.hash())
             .await
-            .map_err(|error| match error {
-                AgentSessionError::Forbidden => {
-                    EgressError::Unauthenticated("unknown session token")
-                }
-                AgentSessionError::Disconnected(_) => EgressError::SessionClosed,
-                error => EgressError::Internal(rootcause::report!(
-                    "could not authenticate session: {error}"
-                )),
-            })?;
+            .map_err(authentication_error)?;
+        self.grant(session).await
+    }
 
+    #[tracing::instrument(skip_all, err(level = Level::DEBUG), fields(%session))]
+    async fn authorize_session(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<SessionGrant, EgressError> {
+        let session = self
+            .sessions
+            .get(session)
+            .await
+            .and_then(open_session)
+            .map_err(authentication_error)?;
+        self.grant(session).await
+    }
+}
+
+fn authentication_error(error: AgentSessionError) -> EgressError {
+    match error {
+        AgentSessionError::Forbidden => EgressError::Unauthenticated("unknown session token"),
+        AgentSessionError::NotFound(_) => EgressError::Unauthenticated("unknown session"),
+        AgentSessionError::Disconnected(_) => EgressError::SessionClosed,
+        error => EgressError::Internal(rootcause::report!(
+            "could not authenticate session: {error}"
+        )),
+    }
+}
+
+impl<Sessions> StoredTokenSessionAuthority<Sessions>
+where
+    Sessions: AgentSessionRepo,
+{
+    async fn grant(&self, session: AgentSession) -> Result<SessionGrant, EgressError> {
         // The grant is a person's: everything egress does, it does with the
         // owner's credentials, and a bot or team has none to spend. Refused
         // as an admission the token fails, in our own fixed words like every
@@ -90,10 +122,9 @@ where
 
         // The agent's own names for the apps it listed, off the row's
         // snapshot, so a refusal can say "Google Sheets" rather than
-        // "google_sheets". Not a permission: any slug resolves against the
-        // owner's connections. A slug the strict parse refuses could never
-        // have been advertised, so skipping it changes nothing the sandbox
-        // can see.
+        // "google_sheets". A slug the strict parse refuses could never have
+        // been advertised, so skipping it changes nothing the sandbox can
+        // see. The permission is `selection`, read off the same snapshot.
         let mcp_servers = session
             .mcp_servers
             .servers()
@@ -105,6 +136,7 @@ where
                 })
             })
             .collect();
+        let selection = agent_selection(&session.mcp_servers);
 
         // Read beside the row rather than off it: the harness writes it at
         // every dispatch, and a call is judged by who prompted the turn
@@ -125,6 +157,7 @@ where
             agent: session.bot_id,
             repo,
             mcp_servers,
+            selection,
             prompter,
         })
     }

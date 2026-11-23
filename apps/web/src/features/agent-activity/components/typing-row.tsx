@@ -1,6 +1,6 @@
+import { ActivityLine } from '@app/features/block-agent/ui';
 import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
-import { ActivityLine } from './activity-line';
 import type { ActivityRowView } from './activity-rows';
 
 /**
@@ -29,7 +29,7 @@ export function TypingRow(
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 items-center gap-2">
           <div class="min-w-0 flex-1">
-            <ActivityLine rows={props.rows} />
+            <ActivityLine steps={props.rows} />
           </div>
           <Show when={props.onStop}>
             {(stop) => (

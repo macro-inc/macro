@@ -4,7 +4,7 @@
 
 Part of AI: assembles every domain crate's AI tool implementations into
 the one `AsyncToolCollection` every AI surface (chat, agent sessions, MCP)
-calls through, plus the cross-cutting tools (search, subagents, deferred
+calls through, plus the cross-cutting tools (search, deferred
 execution, display) that don't belong to a single domain.
 
 ## Start here
@@ -13,8 +13,10 @@ execution, display) that don't belong to a single domain.
   `inbound::toolset` module and builds the combined `AsyncToolCollection`
   and frontend schema set.
 - `ReadAgentSession` is eager across chat, agent sessions, and MCP, and is also
-  available to subagents; keep its registration covered by the host tests.
-- `src/subagent.rs`: dispatches `snippet_specs` to parallel subagents.
+  in the base toolset every host and memory research share; keep its
+  registration covered by the host tests.
+- `src/build_context.rs`: inject CRM rule discovery into both EmailPgRepo
+  compositions so selected Team reads use the shared bounded core.
 - `src/search.rs` / `src/search_tools.rs`: cross-entity search tools.
 - `src/deferred.rs`: tools whose result arrives after the turn (long-running
   work).
@@ -28,9 +30,23 @@ execution, display) that don't belong to a single domain.
   are created with their page's dates (`NewDocumentMetadata::created_at` /
   `updated_at`), and folders through
   `ProjectService::create_project_dated_by_contents`, so the copy keeps
-  Notion's dates. Notion tasks are created unshared and reached through their
-  shared folder, while single tracked tasks (Linear) stay team-shared at
-  creation.
+  Notion's dates. Reviewed workspace imports carry a typed `ImportVisibility`
+  through document, task, folder and tracker-project creation: personal items
+  get an exact OFF override before insertion; shared items retain defaults.
+  Personal tasks also omit teammate assignees, returning a typed notice for the
+  import report; keep the same verdict on every property pass, including retries.
+  Propagate roster lookup errors on assignee replay so a transient outage cannot
+  clear an omission notice without applying the assignment.
+  Notion tasks have no direct team grant; shared lists grant team access
+  through their folder, while single tracked tasks (Linear) stay team-shared
+  at creation.
+  `ImportedTargetReader` reads document/folder/database/initiative lifecycle
+  state through their owning domain ports, independently of viewer permissions;
+  root-folder reuse separately checks view access. Transient read failures propagate
+  so the import domain does not invalidate a live copy on an outage.
+- `src/import_workspace/lifecycle.rs`: physical lifecycle dispatch through owning
+  ports. PostgreSQL adapter tests cover live targets without grants,
+  trash/restore/purge and transient failures; hosts never reach service repos.
 - `src/import_jobs.rs`: `ImportJobs`, the shutdown token and tracker every
   host passes to `build_tool_service_context_from_env` (or its own import
   service) and calls `hand_over` on at shutdown, so running Notion imports
@@ -44,15 +60,21 @@ execution, display) that don't belong to a single domain.
 ## Scope
 
 - Owns: assembling the toolset and the handful of tools with no single
-  domain owner (search, subagent, deferred, self-knowledge, display).
+  domain owner (search, deferred, self-knowledge, display).
+- `Subagent` was removed: it was a one-shot completion with no tools. Its
+  schema survives only as `schemas::subagent`, so saved chats still render.
+  `ReadActivity` was removed the same way (`macro.activity.mine()` covers it);
+  its schema survives as `schemas::read_activity`.
 - Not here: a domain's own tools — those live in that domain crate's
-  `inbound::toolset` (e.g. `forms`, `activity`, `agent_session`) and are
+  `inbound::toolset` (e.g. `forms`, `agent_session`) and are
   only wired in here.
 
 ## Boundaries
 
-- Depends on: nearly every domain crate with tools (`forms`, `activity`,
-  `agent_session`, `anthropic`, `initiative`, `collab_surface`, `favorites`,
+- Depends on: nearly every domain crate with tools (`forms`,
+  `agent_session`, `anthropic` (wire types for the legacy code-execution
+  schemas), `web_search` (`WebSearch`,
+  `WebFetch` via Tavily), `initiative`, `collab_surface`, `favorites`,
   `messages`, `routines`, `ai_billing`, `ai_usage`, `ai_toolset`, `agent`),
   plus `bot_id`, `attachment`, `static_file`.
 - Used by: `document_storage_service`, `agent_harness_service` (session
@@ -81,6 +103,9 @@ edit capability but calls no nested model and emits no additional model charge; 
 ## Checks
 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
+- Keep import access regressions on the real `ToolEntityCreator` → owning service
+  → PostgreSQL creation path (`tool_context/test/import_link_access`); mock external
+  markdown/sync endpoints rather than rebuilding permission resolution in tests.
 - After adding/changing a tool: `cargo run -p ai_tools --bin gen_tool_schemas`
   and `--bin gen_ai_request_schemas` to refresh generated frontend schemas.
 - `DisplayResults` decodes its view with `dynamic_ui` and returns it; readers render the result, never the arguments. Its schema comes from `dynamic_ui::View`.

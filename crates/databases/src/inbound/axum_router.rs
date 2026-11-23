@@ -142,11 +142,8 @@ where
             "/",
             post(create_database_handler::<Service, EntityAccess, Authorization>),
         )
-        // Static segments win over `/{id}`, so these never read as a database.
-        .route(
-            "/queries",
-            post(saved_queries::save_query_handler::<Service, EntityAccess, Authorization>),
-        )
+        // Static segments win over `/{id}`, so this never reads as a database.
+        // Saving a query compiles it, so that route is `databases_sql`'s.
         .route(
             "/queries/{query_id}",
             get(saved_queries::get_query_handler::<Service, EntityAccess, Authorization>),
@@ -154,6 +151,10 @@ where
         .route(
             "/{id}",
             get(get_database_handler::<Service, EntityAccess, Authorization>),
+        )
+        .route(
+            "/{id}/appearance",
+            put(set_database_appearance::<Service, EntityAccess, Authorization>),
         )
         .route(
             "/{id}/duplicate",
@@ -235,6 +236,11 @@ pub(crate) fn agent_attribution<Authorization>(
 pub struct CreateDatabaseRequest {
     /// Display name.
     pub name: String,
+    /// The first table's display name; "Table 1" when omitted. Name it when
+    /// you are about to fill a table, and build into it rather than adding a
+    /// second table beside an empty "Table 1".
+    #[serde(default)]
+    pub first_table: Option<String>,
 }
 
 /// Path params for the column routes.
@@ -274,8 +280,8 @@ where
     Ok(Json(databases))
 }
 
-/// Create a database owned by the caller; its first table, "Table 1", holds a
-/// "Name" text column.
+/// Create a database owned by the caller; its first table, "Table 1" unless
+/// `firstTable` names it, holds a "Name" text column.
 #[utoipa::path(
     post,
     tag = "databases",
@@ -307,6 +313,7 @@ where
             name: request.name,
             owner_id: viewer_of(&user).user_id,
             acting_bot,
+            first_table: request.first_table,
         })
         .await?;
     Ok((StatusCode::CREATED, Json(database)))
@@ -342,6 +349,33 @@ where
         .get_database(access.entity_access_receipt)
         .await?;
     Ok(Json(detail))
+}
+
+/// Replace a database's icon and color without changing its content timestamp.
+#[utoipa::path(put, tag = "databases", operation_id = "set_database_appearance",
+    path = "/databases/{id}/appearance",
+    params(("id" = Uuid, Path, description = "Database id")),
+    request_body = model_entity::EntityAppearance,
+    responses((status = 200, body = model_entity::EntityAppearance),
+        (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn set_database_appearance<Service, EntityAccess, Authorization>(
+    access: DatabaseAccessLevelExtractor<EditAccessLevel, EntityAccess, Authorization>,
+    State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
+    Json(appearance): Json<model_entity::EntityAppearance>,
+) -> Result<Json<model_entity::EntityAppearance>, DatabaseError>
+where
+    Service: DatabasesService,
+    EntityAccess: EntityAccessService,
+    Authorization: MacroAuthorizationService,
+{
+    Ok(Json(
+        state
+            .service
+            .set_appearance(access.entity_access_receipt, appearance)
+            .await?,
+    ))
 }
 
 /// Tell a database's other viewers where the caller is.
@@ -451,6 +485,7 @@ impl IntoResponse for DatabaseError {
             DatabaseError::InvalidSchemaOperation(_)
             | DatabaseError::InvalidSharing(_)
             | DatabaseError::InvalidOp(_) => StatusCode::BAD_REQUEST,
+            DatabaseError::InvalidAppearance(_) => StatusCode::BAD_REQUEST,
             DatabaseError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let message = match self {

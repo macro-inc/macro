@@ -58,6 +58,7 @@ impl JwtValidator for Tokens {
             identity: ValidatedIdentity {
                 agent_id,
                 agent_via: None,
+                routine_id: None,
                 user_id: user_id.to_string(),
                 fusion_user_id: format!("fusion-{jwt}"),
                 organization_id: None,
@@ -242,6 +243,7 @@ pub(super) struct RecordingForms {
 pub(super) fn form() -> Form {
     let at = Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap();
     Form {
+        appearance: None,
         id: FORM,
         name: "RSVP".into(),
         description: "".into(),
@@ -285,6 +287,13 @@ impl RecordingForms {
 }
 
 impl FormsService for RecordingForms {
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, FormError> {
+        self.answer(handed("set_appearance", &receipt), appearance)
+    }
     async fn collaborate_form(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,

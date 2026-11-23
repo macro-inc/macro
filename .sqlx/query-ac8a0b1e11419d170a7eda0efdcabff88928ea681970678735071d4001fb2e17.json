@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggestion_audience (user_id, timezone, seen_at, last_routines_ok_at)\n               VALUES ($1, $2, $3, $3)\n               ON CONFLICT (user_id) DO UPDATE\n                   SET last_routines_ok_at = EXCLUDED.last_routines_ok_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ac8a0b1e11419d170a7eda0efdcabff88928ea681970678735071d4001fb2e17"
+}

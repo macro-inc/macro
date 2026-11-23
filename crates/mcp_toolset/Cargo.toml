@@ -8,12 +8,21 @@ publish = false
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
 futures.workspace = true
+genai_telemetry = { path = "../genai_telemetry" }
 rmcp = { workspace = true, features = ["client"] }
 schemars.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["macros"] }
 tracing.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_user_id = { path = "../macro_user_id" }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 regex.workspace = true
+rmcp = { workspace = true, features = ["client", "server"] }
+tokio = { workspace = true, features = ["io-util", "sync", "time"] }
+tracing-opentelemetry.workspace = true
+tracing-subscriber.workspace = true

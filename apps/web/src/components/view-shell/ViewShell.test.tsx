@@ -10,7 +10,13 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type JSX, onMount, Show } from 'solid-js';
+import {
+  createSignal,
+  type JSX,
+  onMount,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -22,7 +28,12 @@ import {
 import { ViewSidebar } from './ViewSidebar';
 
 const measurement = vi.hoisted(() => ({
+  touch: (): boolean => false,
   width: (): number | undefined => 1200,
+}));
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => measurement.touch(),
 }));
 
 vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
@@ -44,6 +55,7 @@ vi.mock('./create-frame-width', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
   ...(await import('../ui/utils/press')),
+  Layer: (props: ParentProps) => props.children,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
       aria-label={props['aria-label']}
@@ -64,6 +76,7 @@ beforeEach(() => {
     removeItem: (key: string) => values.delete(key),
   });
   measurement.width = () => 1000;
+  measurement.touch = () => false;
 });
 afterEach(() => {
   cleanup();
@@ -116,21 +129,17 @@ it('keeps navigation controls inside their own workspaces', () => {
   expect(collapsed.get('mail')?.()).toBe(true);
 });
 
-function setup(preserveDuringResize: boolean, persistWidth = false) {
+function setup(preserveDuringResize: boolean, app = 'tasks') {
   const [width, setWidth] = createSignal(1200);
-  const [configuredWidth, setConfiguredWidth] = createSignal(256);
   measurement.width = width;
-  const onWidthChangeEnd = vi.fn((width: number) => {
-    if (persistWidth) setConfiguredWidth(width);
-  });
   const view = render(() => (
     <ViewShell.Root
       resizable
-      asidePreferenceKey="tasks"
-      aside={{ width: configuredWidth(), preserveDuringResize }}
+      asidePreferenceKey={app}
+      aside={{ preserveDuringResize }}
       main={{ preferredWidth: 640 }}
     >
-      <ViewShell.Aside onWidthChangeEnd={onWidthChangeEnd}>
+      <ViewShell.Aside>
         <ViewSidebar.Header>
           <ViewSidebar.Title>Tasks</ViewSidebar.Title>
         </ViewSidebar.Header>
@@ -157,18 +166,55 @@ function setup(preserveDuringResize: boolean, persistWidth = false) {
     fireEvent(window, new MouseEvent('pointermove', { clientX: 296 }));
     fireEvent(window, new MouseEvent('pointerup', { clientX: 296 }));
   };
+  const savedWidth = () =>
+    localStorage.getItem(`macro:pref:view-sidebar:width:${app}`);
   return {
     ...view,
     asideWidth,
     growAside,
     dragAside,
     setWidth,
-    setConfiguredWidth,
-    onWidthChangeEnd,
+    savedWidth,
   };
 }
 
 describe('ViewShell aside resize preference', () => {
+  it('widens touch navigation while keeping phone overlays and desktop widths unchanged', () => {
+    const [touch, setTouch] = createSignal(true);
+    measurement.touch = touch;
+    const view = setup(false);
+    expect(view.asideWidth()).toBeCloseTo(403);
+    view.setWidth(1000);
+    expect(view.asideWidth()).toBeCloseTo(403);
+    view.setWidth(600);
+    fireEvent.click(view.getByRole('button', { name: 'Show navigation' }));
+    const overlay = view.container.querySelector<HTMLElement>(
+      '[data-view-shell-aside]'
+    )!;
+    expect(Number.parseFloat(overlay.style.width)).toBeCloseTo(256);
+    view.setWidth(1200);
+    expect(view.asideWidth()).toBeCloseTo(403);
+    setTouch(false);
+    expect(view.asideWidth()).toBeCloseTo(256);
+    expect(view.savedWidth()).toBeNull();
+  });
+
+  it('normalizes a wide touch resize so remounting does not compound its scale', async () => {
+    const [touch, setTouch] = createSignal(true);
+    measurement.touch = touch;
+    const view = setup(false);
+    await view.growAside();
+    expect(view.asideWidth()).toBeCloseTo(423);
+    expect(Number(view.savedWidth())).toBeCloseTo(423 / 1.57421875);
+    view.unmount();
+    setTouch(false);
+    const restored = setup(false);
+    expect(restored.asideWidth()).toBeCloseTo(423 / 1.57421875);
+    setTouch(true);
+    expect(restored.asideWidth()).toBeCloseTo(423);
+    expect(Number(restored.savedWidth())).toBeCloseTo(423 / 1.57421875);
+  });
+
   it('keeps a pointer resize from the sidebar minimum stable as the split grows', () => {
     const view = setup(false);
     view.setWidth(800);
@@ -181,24 +227,21 @@ describe('ViewShell aside resize preference', () => {
     }
   });
 
-  it.each([false, true])(
-    'keeps a manual resize in a constrained split stable as the split grows (persist=%s)',
-    async (persistWidth) => {
-      const view = setup(false, persistWidth);
-      view.setWidth(890);
-      expect(view.asideWidth()).toBeCloseTo(249);
-      await view.growAside();
-      expect(view.asideWidth()).toBeCloseTo(269);
-      for (const width of [891, 900, 1000, 1200]) {
-        view.setWidth(width);
-        expect(view.asideWidth()).toBeCloseTo(269);
-      }
-      view.setWidth(880);
-      expect(view.asideWidth()).toBeCloseTo(259);
-      view.setWidth(1200);
+  it('keeps a manual resize in a constrained split stable as the split grows', async () => {
+    const view = setup(false);
+    view.setWidth(890);
+    expect(view.asideWidth()).toBeCloseTo(249);
+    await view.growAside();
+    expect(view.asideWidth()).toBeCloseTo(269);
+    for (const width of [891, 900, 1000, 1200]) {
+      view.setWidth(width);
       expect(view.asideWidth()).toBeCloseTo(269);
     }
-  );
+    view.setWidth(880);
+    expect(view.asideWidth()).toBeCloseTo(259);
+    view.setWidth(1200);
+    expect(view.asideWidth()).toBeCloseTo(269);
+  });
 
   it('preserves the chosen width through manual collapse and narrow overlays', async () => {
     const view = setup(false);
@@ -223,7 +266,7 @@ describe('ViewShell aside resize preference', () => {
     expect(view.asideWidth()).toBeCloseTo(276);
     view.setWidth(1100);
     expect(view.asideWidth()).toBeCloseTo(276);
-    expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
+    expect(Number(view.savedWidth())).toBeCloseTo(276);
   });
 
   it('remembers the width after a pointer drag', () => {
@@ -232,7 +275,7 @@ describe('ViewShell aside resize preference', () => {
     expect(view.asideWidth()).toBeCloseTo(296);
     view.setWidth(1100);
     expect(view.asideWidth()).toBeCloseTo(296);
-    expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
+    expect(Number(view.savedWidth())).toBeCloseTo(296);
   });
 
   it.each([true, false])(
@@ -240,17 +283,32 @@ describe('ViewShell aside resize preference', () => {
     async (preserve) => {
       const view = setup(preserve);
       expect(view.asideWidth()).toBeCloseTo(256);
+      expect(view.savedWidth()).toBeNull();
       await view.growAside();
       expect(view.asideWidth()).toBeCloseTo(276);
-      expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
-      expect(view.onWidthChangeEnd.mock.calls[0][0]).toBeCloseTo(276);
       view.setWidth(1100);
       expect(view.asideWidth()).toBeCloseTo(276);
       view.setWidth(1400);
       expect(view.asideWidth()).toBeCloseTo(276);
-      expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
+      expect(Number(view.savedWidth())).toBeCloseTo(276);
     }
   );
+
+  it('restores the dragged width per app after the view remounts', () => {
+    const first = setup(false);
+    first.dragAside();
+    first.unmount();
+
+    expect(setup(false).asideWidth()).toBeCloseTo(296);
+    cleanup();
+    expect(setup(false, 'email').asideWidth()).toBeCloseTo(256);
+  });
+
+  it('fits a saved width to the current bounds', () => {
+    localStorage.setItem('macro:pref:view-sidebar:width:tasks', '900');
+    const view = setup(false);
+    expect(view.asideWidth()).toBeCloseTo(360);
+  });
 
   it('yields to the main preference, then restores the chosen width', async () => {
     const view = setup(false);
@@ -263,21 +321,13 @@ describe('ViewShell aside resize preference', () => {
     view.setWidth(1200);
     expect(view.asideWidth()).toBeCloseTo(276);
   });
-
-  it('honors a new configured width after a manual resize', async () => {
-    const view = setup(true);
-    await view.growAside();
-    view.setConfiguredWidth(300);
-    expect(view.asideWidth()).toBeCloseTo(300);
-    view.setWidth(1100);
-    expect(view.asideWidth()).toBeCloseTo(300);
-  });
 });
 
 function Workspace(props: {
   app: string;
   asideRequired?: boolean;
   asidePinned?: boolean;
+  asideList?: ViewShellRootProps['asideList'];
   breakpoints?: ViewShellRootProps['breakpoints'];
   mounted?: () => void;
 }) {
@@ -299,6 +349,7 @@ function Workspace(props: {
         asidePreferenceKey={props.app}
         asideRequired={props.asideRequired}
         asidePinned={props.asidePinned}
+        asideList={props.asideList}
         breakpoints={props.breakpoints}
       >
         <ViewShell.Aside>
@@ -409,30 +460,36 @@ it('restores visibility per app after remount and persists reopening', () => {
   expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
 });
 
-it('opens secondary splits without navigation and leaves the preference alone', () => {
-  function InSplit(props: { app: string; first: boolean }) {
-    return (
-      <SplitPanelContext.Provider
-        value={
-          {
-            handle: { isFirst: () => props.first },
-            isPanelActive: () => false,
-            splitHotkeyScope: props.app,
-          } as unknown as SplitPanelContextType
-        }
-      >
-        <Workspace app={props.app} />
-      </SplitPanelContext.Provider>
-    );
-  }
+function InSplit(props: {
+  app: string;
+  first: boolean;
+  asideList?: ViewShellRootProps['asideList'];
+}) {
+  return (
+    <SplitPanelContext.Provider
+      value={
+        {
+          handle: { isFirst: () => props.first },
+          isPanelActive: () => false,
+          splitHotkeyScope: props.app,
+        } as unknown as SplitPanelContextType
+      }
+    >
+      <Workspace app={props.app} asideList={props.asideList} />
+    </SplitPanelContext.Provider>
+  );
+}
+
+it('opens secondary splits with navigation and leaves the preference alone', () => {
   const split = render(() => <InSplit app="email" first={false} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
-  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
-  split.unmount();
-  const reopened = render(() => <InSplit app="email" first={false} />);
+  expect(asideDocked()).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
   expect(screen.getByRole('button', { name: 'Show navigation' })).toBeTruthy();
-  reopened.unmount();
-  render(() => <InSplit app="email" first />);
+  split.unmount();
+  const first = render(() => <InSplit app="email" first />);
+  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+  first.unmount();
+  render(() => <InSplit app="email" first={false} />);
   expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
 });
 
@@ -445,7 +502,7 @@ it('keeps a secondary split navigation choice when the split changes view', () =
           handle: { isFirst: () => false },
           isPanelActive: () => false,
           splitHotkeyScope: 'split',
-          navigationCollapsed: createSignal(true),
+          navigationCollapsed: createSignal(false),
         } as unknown as SplitPanelContextType
       }
     >
@@ -454,13 +511,13 @@ it('keeps a secondary split navigation choice when the split changes view', () =
       </Show>
     </SplitPanelContext.Provider>
   ));
-  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
   setApp('agents');
   expect(screen.getByRole('region', { name: 'agents' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
-  setApp('home');
   expect(screen.getByRole('button', { name: 'Show navigation' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  setApp('home');
+  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
 });
 
 it('reopens automatic narrow collapse as a dismissible overlay', () => {
@@ -1126,4 +1183,147 @@ describe('automatic docked navigation exit', () => {
       expect(animate).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('list navigation', () => {
+  const main = () => document.querySelector('[data-view-shell-main]')!;
+  const list = () => document.querySelector('[data-view-shell-aside]')!;
+
+  it('fills a narrow shell with the list until an item opens, then goes back to it', () => {
+    const [width, setWidth] = createSignal(600);
+    measurement.width = width;
+    const [open, setOpen] = createSignal(false);
+    const onBack = vi.fn(() => setOpen(false));
+    render(() => (
+      <Workspace app="channels" asideList={{ open: open(), onBack }} />
+    ));
+
+    expect(screen.getByText('channels')).toBeTruthy();
+    expect(main().getAttribute('aria-hidden')).toBe('true');
+    expect(
+      screen.queryByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Hide navigation' })
+    ).toBeNull();
+
+    const listElement = list();
+    setOpen(true);
+    // Hidden, not unmounted, so the list keeps its scroll position.
+    expect(list()).toBe(listElement);
+    expect(list().getAttribute('aria-hidden')).toBe('true');
+    expect(main().getAttribute('aria-hidden')).not.toBe('true');
+    expect(
+      screen.queryByRole('button', { name: 'Show navigation' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(onBack).toHaveBeenCalledOnce();
+    expect(list().getAttribute('aria-hidden')).not.toBe('true');
+    expect(document.activeElement).toBe(listElement);
+
+    // Focus handed to the pane around the view also returns to the list.
+    const pane = screen.getByRole('region', { name: 'channels' });
+    pane.tabIndex = -1;
+    setOpen(true);
+    pane.focus();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(document.activeElement).toBe(listElement);
+
+    setOpen(true);
+    setWidth(1000);
+    expect(asideDocked()).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    expect(
+      screen.getByRole('button', { name: 'Show navigation' })
+    ).toBeTruthy();
+  });
+
+  it('tells the list when it fills the shell', () => {
+    const [width, setWidth] = createSignal(600);
+    measurement.width = width;
+    const [open, setOpen] = createSignal(false);
+    let shell: ReturnType<typeof useViewShell> | undefined;
+    function Probe() {
+      shell = useViewShell();
+      return null;
+    }
+    render(() => (
+      <ViewShell.Root
+        asidePreferenceKey="fills"
+        asideList={{ open: open(), onBack: vi.fn() }}
+      >
+        <Probe />
+      </ViewShell.Root>
+    ));
+    expect(shell?.aside.fillsShell()).toBe(true);
+    setOpen(true);
+    expect(shell?.aside.fillsShell()).toBe(false);
+    setOpen(false);
+    setWidth(1000);
+    expect(shell?.aside.fillsShell()).toBe(false);
+  });
+
+  it('shows a new split its list on either side of the breakpoint', () => {
+    const [width, setWidth] = createSignal(1000);
+    measurement.width = width;
+    render(() => (
+      <InSplit
+        app="notifications"
+        first={false}
+        asideList={{ open: false, onBack: vi.fn() }}
+      />
+    ));
+
+    // Wide, the list docks beside the empty preview, as in any split.
+    expect(asideDocked()).toBe(true);
+    expect(main().getAttribute('aria-hidden')).not.toBe('true');
+    expect(
+      screen.queryByRole('button', { name: 'Show navigation' })
+    ).toBeNull();
+
+    // Narrow, it fills the split instead of hiding behind a toggle.
+    setWidth(600);
+    expect(list().getAttribute('aria-hidden')).not.toBe('true');
+    expect(main().getAttribute('aria-hidden')).toBe('true');
+    expect(
+      screen.queryByRole('button', { name: 'Show navigation' })
+    ).toBeNull();
+
+    setWidth(1000);
+    expect(asideDocked()).toBe(true);
+    expect(main().getAttribute('aria-hidden')).not.toBe('true');
+  });
+});
+
+it('keeps collection sheet visibility independent of the saved desktop sidebar preference', () => {
+  const [touch, setTouch] = createSignal(true);
+  measurement.touch = touch;
+  let shell: ReturnType<typeof useViewShell> | undefined;
+  function Probe() {
+    shell = useViewShell();
+    return null;
+  }
+  render(() => (
+    <ViewShell.Root
+      contentLayout="collection"
+      asidePreferenceKey="collection-preference"
+    >
+      <Probe />
+    </ViewShell.Root>
+  ));
+  expect(shell?.aside.isSheet()).toBe(true);
+  expect(shell?.aside.isCollapsed()).toBe(true);
+  shell?.aside.expand();
+  expect(shell?.aside.isOverlay()).toBe(true);
+  setTouch(false);
+  expect(shell?.aside.isCollapsed()).toBe(false);
+  shell?.aside.collapse();
+  expect(shell?.aside.isCollapsed()).toBe(true);
+  setTouch(true);
+  expect(shell?.aside.isOverlay()).toBe(false);
+  shell?.aside.expand();
+  expect(shell?.aside.isOverlay()).toBe(true);
+  setTouch(false);
+  expect(shell?.aside.isCollapsed()).toBe(true);
 });

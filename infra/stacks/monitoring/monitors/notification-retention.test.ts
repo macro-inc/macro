@@ -1,5 +1,6 @@
 import { beforeAll, expect, test } from 'bun:test';
 import * as pulumi from '@pulumi/pulumi';
+import { evictStackModules } from '../evict-stack-modules';
 
 const resources: pulumi.runtime.MockResourceArgs[] = [];
 
@@ -24,6 +25,7 @@ beforeAll(async () => {
     'prod',
     false
   );
+  evictStackModules();
   await import('./notification-retention');
   await pulumi.runtime.waitForRPCs();
 });

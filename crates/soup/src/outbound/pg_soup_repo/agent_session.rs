@@ -1,8 +1,9 @@
 //! Agent session leg of the PostgreSQL Soup repository.
 //!
 //! Agent sessions live in MacroDB and are authorized through `entity_access`
-//! like chats, but they are **opt-in**: a query that says nothing about them
-//! (no `agent_session_filter` in its AST) gets none.
+//! grants like chats; a session named by id is also readable through its
+//! thread's parent and its link share. They are **opt-in**: a query that says
+//! nothing about them (no `agent_session_filter` in its AST) gets none.
 
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
@@ -14,6 +15,7 @@ use model_entity::EntityType;
 use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{agent_session::SoupAgentSession, item::SoupItem};
+use recursion::CollapsibleExt;
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
@@ -97,6 +99,18 @@ pub(super) fn opted_in(expr: &Expr<AgentSessionLiteral>) -> bool {
     out.include || out.named
 }
 
+/// Whether the filter can only match the nil session id, which is how
+/// confined Soup views (Home) leave sessions out while naming them.
+fn names_only_the_nil_id(expr: &Expr<AgentSessionLiteral>) -> bool {
+    expr.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => a || b,
+        filter_ast::ExprFrame::Or(a, b) => a && b,
+        filter_ast::ExprFrame::Not(_) => false,
+        filter_ast::ExprFrame::Literal(AgentSessionLiteral::Id(id)) => id.is_nil(),
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
 #[tracing::instrument(err, skip_all, fields(limit = req.limit))]
 pub(super) async fn cursor_soup(
     db: &PgPool,
@@ -105,7 +119,11 @@ pub(super) async fn cursor_soup(
     let Some(parts) = cursor_parts(req.cursor) else {
         return Ok(Vec::new());
     };
-    let Some(filter) = parts.filter.as_ref().filter(|filter| opted_in(filter)) else {
+    let Some(filter) = parts
+        .filter
+        .as_ref()
+        .filter(|filter| opted_in(filter) && !names_only_the_nil_id(filter))
+    else {
         return Ok(Vec::new());
     };
     // Agent sessions carry no properties, so a property constraint that a
@@ -138,6 +156,12 @@ pub(super) async fn cursor_soup(
     query.push(FOLLOWED_SQL);
     query.push(") AND ");
     query.push(PARENT_THREAD_GRANT_SQL);
+    // A link share admits a session only when it is asked for by id, so
+    // public links never list in anyone's Home, Recent, or search.
+    query.push(") OR (s.id = ANY(");
+    query.push_bind(named_ids.clone());
+    query.push(") AND ");
+    query.push(LINK_SHARE_GRANT_SQL);
     query.push(")) AND (");
     push_filter(&mut query, filter);
     query.push(")");
@@ -187,11 +211,14 @@ pub(super) async fn by_ids(
     let mut query = QueryBuilder::<Postgres>::new(SELECT_SQL);
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(ACCESS_SQL);
-    // Every session here is named, so its thread's parent grants apply too.
+    // Every session here is named, so its thread's parent grants and its
+    // link share apply too.
     query.push("(");
     query.push(SESSION_GRANT_SQL);
     query.push(" OR ");
     query.push(PARENT_THREAD_GRANT_SQL);
+    query.push(" OR ");
+    query.push(LINK_SHARE_GRANT_SQL);
     query.push(") AND s.id = ANY(");
     query.push_bind(ids);
     query.push(") ORDER BY s.modified_at DESC, s.id DESC");
@@ -317,6 +344,26 @@ pub(super) const PARENT_THREAD_GRANT_SQL: &str = r#"EXISTS (
         WHERE m.id = s.thread_id
             AND m.parent_entity_type IN ('document', 'call')
             AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+    )"#;
+
+/// The session's link share admits the viewer, as the session's REST read
+/// decides: a public link anyone signed in, a team link the owner's current
+/// teammates. Callers apply it only to sessions named by id.
+const LINK_SHARE_GRANT_SQL: &str = r#"EXISTS (
+        SELECT 1 FROM "SharePermission" sp
+        WHERE sp.id = s.share_permission_id
+            AND sp."linkShareAccessLevel" IS NOT NULL
+            AND (
+                sp."linkShare" = 'PUBLIC'
+                OR (
+                    sp."linkShare" = 'TEAM'
+                    AND EXISTS (
+                        SELECT 1 FROM team_user owner_team
+                        WHERE owner_team.user_id = s.owner_id
+                            AND owner_team.team_id::text IN (SELECT source_id FROM user_source_ids)
+                    )
+                )
+            )
     )"#;
 
 fn sort_sql(sort: SimpleSortMethod) -> &'static str {

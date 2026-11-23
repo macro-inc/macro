@@ -87,7 +87,7 @@ pub trait FsRepo: Clone + Send + Sync + 'static {
     fn remove_file(&self, path: &Path) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 }
 
-/// Port for querying native system metadata and cache directories.
+/// Port for querying native system metadata and bundle storage directories.
 pub trait SystemQuery: Send + Sync + 'static {
     /// Return the native build, architecture, and OS target.
     fn get_native_app_info(

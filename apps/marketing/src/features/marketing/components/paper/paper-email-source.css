@@ -1,0 +1,67 @@
+.paper-email-source-1 {background-color:var(--color-ui-canvas);box-sizing:border-box;display:flex;flex-direction:column;font-size:12px;font-synthesis:none;line-height:16px;overflow:clip;overflow-wrap:anywhere}
+.paper-email-source-2 {background-color:var(--color-ui-canvas);background-image:radial-gradient(ellipse 70% 60% at 50% 50% in oklab, color-mix(in srgb, var(--color-ui-content-primary) 4%, transparent) 0%, #00000000 100%);border-radius:16px;box-sizing:border-box;flex-shrink:0;height:544px;overflow:clip;position:relative;width:584px}
+.paper-email-source-3 {box-sizing:border-box;display:flex;flex-direction:column;left:85px;position:absolute;top:96px;width:max-content}
+.paper-email-source-4 {align-items:center;box-sizing:border-box;display:flex;gap:9.2px}
+.paper-email-source-5 {align-items:center;background-color:var(--color-ui-button-secondary-bg);border-radius:9999px;box-shadow:color-mix(in srgb, var(--color-ui-glass-highlight) 40%, transparent) 0px 0.4px 0px inset, color-mix(in srgb, var(--color-ui-glass-edge) 40%, transparent) 0px 0px 0px 0.4px inset, color-mix(in srgb, var(--color-ui-floating-edge) 40%, transparent) 0px 0px 0px 0.4px, #0000000F 0px 1px 2px;box-sizing:border-box;display:flex;flex-shrink:0;height:36.8px;overflow:clip}
+.paper-email-source-6 {align-items:center;box-sizing:border-box;display:flex;flex-shrink:0;height:36.8px;justify-content:center;width:36.8px}
+.paper-email-source-7 {flex-shrink:0;display:inline-block}
+.paper-email-source-8 {align-items:center;background-color:var(--color-ui-button-secondary-pressed);box-sizing:border-box;display:flex;flex-shrink:0;height:36.8px;justify-content:center;width:36.8px}
+.paper-email-source-9 {align-items:center;box-sizing:border-box;display:flex;gap:6.9px;padding-inline:11.5px}
+.paper-email-source-10 {box-sizing:border-box;color:var(--color-ui-content-secondary);display:inline-block;font-family:var(--font-sans);font-size:16.1px;font-weight:500;line-height:24.15px;width:max-content}
+.paper-email-source-11 {box-sizing:border-box;display:flex;flex-direction:column;left:40px;position:absolute;top:170px}
+.paper-email-source-12 {box-sizing:border-box;flex-shrink:0;height:374px;mask-image:linear-gradient(transparent 0px, black 110px);overflow:clip;position:relative;width:594px}
+.paper-email-source-13 {box-sizing:border-box;height:326px;left:0px;position:absolute;top:-40px;width:594px}
+.paper-email-source-14 {background-color:var(--color-ui-surface-floating);border-radius:22px;box-shadow:var(--color-ui-glass-highlight) 0px 1px 0px inset, var(--color-ui-floating-edge) 0px 0px 0px 1px, #00000066 0px 8px 18px -8px;box-sizing:border-box;height:326px;left:0px;mask-image:radial-gradient(360px 120px at 0% 100%, transparent 20%, black 100%);position:absolute;top:0px;width:594px}
+.paper-email-source-15 {box-sizing:border-box;display:flex;flex-direction:column;left:0px;padding-bottom:17.6px;padding-inline:19.8px;padding-top:57.6px;position:absolute;top:0px;width:594px}
+.paper-email-source-16 {align-items:center;box-sizing:border-box;display:flex;flex-shrink:0;gap:6.6px;height:26.4px;padding-left:6.6px}
+.paper-email-source-17 {box-sizing:border-box;color:var(--color-ui-content-primary);display:inline-block;font-family:var(--font-sans);font-size:15.4px;line-height:23.1px;min-width:max-content;text-decoration:underline 1px;text-underline-offset:3px;width:max-content}
+.paper-email-source-18 {box-sizing:border-box;flex-shrink:0;height:26.4px}
+.paper-email-source-19 {align-items:center;box-sizing:border-box;display:flex;flex-shrink:0;height:30.8px;padding-left:6.6px}
+.paper-email-source-20 {box-sizing:border-box;column-gap:8.8px;display:flex;flex-wrap:wrap;margin-top:8.8px;row-gap:4.4px}
+.paper-email-source-21 {align-items:center;background-color:var(--color-ui-button-secondary-bg);border-radius:9999px;box-shadow:color-mix(in srgb, var(--color-ui-glass-highlight) 40%, transparent) 0px 0.4px 0px inset, color-mix(in srgb, var(--color-ui-glass-edge) 40%, transparent) 0px 0px 0px 0.4px inset, color-mix(in srgb, var(--color-ui-floating-edge) 40%, transparent) 0px 0px 0px 0.4px, #0000000F 0px 1px 2px;box-sizing:border-box;display:flex;flex-shrink:0;gap:6.6px;height:30.8px;padding-left:11px;padding-right:8.8px}
+.paper-email-source-22 {box-sizing:border-box;color:var(--color-ui-content-primary);display:inline-block;font-family:var(--font-sans);font-size:13.68px;font-weight:500;line-height:20.54px;min-width:max-content;width:max-content}
+.paper-email-source-23 {opacity:0.3}
+.paper-email-source-24 {box-sizing:border-box;color:var(--color-ui-content-tertiary);display:inline-block;font-family:var(--font-sans);font-size:13.68px;font-weight:500;line-height:20.54px;min-width:max-content;width:max-content}
+.paper-email-source-25 {align-items:center;background-color:var(--color-ui-avatar-bg);border-radius:9999px;box-sizing:border-box;display:flex;flex-shrink:0;height:19.8px;justify-content:center;width:19.8px}
+.paper-email-source-26 {box-sizing:border-box;color:var(--color-ui-avatar-content);display:inline-block;font-family:var(--font-sans);font-size:8.91px;font-weight:500;line-height:100%;min-width:max-content;width:max-content}
+.paper-email-source-27 {align-items:center;background-color:var(--color-ui-button-secondary-bg);border-radius:9999px;box-shadow:color-mix(in srgb, var(--color-ui-glass-highlight) 40%, transparent) 0px 0.4px 0px inset, color-mix(in srgb, var(--color-ui-glass-edge) 40%, transparent) 0px 0px 0px 0.4px inset, color-mix(in srgb, var(--color-ui-floating-edge) 40%, transparent) 0px 0px 0px 0.4px, #0000000F 0px 1px 2px;box-sizing:border-box;display:flex;flex-shrink:0;height:30.8px}
+.paper-email-source-28 {align-items:center;box-sizing:border-box;display:flex;gap:6.6px;padding-inline:11px}
+.paper-email-source-29 {background-color:var(--color-ui-border-secondary);box-sizing:border-box;flex-shrink:0;height:30.8px;width:1px}
+.paper-email-source-30 {align-items:center;box-sizing:border-box;display:flex;flex-shrink:0;justify-content:center;width:28.6px}
+.paper-email-source-31 {align-items:center;background-color:var(--color-ui-button-secondary-bg);border-radius:9999px;box-shadow:color-mix(in srgb, var(--color-ui-glass-highlight) 40%, transparent) 0px 0.4px 0px inset, color-mix(in srgb, var(--color-ui-glass-edge) 40%, transparent) 0px 0px 0px 0.4px inset, color-mix(in srgb, var(--color-ui-floating-edge) 40%, transparent) 0px 0px 0px 0.4px, #0000000F 0px 1px 2px;box-sizing:border-box;display:flex;flex-shrink:0;gap:6.6px;height:30.8px;padding-inline:11px}
+.paper-email-source-32 {align-items:center;box-sizing:border-box;display:flex;flex-shrink:0;gap:8.8px;height:39.6px;margin-top:17.6px;mask-image:linear-gradient(90deg, black 0px, black 112px, transparent 172px, transparent 200px, black 240px)}
+.paper-email-source-33 {align-items:center;background-color:var(--color-ui-accent);border-radius:9999px;box-sizing:border-box;display:flex;flex-shrink:0;height:19.8px;justify-content:end;padding:2.2px;width:35.2px}
+.paper-email-source-34 {background-color:var(--color-ui-white);border-radius:9999px;box-sizing:border-box;flex-shrink:0;height:15.4px;width:15.4px}
+.paper-email-source-35 {box-sizing:border-box;color:var(--color-ui-content-primary);display:inline-block;font-family:var(--font-sans);font-size:15.4px;line-height:23.1px;min-width:max-content;width:max-content}
+.paper-email-source-36 {box-sizing:border-box;flex-basis:0px;flex-grow:1;flex-shrink:1;min-width:0px}
+.paper-email-source-37 {align-items:center;background-color:color-mix(in srgb, var(--color-ui-content-primary) 16%, transparent);border-radius:9999px;box-sizing:border-box;display:flex;flex-shrink:0;height:19.8px;padding:2.2px;width:35.2px}
+.paper-email-source-38 {align-items:center;background-color:var(--color-ui-button-primary-bg);border-radius:9999px;box-sizing:border-box;display:flex;height:33px;padding-inline:13.2px}
+.paper-email-source-39 {box-sizing:border-box;color:var(--color-ui-button-primary-ink);display:inline-block;font-family:var(--font-sans);font-size:15.4px;font-weight:500;line-height:23.1px;min-width:max-content;width:max-content}
+.paper-email-source-40 {background-image:linear-gradient(in oklab 180deg, var(--color-ui-canvas) 0%, #00000000 9%, #00000000 91%, var(--color-ui-canvas) 100%);box-sizing:border-box;height:544px;left:0px;position:absolute;top:0px;width:584px}
+.paper-email-source-41 {background-image:linear-gradient(in oklab 90deg, var(--color-ui-canvas) 0%, #00000000 7%, #00000000 93%, var(--color-ui-canvas) 100%);box-sizing:border-box;height:544px;left:0px;position:absolute;top:0px;width:584px}
+.paper-email-source-42 {background-color:color-mix(in srgb, var(--color-ui-content-primary) 45%, transparent);box-sizing:border-box;height:22px;left:342.1px;position:absolute;top:68px;width:1px}
+.paper-email-source-43 {background-color:var(--color-ui-content-primary);border-radius:9999px;box-shadow:color-mix(in srgb, var(--color-ui-content-primary) 18%, transparent) 0px 0px 0px 3px;box-sizing:border-box;height:8px;left:338.6px;position:absolute;top:86px;width:8px}
+.paper-email-source-44 {align-items:center;background-color:var(--color-ui-surface-floating);border-radius:9999px;box-shadow:var(--color-ui-glass-highlight) 0px 1px 0px inset, var(--color-ui-floating-edge) 0px 0px 0px 1px, #00000066 0px 8px 18px -8px;box-sizing:border-box;display:flex;height:28px;justify-content:center;left:289.1px;position:absolute;top:40px;width:107px}
+.paper-email-source-45 {box-sizing:border-box;color:var(--color-ui-content-primary);display:inline-block;font-family:var(--font-sans);font-size:var(--text-sm);font-weight:500;line-height:var(--leading-sm);min-width:max-content;width:max-content}
+.paper-email-source-46 {background-color:color-mix(in srgb, var(--color-ui-content-primary) 45%, transparent);box-sizing:border-box;height:126px;left:269.4px;position:absolute;top:352px;width:1px}
+.paper-email-source-47 {background-color:var(--color-ui-content-primary);border-radius:9999px;box-shadow:color-mix(in srgb, var(--color-ui-content-primary) 18%, transparent) 0px 0px 0px 3px;box-sizing:border-box;height:8px;left:265.9px;position:absolute;top:348px;width:8px}
+.paper-email-source-48 {align-items:center;background-color:var(--color-ui-surface-floating);border-radius:9999px;box-shadow:var(--color-ui-glass-highlight) 0px 1px 0px inset, var(--color-ui-floating-edge) 0px 0px 0px 1px, #00000066 0px 8px 18px -8px;box-sizing:border-box;display:flex;height:28px;justify-content:center;left:234.9px;position:absolute;top:478px;width:70px}
+
+/* Preserve Rahul's focused crop; keep both callouts in view on a phone. */
+.paper-email-source-1 { --color-ui-canvas:#000; --color-ui-blue-ink:var(--email-source-accent); }
+.paper-email-source-1, .paper-email-source-2 { background-color:transparent; }
+.paper-feature-art[data-compact=true] .paper-email-source-2,
+.paper-feature-art[data-compact=true] .paper-email-source-40,
+.paper-feature-art[data-compact=true] .paper-email-source-41 { width:374px; }
+.paper-feature-art[data-compact=true] .paper-email-source-3 { left:-15px; }
+.paper-feature-art[data-compact=true] .paper-email-source-11 { left:-60px; }
+.paper-feature-art[data-compact=true] .paper-email-source-42 { left:242.1px; }
+.paper-feature-art[data-compact=true] .paper-email-source-43 { left:238.6px; }
+.paper-feature-art[data-compact=true] .paper-email-source-44 { left:189.1px; }
+.paper-feature-art[data-compact=true] .paper-email-source-46 { left:169.4px; }
+.paper-feature-art[data-compact=true] .paper-email-source-47 { left:165.9px; }
+.paper-feature-art[data-compact=true] .paper-email-source-48 { left:134.9px; }
+.paper-feature-art[data-compact=true] .paper-email-source-45 { font-size:14px; }
+
+/* Product UI remains dark against this page’s black canvas, like the interactive demos. */
+.paper-email-source-1 { --color-ui-accent:oklch(70% 0.120 250); --color-ui-avatar-bg:oklch(38.8% 0 0); --color-ui-avatar-content:#FFFFFF; --color-ui-border-secondary:oklch(100% 0 0 / 12%); --color-ui-button-primary-bg:#FFFFFF; --color-ui-button-primary-ink:#000000; --color-ui-button-secondary-bg:oklch(100% 0 0 / 8%); --color-ui-button-secondary-pressed:oklch(100% 0 0 / 16%); --color-ui-content-primary:oklch(100% 0 0); --color-ui-content-secondary:oklch(83% 0 0); --color-ui-content-tertiary:#BEBEBE; --color-ui-floating-edge:oklch(100% 0 0 / 10%); --color-ui-glass-edge:oklch(100% 0 0 / 8%); --color-ui-glass-highlight:oklch(100% 0 0 / 8%); --color-ui-surface-floating:oklch(19.5% 0 0); --color-ui-white:#FFFFFF; }

@@ -1,15 +1,22 @@
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import type {
   ActionTrigger,
+  AgentMcpServer,
   AgentTask,
+  CodeStep,
   EventFilter,
+  RoutineKnob,
+  RoutineKnobEntityType,
   RoutineModelId,
+  RoutineStep,
+  RoutineTask,
   RoutineTemplate as RoutineTemplateRecord,
   RoutineTrigger,
   RunVisibility,
   ScheduledActionResponse,
   TemplateVariable,
 } from '../../../generated/scheduled-action/types.gen';
+import type { EntityAppearance } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
@@ -17,11 +24,16 @@ import type { Agent } from '../agents/agent';
 import { Chat } from '../chats/chat';
 import { MacroEntity } from '../entity';
 import type { EntityReference } from '../reference';
+import type { Task } from '../tasks/task';
 import { User } from '../users/user';
 
 /** An event selector references resources by typed handles. */
 export type RoutineEventFilter = Omit<EventFilter, 'ids' | 'condition'> & {
-  /** Resource selectors for these events. Omit to match all resources. */
+  /**
+   * The items these events are watched on, as references to handles the SDK
+   * returned, such as `{ type: 'channel', entity: channel }`; never ids.
+   * Omit to match all items.
+   */
   entities?: EntityReference[];
   /** Optional yes/no condition on the triggering content. */
   condition?: string;
@@ -69,8 +81,66 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
     .exhaustive();
 }
 
-/** Configuration of an agent routine. */
-export interface RoutineOptions {
+/**
+ * The item an entity knob holds, as a reference to the handle the SDK
+ * returned: an {@link EntityReference} of a kind a knob names, or a task,
+ * which references call a document.
+ */
+export type RoutineKnobItem =
+  | Extract<EntityReference, { type: RoutineKnobEntityType }>
+  | { type: 'task'; entity: Task };
+
+/**
+ * A code step's knob. An `entity` knob holds one of the user's items, such
+ * as the channel the step posts in, as a reference to the handle the SDK
+ * returned: `{ type: 'channel', entity: channel }`, never an id. The step's
+ * code reads it as that handle (`knobs.bugs.send(...)`), and the user can
+ * pick another item without new code. A knob with nothing picked yet holds
+ * `null`. A stored routine passed back gives each picked item again as a
+ * handle (`{ type: 'channel', entity: macro.channels.byId(value.id) }`), as
+ * its Ask AI step gives its agent.
+ */
+export type RoutineKnobOptions =
+  | Exclude<RoutineKnob, { type: 'entity' }>
+  | (Omit<Extract<RoutineKnob, { type: 'entity' }>, 'value'> & {
+      value?: RoutineKnobItem | null;
+    });
+
+/** A code step, its entity knobs holding handles. */
+export type CodeStepOptions = Omit<CodeStep, 'knobs'> & {
+  knobs?: readonly RoutineKnobOptions[];
+};
+
+/**
+ * A routine step. A `code` step runs TypeScript against this SDK, as the
+ * routine's owner; an `agent` ("Ask AI") step hands the run to a model or
+ * agent with instructions. A routine has at most one agent step.
+ */
+export type RoutineStepOptions =
+  | ({ type: 'code' } & CodeStepOptions)
+  | {
+      type: 'agent';
+      /** What the model or agent should do; it also sees earlier steps' output. */
+      instructions: string;
+      /** Model to run the step, or the model override for `agent`. Set `model`, `agent`, or both. */
+      model?: RoutineModelId;
+      /** Agent to run the step. Set `model`, `agent`, or both. */
+      agent?: Agent;
+    };
+
+/** An app outside Macro that a routine's Ask AI step uses. */
+export interface RoutineApp {
+  /**
+   * The app's slug, e.g. `linear`: a connected app's `key`, or a connector's
+   * `slug`.
+   */
+  slug: string;
+  /** Its display name, e.g. `Linear`. */
+  name: string;
+}
+
+/** What every routine has, whatever it runs. */
+interface RoutineCommonOptions {
   /** Display name. */
   name: string;
   /**
@@ -78,6 +148,37 @@ export interface RoutineOptions {
    * or 7 fields: `sec min hour day-of-month month day-of-week [year]`.
    */
   trigger: RoutineTriggerOptions;
+  /** Whether triggers can start executions. Defaults to true on creation. */
+  enabled?: boolean;
+  /**
+   * Whether runs appear in Home and the Agents list. Defaults to `unlisted` on
+   * creation; an update that omits it keeps the stored value.
+   */
+  runVisibility?: RunVisibility;
+  /**
+   * An icon and color for what the routine does, picked by the agent writing
+   * it: `{ icon: { kind: 'macro', name }, color }`, with `name` from Macro's
+   * icon catalog (a check or save naming another lists the catalog). Saved
+   * on create, and on an update made for the routine's owner, unless the
+   * owner chose the routine's look with {@link Routine.setAppearance}, which
+   * it never replaces; omit it to keep the stored look.
+   */
+  appearance?: EntityAppearance;
+  /**
+   * Apps outside Macro (Linear, GitHub, Notion…) the routine's Ask AI step
+   * uses. The owner must have each connected: saving and every run check.
+   * Only an Ask AI step reaches them, so a routine without one requires
+   * none. An update that omits `apps` is refused while the routine requires
+   * some; pass `[]` to remove them.
+   */
+  apps?: readonly RoutineApp[];
+}
+
+/**
+ * A routine that hands each run to one model or agent: the older form, which
+ * runs as one Ask AI step. Write new routines as {@link StepsRoutineOptions}.
+ */
+export interface AgentRoutineOptions extends RoutineCommonOptions {
   /** Instructions delivered to the agent. */
   prompt: string;
   /** Original user instructions. */
@@ -93,18 +194,38 @@ export interface RoutineOptions {
    * again on every run. Set `model`, `agent`, or both.
    */
   agent?: Agent;
-  /** Whether triggers can start executions. Defaults to true on creation. */
-  enabled?: boolean;
-  /**
-   * Whether runs appear in Home and the Agents list. Defaults to `unlisted` on
-   * creation; an update that omits it keeps the stored value.
-   */
-  runVisibility?: RunVisibility;
+  steps?: never;
+  dangerouslyOperateAsUser?: never;
 }
+
+/** A routine that runs code and Ask AI steps in order. */
+export interface StepsRoutineOptions extends RoutineCommonOptions {
+  /** Run in order; a failed step stops the run. Saving type-checks the code. */
+  steps: readonly RoutineStepOptions[];
+  /**
+   * Make code steps' messages, comments and emails appear written by the
+   * owner, with no agent badge. Set it only when the user explicitly asked
+   * for the routine to act, send or post as them; never infer it from what
+   * the routine does. Omitted, writes are attributed to Macro's agent acting
+   * for the owner, and an update that omits it turns it off.
+   */
+  dangerouslyOperateAsUser?: boolean;
+  prompt?: never;
+  userPrompt?: never;
+  model?: never;
+  agent?: never;
+}
+
+/** Configuration of a routine: code and Ask AI steps, or the older single agent task. */
+export type RoutineOptions = AgentRoutineOptions | StepsRoutineOptions;
 
 /** A scheduled or event-triggered agent task. */
 export class Routine extends MacroEntity<ScheduledActionResponse> {
-  /** The routine's URL in the Macro web app; hand it to users as the link. */
+  /**
+   * The routine's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/routines/${this.id}`;
   }
@@ -136,6 +257,24 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   /** Routine name. */
   readonly name = this.field('name');
 
+  /** Shared icon and color overrides. */
+  readonly appearance = this.field('appearance');
+
+  /**
+   * Replace shared appearance without rescheduling. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.scheduledAction.setScheduledActionAppearance({
+        path: { id: this.id },
+        body: appearance,
+      }),
+    );
+  }
+
   /** Configured triggers. */
   readonly trigger = this.field('trigger');
 
@@ -162,7 +301,63 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
       id ? Routine.byId(this.client, id) : undefined,
     );
 
-  /** This routine's shared template, or `undefined` when it isn't shared. */
+  /**
+   * The routine this one follows, when one of that routine's runs created
+   * it: pausing the parent pauses it and deleting the parent deletes it.
+   * `undefined` for a top-level routine.
+   */
+  readonly parent: () => Promise<Routine | undefined> = this.mappedField(
+    'sub_routine',
+    (link): Routine | undefined =>
+      link ? Routine.byId(this.client, link.parent_id) : undefined,
+  );
+
+  /**
+   * The run that created this sub-routine, by the id its history record
+   * has once that run ends. `undefined` for a top-level routine.
+   */
+  readonly createdByRun: () => Promise<RoutineRun | undefined> =
+    this.mappedField('sub_routine', (link): RoutineRun | undefined =>
+      link ? new RoutineRun(link.created_by_run_id) : undefined,
+    );
+
+  /** The key this sub-routine was created under, if its creator gave one. */
+  readonly key: () => Promise<string | undefined> = this.mappedField(
+    'sub_routine',
+    (link) => link?.key ?? undefined,
+  );
+
+  /**
+   * This routine's sub-routines: the active ones and its newest finished
+   * one-time ones.
+   *
+   * @readonly
+   */
+  async children(): Promise<Routine[]> {
+    return unwrap(
+      await this.client.scheduledAction.listScheduledActions({
+        query: { include_events: true, parent: this.id },
+      }),
+    ).map((record) => Routine.from(this.client, record));
+  }
+
+  /**
+   * Keep this sub-routine as the user's own routine: it moves to their main
+   * list and no longer pauses or is deleted with its parent.
+   *
+   * @write
+   */
+  async keepAsOwn(): Promise<void> {
+    await this.mutate((c) =>
+      c.scheduledAction.detachScheduledAction({ path: { id: this.id } }),
+    );
+  }
+
+  /**
+   * This routine's shared template, or `undefined` when it isn't shared.
+   *
+   * @readonly
+   */
   async template(): Promise<RoutineTemplate | undefined> {
     const result = await this.client.scheduledAction.getScheduledActionTemplate(
       { path: { id: this.id } },
@@ -174,6 +369,9 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   /**
    * Share this routine as a template, or update its shared snapshot. People
    * get the template, never the routine, its runs or its results.
+   *
+   * @write
+   * @idempotent
    */
   async shareAsTemplate(options: {
     /** What the routine does for someone. */
@@ -194,6 +392,8 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   /**
    * Create the caller's own routine from this routine's shared template, with
    * its references already filled in for them.
+   *
+   * @write
    */
   async activateTemplate(options: RoutineOptions): Promise<Routine> {
     return Routine.from(
@@ -215,7 +415,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Stop sharing this routine. Routines already activated keep running. */
+  /**
+   * Stop sharing this routine. Routines already activated keep running.
+   *
+   * @destructive
+   * @idempotent
+   */
   async stopSharingTemplate(): Promise<void> {
     unwrap(
       await this.client.scheduledAction.unshareScheduledActionTemplate({
@@ -224,7 +429,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Replace the routine's task and trigger configuration. */
+  /**
+   * Replace the routine's task and trigger configuration.
+   *
+   * @write
+   * @idempotent
+   */
   async update(options: RoutineOptions): Promise<void> {
     await this.mutate((c) =>
       c.scheduledAction.updateScheduledAction({
@@ -234,7 +444,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Enable or disable triggering. */
+  /**
+   * Enable or disable triggering.
+   *
+   * @write
+   * @idempotent
+   */
   async setEnabled(enabled: boolean): Promise<void> {
     await this.mutate((c) =>
       c.scheduledAction.setScheduledActionEnabled({
@@ -244,7 +459,11 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Start an execution immediately and return its transcript handle if available. */
+  /**
+   * Start an execution immediately and return its transcript handle if available.
+   *
+   * @write
+   */
   async execute(): Promise<Chat | AgentSession | undefined> {
     const result = unwrap(
       await this.client.scheduledAction.executeScheduledActionNow({
@@ -263,16 +482,34 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     return result.chat_id ? Chat.byId(this.client, result.chat_id) : undefined;
   }
 
-  /** Completed executions, with their routine scoped identity. */
+  /**
+   * Completed executions, with their routine scoped identity.
+   *
+   * @readonly
+   */
   async history(): Promise<RoutineExecution[]> {
     return unwrap(
       await this.client.scheduledAction.listScheduledActionHistory({
         path: { id: this.id },
       }),
-    ).map((record) => new RoutineExecution(this, record));
+    ).map(
+      (record) =>
+        new RoutineExecution(
+          this,
+          record,
+          (record.created ?? []).map((routine) =>
+            Routine.byId(this.client, routine.id),
+          ),
+        ),
+    );
   }
 
-  /** Delete the routine. */
+  /**
+   * Delete the routine.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.scheduledAction.deleteScheduledAction({ path: { id: this.id } }),
@@ -280,7 +517,28 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   }
 }
 
-/** A routine shared as a template, which people activate as their own routine. */
+/**
+ * One run of a routine, by the id of its history record.
+ *
+ * @mcp-exclude Read from a sub-routine's record; no call takes one.
+ */
+export class RoutineRun {
+  constructor(
+    /** The run's id, which its {@link RoutineExecution} has once it ends. */
+    readonly id: string,
+  ) {}
+
+  /** Serialize the run's identity. */
+  toJSON() {
+    return { id: this.id };
+  }
+}
+
+/**
+ * A routine shared as a template, which people activate as their own routine.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
+ */
 export class RoutineTemplate {
   constructor(
     /** The shared routine. */
@@ -294,6 +552,8 @@ export class RoutineTemplate {
   /**
    * Create the caller's own routine from this template, with its references
    * already filled in for them.
+   *
+   * @write
    */
   activate(options: RoutineOptions): Promise<Routine> {
     return this.routine.activateTemplate(options);
@@ -311,7 +571,9 @@ export class RoutineExecution {
     /** Parent routine. */
     readonly routine: Routine,
     /** Execution snapshot. */
-    readonly record: import('../../../generated/scheduled-action/types.gen').ActionExecutionRecord,
+    readonly record: import('../../../generated/scheduled-action/types.gen').ExecutionRecordResponse,
+    /** The sub-routines this run created that still follow the routine. */
+    readonly created: Routine[] = [],
   ) {}
 
   /** Execution identity, when assigned. */
@@ -325,20 +587,67 @@ export class RoutineExecution {
   }
 }
 
+function knobBody(knob: RoutineKnobOptions): RoutineKnob {
+  if (knob.type !== 'entity') return knob;
+  const { value, ...rest } = knob;
+  return {
+    ...rest,
+    value: value ? { type: value.type, id: value.entity.id } : null,
+  };
+}
+
+function stepBody(step: RoutineStepOptions): RoutineStep {
+  return match(step)
+    .returnType<RoutineStep>()
+    .with({ type: 'code' }, ({ knobs, ...code }) => ({
+      ...code,
+      ...(knobs ? { knobs: knobs.map(knobBody) } : {}),
+    }))
+    .with({ type: 'agent' }, ({ agent, ...rest }) => ({
+      ...rest,
+      agent: agent ? { bot_id: agent.id } : undefined,
+    }))
+    .exhaustive();
+}
+
+/** The apps a routine requires, as its task stores them; absent when not given. */
+export function appsBody(
+  apps: readonly RoutineApp[] | undefined,
+): AgentMcpServer[] | undefined {
+  return apps?.map((app) => ({ app_slug: app.slug, server_name: app.name }));
+}
+
+function taskBody(options: RoutineOptions): RoutineTask {
+  const mcpServers = appsBody(options.apps);
+  return match(options)
+    .returnType<RoutineTask>()
+    .with({ steps: P.array() }, (program) => ({
+      steps: program.steps.map(stepBody),
+      dangerously_operate_as_user: program.dangerouslyOperateAsUser,
+      mcp_servers: mcpServers,
+    }))
+    .with(
+      { prompt: P.string },
+      (agentTask): AgentTask => ({
+        prompt: agentTask.prompt,
+        user_prompt: agentTask.userPrompt,
+        model: agentTask.model,
+        agent: agentTask.agent ? { bot_id: agentTask.agent.id } : undefined,
+        mcp_servers: mcpServers,
+      }),
+    )
+    .exhaustive();
+}
+
 /** Translate typed routine options into the generated wire contract. */
 export function routineBody(options: RoutineOptions) {
-  const task: AgentTask = {
-    prompt: options.prompt,
-    user_prompt: options.userPrompt,
-    model: options.model,
-    agent: options.agent ? { bot_id: options.agent.id } : undefined,
-  };
   return {
     kind: 'Agent' as const,
     name: options.name,
     enabled: options.enabled,
     run_visibility: options.runVisibility,
+    appearance: options.appearance,
     trigger: triggerBody(options.trigger),
-    task: { ...task },
+    task: taskBody(options),
   };
 }

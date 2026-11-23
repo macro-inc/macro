@@ -1,126 +1,122 @@
 ---
-title: "Bring your own agent"
-sidebarTitle: "Bring your own agent"
+title: "BYO agent"
+sidebarTitle: "BYO agent"
 icon: "terminal"
-description: "Bring Claude Code, OpenCode, OpenClaw, or Hermes into your Macro workspace with macrod."
+description: "Run an agent from Macro or give your agent access to your Macro workspace."
 ---
 
-## Agents and runtimes
+## Choose your agent
 
-An **agent** combines a name, instructions, a default model, and a runtime.
+| Agent | How to connect |
+| --- | --- |
+| **Cursor** | [Connect Cursor Cloud](/AI/cursor) with your Cursor API key. |
+| **Claude** | Run Claude Code with MacroD, or [add Macro MCP to Claude chat](/AI/mcp/overview#claude). |
+| **ChatGPT** | [Add Macro MCP](/AI/mcp/overview#chatgpt) as a custom app in ChatGPT. |
+| **Hermes** | Run Hermes with MacroD, or [sign up as an agent](https://macro.com/app/signup/agent) for its own Macro account and SDK token. |
 
-A **runtime** is the harness that powers it: Macro AI, a built-in coding harness, or an agent running on your own machine, like your very own Claude Code.
-
-Manage both in **Settings → General → Agents**. Connect your machine in **Runtimes**, then create an agent that uses it in **Agents**.
+Using MacroD? Start with [Desktop setup](#on-the-macro-desktop-app) or [Server setup](#connect-your-machine).
 
 ## On the Macro desktop app
 
-The desktop app bundles `macrod`, so there is nothing to download. Open **Settings → General → Agents → Runtimes** and use the **This computer** card: **Set up** detects the coding agents installed on your machine, you pick one and a workspace folder, and **Start running agents here** configures, pairs, and starts the runtime automatically — no terminal and no pairing code. Keep the app open while agents run.
+MacroD comes with the desktop app. Install and sign in to your agent on this computer first.
 
-The manual `macrod` steps below are for machines without the desktop app (servers, a second computer), and both kinds of runtime can be paired to the same account.
+1. Open **Settings → Machines** and find **This computer**.
+2. Click **Set up**, then confirm the agent Macro found. Use **Options** to pick a different agent or workspace folder.
+3. @mention the new agent in Macro. Keep the app open while it runs.
 
-## Macro daemon
+## Connect your machine
 
-Use your local coding agent from Macro. `macrod` runs on your computer, connects your agent to Macro, and keeps its sessions available from your workspace.
+Use these steps for a server or a computer without the Macro desktop app. You need macOS, Linux, or Windows and an installed, signed-in agent. MacroD detects Claude Code, Codex, OpenCode, OpenClaw, and Hermes. Choose **Custom command** for another Agent Client Protocol (ACP) agent.
 
-<Info>
-  Macro Daemon is for advanced users that want to connect agents running in your terminal. For example, if you run Claude Code on your server.
-</Info>
+1. **Install MacroD.** Choose your operating system below, or download the archive for your system from [Macro releases](https://github.com/macro-inc/macro/releases).
 
-Run the Macro daemon (`macrod`) on your computer or server.
+   <Accordion title="Install on macOS or Linux">
 
-## Before you start
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh
+   ```
 
-You need a macOS, Linux, or Windows computer that can stay online and an installed, authenticated coding agent. `macrod` recognizes Claude Code, Codex, OpenCode, OpenClaw, and Hermes. You can also configure a custom command for an Agent Client Protocol (ACP) agent.
+   Open a new terminal after installation. The installer adds `~/.local/bin` to your `PATH`. Use `--no-modify-path` or set `MACROD_NO_MODIFY_PATH=1` to preserve your shell startup files.
 
-`macrod` connects out to Macro. You do not need a public webhook endpoint, port forwarding, or an HTTPS tunnel.
+   </Accordion>
 
-<Warning>
-  Your local agent can run commands and edit files on your computer. Choose a dedicated workspace and review access before sharing a runtime with your team. Leave permission bypass off unless you intend to allow actions without approval.
-</Warning>
+   <Accordion title="Install on Windows">
 
-## Connect your runtime
+   ```powershell
+   irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.ps1 | iex
+   ```
 
-<Steps>
-  <Step title="Install macrod">
-    Run the install command for your computer in a terminal:
+   The installer adds `%LOCALAPPDATA%\Programs\macrod` to your user `PATH`. Open a new PowerShell window after installation.
 
-    <Tabs>
-      <Tab title="macOS and Linux">
-        ```bash
-        curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh
-        ```
+   </Accordion>
 
-        This installs `macrod` to `~/.local/bin` and adds that folder to your `PATH` in your shell's startup file (`~/.zshrc`, `~/.bashrc` and `~/.bash_profile`, or fish's `conf.d`), once. Open a new terminal afterwards. To leave your startup files alone, run `curl -fsSL … | sh -s -- --no-modify-path` or set `MACROD_NO_MODIFY_PATH=1`.
-      </Tab>
-      <Tab title="Windows">
-        In PowerShell:
+2. **Start MacroD and choose an agent.** Run `macrod` in your terminal. In **Quickstart**, select your agent, set its **Workspace** folder, and click **Create and pair**.
 
-        ```powershell
-        irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.ps1 | iex
-        ```
+   On macOS and Linux, start `macrod` inside [Herdr](https://herdr.dev) and **Quickstart** also offers **Claude Code in herdr** and **Codex in herdr**. Each session then runs in the agent's own terminal interface, in a Herdr tab you can open and type into.
 
-        This installs `macrod.exe` to `%LOCALAPPDATA%\Programs\macrod` and adds that folder to your user `PATH`. Open a new terminal afterwards.
-      </Tab>
-    </Tabs>
+3. **Approve the pairing in Macro.** Open the pairing link shown in your terminal, or go to **Settings → Machines → New machine**. Enter the device code and click **Look up**. Check the computer and its permissions, then click **Approve**.
 
-    You can also download the archive for your operating system and architecture from [Macro releases](https://github.com/macro-inc/macro/releases) and extract it.
+Use a dedicated workspace folder. Review sharing before enabling permission bypass. Keep MacroD running and the computer awake while you use the agent. MacroD connects out to Macro, so you can use it without opening inbound ports.
 
-    Open **Settings → Runtimes → New runtime** in Macro. The page walks you through installation, configuration, and pairing.
-  </Step>
+## Run agents on a cloud server
 
-  <Step title="Run macrod">
-    Open a terminal in the folder where `macrod` should keep its configuration and run:
+To keep agents running while your laptop is off, run MacroD on a cloud server. Connect over SSH, install and sign in to your agent there, then follow [Connect your machine](#connect-your-machine). Open the pairing link in your own browser; the server does not need one.
 
-    ```bash
-    macrod
-    ```
+MacroD connects out to Macro, so the server needs no public address, open port, reverse proxy, or tunnel. Keep `macrod` running after you disconnect, for example in `tmux` or Herdr.
 
-    Keep the terminal open while you use your runtime.
+## Create an agent that uses your machine
 
-    On first launch, **Quickstart** lists the agents available on your machine. Select one, or choose **Custom command** to enter an ACP launch command.
+For a machine you paired from a terminal, open **Settings → Agents → Add agent**. Give the agent a name and **@tag**. Under **Where it runs**, choose **On your machine**, then select the machine under **Machine**. Choose **Private** for yourself or **Team** to share it, then save and @mention the agent.
 
-    Set **Workspace** to the directory your agent should work in. Choose **Private** for your own runtime that only you can kick off, or **Team** to let teammates use your agent. If you run team mode, anyone can create agent sessions that run on your computer. By default, you'll be asked for permission requests based on the harness you run, such as for accessing files outside of your workspace; if you enable **Full Access** these prompts will automatically be approved.
+## More help with MacroD
 
-    <Frame caption="Configure your agent, workspace, and access before generating a pairing code.">
-      ![The macrod Quickstart configuration screen showing discovered agents, workspace, access, Full Access off, and the Create and pair button](/images/macrod-quickstart-example.png)
-    </Frame>
+<Accordion title="Watch the setup walkthrough">
 
-    Select **Create and pair** to generate your device code.
+<video src="https://macro.com/video/tutorials/macrod.mp4" poster="https://macro.com/video/tutorials/macrod-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
-    <Note>
-      Claude Code and Codex use ACP adapters, which `macrod` installs with `npm` the first time you select them. Their presets require the agent's command and `npm` to be available in the shell where you start `macrod`. On Windows, Claude Code works from either its native installer or `npm install -g @anthropic-ai/claude-code`.
-    </Note>
-  </Step>
+</Accordion>
 
-  <Step title="Enter your pairing code">
-    The **Pair macrod** panel shows a device code and a link to Macro. If you are already in the terminal overview, press <kbd>p</kbd> to open pairing. Press <kbd>c</kbd> to copy the code.
+<Accordion title="Pairing details and agent prerequisites">
 
-    Open the pairing link, or go to **Settings → Runtimes → New runtime**. Enter your code and click **Look up**.
+If you return to the terminal overview, press <kbd>p</kbd> to open pairing and <kbd>c</kbd> to copy the code.
 
-    <Frame caption="Example only—enter the code from your own macrod terminal.">
-      ![The macrod terminal with a device code and approval link in the Pair macrod panel](/images/macrod-pairing-example.png)
-    </Frame>
+<Frame caption="Example only. Use the code from your MacroD terminal.">
+  ![The MacroD terminal with a device code and approval link in the Pair macrod panel](/images/macrod-pairing-example.png)
+</Frame>
 
-    Check that the code and computer match your terminal. Review the runtime name, **Private** or **Team** access, and permissions, then click **Approve**.
+MacroD saves its configuration and credential in `~/.macrod/macrod.toml` (`%USERPROFILE%\.macrod\macrod.toml` on Windows). Keep this file private and out of source control.
 
-    `macrod` connects automatically after approval. It saves your configuration and credential in `macrod.toml` in the directory where you started it. Keep this file private; do not commit it to a repository.
-  </Step>
-</Steps>
+Claude Code and Codex use ACP adapters. Their presets require the agent command and `npm` in the same shell as `macrod`. MacroD installs the adapter the first time you select the agent. On Windows, Claude Code works with its native installer or `npm install -g @anthropic-ai/claude-code`.
 
-## Create an agent that uses your runtime
+</Accordion>
 
-Return to the **Agents** tab and click **New agent**. Give your agent a name and instructions, choose your connected machine under **Runtime**, and select a default model.
+<Accordion title="Run more than one machine on a computer">
 
-Review sharing and channel access, then save the agent. @mention it in a channel it can access to start a session on your machine.
+Each machine has its own configuration. The first one uses `~/.macrod/macrod.toml`. Give every other machine a profile name:
 
-## Keep your runtime connected
+```bash
+macrod --profile work
+```
 
-Leave `macrod` running and your computer awake while you use the runtime. Its terminal shows your sessions, configuration, and logs. You can also check the runtime in **Settings → Runtimes**.
+A profile keeps its configuration in `~/.macrod/profiles/work.toml` and pairs as a new machine named after your computer and the profile, such as `my-laptop · work`. Rename it in **Settings → Machines**. Run `macrod --profile work` again to reconnect it.
 
-To reconnect later, run `macrod` from the same directory so it loads your saved configuration. If you revoke the runtime, pair it again before using it.
+If you start `macrod` while another `macrod` already runs the default configuration, it offers to create a profile and suggests a name. Press <kbd>Enter</kbd> to accept it or type another name, then set up the new machine in **Quickstart**.
 
-## Update macrod
+To see every machine on your computer, run:
+
+```bash
+macrod profiles
+```
+
+It lists each profile with its configuration file, the machine it is paired to, and whether a `macrod` is running it now. Profile names use lowercase letters, digits, `-`, and `_`.
+
+**Configurations in project folders**
+
+Older versions of `macrod` read `macrod.toml` from the folder you started them in. When you run `macrod` in a folder that still has one, `macrod` moves it into `~/.macrod` and keeps running that machine. It becomes `~/.macrod/macrod.toml` if you have no default configuration yet. Otherwise it becomes a profile named after the folder. `macrod` prints where the file went and the command to use from now on, such as `macrod --profile my-project`.
+
+</Accordion>
+
+<Accordion title="Updates and release versions">
 
 `macrod` updates itself. While it runs, it checks for a new release every hour, downloads it, and verifies its checksum and that it starts. Your `macrod.toml` and pairing are kept. If an update fails, `macrod` keeps running the current version and shows the error in its **Logs** tab.
 
@@ -142,10 +138,19 @@ auto = false
 
 or start `macrod` with `MACROD_NO_UPDATE=1` set. `macrod` then only changes when you run the install command again.
 
-## Troubleshooting
+</Accordion>
+
+<Accordion title="Troubleshooting">
+
+Check **Settings → Machines** for the machine’s status and **Logs** in the MacroD terminal for errors. To reconnect, run `macrod` again. If you removed the machine from Macro, pair it again.
 
 - **Your agent is missing from Quickstart:** check that it is installed and its command is available in the terminal where you launch `macrod`. For a different ACP agent, use **Custom command**.
 - **Your code is invalid or expired:** start a new pairing from the terminal and enter the new code. The code in the screenshot is only an example.
-- **Your runtime is offline:** check that your computer is awake, `macrod` is running, and it can reach Macro. Check the terminal's **Logs** tab for errors.
+- **Your machine is offline:** check that your computer is awake, `macrod` is running, and it can reach Macro. Check the terminal's **Logs** tab for errors. The same logs are saved to `~/.macrod/logs/macrod.log` (`%USERPROFILE%\.macrod\logs\macrod.log` on Windows); a profile started with `--profile <name>` saves to `~/.macrod/profiles/logs/<name>.log`), so they are still there after `macrod` stops or restarts. Each run starts with a `macrod started` line and, unless the process was killed, ends with why it stopped. At about 10 MB the log moves to `macrod.log.1`.
+- **`macrod` says your config sets `[identity]` or a `scope` in `[credentials]`:** delete those lines from `~/.macrod/macrod.toml`. The machine's name, access, and permission bypass are set in **Settings → Machines**.
+- **`macrod` asks you to pair again after an update:** run `macrod` from the project folder you used to start it in. It moves that folder's `macrod.toml` into `~/.macrod` and tells you the command to use from now on. Run `macrod profiles` to see every machine on your computer.
+- **You had `allow_permission_bypass = false` in `macrod.toml`:** that setting is gone, and your computer no longer has a local veto. Whether a machine may bypass permission requests is set by the machine's managers in **Settings → Machines**, under **Allow bypassing permission requests**.
 
-To learn more about using agents in your workspace, see [Agents](/product/agents).
+</Accordion>
+
+See [Agents](/product/agents) for more ways to work with agents in your Macro workspace.

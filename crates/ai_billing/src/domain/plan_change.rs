@@ -9,7 +9,7 @@ mod test;
 
 /// A plan transition with its original occurrence time and subscription interval.
 /// Retaining these facts makes delayed/replayed webhooks use the same baseline.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlanChange {
     /// Plan before the change.
     pub from: PlanTier,

@@ -14,7 +14,7 @@ use super::{
 };
 
 /// Human-readable metadata for a property referenced by an activity event.
-#[cfg(feature = "ai_tools")]
+#[cfg(feature = "reads")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivityPropertyMetadata {
     /// The property definition's display name.
@@ -31,7 +31,7 @@ pub struct ActivityPropertyMetadata {
 /// return only metadata the viewer may read. Resolution is best-effort: an
 /// unavailable secondary service returns an empty map so the primary activity
 /// read can still succeed.
-#[cfg(feature = "ai_tools")]
+#[cfg(feature = "reads")]
 #[async_trait::async_trait]
 pub trait ActivityMetadataResolver: Send + Sync + 'static {
     /// Resolve the requested property definition ids for `viewer`.
@@ -110,6 +110,24 @@ pub trait ActivityAudienceExpander: Send + Sync {
         entity_id: &str,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 
+    /// Current visibility for a bounded page; adapters may share permission reads.
+    fn visible_entities(
+        &self,
+        viewer: &MacroUserIdStr<'_>,
+        entities: &[(EntityType, String)],
+    ) -> impl Future<Output = Result<std::collections::HashSet<(EntityType, String)>, Self::Err>> + Send
+    {
+        async move {
+            let mut visible = std::collections::HashSet::new();
+            for (kind, id) in entities {
+                if self.viewer_can_see(*kind, id, viewer).await? {
+                    visible.insert((*kind, id.clone()));
+                }
+            }
+            Ok(visible)
+        }
+    }
+
     /// Check a particular viewer, including link-based access that cannot be
     /// enumerated as an audience. The conservative default uses explicit recipients.
     fn viewer_can_see(
@@ -155,6 +173,72 @@ pub trait ActivityRepo {
     fn purge_entities(
         &self,
         entities: &[(EntityType, String)],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Answers whether a subject did anything in a time range, without reading
+/// the rows: callers deciding whether to spend work on a period ask this first.
+pub trait SubjectActivityPresence {
+    /// The adapter's error type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Whether `subject_id` has an activity in `[from, to)` that touched an
+    /// entity: views and appearance changes ([`NON_TOUCH_ACTION_TAGS`]) do not
+    /// count.
+    ///
+    /// [`NON_TOUCH_ACTION_TAGS`]: super::models::NON_TOUCH_ACTION_TAGS
+    fn touched_between(
+        &self,
+        subject_id: &str,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
+
+/// Whether a person has been using Macro themselves: the check a per-user
+/// background job asks before it spends work on someone who is away.
+///
+/// A person is active in a window when either holds:
+/// - **Seen**: a signed-in Macro client of theirs (web, desktop or mobile)
+///   was open. The connection gateway records it ([`SeenLog`]) when the
+///   client connects and every hour it stays connected, so a seen time is
+///   at most an hour old while Macro is open.
+/// - **Acted**: they changed something themselves: an activity whose actor
+///   is them and that no code-mode invocation made. Views and appearance
+///   changes ([`NON_TOUCH_ACTION_TAGS`]) do not count.
+///
+/// Work done for them does not count: an agent or bot acting for them (its
+/// own actor), a code-mode run under their identity (a correlated activity),
+/// and mail that arrives or syncs (never an activity).
+///
+/// One gap: an activity does not say a routine made it, so a routine step
+/// that runs as its owner, with no agent, counts as the owner acting.
+///
+/// [`NON_TOUCH_ACTION_TAGS`]: super::models::NON_TOUCH_ACTION_TAGS
+pub trait UserActivity {
+    /// The adapter's error type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Whether `user` was active at or after `since`.
+    fn is_active(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
+
+/// Records that people had a signed-in Macro client open, which
+/// [`UserActivity`] counts as seen.
+pub trait SeenLog {
+    /// The adapter's error type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Records `users` as seen at `at`. A later time already recorded for a
+    /// user is kept, and an id with no Macro user is passed over.
+    fn record_seen(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -238,6 +322,21 @@ pub trait EntityActivityReads: Send + Sync + 'static {
         &self,
         entity_type: EntityType,
         entity_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
+}
+
+/// Reads activity caused by one agent session. Its owning domain supplies access.
+pub trait AgentActivityReads: Send + Sync + 'static {
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// A stable page across the session's invocations, optionally narrowed to one.
+    fn agent_activity(
+        &self,
+        session_id: Uuid,
+        correlation_id: Option<Uuid>,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;

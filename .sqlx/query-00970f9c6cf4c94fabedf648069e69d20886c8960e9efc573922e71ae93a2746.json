@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH bot AS (\n                SELECT owner_user_id, team_id, deleted_at\n                FROM bots\n                WHERE id = $1\n            )\n            SELECT owner_user_id AS \"user_id!\"\n            FROM bot\n            WHERE owner_user_id IS NOT NULL\n            UNION\n            SELECT tu.user_id\n            FROM bot\n            INNER JOIN team_user tu ON tu.team_id = bot.team_id\n            UNION\n            SELECT user_p.user_id\n            FROM bot\n            INNER JOIN comms_channel_participants bot_p\n              ON bot_p.user_id = $2\n             AND (bot_p.left_at IS NULL OR bot_p.left_at >= bot.deleted_at)\n            INNER JOIN comms_channel_participants user_p\n              ON user_p.channel_id = bot_p.channel_id\n             AND user_p.left_at IS NULL\n            WHERE user_p.user_id NOT LIKE 'bot|%'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "00970f9c6cf4c94fabedf648069e69d20886c8960e9efc573922e71ae93a2746"
+}

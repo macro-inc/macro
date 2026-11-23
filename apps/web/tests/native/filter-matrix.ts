@@ -215,7 +215,7 @@ function* cases(scope?: Scope): Generator<Case> {
     'Add new Email facets to the matrix'
   );
   assert(
-    EMAIL_FILTER_GROUPS.find((group) => group.id === 'calendar')!
+    EMAIL_FILTER_GROUPS.find((group) => group.id === 'has')!
       .options.map((option) => option.id)
       .join() === 'has-calendar-invite',
     'Add new calendar options to the matrix'

@@ -1,9 +1,10 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { throwOnErr } from '@core/util/result';
 import type { ChannelMessageEntity, EntityData, WithSearch } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import {
+  channelSearchMetadata,
   createSearchResponseItemMapper,
   mapChannelSearchResultItem,
 } from '@queries/soup/transform-utils';
@@ -32,9 +33,12 @@ interface SearchQueryOptions {
   staleTime?: number;
 }
 
-/** Search service won't accept text less than 3 characters */
+/**
+ * The search service accepts a query from one character. It strips double
+ * quotes, so text made only of quotes and spaces holds nothing to search for.
+ */
 export const validateSearchServiceText = (text: string) => {
-  return text.length >= 3;
+  return text.replaceAll('"', '').trim().length > 0;
 };
 
 // Only plain request values and channel metadata enter the cached callbacks.
@@ -109,10 +113,8 @@ export const useSearchSoupQuery = (
     return ENABLE_SEARCH_SERVICE && validSearch();
   });
 
-  const { channels } = useChannelsContext();
-  const channelMetadata = createMemo(() =>
-    channels().map(({ id, name, team_id }) => ({ id, name, team_id }))
-  );
+  const { channels } = useChannelDirectory();
+  const channelMetadata = createMemo(() => channelSearchMetadata(channels()));
 
   return useInfiniteQuery(() =>
     searchSoupQueryOptions(
@@ -188,8 +190,7 @@ export const useSearchChannelQuery = (
   args: Accessor<SearchChannelQueryArgs>,
   options?: Accessor<SearchQueryOptions>
 ) => {
-  const channelsContext = useChannelsContext();
-  const channels = channelsContext.channels;
+  const { channels } = useChannelDirectory();
 
   const request = createMemo(() => {
     const body = args().body;

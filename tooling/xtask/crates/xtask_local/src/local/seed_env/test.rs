@@ -21,7 +21,7 @@ fn default_instance_reproduces_the_fixed_ports() {
         "{rendered}"
     );
     assert!(
-        rendered.contains(r#"export FRONTEND_PORT="${FRONTEND_PORT:-3000}""#),
+        rendered.contains(r#"export PROXY_PORT="${PROXY_PORT:-8090}""#),
         "{rendered}"
     );
     assert!(

@@ -1,6 +1,9 @@
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CompanyDiscussionSection } from '../company-discussion-section';
+import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
@@ -11,7 +14,6 @@ import {
   sameRecordScope,
 } from '../core/record';
 import { CompanyContactsSection } from './company-contacts-section';
-import { CompanyDiscussionSection } from './company-discussion-section';
 import { CompanyEmailsSection } from './company-emails-section';
 import { CompanyHeader } from './company-header';
 import { CompanyListsSection } from './company-list-membership';
@@ -19,7 +21,6 @@ import { CompanyPropertiesSection } from './company-properties-section';
 import { CompanySharingSection } from './company-sharing-section';
 import {
   RecordCallsSection,
-  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
@@ -42,6 +43,7 @@ type CompanyProps = {
 };
 
 export function Company(props: CompanyProps) {
+  const context = useCrmContext();
   return (
     <TraceFlow
       name="crm.company"
@@ -51,7 +53,17 @@ export function Company(props: CompanyProps) {
         'crm.section': props.section ?? 'overview',
       }}
     >
-      <CompanyContent {...props} />
+      <Show
+        when={context.canAccess()}
+        fallback={
+          <CrmAccessFallback
+            state={context.accessState()}
+            onRetry={context.retryAccess}
+          />
+        }
+      >
+        <CompanyContent {...props} />
+      </Show>
     </TraceFlow>
   );
 }
@@ -65,9 +77,9 @@ function CompanyContent(props: CompanyProps) {
     }))
   );
   const listsEnabled = context.listsEnabled();
-  const pipelinesEnabled = context.pipelinesEnabled();
-  const { company, contacts, query } = useCompanyQuery(() => props.companyId);
+  const { company, query } = useCompanyQuery(() => props.companyId);
   usePending('crm.record', () => query.isLoading);
+  createOpenTracker('company', () => company()?.id);
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -95,19 +107,16 @@ function CompanyContent(props: CompanyProps) {
             <Match when={section() === 'overview'}>
               <RecordOverview>
                 <CompanyHeader company={company()} />
-                <Show when={pipelinesEnabled()}>
-                  <context.PipelineEntries
-                    record={{ type: 'company', id: props.companyId }}
-                    onOpenPipeline={props.onOpenPipeline}
-                  />
-                </Show>
+                <context.PipelineEntries
+                  record={{ type: 'company', id: props.companyId }}
+                  onOpenPipeline={props.onOpenPipeline}
+                />
                 <CompanyDiscussionSection companyId={props.companyId} />
               </RecordOverview>
             </Match>
             <Match when={section() === 'team'}>
               <CompanyContactsSection
                 company={company()}
-                contacts={contacts()}
                 onOpenContact={props.onOpenContact}
               />
             </Match>
@@ -126,9 +135,6 @@ function CompanyContent(props: CompanyProps) {
                   {(current) => <context.RecordTasks scope={current()} />}
                 </Show>
               </Suspense>
-            </Match>
-            <Match when={section() === 'databases'}>
-              <RecordDatabasesSection scope={scope()} />
             </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />

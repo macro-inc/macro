@@ -6,8 +6,13 @@ import { importReceipt } from './tests/fake-sources';
 
 const host = vi.hoisted(() => ({
   enabled: true,
-  channels: vi.fn(() => ({ isSuccess: false, data: [] as { id: string }[] })),
-  invalidateChannels: vi.fn(async () => {}),
+  directory: vi.fn(() => ({
+    lookup: (id: string) => ({
+      status: host.loaded.includes(id) ? 'loaded' : 'missing',
+    }),
+  })),
+  loaded: [] as string[],
+  refreshDirectory: vi.fn(async () => {}),
   invalidateSoup: vi.fn(),
   revalidate: vi.fn(async () => {}),
   createSource: vi.fn(),
@@ -26,9 +31,7 @@ const host = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: host.enabled }),
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableSlackArchiveImport: {},
-}));
+vi.mock('@core/constant/featureFlags', () => ({}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: host.openSettings }),
 }));
@@ -36,18 +39,17 @@ vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
 vi.mock('@app/features/connector-import/primitives/promotion', () => ({
   hideImportPromotion: host.hidePromotion,
 }));
-vi.mock('@core/pipedream/flag', () => ({
-  usePipedreamMcpFlag: () => () => true,
-}));
-vi.mock('@core/pipedream/pendingConnect', () => ({
+vi.mock('@core/connectors/pendingConnect', () => ({
   requestConnectApp: host.requestConnect,
 }));
 vi.mock('@core/util/reloadForNewerBuild', () => ({
   holdAutomaticReload: vi.fn(),
 }));
-vi.mock('@queries/channel/channels', () => ({
-  useListChannelsQuery: host.channels,
-  invalidateListChannels: host.invalidateChannels,
+vi.mock('@core/context/channels', () => ({
+  useChannelDirectory: host.directory,
+}));
+vi.mock('@queries/channel/directory', () => ({
+  refreshChannelDirectory: host.refreshDirectory,
 }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('@queries/soup/graphql/channel-list-revalidation', () => ({
@@ -97,6 +99,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   host.enabled = true;
+  host.loaded = [];
 });
 
 describe('Slack import production boundary', () => {
@@ -105,22 +108,22 @@ describe('Slack import production boundary', () => {
     await screen.findByText('Mounted import');
     host.props!.onConnect!();
     expect(host.requestConnect).toHaveBeenCalledWith(
-      'slack_v2',
+      'slack',
       'import-slack-channels'
     );
     expect(host.openSettings).toHaveBeenCalledWith('Connected');
   });
 
-  it.each([
-    { isAdmin: false, enabled: true },
-    { isAdmin: true, enabled: false },
-  ])('mounts no queries for $isAdmin admin / $enabled flag', (gate) => {
-    host.enabled = gate.enabled;
-    render(() => <SlackImport teamId="team" isAdmin={gate.isAdmin} />);
-    expect(screen.queryByText('Mounted import')).toBeNull();
-    expect(host.channels).not.toHaveBeenCalled();
-    expect(host.createSource).not.toHaveBeenCalled();
-  });
+  it.each([{ isAdmin: false, enabled: true }])(
+    'mounts no queries for $isAdmin admin / $enabled flag',
+    (gate) => {
+      host.enabled = gate.enabled;
+      render(() => <SlackImport teamId="team" isAdmin={gate.isAdmin} />);
+      expect(screen.queryByText('Mounted import')).toBeNull();
+      expect(host.directory).not.toHaveBeenCalled();
+      expect(host.createSource).not.toHaveBeenCalled();
+    }
+  );
 
   it('remounts on team changes, unmounts on role revocation and wires all completion refreshes', async () => {
     const [admin, setAdmin] = createSignal(true);
@@ -129,10 +132,12 @@ describe('Slack import production boundary', () => {
     await screen.findByText('Mounted import');
     expect(host.createSource).toHaveBeenCalledOnce();
     await host.props!.onCompleted(importReceipt());
-    expect(host.invalidateChannels).toHaveBeenCalledOnce();
+    expect(host.refreshDirectory).toHaveBeenCalledOnce();
     expect(host.invalidateSoup).toHaveBeenCalledOnce();
     expect(host.revalidate).toHaveBeenCalledOnce();
     expect(host.props!.channelHref(importReceipt().jobId)).toBeUndefined();
+    host.loaded = ['imported'];
+    expect(host.props!.channelHref('imported')).toBe('/app/channel/imported');
     setTeamId('two');
     await waitFor(() => expect(host.view).toHaveBeenLastCalledWith('two'));
     setAdmin(false);
@@ -152,7 +157,7 @@ describe('Slack import production boundary', () => {
   it('hides the promotion after successful completion even if refreshing fails', async () => {
     render(() => <SlackImport teamId="team" isAdmin />);
     await screen.findByText('Mounted import');
-    host.invalidateChannels.mockRejectedValueOnce(new Error('Refresh failed'));
+    host.refreshDirectory.mockRejectedValueOnce(new Error('Refresh failed'));
     await expect(
       host.props!.onCompleted(importReceipt({ status: 'completed' }))
     ).rejects.toThrow('Refresh failed');

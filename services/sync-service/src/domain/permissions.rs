@@ -26,6 +26,7 @@ pub enum WriteAccess {
 /// Verified grant normalized at the dedicated session access boundary.
 #[derive(Debug)]
 pub struct AuthToken {
+    pub agent_correlation_id: Option<uuid::Uuid>,
     pub user_id: Option<String>,
     pub(crate) document_id: String,
     pub access_level: AccessLevel,

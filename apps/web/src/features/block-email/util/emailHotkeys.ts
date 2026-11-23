@@ -7,17 +7,6 @@ export function registerEmailHotkeys(
   scopeId: string,
   handlers: EmailThreadKeyboardHandlers
 ) {
-  if (handlers.replyAllToFocusedMessage) {
-    registerHotkey({
-      hotkey: 'opt+r',
-      scopeId: scopeId,
-      description: 'Reply all to message',
-      keyDownHandler: handlers.replyAllToFocusedMessage,
-      hotkeyToken: TOKENS.email.replyAll,
-      displayPriority: 8,
-    });
-  }
-
   registerHotkey({
     hotkey: 'r',
     scopeId: scopeId,
@@ -122,6 +111,20 @@ export function registerEmailHotkeys(
     description: 'Next message',
     keyDownHandler: handlers.navigateToNextMessage,
     hotkeyToken: TOKENS.email.nextMessage,
+  });
+  registerHotkey({
+    hotkey: 'space',
+    scopeId,
+    description: () => t('commands.scrollThreadPageDown'),
+    keyDownHandler: handlers.pageDown,
+    hotkeyToken: TOKENS.email.pageDown,
+  });
+  registerHotkey({
+    hotkey: 'shift+space',
+    scopeId,
+    description: () => t('commands.scrollThreadPageUp'),
+    keyDownHandler: handlers.pageUp,
+    hotkeyToken: TOKENS.email.pageUp,
   });
 
   registerHotkey({

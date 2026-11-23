@@ -279,6 +279,40 @@ describe('database table view', () => {
     expect(screen.queryByRole('button', { name: 'Add column' })).toBeNull();
   });
 
+  it('keeps the add-column button mounted while a column is renamed', () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: { version: 1, rows: [] },
+      view: allRecords,
+    });
+    const labels: (string | undefined)[] = [];
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={allRecords}
+        stored={false}
+        addColumn={(label) => {
+          labels.push(label);
+          return <button type="button">{label ?? 'Add column'}</button>;
+        }}
+        boardPositions={unplacedCards}
+      />
+    ));
+    const button = screen.getByRole('button', { name: 'Add column' });
+    // Saving a rename on blur updates the columns while the press that
+    // blurred it is still down; a new button there would never be clicked.
+    fixture.setColumns([{ ...columns[0], name: 'Title' }, columns[1]]);
+    expect(screen.getByRole('button', { name: 'Add column' })).toBe(button);
+    expect(labels).toEqual([undefined]);
+    fixture.setColumns([]);
+    expect(
+      screen.getByRole('button', { name: 'Add first column' })
+    ).toBeTruthy();
+    expect(labels).toEqual([undefined, 'Add first column']);
+  });
+
   it('offers refresh and draft recovery after a lost create response without a duplicate Retry', async () => {
     const fixture = createFakeRowsSource({
       columns,
@@ -828,6 +862,103 @@ describe('database table view', () => {
     ));
     actions.openRecord('row');
     expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+
+  it.each([
+    ['a table row', allRecords],
+    ['a board card', statusBoard],
+  ])(
+    'hands %s to the host that opens records elsewhere',
+    async (_layout, view) => {
+      const fixture = createFakeRowsSource({
+        columns,
+        table: {
+          version: 1,
+          rows: [
+            { rowId: 'row', cells: { title: 'Plan launch', status: 'To do' } },
+          ],
+        },
+        view: allRecords,
+      });
+      const onOpenRecord = vi.fn(() => true);
+      render(() => (
+        <DatabaseRecordsView
+          name="Projects"
+          source={fixture.source}
+          canEdit
+          view={view}
+          stored={false}
+          addColumn={() => null}
+          boardPositions={unplacedCards}
+          onOpenRecord={onOpenRecord}
+        />
+      ));
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open Plan launch' })
+      );
+      expect(onOpenRecord).toHaveBeenCalledWith('row');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    }
+  );
+
+  it('opens the record panel when the host cannot open the record elsewhere', async () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: {
+        version: 1,
+        rows: [
+          { rowId: 'row', cells: { title: 'Plan launch', status: 'To do' } },
+        ],
+      },
+      view: allRecords,
+    });
+    const onOpenRecord = vi.fn(() => false);
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={allRecords}
+        stored={false}
+        addColumn={() => null}
+        boardPositions={unplacedCards}
+        onOpenRecord={onOpenRecord}
+      />
+    ));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open Plan launch' })
+    );
+    expect(onOpenRecord).toHaveBeenCalledWith('row');
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+
+  it('keeps a record created on a board in place when the host opens records elsewhere', async () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: { version: 1, rows: [] },
+      view: allRecords,
+    });
+    fixture.persistWrites();
+    const onOpenRecord = vi.fn(() => true);
+    let actions!: DatabaseRecordsActions;
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={statusBoard}
+        stored={false}
+        addColumn={() => null}
+        boardPositions={unplacedCards}
+        onOpenRecord={onOpenRecord}
+        actionsRef={(ready) => {
+          actions = ready;
+        }}
+      />
+    ));
+    await actions.createRow({ values: {}, open: true });
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(onOpenRecord).not.toHaveBeenCalled();
   });
 
   it('cancels pending initial cell focus when the table is unmounted', async () => {

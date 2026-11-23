@@ -12,15 +12,15 @@ testing = []
 anyhow = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true, features = ["cookie", "typed-header"] }
-cookie = { workspace = true }
+cookie = { workspace = true, features = ["percent-encode"] }
 jsonwebtoken = { workspace = true }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
-rand = { workspace = true }
 remote_env_var = { path = "../remote_env_var" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_urlencoded = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }

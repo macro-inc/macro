@@ -10,6 +10,20 @@ use code_execution::{
 };
 use serde_json::json;
 
+/// Programs here return no images.
+struct NoImages;
+
+#[async_trait]
+impl agent_code_mode::domain::ModelImages for NoImages {
+    async fn load_png(
+        &self,
+        _: &agent_code_mode::domain::StaticFileId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> anyhow::Result<agent_code_mode::domain::ModelImage> {
+        anyhow::bail!("no images in this test")
+    }
+}
+
 struct NoAppEgress;
 
 impl agent_egress::domain::service::EgressService for NoAppEgress {
@@ -29,12 +43,14 @@ struct Credentials;
 impl agent_code_mode::domain::ExecutionCredentials for Credentials {
     async fn issue(
         &self,
-        _: &agent_code_mode::domain::ExecutionIdentity,
+        identity: &agent_code_mode::domain::ExecutionIdentity,
         _: &str,
         _: tokio_util::sync::CancellationToken,
-    ) -> Result<code_execution::domain::RunEnvironment, agent_code_mode::domain::CodeModeError>
-    {
-        Ok(code_execution::domain::RunEnvironment::default())
+    ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
+        Ok(agent_code_mode::domain::IssuedRun {
+            environment: code_execution::domain::RunEnvironment::default(),
+            acting_user: identity.owner.clone(),
+        })
     }
 }
 
@@ -55,14 +71,21 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .await
         .unwrap();
     assert!(path.status.success(), "Deno 2.9.6 must be on PATH");
-    let deno = DenoRunner::new(
-        String::from_utf8(path.stdout).unwrap().trim().into(),
-        scratch.path().to_owned(),
-        128,
+    let binary: std::path::PathBuf = String::from_utf8(path.stdout).unwrap().trim().into();
+    let deno = DenoRunner::new(binary.clone(), scratch.path().join("runs"), 128)
+        .await
+        .unwrap();
+    let checker = code_execution::outbound::deno::check::DenoChecker::new(
+        binary,
+        scratch.path().join("checks"),
+        1,
+        4,
+        64 * 1024,
     )
     .await
     .unwrap();
-    let runner = ExecutionService::new(Arc::new(deno), Limits::default()).unwrap();
+    let runner =
+        ExecutionService::new(Arc::new(deno), Arc::new(checker), Limits::default()).unwrap();
     let store = Arc::new(PgExecutionStore::new(pool.clone()));
     let code_mode = Arc::new(agent_code_mode::domain::CodeModeService::new(
         Some(Arc::new(runner.clone())),
@@ -78,6 +101,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
                 ),
             ),
         )),
+        Arc::new(NoImages),
     ));
     let repo = InMemoryAgentSessionRepo::new();
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(
@@ -89,7 +113,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .unwrap();
     let app = router(
         Arc::new(repo.clone()),
-        "localhost".into(),
+        vec!["localhost".into()],
         InternalTools {
             service: Arc::new(SessionPullRequestService::new(
                 repo.clone(),
@@ -231,7 +255,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .expect("the default agent must discover internal code tools");
     let remote = ai_tools::DeferredToolSet::new(
         Arc::new(
-            mcp_select::CombinedToolSet::new(Arc::new(AsyncToolCollection::<()>::new()), remote)
+            mcp_toolset::CombinedToolSet::new(Arc::new(AsyncToolCollection::<()>::new()), remote)
                 .with_eager_mcp_tools(&[
                     "mcp__macro_internal__ExecuteCode",
                     "mcp__macro_internal__DescribeCodeTools",
@@ -329,5 +353,10 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         agent_code_mode::domain::ExecutionStatus::Cancelled
     );
     runner.shutdown().await;
-    assert_eq!(std::fs::read_dir(scratch.path()).unwrap().count(), 0);
+    assert_eq!(
+        std::fs::read_dir(scratch.path().join("runs"))
+            .unwrap()
+            .count(),
+        0
+    );
 }

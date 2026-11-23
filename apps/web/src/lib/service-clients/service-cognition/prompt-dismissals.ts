@@ -19,11 +19,14 @@ export const promptDismissalsClient = {
     );
   },
 
-  /** Dismiss one prompt everywhere (idempotent). */
+  /**
+   * Dismiss one prompt everywhere (idempotent). It may be sent as the page
+   * closes, so the request outlives the page.
+   */
   async dismiss(promptId: string) {
     return await fetchWithToken(
       `${dcsHost}/onboarding/prompts/${encodeURIComponent(promptId)}/dismiss`,
-      { method: 'POST' }
+      { method: 'POST', keepalive: true }
     );
   },
 };

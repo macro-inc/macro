@@ -19,6 +19,7 @@ import { createMemo } from 'solid-js';
 import type { TeamConfigSource } from '../context/crm-sources';
 import { type CrmViewConfig, isCrmViewConfig } from '../core/saved-view';
 import type { TeamCrmSavedView } from '../core/team-config';
+import { crmKeys } from './keys';
 
 export { type CrmViewConfig, isCrmViewConfig } from '../core/saved-view';
 export {
@@ -27,11 +28,12 @@ export {
   encodeCrmViewParam,
 } from './saved-view-codec';
 
-const CRM_SAVED_VIEWS_QUERY_KEY = ['crm', 'saved-views'] as const;
-
-function personalCrmViewsQueryOptions(deps: CrmQueryDependencies) {
+/** The viewer's saved views, shared by CRM lists and personal views. */
+export function crmSavedViewsQueryOptions(
+  deps: Pick<CrmQueryDependencies, 'storage'>
+) {
   return queryOptions({
-    queryKey: CRM_SAVED_VIEWS_QUERY_KEY,
+    queryKey: crmKeys.savedViews.queryKey,
     queryFn: async () =>
       await throwOnErr(async () => await deps.storage.views.getSavedViews()),
   });
@@ -44,7 +46,7 @@ export function usePersonalCrmViews(deps: CrmQueryDependencies) {
   const queryClient = deps.client;
 
   const viewsQuery = useQuery(
-    () => personalCrmViewsQueryOptions(deps),
+    () => crmSavedViewsQueryOptions(deps),
     () => deps.client
   );
 
@@ -57,7 +59,7 @@ export function usePersonalCrmViews(deps: CrmQueryDependencies) {
   const defaultView = () => views().find((view) => view.config.isDefault);
 
   const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: CRM_SAVED_VIEWS_QUERY_KEY });
+    queryClient.invalidateQueries({ queryKey: crmKeys.savedViews.queryKey });
 
   const createMutation = useMutation(
     () => ({

@@ -82,9 +82,30 @@ fn every_action_maps_to_stable_columns() {
         (
             Action::AccessRequested(AccessRequest {
                 request_id: Uuid::from_u128(1),
+                requester_name: None,
             }),
             "access_requested",
             Some(json!({ "request_id": "00000000-0000-0000-0000-000000000001" })),
+        ),
+        (
+            Action::AccessRequested(AccessRequest {
+                request_id: Uuid::from_u128(1),
+                requester_name: Some("Sarah Lee".to_string()),
+            }),
+            "access_requested",
+            Some(json!({
+                "request_id": "00000000-0000-0000-0000-000000000001",
+                "requester_name": "Sarah Lee",
+            })),
+        ),
+        (
+            Action::TimeLogged(TimeLog {
+                minutes: 90,
+                entry_date: NaiveDate::from_ymd_opt(2026, 11, 20).expect("valid date"),
+                source: TimeLogSource::Timer,
+            }),
+            "time_logged",
+            Some(json!({ "minutes": 90, "entry_date": "2026-11-20", "source": "timer" })),
         ),
     ];
 

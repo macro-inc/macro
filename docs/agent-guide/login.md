@@ -21,21 +21,63 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+If the code was accepted but local cleanup reports a failure, **Verify** retries
+completion without submitting that consumed code again. Queued edits stay preserved
+and the app opens only after cleanup succeeds. Changing the email, going back or
+requesting another code starts a new attempt that must verify with the server.
+
+The iOS picker includes **Continue with Apple**. Google and Apple glyphs scale
+into their 20px slots without cropping; the phone browser regression checks the
+Apple drawing stays within its viewport.
+
+## Google sign-in on a local stack
+
+A local stack without real Google keys runs the Gmail emulator in Google's
+place (see [running locally](../development/running-locally.md#google-sign-in-and-gmail-without-a-google-account)).
+
+1. On `/app/welcome`, click `Continue with Google`. The browser goes through
+   FusionAuth to the emulator's page, titled `Choose an account`, at
+   `http://localhost:<gmail_emulator port>/o/oauth2/v2/auth`.
+2. Click the button of a seeded user, such as `Ada Example`. The scope
+   checkboxes below the list can stay checked.
+3. A first sign-in lands on onboarding at `/app/welcome`; its work email step
+   already shows `Work email connected` with the user's address. `Connect
+   personal email` on the next step opens the emulator's page again: pick
+   another seeded user to add that mailbox. A returning user lands in the app.
+4. `/app/mail` lists the seeded mail of every connected mailbox once the
+   backfill finishes, a few seconds after connecting.
+
+## Microsoft sign-in on a local stack
+
+A local stack without a real Microsoft client runs the Outlook emulator in
+Microsoft's place (see [running locally](../development/running-locally.md#microsoft-sign-in-and-outlook-without-a-microsoft-account)).
+
+1. On `/app/welcome`, click `Continue with Microsoft`. The browser goes through
+   FusionAuth to the emulator's page, titled `Pick an account`, at
+   `http://localhost:<outlook_emulator port>/common/oauth2/v2.0/authorize`.
+2. Click the button of a seeded user, such as `Ada Example`. `Cancel` and
+   `Need admin approval` return what Microsoft returns for a declined consent
+   and for a directory that requires an administrator.
+3. A first sign-in lands on onboarding at `/app/welcome`. Its work email step
+   opens the emulator's page again for the Outlook consent: pick the same user
+   to connect their mailbox. A returning user lands in the app.
+4. `/app/mail` lists the mailbox's seeded mail once the backfill finishes, a
+   few seconds after connecting.
+
 ## Agent accounts
 
 `/app/signup/agent` is the agent signup page: Google or an emailed code, without
 the opening slides. The first slide of `/app/signup` links to it (`Sign up as
 agent`), as does `/mobile-signup`, and the marketing site's HTML carries a hidden
 notice pointing agents there. A new account made there, or by redeeming an invite
-sent with **Invite as agent** in Settings → Team → Members or
-`team.invite(email, { agent: true })`, is an agent. An existing account keeps its
+sent with `team.invite(email, { agent: true })`, is an agent. An existing account keeps its
 type. An agent invite email links to `/app/signup/agent?team_invite=<id>`; a signed-in
 account that isn't a new agent continues to `/app/team-invite?id=<id>`.
 
 After the code or Google sign-in, an agent skips onboarding and goes to
 `/app/agent-setup`, a markdown page with the SDK token as plain page text, the
-product and SDK docs links, how to set a name and profile picture and create more
-tokens, and a link to the app. The app shell sends an unconfirmed agent back here. An
+product and SDK docs links, how to set a name and profile picture, install and pair
+`macrod`, and create more tokens, and a link to the app. The app shell sends an unconfirmed agent back here. An
 invited agent also joins the inviting team at this point; if that fails, the page
 says so and the invite stays pending: reloading tries again, and the emailed invite
 link still works after confirming. Each reload before following the link to
@@ -62,6 +104,18 @@ connected, that returning from consent shows the second account, and that
 canceling leaves the app usable and says nothing was connected. iOS and Android
 continue to use their native authentication sessions.
 
+The deep link reaches the callback route through the split router, which mounts
+it a task before Solid Router's location shows it, so the callback reads
+`link_id` only once the location has landed on the route. The route's
+`view.inbox-link-callback` span records the wait
+(`email.link.callback.location.waited`), whether `link_id` and `token` arrived
+(never the token's value), the link id, the consent error or notice code, and
+the reported outcome (`email.link.callback.outcome`), with provisioning as an
+`email.link.callback.init` child. Without an installed desktop app,
+`src/features/auth/tests/inbox-link-deep-link.test.tsx` in `apps/web` drives the
+bridge's `navigate` payload through Solid Router, the split router and the
+callback; OS delivery of the `macro://` URL still needs a real desktop build.
+
 Every callback outcome is announced on web, desktop, and native. Init also
 succeeds when the provider's account chooser returns an account that is already
 connected (for example a Google Workspace user who signs in under a secondary
@@ -82,14 +136,15 @@ works on it) shows a persistent `Email access required`
 prompt whose `Try again` reopens `Connect email`, and anything else shows a
 failure toast.
 
-## Temporary open signup in Develop
+## Signup in Develop
 
-Once the temporary authentication-service override is deployed, Develop accepts
-new accounts with any email address regardless of signup allowlist membership or
-the configured bypass flag. Verify with an authorized test account outside
-`macro.com` that is absent from the allowlist. Email verification and provider
-sign-in still apply. See the [authentication-service configuration guide](../../services/authentication_service/README.md#temporary-open-signup-override)
-for restoring allowlist enforcement.
+With `DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST` off (the default), Develop creates new
+accounts only for `@macro.com` addresses and the addresses on the Develop signup
+allowlist; turning the bypass on admits every address. With the bypass off, a
+code request for any other new address gets a
+generic `403`, and FusionAuth aborts any other provider sign-up. Existing
+accounts still sign in. See the
+[authentication-service configuration guide](../../services/authentication_service/README.md#development-signup-allowlist).
 
 ## GraphQL cache session lifecycle
 
@@ -138,6 +193,8 @@ sign-in navigates the browser to `/__macro_dev/gateway/auth/login/sso` with
 `is_mobile=true` to request the session-code handoff. The `original_url`
 remains the browser destination (including its query and hash). Returning
 from the provider redeems the session code to establish cookies locally.
+A code redeems once: a second redemption, or a reload of a page still
+carrying `?token=`, answers 400.
 This browser flow must not open a native authentication session. Verify the
 redirect separately from provider completion; arbitrary development hostnames
 are not on the hosted OAuth redirect allowlist.
@@ -190,6 +247,11 @@ passwords and verification codes only in that browser, never in agent messages.
 For browsers using the Custom Tabs fallback, verify that the callback returns to
 the original Macro task. A callback for another attempt must leave the current
 attempt pending; a callback after process death must not restore that attempt.
+The first Google sign-in after a fresh install must land in the app, even while
+an over-the-air update finishes downloading: an update reload during the sheet
+or the session-code redemption used to return the user to `Login`, with the
+second tap then signing straight in. Check that PostHog shows no
+`native_webview_started` reload onto `#/login` right after the `login` event.
 
 After signing in, test background/foreground, force-stop/relaunch, logout, and
 signing in as another account. An entity link opened while signed out should
@@ -228,9 +290,19 @@ page should remain stable after the session check returns
 401; it must not alternate with the loading screen or reset a selected color.
 Verify that Continue advances without signing in. Below the color
 picker, "Already have an account? Sign in instead" opens `/app/login`. At the work-email
-step, Connect work email uses Google sign-up to create the Macro account and link
-the primary inbox. This step offers Google sign-up only, with no alternate email
-button. The chosen accent and work step survive the OAuth
+step, Continue with Google creates the Macro account and links the primary
+inbox; Continue with Microsoft below it (behind the `enable-microsoft-signup`
+flag, on only in Vite development-mode builds) creates the account through the
+FusionAuth `microsoft` identity provider (work, school, and personal accounts;
+it accepts only an email whose domain Microsoft verified, the `xms_edov` claim),
+then the signed-in work step continues straight into Outlook consent (mail and
+calendar) when `enable-outlook` admits the user. Declining or a tenant that
+needs admin approval leaves the account on the work step, which offers Google,
+Microsoft, or Skip. A provider sign-in that FusionAuth returns without a code
+comes back with `?sso_error=` and opens email-code sign-up with the reason; a
+refusal by the provider itself or by a reconcile lambda stays on FusionAuth's
+own error page. There is no alternate email
+button. The sign-in picker also offers Continue with Microsoft. The chosen accent and work step survive the OAuth
 redirect; after authentication the accent is saved to the user's theme and setup
 resumes at work email. Regular `/app/login` retains the direct sign-in screen.
 
@@ -250,6 +322,9 @@ Pearl and centers the remaining five swatches. A selected Pearl falls back to Mi
 when entering cream mode; Pearl stays available in dark mode. Cream slab headings use weight 330
 (15 above dark mode) with the same sizing and line breaks. Interests are visual
 preferences only. Security and Google steps have a Read more section below the fold.
+Where the work step offers Microsoft, its Read more adds Continuing with
+Microsoft: sign-in shares only name, email, and account ID, and Outlook mail and
+calendar access is a separate consent that follows.
 
 Work and personal account buttons use the existing Gmail linking flow. Skipping
 work email skips the secondary-account prompt. Verify that a Google return
@@ -257,32 +332,32 @@ restores the correct step, shows the connected address, and allows continuation.
 
 Tools show a stable featured list: Linear, Notion, Slack, then startup tools
 such as PostHog and Stripe, followed by small-business tools such as QuickBooks.
-The featured Pipedream metadata is checked in; the remaining catalog uses one
-live paginated query. Search still covers the full directory. Verify load more,
-search, cancel/retry connection, and state persistence on return. Paging and
-Slack aliases must not duplicate cards. New Slack connections use `slack_v2`;
-existing `slack` accounts remain recognized. Production release requires a real
-Slack authorization and a successful read-only tool call, not just fixture tests.
-Cards use the Pipedream logo, with bundled icons and a generic plug as fallbacks.
+The featured catalog metadata is checked in; the remaining catalog uses one
+live paginated query (`GET /connectors/catalog`). Search still covers the full
+directory. Verify load more, search, cancel/retry connection, and state
+persistence on return. Paging must not duplicate cards; the server lists Slack
+once as `slack`. Production release requires a real Slack authorization and a
+successful read-only tool call, not just fixture tests.
+Cards use the catalog logo, with bundled icons and a generic plug as fallbacks.
 The catalog scrolls with the page; Continue stays visible in a sticky footer.
 At desktop and phone widths, verify scrolling over the cards moves the page,
 the last row remains reachable, and Continue stays fully visible after searching.
 
-GitHub uses Macro's native OAuth/re-authorization flow and returns to the tools
-step. It shows **Account linked**, distinct from agent-tool readiness. A
-**Configure GitHub repositories** action opens native GitHub App installation;
-repository access must not be inferred from the account link. No Pipedream
-GitHub card is offered. The same setup remains available in Settings.
+GitHub connects like any other tool: the server answers how (the Macro
+GitHub account link through `/app/connect/github`, or Macro Connect's consent
+page for someone on Connect), and the tile reads **Connected** only when the
+server says GitHub is. Once it is, a **Configure GitHub repositories** action
+opens native GitHub App installation; repository access must not be inferred
+from the connection. No catalog GitHub card is offered. The same setup remains
+available in Settings.
 
 Gmail and Google Calendar are hidden, including search and later pages. Google
-Drive and Google Sheets remain available in browse and search, with separate
-Pipedream connection state. Native Gmail and Calendar consent does not request
-Drive or Sheets scopes. Enabled native MCP and Pipedream connections show
-Connected. Disabled existing connections show Enable and reuse their stored
-authorization. Native and hosted tools coexist in both chat and sandbox agents,
-with native preference for known overlapping providers and Slack alias deduplication.
-Connection status failures have an explicit retry; they must not prevent
-independent providers such as native GitHub from connecting. Verify unknown
+Drive and Google Sheets remain available in browse and search, with their own
+connection state. Native Gmail and Calendar consent does not request Drive or
+Sheets scopes. Every tile's state is the server's (`GET /connectors`):
+connected apps show Connected, disabled ones show Enable and reuse their stored
+authorization, and a connection that no longer counts shows Connect.
+A failed connection-status read disables every tile until its explicit retry. Verify unknown
 status never launches a duplicate OAuth flow and continuation remains possible.
 Someone already on a team when they leave the tools step (joined by invite
 link or by domain) never sees the team step: Continue goes to the plan step, or
@@ -296,10 +371,16 @@ then allow onboarding/contacts queries to refresh. The same inputs must retain
 their values and focus as suggestions arrive or a background request fails.
 Pending queries must show local loading states without suspending the flow.
 When the server suggests a work domain, the create form has no Skip button and
-shows an **Allow @domain emails to join** switch, on by default. Creating the
-team with it on sets the team's auto-join domain and, after the invites, emails
-up to 25 of the creator's same-domain contacts who are not on Macro, invited,
-or already sent a notice (`POST /team/domain-notice`). Creating the team does not leave the step: it
+shows two switches, both on by default and marked recommended: **Allow @domain
+emails to join** and **Notify your team via email**. Creating the team with the
+first on sets the team's auto-join domain. With both on, it then, after the
+invites, emails up to 25 of the creator's same-domain contacts who are not on
+Macro, invited, or already sent a notice (`POST /team/domain-notice`). The
+notice switch is disabled and reads off while domain join is off, because the
+server sends nothing to a team without an auto-join domain; turning domain
+join back on restores its earlier setting. Each switch has an info button
+beside it that explains the setting in a tooltip on hover or focus, and in a
+popover on tap on touch devices; pressing it never toggles the switch. Creating the team does not leave the step: it
 switches to the **You're on <team>** confirmation, the same panel members who
 were already on a team (auto-joined or invite-accepted) see. That panel has
 **Copy invite link** beside **Continue**; it copies the team's
@@ -400,10 +481,23 @@ fully recoverable: click the dialog's `Home` button, then wait for the sidebar t
 
 ## Session persistence
 
-The session lives in cookies (`local-macro-access-token`, `local-macro-refresh-token`). It
-survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
+The session lives in cookies. Services use `local-macro-access-token` and
+`local-macro-refresh-token`; the local proxy stores them in the browser as
+`macro-<instance>--local-macro-access-token`, so stacks on one machine don't share sessions
+([details](../development/running-locally.md#run-more-than-one-stack)). When copying cookies
+into a browser context, copy the names the proxy returned. The session survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
 with a fresh profile you must log in again. Workspace data (docs, channels, tasks) persists on
 the backend across logins for the same email.
+
+### Stalled session refresh
+
+When an expired session triggers cookie-auth refresh, every waiting request and
+socket setup shares one refresh, which settles within 12 seconds as a
+retryable network failure, or sooner when the native network path drops.
+Cancelling one view stops only its own wait. After a timeout the next request
+starts a fresh refresh; a timeout never signs the user out or reloads the app.
+Returning to the app expires a refresh that started more than 12 seconds
+earlier, so requests after a resume start a fresh one instead of waiting.
 
 ### Google OAuth through a remote local stack
 

@@ -10,7 +10,10 @@
         "crates/agent_runtime_protocol/**",
         "crates/agent_preview/**",
         "crates/agent_egress/**",
-        "crates/scheduled_action/**"
+        "crates/scheduled_action/**",
+        "crates/agent_git/**",
+        "crates/agent_credentials/**",
+        "packages/starter-agent/**"
       ],
       "stack_path": "infra/stacks/agent-harness-service/**",
       "deploy_binaries": [
@@ -190,6 +193,21 @@
       "deploy_lambdas": [
         "organization_retention_handler",
         "organization_retention_trigger"
+      ]
+    },
+    "search-freshness-probe": {
+      "source_paths": [
+        "services/search_freshness_probe/**",
+        "crates/channels/**",
+        "crates/item_filters/**",
+        "crates/messages/**",
+        "crates/model/**",
+        "crates/models_properties/**",
+        "crates/models_search/**"
+      ],
+      "stack_path": "infra/stacks/search-freshness-probe/**",
+      "deploy_binaries": [
+        "search_freshness_probe"
       ]
     },
     "search-processing-service": {

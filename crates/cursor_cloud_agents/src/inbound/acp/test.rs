@@ -141,7 +141,7 @@ fn serve_over_channel_with_default_model(
     default_model: Option<&str>,
     configure: impl FnOnce(&Service),
 ) -> (Arc<Service>, TestClient) {
-    serve_over_channel_with_models(cursor, default_model, None, configure)
+    serve_over_channel_with_models(cursor, default_model, None, None, configure)
 }
 
 /// [`serve_over_channel`], for a session whose host record names a model.
@@ -154,12 +154,13 @@ fn serve_over_channel_with_host_model(
     host_model: Option<&str>,
     configure: impl FnOnce(&Service),
 ) -> (Arc<Service>, TestClient) {
-    serve_over_channel_with_models(cursor, None, host_model, configure)
+    serve_over_channel_with_models(cursor, None, None, host_model, configure)
 }
 
 fn serve_over_channel_with_models(
     cursor: FakeCursor,
     default_model: Option<&str>,
+    default_effort: Option<&str>,
     host_model: Option<&str>,
     configure: impl FnOnce(&Service),
 ) -> (Arc<Service>, TestClient) {
@@ -173,6 +174,7 @@ fn serve_over_channel_with_models(
             crate::domain::ports::NoArtifactStore,
         )
         .with_default_model(default_model.map(str::to_owned))
+        .with_default_effort(default_effort.map(str::to_owned))
         .with_host_model(host_model.map(str::to_owned)),
     );
     configure(&service);
@@ -838,6 +840,76 @@ async fn session_new_advertises_the_models_as_a_config_option() {
         .map(|entry| entry["value"].as_str().expect("a value id"))
         .collect();
     assert_eq!(values, vec!["composer-2.5", "gpt-5.5"]);
+}
+
+/// The account's default effort is what a session on the default model starts
+/// on, whether the host record names that model or nothing at all.
+#[tokio::test]
+async fn a_session_on_the_default_model_starts_on_the_default_effort() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (_service, mut client) = serve_over_channel_with_models(
+        cursor,
+        Some("gpt-5.5"),
+        Some("low"),
+        Some("gpt-5.5"),
+        |_| {},
+    );
+
+    let response = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&response);
+    assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+    assert_eq!(result["configOptions"][1]["id"], "reasoning_effort");
+    assert_eq!(result["configOptions"][1]["currentValue"], "low");
+}
+
+/// The default effort belongs to the default model: a session on another model
+/// keeps that model's own default, and an effort the default model no longer
+/// offers falls back to its default variant instead of failing the session.
+#[tokio::test]
+async fn the_default_effort_applies_only_where_the_default_model_offers_it() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (_service, mut client) =
+        serve_over_channel_with_models(cursor, Some("gpt-5.5"), Some("ultra"), None, |_| {});
+
+    let response = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&response);
+    assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+    assert_eq!(result["configOptions"][1]["currentValue"], "medium");
+
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (_service, mut client) = serve_over_channel_with_models(
+        cursor,
+        Some("composer-2.5"),
+        Some("low"),
+        Some("gpt-5.5"),
+        |_| {},
+    );
+
+    let response = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&response);
+    assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+    assert_eq!(result["configOptions"][1]["currentValue"], "medium");
 }
 
 /// `session/new` advertises Cursor's cloud slash commands after the session

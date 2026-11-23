@@ -1,4 +1,4 @@
-import CaretRight from '@phosphor/caret-right.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import './homepage-feature-details.css';
 
 export type ProductPagePath =
@@ -16,9 +16,10 @@ export function HomepageFeatureDetails(props: {
 }) {
   return (
     <div class="homepage-feature-more workspace-demo">
-      <a href={props.path} aria-label={`Learn more about ${props.title}`}>
-        {props.title}
-        <CaretRight aria-hidden="true" />
+      <a href={props.path}>
+        Learn about{' '}
+        {props.title === 'CRM' ? props.title : props.title.toLowerCase()}
+        <ArrowRight aria-hidden="true" />
       </a>
     </div>
   );

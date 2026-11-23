@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT allow_permission_bypass, computer_id IS NOT NULL AS \"on_computer!\"\n            FROM harnesses\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allow_permission_bypass",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "on_computer!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "3eb7f8a14ad8713bb5973b5ccdf70ec64a8957051dd20feb4c2c6a83b8f35f77"
+}

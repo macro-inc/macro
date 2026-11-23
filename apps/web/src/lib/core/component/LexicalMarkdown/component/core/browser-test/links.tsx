@@ -55,7 +55,7 @@ function Fixture() {
                 >
                   <StaticMarkdown
                     markdown={
-                      'Encoded path: https://example.com/a%20b?q=x%2Fy#part\n\nURL punctuation: https://example.com/a~~b~~c\n\nLiteral code: `https://example.com/code`\n\nRemoved link: <m-link>{"url":"https://example.com/removed","text":"https://example.com/removed","unlinked":true}</m-link>'
+                      'Encoded path: https://example.com/a%20b?q=x%2Fy#part\n\nURL punctuation: https://example.com/a~~b~~c\n\nSaved before linking: https://example.com/post?a=x\\_y&s=20\n\nLiteral code: `https://example.com/code`\n\nRemoved link: <m-link>{"url":"https://example.com/removed","text":"https://example.com/removed","unlinked":true}</m-link>'
                     }
                   />
                 </section>

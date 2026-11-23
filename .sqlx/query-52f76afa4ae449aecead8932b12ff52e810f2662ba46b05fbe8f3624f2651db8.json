@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_generation_session\n               SET cleanup = $2, cleanup_at = $3, cleanup_attempts = cleanup_attempts + $4\n               WHERE session_id = $1 AND cleanup = ANY($5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Int2",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "52f76afa4ae449aecead8932b12ff52e810f2662ba46b05fbe8f3624f2651db8"
+}

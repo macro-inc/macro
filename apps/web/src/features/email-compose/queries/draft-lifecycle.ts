@@ -1,11 +1,15 @@
+import { fetchToken } from '@core/auth/session-refresh';
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import {
   type DraftLifecycleChange,
   publishDraftLifecycleChange,
   subscribeToDraftLifecycleChanges,
 } from '@queries/email/draft-lifecycle-events';
 import { emailKeys } from '@queries/email/keys';
+import { readSentWorkingCopy } from '@queries/email/send-queue';
 import { fetchFreshEmailThread } from '@queries/email/thread';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import {
@@ -14,6 +18,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/solid-query';
+import { ResultAsync } from 'neverthrow';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   EmailDraftLifecycleSource,
@@ -70,22 +75,63 @@ async function fetchLifecycle(input: {
   threadId: string;
   inboxId?: string;
 }): Promise<EmailDraftLifecycleState> {
+  const state = await fetchServerLifecycle(input);
+  if (state.type !== 'sent') return state;
+  // Read after the server's answer: a send from this browser records its
+  // working copy before dispatch and keeps it past the intent's removal.
+  const sentCopy = await ResultAsync.fromPromise(
+    readSentWorkingCopy(input.draftId),
+    (error) => error
+  );
+  if (sentCopy.isErr()) {
+    // Without it, unsaved-looking text is kept as a new draft, never dropped.
+    Telemetry.error(
+      sentCopy.error instanceof Error
+        ? sentCopy.error
+        : new Error(String(sentCopy.error))
+    );
+    return state;
+  }
+  return sentCopy.value ? { ...state, sentCopy: sentCopy.value } : state;
+}
+
+async function fetchServerLifecycle(
+  input: DraftIdentity
+): Promise<EmailDraftLifecycleState> {
   const observedAt = Date.now();
-  try {
-    const thread = await fetchFreshEmailThread(input.threadId, input.draftId);
-    return deriveEmailDraftLifecycle({
-      ...input,
-      observedAt,
-      message: thread.messages.find(
-        (message) => message.db_id === input.draftId
-      ),
-    });
-  } catch (error) {
-    if (thrownResultErrorHasCode(error, 'NOT_FOUND')) {
+  const readThread = () =>
+    ResultAsync.fromPromise(
+      fetchFreshEmailThread(input.threadId, input.draftId),
+      (error) => error
+    );
+  let thread = await readThread();
+  // A cookie refresh cannot confirm that a separate bearer token is valid.
+  if (
+    !ENABLE_BEARER_TOKEN_AUTH &&
+    thread.isErr() &&
+    thrownResultErrorHasCode(thread.error, 'UNAUTHORIZED') &&
+    (await fetchToken()).isOk()
+  ) {
+    // The first refusal can predate refreshed credentials. Use the fresh
+    // response before deciding that the draft itself is unavailable.
+    thread = await readThread();
+    if (
+      thread.isErr() &&
+      thrownResultErrorHasCode(thread.error, 'UNAUTHORIZED')
+    ) {
       return deriveEmailDraftLifecycle({ ...input, observedAt });
     }
-    throw error;
   }
+  if (thread.isErr() && !thrownResultErrorHasCode(thread.error, 'NOT_FOUND')) {
+    throw thread.error;
+  }
+  return deriveEmailDraftLifecycle({
+    ...input,
+    observedAt,
+    message: thread.isOk()
+      ? thread.value.messages.find((message) => message.db_id === input.draftId)
+      : undefined,
+  });
 }
 
 function refreshInterval(state: EmailDraftLifecycleState | undefined) {

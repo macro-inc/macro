@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in - Microsoft emulator</title>
+<style>
+{% include "page_style.css" %}
+</style>
+</head>
+<body>
+<main>
+  <div class="banner">Outlook emulator. This is not Microsoft, and these are seeded test users.</div>
+  <h1>Pick an account</h1>
+  <p>to continue to <code>{{ client_id }}</code> at <code>{{ redirect_host }}</code></p>
+  <form method="post">
+    {% for (name, value) in request %}
+    <input type="hidden" name="{{ name }}" value="{{ value }}">
+    {% endfor %}
+    {% for user in users %}
+    <button class="user" type="submit" name="user" value="{{ user.email }}">
+      <span class="initial">{{ user.initial }}</span>
+      <span>{{ user.name }}<span class="email">{{ user.email }}</span></span>
+    </button>
+    {% endfor %}
+    {% if users.is_empty() %}
+    <div class="empty">The emulator has no mailboxes. Seed one, then reload.</div>
+    {% endif %}
+    {% if !permissions.is_empty() %}
+    <div class="permissions">
+      <h2>Picking an account accepts the permissions requested:</h2>
+      <ul>
+        {% for permission in permissions %}
+        <li><code>{{ permission }}</code></li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    <div class="actions">
+      <button class="action" type="submit" name="cancel" value="1">Cancel</button>
+      <button class="action" type="submit" name="admin_approval" value="1">Need admin approval</button>
+    </div>
+  </form>
+</main>
+</body>
+</html>

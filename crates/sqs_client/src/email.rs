@@ -1,8 +1,10 @@
+pub mod trace_context;
+
 use crate::SQS;
-use email::domain::ports::EmailMessageEnqueuer;
 use models_email::email::service::backfill::BackfillPubsubMessage;
 use models_email::email::service::crm_cleanup::CrmCleanupPubsubMessage;
 pub use models_email::email::service::pubsub::LinkManagerMessage;
+use models_email::email::service::pubsub::{LinkManagerLane, LinkManagerSender};
 #[cfg(feature = "sfs_uploader")]
 use models_email::service::pubsub::SFSUploaderMessage;
 use models_email::service::pubsub::ScheduledPubsubMessage;
@@ -13,8 +15,46 @@ use uuid::Uuid;
 pub const BACKFILL_DEFERRALS_ATTRIBUTE: &str = "deferrals";
 
 impl SQS {
+    /// Enqueues one Gmail label write, split into operations no larger than a
+    /// provider batch. Each operation clears its message's `pending_write_id`
+    /// marker when it finishes.
+    pub async fn enqueue_gmail_label_write(
+        &self,
+        link_id: Uuid,
+        messages: Vec<(Uuid, String)>,
+        labels_to_add: Vec<String>,
+        labels_to_remove: Vec<String>,
+        pending_write_id: Uuid,
+    ) -> anyhow::Result<()> {
+        let messages = self.gmail_label_write_messages(
+            link_id,
+            messages,
+            labels_to_add,
+            labels_to_remove,
+            pending_write_id,
+        );
+        if !self.gmail_label_write_batches {
+            return self.enqueue_gmail_ops_notifications_batch(messages).await;
+        }
+        // A full batch is ~100 KB, so each goes out alone rather than in an
+        // SQS batch whose 256 KB cap is shared by all its entries.
+        for message in messages {
+            self.enqueue_gmail_ops_notification(message).await?;
+        }
+        Ok(())
+    }
+
+    /// The link-manager queue of the interactive lane
+    /// ([`LinkManagerMessage::lane`]).
     pub fn email_link_manager_queue(mut self, link_manager_queue: &str) -> Self {
         self.link_manager_queue = Some(link_manager_queue.to_string());
+        self
+    }
+
+    /// The link-manager queue of the maintenance lane
+    /// ([`LinkManagerMessage::lane`]).
+    pub fn email_link_maintenance_queue(mut self, link_maintenance_queue: &str) -> Self {
+        self.link_maintenance_queue = Some(link_maintenance_queue.to_string());
         self
     }
 
@@ -86,21 +126,26 @@ impl SQS {
         self
     }
 
-    /// Sends a notification message to the email refresh queue
-    #[tracing::instrument(skip(self))]
+    /// Sends `sender`'s link-manager message to the queue of its lane.
+    #[tracing::instrument(skip(self), fields(lane = %message.lane(sender)), err)]
     pub async fn enqueue_link_manager_notification(
         &self,
         message: LinkManagerMessage,
+        sender: LinkManagerSender,
     ) -> anyhow::Result<()> {
-        if let Some(link_manager_queue) = &self.link_manager_queue {
-            return enqueue_link_manager_notification(&self.inner, link_manager_queue, message)
-                .await;
-        }
-        anyhow::bail!("link_manager_queue is not configured")
+        let lane = message.lane(sender);
+        let queue = match lane {
+            LinkManagerLane::Interactive => &self.link_manager_queue,
+            LinkManagerLane::Maintenance => &self.link_maintenance_queue,
+        };
+        let Some(queue) = queue else {
+            anyhow::bail!("the {lane} link manager queue is not configured");
+        };
+        enqueue_link_manager_notification(&self.inner, queue, message).await
     }
 
     /// Sends a message to the email backfill queue
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all, err)]
     pub async fn enqueue_email_backfill_message(
         &self,
         message: BackfillPubsubMessage,
@@ -115,7 +160,7 @@ impl SQS {
     /// that becomes visible after `delay_seconds`. Unlike waiting out the
     /// visibility timeout, the wait uses none of the operation's deliveries.
     /// `deferrals` is recorded in [`BACKFILL_DEFERRALS_ATTRIBUTE`].
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err, fields(delay_seconds = i64::from(delay_seconds), deferrals = i64::from(deferrals)))]
     pub async fn defer_email_backfill_message(
         &self,
         message: &BackfillPubsubMessage,
@@ -129,14 +174,17 @@ impl SQS {
             .data_type("Number")
             .string_value(deferrals.to_string())
             .build()?;
-        self.inner
+        let mut request = self
+            .inner
             .send_message()
             .queue_url(email_backfill_queue)
             .message_body(serde_json::to_string(&message)?)
             .delay_seconds(delay_seconds)
-            .message_attributes(BACKFILL_DEFERRALS_ATTRIBUTE, deferrals)
-            .send()
-            .await?;
+            .message_attributes(BACKFILL_DEFERRALS_ATTRIBUTE, deferrals);
+        if let Some(context) = trace_context::attribute() {
+            request = request.message_attributes(trace_context::ATTRIBUTE, context);
+        }
+        request.send().await?;
         Ok(())
     }
 
@@ -201,94 +249,6 @@ impl SQS {
     }
 }
 
-impl EmailMessageEnqueuer for SQS {
-    type Err = anyhow::Error;
-
-    const MAX_LABEL_WRITE_MESSAGES: usize =
-        models_email::gmail::gmail_ops::MAX_BATCH_MODIFY_MESSAGES;
-
-    async fn enqueue_scheduled_message(
-        &self,
-        link_id: Uuid,
-        message_id: Uuid,
-        delay_seconds: Option<i32>,
-    ) -> Result<(), Self::Err> {
-        self.enqueue_email_scheduled_message(
-            ScheduledPubsubMessage {
-                link_id,
-                message_id,
-            },
-            delay_seconds,
-        )
-        .await
-    }
-
-    #[tracing::instrument(
-        skip(self, messages, labels_to_add, labels_to_remove),
-        fields(message_count = messages.len()),
-        err
-    )]
-    async fn enqueue_gmail_ops_modify_labels_batch(
-        &self,
-        link_id: Uuid,
-        messages: Vec<(Uuid, String)>,
-        labels_to_add: Vec<String>,
-        labels_to_remove: Vec<String>,
-        pending_write_id: Uuid,
-    ) -> Result<(), Self::Err> {
-        let messages = self.gmail_label_write_messages(
-            link_id,
-            messages,
-            labels_to_add,
-            labels_to_remove,
-            pending_write_id,
-        );
-        if !self.gmail_label_write_batches {
-            return self.enqueue_gmail_ops_notifications_batch(messages).await;
-        }
-        // A full batch is ~100 KB, so each goes out alone rather than in an
-        // SQS batch whose 256 KB cap is shared by all its entries.
-        for message in messages {
-            self.enqueue_gmail_ops_notification(message).await?;
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self, email_address), err)]
-    async fn enqueue_gmail_ops_block_sender(
-        &self,
-        link_id: Uuid,
-        email_address: String,
-    ) -> Result<(), Self::Err> {
-        use models_email::gmail::gmail_ops::{
-            BlockSenderPayload, GmailOpsOperation, GmailOpsPubsubMessage,
-        };
-
-        self.enqueue_gmail_ops_notification(GmailOpsPubsubMessage {
-            link_id,
-            operation: GmailOpsOperation::BlockSender(BlockSenderPayload { email_address }),
-        })
-        .await
-    }
-
-    #[tracing::instrument(skip(self, email_address), err)]
-    async fn enqueue_gmail_ops_unblock_sender(
-        &self,
-        link_id: Uuid,
-        email_address: String,
-    ) -> Result<(), Self::Err> {
-        use models_email::gmail::gmail_ops::{
-            GmailOpsOperation, GmailOpsPubsubMessage, UnblockSenderPayload,
-        };
-
-        self.enqueue_gmail_ops_notification(GmailOpsPubsubMessage {
-            link_id,
-            operation: GmailOpsOperation::UnblockSender(UnblockSenderPayload { email_address }),
-        })
-        .await
-    }
-}
-
 #[tracing::instrument(skip(sqs_client))]
 pub async fn enqueue_link_manager_notification(
     sqs_client: &aws_sdk_sqs::Client,
@@ -306,7 +266,7 @@ pub async fn enqueue_link_manager_notification(
     Ok(())
 }
 
-#[tracing::instrument(skip(sqs_client))]
+#[tracing::instrument(skip_all, err)]
 pub async fn enqueue_backfill_message(
     sqs_client: &aws_sdk_sqs::Client,
     queue_url: &str,
@@ -315,12 +275,14 @@ pub async fn enqueue_backfill_message(
     let message_str = serde_json::to_string(&message)?;
 
     // Send the message with the serialized body
-    sqs_client
+    let mut request = sqs_client
         .send_message()
         .queue_url(queue_url)
-        .message_body(message_str)
-        .send()
-        .await?;
+        .message_body(message_str);
+    if let Some(context) = trace_context::attribute() {
+        request = request.message_attributes(trace_context::ATTRIBUTE, context);
+    }
+    request.send().await?;
 
     Ok(())
 }

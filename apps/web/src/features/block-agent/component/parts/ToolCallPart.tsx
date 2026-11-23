@@ -11,6 +11,7 @@
 
 import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
 import { type JSX, Match, Show, Switch } from 'solid-js';
+import { isCodeModeSupportCall } from '../../state/code-mode-support';
 import {
   isCodeExecution,
   presentedReviewId,
@@ -46,8 +47,8 @@ export function ToolCallPart(props: {
   // (see `settledToolStatus`).
   const status = () =>
     settledToolStatus(props.part.status, props.context.inFlight);
-  // The chat block's failed-tool treatment: the same row, faded, with a quiet
-  // trailing label — not a separate error card.
+  // A failed call's row looks like any other; the agent explains what went
+  // wrong in its reply.
   const stopped = () =>
     (props.part.status === 'pending' || props.part.status === 'running') &&
     status() === 'completed';
@@ -55,15 +56,16 @@ export function ToolCallPart(props: {
     id: props.part.id,
     label: toolLabel(props.part.name),
     status: status(),
-    muted: failed(),
+    unsuccessful: failed(),
     stopped: stopped(),
-    trailing: failed() ? 'Failed' : stopped() ? 'Stopped' : undefined,
+    trailing: stopped() ? 'Stopped' : undefined,
   });
 
   // Non-keyed matches preserve the disclosure when a streamed update replaces
   // its detail object; each child receives the current detail through an accessor.
   return (
     <Switch>
+      <Match when={isCodeModeSupportCall(props.part)}>{null}</Match>
       <Match when={presentedReviewId(props.part)}>
         {(id) => (
           <PresentedReviewPart
@@ -121,10 +123,7 @@ export function ToolCallPart(props: {
           <Show
             when={
               props.part.name.kind === 'mcp' &&
-              (props.part.name.server === 'macro' ||
-                (props.part.name.server === 'macro_internal' &&
-                  (props.part.name.tool === 'DescribeCodeTools' ||
-                    props.part.name.tool === 'ReadCodeDocs'))) &&
+              props.part.name.server === 'macro' &&
               hasToolRenderer(props.part.name.tool)
             }
             fallback={<ExchangeToolCall detail={detail()} common={common()} />}

@@ -1,10 +1,20 @@
+import { MenuItem } from '@core/component/ContextMenu';
+import type { EntityData } from '@entity';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectRow } from '../context/projects-context';
 import type { ProjectAccess } from '../core/project';
 import { ProjectMenuDropdown } from './project-row-menu';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+
+const showAppearance = vi.hoisted(() => vi.fn());
+vi.mock('@app/features/entity-appearance/appearance-menu', () => ({
+  EntityAppearanceMenu: (props: { entity: EntityData }) => (
+    <MenuItem text="Change icon" onClick={() => showAppearance(props.entity)} />
+  ),
+}));
 
 vi.mock('@entity', () => ({
   InlineEntity: (props: { entity: { name: string } }) => props.entity.name,
@@ -80,7 +90,7 @@ async function openMenu() {
 const entries = () =>
   screen
     .getAllByRole('menuitem')
-    .map((item) => item.firstChild?.textContent ?? '');
+    .map((item) => item.querySelector('.flex-1')?.textContent ?? '');
 
 describe('project actions dropdown', () => {
   it('offers an owner every action the row menu has', async () => {
@@ -112,6 +122,43 @@ describe('project actions dropdown', () => {
           properties: [],
         },
       ])
+    );
+  });
+
+  it('updates editing capability without changing the targets of an open menu', async () => {
+    const original = project('owner');
+    const [rows, setRows] = createSignal([original]);
+    const [editing, setEditing] = createSignal(true);
+    const changeIcon = vi.fn();
+    render(() => (
+      <ProjectMenuDropdown
+        targets={rows}
+        canOpenInNewSplit
+        onOpenInNewSplit={vi.fn()}
+        onRename={vi.fn()}
+        onChangeIcon={editing() ? changeIcon : undefined}
+        onSetOption={vi.fn()}
+        onCopyLink={vi.fn()}
+        onCopyId={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    ));
+    await openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Change icon' })).toBeTruthy();
+
+    setEditing(false);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Change icon' })).toBeNull();
+
+    setRows([
+      { project: { ...original.project, id: 'other' }, properties: [] },
+    ]);
+    setEditing(true);
+    click(screen.getByRole('menuitem', { name: 'Change icon' }));
+    await waitFor(() =>
+      expect(showAppearance).toHaveBeenCalledWith(
+        expect.objectContaining({ id: original.project.id })
+      )
     );
   });
 

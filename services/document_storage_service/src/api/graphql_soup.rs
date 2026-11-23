@@ -30,8 +30,8 @@ mod websocket;
 
 use websocket::GraphqlWebSocketUpgrade;
 
-const GRAPHQL_PATH: &str = "/soup/graphql";
-const GRAPHQL_SUBSCRIPTION_PATH: &str = "/soup/graphql/ws";
+pub(crate) const GRAPHQL_PATH: &str = "/soup/graphql";
+pub(crate) const GRAPHQL_SUBSCRIPTION_PATH: &str = "/soup/graphql/ws";
 
 pub(crate) fn router() -> Router<ApiContext> {
     Router::new()
@@ -166,7 +166,7 @@ fn insert_graphql_context_data(
 ) {
     data.insert(state.clone());
     let saved_views: std::sync::Arc<dyn saved_views::domain::SavedViewApi> =
-        std::sync::Arc::new(crate::service::saved_views::service(state.db.clone()));
+        state.saved_views.clone();
     data.insert(saved_views);
 
     let Some(macro_user_id) = macro_user_id else {
@@ -202,16 +202,23 @@ fn insert_graphql_context_data(
         state.projects_state.service.clone(),
     )));
     data.insert(state.channel_service.clone());
+    data.insert(complete_graph::ChannelQueryContext::new(
+        state.channel_service.clone(),
+    ));
     data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_database_rows_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());
+    data.insert(state.graphql_contacts_context.clone());
     data.insert(state.graphql_calendar_context.clone());
     data.insert(state.graphql_calendar_mutation_context.clone());
     data.insert(state.graphql_work_feed_context.clone());
+    data.insert(state.graphql_registered_work_context.clone());
     data.insert(state.graphql_notification_inbox_context.clone());
+    data.insert(state.graphql_active_notification_ids_context.clone());
     data.insert(state.graphql_initiative_entity_loader.clone());
     data.insert(state.graphql_agent_session_entity_loader.clone());
     data.insert(state.graphql_primary_soup_item_loader.clone());
+    data.insert(state.graphql_primary_channel_soup.clone());
     data.insert(graphql_initiative::initiative_loader(
         state.graphql_initiative_context.clone(),
         macro_user_id.clone(),
@@ -220,11 +227,18 @@ fn insert_graphql_context_data(
         state.graphql_crm_context.clone(),
         macro_user_id.clone(),
     ));
+    data.insert(state.graphql_time_tracking_context.clone());
+    data.insert(graphql_time_tracking::time_entries_loader(
+        state.graphql_time_tracking_context.clone(),
+        macro_user_id.clone(),
+    ));
     data.insert(state.graphql_notification_reader.clone());
+    data.insert(state.graphql_notification_writer.clone());
     data.insert(state.soup_router_state.email_service());
     data.insert(state.entity_access_service.clone());
     data.insert(state.graphql_soup_item_loader.clone());
     data.insert(state.agent_session_log_subscriptions.clone());
+    data.insert(state.agent_session_activity_subscriptions.clone());
     // Mutation replies must read their committed state from the primary email
     // service. Ordinary Soup lists and subscriptions retain their own reader.
     data.insert(email_mutation_thread_loader(

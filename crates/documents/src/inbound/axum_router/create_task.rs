@@ -55,7 +55,9 @@ pub async fn create_task_handler<
         metadata = metadata.project_id(project_id);
     }
 
-    let team_id = if req.share_with_team {
+    // A session that may not share gets a private task by default
+    // (`CreateTaskRequest::share_with_team`) that is still numbered in its team.
+    let team_id = if req.share_with_team || !agent_correlation::context::may_share() {
         optional_team
             .entity_access_receipt
             .map(|team| macro_uuid::string_to_uuid(&team.entity().entity_id).unwrap())
@@ -72,6 +74,7 @@ pub async fn create_task_handler<
                 markdown,
                 subtype: MarkdownSubtype::Task {
                     property_values: req.property_values,
+                    pinned_property_definition_ids: req.pinned_property_definition_ids,
                     share_with_team: req.share_with_team && team_id.is_some(), // we should only try and share if the user is in a team and they have share_with_team set
                     team_id,
                 },

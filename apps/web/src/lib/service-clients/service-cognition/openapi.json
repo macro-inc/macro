@@ -11,6 +11,68 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/activity": {
+      "get": {
+        "tags": ["activity"],
+        "summary": "Read the acting user's own activity in a time range, newest first.",
+        "description": "Includes actions agents performed on the user's behalf. Returns at most\n100 events; `truncated` reports that more matched, so narrow the range.",
+        "operationId": "read_my_activity",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Inclusive start, RFC 3339.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Exclusive end, RFC 3339; must be after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity in the range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadActivityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`from` is not before `to`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai-cost/pricing": {
       "post": {
         "tags": ["ai_usage"],
@@ -122,65 +184,6 @@
         }
       }
     },
-    "/ai-projections": {
-      "post": {
-        "tags": ["ai_projections::inbound::axum_router::upsert_projection"],
-        "summary": "Gets or creates an ai projection and the requesting user's instance,\ntriggering (or awaiting) materialization when needed.",
-        "operationId": "upsert_ai_projection",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpsertProjectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProjectionStateResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/attachments/{attachment_id}/chats": {
       "get": {
         "tags": ["get_chats_for_attachment"],
@@ -233,6 +236,59 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar/events/create-confirmed": {
+      "post": {
+        "tags": ["confirmed_actions"],
+        "summary": "Create a calendar event the user approved in conversation, quoting their approval.",
+        "operationId": "create_confirmed_calendar_event",
+        "requestBody": {
+          "description": "CreateConfirmedCalendarEvent arguments: CreateCalendarEvent's, plus userConfirmation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ToolCalendarEvent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, or missing userConfirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Not created: a blank confirmation, a calendar the user cannot write, or a provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
                 }
               }
             }
@@ -1046,6 +1102,485 @@
         }
       }
     },
+    "/connectors": {
+      "get": {
+        "tags": ["connectors"],
+        "summary": "Every app and server the user holds, with where they stand with it. A\nconnection that no longer counts shows as `notConnected`.",
+        "operationId": "list_connectors",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Connector"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["connectors"],
+        "summary": "Add a server by URL, enabled and not yet signed in to. A URL the user\nalready has is answered as it stands. A server at an app's address is\nthat app.",
+        "operationId": "add_connector_server",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddServerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connector"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/catalog": {
+      "get": {
+        "tags": ["connectors"],
+        "summary": "Browse or search the apps the user can connect, most popular first.",
+        "operationId": "browse_connector_catalog",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Filter apps by name; omit to browse.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The cursor from the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1 to 50 (default 20).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/{kind}/{id}": {
+      "delete": {
+        "tags": ["connectors"],
+        "summary": "Remove a connection, revoking it where its provider can. Removing GitHub\nunlinks the account.",
+        "operationId": "remove_connector",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "`app` or `server`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectorKind"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The app's slug, or the server's URL in unpadded base64url.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["connectors"],
+        "summary": "Turn a connection on or off, or rename it.",
+        "operationId": "update_connector",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "`app` or `server`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectorKind"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The app's slug, or the server's URL in unpadded base64url.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConnectorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/{kind}/{id}/complete": {
+      "post": {
+        "tags": ["connectors"],
+        "summary": "Record the connection the user just finished making, once the connect\npage or dialog is done. Answers 404 until it exists, so it can be polled.\nA server added by URL finishes on its OAuth callback; this answers it as\nit stands.",
+        "operationId": "complete_connector_connect",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "`app` or `server`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectorKind"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The app's slug, or the server's URL in unpadded base64url.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connector"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not connected yet; poll again while the connect page is open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/{kind}/{id}/connect": {
+      "post": {
+        "tags": ["connectors"],
+        "summary": "Begin connecting an app, or signing in to a server added by URL. Answers\nthe step the user takes next.",
+        "operationId": "start_connector_connect",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "`app` or `server`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConnectorKind"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The app's slug, or the server's URL in unpadded base64url.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectStep"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/database-query": {
       "post": {
         "tags": ["database_query"],
@@ -1221,6 +1756,59 @@
         }
       }
     },
+    "/email/send-confirmed": {
+      "post": {
+        "tags": ["confirmed_actions"],
+        "summary": "Send an email the user approved in conversation, quoting their approval.",
+        "operationId": "send_confirmed_email",
+        "requestBody": {
+          "description": "SendConfirmedEmail arguments: SendEmail's, plus userConfirmation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SendEmailResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, or missing userConfirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -1342,6 +1930,117 @@
         }
       }
     },
+    "/import/entities": {
+      "get": {
+        "tags": ["import"],
+        "summary": "List the caller's import ledger: staged candidates, running and finished\nimports (with the team's imports), and declined items.",
+        "operationId": "list_import_entities",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "description": "Only rows from this source.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ImportSource"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only rows in this status.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ImportStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportEntitiesResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "tags": ["import"],
+        "summary": "Track an external item in the ledger: stage it as a candidate, or record a\nMacro entity already created from it. Says when the item was already\nimported, so callers do not create a duplicate.",
+        "operationId": "track_import_entity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackImportEntityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackImportEntityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid item or metadata"
+          },
+          "422": {
+            "description": "The import service refused the item"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/import/entities/{id}": {
+      "delete": {
+        "tags": ["import"],
+        "summary": "Decline one of the caller's staged candidates; it is remembered as declined\nand not proposed again.",
+        "operationId": "decline_import_entity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger row id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Declined"
+          },
+          "404": {
+            "description": "No such row belongs to the caller"
+          },
+          "409": {
+            "description": "Only staged rows can be declined"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/import/notion": {
       "get": {
         "tags": ["import"],
@@ -1379,6 +2078,44 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/import/notion/pages": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Import one Notion page as a Macro document through the caller's Notion\nconnection, deduplicated against the ledger. Notion databases are not\nimported; a whole workspace goes through a reviewed import instead.",
+        "operationId": "import_notion_page",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportNotionPageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportNotionPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No page given"
+          },
+          "422": {
+            "description": "Not a page that can be imported, or Notion is not connected"
           },
           "500": {
             "description": "Internal server error"
@@ -1527,213 +2264,16 @@
         }
       }
     },
-    "/mcp/servers": {
-      "get": {
-        "tags": ["mcp"],
-        "summary": "List all MCP servers configured for the authenticated user.",
-        "operationId": "list_mcp_servers",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ServerResponse"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": ["mcp"],
-        "summary": "Update an existing MCP server's name or enabled status.",
-        "operationId": "update_mcp_server",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateServerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServerResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["mcp"],
-        "summary": "Add a new MCP server for the authenticated user. A URL the user already\nhas is returned as stored, keeping its credentials.",
-        "operationId": "add_mcp_server",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddServerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServerResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": ["mcp"],
-        "summary": "Delete an MCP server by URL.",
-        "operationId": "delete_mcp_server",
-        "parameters": [
-          {
-            "name": "url",
-            "in": "query",
-            "description": "The server URL to delete.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/mcp/servers/auth/callback": {
       "get": {
-        "tags": ["mcp"],
-        "summary": "OAuth callback endpoint — receives code and state, or an error, from the\nauthorization server.",
-        "operationId": "mcp_auth_callback",
+        "tags": ["connectors"],
+        "summary": "Finish signing in to a server by URL: the authorization server redirects\nthe browser here with a code or an error.",
+        "operationId": "connector_oauth_callback",
         "parameters": [
           {
             "name": "code",
             "in": "query",
-            "description": "Authorization code from the OAuth provider. Present on success.",
+            "description": "The authorization code, on success.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1742,7 +2282,7 @@
           {
             "name": "state",
             "in": "query",
-            "description": "CSRF state parameter.",
+            "description": "The one-time state the flow started with.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1751,7 +2291,7 @@
           {
             "name": "error",
             "in": "query",
-            "description": "OAuth error code from the provider, e.g. `access_denied`. Present on failure.",
+            "description": "The provider's error code, e.g. `access_denied`, on failure.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1760,7 +2300,7 @@
           {
             "name": "error_description",
             "in": "query",
-            "description": "Human-readable error description from the provider.",
+            "description": "The provider's description of the error.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1769,10 +2309,10 @@
         ],
         "responses": {
           "200": {
-            "description": "OAuth flow completed successfully"
+            "description": "Signed in"
           },
           "400": {
-            "description": "Provider rejected authorization, or the callback was malformed",
+            "description": "The provider refused, or the redirect was malformed",
             "content": {
               "application/json": {
                 "schema": {
@@ -1796,61 +2336,12 @@
     },
     "/mcp/servers/auth/client-metadata": {
       "get": {
-        "tags": ["mcp"],
-        "summary": "Return Macro's public OAuth Client ID Metadata Document.",
-        "operationId": "mcp_oauth_client_metadata",
+        "tags": ["connectors"],
+        "summary": "Macro's public OAuth Client ID Metadata Document.",
+        "operationId": "connector_oauth_client_metadata",
         "responses": {
           "200": {
-            "description": "Macro OAuth client metadata document"
-          }
-        }
-      }
-    },
-    "/mcp/servers/auth/start": {
-      "post": {
-        "tags": ["mcp"],
-        "summary": "Start the OAuth authorization flow for an MCP server.",
-        "operationId": "start_mcp_auth",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StartAuthRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StartAuthResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Macro's OAuth client metadata document"
           }
         }
       }
@@ -1877,6 +2368,195 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/memory/activity": {
+      "get": {
+        "tags": ["memory"],
+        "summary": "Read privacy-reviewed professional activity of the caller or a current teammate.",
+        "description": "Reports use UTC calendar days, Monday-start weeks and calendar months.\nAn empty list means no stored activity, not no work.",
+        "operationId": "get_user_activity",
+        "parameters": [
+          {
+            "name": "user",
+            "in": "query",
+            "description": "A `macro|` user id; omit for the caller.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive first UTC date.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Inclusive last UTC date, at most 366 days after `start`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity reports in the range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityReports"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid user id or date range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user is not the caller or a current teammate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/memory/explicit": {
+      "get": {
+        "tags": ["memory"],
+        "summary": "Read the caller's private explicit memory and its revision.",
+        "description": "Content is newline-separated; edits address one-based lines.",
+        "operationId": "read_explicit_memory",
+        "responses": {
+          "200": {
+            "description": "The caller's explicit memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplicitMemory"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["memory"],
+        "summary": "Apply one edit to the caller's private explicit memory.",
+        "description": "A stale revision changes nothing and answers 409; reread before retrying.\nAdditions that fail privacy review answer 422.",
+        "operationId": "edit_explicit_memory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExplicitMemoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The edited explicit memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplicitMemory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid line or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The revision is stale",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Rejected by privacy review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Privacy review is unavailable; nothing was saved",
             "content": {
               "application/json": {
                 "schema": {
@@ -1993,566 +2673,6 @@
         }
       }
     },
-    "/pipedream/mcp/catalog": {
-      "get": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Browse or search the catalog of connectable apps.",
-        "description": "Results come from Pipedream's app directory, most popular first.",
-        "operationId": "browse_pipedream_mcp_catalog",
-        "parameters": [
-          {
-            "name": "search",
-            "in": "query",
-            "description": "Search query to filter apps by name. Omit to browse.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque pagination cursor from a previous response.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Page size (default 20, max 50).",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 0
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamCatalogResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/complete": {
-      "post": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Register a connected account reported by the Pipedream Connect UI.",
-        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything. An overlaid app is\nrefused with 409: it connects through its own MCP server instead.",
-        "operationId": "complete_pipedream_mcp_connection",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PipedreamCompleteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/connect/complete": {
-      "post": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Record an app the user connected through Macro Connect.",
-        "description": "Answers 404 until Connect lists an active connection for this user and\napp, so the frontend can poll it while the consent window is open.",
-        "operationId": "complete_pipedream_mcp_connect",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PipedreamConnectCompleteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/connections": {
-      "get": {
-        "tags": ["pipedream-mcp"],
-        "summary": "List the MCP apps connected by the authenticated user.",
-        "operationId": "list_pipedream_mcp_connections",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Rename or enable/disable a connected app.",
-        "operationId": "update_pipedream_mcp_connection",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PipedreamUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Disconnect an app, revoking its Pipedream account.",
-        "operationId": "delete_pipedream_mcp_connection",
-        "parameters": [
-          {
-            "name": "app_slug",
-            "in": "query",
-            "description": "The app slug to disconnect.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/overlays": {
-      "get": {
-        "tags": ["pipedream-mcp"],
-        "summary": "List the catalog apps that connect through their own MCP server.",
-        "description": "Clients connect these with the native MCP OAuth flow against\n`server_url`; Pipedream refuses to complete a connection for them.",
-        "operationId": "list_pipedream_mcp_overlays",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PipedreamOverlayResponse"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/recover": {
-      "post": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Register an account a Connect flow created but the Connect UI never\nreported.",
-        "description": "Called after the Connect UI closes without a success event. Answers 404\nwhen Pipedream has no new account for this user and app.\nAn overlaid app is refused with 409, as in [`complete_connection`].",
-        "operationId": "recover_pipedream_mcp_connection",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PipedreamRecoverRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pipedream/mcp/token": {
-      "post": {
-        "tags": ["pipedream-mcp"],
-        "summary": "Start a connect flow for the authenticated user.",
-        "description": "By default, a short-lived Pipedream Connect token: the frontend opens\nPipedream's hosted Connect UI with it, and the user picks (or is\ndeep-linked into) an app and authorizes it there. When the body names an\napp Macro Connect serves and the `macro-connect` rollout is on for the\nuser, a Connect URL instead.",
-        "operationId": "create_pipedream_mcp_token",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PipedreamTokenRequest"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PipedreamTokenResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/preview": {
       "post": {
         "tags": ["get_batch_preview"],
@@ -2594,6 +2714,142 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skills": {
+      "get": {
+        "tags": ["skills"],
+        "summary": "List the caller's skills, or search them by name when `query` is given.\nBuilt-in skills are included.",
+        "operationId": "list_skills",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Words from the skill's name, matched as one adjacent phrase. Omit to\nlist the 100 most recently updated skills.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "matchType",
+            "in": "query",
+            "description": "How `query` is matched; `partial` when omitted.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SkillsMatchType"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching skills, most recently updated first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Blank query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Listing failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Search failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skills/{id}": {
+      "get": {
+        "tags": ["skills"],
+        "summary": "Read one skill's complete instructions: a skill document the caller can\nview, or a built-in skill.",
+        "operationId": "read_skill",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The skill's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The skill's instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillContentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "No skill the caller can view has this id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Reading failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Access check unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
                 }
               }
             }
@@ -2804,6 +3060,186 @@
           }
         }
       }
+    },
+    "/web/fetch": {
+      "post": {
+        "tags": ["web"],
+        "summary": "Read one public web page as Markdown. Charged to the acting user's AI allowance.",
+        "operationId": "fetch_web_page",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebFetch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The page text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebFetchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid URL or length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Web fetch is not configured in this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The page could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-user hourly rate limit exceeded"
+          },
+          "502": {
+            "description": "The fetch provider failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Web fetch busy, or usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/web/search": {
+      "post": {
+        "tags": ["web"],
+        "summary": "Search the public web. Charged to the acting user's AI allowance.",
+        "operationId": "search_web",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebSearch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Results, best match first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query or filters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Web search is not configured in this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-user hourly rate limit exceeded"
+          },
+          "502": {
+            "description": "The search provider failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Web search busy, or usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2813,18 +3249,63 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
       },
+      "Activity": {
+        "type": "object",
+        "description": "A privacy-reviewed activity report; period_end is inclusive.",
+        "required": ["granularity", "periodStart", "periodEnd", "content"],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "granularity": {
+            "$ref": "#/components/schemas/Granularity"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "ActivityErrorBody": {
+        "type": "object",
+        "description": "Error body for activity reads.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error description."
+          }
+        }
+      },
+      "ActivityReports": {
+        "type": "object",
+        "description": "Activity reports for one user, ordered by period.",
+        "required": ["reports"],
+        "properties": {
+          "reports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Activity"
+            }
+          }
+        }
+      },
       "AddServerRequest": {
         "type": "object",
-        "description": "Request body for adding a new MCP server.",
-        "required": ["url", "server_name"],
+        "description": "Adding a server by URL.",
+        "required": ["url", "name"],
         "properties": {
-          "server_name": {
+          "name": {
             "type": "string",
-            "description": "Human-readable name for the server."
+            "description": "Its display name; its tools are listed under it."
           },
           "url": {
             "type": "string",
-            "description": "The MCP server's streamable HTTP URL."
+            "description": "The server's streamable HTTP URL."
           }
         }
       },
@@ -2845,9 +3326,12 @@
           "agent_session",
           "agent_repository_choice",
           "agent_mode_choice",
+          "agent_activity_summary",
           "dictation",
           "image_generation",
-          "email_focus"
+          "email_focus",
+          "web_search",
+          "non_billable_agent_session"
         ]
       },
       "AssistantMessagePart": {
@@ -3094,6 +3578,99 @@
         "properties": {
           "result": {
             "description": "The tool execution result."
+          }
+        }
+      },
+      "CatalogApp": {
+        "type": "object",
+        "description": "One connectable app.",
+        "required": ["key", "slug", "name", "categories"],
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The directory's categories for it."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "One line on what connecting it enables."
+          },
+          "iconUrl": {
+            "type": ["string", "null"],
+            "description": "Its icon."
+          },
+          "key": {
+            "type": "string",
+            "description": "Its connector key, `app/{slug}`."
+          },
+          "name": {
+            "type": "string",
+            "description": "The display name."
+          },
+          "orgSetup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogOrgSetup",
+                "description": "Setup an admin of the user's organization must do at the vendor\nbefore the user connects it; absent when there is none."
+              }
+            ]
+          },
+          "slug": {
+            "type": "string",
+            "description": "Its canonical slug."
+          }
+        }
+      },
+      "CatalogOrgSetup": {
+        "type": "object",
+        "description": "Setup an admin of the user's organization must do at the vendor.",
+        "required": ["summary", "steps", "settingsUrl", "required"],
+        "properties": {
+          "allowlistUrl": {
+            "type": ["string", "null"],
+            "description": "The URL the admin adds, when a step adds one."
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Connecting fails until this is done. Otherwise it works with less\naccess."
+          },
+          "settingsUrl": {
+            "type": "string",
+            "description": "Where the admin does it."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The steps, in order."
+          },
+          "summary": {
+            "type": "string",
+            "description": "One sentence on what the admin does and what happens without it."
+          }
+        }
+      },
+      "CatalogPage": {
+        "type": "object",
+        "description": "A page of the catalog, most popular first.",
+        "required": ["apps"],
+        "properties": {
+          "apps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogApp"
+            },
+            "description": "The apps, in display order."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "The cursor for the next page; absent on the last."
           }
         }
       },
@@ -3523,6 +4100,11 @@
           }
         }
       },
+      "CompletionThinking": {
+        "type": "string",
+        "description": "How much a model may think before it gives a structured answer.",
+        "enum": ["default", "low"]
+      },
       "CompletionUsage": {
         "type": "object",
         "description": "User and feature attribution for one invocation.",
@@ -3547,54 +4129,160 @@
           }
         }
       },
+      "ConnectStep": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Open this page in a popup or browser tab. When it closes, call\n`POST /connectors/{kind}/{id}/complete`; it answers 404 until the\nconnection exists, so it can be polled while the page is open.",
+            "required": ["url", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["openUrl"]
+              },
+              "url": {
+                "type": "string",
+                "description": "The page."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Open the embedded connect dialog with this short-lived token. When it\nreports success, call `POST /connectors/{kind}/{id}/complete`.",
+            "required": ["token", "expiresAt", "link", "type"],
+            "properties": {
+              "expiresAt": {
+                "type": "string",
+                "description": "RFC 3339 expiry of the token."
+              },
+              "link": {
+                "type": "string",
+                "description": "A page that opens the same flow in a browser tab."
+              },
+              "token": {
+                "type": "string",
+                "description": "The token the dialog opens with."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["embeddedDialog"]
+              }
+            }
+          }
+        ],
+        "description": "What the user must do next to connect. It never says whose flow it is."
+      },
       "ConnectedServer": {
         "type": "object",
-        "description": "One of the user's MCP server connections, as the setup page sees it.",
+        "description": "One of the user's usable connections, an app or a server added by URL,\nas the setup page sees it.",
         "required": ["name", "url", "authenticated"],
         "properties": {
           "authenticated": {
             "type": "boolean",
-            "description": "Whether the user has completed OAuth against it."
+            "description": "Whether it is usable; always true, since only usable connections are\nlisted."
           },
           "name": {
             "type": "string",
-            "description": "The server's display name."
+            "description": "The display name."
           },
           "url": {
             "type": "string",
-            "description": "The server URL."
+            "description": "The app's slug, or the server's URL."
           }
         }
       },
-      "ConnectorOrgSetupResponse": {
+      "Connector": {
         "type": "object",
-        "description": "Setup an admin of the user's organization must do at the vendor.",
-        "required": ["summary", "steps", "settings_url", "required"],
+        "description": "One app or server and where the user stands with it. It never says\nwhich provider holds the connection.",
+        "required": [
+          "key",
+          "target",
+          "name",
+          "status",
+          "connectable",
+          "mcp",
+          "api",
+          "importAvailable"
+        ],
         "properties": {
-          "allowlist_url": {
-            "type": ["string", "null"],
-            "description": "The URL the admin adds, when a step adds one."
-          },
-          "required": {
+          "api": {
             "type": "boolean",
-            "description": "Connecting fails until this is done."
+            "description": "Whether its connection provides the app's REST API."
           },
-          "settings_url": {
+          "connectable": {
+            "type": "boolean",
+            "description": "Whether the user can connect it from here."
+          },
+          "importAvailable": {
+            "type": "boolean",
+            "description": "Whether Macro can import from it through its connection."
+          },
+          "key": {
             "type": "string",
-            "description": "Where the admin does it."
+            "description": "The stable key, also its path under `/connectors/`."
           },
-          "steps": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The steps, in order."
+          "mcp": {
+            "type": "boolean",
+            "description": "Whether its connection provides MCP tools."
           },
-          "summary": {
+          "name": {
             "type": "string",
-            "description": "One sentence on what the admin does and what happens without it."
+            "description": "The display name."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectorStatus",
+            "description": "Where the user stands with it."
+          },
+          "target": {
+            "$ref": "#/components/schemas/ConnectorTarget",
+            "description": "What the key names."
           }
         }
+      },
+      "ConnectorKind": {
+        "type": "string",
+        "description": "Which kind of connector a key names.",
+        "enum": ["app", "server"]
+      },
+      "ConnectorStatus": {
+        "type": "string",
+        "description": "Where a user stands with an app or server.",
+        "enum": ["connected", "disabled", "needsReauth", "notConnected"]
+      },
+      "ConnectorTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A catalog app.",
+            "required": ["slug", "type"],
+            "properties": {
+              "slug": {
+                "type": "string",
+                "description": "Its canonical slug."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["app"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A server added by URL.",
+            "required": ["url", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["server"]
+              },
+              "url": {
+                "type": "string",
+                "description": "Its normalized URL."
+              }
+            }
+          }
+        ],
+        "description": "What a key names, for display."
       },
       "ConversationRecord": {
         "type": "object",
@@ -3924,6 +4612,7 @@
           "crm_contact",
           "crm_pipeline",
           "reminder",
+          "harness",
           "skill",
           "agent_session",
           "scheduled_action",
@@ -3956,10 +4645,19 @@
           }
         }
       },
-      "Expiry": {
-        "type": "string",
-        "description": "How long a projection remains active without being requested.",
-        "enum": ["day", "week", "month"]
+      "ExplicitMemory": {
+        "type": "object",
+        "description": "A private explicit memory document and its optimistic concurrency token.",
+        "required": ["content", "revision"],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "FeatureUsage": {
         "type": "object",
@@ -4644,6 +5342,11 @@
           }
         }
       },
+      "Granularity": {
+        "type": "string",
+        "description": "Fixed calendar granularity, always in UTC, with Monday-start weeks.",
+        "enum": ["day", "week", "month", "summary"]
+      },
       "HttpSendChatMessageRequest": {
         "type": "object",
         "description": "HTTP request payload for sending a chat message.\nUnlike the WebSocket payload, this does not include stream_id as it's generated server-side.",
@@ -4679,6 +5382,20 @@
           "toolset": {
             "$ref": "#/components/schemas/ToolSet",
             "description": "Which toolset to use. Defaults to `all`"
+          }
+        }
+      },
+      "ImportEntitiesResponse": {
+        "type": "object",
+        "description": "The caller's ledger rows.",
+        "required": ["entities"],
+        "properties": {
+          "entities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportEntity"
+            },
+            "description": "The caller's own rows and their team's imported rows, newest first."
           }
         }
       },
@@ -4791,6 +5508,43 @@
           "channel"
         ]
       },
+      "ImportNotionPageRequest": {
+        "type": "object",
+        "description": "Body for importing one Notion page.",
+        "required": ["page"],
+        "properties": {
+          "page": {
+            "type": "string",
+            "description": "The Notion page URL or 32-character page id."
+          }
+        }
+      },
+      "ImportNotionPageResponse": {
+        "type": "object",
+        "description": "The outcome of importing a Notion page, with its ledger row.",
+        "required": ["outcome", "entity"],
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/ImportEntity",
+            "description": "The row behind the outcome; `entity_id` is the document once imported."
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ImportNotionPageResult",
+            "description": "What happened."
+          }
+        }
+      },
+      "ImportNotionPageResult": {
+        "type": "string",
+        "description": "What importing one Notion page did.",
+        "enum": [
+          "imported",
+          "already_imported",
+          "already_imported_by_teammate",
+          "previously_declined",
+          "import_in_progress"
+        ]
+      },
       "ImportRun": {
         "type": "object",
         "description": "Discovery-run state for one user × source.",
@@ -4804,6 +5558,11 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The review presenting the run's plan, once one does. A Notion plan is\npresented while it is still `running`; rows staged after that take it."
+          },
+          "review_session_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The agent session presenting that review."
           },
           "scanned": {
             "oneOf": [
@@ -4927,6 +5686,59 @@
       "MacroUserIdStr": {
         "type": "string"
       },
+      "MemoryEdit": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["line", "content", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["insert"]
+              },
+              "content": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["line", "content", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["replace"]
+              },
+              "content": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["line", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["delete"]
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "An edit to one one-based line. A revision is required to prevent replay\nor concurrent edits from inserting twice or deleting a different line."
+      },
       "MemoryErrorBody": {
         "type": "object",
         "required": ["error"],
@@ -4970,7 +5782,7 @@
       "ModelSpeed": {
         "type": "string",
         "description": "The requested inference speed. Standard is backward compatible with old clients.",
-        "enum": ["standard", "fast", "ultrafast"]
+        "enum": ["standard", "priority", "fast", "ultrafast"]
       },
       "NewAttachment": {
         "type": "object",
@@ -5465,7 +6277,7 @@
             "items": {
               "$ref": "#/components/schemas/ConnectedServer"
             },
-            "description": "The user's MCP server connections."
+            "description": "The user's usable connections."
           },
           "row": {
             "$ref": "#/components/schemas/OnboardingRow",
@@ -5507,209 +6319,6 @@
           }
         }
       },
-      "PipedreamCatalogEntryResponse": {
-        "type": "object",
-        "description": "One connectable app in the catalog.",
-        "required": ["app_slug", "display_name"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "Pipedream app name slug — pass this to the connect flow."
-          },
-          "categories": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Categories assigned by Pipedream."
-          },
-          "description": {
-            "type": ["string", "null"],
-            "description": "One-line description of the app."
-          },
-          "display_name": {
-            "type": "string",
-            "description": "Human-readable name to display."
-          },
-          "icon_url": {
-            "type": ["string", "null"],
-            "description": "URL of the app's icon, when available."
-          },
-          "org_setup": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ConnectorOrgSetupResponse",
-                "description": "Setup an admin of the user's organization must do at the vendor."
-              }
-            ]
-          }
-        }
-      },
-      "PipedreamCatalogResponse": {
-        "type": "object",
-        "description": "A page of the connector catalog.",
-        "required": ["servers"],
-        "properties": {
-          "next_cursor": {
-            "type": ["string", "null"],
-            "description": "Cursor for the next page. Absent on the last page."
-          },
-          "servers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PipedreamCatalogEntryResponse"
-            },
-            "description": "Catalog entries in display order (most popular first)."
-          }
-        }
-      },
-      "PipedreamCompleteRequest": {
-        "type": "object",
-        "description": "Request body for completing a Pipedream connect flow.",
-        "required": ["account_id"],
-        "properties": {
-          "account_id": {
-            "type": "string",
-            "description": "The connected-account ID reported by the Connect UI on success."
-          },
-          "server_name": {
-            "type": ["string", "null"],
-            "description": "Optional display name for the connector. Defaults to the app's name\nfor new connections; existing connections keep their name."
-          }
-        }
-      },
-      "PipedreamConnectCompleteRequest": {
-        "type": "object",
-        "description": "Request body for recording a finished Macro Connect flow.",
-        "required": ["app_slug"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "The app that was connected, by Pipedream slug."
-          },
-          "server_name": {
-            "type": ["string", "null"],
-            "description": "Optional display name for the connector, as for completion."
-          }
-        }
-      },
-      "PipedreamConnectionResponse": {
-        "type": "object",
-        "description": "A connected MCP app as returned by the API.",
-        "required": ["app_slug", "server_name", "enabled", "provider"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "Pipedream app name slug, e.g. `linear`."
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "Whether the connector is enabled for tool use."
-          },
-          "provider": {
-            "$ref": "#/components/schemas/PipedreamProviderResponse",
-            "description": "The backend holding the grant."
-          },
-          "server_name": {
-            "type": "string",
-            "description": "Human-readable display name."
-          }
-        }
-      },
-      "PipedreamOverlayResponse": {
-        "type": "object",
-        "description": "A catalog app that connects through its own MCP server instead of\nPipedream.",
-        "required": ["app_slug", "server_url"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "Pipedream app name slug, as it appears in the catalog."
-          },
-          "server_url": {
-            "type": "string",
-            "description": "The MCP server to authorize with the native MCP OAuth flow."
-          }
-        }
-      },
-      "PipedreamProviderResponse": {
-        "type": "string",
-        "description": "Which backend a connection or connect flow uses.",
-        "enum": ["pipedream", "connect"]
-      },
-      "PipedreamRecoverRequest": {
-        "type": "object",
-        "description": "Request body for recovering a connect flow whose result the Connect UI\nnever reported.",
-        "required": ["app_slug"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "The Pipedream app the flow was connecting, by name slug."
-          },
-          "server_name": {
-            "type": ["string", "null"],
-            "description": "Optional display name for the connector, as for completion."
-          }
-        }
-      },
-      "PipedreamTokenRequest": {
-        "type": "object",
-        "description": "Request body for starting a connect flow.",
-        "properties": {
-          "app_slug": {
-            "type": ["string", "null"],
-            "description": "The app to connect, by Pipedream slug. With it, an app Macro Connect\nserves can answer with a Connect URL instead of a Pipedream token."
-          }
-        }
-      },
-      "PipedreamTokenResponse": {
-        "type": "object",
-        "description": "Response from starting a connect flow: a Pipedream Connect token, or for\n`provider = connect` a Macro Connect URL.",
-        "required": ["provider"],
-        "properties": {
-          "connect_link_url": {
-            "type": ["string", "null"],
-            "description": "Shareable link that opens the same connect flow in a browser tab.\nPipedream only."
-          },
-          "connect_url": {
-            "type": ["string", "null"],
-            "description": "URL to open in a popup or browser tab for Macro Connect's consent\nflow; once it finishes, call `/pipedream/mcp/connect/complete`.\nConnect only."
-          },
-          "expires_at": {
-            "type": ["string", "null"],
-            "description": "RFC 3339 expiry of the token. Pipedream only."
-          },
-          "provider": {
-            "$ref": "#/components/schemas/PipedreamProviderResponse",
-            "description": "The backend this flow connects through."
-          },
-          "token": {
-            "type": ["string", "null"],
-            "description": "Short-lived token to open the Pipedream Connect UI with. Pipedream only."
-          }
-        }
-      },
-      "PipedreamUpdateRequest": {
-        "type": "object",
-        "description": "Request body for updating a connected app.",
-        "required": ["app_slug"],
-        "properties": {
-          "app_slug": {
-            "type": "string",
-            "description": "The app slug to update."
-          },
-          "enabled": {
-            "type": ["boolean", "null"],
-            "description": "Enable or disable the connector."
-          },
-          "server_name": {
-            "type": ["string", "null"],
-            "description": "New display name for the connector."
-          }
-        }
-      },
       "Price": {
         "type": "object",
         "description": "Rates applied to an invocation and its resolved dollar cost.",
@@ -5718,27 +6327,32 @@
           "price_per_audio_minute": {
             "type": ["number", "null"],
             "format": "float",
-            "description": "Price per audio minute (USD), absent for token billing."
+            "description": "Price per audio minute (USD), absent for token and credit billing."
           },
           "price_per_million_cache_read": {
             "type": ["number", "null"],
             "format": "float",
-            "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+            "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio and credit billing."
           },
           "price_per_million_cache_write": {
             "type": ["number", "null"],
             "format": "float",
-            "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+            "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio and credit billing."
           },
           "price_per_million_in": {
             "type": "number",
             "format": "float",
-            "description": "Price per million input tokens (USD); zero for audio billing."
+            "description": "Price per million input tokens (USD); zero for audio and credit billing."
           },
           "price_per_million_out": {
             "type": "number",
             "format": "float",
-            "description": "Price per million output tokens (USD); zero for audio billing."
+            "description": "Price per million output tokens (USD); zero for audio and credit billing."
+          },
+          "price_per_provider_credit": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per vendor credit (USD), absent for token and audio billing."
           },
           "total": {
             "type": "number",
@@ -5747,48 +6361,23 @@
           }
         }
       },
-      "ProjectionStateResponse": {
+      "ReadActivityResponse": {
         "type": "object",
-        "description": "The current state of a user's projection instance.",
-        "required": ["id", "status"],
+        "description": "Response from [`ReadActivity`].",
+        "required": ["activities", "truncated"],
         "properties": {
-          "data": {
-            "type": ["string", "null"],
-            "description": "The cached result, if any. JSON-encoded when the projection defines an\n`output_schema`."
+          "activities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolActivityEvent"
+            },
+            "description": "Matching activity events, newest first."
           },
-          "error": {
-            "type": ["string", "null"],
-            "description": "The most recent materialization error, if any."
-          },
-          "generated_at": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "When the result was generated."
-          },
-          "id": {
-            "type": "string",
-            "description": "The projection id."
-          },
-          "stale_at": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "When the result becomes stale."
-          },
-          "status": {
-            "$ref": "#/components/schemas/ProjectionStatus",
-            "description": "The materialization status."
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether more than 100 events matched the requested range."
           }
         }
-      },
-      "ProjectionStatus": {
-        "type": "string",
-        "description": "The materialization status of a user's projection instance.",
-        "enum": ["loading", "cold", "ready", "refreshing", "error"]
-      },
-      "RefreshCadence": {
-        "type": "string",
-        "description": "How frequently an active projection is regenerated.",
-        "enum": ["high", "medium", "low"]
       },
       "RejectToolCallRequest": {
         "type": "object",
@@ -5945,29 +6534,6 @@
           }
         }
       },
-      "ServerResponse": {
-        "type": "object",
-        "description": "An MCP server record as returned by the API.",
-        "required": ["url", "server_name", "enabled", "authenticated"],
-        "properties": {
-          "authenticated": {
-            "type": "boolean",
-            "description": "Whether the server has valid stored credentials."
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "Whether the server is enabled for tool use."
-          },
-          "server_name": {
-            "type": "string",
-            "description": "Human-readable server name."
-          },
-          "url": {
-            "type": "string",
-            "description": "The MCP server URL."
-          }
-        }
-      },
       "SetPricingRequest": {
         "type": "object",
         "description": "Request body for [`set_pricing_handler`].",
@@ -6001,6 +6567,11 @@
             "type": ["number", "null"],
             "format": "float",
             "description": "New price per million output tokens (USD). Required for token pricing."
+          },
+          "price_per_provider_credit": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per vendor credit (USD), or null unless the model bills in credits."
           }
         }
       },
@@ -6058,6 +6629,93 @@
           }
         }
       },
+      "SkillContentResponse": {
+        "type": "object",
+        "description": "A skill's complete instructions.",
+        "required": ["id", "name", "content", "builtIn"],
+        "properties": {
+          "builtIn": {
+            "type": "boolean",
+            "description": "Whether this is a built-in skill, with no document behind it."
+          },
+          "content": {
+            "type": "string",
+            "description": "The skill's full markdown instructions."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The skill's id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The skill's name."
+          }
+        }
+      },
+      "SkillErrorBody": {
+        "type": "object",
+        "description": "Machine-readable failure of a skill request.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable failure code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Explanation without backend diagnostics."
+          }
+        }
+      },
+      "SkillListing": {
+        "type": "object",
+        "description": "One skill the caller can read.",
+        "required": ["id", "name", "builtIn"],
+        "properties": {
+          "builtIn": {
+            "type": "boolean",
+            "description": "Whether this is a built-in skill, with no document behind it."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "When to use the skill, when it says."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The skill document's id, or a built-in skill's well-known id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The skill's name."
+          },
+          "updatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the skill document was last updated; built-in skills have none."
+          }
+        }
+      },
+      "SkillsMatchType": {
+        "type": "string",
+        "description": "How search terms are matched against skill names.",
+        "enum": ["partial", "exact"]
+      },
+      "SkillsResponse": {
+        "type": "object",
+        "description": "The skills matching a listing or search, most recently updated first,\nbuilt-in skills last.",
+        "required": ["skills"],
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillListing"
+            },
+            "description": "The matching skills."
+          }
+        }
+      },
       "SlackChannelMeta": {
         "type": "object",
         "description": "Metadata for one staged Slack channel.",
@@ -6110,32 +6768,6 @@
           "name": {
             "type": "string",
             "description": "Display name or Slack handle."
-          }
-        }
-      },
-      "StartAuthRequest": {
-        "type": "object",
-        "description": "Request body for starting an OAuth authorization flow.",
-        "required": ["server_url", "server_name"],
-        "properties": {
-          "server_name": {
-            "type": "string",
-            "description": "Human-readable name for the server."
-          },
-          "server_url": {
-            "type": "string",
-            "description": "The MCP server URL to authorize against."
-          }
-        }
-      },
-      "StartAuthResponse": {
-        "type": "object",
-        "description": "Response from starting an OAuth authorization flow.",
-        "required": ["authorization_url"],
-        "properties": {
-          "authorization_url": {
-            "type": "string",
-            "description": "The OAuth authorization URL to redirect the user to."
           }
         }
       },
@@ -6290,6 +6922,10 @@
           "prompt": {
             "type": "string"
           },
+          "thinking": {
+            "$ref": "#/components/schemas/CompletionThinking",
+            "description": "How much the model may think first; `low` answers faster. Applies to\ncompletions without tools."
+          },
           "toolset": {
             "$ref": "#/components/schemas/ToolSet"
           }
@@ -6324,10 +6960,249 @@
           }
         }
       },
-      "TargetType": {
-        "type": "string",
-        "description": "The kind of entity a projection is materialized for.",
-        "enum": ["user", "team"]
+      "ToolActivityAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The entity was created.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["created"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The entity's content or metadata was edited.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["edited"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The entity was opened.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["opened"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The entity was soft-deleted.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["deleted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was sent in the entity.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["messaged"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An email message was sent on the thread.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["sent"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone submitted a response to the entity (form).",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["responded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A property value changed on the entity.",
+            "required": ["property", "type"],
+            "properties": {
+              "from": {
+                "description": "The previous value, when known."
+              },
+              "from_labels": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Previous select/tag option ids resolved to display labels."
+              },
+              "property": {
+                "type": "string",
+                "description": "The property definition id."
+              },
+              "property_name": {
+                "type": ["string", "null"],
+                "description": "The property definition's human-readable display name, when it is\nstill visible to the caller."
+              },
+              "property_type": {
+                "type": ["string", "null"],
+                "description": "The property's canonical data type, including `tag` for tag sets."
+              },
+              "to": {
+                "description": "The new value, or `None` when cleared."
+              },
+              "to_labels": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "New select/tag option ids resolved to display labels."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["propertyChanged"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A principal was added to the entity.",
+            "required": ["participant", "type"],
+            "properties": {
+              "participant": {
+                "type": "string",
+                "description": "The added principal."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["participantAdded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A principal was removed from the entity.",
+            "required": ["participant", "type"],
+            "properties": {
+              "participant": {
+                "type": "string",
+                "description": "The removed principal."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["participantRemoved"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A call was started in the entity.",
+            "required": ["call_id", "type"],
+            "properties": {
+              "call_id": {
+                "type": "string",
+                "description": "The started call's id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["callStarted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A task was added to the project. Resolve references through authorized project history.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["taskAdded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A task was removed from the project.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["taskRemoved"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An action outside this deployment's vocabulary.",
+            "required": ["tag", "type"],
+            "properties": {
+              "payload": {
+                "description": "The stored payload, verbatim."
+              },
+              "tag": {
+                "type": "string",
+                "description": "The stored action tag."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["unknown"]
+              }
+            }
+          }
+        ],
+        "description": "One activity action returned to the AI."
+      },
+      "ToolActivityEvent": {
+        "type": "object",
+        "description": "One activity event returned by [`ReadActivity`].",
+        "required": [
+          "actorId",
+          "entityType",
+          "entityId",
+          "action",
+          "occurredAt"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ToolActivityAction",
+            "description": "What the principal did."
+          },
+          "actorId": {
+            "type": "string",
+            "description": "The principal that mechanically performed the action."
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The entity acted on."
+          },
+          "entityType": {
+            "type": "string",
+            "description": "The kind of entity acted on."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the action occurred."
+          }
+        }
       },
       "ToolOutcome": {
         "oneOf": [
@@ -6400,6 +7275,65 @@
           }
         ]
       },
+      "TrackImportEntityRequest": {
+        "type": "object",
+        "description": "Body for tracking one external item in the ledger.",
+        "required": ["source", "foreignId", "status", "metadata"],
+        "properties": {
+          "entityId": {
+            "type": ["string", "null"],
+            "description": "The Macro entity created from the item; required when `status` is\n`imported`."
+          },
+          "foreignId": {
+            "type": "string",
+            "description": "Stable id of the item in its source: a Linear identifier such as\n`ENG-142`, a Notion page URL or id, or a Slack channel id."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Per-source metadata. Linear: `{identifier, title, …}`; Notion:\n`{title, url?, summary?}`; Slack: `{name, …}`."
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImportSource",
+            "description": "The external system the item comes from."
+          },
+          "status": {
+            "$ref": "#/components/schemas/TrackImportStatus",
+            "description": "`staged` to propose the item, `imported` to record an entity already\ncreated from it."
+          }
+        }
+      },
+      "TrackImportEntityResponse": {
+        "type": "object",
+        "description": "The outcome of tracking an item, with its ledger row.",
+        "required": ["outcome", "entity"],
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/ImportEntity",
+            "description": "The row behind the outcome."
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/TrackImportOutcome",
+            "description": "What happened."
+          }
+        }
+      },
+      "TrackImportOutcome": {
+        "type": "string",
+        "description": "What tracking an item did.",
+        "enum": [
+          "staged",
+          "recorded_imported",
+          "already_imported",
+          "already_imported_by_teammate",
+          "previously_declined",
+          "import_in_progress"
+        ]
+      },
+      "TrackImportStatus": {
+        "type": "string",
+        "description": "Whether a tracked item is a candidate or an import already made.",
+        "enum": ["staged", "imported"]
+      },
       "UpdateChannelSharePermission": {
         "type": "object",
         "required": ["operation", "channelId"],
@@ -6425,28 +7359,39 @@
           }
         }
       },
-      "UpdateOperation": {
-        "type": "string",
-        "enum": ["add", "remove", "replace"]
-      },
-      "UpdateServerRequest": {
+      "UpdateConnectorRequest": {
         "type": "object",
-        "description": "Request body for updating an MCP server.",
-        "required": ["url"],
+        "description": "Changing a connection. Each field present is applied.",
         "properties": {
           "enabled": {
             "type": ["boolean", "null"],
-            "description": "Enable or disable the server."
+            "description": "Turn it on or off."
           },
-          "server_name": {
+          "name": {
             "type": ["string", "null"],
-            "description": "New name for the server."
-          },
-          "url": {
-            "type": "string",
-            "description": "The server URL to update."
+            "description": "A new display name."
           }
         }
+      },
+      "UpdateExplicitMemoryRequest": {
+        "type": "object",
+        "description": "One explicit memory edit at the revision it was based on.",
+        "required": ["revision", "edit"],
+        "properties": {
+          "edit": {
+            "$ref": "#/components/schemas/MemoryEdit",
+            "description": "The one-based line edit to apply."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The revision returned by the last read or successful edit."
+          }
+        }
+      },
+      "UpdateOperation": {
+        "type": "string",
+        "enum": ["add", "remove", "replace"]
       },
       "UpdateSharePermissionRequestV2": {
         "type": "object",
@@ -6530,55 +7475,6 @@
           }
         }
       },
-      "UpsertProjectionRequest": {
-        "type": "object",
-        "description": "Request body for getting or creating an ai projection. The concrete target\nid is resolved from the authenticated user, so only the target type is sent.",
-        "required": [
-          "id",
-          "prompt",
-          "target_type",
-          "refresh_cadence",
-          "expiry"
-        ],
-        "properties": {
-          "await": {
-            "type": "boolean",
-            "description": "When `true` and generation is needed (cold instance or `regenerate`),\nthe server generates inline and responds with the finished result\ninstead of returning immediately and pushing an update through the\nconnection gateway."
-          },
-          "expiry": {
-            "$ref": "#/components/schemas/Expiry",
-            "description": "How long the projection remains active without being requested."
-          },
-          "id": {
-            "type": "string",
-            "description": "The frontend-defined projection id (e.g. `notification_important_widget`)."
-          },
-          "model": {
-            "type": ["string", "null"],
-            "description": "Optional `provider/model` id used for generation (e.g.\n`cerebras/llama-3.3-70b`). The default model is used when absent."
-          },
-          "output_schema": {
-            "type": ["object", "null"],
-            "description": "Optional JSON schema the generated result must conform to. When set,\n`data` holds the JSON serialization of a conforming value. Enforcement\nis prompted (non-strict), so it works across providers."
-          },
-          "prompt": {
-            "type": "string",
-            "description": "The prompt used to materialize the projection."
-          },
-          "refresh_cadence": {
-            "$ref": "#/components/schemas/RefreshCadence",
-            "description": "How frequently the projection should be regenerated."
-          },
-          "regenerate": {
-            "type": "boolean",
-            "description": "When `true`, regenerate even if a cached result exists."
-          },
-          "target_type": {
-            "$ref": "#/components/schemas/TargetType",
-            "description": "Whether the projection is materialized for the requesting user or their team."
-          }
-        }
-      },
       "Usage": {
         "type": "object",
         "description": "Measured usage for one invocation.",
@@ -6594,18 +7490,18 @@
           "audio_seconds": {
             "type": ["number", "null"],
             "format": "double",
-            "description": "Audio duration in seconds, absent for token billing."
+            "description": "Audio duration in seconds, absent for token and credit billing."
           },
           "cache_read_input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Input tokens read from a prompt cache; zero for audio billing.",
+            "description": "Input tokens read from a prompt cache; zero for audio and credit billing.",
             "minimum": 0
           },
           "cache_write_input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Input tokens written to a prompt cache; zero for audio billing.",
+            "description": "Input tokens written to a prompt cache; zero for audio and credit billing.",
             "minimum": 0
           },
           "created_at": {
@@ -6616,7 +7512,7 @@
           "input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Uncached input tokens; zero for audio billing.",
+            "description": "Uncached input tokens; zero for audio and credit billing.",
             "minimum": 0
           },
           "model": {
@@ -6626,7 +7522,7 @@
           "output_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Output tokens; zero for audio billing.",
+            "description": "Output tokens; zero for audio and credit billing.",
             "minimum": 0
           },
           "price": {
@@ -6639,6 +7535,12 @@
                 "description": "Applied pricing, if known."
               }
             ]
+          },
+          "provider_credits": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Vendor credits consumed, absent for token and audio billing.",
+            "minimum": 0
           }
         }
       },
@@ -6768,6 +7670,158 @@
             "description": "The URL of the citation."
           }
         }
+      },
+      "WebErrorBody": {
+        "type": "object",
+        "description": "Machine-readable failure of a web request.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable failure code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Explanation without provider diagnostics."
+          }
+        }
+      },
+      "WebFetch": {
+        "type": "object",
+        "description": "Read one public web page.",
+        "required": ["url"],
+        "properties": {
+          "maxChars": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Most characters of page text to return, 1 to 100,000 (default 20,000).",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string",
+            "description": "The `http` or `https` URL of the page."
+          }
+        }
+      },
+      "WebFetchResponse": {
+        "type": "object",
+        "description": "The text of a fetched page.",
+        "required": ["url", "content", "truncated"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The page text as Markdown, cut to `maxChars`."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "The page title, when the provider reports one."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether `content` was cut to `maxChars`."
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL that was read."
+          }
+        }
+      },
+      "WebSearch": {
+        "type": "object",
+        "description": "Search the public web.",
+        "required": ["query"],
+        "properties": {
+          "domains": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Only return pages from these domains, e.g. `[\"docs.rs\", \"github.com\"]`."
+          },
+          "excludeDomains": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Never return pages from these domains."
+          },
+          "includeContent": {
+            "type": ["boolean", "null"],
+            "description": "Also return each page's text as Markdown (up to 8,000 characters per result)."
+          },
+          "maxResults": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "How many results to return, 1 to 20 (default 5).",
+            "minimum": 0
+          },
+          "query": {
+            "type": "string",
+            "description": "What to search for, in natural language or keywords (at most 400 characters)."
+          },
+          "since": {
+            "type": ["string", "null"],
+            "format": "date",
+            "description": "Only return pages published on or after this date (`YYYY-MM-DD`)."
+          },
+          "topic": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebSearchTopic",
+                "description": "`news` for recent articles with publication dates; `general` (the default) otherwise."
+              }
+            ]
+          }
+        }
+      },
+      "WebSearchResponse": {
+        "type": "object",
+        "description": "The pages a search found, best match first.",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebSearchResult"
+            },
+            "description": "Results, best match first. Empty when nothing matched."
+          }
+        }
+      },
+      "WebSearchResult": {
+        "type": "object",
+        "description": "One page a search found.",
+        "required": ["title", "url", "snippet"],
+        "properties": {
+          "content": {
+            "type": ["string", "null"],
+            "description": "The page text as Markdown, when `includeContent` was set."
+          },
+          "publishedAt": {
+            "type": ["string", "null"],
+            "description": "When the page was published, as the search provider reports it."
+          },
+          "snippet": {
+            "type": "string",
+            "description": "The part of the page most relevant to the query."
+          },
+          "title": {
+            "type": "string",
+            "description": "The page title."
+          },
+          "url": {
+            "type": "string",
+            "description": "The page URL; cite it when you use the result."
+          }
+        }
+      },
+      "WebSearchTopic": {
+        "type": "string",
+        "description": "The kind of results a search favours.",
+        "enum": ["general", "news"]
       },
       "WithChatId": {
         "type": "object",

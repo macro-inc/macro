@@ -56,6 +56,15 @@ fn truncate_body(s: String) -> String {
 }
 
 impl NotifPreview {
+    /// The body's lines without blank ones, so a run of newlines in a message
+    /// stays one line break in the digest.
+    fn body_lines(&self) -> Vec<&str> {
+        self.body
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .collect()
+    }
+
     #[tracing::instrument(err)]
     fn new(v: UserNotificationRow<NotifEvent>) -> Result<Self, Report> {
         let title = v
@@ -139,10 +148,7 @@ impl Notification for EmailDigestNotification {
 
 impl NotificationExtEmail for EmailDigestNotification {
     fn format_email(&self) -> EmailContent {
-        EmailContent {
-            subject: self.subject.clone(),
-            body: self.inner_html_string.clone(),
-        }
+        EmailContent::new(self.subject.clone(), self.inner_html_string.clone())
     }
 
     fn rate_limit_config() -> RateLimitConfig {

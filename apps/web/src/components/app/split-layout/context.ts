@@ -1,4 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
+import type { NotificationSettingsMenuProps } from '@notifications/components/NotificationSettingsMenu';
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -24,10 +26,21 @@ export type SplitBottomPanelRegistration = {
 };
 
 export type SplitFileMenuAction = {
+  /** Stable identity for a row while its metadata changes. */
+  id?: string;
   label: string | JSX.Element;
-  icon: Component;
-  action?: (e?: MouseEvent) => void;
+  disabledReason?: string;
+  icon?: Component;
+  action?: (e?: MouseEvent) => void | Promise<unknown>;
+  /** Destructive presentation chosen by the action owner. */
+  danger?: boolean;
+  /** Clipboard actions acknowledge completion inline without dismissing the menu. */
+  copy?: boolean;
   children?: SplitFileMenuAction[];
+  muteMenu?: NotificationMuteMenuProps;
+  notificationSettingsMenu?: NotificationSettingsMenuProps;
+  /** Desktop-only composed item, such as an entity picker submenu. */
+  menuItem?: Component<{ onActionComplete?: () => void }>;
   /** Only set when the token's shortcut is executable from the split. */
   hotkeyToken?: HotkeyToken;
   group?: SplitFileMenuActionGroup;
@@ -43,6 +56,8 @@ export type SplitFileMenuActionGroups = {
   sharing: SplitFileMenuAction[];
   /** Macro platform features: Favorite, Mute, Remind me, Add tag. */
   macro: SplitFileMenuAction[];
+  /** Mute and Notification Settings, together when a channel has both. */
+  notifications: SplitFileMenuAction[];
   /** Non-destructive operations on the file itself: Duplicate, Rename, Move, Download. */
   file: SplitFileMenuAction[];
   /** Destructive actions, always last. */
@@ -71,6 +86,7 @@ export function getSplitFileMenuActionSections(
     { key: 'sender', actions: groups.sender },
     { key: 'sharing', actions: groups.sharing },
     { key: 'macro', actions: groups.macro },
+    { key: 'notifications', actions: groups.notifications },
     { key: 'file', actions: groups.file },
     { key: 'delete', actions: groups.delete },
   ];
@@ -81,6 +97,11 @@ export function getSplitFileMenuActionSections(
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
+  /**
+   * The split's own scope. An inline preview gives its content a narrower
+   * `splitHotkeyScope`, which a key pressed on the split itself never reaches.
+   */
+  splitRootHotkeyScope?: string;
   /** Whether mounted block content is rendered in a passive inline preview. */
   isInlinePreview?: boolean;
   isPanelActive: Accessor<boolean>;
@@ -115,6 +136,17 @@ export type SplitPanelContextType = {
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
   };
+  /**
+   * Set while a mobile view's `MobileHeader` owns this pane's header. Other
+   * header contributions stand down, so the header shows only what that view
+   * composes.
+   */
+  mobileHeaderOwner: Signal<symbol | undefined>;
+  /**
+   * How many header contributions declared 32px controls (`SplitHeaderRight`
+   * with `size="md"`), so the header's own controls match them.
+   */
+  headerMdControls?: Signal<number>;
   titleFileMenuRef: Accessor<HTMLDivElement | undefined>;
   setTitleFileMenuRef: Setter<HTMLDivElement | undefined>;
   titleFileMenuTrigger: Accessor<(() => void) | undefined>;

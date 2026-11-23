@@ -37,6 +37,9 @@ pub struct SessionConversation {
     pub model: String,
     /// Last runtime status.
     pub status: String,
+    /// What opened the session: who or what started it, and what it is about.
+    #[cfg_attr(feature = "ai_tools", schemars(with = "serde_json::Value"))]
+    pub origin: trigger_context::TriggerOrigin,
     /// Messages in the requested turn, or the latest messages, oldest first.
     pub messages: Vec<SessionConversationMessage>,
     /// Number of messages matching the requested turn before bounding.
@@ -121,7 +124,7 @@ fn conversation(
         .into_iter()
         .skip(total_messages.saturating_sub(MAX_MESSAGES))
         .map(|message| {
-            let text = message.searchable_text();
+            let text = message.readable_text();
             let content: String = text.chars().take(MAX_MESSAGE_CHARS).collect();
             let (failure, failure_truncated) = match &message.stop {
                 Some(agent_fold::domain::model::StopReason::Failed { message, .. }) => {
@@ -152,6 +155,7 @@ fn conversation(
         archived_at: session.archived.map(|archive| archive.at),
         harness: session.harness.clone(),
         model: session.model.clone(),
+        origin: session.origin.clone(),
         status: match &session.status {
             super::model::SessionStatus::Event(event) => event.as_str().to_string(),
             status => status.as_ref().to_string(),

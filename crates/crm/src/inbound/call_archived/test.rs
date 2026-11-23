@@ -102,6 +102,7 @@ fn consumer(
 
 fn archived() -> CallTopicEvent {
     CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
+        channel_thread: false,
         call_id: CALL_RECORD_ID,
         channel_id: None,
         created_by: MacroUserIdStr::try_from_email("rep@ours.com").unwrap(),

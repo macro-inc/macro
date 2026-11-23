@@ -1,6 +1,7 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { CanvasDocument } from '@block-canvas/component/CanvasDocument';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import {
   getPermissions,
@@ -9,6 +10,7 @@ import {
 } from '@core/component/SharePermissions';
 import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { useSearchParams } from '@solidjs/router';
 import { err, ok } from 'neverthrow';
 import type { Accessor, JSX } from 'solid-js';
@@ -84,15 +86,18 @@ export function CanvasDetailDocument(props: {
       userAccessLevel={props.data.userAccessLevel}
     >
       <SidePanel.HeaderActions>
-        <AskMacroButton
-          entity={{
-            type: 'document',
-            id: props.documentId,
-            name:
-              props.data.documentMetadata.documentName ?? 'Unknown Filename',
-            fileType: 'canvas',
-          }}
-        />
+        <HeaderActionGroup label="Actions">
+          <AskMacroButton
+            grouped
+            entity={{
+              type: 'document',
+              id: props.documentId,
+              name:
+                props.data.documentMetadata.documentName ?? 'Unknown Filename',
+              fileType: 'canvas',
+            }}
+          />
+        </HeaderActionGroup>
       </SidePanel.HeaderActions>
       <CanvasDocument
         documentId={props.documentId}
@@ -120,6 +125,7 @@ export function CanvasDetail(props: {
 }) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="canvas"
       label="canvas"

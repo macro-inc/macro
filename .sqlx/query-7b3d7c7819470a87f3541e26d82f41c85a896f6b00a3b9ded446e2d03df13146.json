@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM entity_access ea\n                JOIN harnesses h ON h.id = ea.entity_id AND h.deleted_at IS NULL\n                WHERE ea.entity_id = $1\n                  AND ea.entity_type = 'harness'\n                  AND ea.source_type = 'team'\n                  AND ea.source_id = $2\n            ) AS \"granted!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "granted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7b3d7c7819470a87f3541e26d82f41c85a896f6b00a3b9ded446e2d03df13146"
+}

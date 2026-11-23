@@ -49,6 +49,9 @@ import {
   runCommand,
 } from './utils';
 
+/** Commands that dispose with their reactive owner; see registerHotkey. */
+const ownerBoundCommands = new WeakSet<HotkeyCommand>();
+
 /**
  * Registers a keyboard shortcut to a particular, existing scope.
  *
@@ -61,9 +64,9 @@ import {
  * @param args.hotkey - Keyboard shortcut keys, e.g. 'j', 'cmd+j', or
  * 'opt+shift+j'. We use Mac modifier abbreviations ('ctrl', 'opt', 'shift',
  * 'cmd'). Modifiers must be listed in this order: 'ctrl', 'opt', 'shift',
- * 'cmd'. 'cmd' will be translated to 'ctrl' for non-Mac users. For this
- * reason, you should not use both 'cmd' and 'ctrl' in your hotkeys. Can be a
- * single hotkey or an array of hotkeys.
+ * 'cmd'). 'cmd' translates to 'ctrl' for non-Mac users. Give Mac-only
+ * 'ctrl+cmd' bindings a separate non-Mac shortcut. Can be a single hotkey or
+ * an array of hotkeys.
  * @param args.condition - Optional condition to check if the hotkey command
  * should run. Checked on keydown/keyup. If this is reactive, any hotkey UI
  * that displays based on this condition will be reactively updated.
@@ -255,14 +258,21 @@ export function registerHotkey(
   };
 
   // An override re-registration of the same logical command — same token in
-  // this scope — replaces the old registration outright instead of stacking:
-  // persistent commands (disposeWithOwner: false) re-register on every mount
-  // of their view and must not accumulate eclipsed copies.
+  // this scope — replaces an old persistent registration outright instead of
+  // stacking: persistent commands (disposeWithOwner: false) re-register on
+  // every mount of their view and must not accumulate eclipsed copies. A
+  // registration that disposes with its owner is only eclipsed, so a second
+  // live registrant (a view's loading skeleton shown while the view suspends)
+  // hands the key back when it unmounts.
   if (registrationType === 'override' && hotkeyToken) {
     const replaced: HotkeyCommand[] = [];
     for (let i = scopeNode.commands.length - 1; i >= 0; i--) {
       const existingCommand = scopeNode.commands[i];
-      if (existingCommand && existingCommand.hotkeyToken === hotkeyToken) {
+      if (
+        existingCommand &&
+        existingCommand.hotkeyToken === hotkeyToken &&
+        !ownerBoundCommands.has(existingCommand)
+      ) {
         replaced.push(existingCommand);
         scopeNode.commands.splice(i, 1);
       }
@@ -337,6 +347,7 @@ export function registerHotkey(
   // over unmounted state. `disposeWithOwner: false` opts out for commands
   // meant to persist past their registrant (see HotkeyRegistrationOptions).
   if (disposeWithOwner !== false && getOwner()) {
+    ownerBoundCommands.add(command);
     onCleanup(() => disposer.dispose());
   }
 
@@ -694,6 +705,16 @@ export function useHotKeyRoot() {
     const scopeTree = hotkeyScopeTree;
     const currentScopeId = activeScope();
     const currentPressedKeys = pressedKeys();
+    // A plain key's release empties the set; finish holds before that early return.
+    if (e.type === 'keyup') {
+      for (const command of [...hotkeysAwaitingKeyUp]) {
+        const key = command.hotkey.split('+').at(-1);
+        if (key && !currentPressedKeys.has(key)) {
+          command.command?.();
+          hotkeysAwaitingKeyUp.splice(hotkeysAwaitingKeyUp.indexOf(command), 1);
+        }
+      }
+    }
     if (currentPressedKeys.size === 0) {
       return;
     }
@@ -783,19 +804,6 @@ export function useHotKeyRoot() {
       scopeNode = scopeNode.parentScopeId
         ? hotkeyScopeTree.get(scopeNode.parentScopeId)
         : undefined;
-    }
-
-    if (e.type === 'keyup') {
-      // check if there are any keyUpHandlers that should be triggered.
-      hotkeysAwaitingKeyUp.forEach((command) => {
-        const key = command.hotkey.split('+').at(-1);
-        const keyReleased = key && !currentPressedKeys.has(key);
-
-        if (keyReleased) {
-          command.command?.();
-          hotkeysAwaitingKeyUp.splice(hotkeysAwaitingKeyUp.indexOf(command), 1);
-        }
-      });
     }
 
     // Build context object with all relevant information

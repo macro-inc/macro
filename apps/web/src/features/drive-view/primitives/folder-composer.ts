@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { createSignal } from 'solid-js';
 import type {
   FolderCreationCommands,
@@ -19,7 +20,7 @@ async function finishFolder(
       type: 'failed',
       draft: {
         ...draft,
-        error: 'Could not create the folder. Please try again.',
+        error: t('entityActions.toastFolderCreateError'),
       },
     };
   }
@@ -42,8 +43,7 @@ async function finishFolder(
         ...draft,
         createdId: id,
         files: failedFiles,
-        error:
-          'Folder created, but some items could not be saved. Retry to finish adding your tags and files.',
+        error: t('entityActions.toastFolderItemsSaveFailed'),
       },
     };
   }

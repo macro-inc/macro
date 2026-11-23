@@ -470,9 +470,9 @@ impl IntoResponse for PipelineError {
                     }
                     DatabaseError::NotFound => StatusCode::NOT_FOUND,
                     DatabaseError::Unauthorized => StatusCode::FORBIDDEN,
-                    DatabaseError::InvalidSchemaOperation(_) | DatabaseError::InvalidSharing(_) => {
-                        StatusCode::BAD_REQUEST
-                    }
+                    DatabaseError::InvalidSchemaOperation(_)
+                    | DatabaseError::InvalidSharing(_)
+                    | DatabaseError::InvalidAppearance(_) => StatusCode::BAD_REQUEST,
                     DatabaseError::RowInUse
                     | DatabaseError::OptionInUse
                     | DatabaseError::VersionConflict => StatusCode::CONFLICT,

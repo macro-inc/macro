@@ -1,0 +1,41 @@
+# Fails macrod-enroll with a readable reason before macrod runs. With no
+# source but an enrollment marker, the computer is already enrolled and
+# `macrod enroll` decides.
+enrolled() {
+  [ -s "$MACRO_ENROLLED_MARKER" ]
+}
+
+case "${MACRO_ENROLL_FROM:-}" in
+  mmds)
+    token=$(curl --silent --show-error --max-time 2 --request PUT \
+      --header 'X-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token) || {
+      if enrolled; then exit 0; fi
+      echo "macrod-enroll: MMDS (169.254.169.254) is unreachable; does the microVM have MMDS v2 on its network interface?" >&2
+      exit 1
+    }
+    status=$(curl --silent --show-error --max-time 2 --output /dev/null --write-out '%{http_code}' \
+      --header "X-metadata-token: $token" --header 'Accept: application/json' \
+      http://169.254.169.254/macro/enrollment)
+    if [ "$status" = 404 ]; then
+      if enrolled; then exit 0; fi
+      echo "macrod-enroll: missing enrollment; put the Enrollment JSON at macro.enrollment in the microVM's MMDS" >&2
+      exit 1
+    fi
+    if [ "$status" != 200 ]; then
+      echo "macrod-enroll: MMDS returned HTTP $status for /macro/enrollment" >&2
+      exit 1
+    fi
+    ;;
+  file:*)
+    path="${MACRO_ENROLL_FROM#file:}"
+    if [ ! -s "$path" ]; then
+      if enrolled; then exit 0; fi
+      echo "macrod-enroll: enrollment file $path is missing or empty; bind-mount the Enrollment JSON there (docker run -v <file>:$path:ro)" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "macrod-enroll: MACRO_ENROLL_FROM='${MACRO_ENROLL_FROM:-}' (macro.box.enrollFrom) is not 'mmds' or 'file:<path>'" >&2
+    exit 1
+    ;;
+esac

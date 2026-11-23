@@ -1,7 +1,60 @@
 import { describe, expect, test } from 'bun:test';
-import { observeSdk, type RequestActivity } from './activity';
+import {
+  observeSdk,
+  type RequestActivity,
+  setDefaultRequestVerbHeader,
+} from './activity';
 
 describe('SDK activity', () => {
+  test('attaches each verb to its own options during concurrent calls', async () => {
+    const seen: string[] = [];
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    setDefaultRequestVerbHeader(true);
+    const sdk = observeSdk(
+      {
+        async getDocument(options: { headers?: Record<string, string> }) {
+          await pending;
+          seen.push(options.headers?.['x-macro-sdk-verb'] ?? '');
+        },
+        async createDocument(options: { headers?: Record<string, string> }) {
+          seen.push(options.headers?.['x-macro-sdk-verb'] ?? '');
+        },
+      },
+      'storage',
+    );
+    const options = { headers: { 'x-test': 'kept' } };
+    try {
+      const read = sdk.getDocument(options);
+      await sdk.createDocument(options);
+      release();
+      await read;
+      expect(seen).toEqual(['created', 'read']);
+      expect(options.headers).toEqual({ 'x-test': 'kept' });
+    } finally {
+      setDefaultRequestVerbHeader(false);
+    }
+  });
+  test('attaches the verb to a call made without options', async () => {
+    let seen = '';
+    setDefaultRequestVerbHeader(true);
+    const sdk = observeSdk(
+      {
+        async listCrmPipelines(options?: { headers?: Record<string, string> }) {
+          seen = options?.headers?.['x-macro-sdk-verb'] ?? '';
+        },
+      },
+      'storage',
+    );
+    try {
+      await sdk.listCrmPipelines();
+      expect(seen).toBe('listed');
+    } finally {
+      setDefaultRequestVerbHeader(false);
+    }
+  });
   test('correlates concurrent requests and preserves results and errors', async () => {
     const events: RequestActivity[] = [];
     let release!: () => void;

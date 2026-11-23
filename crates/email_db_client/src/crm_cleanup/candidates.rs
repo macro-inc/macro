@@ -108,7 +108,7 @@ pub async fn claim_candidates(pool: &PgPool, pairs: &[(Uuid, String)]) -> anyhow
 /// existed. Claiming happens before the depopulate check so a message delete
 /// that lands mid-processing re-inserts a fresh row for the next run instead
 /// of being swallowed.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, contact_email), err)]
 pub async fn claim_candidate(
     pool: &PgPool,
     link_id: Uuid,

@@ -120,14 +120,15 @@ automatic reload changes, credit purchases, and the sweep. Enable them
 together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
-A requesting host other than document cognition presents the authentication
-service's own internal key, `AUTHENTICATION_SERVICE_SECRET_KEY` (document
-cognition already holds it). The key is optional in those hosts' configuration
-while `ENABLE_AI_USAGE_BILLING` is false and mandatory once it is true: a host
-enabling billing without the key fails startup rather than quietly recording
-chargeable usage that only the sweep settles. Hosts without the recorder
-(document storage, the standalone trigger service, memory) are covered by the
-sweep alone; memory's usage is exempt and never chargeable.
+A requesting host presents the authentication service's own internal key,
+`AUTHENTICATION_SERVICE_SECRET_KEY`. In deployed Doppler configs this value is
+the Secrets Manager name; services resolve it at startup. Locally it is the
+key itself. The harness, scheduling, and cognition configs require the key
+regardless of `ENABLE_AI_USAGE_BILLING`; a missing key fails configuration
+loading even when billing is disabled. The billing flag controls settlement
+requests, not whether the authentication client is available. Hosts without
+the recorder (document storage, the standalone trigger service, memory) are
+covered by the sweep alone; memory's usage is exempt and never chargeable.
 
 ### Reconciliation sweep and closed periods
 
@@ -228,20 +229,13 @@ handling, but settlement never creates or retries direct charges.
 reports `auto_reload` with the thresholds, `suspended`, and `active`.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
-dialog support all plans. Production activation follows the
-`enable-ai-usage-billing` PostHog flag: while off or loading, Usage shows the
-October 8, 2026 announcement with disabled controls and the dialog stays closed.
-Dev and local stay active regardless of the flag. No backend rollout endpoint is
-required. Foreground AI actions recognize the four quota
+dialog support all plans. No backend rollout endpoint is required. Foreground AI actions recognize the four quota
 codes below; clients return typed errors, and presentation happens in the app's
 mutation subscription or direct session/edit action handlers. Generic HTTP errors
 and background queries do not open dialogs. Free refusals offer a paid plan;
 paid refusals link to Usage settings. The monthly percentage uses
 `GET /ai-billing/summary`; plan allowances use `GET /ai-billing/plans`.
-Plan allowance copy and comparisons follow the `enable-ai-usage-billing` PostHog
-flag (`enableAiUsageBilling` in `apps/web/src/lib/core/constant/featureFlags.ts`),
-which defaults on in development builds and follows PostHog elsewhere;
-`VITE_ENABLE_AI_USAGE_BILLING` overrides it locally. Model usage multipliers have
+Model usage multipliers have
 been removed. The Auto-Reload dialog saves through `PATCH /ai-billing/auto-reload`
 and is the only surface that turns usage billing on.
 
@@ -277,7 +271,7 @@ inspect the content type and code rather than assuming every 503 is billing.
 
 ### Tools, protocols, queues, and background work
 
-- Subagent, native Anthropic tools, and AI editing return a failed tool result with
+- Subagent and AI editing return a failed tool result with
   the stable code and public explanation. These are tool/protocol failures, not
   necessarily HTTP 402/503 at the outer MCP transport. Do not treat an HTTP-success
   tool envelope as successful execution. No alternate provider is tried on refusal.
@@ -350,13 +344,13 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Structured completion / DynamicCompletionsApi | [completion handler](../../services/agent_harness_service/src/cognition/api/structured_completion.rs) | DCS main, same recorder across both phases | [both phases and OpenAPI](../../services/agent_harness_service/src/cognition/api/structured_completion/test.rs) |
 | Chat naming / ChatRename | [chat renamer](../../services/agent_harness_service/src/cognition/service/chat_renamer.rs) | DCS main, same recorder | [safe naming skip](../../services/agent_harness_service/src/cognition/service/chat_renamer/test.rs) |
 | Direct subagent / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai_tools/src/subagent/test.rs) |
-| Native Anthropic WebSearch/WebFetch/code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
+| `WebSearch`/`WebFetch` tools and cognition `POST /web/search`, `/web/fetch` / `web_search` | [WebSearchService](../../crates/web_search/src/domain/service.rs) admits `web_search` before the Tavily call | `UsageRecorder` records Tavily's reported credits (`provider_credits`, pricing id `tavily`), counted when enforcement is on | [service and router tests](../../crates/web_search/src/domain/service/test.rs) |
 | AI document editing / AiEditing | [document orchestration](../../crates/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../../crates/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../../crates/documents/src/inbound/toolset/edit_document/test.rs) |
 | Notion page imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |
 | Channel responder / ChannelBot | [bot service](../../crates/channel_bots/src/domain/service.rs) | [DSS main](../../services/document_storage_service/src/main.rs), common context T | [response refusal](../../crates/channel_bots/src/domain/service/tests.rs) |
 | Optional channel classification / ChannelBot | [trigger detector](../../crates/channel_bots/src/domain/trigger_detector.rs) | DSS main, independent R for classifier | [explicit routing and inference skip](../../crates/channel_bots/src/domain/trigger_detector/tests.rs) |
 | Trigger inference and image captions / Automation | [trigger service](../../crates/agent_trigger/src/domain/service.rs) | [standalone trigger main](../../services/agent_trigger_service/src/main.rs) R; [harness trigger](../../services/agent_harness_service/src/trigger.rs) receives the harness's settling recorder from harness main | [classification/caption refusal](../../crates/agent_trigger/src/domain/service/test/admission.rs), [no system fallback](../../crates/agent_trigger/src/outbound/jev_judge/test.rs) |
-| Managed session ingress/dispatch/queue / AgentSession | [harness admission](../../crates/agent_harness/src/domain/service/admission.rs) | [harness main](../../services/agent_harness_service/src/main.rs): one `pg_settling_recorder` shared with T for in-memory; managed sandbox inference has **no `ai_usage` producer** | [owner, authorization, runtime funding, restart, queue rejection/outage](../../crates/agent_harness/src/domain/service/test/quota.rs), [HTTP](../../crates/agent_session/src/inbound/axum_router/test.rs), [event shape](../../crates/agent_session/src/domain/events/test.rs) |
+| Managed session ingress/dispatch/queue / AgentSession | [harness admission](../../crates/agent_harness/src/domain/service/admission.rs) | [harness composition root](../../services/agent_harness_service/src/lib.rs): one `pg_settling_recorder` shared with T for in-memory; managed sandbox inference has **no `ai_usage` producer** | [owner, authorization, runtime funding, restart, queue rejection/outage](../../crates/agent_harness/src/domain/service/test/quota.rs), [HTTP](../../crates/agent_session/src/inbound/axum_router/test.rs), [event shape](../../crates/agent_session/src/domain/events/test.rs) |
 | Direct in-memory ACP/provider commands / AgentSession | [admit_turn](../../crates/agent_inmem/src/domain/admission.rs), [agent execution](../../crates/agent_inmem/src/domain/agent.rs) | Harness main → manager → `RigTurnEngine`, the harness's settling recorder passed into T | [direct ACP, queue, cancel, history](../../crates/agent_inmem/src/domain/agent/test.rs), [manager](../../crates/agent_inmem/src/outbound/manager/test.rs) |
 | Session naming / ChatRename | [name generator gate](../../crates/agent_session/src/domain/name_generation.rs) | Harness main, the same settling recorder for `HaikuAgentSessionNameGenerator` (exempt, so never counted or settled) | [fallback without provider calls](../../crates/agent_session/src/domain/name_generation/test.rs) |
 | Repository chooser / AgentRepositoryChoice | [repository choice service](../../crates/agent_harness/src/domain/repository_choice.rs) | Harness main → `CursorContainerManager`, the same settling recorder | [deterministic bypass / typed model refusal](../../crates/agent_harness/src/domain/repository_choice/test.rs) |
@@ -421,11 +415,11 @@ procedure. Operators must approve and record each release gate.
    `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`,
    and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
    whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
-   Before `ENABLE_AI_USAGE_BILLING` is turned on for the agent harness, MCP, or
-   scheduled action service, register `AUTHENTICATION_SERVICE_SECRET_KEY` (the
-   authentication service's internal key, as document cognition already has it)
-   in that service's Doppler config; those hosts refuse to start with billing on
-   and the key absent.
+   Before starting the agent harness, MCP, or scheduled action service,
+   register `AUTHENTICATION_SERVICE_SECRET_KEY` (the authentication service's
+   Secrets Manager name in deployed configs)
+   in that service's Doppler config; those hosts refuse to start with the key
+   absent, regardless of billing flags.
    Verify the effective startup value for every replica/worker. Registration and
    hosted access require operator approval; code defaults are not proof of it.
 4. **Validate locally, then in an approved staging environment.** Use the checklist

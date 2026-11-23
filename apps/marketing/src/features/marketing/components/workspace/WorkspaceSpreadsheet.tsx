@@ -1,5 +1,5 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Table from '@phosphor/table.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Table from '@icon/system/regular/table.svg';
 import { Button } from '@ui';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { ViewShell } from '../DemoWorkspaceChrome';

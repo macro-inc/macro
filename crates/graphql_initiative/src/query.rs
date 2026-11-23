@@ -43,13 +43,23 @@ pub(crate) async fn load_from_soup<E: SoupEntityEdges>(
     }
 }
 
-/// Resolve a project visible to the authenticated viewer without loading its details.
+/// Resolve a project visible to the authenticated viewer without loading its
+/// details, or `None` when it is missing or not visible to them.
+pub async fn resolve_visible_initiative<E: SoupEntityEdges>(
+    ctx: &Context<'_>,
+    initiative_id: ID,
+) -> async_graphql::Result<Option<GraphqlSoupInitiative<E>>> {
+    let id = parse_id(initiative_id, "initiativeId")?;
+    load_initiative(ctx, id).await
+}
+
+/// [`resolve_visible_initiative`] for the deprecated non-null field, which
+/// answers a missing or hidden project with `NOT_FOUND`.
 pub async fn resolve_initiative<E: SoupEntityEdges>(
     ctx: &Context<'_>,
     initiative_id: ID,
 ) -> async_graphql::Result<GraphqlSoupInitiative<E>> {
-    let id = parse_id(initiative_id, "initiativeId")?;
-    load_initiative(ctx, id)
+    resolve_visible_initiative(ctx, initiative_id)
         .await?
         .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
 }

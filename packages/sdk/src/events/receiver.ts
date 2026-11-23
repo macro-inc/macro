@@ -6,9 +6,11 @@ import type {
 import { MacroError } from '../utils';
 import type { MacroClient } from '../utils/client';
 import { hydrateAgentSessionEvent } from './hydrate/agentSession';
+import { hydrateCallEvent } from './hydrate/call';
 import { hydrateChannelEvent } from './hydrate/channel';
 import { hydrateDocumentEvent } from './hydrate/document';
 import { hydrateMessageEvent } from './hydrate/message';
+import { hydrateUserEvent } from './hydrate/user';
 import type {
   DeliveryHeaders,
   EventHandler,
@@ -38,7 +40,50 @@ export interface ListenOptions {
   scope?: WebhookScope;
   /** Abort the stream. */
   signal?: AbortSignal;
+  /**
+   * Told once each time an open stream drops (the server closed it, as a
+   * restart or deploy does, or the connection failed), before it reconnects
+   * on its own; failed reconnect attempts while it is down aren't told.
+   * Events published while it was down are not replayed, unless `resume`
+   * catches a short gap: resync them from history from `at` after `onOpen`,
+   * e.g. with a channel's `messagesAfter`.
+   */
+  onDrop?: (at: Date) => void;
+  /**
+   * Told each time the stream opens: the first time, and again after each
+   * drop, once events reach the handlers again. Resync after a reopen, not
+   * at the drop: an event published between a resync and the reopen would
+   * reach neither.
+   */
+  onOpen?: (at: Date) => void;
+  /**
+   * Ask the server to replay the events after the last one seen, on the
+   * first connection (`lastEventId`, e.g. stored by a process before it
+   * restarted) and on each reconnect. The server keeps only a short window
+   * of recent events, in one process, and doesn't say when a gap was longer:
+   * resync from history as well, and expect repeats (drop them by id).
+   */
+  resume?: { readonly lastEventId?: string };
+  /**
+   * Told each event's id once its handlers are done, whether or not they
+   * succeeded (an event that always fails must not be replayed forever), to
+   * resume from later.
+   */
+  onEventId?: (id: string) => void;
+  /** Told when a handler throws or rejects; the stream goes on. */
+  onHandlerError?: (error: unknown) => void;
 }
+
+/** Runs a caller's callback without letting it break the stream. */
+const safely =
+  <Args extends unknown[]>(callback: ((...args: Args) => void) | undefined) =>
+  (...args: Args): void => {
+    try {
+      callback?.(...args);
+    } catch {
+      // The caller's to handle: a callback must not end the stream.
+    }
+  };
 
 /** Attach the entity handles defined for each webhook event. */
 function hydrate(
@@ -49,11 +94,17 @@ function hydrate(
     .with({ event_type: P.string.startsWith('document.') }, (documentEvent) =>
       hydrateDocumentEvent(client, documentEvent),
     )
+    .with({ event_type: P.string.startsWith('call.') }, (callEvent) =>
+      hydrateCallEvent(client, callEvent),
+    )
     .with({ event_type: P.string.startsWith('channel.') }, (channelEvent) =>
       hydrateChannelEvent(client, channelEvent),
     )
     .with({ event_type: P.string.startsWith('message.') }, (messageEvent) =>
       hydrateMessageEvent(client, messageEvent),
+    )
+    .with({ event_type: P.string.startsWith('user.') }, (userEvent) =>
+      hydrateUserEvent(client, userEvent),
     )
     .with(
       { event_type: P.string.startsWith('agent_session.') },
@@ -69,6 +120,8 @@ function hydrate(
  * {@link MacroEvents.webhook} at a persisted webhook URL.
  *
  * Obtain via `macro.events` — do not construct directly.
+ *
+ * @mcp-exclude Registers live event handlers and listeners; MCP calls carry JSON only.
  */
 export class MacroEvents {
   private readonly handlers = new Map<EventName, Set<AnyHandler>>();
@@ -121,9 +174,15 @@ export class MacroEvents {
   /**
    * Open a live Server-Sent Events stream of matching broker events. This is
    * the default way to receive events — no public URL or signing secret
-   * required. Delivery is best-effort: events published before the
-   * connection, while disconnected, or dropped for a slow subscriber are
-   * missed; there is no replay.
+   * required. It reconnects on its own when the server ends it or the
+   * connection fails. Delivery is best-effort: events published before the
+   * connection, while it was down, or dropped for a slow subscriber are
+   * missed, unless `resume` replays them from the server's short, per-process
+   * window. Resync from history after `onOpen` reports a reopen.
+   *
+   * A handler that throws doesn't end the stream: the error goes to
+   * `onHandlerError`. The callbacks in `opts` must not throw; one that does
+   * is ignored.
    *
    * Filters default to the event names currently registered with {@link on}.
    * The stream uses those filters for its lifetime; later `.on` / unsubscribe
@@ -153,18 +212,68 @@ export class MacroEvents {
       }
     }
 
+    let lastId: string | undefined;
+    // Told once per drop, not once per failed reconnect attempt.
+    let open = false;
+    const onOpen = safely(opts.onOpen);
+    const onDrop = safely(opts.onDrop);
+    const onEventId = safely(opts.onEventId);
+    const onHandlerError = safely(opts.onHandlerError);
+    // The generated client sends back the last id it saw on a reconnect; the
+    // server replays from it only when asked to resume.
+    const resuming = (request: Request): Request => {
+      if (opts.resume === undefined) return request;
+      const url = new URL(request.url);
+      url.searchParams.set('resume', 'true');
+      const headers = new Headers(request.headers);
+      const from = opts.resume.lastEventId;
+      if (!headers.has('Last-Event-ID') && from !== undefined)
+        headers.set('Last-Event-ID', from);
+      // Everything else (credentials, signal, ...) is kept from the original.
+      return new Request(url, new Request(request, { headers }));
+    };
     const { stream } = await this.client.storage.streamEvents({
       query: {
         scope: opts.scope ?? 'user',
         filters: JSON.stringify(filters),
       },
       signal: controller.signal,
+      // The generated client reconnects by itself; each successful response
+      // is the stream open.
+      fetch: Object.assign(
+        async (...request: Parameters<typeof fetch>) => {
+          const response = await globalThis.fetch(
+            resuming(new Request(...request)),
+          );
+          if (response.ok) {
+            open = true;
+            onOpen(new Date());
+          }
+          return response;
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
+      onSseEvent: (event) => {
+        lastId = event.id;
+      },
+      onSseError: () => {
+        if (controller.signal.aborted || !open) return;
+        open = false;
+        onDrop(new Date());
+      },
     });
 
     const consume = (async () => {
       try {
         for await (const data of stream) {
-          await this.dispatchEvent(data);
+          // The client reads an event's id just before yielding it.
+          const id = lastId;
+          try {
+            await this.dispatchEvent(data);
+          } catch (error) {
+            onHandlerError(error);
+          }
+          if (id !== undefined) onEventId(id);
         }
       } catch {
         if (controller.signal.aborted) return;

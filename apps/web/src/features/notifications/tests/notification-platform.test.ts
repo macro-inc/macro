@@ -194,6 +194,64 @@ describe('maybeHandlePlatformNotification', () => {
     expect(resolveDocumentName).not.toHaveBeenCalled();
   });
 
+  it('shows a ping like its push: who pinged, what about, their words', async () => {
+    const result = await toPlatformNotificationData(
+      baseNotification({
+        entity_id: 'task-1',
+        entity_type: 'document',
+        sender_id: 'macro|sender@macro.com',
+        notification_event_type: 'ping',
+        notification_metadata: {
+          tag: 'ping',
+          content: {
+            body: 'All 3 services are live.',
+            entityName: 'Deploy plan',
+            agent: {
+              id: '01a00000-0000-7000-8000-0000000000b7',
+              name: 'Deploy bot',
+              avatarUrl: 'https://example.com/bot.png',
+            },
+          },
+        },
+      }),
+      async () => 'Sender',
+      async () => 'Unexpected document',
+      async () => undefined
+    );
+
+    expect(result).toEqual({
+      title: 'Deploy bot pinged you — Deploy plan',
+      options: { body: 'All 3 services are live.', icon: 'favicon.ico' },
+      sender: {
+        id: 'macro|sender@macro.com',
+        name: 'Deploy bot pinged you',
+        avatarUrl: 'https://example.com/bot.png',
+      },
+      conversation: { id: 'task-1', name: 'Deploy plan' },
+    });
+  });
+
+  it('leaves out what a ping is about when it has no shared name', async () => {
+    const result = await toPlatformNotificationData(
+      baseNotification({
+        entity_id: 'dm-1',
+        entity_type: 'channel',
+        sender_id: 'macro|sender@macro.com',
+        notification_event_type: 'ping',
+        notification_metadata: {
+          tag: 'ping',
+          content: { body: 'Can you look?' },
+        },
+      }),
+      async () => 'Ada',
+      async () => 'Unexpected name',
+      async () => undefined
+    );
+
+    expect(result?.title).toBe('Ada pinged you');
+    expect(result?.options?.body).toBe('Can you look?');
+  });
+
   it('skips GitHub PR events so they do not render as browser notifications', async () => {
     const showNotification = vi.fn<
       PlatformNotificationState['showNotification']
@@ -415,6 +473,93 @@ describe('platform notification sender and conversation', () => {
     expect(result?.sender?.avatarUrl).toBe('https://cdn.example.com/ada.png');
     expect(result?.conversation).toEqual({ id: 'channel-1', name: undefined });
     expect(resolveUserAvatar).not.toHaveBeenCalled();
+  });
+
+  function reaction(
+    channelType: 'public' | 'directMessage',
+    messageContent = 'Ship it\n\non Friday'
+  ): UnifiedNotification {
+    return baseNotification({
+      entity_id: 'channel-1',
+      sender_id: 'macro|ada@example.com',
+      notification_event_type: 'channel_message_reaction',
+      notification_metadata: {
+        tag: 'channel_message_reaction',
+        content: {
+          messageId: 'message-1',
+          messageContent,
+          emoji: '🧑🏽‍💻',
+          channelType,
+          channelName: 'design',
+        },
+      },
+    } as Partial<UnifiedNotification>);
+  }
+
+  it('shows a reaction as who reacted, the reaction and message, then where', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('public'),
+      async () => 'Ada',
+      async () => 'design',
+      async () => undefined
+    );
+
+    expect(result).toMatchObject({
+      title: 'Ada',
+      options: { body: 'Reacted 🧑🏽‍💻 to: Ship it on Friday\n#design' },
+      conversation: { id: 'channel-1', name: undefined },
+    });
+  });
+
+  it('names no place for a reaction in a direct message', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('directMessage'),
+      async () => 'Ada',
+      async () => 'Ada',
+      async () => undefined
+    );
+
+    expect(result?.title).toBe('Ada');
+    expect(result?.options?.body).toBe('Reacted 🧑🏽‍💻 to: Ship it on Friday');
+  });
+
+  it('cuts a long reacted-to message so the channel stays in view', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('public', `${'word '.repeat(30)}end`),
+      async () => 'Ada',
+      async () => 'design',
+      async () => undefined
+    );
+
+    expect(result?.options?.body).toBe(
+      `Reacted 🧑🏽‍💻 to: ${'word '.repeat(16)}…\n#design`
+    );
+  });
+
+  it('never cuts a flag in half when shortening the message', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('public', `${'a'.repeat(79)}🇨🇦 and more`),
+      async () => 'Ada',
+      async () => 'design',
+      async () => undefined
+    );
+
+    expect(result?.options?.body).toBe(
+      `Reacted 🧑🏽‍💻 to: ${'a'.repeat(79)}🇨🇦…\n#design`
+    );
+  });
+
+  it('names a message with no text as your message', async () => {
+    const result = await toPlatformNotificationData(
+      reaction('public', ''),
+      async () => 'Ada',
+      async () => 'design',
+      async () => undefined
+    );
+
+    expect(result?.options?.body).toBe(
+      'Reacted 🧑🏽‍💻 to your message\n#design'
+    );
   });
 
   it('names the bot and the channel for a bot reply', async () => {

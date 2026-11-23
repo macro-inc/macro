@@ -206,6 +206,7 @@ pub fn upgrade_convert_message(
         // Versioned keys have no extension, so the types travel explicitly.
         from_file_type: Some(request.from),
         to_file_type: Some(request.to),
+        notify_job: false,
     })
 }
 

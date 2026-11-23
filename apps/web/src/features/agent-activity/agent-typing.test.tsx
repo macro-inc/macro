@@ -50,9 +50,18 @@ vi.mock('@queries/bots/profiles', () => ({
     data: { name: 'Researcher', avatarUrl: undefined, deleted: false },
   }),
 }));
-vi.mock('@app/features/block-agent/ui', () => ({
+vi.mock('@app/features/block-agent/ui/TextShimmer', () => ({
   TextShimmer: (props: { text: string }) => <>{props.text}</>,
+}));
+vi.mock('@app/features/block-agent/ui/WorkingDots', () => ({
   WorkingDots: () => null,
+}));
+// The real line, over the plain text and dots above.
+vi.mock('@app/features/block-agent/ui', async () => ({
+  ActivityLine: (await import('@app/features/block-agent/ui/ActivityLine'))
+    .ActivityLine,
+  TextShimmer: (await import('@app/features/block-agent/ui/TextShimmer'))
+    .TextShimmer,
 }));
 vi.mock('@app/features/agent-dms/components/persona-avatar', () => ({
   PersonaAvatar: () => null,
@@ -384,4 +393,45 @@ it('lets a lapsed typing go when the fold has no turn open', () => {
   expect(view.getByRole('status')).toBeTruthy();
   vi.advanceTimersByTime(TYPING_INDICATOR_TIMEOUT_MS);
   expect(view.queryByRole('status')).toBeNull();
+});
+
+it("never names a program's unnamed failure, keeping the step before it", () => {
+  typing('working');
+  const run = (rows: FoldedMessage['segments'][number]['rows']) => [
+    {
+      ...writing('Checking the board first.'),
+      segments: [
+        { index: 0, kind: 'prose', start: 0, end: 1, sealed: true, rows: [] },
+        {
+          index: 1,
+          kind: 'activity',
+          start: 1,
+          end: 2,
+          sealed: false,
+          rows,
+        },
+      ],
+      phase: 'working',
+    } satisfies FoldedMessage,
+  ];
+  setMessages(
+    run([
+      { id: 't1', label: 'Read board', detail: null, status: 'completed' },
+      { id: 't2', label: 'A step failed', detail: null, status: 'failed' },
+    ])
+  );
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
+  expect(view.getByRole('status').textContent).toBe('Read board');
+
+  setMessages(
+    run([
+      {
+        id: 't3',
+        label: 'Step interrupted',
+        detail: null,
+        status: 'interrupted',
+      },
+    ])
+  );
+  expect(view.getByRole('status').textContent).toBe('Working');
 });

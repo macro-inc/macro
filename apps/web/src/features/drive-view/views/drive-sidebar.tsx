@@ -4,14 +4,19 @@ import {
   SearchBar,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { SIDEBAR_SECTION_DRAG_TYPE } from '@app/components/view-shell/core/section-order';
 import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
 import { createFolderDropTargets } from '@app/features/next-soup/actions';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
+import { TutorialSidebarItem } from '@app/features/video-tutorials';
+import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
-import DatabaseIcon from '@icon/system/regular/database.svg';
+import { EntityIcon } from '@entity/extractors/entity-icon';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
@@ -49,12 +54,14 @@ function DriveDatabases(props: { onNavigate?: () => void }) {
             <ViewSidebar.Item
               title={database.name}
               onClick={(event) => {
-                actions.openEntity(database, event);
+                actions.openShortcut(database, event);
                 props.onNavigate?.();
               }}
             >
               <ViewSidebar.Icon>
-                <DatabaseIcon class="size-4" />
+                <span class="size-4">
+                  <EntityIcon entity={database} />
+                </span>
               </ViewSidebar.Icon>
               <span class="truncate">{database.name}</span>
             </ViewSidebar.Item>
@@ -83,6 +90,7 @@ function DriveFavorite(props: { favorite: Favorite; onNavigate?: () => void }) {
           <FavoriteIcon favorite={props.favorite} class="size-4" />
         </ViewSidebar.Icon>
         <span class="truncate">{name()}</span>
+        <FavoriteUnreadIndicator favorite={props.favorite} />
       </ViewSidebar.Item>
     </FavoriteContextMenu>
   );
@@ -94,6 +102,7 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
 
   // Rows here live in the same split as the list, so its rows can drop on them.
   const createDropTarget = createFolderDropTargets();
+  const rootDropTarget = createDropTarget?.(() => null);
 
   const [folderSearch, setFolderSearch] = createSignal('');
 
@@ -118,23 +127,33 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
 
   return (
     <>
-      <DriveNavigation
-        locationMenu={DriveLocationMenu}
-        location={state.value().location}
-        onNavigate={(tab) => {
-          state.selectTab(tab);
-          props.onNavigate?.();
-        }}
-      />
+      <ViewSidebar.Section
+        id="views"
+        label={t('viewMenus.driveViews')}
+        headerless
+      >
+        <DriveNavigation
+          locationMenu={DriveLocationMenu}
+          location={state.value().location}
+          onNavigate={(tab) => {
+            state.selectTab(tab);
+            props.onNavigate?.();
+          }}
+        />
+      </ViewSidebar.Section>
       <Show when={sidebar.favorites().length > 0}>
         <CollapsibleSection.Root
+          sectionId="favorites"
+          sectionLabel="Favorites"
           open={state.value().favoritesOpen}
           onOpenChange={state.setFavoritesOpen}
         >
-          <CollapsibleSection.Trigger>
-            <span class="min-w-0 truncate">Favorites</span>
-            <CollapsibleSection.Indicator />
-          </CollapsibleSection.Trigger>
+          <CollapsibleSection.Header>
+            <CollapsibleSection.Trigger>
+              <span class="min-w-0 truncate">Favorites</span>
+              <CollapsibleSection.Indicator />
+            </CollapsibleSection.Trigger>
+          </CollapsibleSection.Header>
           <CollapsibleSection.Content>
             <ViewSidebar.Nav aria-label="Favorite files and folders">
               <For each={sidebar.favorites()}>
@@ -151,19 +170,25 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
       </Show>
       <Show when={sidebar.databases().length > 0}>
         <CollapsibleSection.Root
+          sectionId="databases"
+          sectionLabel="Databases"
           open={state.value().databasesOpen}
           onOpenChange={state.setDatabasesOpen}
         >
-          <CollapsibleSection.Trigger>
-            <span class="min-w-0 truncate">Databases</span>
-            <CollapsibleSection.Indicator />
-          </CollapsibleSection.Trigger>
+          <CollapsibleSection.Header>
+            <CollapsibleSection.Trigger>
+              <span class="min-w-0 truncate">Databases</span>
+              <CollapsibleSection.Indicator />
+            </CollapsibleSection.Trigger>
+          </CollapsibleSection.Header>
           <CollapsibleSection.Content>
             <DriveDatabases onNavigate={props.onNavigate} />
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
       </Show>
       <CollapsibleSection.Root
+        sectionId="folders"
+        sectionLabel="Folders"
         open={state.value().rootOpen}
         onOpenChange={state.setRootOpen}
       >
@@ -198,15 +223,24 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
           </Show>
           <ViewSidebar.Nav aria-label="Folders">
             <DriveLocationMenu location={{ kind: 'folder', id: null }}>
-              <ViewSidebar.Item
-                active={selectedFolder() === null}
-                onClick={() => selectFolder(null)}
+              <div
+                ref={(element) => rootDropTarget?.ref(element)}
+                class={cn(
+                  'rounded-lg',
+                  rootDropTarget?.isOver() &&
+                    'outline-2 -outline-offset-2 outline-accent'
+                )}
               >
-                <ViewSidebar.Icon>
-                  <FolderIcon class="size-4" />
-                </ViewSidebar.Icon>
-                <span>Drive</span>
-              </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={selectedFolder() === null}
+                  onClick={() => selectFolder(null)}
+                >
+                  <ViewSidebar.Icon>
+                    <FolderIcon class="size-4" />
+                  </ViewSidebar.Icon>
+                  <span>Drive</span>
+                </ViewSidebar.Item>
+              </div>
             </DriveLocationMenu>
             <ViewSidebar.Branch>
               <Show
@@ -288,26 +322,46 @@ function DriveImportPromotion() {
   );
 }
 
+/**
+ * Drive's tutorials: Docs, and Spreadsheets and Databases where they're
+ * rolled out. Drive's own video is its list's row. Among several, each item
+ * names its block.
+ */
+function DriveTutorials() {
+  const { tutorials } = useDriveView();
+  return (
+    <ViewSidebar.Nav
+      aria-label={t('tutorials.watchTutorial')}
+      class="empty:hidden"
+    >
+      <For each={tutorials()}>
+        {(id) => (
+          <TutorialSidebarItem tutorial={id} named={tutorials().length > 1} />
+        )}
+      </For>
+    </ViewSidebar.Nav>
+  );
+}
+
 export function DriveSidebar() {
-  const { state } = useDriveView();
   const [content, setContent] = createSignal<HTMLDivElement>();
   // A long folder tree scrolls under a drag held at its edge.
-  if (useDragDropContext()) {
-    createDragAutoScroll({ getViewport: content, axis: 'both' });
+  const drag = useDragDropContext();
+  if (drag) {
+    const [state] = drag;
+    createDragAutoScroll({
+      getViewport: () => {
+        // The shared section controller already scrolls this viewport for headings.
+        if (state.active.draggable?.data.dragType === SIDEBAR_SECTION_DRAG_TYPE)
+          return;
+        return content();
+      },
+      axis: 'both',
+    });
   }
   return (
-    <ViewSidebar.Root aria-label="Drive navigation">
-      <ViewSidebar.Header
-        searchLabel="Search files"
-        search={() => (
-          <SearchBar
-            label="Search files"
-            placeholder="Search files"
-            value={state.value().search}
-            onValueChange={state.setSearch}
-          />
-        )}
-      >
+    <ViewSidebar.Root reorderId="drive" aria-label="Drive navigation">
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Drive</ViewSidebar.Title>
@@ -317,6 +371,8 @@ export function DriveSidebar() {
         <DriveCreateMenu />
       </ViewSidebar.Primary>
       <ViewSidebar.Content ref={setContent}>
+        <SidebarRoutineSuggestions surface="files" />
+        <DriveTutorials />
         <DriveSidebarContent />
         <DriveImportPromotion />
       </ViewSidebar.Content>

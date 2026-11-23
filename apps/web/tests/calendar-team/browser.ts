@@ -412,33 +412,23 @@ try {
   await expect(
     page.getByRole('switch', { name: 'Show team calendars' })
   ).toHaveCount(0);
-  // The innermost section that holds the heading; the page nests sections.
-  const busySection = page
-    .locator('section')
-    .filter({
-      has: page.getByRole('heading', { name: 'Calendars that count as busy' }),
-    })
-    .last();
-  const account = busySection.getByRole('checkbox', {
-    name: 'offline@example.com',
-    exact: true,
+  await expect(
+    page.getByRole('heading', { name: 'Calendars that count as busy' })
+  ).toHaveCount(0);
+  // Busy sits on each Connected calendars row, apart from its visibility.
+  const primaryBusy = page.getByRole('switch', {
+    name: 'My primary counts as busy',
   });
-  await expect
-    .poll(() =>
-      account.evaluate((element) => (element as HTMLInputElement).indeterminate)
-    )
-    .toBe(true);
-  await busySection
-    .getByRole('button', { name: 'Expand offline@example.com', exact: true })
-    .click();
-  const followed = busySection.getByRole('checkbox', {
+  const followedBusy = page.getByRole('switch', {
+    name: 'Subscribed coworker counts as busy',
+  });
+  const followedShown = page.getByRole('checkbox', {
     name: 'Subscribed coworker',
     exact: true,
   });
-  await expect(
-    busySection.getByRole('checkbox', { name: 'My primary' })
-  ).toBeChecked();
-  await expect(followed).not.toBeChecked();
+  await expect(primaryBusy).toBeChecked();
+  await expect(followedBusy).not.toBeChecked();
+  await expect(followedShown).toBeChecked();
   await page.screenshot({
     path: '/tmp/calendar-team-settings.png',
     fullPage: true,
@@ -460,14 +450,14 @@ try {
   await sharingSelect.click();
   await page.getByRole('option', { name: 'Nothing', exact: true }).click();
   await expect.poll(() => sharing).toBe('none');
-  await busySection.getByText('Subscribed coworker', { exact: true }).click();
+  await followedBusy.click();
   await expect.poll(() => included.followed).toBe(true);
-  await expect(followed).toBeChecked();
-  await expect(account).toBeChecked();
-  await busySection.getByText('offline@example.com', { exact: true }).click();
+  await expect(followedBusy).toBeChecked();
+  await expect(followedShown).toBeChecked();
+  await primaryBusy.click();
   await expect.poll(() => included.primary).toBe(false);
-  await expect.poll(() => included.followed).toBe(false);
-  await expect(account).not.toBeChecked();
+  await expect(primaryBusy).not.toBeChecked();
+  await expect(followedBusy).toBeChecked();
   await sharingSelect.click();
   await page.getByRole('option', { name: 'Busy blocks', exact: true }).click();
   await expect.poll(() => sharing).toBe('busy_only');
@@ -486,7 +476,7 @@ try {
   assert.deepEqual(errors, []);
   assert.deepEqual(requestFailures, []);
   console.log(
-    'PASS: imported point rendering and metadata-only edit, team out-of-office overlay checkbox, no team calendar overlay or controls, team sharing select, account-grouped busy calendars, and settings changes without a loading flash'
+    'PASS: imported point rendering and metadata-only edit, team out-of-office overlay checkbox, no team calendar overlay or controls, team sharing select, per-calendar Busy switches in Connected calendars, and settings changes without a loading flash'
   );
 } catch (error) {
   console.error(error);

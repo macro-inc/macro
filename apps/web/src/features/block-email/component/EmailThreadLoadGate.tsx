@@ -15,7 +15,6 @@ export type EmailThreadLoadGateProps<Data> = ParentProps<{
   threadId: string;
   /** An account-owned working copy whose thread has never been confirmed. */
   isLocalDraft?: boolean;
-  linkId?: string;
   debounceTime?: number;
   onRetry: () => void;
 }>;
@@ -51,7 +50,6 @@ export function EmailThreadLoadGate<Data>(
             <EmailReadMarker
               notificationSource={props.notificationSource}
               threadId={threadId}
-              linkId={props.linkId}
               debounceTime={props.debounceTime}
             />
           )}

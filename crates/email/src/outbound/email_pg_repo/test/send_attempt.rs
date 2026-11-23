@@ -6,9 +6,11 @@ use crate::domain::{
 
 mod deferred_deletion;
 mod independent_outbox;
+mod lock_timeouts;
 mod preparation_cancel;
 mod provider_deletion;
 mod provider_draft_trash;
+mod reply_draft_identity;
 mod retention;
 mod trash;
 
@@ -67,6 +69,7 @@ fn prepared() -> PreparedSend {
             provider_thread_id: None,
             replying_to_id: None,
             subject: input.subject.clone(),
+            from_name: None,
             to: vec![],
             cc: vec![],
             bcc: vec![],
@@ -316,6 +319,9 @@ fn service(
         sent_undo_delay_secs: 5,
         sender_provider: std::sync::Arc::new(
             crate::domain::senders::UnavailableEmailSenderProvider,
+        ),
+        shared_thread_replies: std::sync::Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
         ),
     }
 }

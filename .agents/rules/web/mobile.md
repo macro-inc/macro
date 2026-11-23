@@ -20,16 +20,29 @@ read their code, and follow that pattern rather than inventing a new one.
 
 ## Detection and input
 
-- `isTouchDevice()` / `touch:` decide input (no hover); `isMobile()` /
-  `mobile:` decide phone layout (touch and under 640px). Hide a desktop
-  control and show its touch replacement with the same one, or tablets get
-  neither. Native checks (`isPlatform` in `@core/util/platform`) are for
-  native bridges and platform-specific visual effects, not layout.
-- When a surface needs a different phone or touch layout, compose a separate
-  mobile view from shared parts (and a shared state primitive) instead of
-  branching on `isMobile()` / `isTouchDevice()` throughout one component;
-  extract the parts first if needed. The task composer
-  (`features/task-composer/views`) is the reference.
+- `isTouchDevice()` / `touch:` adapt input (no hover) and pick the mobile
+  view, which phones and tablets both get; `isMobile()` / `mobile:` adjust a
+  mobile view for phones (touch and UIKit compact width when available,
+  otherwise under 640px). Native checks (`isPlatform` in
+  `@core/util/platform`) are for native bridges and platform-specific visual
+  effects, not layout.
+- **FE-70** Give each app view a desktop view in `views/<name>.tsx` and a
+  mobile view in `views/mobile/<name>.tsx` over shared state, switched once
+  in the view's entry with `<Show when={isTouchDevice()}>`. Parts both views
+  render go in `views/shared/`; `features/task-composer` and
+  `features/block-email` are the references. Enforced by ast-grep
+  `tsx-views-no-mobile-imports`, `tsx-mobile-view-closed`,
+  `tsx-mobile-header-only-in-mobile-views`, and `tsx-no-device-composition`,
+  CI error. See [platform views](../../../docs/architecture/frontend-features.md#platform-views).
+- Never decide by device what exists outside that switch: a shared part adapts
+  size, spacing, hover, and event handling only. Delete the device check; if
+  both platforms still show the same controls in the same order, it may stay.
+- Keep each shared part to one control or one region and assemble action sets
+  in the view, so an action added for desktop cannot reach mobile.
+- When you split a view, delete its files from the "Not yet split" list in
+  `rules/ast-grep/tsx-no-device-composition.yml` and add its entry to the list
+  above it. Add a file to "Not yet split" only when its view's split is
+  already a task, named in a comment on the file's line; otherwise split it.
 - Gate hover and press styles with `not-touch:`; iOS leaves hover stuck.
 - No action lives only behind hover. `HoverCard` renders nothing on touch,
   so give it a tap path that opens a sheet, as `UserCardTrigger` does.
@@ -85,6 +98,12 @@ read their code, and follow that pattern rather than inventing a new one.
   per-sheet delays or click guards for it. A drag dismissal the owner refuses
   (to confirm a discard, or while an action is pending) snaps the sheet back
   open.
+- Sheets and touch dialogs close themselves when the app navigates to
+  another page; don't close them per sheet. Pass `keepOpenOnNavigation` only
+  when dismissing does something the user didn't choose (discards files
+  shared to the app, records a prompt as dismissed). A sheet that reopens
+  after a dialog closes checks `shownPage()` first: a navigation may have
+  closed the dialog.
 - A sheet opened from another sheet stacks on it under its own scrim, which
   shares the sheets' layer (as Dialog's does), so the sheet beneath dims with
   the page and only the top sheet's handle stands out. Open it under the
@@ -108,17 +127,25 @@ read their code, and follow that pattern rather than inventing a new one.
 - Focus inputs on user intent only, never on mount. On touch, Enter in a
   composer inserts a newline; the send button submits.
 - iOS raises the keyboard only for a focus inside the tap. A tap that opens a
-  composer whose field mounts later calls `triggerFocusInput` in the tap (see
-  `raiseKeyboardForNewTaskTitle`), or a create menu item's `raiseKeyboard`;
-  popovers and the create menu leave focus with its stand-in.
+  composer or dialog whose field mounts later calls `triggerFocusNewElement`
+  in the tap with a selector for that field (`RENAME_FIELD_SELECTOR`,
+  `NEW_TASK_TITLE_SELECTOR`), or a create menu item's `raiseKeyboard`;
+  popovers and the create menu leave focus with its stand-in. A new rename
+  dialog marks its name field with `RENAME_FIELD_ATTRIBUTE`.
 - UI over an editor must not take focus: cancel `pointerdown` and
   `mousedown` on its root (`keepEditorFocus` in `TouchSelectionToolbar`) or
   use `usePreserveFocusOnButtonTaps`; mark sibling regions
   `data-keep-keyboard`. Dismiss with `useTouchOutsideToDismissKeyboard`.
+- In the iOS app a swipe down into the keyboard dismisses it
+  (`SwipeDownDismissKeyboard`). Mark a composer's own text scroll box
+  `data-composer-scroll` (a `textarea` counts already): a drag that starts in
+  it scrolls the draft, and dismisses only after the text reaches its top.
 - Size against the keyboard with `var(--dvh,1dvh)` and
   `var(--virtual-keyboard-height,0px)`, fallback included (Android leaves it
   unset); in JS read `virtualKeyboardVisible()`. Sheets with inputs call
   `scrollToFocusedInput` from `onFocusIn`.
+  Native iOS viewport clearance must be remeasured on fold/rotation even when
+  the keyboard does not emit another show event.
 - Never remount a focused editor (keys on content ids, Suspense around it).
   Collapsed inputs match the focused height (`CollapsedInput`), and hidden
   controls use `hidden`, not `opacity-0`, so neighbors don't jump.
@@ -132,11 +159,31 @@ read their code, and follow that pattern rather than inventing a new one.
   an in-flow header consumes the inset, reset it to `0px` on its content subtree
   so nested lists/editors do not reserve it again. Otherwise pad the scroller
   with the top and bottom content insets so content scrolls under the chrome.
+- Top edge fades (`MobileTopEdgeFade`) size from `--mobile-content-inset-top`
+  and draw nothing when it is 0, so panes without a top safe area or floating
+  chrome (the iPhone Duo) get no fade; place them where that inset is set.
+  They draw only on touch devices: desktop split panes set the inset to their
+  in-flow header's height, which would paint a band under the header.
 - Safe areas come from the `--safe-*` CSS variables (e.g.
   `bottom-[var(--safe-bottom,0px)]`); `getSafeAreaInset` only when JS needs
   the number. Never measure insets yourself.
-- Wrap split-header contributions in `HeaderIsland` (the touch header
-  ignores taps outside islands). Bottom chrome goes through `FloatRegion` or
+- Fixed overlays outside the app frame (sheets, toasts) stay between
+  `--safe-left` and `--safe-right`: the iPhone Duo's clock and camera column
+  is a right safe area. Only scrims cover the whole screen.
+- Show a detail beside a list on wide touch through `SplitHeaderScope`, which
+  hosts the detail's own mobile header (`MobileEmailThread`,
+  `HostedMarkdownHeader`, `MobileAgentSessionHeader`) in the pane's top bar,
+  so a detail has one mobile header beside a list and on its own; only a
+  narrow detail adds Back. The mobile view may still differ by width with
+  `isMobile()`.
+- Compose a mobile view's header with `MobileHeader`
+  (`components/app/mobile-header`): Back from the shell, a title that opens
+  its menu, then explicit trailing islands such as `MobileHeader.Info`. While
+  it is mounted nothing else in the pane can add to the header, so never
+  render `SplitHeaderLeft` / `SplitHeaderRight`, `HeaderIsland`, or
+  `SidePanel.HeaderActionsOutlet` in a mobile view. Headers not yet split
+  still wrap their contributions in `HeaderIsland` (the touch header ignores
+  taps outside islands). Bottom chrome goes through `FloatRegion` or
   `FloatRegionOrInline` with `px-(--mobile-chrome-gutter)` and
   `pointer-events-auto`. Style it with `island` / `glass`, size it with the
   px `--mobile-chrome-*` tokens (not rem), and use Button's size and finish props.
@@ -148,8 +195,12 @@ read their code, and follow that pattern rather than inventing a new one.
   split. Desktop-only layouts fall back (board to list) and update the URL.
 - Suspense wraps content, never the router or chrome, with `ContentLoading`
   as the fallback; otherwise phones go blank.
-- Keep content and actions the same as desktop and change presentation.
-  Drop a feature on phones only when it is desk work (API keys).
+- Keep mobile views minimal: a control appears on mobile only when the
+  mobile view adds it. A new detail header is Back, the title with its menu,
+  and Info; put other actions in the title menu or a sheet so they stay
+  reachable. A header split from a shared one keeps the islands it had,
+  listed in its mobile view, until someone decides to remove them. Drop a
+  feature on phones only when it is desk work (API keys).
 
 ## Platform pitfalls
 
@@ -166,5 +217,6 @@ read their code, and follow that pattern rather than inventing a new one.
   menus in the iOS Simulator and tap/focus bugs on a physical iPhone
   (`apps/web/AGENTS.md`); Android per `docs/development/android.md`.
 
-Check: no hover-only actions, the helpers above are used, and the change was
-seen at phone width with touch emulation.
+Check: no hover-only actions, the helpers above are used, a device check that
+changes what exists lives only in the view's entry, and the change was seen at
+phone width with touch emulation.

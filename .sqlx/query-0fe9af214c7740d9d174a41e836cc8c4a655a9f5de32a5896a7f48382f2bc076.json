@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_run\n           SET state = $4, state_changed_at = $5, settled_at = $6,\n               claimed_until = CASE WHEN $7 THEN NULL ELSE claimed_until END\n           WHERE session_id = $1 AND state = $2 AND state_changed_at = $3\n           RETURNING suggestion_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "suggestion_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0fe9af214c7740d9d174a41e836cc8c4a655a9f5de32a5896a7f48382f2bc076"
+}

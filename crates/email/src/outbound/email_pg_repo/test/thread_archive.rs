@@ -63,6 +63,7 @@ pub(super) fn service_with_enqueuer<E: EmailMessageEnqueuer>(
         macro_event_broker: original.macro_event_broker,
         sent_undo_delay_secs: original.sent_undo_delay_secs,
         sender_provider: original.sender_provider,
+        shared_thread_replies: original.shared_thread_replies,
     }
 }
 

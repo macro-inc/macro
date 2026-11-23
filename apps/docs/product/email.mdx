@@ -1,18 +1,57 @@
 ---
 title: "Email"
 icon: "envelope"
-description: "Keyboard-driven email with Gmail sync."
+description: "Keyboard-driven email with Gmail and Outlook sync."
 ---
 
 <iframe src="https://www.youtube.com/embed/tnsxkywzTvY" title="YouTube video player" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
 
-Email is one of Macro's core blocks, which is why we recommend linking your account at signup. In Macro you can triage your email normally while also using our Signal/Noise filtering and an agent to draft and send emails.
+Watch a 1:42 walkthrough of Macro Mail.
 
-<Frame>
-  ![Email Signal Ss](/images/email_signal_ss-2.png)
-</Frame>
+<video src="https://macro.com/video/tutorials/mail.mp4" poster="https://macro.com/video/tutorials/mail-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
-> To draft a new email use shortcut <kbd>c</kbd> \+ <kbd>e</kbd>
+Email is one of Macro's core blocks, which is why we recommend linking your account at signup. Connect Gmail or Outlook / Microsoft 365. In Macro you can triage your email normally while also using our Signal/Noise filtering and an agent to draft and send emails.
+
+<GuideGraphic kind="email" label="An email shared with a channel keeps the conversation and its follow-up together." />
+
+<video src="https://macro.com/video/tutorials/mail.mp4" poster="https://macro.com/video/tutorials/mail-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
+
+<div className="signal-preview" role="img" aria-label="Signal, with Invoice question selected">
+  <div className="signal-preview-bar">
+    <span className="signal-preview-title">Inbox</span>
+    <span className="signal-preview-tabs">
+      <span className="is-on">Signal</span>
+      <span>Noise</span>
+    </span>
+  </div>
+  <div className="signal-preview-row is-on">
+    <span className="signal-preview-dot" />
+    <span className="signal-preview-from">Billing</span>
+    <span className="signal-preview-line">
+      <span className="signal-preview-subject">Invoice question</span>
+      <span className="signal-preview-snippet">Can you confirm the March amount?</span>
+    </span>
+    <span className="signal-preview-time">9:41 AM</span>
+  </div>
+  <div className="signal-preview-row">
+    <span className="signal-preview-dot is-read" />
+    <span className="signal-preview-from">Hiring</span>
+    <span className="signal-preview-line">
+      <span className="signal-preview-subject">Interview times</span>
+      <span className="signal-preview-snippet">Thursday at 2 still works.</span>
+    </span>
+    <span className="signal-preview-time">Yesterday</span>
+  </div>
+  <div className="signal-preview-row">
+    <span className="signal-preview-dot is-read" />
+    <span className="signal-preview-from">Facilities</span>
+    <span className="signal-preview-line">
+      <span className="signal-preview-subject">Office move</span>
+      <span className="signal-preview-snippet">The loading dock is booked for Friday.</span>
+    </span>
+    <span className="signal-preview-time">Monday</span>
+  </div>
+</div>
 
 > Use <kbd>j</kbd> and <kbd>k</kbd> to move up and down through your emails. To archive an email and remove it from your inbox, press <kbd>e</kbd>.
 
@@ -20,13 +59,11 @@ Email is one of Macro's core blocks, which is why we recommend linking your acco
 
 Macro supports multiple email accounts in a single inbox. Instead of switching between a work tab and a personal tab, all of your accounts flow into one list that you triage in one pass, with the same keyboard shortcuts and Signal/Noise filtering applied across all of them.
 
-To connect another account, go to **Settings** and add the Gmail or Google Workspace account. When you draft an email, you choose which connected address it sends from.
+To connect another account, open **Settings → Email**, click **Add account**, and choose **Gmail** or **Outlook / Microsoft 365**. When you draft an email, you choose which connected address it sends from.
 
 ### Signal vs Noise
 
 Macro splits email into Signal and Noise tabs. Signal is where your high-priority emails go, like team member updates and customer feedback. Noise is for emails that aren't crucial to your workflow, such as newsletters and promotions.
-
-To count as Signal in Email, threads have to clear a higher bar than in the Macro inbox: they must be **important** and **not shared** with you by someone else. Routine or shared emails won't be there.
 
 To move a sender, right-click a thread and choose **Sender → Signal** or **Sender → Noise**. The same menu has **Block Sender**.
 
@@ -34,11 +71,9 @@ The email sidebar also has **Favorites**, **Sent**, **Scheduled**, **Drafts**, *
 
 ### Sharing
 
-<Frame>
-  ![Sharing an email thread into a channel from the share menu](/images/Screenshot-2026-06-03-at-11.52.56-AM.png)
-</Frame>
-
 You can forward, cc, and bcc people as normal using Macro's email client, or share an email thread inside the app using the share button.
+
+Share into a channel when you want people to read the thread and talk about it in Macro. They are not added to the email, so the original thread stays as it is and that discussion never goes out as a reply. A forward sends a copy they can reply to, which takes the conversation back out over email.
 
 When you share an email into a new or existing channel, the participants receive a notification in the left-hand panel.
 
@@ -50,3 +85,54 @@ There are several ways to share in an email.
 
 - If you @mention someone in an email, they get added as a recipient.
 - If you @mention a document in an email, it gets inserted as a URL link to Macro. The document's permissions also get updated so that anyone with the link can view it.
+- If you @mention a booking link in an email, it gets inserted as a link to that booking page.
+
+### Reading pane
+
+**Show reading pane** opens the selected thread beside the list, so the inbox stays on screen while you read. **Hide reading pane** returns to the list. This view is on desktop.
+
+<div className="mail-pane" role="img" aria-label="Inbox with the reading pane open on Invoice question">
+  <div className="mail-pane-list">
+    <div className="mail-pane-bar">
+      <span className="mail-pane-title">Inbox</span>
+      <span className="mail-pane-tabs">
+        <span className="is-on">Signal</span>
+        <span>Noise</span>
+      </span>
+      <span className="mail-pane-columns" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <rect x="3.5" y="3" width="7" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+          <rect x="13.5" y="3" width="7" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      </span>
+    </div>
+    <div className="mail-pane-row is-on">
+      <span className="mail-pane-dot" />
+      <span className="mail-pane-from">Billing</span>
+      <span className="mail-pane-time">9:41 AM</span>
+      <span className="mail-pane-subject">Invoice question</span>
+      <span className="mail-pane-snippet">Can you confirm the March amount?</span>
+    </div>
+    <div className="mail-pane-row">
+      <span className="mail-pane-dot is-read" />
+      <span className="mail-pane-from">Hiring</span>
+      <span className="mail-pane-time">Yesterday</span>
+      <span className="mail-pane-subject">Interview times</span>
+      <span className="mail-pane-snippet">Thursday at 2 still works.</span>
+    </div>
+  </div>
+  <div className="mail-pane-read">
+    <div className="mail-pane-subject-line">Invoice question</div>
+    <div className="mail-pane-message">
+      <span className="mail-pane-avatar">B</span>
+      <div className="mail-pane-message-body">
+        <div className="mail-pane-who">Billing <span className="mail-pane-to">to you</span></div>
+        <p>Can you confirm the March amount? I can send the invoice today.</p>
+      </div>
+    </div>
+    <div className="mail-pane-reply">
+      <span className="mail-pane-avatar is-you">Y</span>
+      <span>Reply...</span>
+    </div>
+  </div>
+</div>

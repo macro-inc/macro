@@ -210,6 +210,31 @@ fn agent_harness_egress_url_selects_defaults_without_a_required_config_value() {
 }
 
 #[test]
+fn telemetry_intake_url_parses() {
+    assert_parses_for_all_environments(TelemetryIntakeUrl::default_for_environment);
+}
+
+#[test]
+fn telemetry_intake_url_is_the_analytics_proxy_outside_local() {
+    with_mock_override_env(missing_override, || {
+        for (environment, expected) in [
+            (Environment::Local, "http://localhost:4318"),
+            (
+                Environment::Develop,
+                "https://macro-prox-dev.macroverse.workers.dev/i/otlp",
+            ),
+            (
+                Environment::Production,
+                "https://macro-prox-prod.macroverse.workers.dev/i/otlp",
+            ),
+        ] {
+            let url = TelemetryIntakeUrl::new_for_environment(environment).unwrap();
+            assert_eq!(url.as_str(), expected);
+        }
+    });
+}
+
+#[test]
 fn agent_harness_egress_url_honors_the_standard_override_for_tunnels() {
     with_mock_override_env(
         |name| {
@@ -257,6 +282,27 @@ fn mcp_service_url_honors_the_standard_override() {
             assert_eq!(url.as_str(), "http://mcp-service:8080");
         },
     );
+}
+
+#[test]
+fn mcp_chatgpt_service_url_defaults_are_bases_without_a_trailing_slash() {
+    with_mock_override_env(missing_override, || {
+        for (environment, expected) in [
+            (Environment::Local, "http://localhost:8103"),
+            (
+                Environment::Develop,
+                "https://mcp-chatgpt-worker-dev.macroverse.workers.dev",
+            ),
+            (
+                Environment::Production,
+                "https://mcp-chatgpt-worker.macroverse.workers.dev",
+            ),
+        ] {
+            let url = McpChatgptServiceUrl::new_for_environment(environment).unwrap();
+            assert_eq!(url.as_str(), expected);
+            url.as_str().parse::<Url>().unwrap();
+        }
+    });
 }
 
 #[test]
@@ -809,4 +855,33 @@ fn service_url_converts_to_string() {
 #[test]
 fn connect_api_url_parses() {
     assert_parses_for_all_environments(ConnectApiUrl::default_for_environment);
+}
+
+#[test]
+fn google_oauth_token_info_url_is_google_in_every_environment() {
+    with_mock_override_env(missing_override, || {
+        for environment in ENVS {
+            let url = GoogleOauthTokenInfoUrl::new_for_environment(environment).unwrap();
+            assert_eq!(
+                url.as_str(),
+                "https://www.googleapis.com/oauth2/v3/tokeninfo"
+            );
+        }
+    });
+}
+
+#[test]
+fn google_oauth_token_info_url_honors_the_standard_override() {
+    with_mock_override_env(
+        |name| {
+            assert_eq!(name, "OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL");
+            Ok("http://127.0.0.1:9100/oauth2/v3/tokeninfo".to_owned())
+        },
+        || {
+            for environment in ENVS {
+                let url = GoogleOauthTokenInfoUrl::new_for_environment(environment).unwrap();
+                assert_eq!(url.as_str(), "http://127.0.0.1:9100/oauth2/v3/tokeninfo");
+            }
+        },
+    );
 }

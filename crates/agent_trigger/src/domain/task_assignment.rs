@@ -4,7 +4,8 @@ use std::collections::HashSet;
 
 use agent_session::domain::error::{AgentSessionError, Result as AgentResult};
 use chrono::{DateTime, Utc};
-use trigger_context::{TaskAssignedContext, TaskSnapshot, TriggerContext};
+use trigger_context::origin::{AgentActor, Caller, Lineage};
+use trigger_context::{TaskAssignedContext, TaskSnapshot, TriggerContext, TriggerOrigin};
 
 use crate::domain::context::PeopleDirectory;
 use agent_session::domain::ports::AgentSessionRepo;
@@ -47,6 +48,8 @@ pub struct TaskBrief {
     pub status: Option<String>,
     /// Current Priority option name.
     pub priority: Option<String>,
+    /// Current start date.
+    pub start: Option<chrono::DateTime<chrono::Utc>>,
     /// Current due date.
     pub due: Option<chrono::DateTime<chrono::Utc>>,
     /// User and bot ids in the Assignees property, people and agents alike.
@@ -76,6 +79,8 @@ pub struct TaskAssignment {
     pub actor: MacroUserIdStr<'static>,
     /// Agents added by this change, in stable order.
     pub bots: Vec<BotId>,
+    /// Who made the assignment, and how.
+    pub origin: TriggerOrigin,
 }
 
 impl TaskAssignment {
@@ -95,15 +100,39 @@ impl TaskAssignment {
         if bots.is_empty() {
             return None;
         }
+        let actor = updated
+            .actor_user_id
+            .clone()
+            .or_else(|| updated.on_behalf_of.clone())?;
         Some(Self {
             event_id,
             parent: MessageParent::parse("document", &updated.entity_id).ok()?,
-            actor: updated
-                .actor_user_id
-                .clone()
-                .or_else(|| updated.on_behalf_of.clone())?,
+            origin: assignment_origin(updated, actor.clone()),
+            actor,
             bots,
         })
+    }
+}
+
+/// `actor` is the user behind the change; the event's own `actor` says whether
+/// an agent made it for them.
+fn assignment_origin(
+    updated: &EntityPropertyUpdatedMetadata,
+    actor: MacroUserIdStr<'static>,
+) -> TriggerOrigin {
+    let acting_bot = updated.actor.as_ref().and_then(|actor| actor.as_bot());
+    let by = match acting_bot {
+        Some(bot) => Caller::Agent(AgentActor {
+            bot: bot.bot_id(),
+            on_behalf_of: actor,
+            lineage: Lineage::Unattributed,
+        }),
+        None => Caller::Person { user: actor },
+    };
+    let task = updated.entity_id.clone();
+    match updated.inherited_from_project {
+        Some(project) => TriggerOrigin::ProjectInherited { by, task, project },
+        None => TriggerOrigin::TaskAssigned { by, task },
     }
 }
 
@@ -193,6 +222,7 @@ where
                 discussion_id: message.id,
                 actor: assignment.actor.clone(),
                 prompt: assignment_prompt(assignment, &brief),
+                origin: assignment.origin.clone(),
                 context: Some(context),
             },
         ));
@@ -229,6 +259,7 @@ async fn assigned_context(
             markdown: brief.markdown.clone(),
             status: brief.status.clone(),
             priority: brief.priority.clone(),
+            start: brief.start,
             due: brief.due,
             assignees: named.collect(),
             project: brief.project.clone(),

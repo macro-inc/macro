@@ -78,3 +78,72 @@ backfill_markdown_content_location_prod_apply *FLAGS:
     DOCUMENT_STORAGE_BUCKET="macro-document-storage-prod"
     RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="prod" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
         cargo run -p documents --features backfill_binary --bin backfill_markdown_content_location -- --apply {{ FLAGS }}
+
+# Dry-run the orphaned email attachment scan against the dev DB: counts only,
+# writes nothing but the state file. Pass an absolute --state-file, for example:
+# just enqueue_orphaned_email_attachments_dev --state-file /tmp/orphans-dev-dry-run.json
+enqueue_orphaned_email_attachments_dev *FLAGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ " {{ FLAGS }} " == *" --apply "* ]]; then
+        echo "--apply queues documents; use enqueue_orphaned_email_attachments_dev_apply." >&2
+        exit 1
+    fi
+    DATABASE_URL="$(../../tooling/scripts/rds_database_url.sh macro-db-dev macrodb-password-dev macrodb)"
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="dev" DATABASE_URL="$DATABASE_URL" \
+        cargo run -p documents --features backfill_binary --bin enqueue_orphaned_email_attachments -- {{ FLAGS }}
+
+# Queue dev's orphaned email attachments for the released-attachment drain,
+# which trashes the ones their owners did not adopt. For example:
+# just enqueue_orphaned_email_attachments_dev_apply --state-file /tmp/orphans-dev-apply.json
+enqueue_orphaned_email_attachments_dev_apply *FLAGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo -e "\033[33mWARNING: this queues dev email attachment documents with no email link for the drain, which moves unadopted ones to the Trash.\033[0m"
+    echo -n "Continue? [y/N] "
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        echo "Cancelled."
+        exit 0
+    fi
+    DATABASE_URL="$(../../tooling/scripts/rds_database_url.sh macro-db-dev macrodb-password-dev macrodb)"
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="dev" DATABASE_URL="$DATABASE_URL" \
+        cargo run -p documents --features backfill_binary --bin enqueue_orphaned_email_attachments -- --apply {{ FLAGS }}
+
+# Dry-run the orphaned email attachment scan against the PRODUCTION primary.
+# Read-only, but it reads every property row; see AGENTS.md first. For example:
+# just enqueue_orphaned_email_attachments_prod --state-file /tmp/orphans-prod-dry-run.json
+enqueue_orphaned_email_attachments_prod *FLAGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ " {{ FLAGS }} " == *" --apply "* ]]; then
+        echo "--apply queues documents; use enqueue_orphaned_email_attachments_prod_apply." >&2
+        exit 1
+    fi
+    echo -e "\033[31mThis reads the PRODUCTION primary page by page until the walk ends or you stop it.\033[0m"
+    echo -n "Type 'prod dry run' to continue: "
+    read -r response
+    if [[ "$response" != "prod dry run" ]]; then
+        echo "Cancelled."
+        exit 0
+    fi
+    DATABASE_URL="$(../../tooling/scripts/rds_database_url.sh macro-db-prod macrodb-password-prod macrodb)"
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="prod" DATABASE_URL="$DATABASE_URL" \
+        cargo run -p documents --features backfill_binary --bin enqueue_orphaned_email_attachments -- {{ FLAGS }}
+
+# Queue PRODUCTION's orphaned email attachments for the drain, which moves
+# unadopted ones to the Trash. See AGENTS.md first. For example:
+# just enqueue_orphaned_email_attachments_prod_apply --state-file /tmp/orphans-prod-apply.json
+enqueue_orphaned_email_attachments_prod_apply *FLAGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo -e "\033[31mWARNING: this queues PRODUCTION email attachment documents with no email link for the drain, which moves unadopted ones to the Trash.\033[0m"
+    echo -n "Type 'prod enqueue orphans' to continue: "
+    read -r response
+    if [[ "$response" != "prod enqueue orphans" ]]; then
+        echo "Cancelled."
+        exit 0
+    fi
+    DATABASE_URL="$(../../tooling/scripts/rds_database_url.sh macro-db-prod macrodb-password-prod macrodb)"
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="prod" DATABASE_URL="$DATABASE_URL" \
+        cargo run -p documents --features backfill_binary --bin enqueue_orphaned_email_attachments -- --apply {{ FLAGS }}

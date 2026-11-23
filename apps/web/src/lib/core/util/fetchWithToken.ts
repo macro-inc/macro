@@ -29,7 +29,7 @@ export type FetchWithTokenInit<CustomErrorCode extends string = never> =
   };
 
 function fetchWithCredentials<
-  T extends ObjectLike | Uint8Array,
+  T extends ObjectLike | Uint8Array | null,
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,
@@ -84,7 +84,7 @@ function fetchWithCredentials<
  * }
  */
 export async function fetchWithToken<
-  T extends ObjectLike | Uint8Array,
+  T extends ObjectLike | Uint8Array | null,
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,
@@ -120,7 +120,7 @@ export async function fetchWithToken<
     result.error.some((error) => error.code === 'UNAUTHORIZED')
   ) {
     const tokenResult = await requestInit.trace.parentSpan.run(() =>
-      fetchToken()
+      fetchToken(init?.signal)
     );
     if (tokenResult.isErr()) {
       // A definitive rejection already carries UNAUTHORIZED; transient refresh
@@ -128,6 +128,17 @@ export async function fetchWithToken<
       // session.
       return err(tokenResult.error);
     }
+
+    // The caller may have given up while the session refreshed, for example
+    // because the signed-in account changed; never replay under the new one.
+    if (init?.signal?.aborted)
+      return err([
+        {
+          name: 'AbortError',
+          code: 'NETWORK_ERROR',
+          message: 'Request aborted before retry',
+        },
+      ]);
 
     // Retry the original request
     result = await fetchWithCredentials<T, CustomErrorCode>(input, requestInit);

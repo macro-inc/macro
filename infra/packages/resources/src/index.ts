@@ -23,6 +23,7 @@ export {
   createFrecencyTablePolicy,
 } from './resources/frecency';
 export { createImage } from './resources/image';
+export { versionEnvironment } from './resources/image_version';
 export {
   serviceLoadBalancer,
   MacroApplicationLoadBalancer,

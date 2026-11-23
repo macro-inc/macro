@@ -1,9 +1,15 @@
 import type { CellWrite } from '@core/database-sql/generated/types';
 import type { Accessor, Component, JSX } from 'solid-js';
+import type { GridCellProps } from '../../database/components/grid-cell';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
-import type { NewPipeline, Pipeline } from '../core/pipeline';
+import type { RecordCreation } from '../../database/primitives/record-actions';
+import type { NewPipeline, Pipeline, TrackedPipeline } from '../core/pipeline';
 import type { PipelineCsvRecord, PipelineCsvRow } from '../core/pipeline-csv';
-import type { PipelineEntryRecord } from '../core/pipeline-entry';
+import type {
+  PipelineEntry,
+  PipelineEntryRecord,
+} from '../core/pipeline-entry';
+import type { StageRequirement } from '../core/stage-requirements';
 
 export type PipelinesSource = {
   pipelines: Accessor<Pipeline[]>;
@@ -72,3 +78,59 @@ export type PipelineEntriesView = Component<{
   record: PipelineEntryRecord;
   onOpenPipeline?: (pipelineId: string) => void;
 }>;
+
+/** The record a page offers to add to a pipeline, as the add form names it. */
+export type AddToPipelineRecord = PipelineEntryRecord & {
+  name: string;
+  /** Its domain or email, shown beside the name. */
+  detail: string;
+};
+
+/** One pipeline's columns and stage requirements, read while its stages or add form are shown. */
+export type PipelineSchemaSource = {
+  /** Undefined until read. */
+  columns: Accessor<DatabaseViewColumn[] | undefined>;
+  /** Undefined until read. */
+  requirements: Accessor<StageRequirement[] | undefined>;
+  loading: Accessor<boolean>;
+  error: Accessor<boolean>;
+};
+
+/** How a pipeline row added from a record's page ended. */
+export type PipelineRowAdded =
+  | { kind: 'added' }
+  /** The answer was lost; the row may have been saved. */
+  | { kind: 'uncertain' }
+  | { kind: 'failed'; message: string };
+
+/**
+ * What a record page's Add to pipeline menu reads and writes. Created when the
+ * menu first opens, so a page that never opens it reads nothing.
+ */
+export type AddToPipelineSource = {
+  /** The team's pipelines the viewer can see. */
+  pipelines: Accessor<Pipeline[]>;
+  loading: Accessor<boolean>;
+  error: Accessor<boolean>;
+  retry(): Promise<void>;
+  /** The record's pipeline rows, as its Pipelines card reads them. */
+  entries: Accessor<PipelineEntry[]>;
+  createSchema(pipeline: TrackedPipeline): PipelineSchemaSource;
+  /** Writes one row, then rereads the record's rows so its Pipelines card shows it. */
+  addRow(
+    pipeline: TrackedPipeline,
+    columns: readonly DatabaseViewColumn[],
+    creation: RecordCreation
+  ): Promise<PipelineRowAdded>;
+  /** How the add form shows and edits text, links and mentions. */
+  cells: PipelineCellRenderers;
+};
+
+export type PipelineCellRenderers = Pick<
+  GridCellProps,
+  | 'renderTextEditor'
+  | 'renderTextValue'
+  | 'renderLinkValue'
+  | 'renderMentionPicker'
+  | 'renderMentionValue'
+>;

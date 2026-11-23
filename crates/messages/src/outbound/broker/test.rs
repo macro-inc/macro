@@ -43,6 +43,7 @@ fn attachment(id: u128) -> MessageAttachment {
 
 fn reply(parent: MessageParent, attachments: Vec<MessageAttachment>) -> Message {
     Message {
+        kind: crate::domain::models::MessageKind::Message,
         id: REPLY,
         parent,
         thread_id: Some(ROOT),

@@ -4,15 +4,20 @@
 #[path = "http_validator_test.rs"]
 mod http_validator_test;
 
+use super::address_guard::{BlockedAddressFilteringResolver, SystemResolver};
 use crate::domain::{
+    blocked_address::{is_blocked_host, is_blocked_ip},
     models::{
         Webhook, WebhookEndpointSchemePolicy, WebhookValidationResult, WebhookValidationTestEvent,
     },
     ports::WebhookValidationClient,
 };
-use reqwest::{Client, StatusCode, Url, redirect::Policy};
-use std::{net::IpAddr, time::Duration};
-use tokio::net::lookup_host;
+use reqwest::{
+    Client, StatusCode, Url,
+    dns::{Name, Resolve},
+    redirect::Policy,
+};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 const EVENT_NAME: &str = "webhook.validation.test";
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
@@ -22,6 +27,9 @@ pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct ReqwestWebhookValidationClient {
     pub(super) client: Client,
     pub(super) endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+    /// Unfiltered resolver behind both the preflight check and the client's
+    /// connect-time filter.
+    pub(super) resolver: Arc<dyn Resolve>,
 }
 
 impl ReqwestWebhookValidationClient {
@@ -34,14 +42,35 @@ impl ReqwestWebhookValidationClient {
     pub fn new_with_endpoint_scheme_policy(
         endpoint_scheme_policy: WebhookEndpointSchemePolicy,
     ) -> Result<Self, reqwest::Error> {
+        Self::with_resolver(endpoint_scheme_policy, Arc::new(SystemResolver))
+    }
+
+    /// Build the client so every connection goes through `resolver`, filtered
+    /// for blocked addresses unless the policy allows local ones. System
+    /// proxies are ignored so they cannot route around the filter.
+    pub(super) fn with_resolver(
+        endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+        resolver: Arc<dyn Resolve>,
+    ) -> Result<Self, reqwest::Error> {
+        let connect_resolver: Arc<dyn Resolve> = if endpoint_scheme_policy.allows_local_addresses()
+        {
+            resolver.clone()
+        } else {
+            Arc::new(BlockedAddressFilteringResolver {
+                inner: resolver.clone(),
+            })
+        };
         let client = Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .redirect(Policy::none())
+            .no_proxy()
+            .dns_resolver(connect_resolver)
             .build()?;
 
         Ok(Self {
             client,
             endpoint_scheme_policy,
+            resolver,
         })
     }
 }
@@ -56,6 +85,7 @@ impl WebhookValidationClient for ReqwestWebhookValidationClient {
         let url = match validate_resolved_endpoint_url(
             &webhook.endpoint_url,
             self.endpoint_scheme_policy,
+            self.resolver.as_ref(),
         )
         .await
         {
@@ -147,38 +177,37 @@ impl EndpointValidationError {
     }
 }
 
+/// Check the endpoint before sending so users get a clear message. The
+/// client's connect-time resolver enforces the same address rules.
 pub(super) async fn validate_resolved_endpoint_url(
     value: &str,
     endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+    resolver: &dyn Resolve,
 ) -> Result<Url, EndpointValidationError> {
     let url = validate_endpoint_url(value, endpoint_scheme_policy)?;
-    let Some(host) = url.host_str().map(str::to_owned) else {
-        return Err(EndpointValidationError::InvalidConfiguration(
-            "webhook endpoint URL host is invalid",
-        ));
+    // IP literals were checked by `validate_endpoint_url` and never reach a resolver.
+    let Some(url::Host::Domain(host)) = url.host() else {
+        return Ok(url);
     };
-    let Some(port) = url.port_or_known_default() else {
-        return Err(EndpointValidationError::InvalidConfiguration(
-            "webhook endpoint URL port is invalid",
-        ));
-    };
+    let name = Name::from_str(host).map_err(|_| {
+        EndpointValidationError::InvalidConfiguration("webhook endpoint URL host is invalid")
+    })?;
 
-    let mut resolved =
-        match tokio::time::timeout(REQUEST_TIMEOUT, lookup_host((host.as_str(), port))).await {
-            Ok(Ok(resolved)) => resolved,
-            Ok(Err(_)) => {
-                return Err(EndpointValidationError::ResolutionFailure(
-                    "webhook endpoint host could not be resolved",
-                ));
-            }
-            Err(_) => {
-                return Err(EndpointValidationError::ResolutionFailure(
-                    "webhook endpoint host resolution timed out",
-                ));
-            }
-        };
+    let resolved = match tokio::time::timeout(REQUEST_TIMEOUT, resolver.resolve(name)).await {
+        Ok(Ok(resolved)) => resolved,
+        Ok(Err(_)) => {
+            return Err(EndpointValidationError::ResolutionFailure(
+                "webhook endpoint host could not be resolved",
+            ));
+        }
+        Err(_) => {
+            return Err(EndpointValidationError::ResolutionFailure(
+                "webhook endpoint host resolution timed out",
+            ));
+        }
+    };
     let mut saw_address = false;
-    for address in resolved.by_ref() {
+    for address in resolved {
         saw_address = true;
         if !endpoint_scheme_policy.allows_local_addresses() && is_blocked_ip(address.ip()) {
             return Err(EndpointValidationError::InvalidConfiguration(
@@ -222,34 +251,6 @@ fn validate_endpoint_url(
     }
 
     Ok(url)
-}
-
-fn is_blocked_host(host: &str) -> bool {
-    let host = host.trim_matches(['[', ']']).to_ascii_lowercase();
-    if host == "localhost" || host.ends_with(".localhost") {
-        return true;
-    }
-
-    host.parse::<IpAddr>().is_ok_and(is_blocked_ip)
-}
-
-fn is_blocked_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(ip) => {
-            ip.is_private()
-                || ip.is_loopback()
-                || ip.is_link_local()
-                || ip.is_broadcast()
-                || ip.is_unspecified()
-                || ip.octets() == [169, 254, 169, 254]
-        }
-        IpAddr::V6(ip) => {
-            ip.is_loopback()
-                || ip.is_unspecified()
-                || ip.is_unique_local()
-                || (ip.segments()[0] & 0xffc0) == 0xfe80
-        }
-    }
 }
 
 pub(super) fn is_reserved_macro_header(name: &str) -> bool {

@@ -49,10 +49,7 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'channel_thread' }, () => EntityType.CHANNEL)
     .with({ type: 'call' }, () => EntityType.CHANNEL)
     .with({ type: 'crm_company' }, () => EntityType.COMPANY)
-    .with({ type: 'crm_contact' }, () => {
-      // No CONTACT in the properties-service EntityType yet.
-      throw new Error('crm contacts do not support properties');
-    })
+    .with({ type: 'crm_contact' }, () => EntityType.CONTACT)
     .with({ type: 'agent_session' }, () => {
       throw new Error(
         'agent sessions are not property-service mutation targets'
@@ -72,6 +69,12 @@ function getEntityType(entity: EntityData): EntityType {
     })
     .with({ type: 'form' }, () => {
       throw new Error('forms do not support properties');
+    })
+    .with({ type: 'harness' }, () => {
+      throw new Error('runtimes do not support properties');
+    })
+    .with({ type: 'team' }, () => {
+      throw new Error('teams do not support properties');
     })
     .exhaustive();
 }
@@ -238,10 +241,7 @@ function KeyPropertiesRow(props: {
                           <Match when={userCount() > 1}>
                             <div class="flex items-center gap-1">
                               <Show when={props.maxUserStackUsers === 0}>
-                                <UsersIcon
-                                  class="size-4 shrink-0 mobile:size-5"
-                                  data-icon-motion="none"
-                                />
+                                <UsersIcon class="size-4 shrink-0 mobile:size-5" />
                               </Show>
                               <Property.UserStack
                                 property={shown()}

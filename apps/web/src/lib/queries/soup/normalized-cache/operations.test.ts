@@ -15,20 +15,6 @@ let testQueryClient: QueryClient;
 
 const getSoupItemsMock = vi.hoisted(() => vi.fn());
 const refreshActiveGraphqlSoupQueriesMock = vi.hoisted(() => vi.fn());
-const graphqlSoup = vi.hoisted(() => ({ enabled: false }));
-
-vi.mock('@core/constant/featureFlags', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...actual,
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      flag === actual.enableGraphqlSoup
-        ? graphqlSoup.enabled
-        : actual.isFeatureEnabled(flag),
-  };
-});
-
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getSoupItems: getSoupItemsMock },
 }));
@@ -79,7 +65,6 @@ import {
   refetchSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
-  removeSoupEntitiesFromDoneFilteredQueries,
   restoreSoupEntityToDoneFilteredQueries,
 } from './operations';
 
@@ -205,7 +190,6 @@ function getSearchQuery() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  graphqlSoup.enabled = false;
   getSoupItemsMock.mockResolvedValue({
     isErr: () => false,
     value: { items: [] },
@@ -314,19 +298,18 @@ describe('refetchSoupEntity', () => {
     await refetchSoupEntity('task-1', 'document', { refreshGraphql: true });
 
     expect(refreshActiveGraphqlSoupQueriesMock).toHaveBeenCalledOnce();
-    expect(getSoupItemsMock).toHaveBeenCalledOnce();
+    expect(getSoupItemsMock).not.toHaveBeenCalled();
   });
 
   it('does not refresh GraphQL Soup queries for legacy-only refetches', async () => {
     await refetchSoupEntity('task-1', 'document');
 
     expect(refreshActiveGraphqlSoupQueriesMock).not.toHaveBeenCalled();
-    expect(getSoupItemsMock).toHaveBeenCalledOnce();
+    expect(getSoupItemsMock).not.toHaveBeenCalled();
   });
 
   describe('when GraphQL owns the soup lists', () => {
     beforeEach(() => {
-      graphqlSoup.enabled = true;
       getSoupItemsMock.mockResolvedValue({
         isErr: () => false,
         value: { items: [mockDocumentItem('doc-new')] },
@@ -638,86 +621,6 @@ describe('removeSoupEntities', () => {
     const restored = getSoupQuery()!;
     expect(restored.pages[0].items).toHaveLength(2);
     expect(getSoupItemId(restored.pages[0].items[0])).toBe('d-1');
-  });
-});
-
-describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
-  const emailItem = (id: string): SoupApiItem =>
-    ({
-      tag: 'emailThread',
-      data: { id, inboxVisible: true },
-      frecency_score: 1,
-    }) as unknown as SoupApiItem;
-
-  // Query keys carry the compiled filter body; done-excluding views embed
-  // `emailView: 'inbox'` or a compiled `*Done: false` literal.
-  const inboxViewKey = [...soupKeys.items._def, { emailView: 'inbox' }];
-  const doneFilterKey = [
-    ...soupKeys.items._def,
-    {
-      ef: [
-        {
-          '|': [
-            { l: { NotificationState: 'unseen' } },
-            { l: { NotificationState: 'seen' } },
-          ],
-        },
-      ],
-    },
-  ];
-  const ndFilterKey = [
-    ...soupKeys.items._def,
-    { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
-  ];
-  const allViewKey = [...soupKeys.items._def, { emailView: 'all' }];
-
-  const itemsAt = (key: unknown[]) =>
-    testQueryClient
-      .getQueryData<InfiniteData<SoupPage, unknown>>(key)!
-      .pages[0].items.map(getSoupItemId);
-
-  it('does not treat negated or mixed-OR state filters as active-only', () => {
-    const active = { l: { ns: 'unseen' } };
-    const cases = [
-      { '!': active },
-      { '|': [active, { l: { ns: 'done' } }] },
-      { '|': [active, { l: { id: 'e-1' } }] },
-      { l: { ns: 'done' } },
-    ];
-    for (const ast of cases) {
-      const key = [...soupKeys.items._def, { df: ast }];
-      testQueryClient.setQueryData(key, mockSoupCache([[emailItem('e-1')]]));
-      removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
-      expect(itemsAt(key)).toEqual(['e-1']);
-    }
-  });
-
-  it('removes from done-filtered queries and keeps done-inclusive ones', () => {
-    const data = () => mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]]);
-    testQueryClient.setQueryData(inboxViewKey, data());
-    testQueryClient.setQueryData(doneFilterKey, data());
-    testQueryClient.setQueryData(ndFilterKey, data());
-    testQueryClient.setQueryData(allViewKey, data());
-
-    removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
-
-    expect(itemsAt(inboxViewKey)).toEqual(['c-1']);
-    expect(itemsAt(doneFilterKey)).toEqual(['c-1']);
-    expect(itemsAt(ndFilterKey)).toEqual(['c-1']);
-    expect(itemsAt(allViewKey)).toEqual(['e-1', 'c-1']);
-  });
-
-  it('rollback restores removed rows', () => {
-    testQueryClient.setQueryData(
-      inboxViewKey,
-      mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]])
-    );
-
-    const tx = removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
-    expect(itemsAt(inboxViewKey)).toEqual(['c-1']);
-
-    tx.rollback();
-    expect(itemsAt(inboxViewKey)).toEqual(['e-1', 'c-1']);
   });
 });
 
@@ -2177,4 +2080,23 @@ describe('raw grouped entity IDs', () => {
     expect(removed[1].group.itemIds).toEqual([]);
     expect(removed[1].group.totalCount).toBe(4);
   });
+});
+
+it('notification-only Team skips generic refetch and timestamp cache mutation', async () => {
+  await refetchSoupEntity('team-1', 'team', {
+    refreshGraphql: true,
+    ownTouch: true,
+    notified: true,
+  });
+  expect(getSoupItemsMock).not.toHaveBeenCalled();
+  expect(refreshActiveGraphqlSoupQueriesMock).not.toHaveBeenCalled();
+  const team: SoupApiItem = {
+    tag: 'team',
+    data: { id: 'team-1', name: 'Synthetic team', ownerId: 'viewer' },
+    frecency_score: 0,
+    is_favorited: false,
+  };
+  mockNormalizer.getObjectById.mockReturnValueOnce(team);
+  optimisticUpdateSoupItemUpdatedAt('team-1', 'team', '2026-11-13T00:00:00Z');
+  expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
 });

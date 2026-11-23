@@ -1,11 +1,7 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import type { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { Accessor } from 'solid-js';
-import {
-  andEmailFilters,
-  emailFilterForDomains,
-  emailFilterForSignal,
-} from './email-filter';
+import { andEmailFilters, emailFilterForSignal } from './email-filter';
 
 export type EmailView = 'team' | 'me';
 export type EmailSignalView = 'signal' | 'all';
@@ -16,9 +12,7 @@ export type EmailSignalView = 'signal' | 'all';
  *
  * - `team` (default): widens visibility to every teammate's mailbox via
  *   the CRM-scoped domain filter (`ecd`).
- * - `me`: drops `ecd` and uses a raw `ef` any-direction OR-tree across
- *   the company's domains, so the default per-user mailbox scope applies
- *   and only the current user's own emails come back.
+ * - `me`: retains CRM consent/exclusions and narrows to the caller's mailbox.
  * - `signal`: ANDs an Importance leaf into `ef` (the server AND-merges
  *   `ef` with the CRM scope tree, so it composes with `ecd` too).
  */
@@ -26,7 +20,8 @@ export function useCompanyEmailsQuery(
   createQuery: typeof useSoupAstItemsQuery,
   domains: Accessor<string[]>,
   view: Accessor<EmailView>,
-  signalView: Accessor<EmailSignalView>
+  signalView: Accessor<EmailSignalView>,
+  primaryLinkId: Accessor<string | undefined>
 ) {
   return createQuery(
     () => {
@@ -44,18 +39,23 @@ export function useCompanyEmailsQuery(
       };
       const signal =
         signalView() === 'signal' ? emailFilterForSignal() : undefined;
-      const body =
-        view() === 'me'
-          ? {
-              ...base,
-              ef: andEmailFilters(emailFilterForDomains(domains()), signal),
-            }
-          : { ...base, ecd: domains(), ef: signal };
+      const body = {
+        ...base,
+        ecd: domains(),
+        ef: andEmailFilters(
+          signal,
+          view() === 'me'
+            ? { l: { Owner: primaryLinkId() ?? NIL_UUID } }
+            : undefined
+        ),
+      };
       return {
         params: { limit: 100, sort_method: 'updated_at' },
         body,
       };
     },
-    () => ({ enabled: domains().length > 0 })
+    () => ({
+      enabled: domains().length > 0 && (view() !== 'me' || !!primaryLinkId()),
+    })
   );
 }

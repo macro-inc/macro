@@ -1,6 +1,8 @@
 use super::*;
 use macro_user_id::cowlike::CowLike;
 
+type ExpectedWrite = (&'static [&'static str], &'static [&'static str]);
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
@@ -24,24 +26,33 @@ async fn gmail_folder_restore_refreshes_all_mail_before_provider_sync(
     let owner = MacroUserIdStr::parse_from_str("macro|mail@example.com")?.into_owned();
     let link = uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
-    for (thread, message, provider_id, label, folder, action, date) in [
+    // Restoring from Trash takes TRASH off and nothing else. Not spam is a
+    // move from Spam to the inbox, as Gmail's own button makes it: INBOX
+    // goes on before SPAM comes off.
+    let trash_writes: &[ExpectedWrite] = &[(&[], &["TRASH"])];
+    let spam_writes: &[ExpectedWrite] = &[(&["INBOX"], &[]), (&[], &["SPAM"])];
+    for (thread, message, provider_id, folder, action, date, in_inbox, labels, expected_writes) in [
         (
             uuid::uuid!("0b000000-0000-0000-0000-000000000103"),
             uuid::uuid!("0c000000-0000-0000-0000-000000000103"),
             "all-mail-message-1-3",
-            "TRASH",
             PreviewViewStandardLabel::Trash,
             MailboxAction::Trashed(false),
             Utc.with_ymd_and_hms(2025, 6, 3, 0, 0, 0).unwrap(),
+            false,
+            &["Label_Work"][..],
+            trash_writes,
         ),
         (
             uuid::uuid!("0b000000-0000-0000-0000-000000000104"),
             uuid::uuid!("0c000000-0000-0000-0000-000000000104"),
             "all-mail-message-1-4",
-            "SPAM",
             PreviewViewStandardLabel::Spam,
             MailboxAction::Junk(false),
             Utc.with_ymd_and_hms(2025, 6, 4, 0, 0, 0).unwrap(),
+            true,
+            &["INBOX", "Label_Work"][..],
+            spam_writes,
         ),
     ] {
         service
@@ -62,7 +73,7 @@ async fn gmail_folder_restore_refreshes_all_mail_before_provider_sync(
         );
 
         // Exercise the semantic action and real staged DB write. Repeating
-        // a completed restore must not enqueue another write or add Inbox.
+        // a completed restore must not enqueue another write.
         for _ in 0..2 {
             service
                 .change_thread_mailbox_state_impl(owner.clone(), thread, action.clone())
@@ -71,15 +82,14 @@ async fn gmail_folder_restore_refreshes_all_mail_before_provider_sync(
 
         let restored = service.email_repo.thread_by_id(thread).await?.unwrap();
         assert_eq!(restored.latest_non_spam_message_ts, Some(date));
-        assert!(!restored.inbox_visible);
-        let labels = service.email_repo.labels_by_message_ids(&[message]).await?;
-        assert_eq!(
-            labels[&message]
-                .iter()
-                .map(|l| l.provider_label_id.as_str())
-                .collect::<Vec<_>>(),
-            ["Label_Work"]
-        );
+        assert_eq!(restored.inbox_visible, in_inbox);
+        let found = service.email_repo.labels_by_message_ids(&[message]).await?;
+        let mut found: Vec<_> = found[&message]
+            .iter()
+            .map(|l| l.provider_label_id.as_str())
+            .collect();
+        found.sort_unstable();
+        assert_eq!(found, labels);
 
         for view in [folder, PreviewViewStandardLabel::All] {
             let rows = service
@@ -110,18 +120,170 @@ async fn gmail_folder_restore_refreshes_all_mail_before_provider_sync(
         let matching: Vec<_> = writes
             .iter()
             .filter(|write| write.1.iter().any(|(id, _)| *id == message))
+            .cloned()
             .collect();
-        assert_eq!(matching.len(), 1);
-        assert_eq!(
-            *matching[0],
+        let expected: Vec<_> = expected_writes
+            .iter()
+            .map(|(add, remove)| {
+                (
+                    link,
+                    vec![(message, provider_id.to_string())],
+                    add.iter().map(|l| l.to_string()).collect::<Vec<_>>(),
+                    remove.iter().map(|l| l.to_string()).collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        assert_eq!(matching, expected);
+    }
+    Ok(())
+}
+
+/// Report spam on a Gmail thread in the inbox files it under Spam and takes
+/// it out of the inbox, as Gmail's own button does; Not spam on a thread
+/// that was never spam leaves an archived thread archived.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts(
+            "email_dynamic_query",
+            "email_outlook_threads",
+            "email_all_mail",
+            "email_folders"
+        )
+    )
+)]
+async fn gmail_report_spam_moves_the_thread_out_of_the_inbox(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use super::thread_archive::{RecordingEnqueuer, service_with_enqueuer};
+    use crate::domain::models::mailbox_action::MailboxAction;
+
+    let enqueuer = RecordingEnqueuer::default();
+    let service = service_with_enqueuer(pool.clone(), enqueuer.clone());
+    let owner = MacroUserIdStr::parse_from_str("macro|mail@example.com")?.into_owned();
+    let link = uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    let thread = uuid::uuid!("0b000000-0000-0000-0000-000000000101");
+    let message = uuid::uuid!("0c000000-0000-0000-0000-000000000101");
+    let provider_id = "all-mail-message-1-1".to_string();
+    let views = async |view| -> anyhow::Result<bool> {
+        let rows = service
+            .email_repo
+            .previews_for_view_cursor(
+                PreviewCursorQuery {
+                    view: PreviewView::StandardLabel(view),
+                    link_ids: vec![link],
+                    limit: 100,
+                    team_id: None,
+                    query: Query::new(None, SimpleSortMethod::UpdatedAt, None),
+                },
+                owner.clone(),
+            )
+            .await?;
+        Ok(rows.iter().any(|row| row.id == thread))
+    };
+
+    service
+        .change_thread_mailbox_state_impl(owner.clone(), thread, MailboxAction::Junk(false))
+        .await?;
+    assert!(enqueuer.0.lock().unwrap().is_empty());
+    assert!(
+        !service
+            .email_repo
+            .thread_by_id(thread)
+            .await?
+            .unwrap()
+            .inbox_visible
+    );
+
+    service
+        .email_repo
+        .insert_message_labels_batch(&[message], "INBOX", link)
+        .await?;
+    let mut tx = pool.begin().await?;
+    super::super::thread::update_thread_metadata(&mut tx, thread, link).await?;
+    tx.commit().await?;
+    assert!(
+        service
+            .email_repo
+            .thread_by_id(thread)
+            .await?
+            .unwrap()
+            .inbox_visible
+    );
+
+    for _ in 0..2 {
+        service
+            .change_thread_mailbox_state_impl(owner.clone(), thread, MailboxAction::Junk(true))
+            .await?;
+    }
+
+    assert!(
+        !service
+            .email_repo
+            .thread_by_id(thread)
+            .await?
+            .unwrap()
+            .inbox_visible
+    );
+    let labels = service.email_repo.labels_by_message_ids(&[message]).await?;
+    assert_eq!(
+        labels[&message]
+            .iter()
+            .map(|l| l.provider_label_id.as_str())
+            .collect::<Vec<_>>(),
+        ["SPAM"]
+    );
+    assert!(views(PreviewViewStandardLabel::Spam).await?);
+    assert!(!views(PreviewViewStandardLabel::Inbox).await?);
+    assert!(!views(PreviewViewStandardLabel::All).await?);
+    assert_eq!(
+        *enqueuer.0.lock().unwrap(),
+        [
             (
                 link,
-                vec![(message, provider_id.to_string())],
+                vec![(message, provider_id.clone())],
+                vec!["SPAM".to_string()],
+                vec![]
+            ),
+            (
+                link,
+                vec![(message, provider_id.clone())],
                 vec![],
-                vec![label.to_string()]
-            )
-        );
-    }
+                vec!["INBOX".to_string()]
+            ),
+        ]
+    );
+
+    // Not spam on the user's own sent mail takes it out of Spam but keeps
+    // it out of the inbox, as Move to inbox does.
+    enqueuer.0.lock().unwrap().clear();
+    sqlx::query!(
+        "UPDATE email_messages SET is_sent = true WHERE id = $1",
+        message
+    )
+    .execute(&pool)
+    .await?;
+    service
+        .change_thread_mailbox_state_impl(owner.clone(), thread, MailboxAction::Junk(false))
+        .await?;
+    assert!(
+        !service
+            .email_repo
+            .thread_by_id(thread)
+            .await?
+            .unwrap()
+            .inbox_visible
+    );
+    assert_eq!(
+        *enqueuer.0.lock().unwrap(),
+        [(
+            link,
+            vec![(message, provider_id)],
+            vec![],
+            vec!["SPAM".to_string()]
+        )]
+    );
     Ok(())
 }
 
@@ -320,5 +482,41 @@ async fn folder_dates_and_shared_scope_use_the_selected_folder(
         .execute(&pool)
         .await?;
     }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_outlook_threads", "email_all_mail")
+    )
+)]
+async fn outlook_mailbox_states_report_the_messages_they_change(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use super::thread_archive::{RecordingEnqueuer, service_with_enqueuer};
+    use crate::domain::models::mailbox_action::MailboxAction;
+
+    let service = service_with_enqueuer(pool.clone(), RecordingEnqueuer::default());
+    // `email_all_mail` gives the Outlook inbox this owner.
+    let owner = MacroUserIdStr::parse_from_str("macro|mail@example.com")?.into_owned();
+    let thread = uuid::uuid!("0a000000-0000-0000-0000-0000000000a1");
+    // A second received message in the same conversation, also read and in
+    // the Inbox.
+    sqlx::query(
+        "INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_read, is_starred, is_sent, is_draft, has_attachments, internal_date_ts, mailbox_state, created_at, updated_at)
+         VALUES ('0a000000-0000-0000-0000-0000000000b3', $1, '0a000000-0000-0000-0000-000000000001', 'outlook-message-3', true, false, false, false, false, '2025-01-02T10:00:00Z',
+             '{\"in_inbox\":true,\"in_trash\":false,\"in_junk\":false,\"attention\":\"primary\"}', NOW(), NOW())",
+    )
+    .bind(thread)
+    .execute(&pool)
+    .await?;
+
+    let change = |action| service.change_thread_mailbox_state_impl(owner.clone(), thread, action);
+    assert_eq!(change(MailboxAction::Flagged(true)).await?, 2);
+    // Both are already read: nothing to change.
+    assert_eq!(change(MailboxAction::Read(true)).await?, 0);
+    assert_eq!(change(MailboxAction::Archived(true)).await?, 2);
     Ok(())
 }

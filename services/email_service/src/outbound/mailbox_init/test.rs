@@ -472,6 +472,105 @@ async fn reconnect_resumes_organization_commands_under_the_new_grant(db: PgPool)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reconnect_deletes_the_superseded_generations_sync_work(db: PgPool) {
+    let owner = actor(&db, "superseded@example.com").await;
+    let link = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(owner.0)),
+    )
+    .initialize(attempt(&db, owner.clone()).await)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES ($1,$2,1,'mail_folder','inbox')",
+        Uuid::now_v7(),
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES ($1,1,'queued',true)",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    // The old grant's subscription upkeep had been failing.
+    sqlx::query!(
+        "UPDATE email_mailbox_watch_work SET failures = 7, next_run_at = now() + interval '12 hours' WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    // And discovery had found no mailbox for the account.
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = now() WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    MailboxInitializationService::new(PgMailboxInitialization(db.clone()), Grants(grant(owner.0)))
+        .initialize(attempt(&db, owner.clone()).await)
+        .await
+        .unwrap();
+
+    let upkeep = sqlx::query!(
+        r#"SELECT failures, next_run_at <= now() AS "due!" FROM email_mailbox_watch_work WHERE link_id = $1"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        (upkeep.failures, upkeep.due),
+        (0, true),
+        "a reconnect retries the subscription at once, with its failures forgotten"
+    );
+    let marked = sqlx::query_scalar!(
+        r#"SELECT mailbox_unavailable_at IS NOT NULL AS "marked!" FROM email_links WHERE id = $1"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!marked, "a reconnect syncs the account's mailbox again");
+
+    let streams = sqlx::query!(
+        "SELECT generation,kind FROM email_sync_streams WHERE link_id = $1 ORDER BY kind",
+        link
+    )
+    .fetch_all(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        streams
+            .iter()
+            .map(|s| (s.generation, s.kind.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (2, "contacts_catalog"),
+            (2, "contacts_profile"),
+            (2, "folder_catalog")
+        ],
+        "the new generation re-enumerates folders from its own catalog"
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM email_message_reconciliation WHERE link_id = $1",
+            link
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn concurrent_gmail_and_outlook_connections_share_one_remaining_free_slot(db: PgPool) {
     let owner = actor(&db, "concurrent-limit@example.com").await;
     sqlx::query!("INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider) VALUES($1,$2,$3,'first@gmail.example','GMAIL')",Uuid::new_v4(),owner.1.as_ref(),owner.0.to_string()).execute(&db).await.unwrap();
@@ -494,4 +593,262 @@ async fn concurrent_gmail_and_outlook_connections_share_one_remaining_free_slot(
     assert!(matches!(failure, InitializationError::PaymentRequired));
     let count=sqlx::query_scalar!("SELECT count(*) FROM email_links l WHERE l.macro_id=$1 OR EXISTS(SELECT 1 FROM macro_user_links a WHERE a.link_id=l.id AND a.primary_macro_id=$1)",owner.1.as_ref()).fetch_one(&db).await.unwrap();
     assert_eq!(count, Some(2));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_addresss_own_account_takes_over_the_inbox_another_account_added(db: PgPool) {
+    let first = actor(&db, "first@example.com").await;
+    let link = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(first.0)),
+    )
+    .initialize(attempt(&db, first.clone()).await)
+    .await
+    .unwrap();
+    // The address gets its own account only after another account added it.
+    let mailbox = actor(&db, "mailbox@example.com").await;
+    let service = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(mailbox.0)),
+    );
+    assert_eq!(
+        service
+            .initialize(attempt(&db, mailbox.clone()).await)
+            .await
+            .unwrap(),
+        link
+    );
+    let row = sqlx::query!(
+        "SELECT macro_id,fusionauth_user_id,is_primary,sync_generation FROM email_links WHERE id = $1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(row.macro_id, mailbox.1.as_ref());
+    assert_eq!(row.fusionauth_user_id, mailbox.0.to_string());
+    assert!(row.is_primary);
+    assert_eq!(row.sync_generation, 2);
+    let edges = sqlx::query!(
+        "SELECT primary_macro_id,child_macro_id FROM macro_user_links WHERE link_id = $1",
+        link
+    )
+    .fetch_all(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        edges
+            .iter()
+            .map(|edge| (edge.primary_macro_id.as_str(), edge.child_macro_id.as_str()))
+            .collect::<Vec<_>>(),
+        vec![(first.1.as_ref(), mailbox.1.as_ref())],
+        "the account that added the inbox keeps it"
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM promoted_shared_mailboxes")
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_inbox_left_by_a_deleted_account_connects_without_sharing(db: PgPool) {
+    let first = actor(&db, "first@example.com").await;
+    let link = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(first.0)),
+    )
+    .initialize(attempt(&db, first.clone()).await)
+    .await
+    .unwrap();
+    // Account deletion removes the profile at once and its inboxes later.
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, first.1.as_ref())
+        .execute(&db)
+        .await
+        .unwrap();
+    let second = actor(&db, "second@example.com").await;
+    let service = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(second.0)),
+    );
+    assert_eq!(
+        service
+            .initialize(attempt(&db, second.clone()).await)
+            .await
+            .unwrap(),
+        link
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT macro_id FROM email_links WHERE id = $1", link)
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        second.1.as_ref()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_promotion_whose_owner_account_disappears_is_retried_not_failed(db: PgPool) {
+    let first = actor(&db, "first@example.com").await;
+    let link = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(first.0)),
+    )
+    .initialize(attempt(&db, first.clone()).await)
+    .await
+    .unwrap();
+    let second = actor(&db, "second@example.com").await;
+    let mut request = attempt(&db, second.clone()).await;
+    request.force_share = true;
+    let grants = grant(second.0);
+    let repo = PgMailboxInitialization(db.clone());
+    let before = repo.inspect(&request, &grants).await.unwrap();
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, first.1.as_ref())
+        .execute(&db)
+        .await
+        .unwrap();
+    assert!(matches!(
+        repo.commit(&request, &grants, &before, InitializationDecision::Promote)
+            .await,
+        Err(InitializationError::Changed)
+    ));
+    let service = MailboxInitializationService::new(repo, Grants(grants));
+    assert_eq!(service.initialize(request).await.unwrap(), link);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_inbox_being_removed_asks_to_wait_for_its_removal(db: PgPool) {
+    let owner = actor(&db, "owner@example.com").await;
+    let service = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(owner.0)),
+    );
+    let link = service
+        .initialize(attempt(&db, owner.clone()).await)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE email_links SET disconnect_requested_at = now() WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(matches!(
+        service.initialize(attempt(&db, owner.clone()).await).await,
+        Err(InitializationError::InboxBeingRemoved)
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reconnect_with_the_same_grant_makes_the_work_a_missing_mailbox_held_due(db: PgPool) {
+    let owner = actor(&db, "unlicensed@example.com").await;
+    let same = grant(owner.0);
+    let link = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(same.clone()),
+    )
+    .initialize(attempt(&db, owner.clone()).await)
+    .await
+    .unwrap();
+    // Discovery found no mailbox: the link is marked, its next probe is
+    // hours away, and the work the mark held was backed off before it.
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = now() - interval '1 day' WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_sync_streams SET next_run_at = now() + interval '12 hours' WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_mailbox_watch_work SET next_run_at = now() + interval '12 hours', failures = 4 WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    MailboxInitializationService::new(PgMailboxInitialization(db.clone()), Grants(same))
+        .initialize(attempt(&db, owner.clone()).await)
+        .await
+        .unwrap();
+
+    let state = sqlx::query!(
+        r#"SELECT l.sync_generation, l.mailbox_unavailable_at IS NULL AS "cleared!",
+            bool_and(s.next_run_at <= now()) AS "streams_due!"
+        FROM email_links l JOIN email_sync_streams s ON s.link_id = l.id
+        WHERE l.id = $1 GROUP BY l.id"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        state.sync_generation, 1,
+        "the same grant starts no new generation"
+    );
+    assert!(state.cleared);
+    assert!(state.streams_due, "discovery and the rest run at once");
+    let upkeep = sqlx::query!(
+        r#"SELECT failures, next_run_at <= now() AS "due!" FROM email_mailbox_watch_work WHERE link_id = $1"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!((upkeep.failures, upkeep.due), (0, true));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reconnect_behind_a_population_is_busy_and_keeps_its_attempt(db: PgPool) {
+    let actor = actor(&db, "owner@example.com").await;
+    let service = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(actor.0)),
+    );
+    let link = service
+        .initialize(attempt(&db, actor.clone()).await)
+        .await
+        .unwrap();
+    let again = attempt(&db, actor.clone()).await;
+
+    // A CRM contact population holds the link this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        service.initialize(again.clone()),
+    )
+    .await
+    .expect("the reconnect waited past its lock timeout");
+    assert!(
+        matches!(blocked, Err(InitializationError::Contended)),
+        "{blocked:?}"
+    );
+    // The attempt survives, so the same connection can be retried.
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM in_progress_user_link WHERE id = $1",
+            again.attempt
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        Some(1)
+    );
+    population.rollback().await.unwrap();
+
+    assert_eq!(service.initialize(again).await.unwrap(), link);
 }

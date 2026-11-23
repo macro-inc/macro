@@ -1,8 +1,10 @@
 use attention_feed::test_support::*;
+use model_entity::Entity;
 use notification::domain::models::NotificationState;
 use serde_json::{Value, json};
 
 use super::*;
+use crate::domain::models::InboxScope;
 
 const CHANNEL: u128 = 0xC0;
 const ROOT: u128 = 0x7A;
@@ -171,6 +173,103 @@ fn a_mention_in_a_reply_is_a_thread_row() {
         ])),
         vec![(InboxRowType::ChannelThread, vec![uuid(1)], vec![uuid(2)])]
     );
+}
+
+fn scope(row_types: &[InboxRowType]) -> InboxScope {
+    InboxScope {
+        row_types: row_types.to_vec(),
+        unread_only: false,
+    }
+}
+
+/// How many of `rows` each scope lists.
+fn listed_in(rows: &[InboxRow], scopes: &[&[InboxRowType]]) -> Vec<usize> {
+    scopes
+        .iter()
+        .map(|row_types| {
+            let scope = scope(row_types);
+            rows.iter().filter(|row| scope.admits(row)).count()
+        })
+        .collect()
+}
+
+const MENTIONS: &[InboxRowType] = &[
+    InboxRowType::ChannelMention,
+    InboxRowType::DiscussionMention,
+];
+const REPLIES: &[InboxRowType] = &[InboxRowType::ChannelThread, InboxRowType::DiscussionThread];
+const COMMENTS: &[InboxRowType] = &[InboxRowType::DiscussionMessages];
+const MENTIONS_AND_REPLIES: &[InboxRowType] = &[
+    InboxRowType::ChannelMention,
+    InboxRowType::DiscussionMention,
+    InboxRowType::ChannelThread,
+    InboxRowType::DiscussionThread,
+];
+
+#[test]
+fn a_reply_that_mentions_you_is_listed_under_mentions_and_replies() {
+    let listed = channel_rows(&[
+        channel_reply(1, CHANNEL, ROOT, 0x100, 1),
+        channel_mention(2, CHANNEL, 0x101, Some(ROOT), 2),
+    ]);
+    assert_eq!(listed[0].row_type, InboxRowType::ChannelThread);
+    assert_eq!(listed[0].also_listed_as, vec![InboxRowType::ChannelMention]);
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, REPLIES, MENTIONS_AND_REPLIES, &[]]),
+        vec![1, 1, 1, 1]
+    );
+}
+
+#[test]
+fn a_thread_without_mentions_is_not_listed_under_mentions() {
+    let listed = channel_rows(&[channel_reply(1, CHANNEL, ROOT, 0x100, 1)]);
+    assert!(listed[0].also_listed_as.is_empty());
+    assert_eq!(listed_in(&listed, &[MENTIONS, REPLIES]), vec![0, 1]);
+
+    // A reply that names one of your documents mentions the document, not you.
+    let document = channel_rows(&[document_mention(1, 0x100, Some(ROOT), USER, 1)]);
+    assert_eq!(document[0].row_type, InboxRowType::ChannelThread);
+    assert!(document[0].also_listed_as.is_empty());
+}
+
+#[test]
+fn a_mention_with_replies_is_listed_under_replies_too() {
+    let listed = channel_rows(&[
+        channel_mention(1, CHANNEL, ROOT, None, 1),
+        channel_reply(2, CHANNEL, ROOT, 0x101, 2),
+    ]);
+    assert_eq!(listed[0].row_type, InboxRowType::ChannelMention);
+    assert_eq!(listed[0].also_listed_as, vec![InboxRowType::ChannelThread]);
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, REPLIES, MENTIONS_AND_REPLIES]),
+        vec![1, 1, 1]
+    );
+
+    // A reaction to the mention is not a reply.
+    let reacted = channel_rows(&[
+        channel_mention(1, CHANNEL, ROOT, None, 1),
+        channel_reaction(2, CHANNEL, ROOT, None, 2),
+    ]);
+    assert!(reacted[0].also_listed_as.is_empty());
+    assert_eq!(listed_in(&reacted, &[MENTIONS, REPLIES]), vec![1, 0]);
+}
+
+#[test]
+fn comments_that_mention_you_are_listed_under_comments_too() {
+    let doc = group(EntityType::Document, DOC);
+    let listed = rows_of(
+        &doc,
+        &[
+            doc_comment_mention(1, DOC, 0xA0, 0xA0, 1),
+            doc_reply(2, DOC, 0xA1, 0xA0, 2),
+        ],
+    );
+    assert_eq!(listed[0].row_type, InboxRowType::DiscussionMention);
+    assert_eq!(
+        listed[0].also_listed_as,
+        vec![InboxRowType::DiscussionMessages]
+    );
+    assert_eq!(listed_in(&listed, &[MENTIONS, COMMENTS]), vec![1, 1]);
 }
 
 #[test]
@@ -422,6 +521,56 @@ fn each_access_request_and_task_is_its_own_row() {
     );
 }
 
+const TEAM: u128 = 0x7E;
+
+#[test]
+fn a_team_holds_one_row_per_password_request_and_none_for_invites() {
+    let request = |id: u128, request: u128, minute: u32| {
+        notification(
+            id,
+            entity(EntityType::Team, TEAM),
+            "password_access_requested",
+            json!({
+                "requestId": uuid(request),
+                "teamId": uuid(TEAM),
+                "itemId": uuid(0x1E),
+                "itemName": "Deploy key",
+            }),
+            minute,
+            NotificationState::Unseen,
+        )
+    };
+    let invite = notification(
+        3,
+        entity(EntityType::Team, TEAM),
+        "invite_to_team",
+        json!({
+            "teamName": "Team",
+            "teamId": uuid(TEAM),
+            "teamInviteId": uuid(0x1A),
+            "invitedBy": "macro|other@example.com",
+        }),
+        3,
+        NotificationState::Unseen,
+    );
+    let team = group(EntityType::Team, TEAM);
+    let listed = rows_of(
+        &team,
+        &[request(1, 0xA1, 1), request(2, 0xA2, 2), invite.clone()],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::PasswordAccessRequested, vec![uuid(2)], vec![]),
+            (InboxRowType::PasswordAccessRequested, vec![uuid(1)], vec![]),
+        ]
+    );
+    assert!(
+        rows_of(&team, &[invite]).is_empty(),
+        "an invite alone lists nothing"
+    );
+}
+
 fn calendar_reminder(id: u128, ends_minute: u32) -> FeedNotification {
     notification(
         id,
@@ -572,6 +721,17 @@ fn an_agent_waiting_for_the_viewer_offers_an_answer() {
 }
 
 #[test]
+fn a_ping_after_a_question_leaves_it_to_answer() {
+    let session = group(EntityType::AgentSession, SESSION);
+    let pinged = entity(EntityType::AgentSession, SESSION);
+    let listed = rows_of(&session, &[waiting(2, 2), ping(3, pinged, None, 3)]);
+    assert_eq!(
+        listed[0].actions,
+        vec![action(InboxRowActionKind::Answer, None, None)]
+    );
+}
+
+#[test]
 fn requests_offer_their_answers_on_the_request() {
     let listed = rows_of(
         &group(EntityType::Document, DOC),
@@ -666,5 +826,411 @@ fn a_requested_review_offers_the_pull_request() {
     assert_eq!(
         listed[0].actor, None,
         "GitHub users are not Macro principals"
+    );
+}
+
+fn pull_request_notification(id: u128, tag: &str, extra: Value, minute: u32) -> FeedNotification {
+    let mut content = json!({
+        "foreignEntityId": uuid(0xF0),
+        "githubKey": "macro-inc/macro#1",
+        "owner": "macro-inc",
+        "repo": "macro",
+        "number": 1,
+        "url": "https://github.com/macro-inc/macro/pull/1",
+        "displayName": "macro-inc/macro#1",
+        "title": "Fix the inbox",
+    });
+    for (key, value) in extra.as_object().unwrap() {
+        content[key] = value.clone();
+    }
+    notification(
+        id,
+        entity(EntityType::ForeignEntity, 0xF0),
+        tag,
+        content,
+        minute,
+        NotificationState::Unseen,
+    )
+}
+
+fn pull_request_mention(id: u128, minute: u32) -> FeedNotification {
+    pull_request_notification(
+        id,
+        "github_pr_mention",
+        json!({ "location": "comment", "textSnippet": "can you take a look?" }),
+        minute,
+    )
+}
+
+fn session_mention(id: u128, minute: u32) -> FeedNotification {
+    agent_notification(
+        id,
+        "agent_session_mentioned",
+        json!({ "mentionedBy": "macro|colleague@example.com", "actionId": uuid(0xAC) }),
+        minute,
+    )
+}
+
+const PULL_REQUESTS: &[InboxRowType] = &[InboxRowType::PullRequest];
+const AGENTS: &[InboxRowType] = &[InboxRowType::Agent];
+
+#[test]
+fn a_pull_request_that_mentions_you_is_listed_under_mentions_too() {
+    let pull_request = group(EntityType::ForeignEntity, 0xF0);
+    let requested = pull_request_notification(1, "github_review_requested", json!({}), 1);
+
+    let listed = rows_of(
+        &pull_request,
+        &[requested.clone(), pull_request_mention(2, 2)],
+    );
+    assert_eq!(listed[0].row_type, InboxRowType::PullRequest);
+    assert_eq!(
+        listed[0].also_listed_as,
+        vec![InboxRowType::DiscussionMention]
+    );
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, PULL_REQUESTS, COMMENTS]),
+        vec![1, 1, 0]
+    );
+
+    let without_mention = rows_of(&pull_request, &[requested]);
+    assert!(without_mention[0].also_listed_as.is_empty());
+    assert_eq!(listed_in(&without_mention, &[MENTIONS]), vec![0]);
+}
+
+#[test]
+fn an_agent_session_that_mentions_you_is_listed_under_mentions_too() {
+    let session = group(EntityType::AgentSession, SESSION);
+
+    let listed = rows_of(&session, &[settled(1, 1), session_mention(2, 2)]);
+    assert_eq!(listed[0].row_type, InboxRowType::Agent);
+    assert_eq!(
+        listed[0].also_listed_as,
+        vec![InboxRowType::DiscussionMention]
+    );
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, AGENTS, COMMENTS]),
+        vec![1, 1, 0]
+    );
+
+    let without_mention = rows_of(&session, &[settled(1, 1), waiting(2, 2)]);
+    assert!(without_mention[0].also_listed_as.is_empty());
+    assert_eq!(listed_in(&without_mention, &[MENTIONS]), vec![0]);
+}
+
+/// A ping from the agent Scout, filed under `entity`.
+fn ping(
+    id: u128,
+    entity: Entity<'static>,
+    message: Option<Value>,
+    minute: u32,
+) -> FeedNotification {
+    let mut content = json!({
+        "body": "Deploy finished",
+        "agent": { "id": uuid(0xB07), "name": "Scout" },
+    });
+    if let Some(message) = message {
+        content["message"] = message;
+    }
+    notification(
+        id,
+        entity,
+        "ping",
+        content,
+        minute,
+        NotificationState::Unseen,
+    )
+}
+
+#[test]
+fn a_ping_joins_its_entitys_comments_from_its_agent_or_its_sender() {
+    let document = group(EntityType::Document, DOC);
+    let listed = rows_of(
+        &document,
+        &[
+            doc_comment(1, DOC, 0x200, 0x200, 1),
+            ping(2, entity(EntityType::Document, DOC), None, 2),
+        ],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::DiscussionMessages,
+            vec![uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+    assert_eq!(
+        listed[0].id.id(),
+        format!("document:{}#top_level", uuid(DOC))
+    );
+    assert_eq!(listed[0].actor, agent());
+    assert!(listed[0].unseen);
+
+    let mut from_script = notification(
+        3,
+        entity(EntityType::Document, DOC),
+        "ping",
+        json!({ "body": "Invoice sent" }),
+        3,
+        NotificationState::Unseen,
+    );
+    std::sync::Arc::make_mut(&mut from_script).sender_id =
+        Some(MacroUserIdStr::parse_from_str("macro|sender@example.com").unwrap());
+    let listed = rows_of(&document, &[from_script]);
+    assert_eq!(listed[0].row_type, InboxRowType::DiscussionMessages);
+    assert_eq!(
+        listed[0].actor,
+        Some(InboxActor::User(
+            MacroUserIdStr::parse_from_str("macro|sender@example.com").unwrap()
+        ))
+    );
+}
+
+#[test]
+fn a_ping_on_a_task_leaves_its_assignment_a_row_of_its_own() {
+    let task = notification(
+        1,
+        entity(EntityType::Document, DOC),
+        "task_assigned",
+        json!({ "taskId": uuid(DOC), "taskName": "Ship", "assignedBy": "macro|other@example.com" }),
+        1,
+        NotificationState::Unseen,
+    );
+    let listed = rows_of(
+        &group(EntityType::Document, DOC),
+        &[task, ping(2, entity(EntityType::Document, DOC), None, 2)],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::DiscussionMessages, vec![uuid(2)], vec![]),
+            (InboxRowType::Task, vec![uuid(1)], vec![]),
+        ]
+    );
+}
+
+#[test]
+fn a_ping_joins_the_comments_of_a_folder_project_or_crm_record() {
+    for (entity_type, name) in [
+        (EntityType::Project, "project"),
+        (EntityType::Initiative, "initiative"),
+        (EntityType::CrmCompany, "crm_company"),
+        (EntityType::CrmContact, "crm_contact"),
+    ] {
+        let listed = rows_of(
+            &group(entity_type, 0x90),
+            &[ping(1, entity(entity_type, 0x90), None, 1)],
+        );
+        assert_eq!(
+            shape(&listed),
+            vec![(InboxRowType::DiscussionMessages, vec![uuid(1)], vec![])],
+            "{name}"
+        );
+        assert_eq!(
+            listed[0].id.id(),
+            format!("{name}:{}#top_level", uuid(0x90))
+        );
+    }
+
+    let project = group(EntityType::Initiative, 0x1A);
+    let listed = rows_of(
+        &project,
+        &[
+            project_discussion(1, "owner", 0x300, 0x300, 1),
+            ping(2, entity(EntityType::Initiative, 0x1A), None, 2),
+        ],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::DiscussionMessages,
+            vec![uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+}
+
+#[test]
+fn a_ping_joins_the_email_event_and_agent_rows() {
+    let thread = group(EntityType::EmailThread, 0xE0);
+    let listed = rows(
+        &thread,
+        &[
+            new_email(1, 0xE0, 1, NotificationState::Unseen),
+            ping(2, entity(EntityType::EmailThread, 0xE0), None, 2),
+        ],
+        Some(MailFacts {
+            inbox_visible: true,
+            is_read: true,
+        }),
+        &viewer_id(),
+        at(59),
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::Email, vec![uuid(2), uuid(1)], vec![])]
+    );
+    assert!(
+        listed[0].unseen,
+        "an unseen ping keeps read mail's row unread"
+    );
+    let seen = rows(
+        &thread,
+        &[with_state(
+            &ping(2, entity(EntityType::EmailThread, 0xE0), None, 2),
+            NotificationState::Seen,
+        )],
+        Some(MailFacts {
+            inbox_visible: true,
+            is_read: true,
+        }),
+        &viewer_id(),
+        at(59),
+    );
+    assert!(!seen[0].unseen);
+
+    let event = group(EntityType::CalendarEvent, 0xCA);
+    let listed = rows(
+        &event,
+        &[
+            calendar_reminder(1, 30),
+            ping(2, entity(EntityType::CalendarEvent, 0xCA), None, 2),
+        ],
+        None,
+        &viewer_id(),
+        at(25),
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::CalendarEvent, vec![uuid(2), uuid(1)], vec![])]
+    );
+
+    let session = group(EntityType::AgentSession, SESSION);
+    let listed = rows_of(
+        &session,
+        &[
+            settled(1, 1),
+            ping(2, entity(EntityType::AgentSession, SESSION), None, 2),
+        ],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::Agent, vec![uuid(2), uuid(1)], vec![])]
+    );
+
+    let chat = group(EntityType::Chat, 0xC4);
+    let listed = rows_of(&chat, &[ping(1, entity(EntityType::Chat, 0xC4), None, 1)]);
+    assert_eq!(
+        shape(&listed),
+        vec![(InboxRowType::Agent, vec![uuid(1)], vec![])]
+    );
+}
+
+#[test]
+fn a_ping_on_a_channel_joins_its_top_level_row_and_counts_as_unread() {
+    let channel = entity(EntityType::Channel, CHANNEL);
+    let listed = channel_rows(&[
+        channel_send(1, CHANNEL, 0x100, 1),
+        ping(2, channel.clone(), None, 2),
+    ]);
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::ChannelMessages,
+            vec![uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+    assert_eq!(listed[0].actor, agent());
+
+    // A ping is shown and unread by itself, unlike a call starting.
+    let alone = channel_rows(&[ping(2, channel, None, 2)]);
+    assert_eq!(
+        shape(&alone),
+        vec![(InboxRowType::ChannelMessages, vec![uuid(2)], vec![])]
+    );
+    assert!(alone[0].unseen);
+}
+
+#[test]
+fn a_ping_on_a_message_joins_that_messages_thread() {
+    let channel = entity(EntityType::Channel, CHANNEL);
+    let on_root = ping(
+        2,
+        channel.clone(),
+        Some(json!({ "messageId": uuid(ROOT) })),
+        2,
+    );
+
+    // The message it is about comes off the channel's row to stack with it.
+    let listed = channel_rows(&[
+        channel_send(1, CHANNEL, ROOT, 1),
+        on_root.clone(),
+        channel_send(3, CHANNEL, 0x100, 3),
+    ]);
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::ChannelMessages, vec![uuid(3)], vec![]),
+            (InboxRowType::ChannelThread, vec![uuid(2), uuid(1)], vec![]),
+        ]
+    );
+    assert_eq!(
+        listed[1].id.id(),
+        format!("channel:{}#thread:{}", uuid(CHANNEL), uuid(ROOT))
+    );
+    assert_eq!(listed[1].thread_id, Some(uuid(ROOT).to_string()));
+
+    // A ping on a reply joins the thread the reply is in.
+    let on_reply = ping(
+        4,
+        channel,
+        Some(json!({ "messageId": uuid(0x101), "threadId": uuid(ROOT) })),
+        4,
+    );
+    let listed = channel_rows(&[channel_reply(1, CHANNEL, ROOT, 0x101, 1), on_root, on_reply]);
+    assert_eq!(
+        shape(&listed),
+        vec![(
+            InboxRowType::ChannelThread,
+            vec![uuid(4), uuid(2), uuid(1)],
+            vec![]
+        )]
+    );
+
+    // A done of the ping takes nothing else with it.
+    assert_eq!(speaks_for(&listed[0], uuid(2), &viewer_id()), vec![uuid(2)]);
+}
+
+#[test]
+fn each_removal_of_runtime_access_is_its_own_row_that_opens() {
+    let removed = |id: u128, minute: u32| {
+        notification(
+            id,
+            entity(EntityType::Harness, 0xAB),
+            "runtime_access_removed",
+            json!({
+                "runtimeName": "Studio Mac",
+                "agents": [{ "botId": uuid(0xB0), "name": "Scout" }],
+            }),
+            minute,
+            NotificationState::Unseen,
+        )
+    };
+    let listed = rows_of(
+        &group(EntityType::Harness, 0xAB),
+        &[removed(1, 1), removed(2, 2)],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::AccessRemoved, vec![uuid(2)], vec![]),
+            (InboxRowType::AccessRemoved, vec![uuid(1)], vec![]),
+        ]
+    );
+    assert_eq!(
+        listed[0].actions,
+        vec![action(InboxRowActionKind::Open, None, None)]
     );
 }

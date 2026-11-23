@@ -1,5 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableChannelTags } from '@core/constant/featureFlags';
+import {
+  enableChannelTags,
+  enableChatSidebarSections,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { throwOnErr } from '@core/util/result';
@@ -10,24 +13,29 @@ import type { ChannelLabelScopeSelection } from '@service-storage/generated/sche
 import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { fetchAllChannels } from '../channel/channels';
-import { channelKeys } from '../channel/keys';
 import { queryClient } from '../client';
 import { withCallbacks } from '../utils';
-import { channelLabelKeys } from './keys';
+import { channelLabelKeys, channelSectionKeys } from './keys';
+
+const keysForMode = (sectionMode = false) =>
+  sectionMode ? channelSectionKeys : channelLabelKeys;
+const clientForMode = (sectionMode = false) =>
+  sectionMode
+    ? storageServiceClient.channelSections
+    : storageServiceClient.channelLabels;
 
 export type { ChannelLabel, ChannelLabelScopeSelection };
 
 function channelLabelsQueryOptions(
   enabled: boolean,
   scope: ChannelLabelScopeSelection | undefined,
-  actorId: string | undefined
+  actorId: string | undefined,
+  sectionMode = false
 ) {
   return queryOptions({
-    queryKey: channelLabelKeys.list(scope, actorId).queryKey,
+    queryKey: keysForMode(sectionMode).list(scope, actorId).queryKey,
     enabled: enabled && Boolean(actorId),
-    queryFn: () =>
-      throwOnErr(() => storageServiceClient.channelLabels.list(scope)),
+    queryFn: () => throwOnErr(() => clientForMode(sectionMode).list(scope)),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     refetchInterval: (query) =>
@@ -42,12 +50,14 @@ export function useChannelLabelsQuery(
   enabled: Accessor<boolean> = () => true
 ) {
   const channelTagsFlag = useFeatureFlag(enableChannelTags);
+  const sectionsFlag = useFeatureFlag(enableChatSidebarSections);
   const userId = useUserId();
   return useQuery(() =>
     channelLabelsQueryOptions(
       channelTagsFlag().enabled && enabled(),
       scope,
-      userId()
+      userId(),
+      sectionsFlag().enabled
     )
   );
 }
@@ -65,11 +75,13 @@ export function invalidateChannelLabels(
   scope?: ChannelLabelScopeSelection,
   actorId?: string
 ) {
-  return queryClient.invalidateQueries({
-    queryKey: actorId
-      ? channelLabelKeys.list(scope, actorId).queryKey
-      : channelLabelKeys.list._def,
-  });
+  return Promise.all(
+    [channelLabelKeys, channelSectionKeys].map((keys) =>
+      queryClient.invalidateQueries({
+        queryKey: actorId ? keys.list(scope, actorId).queryKey : keys.list._def,
+      })
+    )
+  );
 }
 
 function writeLabels(
@@ -91,23 +103,29 @@ async function cancelLabelFetch(
   scope: ChannelLabelScopeSelection | undefined,
   actorId: string | undefined
 ) {
-  await queryClient.cancelQueries({
-    queryKey: channelLabelKeys.list(scope, actorId).queryKey,
-  });
+  await Promise.all(
+    [channelLabelKeys, channelSectionKeys].map((keys) =>
+      queryClient.cancelQueries({
+        queryKey: keys.list(scope, actorId).queryKey,
+      })
+    )
+  );
 }
 
 function smartTagPreviewQueryOptions(
   contains: string,
   enabled: boolean,
   scope: ChannelLabelScopeSelection | undefined,
-  actorId: string | undefined
+  actorId: string | undefined,
+  sectionMode = false
 ) {
   return queryOptions({
-    queryKey: channelLabelKeys.preview(contains, scope, actorId).queryKey,
+    queryKey: keysForMode(sectionMode).preview(contains, scope, actorId)
+      .queryKey,
     enabled: enabled && Boolean(actorId),
     queryFn: ({ signal }) =>
       throwOnErr(() =>
-        storageServiceClient.channelLabels.preview(
+        clientForMode(sectionMode).preview(
           { attribute: 'name', contains },
           signal,
           scope
@@ -123,6 +141,7 @@ export function useSmartTagPreviewQuery(
   scope?: ChannelLabelScopeSelection | Accessor<ChannelLabelScopeSelection>
 ) {
   const channelTagsFlag = useFeatureFlag(enableChannelTags);
+  const sectionsFlag = useFeatureFlag(enableChatSidebarSections);
   const userId = useUserId();
   const debouncedPattern = debouncedDependent(pattern, 150);
   return useQuery(() => {
@@ -132,36 +151,15 @@ export function useSmartTagPreviewQuery(
       contains,
       channelTagsFlag().enabled && contains.length > 0,
       selectedScope,
-      userId()
+      userId(),
+      sectionsFlag().enabled
     );
   });
 }
 
-function availableSectionChannelsQueryOptions(
-  actorId: string | undefined,
-  enabled: boolean
-) {
-  return queryOptions({
-    queryKey: channelKeys.listChannels._ctx.account(actorId).queryKey,
-    queryFn: ({ signal }) => fetchAllChannels(signal),
-    enabled: enabled && Boolean(actorId),
-    reconcile: 'id',
-    staleTime: 0,
-  });
-}
-
-/** Full authorized channel membership, scoped to the current account. */
-export function useAvailableSectionChannelsQuery(
-  enabled: Accessor<boolean> = () => true
-) {
-  const userId = useUserId();
-  return useQuery(() =>
-    availableSectionChannelsQueryOptions(userId(), enabled())
-  );
-}
-
 export type CreateChannelLabelArgs = {
   actorId: string | undefined;
+  sectionMode?: boolean;
   name: string;
   channelIds: string[];
   rule?: ChannelLabelRule;
@@ -177,7 +175,7 @@ export function useCreateChannelLabelMutation(
       if (!args.actorId || args.actorId !== userId())
         throw new Error('The account has changed.');
       return await throwOnErr(() =>
-        storageServiceClient.channelLabels.create(
+        clientForMode(args.sectionMode).create(
           {
             name: args.name,
             channelIds: args.channelIds,
@@ -192,6 +190,7 @@ export function useCreateChannelLabelMutation(
         if (args.actorId !== userId()) return;
         await cancelLabelFetch(scope, args.actorId);
         if (args.actorId !== userId()) return;
+        if (args.sectionMode) return;
         writeLabels(scope, args.actorId, (labels) =>
           labels
             .map((label) => {
@@ -220,6 +219,7 @@ export function useCreateChannelLabelMutation(
 
 export type RenameChannelLabelArgs = {
   actorId: string | undefined;
+  sectionMode?: boolean;
   labelId: string;
   name: string;
   rule?: ChannelLabelRule;
@@ -235,7 +235,7 @@ export function useRenameChannelLabelMutation(
       if (!args.actorId || args.actorId !== userId())
         throw new Error('The account has changed.');
       return await throwOnErr(() =>
-        storageServiceClient.channelLabels.rename(
+        clientForMode(args.sectionMode).rename(
           args.labelId,
           {
             name: args.name,
@@ -251,6 +251,15 @@ export function useRenameChannelLabelMutation(
         if (args.actorId !== userId()) return;
         await cancelLabelFetch(scope, args.actorId);
         if (args.actorId !== userId()) return;
+        if (args.sectionMode) {
+          if (args.targetScope && args.targetScope !== (scope ?? 'team')) {
+            await cancelLabelFetch(
+              args.targetScope === 'team' ? undefined : args.targetScope,
+              args.actorId
+            );
+          }
+          return;
+        }
         const destinationScope =
           args.targetScope === 'team' ? undefined : args.targetScope;
         const changesScope =
@@ -304,6 +313,7 @@ export function useRenameChannelLabelMutation(
 export type DeleteChannelLabelArgs = {
   labelId: string;
   actorId: string | undefined;
+  sectionMode?: boolean;
 };
 export function useDeleteChannelLabelMutation(
   scope?: ChannelLabelScopeSelection
@@ -315,7 +325,7 @@ export function useDeleteChannelLabelMutation(
       if (!args.actorId || args.actorId !== userId())
         throw new Error('The account has changed.');
       return await throwOnErr(() =>
-        storageServiceClient.channelLabels.remove(args.labelId, scope)
+        clientForMode(args.sectionMode).remove(args.labelId, scope)
       );
     },
     ...withCallbacks<void, Error, DeleteChannelLabelArgs>({
@@ -323,6 +333,7 @@ export function useDeleteChannelLabelMutation(
         if (args.actorId !== userId()) return;
         await cancelLabelFetch(scope, args.actorId);
         if (args.actorId !== userId()) return;
+        if (args.sectionMode) return;
         writeLabels(scope, args.actorId, (labels) =>
           labels.filter((label) => label.id !== args.labelId)
         );
@@ -337,6 +348,7 @@ export function useDeleteChannelLabelMutation(
 
 export type SetChannelLabelArgs = {
   actorId: string | undefined;
+  sectionMode?: boolean;
   channelId: string;
   labelId: string | undefined;
 };
@@ -348,7 +360,7 @@ export function useSetChannelLabelMutation(scope?: ChannelLabelScopeSelection) {
       if (!args.actorId || args.actorId !== userId())
         throw new Error('The account has changed.');
       return await throwOnErr(() =>
-        storageServiceClient.channelLabels.setChannelLabel(
+        clientForMode(args.sectionMode).setChannelLabel(
           args.channelId,
           {
             labelId: args.labelId ?? null,
@@ -362,6 +374,7 @@ export function useSetChannelLabelMutation(scope?: ChannelLabelScopeSelection) {
         if (args.actorId !== userId()) return;
         await cancelLabelFetch(scope, args.actorId);
         if (args.actorId !== userId()) return;
+        if (args.sectionMode) return;
         writeLabels(scope, args.actorId, (labels) =>
           labels.map((label) => {
             if (label.rule) return label;

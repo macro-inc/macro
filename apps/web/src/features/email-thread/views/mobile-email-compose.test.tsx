@@ -38,7 +38,7 @@ const state = {
       setMessageId(undefined);
     },
   },
-  permissions: () => ({ isOwner: true }),
+  permissions: () => ({ isOwner: true, canReply: true }),
   messages: { unfiltered: () => [parent], setBottomReplyOpen: vi.fn() },
   drafts: {
     getDraftForMessage: () =>

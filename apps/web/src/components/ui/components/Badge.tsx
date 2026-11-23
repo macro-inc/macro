@@ -1,4 +1,4 @@
-import { type ComponentProps, splitProps } from 'solid-js';
+import { type ComponentProps, Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { CONTROL_SIZE_VARIANTS } from '../utils/controlSizes';
 import { createVariants, type VariantProps } from '../utils/variants';
@@ -16,6 +16,12 @@ export const badgeVariants = createVariants(
       ghost: 'bg-transparent text-ink-muted',
       secondary: 'bg-button-secondary-bg text-ink',
       outline: 'bg-transparent text-ink-muted border-edge-muted',
+      /** AI-made choices, e.g. a routine step AI picks for. */
+      accent: 'bg-accent-bg text-accent',
+      /** Picked for the person by AI, as the app's violet means. */
+      violet: 'bg-violet-bg text-violet-ink',
+      /** Done or running, e.g. a routine that is on. */
+      success: 'bg-success-bg text-success',
     },
     size: {
       xs: "h-5 gap-1 px-2 text-xs [&>svg:not([class*='size-'])]:size-3 has-[>[data-slot=avatar][data-size=sm]:first-child]:pl-px",
@@ -61,6 +67,12 @@ export function badgeClasses(options: BadgeClassOptions = {}): string {
 /** Returns Button interaction styles with Badge variants, sizes, and shape. */
 export function badgeTriggerClasses(options: BadgeClassOptions = {}): string {
   const { variant = 'ghost', size = 'md', class: className } = options;
+  // Buttons have no violet; a violet badge keeps its label look.
+  if (variant === 'violet')
+    return cn(
+      badgeClasses({ variant, size, class: className }),
+      'outline-none focus-visible:ring-2 focus-visible:ring-accent/20'
+    );
   return cn(
     buttonClasses({
       variant: variant ?? 'ghost',
@@ -100,5 +112,32 @@ export function Badge(props: BadgeProps) {
       })}
       {...others}
     />
+  );
+}
+
+/** A count inside a control, after its icon or label: applied filters,
+ * pending requests, unseen items. Renders nothing at zero.
+ *
+ * @do Put it in the control's own row so the control grows to fit it.
+ * @do Name what the count means in the control's `aria-label` or tooltip.
+ * @dont Do not pin it over a corner of the control or its icon.
+ */
+export function CountBadge(
+  props: Omit<ComponentProps<'span'>, 'children'> & { count: number }
+) {
+  const [local, others] = splitProps(props, ['count', 'class']);
+  return (
+    <Show when={local.count > 0}>
+      <span
+        data-slot="count-badge"
+        class={cn(
+          'inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-xxs font-medium leading-none tabular-nums text-button-accent-ink',
+          local.class
+        )}
+        {...others}
+      >
+        {local.count > 99 ? '99+' : local.count}
+      </span>
+    </Show>
   );
 }

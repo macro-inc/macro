@@ -39,6 +39,48 @@ fn digest_logo_keeps_the_png_aspect_ratio() {
 }
 
 #[test]
+fn digest_escapes_nameless_mention_placeholders() {
+    use model_notifications::{
+        ChannelMessageSendMetadata, ChannelType, CommonChannelMetadata, NotificationTitle,
+    };
+
+    let event = NotifEvent::ChannelMessageSend(ChannelMessageSendMetadata {
+        sender: None,
+        sender_display_name: Some("Helper Bot".to_string()),
+        message_content: r#"Filed <m-document-mention>{"documentId":"t1","documentName":"","blockName":"task","blockParams":{}}</m-document-mention>"#.to_string(),
+        message_id: "m1".to_string(),
+        has_attachments: false,
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Team,
+            channel_name: "AI Team".to_string(),
+        },
+        sender_profile_picture_url: None,
+    });
+    let notif = NotifPreview {
+        created_at: Utc::now(),
+        title: event.format_title(None).unwrap(),
+        body: event.format_body(None).unwrap(),
+    };
+    assert_eq!(notif.body, "Filed <task>");
+
+    let html = DigestTemplate {
+        notifs: vec![notif],
+        num_truncated: 0,
+        total_count: 1,
+        unsubscribe_url: SignedUrl::new(
+            NotificationServiceUrl::default_for_environment(Environment::Production)
+                .parse_url()
+                .unwrap(),
+            Hmac::<Sha256>::new_from_slice(b"test-secret").unwrap(),
+        ),
+    }
+    .render()
+    .unwrap();
+    assert!(html.contains("Filed &#60;task&#62;"));
+    assert!(!html.contains("<task>"));
+}
+
+#[test]
 fn signed_unsubscribe_roundtrips_against_request_url() {
     let secret = Hmac::<Sha256>::new_from_slice(b"test-secret").unwrap();
     let mut unsigned = signing::append_path(
@@ -64,4 +106,59 @@ fn signed_unsubscribe_roundtrips_against_request_url() {
             .as_str()
             .contains("/notification/user_notifications/")
     );
+}
+
+fn render_one(notif: NotifPreview) -> String {
+    let html = DigestTemplate {
+        notifs: vec![notif],
+        num_truncated: 0,
+        total_count: 1,
+        unsubscribe_url: SignedUrl::new(
+            NotificationServiceUrl::default_for_environment(Environment::Production)
+                .parse_url()
+                .unwrap(),
+            Hmac::<Sha256>::new_from_slice(b"test-secret").unwrap(),
+        ),
+    }
+    .render()
+    .unwrap();
+    html.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[test]
+fn digest_keeps_a_bodys_lines_apart() {
+    use model_notifications::{ChannelMessageReactionMetadata, ChannelType, CommonChannelMetadata};
+
+    let event = NotifEvent::ChannelMessageReaction(ChannelMessageReactionMetadata {
+        thread_id: None,
+        message_id: "m1".to_string(),
+        message_content: "Release branch is cut".to_string(),
+        emoji: "🎉".to_string(),
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Public,
+            channel_name: "eng".to_string(),
+        },
+        sender_profile_picture_url: None,
+    });
+    let html = render_one(NotifPreview {
+        created_at: Utc::now(),
+        title: "dave".to_string(),
+        body: event.format_body(None).unwrap(),
+    });
+    assert!(
+        html.contains("Reacted 🎉 to: “Release branch is cut”<br />#eng"),
+        "{html}"
+    );
+}
+
+#[test]
+fn digest_drops_a_bodys_blank_lines() {
+    let html = render_one(NotifPreview {
+        created_at: Utc::now(),
+        title: "dave".to_string(),
+        body: format!("first{}second\n \n", "\n".repeat(200)),
+    });
+    assert!(html.contains("first<br />second </p>"), "{html}");
+    // One between the two lines, one in the footer.
+    assert_eq!(html.matches("<br />").count(), 2, "{html}");
 }

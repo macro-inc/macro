@@ -18,14 +18,14 @@ use s3_key::{
     build_docx_to_pdf_converted_document_key,
 };
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 use crate::parsers::pdf::parse_pdf_pages;
 use crate::{
     parsers::{
         ai::parse_ai_text, fig::parse_fig_pages, markdown::parse_markdown_legacy,
-        psd::parse_psd_text,
+        psd::parse_psd_text, text::decode_text,
     },
-    process::document::document_info::{DocumentInfo, get_document_info},
+    process::document::document_info::{DocumentInfo, IndexableDocument, get_document_info},
     process::properties::to_indexed_properties,
 };
 
@@ -34,6 +34,10 @@ use super::SearchExtractorMessage;
 /// The node id of the one chunk a Photoshop or Illustrator document indexes
 /// as, fixed so that a new version replaces it.
 const DESIGN_TEXT_NODE_ID: &str = "0";
+/// The node id of the one chunk a text or code file indexes as, fixed so that
+/// a new version replaces it and two reindexes running at once keep each
+/// other's chunk.
+const TEXT_FILE_NODE_ID: &str = "0";
 
 async fn upsert_document(
     opensearch_client: &OpensearchClient,
@@ -41,41 +45,40 @@ async fn upsert_document(
     upserts: Vec<UpsertDocumentArgs>,
 ) -> anyhow::Result<()> {
     let index_override = search_extractor_message.index_override.as_deref();
-    // Delete existing documents for the document id
-    // This ensures we replace any old nodes with new ones for editable files
-    // (a design's removed pages, for example)
-    match search_extractor_message.file_type {
-        FileType::Md
-        | FileType::Canvas
-        | FileType::Fig
-        | FileType::Psd
-        | FileType::Psb
-        | FileType::Ai => {
-            tracing::debug!("deleting existing search results");
-            opensearch_client
-                .delete_document(&search_extractor_message.document_id, index_override)
-                .await
-                .context("unable to delete existing search results")?;
-        }
-        _ => {}
-    }
 
-    let results = opensearch_client
+    if let Err(error) = opensearch_client
         .bulk_upsert_documents(&upserts, index_override)
         .await
-        .context("unable to bulk upsert documents in opensearch")?;
-
-    if !results.errors.is_empty() {
-        tracing::error!(errors=?results.errors, "bulk upsert failed");
+    {
+        tracing::error!(error = %error, "bulk upsert failed");
 
         // delete document that failed to upsert
-        opensearch_client
+        if let Err(delete_error) = opensearch_client
             .delete_document(&search_extractor_message.document_id, index_override)
             .await
-            .context("failed to delete document for failed bulk upsert")?;
+        {
+            // The upsert's error decides how the attempt is retried.
+            tracing::warn!(error = %delete_error, "failed to delete document for failed bulk upsert");
+        }
 
-        anyhow::bail!("failed to upsert documents");
+        return Err(error).context("failed to upsert documents");
     }
+
+    // Delete the existing nodes the new ones did not replace, for every file
+    // type: a design's removed pages, a shortened PDF's later pages, and the
+    // previous chunks of a text file, whose chunk ids change on every reindex.
+    let node_ids: Vec<&str> = upserts
+        .iter()
+        .map(|upsert| upsert.node_id.as_str())
+        .collect();
+    opensearch_client
+        .delete_stale_document_chunks(
+            &search_extractor_message.document_id,
+            &node_ids,
+            index_override,
+        )
+        .await
+        .context("unable to delete stale search results")?;
 
     tracing::trace!("upserted document");
 
@@ -127,6 +130,7 @@ async fn attach_indexed_properties(
 /// Returns `None` when the document has no file type.
 fn generate_parent_only_upsert(
     document_info: DocumentMetadata,
+    is_email_attachment: bool,
 ) -> anyhow::Result<Option<UpsertDocumentArgs>> {
     let Some(file_type) = document_info.file_type else {
         return Ok(None);
@@ -142,6 +146,7 @@ fn generate_parent_only_upsert(
         updated_at_millis: EpochMillis::new(Utc::now().timestamp_millis())?,
         sub_type: document_info.sub_type.map(|st| st.to_string()),
         properties: vec![],
+        is_email_attachment,
     }))
 }
 
@@ -153,7 +158,10 @@ async fn update_search_with_parent_only_document(
     db: &sqlx::Pool<sqlx::Postgres>,
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
-    let document_info = match get_document_info(db, search_extractor_message)
+    let IndexableDocument {
+        metadata: document_info,
+        is_email_attachment,
+    } = match get_document_info(db, search_extractor_message)
         .await
         .context("failed to get document info")?
     {
@@ -175,7 +183,7 @@ async fn update_search_with_parent_only_document(
         }
     };
 
-    let Some(args) = generate_parent_only_upsert(document_info)? else {
+    let Some(args) = generate_parent_only_upsert(document_info, is_email_attachment)? else {
         tracing::debug!("file type is none");
         return Ok(());
     };
@@ -220,7 +228,8 @@ async fn read_design_text(file_type: FileType, content: Vec<u8>) -> anyhow::Resu
 }
 
 /// Indexes a file its parser cannot read (a password-protected or damaged
-/// PDF, or a design that is old, damaged, or too large to decode here) by
+/// PDF, a design that is old, damaged, or too large to decode here, or a
+/// text file whose bytes are binary or in an unrecognized encoding) by
 /// name only, dropping the text an earlier version left, so it stays
 /// findable. Reading it again would fail the same way, so this is not an
 /// error to retry.
@@ -311,7 +320,10 @@ pub async fn update_search_with_raw_document(
     }
 
     // This ensures we only process the latest version
-    let document_info = match get_document_info(db, search_extractor_message)
+    let IndexableDocument {
+        metadata: document_info,
+        is_email_attachment,
+    } = match get_document_info(db, search_extractor_message)
         .await
         .context("failed to get document info")?
     {
@@ -385,11 +397,10 @@ pub async fn update_search_with_raw_document(
     tracing::trace!("got raw file content");
 
     let updated_at_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
-    let uuid = macro_uuid::generate_uuid_v7().to_string();
 
     let mut upserts: Vec<UpsertDocumentArgs> = match file_type {
         FileType::Pdf | FileType::Docx => {
-            #[cfg(feature = "pdf")]
+            #[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
             {
                 let Some(pages_content) =
                     parse_pdf_pages(content).context("unable to parse pdf")?
@@ -415,14 +426,17 @@ pub async fn update_search_with_raw_document(
                         updated_at_millis,
                         sub_type: sub_type.clone(),
                         properties: vec![],
+                        is_email_attachment,
                     })
                     .collect()
             }
-            #[cfg(not(feature = "pdf"))]
+            #[cfg(not(all(feature = "pdf", not(feature = "no_pdf"))))]
             {
                 let _ = content;
                 tracing::debug!("pdf/docx indexing skipped: pdf feature disabled");
-                vec![]
+                // Writing nothing here would make the stale-chunk cleanup
+                // delete the chunks a build that parses PDFs wrote.
+                return Ok(());
             }
         }
         FileType::Fig => {
@@ -445,6 +459,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 })
                 .collect()
         }
@@ -461,6 +476,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 }],
                 read => {
                     if let Err(error) = &read {
@@ -479,8 +495,16 @@ pub async fn update_search_with_raw_document(
             // NOTE: this is legacy now. MD parsing mainly happens through sync service via
             // LexicalClient
             tracing::trace!("markdown parsing from DSS is deprecated");
-            let result = parse_markdown_legacy(&String::from_utf8(content)?)
-                .context("unable to parse markdown")?;
+            let Some(content) = decode_text(content, file_type) else {
+                tracing::warn!("indexing markdown that is not text by name only");
+                return update_search_with_unreadable_file(
+                    opensearch_client,
+                    db,
+                    search_extractor_message,
+                )
+                .await;
+            };
+            let result = parse_markdown_legacy(&content).context("unable to parse markdown")?;
             result
                 .into_iter()
                 .map(|result| UpsertDocumentArgs {
@@ -494,17 +518,26 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 })
                 .collect::<Vec<UpsertDocumentArgs>>()
         }
         file_type => {
-            let content = String::from_utf8(content)?;
+            let Some(content) = decode_text(content, file_type) else {
+                tracing::warn!("indexing a file that is not text by name only");
+                return update_search_with_unreadable_file(
+                    opensearch_client,
+                    db,
+                    search_extractor_message,
+                )
+                .await;
+            };
             if content.is_empty() {
                 vec![]
             } else {
                 vec![UpsertDocumentArgs {
                     document_id: search_extractor_message.document_id.clone(),
-                    node_id: uuid,
+                    node_id: TEXT_FILE_NODE_ID.to_string(),
                     raw_content: None,
                     document_name,
                     content: content.clone(),
@@ -513,6 +546,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 }]
             }
         }
@@ -534,6 +568,7 @@ pub async fn update_search_with_raw_document(
 fn generate_upserts(
     document_info: DocumentMetadata,
     markdown_result: Vec<MarkdownParseResult>,
+    is_email_attachment: bool,
 ) -> anyhow::Result<Vec<UpsertDocumentArgs>> {
     let result = markdown_result;
     let updated_at_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
@@ -559,6 +594,7 @@ fn generate_upserts(
             updated_at_millis,
             sub_type: sub_type.clone(),
             properties: vec![],
+            is_email_attachment,
         })
         .collect::<Vec<UpsertDocumentArgs>>();
 
@@ -584,7 +620,10 @@ pub async fn update_search_with_sync_document(
         }
     }
 
-    let document_info = match get_document_info(db, search_extractor_message)
+    let IndexableDocument {
+        metadata: document_info,
+        is_email_attachment,
+    } = match get_document_info(db, search_extractor_message)
         .await
         .context("failed to get document info")?
     {
@@ -610,7 +649,19 @@ pub async fn update_search_with_sync_document(
     let result = match lexical_client.parse_markdown(document_id).await {
         Ok(result) => result,
         Err(e) => {
-            tracing::warn!(error=?e, "failed to parse markdown with lexical");
+            if sync_holds_no_copy(&e) {
+                tracing::info!(
+                    "the sync service holds no copy of the document; indexing its stored content"
+                );
+            } else if search_extractor_message.index_override.is_some() {
+                // A rebuild into a new index would leave the document out of
+                // it, which is worse than content that may be older.
+                tracing::warn!(error=?e, "failed to parse markdown with lexical; indexing the stored content into the rebuild");
+            } else {
+                // The stored content can be older than the edit being
+                // indexed, so a failed parse fails the event instead.
+                return Err(e.context("failed to parse markdown with lexical"));
+            }
             // call DSS as fallback if lexical/sync service fails
             update_search_with_raw_document(
                 opensearch_client,
@@ -625,8 +676,8 @@ pub async fn update_search_with_sync_document(
     };
 
     let sub_type = document_info.sub_type.as_ref().map(|st| st.to_string());
-    let mut upserts =
-        generate_upserts(document_info, result).context("unable to generate upserts")?;
+    let mut upserts = generate_upserts(document_info, result, is_email_attachment)
+        .context("unable to generate upserts")?;
 
     attach_indexed_properties(db, document_id, sub_type.as_deref(), &mut upserts).await?;
 
@@ -635,6 +686,14 @@ pub async fn update_search_with_sync_document(
     tracing::info!(document_id = %document_id, chunk_count, "sync document indexed");
 
     Ok(())
+}
+
+/// Whether lexical answered that the sync service holds no copy of the
+/// document.
+fn sync_holds_no_copy(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<lexical_client::parse_markdown::UnexpectedResponse>()
+        .is_some_and(lexical_client::parse_markdown::UnexpectedResponse::is_document_not_found)
 }
 
 #[cfg(test)]

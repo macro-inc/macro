@@ -9,20 +9,6 @@ export const TOKENS = {
     sort: 'soup.sort',
     filter: 'soup.filter',
     dismiss: 'soup.dismiss',
-    tabs: {
-      '0': 'soup.tabs.0',
-      '1': 'soup.tabs.1',
-      '2': 'soup.tabs.2',
-      '3': 'soup.tabs.3',
-      '4': 'soup.tabs.4',
-      '5': 'soup.tabs.5',
-      '6': 'soup.tabs.6',
-      '7': 'soup.tabs.7',
-      '8': 'soup.tabs.8',
-      '9': 'soup.tabs.9',
-      next: 'soup.tabs.next',
-      prev: 'soup.tabs.prev',
-    },
   },
 
   // unified list
@@ -123,6 +109,17 @@ export const TOKENS = {
     close: 'tabs.close',
     next: 'tabs.next',
     previous: 'tabs.previous',
+    goTo: {
+      '1': 'tabs.goTo.1',
+      '2': 'tabs.goTo.2',
+      '3': 'tabs.goTo.3',
+      '4': 'tabs.goTo.4',
+      '5': 'tabs.goTo.5',
+      '6': 'tabs.goTo.6',
+      '7': 'tabs.goTo.7',
+      '8': 'tabs.goTo.8',
+      '9': 'tabs.goTo.9',
+    },
   },
 
   // sidebar navigation
@@ -137,6 +134,7 @@ export const TOKENS = {
       search: 'sidebar.goTo.search',
       agents: 'sidebar.goTo.agents',
       mail: 'sidebar.goTo.mail',
+      sent: 'sidebar.goTo.sent',
       documents: 'sidebar.goTo.documents',
       markdownDocuments: 'sidebar.goTo.markdownDocuments',
       tasks: 'sidebar.goTo.tasks',
@@ -158,10 +156,11 @@ export const TOKENS = {
     sendAndMarkDone: 'email.sendAndMarkDone',
     archive: 'email.archive',
     reply: 'email.reply',
-    replyAll: 'email.replyAll',
     forward: 'email.forward',
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
+    pageDown: 'email.pageDown',
+    pageUp: 'email.pageUp',
     cancelReply: 'email.cancelReply',
     discardDraft: 'email.discardDraft',
     attach: 'email.attach',
@@ -212,6 +211,8 @@ export const TOKENS = {
     },
     focusSplitRight: 'window.focusSplitRight',
     focusSplitLeft: 'window.focusSplitLeft',
+    focusSplitDown: 'window.focusSplitDown',
+    focusSplitUp: 'window.focusSplitUp',
   },
 
   // canvas

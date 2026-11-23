@@ -6,6 +6,7 @@ import { createExternalChatCapabilities } from '@app/features/external-chat/quer
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { ExternalChatView } from '@app/features/external-chat/views/external-chat-view';
 import { InMacroChats } from '@app/features/external-view/components/in-macro-section';
+import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
@@ -30,17 +31,19 @@ import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { SidePanel } from '@components/app/side-panel';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { useExternalChatsQuery } from '@queries/external-chats';
 import { queryReadyGate } from '@queries/gate';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
 import { render } from 'solid-js/web';
+import { ChatHeaderFixture } from './split-header-fixture';
 
 declare global {
   interface Window {
@@ -78,6 +81,7 @@ const noQuickAccess: QuickAccessContextValue = {
   isLoading: () => false,
   refresh: () => {},
   getById: () => undefined,
+  interactionForUser: () => undefined,
 };
 
 function ChatHarness(props: { chatId: string }) {
@@ -101,29 +105,31 @@ function ChatHarness(props: { chatId: string }) {
   });
   return (
     <div class="relative h-dvh">
-      <ToastRegion />
-      {/* The app's bottom chrome host, where the composer floats on touch. */}
-      <Show when={isTouchDevice()}>
-        <FloatRegionHost />
-      </Show>
-      <ExternalChatContextProvider value={source}>
-        <SidePanel.Root floating defaultOpen={false}>
-          <ExternalChatView
-            userId={userId()}
-            share={
-              <ShareTrigger
-                onClick={share}
-                id={props.chatId}
-                blockType="external_chat"
-              />
-            }
-            onShare={share}
-            onConnect={() => {
-              location.search = '';
-            }}
-          />
-        </SidePanel.Root>
-      </ExternalChatContextProvider>
+      <ChatHeaderFixture>
+        <ToastRegion />
+        {/* The app's bottom chrome host, where the composer floats on touch. */}
+        <Show when={isTouchDevice()}>
+          <FloatRegionHost />
+        </Show>
+        <ExternalChatContextProvider value={source}>
+          <SidePanel.Root floating defaultOpen={false}>
+            <ExternalChatView
+              userId={userId()}
+              share={
+                <ShareTrigger
+                  onClick={share}
+                  id={props.chatId}
+                  blockType="external_chat"
+                />
+              }
+              onShare={share}
+              onConnect={() => {
+                location.search = '';
+              }}
+            />
+          </SidePanel.Root>
+        </ExternalChatContextProvider>
+      </ChatHeaderFixture>
     </div>
   );
 }
@@ -195,6 +201,7 @@ function Page() {
   );
 }
 
+initializeLexical();
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');
 render(
@@ -207,7 +214,9 @@ render(
               <EmailLinksContextProvider>
                 {/* The app root provides Macro's items; the composer's `@` menu
                     reads them. An external chat offers only its people. */}
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <QuickAccessContextProvider value={noQuickAccess}>
                     <Router
                       root={(props) => (
@@ -220,7 +229,7 @@ render(
                       <Route path="*" component={Page} />
                     </Router>
                   </QuickAccessContextProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </Suspense>
           </UserContextProvider>

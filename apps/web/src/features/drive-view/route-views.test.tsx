@@ -26,6 +26,7 @@ vi.mock('./drive-view', () => ({
   },
   SignedOutDriveView: () => <div>Shared document viewer</div>,
 }));
+vi.mock('./views/DriveCallDetail', () => ({ DriveCallDetail: () => null }));
 vi.mock('./drive-view-skeleton', () => ({
   DriveViewSkeleton: () => <div>Confirming session</div>,
 }));

@@ -1,13 +1,53 @@
 #[cfg(not(test))]
 use cached::proc_macro::cached;
 
+use std::sync::{Arc, LazyLock};
+
 use model::item::UserAccessibleItem;
-use sqlx::{Pool, Postgres};
+use single_flight::{DatabaseKey, SingleFlight};
+use sqlx::{PgConnection, Pool, Postgres};
+
+mod checked_documents;
+
+type AccessibleItemsKey = (DatabaseKey, String, Option<String>, bool);
+type AccessibleItems = Result<Arc<Vec<UserAccessibleItem>>, Arc<sqlx::Error>>;
+
+static RUNNING_LOOKUPS: LazyLock<SingleFlight<AccessibleItemsKey, AccessibleItems>> =
+    LazyLock::new(SingleFlight::new);
 
 /// Gets all accessible items for a user by querying entity_access with the user's source IDs
 /// (user ID, team memberships, and channel participations). Soft-deleted items and grants
 /// whose item row no longer exists are excluded.
-#[tracing::instrument(skip(db))]
+///
+/// Callers that miss the cache at the same time for the same database, user and
+/// filters share one run of the queries. A failure reaches all of them as an
+/// `Arc<sqlx::Error>`. A run whose callers all go away (searches cancelled as
+/// the user keeps typing) still finishes, so the document checks it reads are
+/// there for the next search, and a caller arriving meanwhile joins it.
+pub async fn get_user_accessible_items(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    item_type_filter: Option<String>,
+    exclude_owned: bool,
+) -> anyhow::Result<Vec<UserAccessibleItem>> {
+    let items = shared_accessible_items(db, user_id, item_type_filter, exclude_owned).await?;
+
+    // The caller's own copy is made here, after the cache lock is released.
+    Ok(Arc::unwrap_or_clone(items))
+}
+
+/// The list every caller of one lookup shares. The cache keeps it behind a
+/// pointer because it has one lock for all users, and a hit or a store that
+/// copied the list would hold that lock for the length of the list.
+///
+/// The span keeps the public function's name and, sitting above the cache,
+/// is opened only when the cache misses.
+#[tracing::instrument(
+    name = "get_user_accessible_items",
+    skip(db),
+    err,
+    fields(coalesced = tracing::field::Empty)
+)]
 #[cfg_attr(
     not(test),
     cached(
@@ -17,21 +57,53 @@ use sqlx::{Pool, Postgres};
         convert = r#"{ format!("{}-{}-{}", user_id, item_type_filter.as_deref().unwrap_or("all"), exclude_owned) }"#
     )
 )]
-pub async fn get_user_accessible_items(
+async fn shared_accessible_items(
     db: &Pool<Postgres>,
     user_id: &str,
     item_type_filter: Option<String>,
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
-    match item_type_filter.as_deref() {
-        Some("document") => accessible_documents(db, user_id, exclude_owned).await,
-        Some("chat") => accessible_chats(db, user_id, exclude_owned).await,
-        Some("project") => accessible_projects(db, user_id, exclude_owned).await,
+) -> anyhow::Result<Arc<Vec<UserAccessibleItem>>> {
+    let key = (
+        DatabaseKey::of(db),
+        user_id.to_string(),
+        item_type_filter.clone(),
+        exclude_owned,
+    );
+    let lookup = || {
+        let db = db.clone();
+        let user_id = user_id.to_string();
+        let item_type_filter = item_type_filter.clone();
+
+        async move {
+            query_accessible_items(&db, &user_id, item_type_filter.as_deref(), exclude_owned)
+                .await
+                .map(Arc::new)
+                .map_err(Arc::new)
+        }
+    };
+
+    // Boxed so the lookup adds one pointer, not its whole state machine, to
+    // the future of every caller up the stack: services near rustc's layout
+    // depth limit stop compiling otherwise.
+    Ok(Box::pin(RUNNING_LOOKUPS.run_to_completion(key, lookup)).await?)
+}
+
+async fn query_accessible_items(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    item_type_filter: Option<&str>,
+    exclude_owned: bool,
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
+    let source_ids = user_source_ids(db, user_id).await?;
+    match item_type_filter {
+        Some("document") => accessible_documents(db, user_id, &source_ids, exclude_owned).await,
+        Some("chat") => accessible_chats(db, user_id, &source_ids, exclude_owned).await,
+        Some("project") => accessible_projects(db, user_id, &source_ids, exclude_owned).await,
         Some(_) => Ok(vec![]),
         None => {
-            let mut items = accessible_documents(db, user_id, exclude_owned).await?;
-            items.extend(accessible_chats(db, user_id, exclude_owned).await?);
-            items.extend(accessible_projects(db, user_id, exclude_owned).await?);
+            let mut items = accessible_documents(db, user_id, &source_ids, exclude_owned).await?;
+            items.extend(accessible_chats(db, user_id, &source_ids, exclude_owned).await?);
+            items.extend(accessible_projects(db, user_id, &source_ids, exclude_owned).await?);
             Ok(items)
         }
     }
@@ -46,66 +118,169 @@ fn to_items(ids: Vec<String>, item_type: &str) -> Vec<UserAccessibleItem> {
         .collect()
 }
 
-async fn accessible_documents(
-    db: &Pool<Postgres>,
-    user_id: &str,
-    exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
-    let ids = sqlx::query_scalar!(
+/// The user's active channels, team, and the user id itself: every
+/// `entity_access.source_id` that grants them access.
+///
+/// The per-type queries bind these as a constant `source_id = ANY($2)` rather
+/// than joining the same union as a CTE. Postgres costs a CTE join at the
+/// average source's grant count, so it planned users holding hundreds of
+/// thousands of grants with one item-table probe per grant; a constant array
+/// is estimated from `entity_access.source_id` statistics, which picks a hash
+/// join for them. The per-type queries run as unnamed statements because a
+/// cached prepared statement switches every user to one generic plan after
+/// five calls.
+///
+/// Those statistics list only the largest sources and give every other one
+/// the table's average, which `accessible_documents` corrects for.
+async fn user_source_ids(db: &Pool<Postgres>, user_id: &str) -> sqlx::Result<Vec<String>> {
+    let source_ids = sqlx::query_scalar!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-        )
-        SELECT DISTINCT ea.entity_id::text as "item_id!"
-        FROM entity_access ea
-        JOIN user_source_ids us ON us.source_id = ea.source_id
-        JOIN "Document" d ON d.id = ea.entity_id::text
-        WHERE ea.entity_type = 'document'
-            AND d."deletedAt" IS NULL
-            AND (NOT $2 OR d.owner != $1)
+        SELECT cp.channel_id::text FROM comms_channel_participants cp
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        UNION ALL
+        SELECT t.team_id::text FROM team_user t
+            WHERE t.user_id = $1
+        UNION ALL
+        SELECT $1
         "#,
-        user_id,
-        exclude_owned
+        user_id
     )
     .fetch_all(db)
     .await?;
 
+    Ok(source_ids.into_iter().flatten().collect())
+}
+
+/// Callers holding at most this many document grants get their documents
+/// looked up one granted id at a time: about a third of a second of lookups
+/// at the limit when the pages are cached. Above it, one scan of the live
+/// documents can be cheaper than that many random reads, so the planner
+/// chooses. The limit sits above what callers with hundreds of sources hold,
+/// the callers the planner's estimate is most wrong for.
+const DOCUMENT_GRANTS_LOOKED_UP_BY_ID: i64 = 50_000;
+
+/// The planner cannot be left to choose for every caller. It estimates each
+/// source it has no statistics for at the table's average grant count, so a
+/// caller with a few hundred sources (every direct message is one) looks like
+/// a holder of hundreds of thousands of grants and gets a hash join over a scan
+/// of every live document: seconds of work that grows with the table, for a
+/// caller holding a few thousand grants. Reading the grants first, up to the
+/// limit, replaces that estimate with a fact.
+#[tracing::instrument(
+    skip_all,
+    err,
+    fields(
+        looked_up_by_grant = tracing::field::Empty,
+        grants = tracing::field::Empty,
+        document_checks = tracing::field::Empty,
+        documents_checked = tracing::field::Empty,
+        documents_reused = tracing::field::Empty,
+        documents_listed = tracing::field::Empty,
+    )
+)]
+async fn accessible_documents(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    source_ids: &[String],
+    exclude_owned: bool,
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
+    // One connection for the grants and the documents: a second checkout
+    // would double this lookup's share of the pool.
+    let mut connection = db.acquire().await?;
+
+    let granted = sqlx::query_scalar!(
+        r#"
+        SELECT ea.entity_id
+        FROM entity_access ea
+        WHERE ea.source_id = ANY($1)
+            AND ea.entity_type = 'document'
+        LIMIT $2
+        "#,
+        source_ids,
+        DOCUMENT_GRANTS_LOOKED_UP_BY_ID + 1
+    )
+    .persistent(false)
+    .fetch_all(&mut *connection)
+    .await?;
+    let span = tracing::Span::current();
+    let looked_up_by_grant =
+        i64::try_from(granted.len()).is_ok_and(|grants| grants <= DOCUMENT_GRANTS_LOOKED_UP_BY_ID);
+    span.record("looked_up_by_grant", looked_up_by_grant);
+    span.record("grants", granted.len());
+
+    let ids = if looked_up_by_grant {
+        let (ids, counts) = checked_documents::accessible_document_ids(
+            &mut connection,
+            DatabaseKey::of(db),
+            user_id,
+            granted,
+            exclude_owned,
+        )
+        .await?;
+        span.record("document_checks", counts.outcome());
+        span.record("documents_checked", counts.checked);
+        span.record("documents_reused", counts.reused);
+        ids
+    } else {
+        documents_by_planner_choice(&mut connection, user_id, source_ids, exclude_owned).await?
+    };
+    span.record("documents_listed", ids.len());
+
     Ok(to_items(ids, "document"))
+}
+
+async fn documents_by_planner_choice(
+    connection: &mut PgConnection,
+    user_id: &str,
+    source_ids: &[String],
+    exclude_owned: bool,
+) -> sqlx::Result<Vec<String>> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT d.id
+        FROM "Document" d
+        WHERE d.id IN (
+                SELECT ea.entity_id::text
+                FROM entity_access ea
+                WHERE ea.source_id = ANY($2)
+                    AND ea.entity_type = 'document'
+            )
+            AND d."deletedAt" IS NULL
+            AND (NOT $3 OR d.owner != $1)
+        "#,
+        user_id,
+        source_ids,
+        exclude_owned
+    )
+    .persistent(false)
+    .fetch_all(connection)
+    .await
 }
 
 async fn accessible_chats(
     db: &Pool<Postgres>,
     user_id: &str,
+    source_ids: &[String],
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-        )
-        SELECT DISTINCT ea.entity_id::text as "item_id!"
-        FROM entity_access ea
-        JOIN user_source_ids us ON us.source_id = ea.source_id
-        JOIN "Chat" c ON c.id = ea.entity_id::text
-        WHERE ea.entity_type = 'chat'
+        SELECT c.id
+        FROM "Chat" c
+        WHERE c.id IN (
+                SELECT ea.entity_id::text
+                FROM entity_access ea
+                WHERE ea.source_id = ANY($2)
+                    AND ea.entity_type = 'chat'
+            )
             AND c."deletedAt" IS NULL
-            AND (NOT $2 OR c."userId" != $1)
+            AND (NOT $3 OR c."userId" != $1)
         "#,
         user_id,
+        source_ids,
         exclude_owned
     )
+    .persistent(false)
     .fetch_all(db)
     .await?;
 
@@ -115,35 +290,35 @@ async fn accessible_chats(
 async fn accessible_projects(
     db: &Pool<Postgres>,
     user_id: &str,
+    source_ids: &[String],
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-        )
-        SELECT DISTINCT ea.entity_id::text as "item_id!"
-        FROM entity_access ea
-        JOIN user_source_ids us ON us.source_id = ea.source_id
-        JOIN "Project" p ON p.id = ea.entity_id::text
-        WHERE ea.entity_type = 'project'
+        SELECT p.id
+        FROM "Project" p
+        WHERE p.id IN (
+                SELECT ea.entity_id::text
+                FROM entity_access ea
+                WHERE ea.source_id = ANY($2)
+                    AND ea.entity_type = 'project'
+            )
             AND p."deletedAt" IS NULL
-            AND (NOT $2 OR p."userId" != $1)
+            AND (NOT $3 OR p."userId" != $1)
         "#,
         user_id,
+        source_ids,
         exclude_owned
     )
+    .persistent(false)
     .fetch_all(db)
     .await?;
 
     Ok(to_items(ids, "project"))
 }
+
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 mod tests {

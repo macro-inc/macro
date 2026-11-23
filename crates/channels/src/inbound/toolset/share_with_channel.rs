@@ -2,7 +2,7 @@
 
 use super::{ChannelToolContext, channel_mutation_error};
 use crate::domain::{
-    models::{ReferenceShareOutcome, ReferencedShareItem, ReferencedShareItemType},
+    models::{ReferenceShareOutcome, ReferencedShareItem},
     ports::ChannelService,
 };
 use ai_toolset::{
@@ -15,60 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Entity types a channel grant can cover.
-///
-/// Values are the stored entity types. `calendar` is accepted for a calendar
-/// chip, whose stored type is `calendar_event`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ChannelShareEntityType {
-    /// A calendar event. A calendar chip's `documentId` is this id.
-    #[serde(alias = "calendar")]
-    CalendarEvent,
-    /// A document.
-    Document,
-    /// A project.
-    Project,
-    /// A database.
-    Database,
-    /// A form.
-    Form,
-    /// A call.
-    Call,
-    /// An email thread.
-    #[serde(rename = "thread", alias = "email", alias = "email_thread")]
-    EmailThread,
-    /// An agent session.
-    AgentSession,
-    /// An external chat (such as WhatsApp) added to Macro.
-    ExternalChat,
-}
-
-impl ChannelShareEntityType {
-    fn to_domain(self) -> ReferencedShareItemType {
-        match self {
-            Self::CalendarEvent => ReferencedShareItemType::CalendarEvent,
-            Self::Document => ReferencedShareItemType::Document,
-            Self::Project => ReferencedShareItemType::Project,
-            Self::Database => ReferencedShareItemType::Database,
-            Self::Form => ReferencedShareItemType::Form,
-            Self::Call => ReferencedShareItemType::Call,
-            Self::EmailThread => ReferencedShareItemType::EmailThread,
-            Self::AgentSession => ReferencedShareItemType::AgentSession,
-            Self::ExternalChat => ReferencedShareItemType::ExternalChat,
-        }
-    }
-
-    fn not_permitted(self) -> &'static str {
-        match self {
-            Self::CalendarEvent => {
-                "you can only share a calendar event you hold on your own calendar, and private or confidential events are not shared"
-            }
-            Self::AgentSession => "you can only share an agent session you own",
-            _ => "you need access to this item before it can be shared with the channel",
-        }
-    }
-}
+pub use crate::domain::models::ChannelShareEntityType;
 
 /// Grant the current members of a channel access to one item.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]

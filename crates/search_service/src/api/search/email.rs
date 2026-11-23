@@ -2,7 +2,7 @@ use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
 use email_db_client::contacts::get::ThreadContactsMap;
 use indexmap::IndexMap;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
 use models_email::service::message::{MessageSenderInfo, ThreadHistoryInfo};
 use models_properties::{EntityReference, EntityType};
 use models_search::email::{
@@ -36,19 +36,51 @@ pub(in crate::api::search) async fn enrich_emails(
     let inboxes = email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, user_id)
         .await
         .map_err(SearchError::InternalError)?;
-    if inboxes.is_empty() {
-        return Ok(vec![]);
-    }
     let link_ids: Vec<Uuid> = inboxes.iter().map(|l| l.id).collect();
 
     // Extract thread IDs from results
     let thread_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
 
     // Fetch email thread metadata directly from DB
-    let thread_histories =
+    let mut thread_histories =
         email_db_client::user_history::get_thread_summary_info(&ctx.db, &link_ids, &thread_ids)
             .await
             .map_err(SearchError::InternalError)?;
+
+    // A shared thread lives in someone else's inbox: read it through that
+    // inbox once a grant to the caller confirms it is shared with them.
+    let viewer = MacroUserId::parse_from_str(user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
+        .lowercase();
+    let unresolved_ids: Vec<Uuid> = thread_ids
+        .iter()
+        .filter(|id| !thread_histories.contains_key(id))
+        .copied()
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+    let shared = ctx
+        .email_search()
+        .shared_among(&viewer, &link_ids, &unresolved_ids)
+        .await
+        .map_err(|error| SearchError::InternalError(anyhow::anyhow!("{error}")))?;
+    let mut link_ids = link_ids;
+    if !shared.is_empty() {
+        let mut shared_link_ids: Vec<Uuid> = shared.iter().map(|thread| thread.link_id).collect();
+        shared_link_ids.sort();
+        shared_link_ids.dedup();
+        let shared_thread_ids: Vec<Uuid> = shared.iter().map(|thread| thread.thread_id).collect();
+        thread_histories.extend(
+            email_db_client::user_history::get_thread_summary_info(
+                &ctx.db,
+                &shared_link_ids,
+                &shared_thread_ids,
+            )
+            .await
+            .map_err(SearchError::InternalError)?,
+        );
+        link_ids.extend(shared_link_ids);
+    }
 
     let message_ids: Vec<Uuid> = results
         .iter()

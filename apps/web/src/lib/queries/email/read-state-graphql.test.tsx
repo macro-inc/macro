@@ -1,41 +1,23 @@
 import { QueryClient } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountEmailMutation } from './tests/mutation';
 
 const mocks = vi.hoisted(() => ({
-  graphqlEnabled: true,
   cacheEnabled: true,
-  markSeen: vi.fn(),
-  updateLabel: vi.fn(),
+  getCacheHost: vi.fn(),
   getLabels: vi.fn(),
-  legacyPatch: vi.fn(),
   graphqlMutation: vi.fn(),
   refresh: vi.fn(),
-  refetch: vi.fn(),
-}));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
 vi.mock('@service-email/client', () => ({
-  emailClient: {
-    markThreadAsSeen: mocks.markSeen,
-    updateThreadLabel: mocks.updateLabel,
-    updateThreadState: mocks.updateLabel,
-    getUserLabels: mocks.getLabels,
-  },
+  emailClient: { getUserLabels: mocks.getLabels },
 }));
 vi.mock('../client', () => ({
   get queryClient() {
     return client;
   },
 }));
-vi.mock('../soup/cache', () => ({
-  optimisticUpdateSoupEntity: mocks.legacyPatch,
-  refetchSoupEntity: mocks.refetch,
-}));
+vi.mock('../soup/cache', () => ({ refetchSoupEntity: vi.fn() }));
 vi.mock('../soup/graphql/active-queries', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../soup/graphql/active-queries')>()),
   refreshActiveGraphqlSoupQueries: mocks.refresh,
@@ -50,17 +32,16 @@ vi.mock('./graphql/thread', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.graphqlEnabled }),
-}));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({ Telemetry: { error: vi.fn() } }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlCacheHost: mocks.getCacheHost,
   getGraphqlSoupClient: () => ({ mutation: mocks.graphqlMutation }),
   graphqlCacheEnabled: () => mocks.cacheEnabled,
 }));
 
 import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
+import type { MutationSettlement } from '@graphql-cache/protocol';
 import {
   MarkEmailThreadSeenDocument,
   MarkEmailThreadUnreadDocument,
@@ -70,7 +51,7 @@ import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 import { soupKeys } from '../soup/keys';
 import { emailKeys } from './keys';
-import { markEmailThreadSeen } from './read-state';
+import { markEmailThreadUnread } from './read-state';
 import {
   trackExternalThreadArchive,
   useMarkThreadAsSeenMutation,
@@ -94,9 +75,7 @@ function hasReadPatch(value: unknown, isRead: boolean): boolean {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.graphqlEnabled = true;
   mocks.cacheEnabled = true;
-  mocks.legacyPatch.mockReturnValue({ rollback: vi.fn() });
   mocks.refresh.mockResolvedValue(undefined);
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   client.setQueryData(emailKeys.labels.queryKey, {
@@ -109,41 +88,68 @@ afterEach(() => client.clear());
 
 describe('external archive disposition', () => {
   it.each(['queued', 'committed', 'failed'] as const)(
-    'retains the optimistic thread until a %s archive can be reconciled',
+    'reads previews again only once a %s archive can be reconciled',
     async (disposition) => {
-      const key = emailKeys.threadMessages('thread').queryKey;
-      client.setQueryData(key, {
-        pages: [{ inbox_visible: true }],
-        pageParams: [0],
-      });
       const invalidate = vi.spyOn(client, 'invalidateQueries');
       await trackExternalThreadArchive(
-        'thread',
         disposition === 'failed'
           ? Promise.reject(new Error('archive failed'))
           : Promise.resolve(disposition)
       );
-      expect(
-        client.getQueryData<{ pages: { inbox_visible: boolean }[] }>(key)
-          ?.pages[0].inbox_visible
-      ).toBe(disposition === 'failed');
       expect(invalidate).toHaveBeenCalledTimes(
-        disposition === 'queued' ? 0 : 2
+        disposition === 'queued' ? 0 : 1
       );
     }
   );
 });
 
 describe('email read state with GraphQL Soup', () => {
-  it.each([
-    { read: true, graphql: true },
-    { read: false, graphql: true },
-    { read: true, graphql: false },
-    { read: false, graphql: false },
-  ])(
-    'propagates isRead=$read before the request settles (GraphQL=$graphql)',
-    async ({ read, graphql }) => {
-      mocks.graphqlEnabled = graphql;
+  it('retains a queued refusal that arrives before the admission result', async () => {
+    let reportSettlement!: (settlement: MutationSettlement) => void;
+    const stop = vi.fn();
+    const stopGeneration = vi.fn();
+    mocks.getCacheHost.mockReturnValue({
+      onMutationSettled: (listener: typeof reportSettlement) => {
+        reportSettlement = listener;
+        return stop;
+      },
+      onCacheGenerationChanged: () => stopGeneration,
+    });
+    mocks.graphqlMutation.mockImplementation((_document, _params, context) => ({
+      toPromise: async () => {
+        reportSettlement({
+          transactionId: 'other',
+          mutationUuid: 'another-write',
+          status: 'committed',
+        });
+        reportSettlement({
+          transactionId: 'unread',
+          mutationUuid: context.optimisticMutation.uuid,
+          status: 'permanently-failed',
+          error: 'refused by the mailbox',
+        });
+        return {
+          extensions: {
+            normalizedCacheMutationDisposition: {
+              kind: 'queued',
+              transactionId: 'unread',
+            },
+          },
+        };
+      },
+    }));
+
+    const result = await markEmailThreadUnread({ threadId: 'thread' }, true);
+
+    if (result.kind !== 'queued') throw new Error('expected a queued write');
+    await expect(result.settlement).resolves.toBe('permanently-failed');
+    expect(stop).toHaveBeenCalledOnce();
+    expect(stopGeneration).toHaveBeenCalledOnce();
+  });
+
+  it.each([true, false])(
+    'propagates isRead=%s before the request settles',
+    async (read) => {
       const folderKeys = ['spam', 'trash'].map(
         (emailView) =>
           soupKeys.astItems({
@@ -162,11 +168,6 @@ describe('email read state with GraphQL Soup', () => {
       const network = new Promise<void>((resolve) => {
         finish = resolve;
       });
-      const restRequest = read ? mocks.markSeen : mocks.updateLabel;
-      restRequest.mockImplementation(async () => {
-        await network;
-        return ok(undefined);
-      });
       // The call supplies variables; the shared registry supplies the optimistic fields.
       mocks.graphqlMutation.mockReturnValue({
         toPromise: async () => {
@@ -179,50 +180,36 @@ describe('email read state with GraphQL Soup', () => {
         },
       });
       const mutation = mountEmailMutation(
-        read ? useMarkThreadAsSeenMutation : useMarkThreadAsUnreadMutation,
+        () =>
+          read
+            ? useMarkThreadAsSeenMutation()
+            : useMarkThreadAsUnreadMutation(),
         client
       );
-      const result = mutation.mutateAsync({
-        threadId: 'thread',
-        linkId: 'inbox',
-      });
+      const result = mutation.mutateAsync({ threadId: 'thread' });
       try {
         await vi.waitFor(() =>
-          expect(
-            graphql ? mocks.graphqlMutation : restRequest
-          ).toHaveBeenCalledOnce()
+          expect(mocks.graphqlMutation).toHaveBeenCalledOnce()
         );
         expect(mutation.isPending).toBe(true);
-        if (graphql) {
-          const [document, variables] = mocks.graphqlMutation.mock.calls[0];
-          expect(document).toBe(
-            read ? MarkEmailThreadSeenDocument : MarkEmailThreadUnreadDocument
-          );
-          expect(variables).toEqual({
-            input: { threadId: 'thread' },
-          });
-          expect(
-            hasReadPatch(
-              predictOptimisticMutation(
-                soupOptimisticResolvers,
-                document,
-                variables
-              )?.response,
-              read
-            ),
-            'A legacy Soup patch does not update GraphqlSoupEmailThread.isRead'
-          ).toBe(true);
-          expect(restRequest).not.toHaveBeenCalled();
-          expect(mocks.legacyPatch).not.toHaveBeenCalled();
-        } else {
-          expect(mocks.graphqlMutation).not.toHaveBeenCalled();
-          expect(mocks.legacyPatch).toHaveBeenCalledWith(
-            expect.objectContaining({
-              tag: 'emailThread',
-              data: { id: 'thread', isRead: read },
-            })
-          );
-        }
+        const [document, variables] = mocks.graphqlMutation.mock.calls[0];
+        expect(document).toBe(
+          read ? MarkEmailThreadSeenDocument : MarkEmailThreadUnreadDocument
+        );
+        expect(variables).toEqual({
+          input: { threadId: 'thread' },
+        });
+        expect(
+          hasReadPatch(
+            predictOptimisticMutation(
+              soupOptimisticResolvers,
+              document,
+              variables
+            )?.response,
+            read
+          ),
+          'A legacy Soup patch does not update GraphqlSoupEmailThread.isRead'
+        ).toBe(true);
         expect(mocks.refresh).not.toHaveBeenCalled();
       } finally {
         finish();
@@ -268,10 +255,7 @@ describe('email read state with GraphQL Soup', () => {
         useMarkThreadAsUnreadMutation,
         client
       );
-      const result = mutation.mutateAsync({
-        threadId: 'thread',
-        linkId: 'secondary-inbox',
-      });
+      const result = mutation.mutateAsync({ threadId: 'thread' });
       try {
         await vi.waitFor(() =>
           expect(mocks.graphqlMutation).toHaveBeenCalledOnce()
@@ -291,7 +275,6 @@ describe('email read state with GraphQL Soup', () => {
         ).toBe(true);
         expect(mutation.isPending).toBe(true);
         expect(mocks.getLabels).not.toHaveBeenCalled();
-        expect(mocks.legacyPatch).not.toHaveBeenCalled();
         expect(mocks.refresh).not.toHaveBeenCalled();
       } finally {
         finish();
@@ -313,7 +296,7 @@ describe('email read state with GraphQL Soup', () => {
           },
         }),
       });
-      const mutation = mountEmailMutation(useMutation, client);
+      const mutation = mountEmailMutation(() => useMutation(), client);
       await mutation.mutateAsync({ threadId: 'thread' });
       expect(mocks.refresh).toHaveBeenCalledOnce();
     }
@@ -343,7 +326,7 @@ describe('email read state with GraphQL Soup', () => {
         }),
       });
       try {
-        const mutation = mountEmailMutation(useMutation, client);
+        const mutation = mountEmailMutation(() => useMutation(), client);
         await mutation.mutateAsync({ threadId: 'thread' });
         // Replay commits the record, which the maintained list reads; only
         // the list the cache cannot keep current is read again.
@@ -352,62 +335,10 @@ describe('email read state with GraphQL Soup', () => {
             .revalidations
         ).toEqual([{ document: SoupDocument, variables: grouped }]);
         expect(mocks.refresh).not.toHaveBeenCalled();
-        expect(mocks.markSeen).not.toHaveBeenCalled();
       } finally {
         unregisterMaintained();
         unregisterGrouped();
       }
     }
   );
-});
-
-describe('row-open email read operation', () => {
-  it('patches the REST row synchronously, preserves inbox targeting and refreshes only the failed thread', async () => {
-    mocks.graphqlEnabled = false;
-    const folderKey = soupKeys.astItems({
-      params: {},
-      body: { emailView: 'spam' },
-      transport: 'rest',
-    }).queryKey;
-    const allKey = soupKeys.astItems({
-      params: {},
-      body: { emailView: 'all' },
-    }).queryKey;
-    client.setQueryData(folderKey, { pages: [] });
-    client.setQueryData(allKey, { pages: [] });
-    const pending = Promise.withResolvers<ReturnType<typeof ok<void>>>();
-    mocks.markSeen.mockReturnValueOnce(pending.promise);
-    const request = markEmailThreadSeen({
-      threadId: 'thread',
-      linkId: 'secondary-inbox',
-    });
-    expect(mocks.legacyPatch).toHaveBeenCalledExactlyOnceWith({
-      tag: 'emailThread',
-      data: { id: 'thread', isRead: true },
-      frecency_score: 0,
-    });
-    expect(mocks.markSeen).toHaveBeenCalledExactlyOnceWith(
-      { thread_id: 'thread' },
-      'secondary-inbox'
-    );
-    pending.resolve(ok(undefined));
-    await request;
-    expect(mocks.refetch).not.toHaveBeenCalled();
-    expect(client.getQueryState(folderKey)?.isInvalidated).toBe(true);
-    expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
-
-    client.setQueryData(folderKey, { pages: [] });
-    mocks.markSeen.mockResolvedValueOnce(
-      err([{ code: 'NETWORK', message: 'offline' }])
-    );
-    await expect(
-      markEmailThreadSeen({ threadId: 'thread', linkId: 'secondary-inbox' })
-    ).rejects.toThrow('offline');
-    expect(mocks.refetch).toHaveBeenCalledExactlyOnceWith(
-      'thread',
-      'emailThread'
-    );
-    expect(client.getQueryState(folderKey)?.isInvalidated).toBe(true);
-    expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
-  });
 });

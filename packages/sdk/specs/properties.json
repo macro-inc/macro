@@ -97,6 +97,9 @@
           "403": {
             "description": "Team membership required for team scope"
           },
+          "409": {
+            "description": "The name belongs to a built-in property. The body names that property."
+          },
           "500": {
             "description": "Internal server error"
           }
@@ -1977,6 +1980,7 @@
           "CHANNEL",
           "CHAT",
           "COMPANY",
+          "CONTACT",
           "DATABASE_ROW",
           "DOCUMENT",
           "INITIATIVE",
@@ -2050,9 +2054,13 @@
           },
           {
             "type": "object",
-            "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}",
+            "description": "Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set",
             "required": ["value", "type"],
             "properties": {
+              "has_time": {
+                "type": "boolean",
+                "description": "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+              },
               "type": {
                 "type": "string",
                 "enum": ["Date"]
@@ -2060,7 +2068,7 @@
               "value": {
                 "type": "string",
                 "format": "date-time",
-                "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}"
+                "description": "Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set"
               }
             }
           },
@@ -2201,9 +2209,12 @@
           },
           {
             "type": "object",
-            "description": "Date and time value",
+            "description": "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone.",
             "required": ["value", "type"],
             "properties": {
+              "has_time": {
+                "type": "boolean"
+              },
               "type": {
                 "type": "string",
                 "enum": ["date"]

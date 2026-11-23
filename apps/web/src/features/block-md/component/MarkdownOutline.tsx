@@ -1,4 +1,8 @@
 import { DocumentOutline } from '@app/components/DocumentOutline';
+import {
+  FOLDED_BLOCK_CLASS,
+  REVEAL_NODE_COMMAND,
+} from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { $isHeadingNode } from '@lexical/rich-text';
 import { $getRoot, type LexicalEditor } from 'lexical';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
@@ -169,9 +173,11 @@ export function MarkdownOutline(props: {
       );
       const renderedHeadings = currentHeadings.flatMap((heading) => {
         const element = editor.getElementByKey(heading.key);
-        return element
-          ? [{ key: heading.key, top: element.getBoundingClientRect().top }]
-          : [];
+        // Headings inside a folded section take no space on screen.
+        if (!element || element.classList.contains(FOLDED_BLOCK_CLASS)) {
+          return [];
+        }
+        return [{ key: heading.key, top: element.getBoundingClientRect().top }];
       });
       const indexes = getVisibleHeadingIndexes(
         renderedHeadings.map((heading) => heading.top),
@@ -234,6 +240,7 @@ export function MarkdownOutline(props: {
   };
 
   const scrollToHeading = (heading: OutlineHeading) => {
+    props.editor()?.dispatchCommand(REVEAL_NODE_COMMAND, heading.key);
     const headingElement = props.editor()?.getElementByKey(heading.key);
     if (!headingElement) return;
 

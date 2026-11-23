@@ -6,6 +6,7 @@ fn dt(seconds: i64) -> DateTime<Utc> {
 
 fn reply(seconds: i64) -> Message {
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::new_v4(),
         parent: messages::domain::models::MessageParent::Channel(Uuid::nil()),
         thread_id: Some(Uuid::from_u128(1)),

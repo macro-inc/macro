@@ -12,6 +12,7 @@ import {
   timeRangeFromInstants,
   timeRangeToInstants,
 } from '@app/features/database/core/cell-date-range';
+import { percentagePointsText } from '@app/features/database/core/column-inference';
 import Paperclip from '@icon/system/regular/paperclip.svg';
 import Spinner from '@icon/system/regular/spinner.svg';
 import UploadSimple from '@icon/system/regular/upload-simple.svg';
@@ -451,10 +452,12 @@ export function QuestionField(props: {
               numberDraft() ??
               (props.value?.type === 'number' &&
               Number.isFinite(props.value.value)
-                ? String(props.value.value)
+                ? props.column.percentage
+                  ? percentagePointsText(props.value.value)
+                  : String(props.value.value)
                 : '')
             }
-            placeholder="Number"
+            placeholder={props.column.percentage ? 'Percent' : 'Number'}
             disabled={props.disabled}
             aria-describedby={describedBy()}
             aria-invalid={invalid()}
@@ -472,7 +475,10 @@ export function QuestionField(props: {
                 return;
               }
               const number = event.currentTarget.valueAsNumber;
-              props.onChange({ type: 'number', value: number });
+              props.onChange({
+                type: 'number',
+                value: props.column.percentage ? number / 100 : number,
+              });
             }}
           />
         </Match>

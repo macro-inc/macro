@@ -88,6 +88,67 @@ struct OwnerOnlyStorage(InMemoryStorage);
 
 impl Storage for OwnerOnlyStorage {
     type Error = std::convert::Infallible;
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.0.record_keys(typename, after_id, limit).await
+    }
+
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.0.projection_keys(typename, after_id, limit).await
+    }
+
+    async fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &cache_core::people::sql::PeopleSqlPlan,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
+        self.0.read_people_sql(viewer, plan).await
+    }
+
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        self.0.scan_contact_records(after, limit, visit).await
+    }
+
+    async fn visit_name_search(
+        &self,
+        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        self.0.visit_name_search(read).await
+    }
+
+    async fn visit_contact_records(
+        &self,
+        query: &cache_core::search::SearchQuery,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.0.visit_contact_records(query, visit).await
+    }
+
+    async fn visit_search_documents(
+        &self,
+        profile: cache_core::search::SearchProfile,
+        bucket: &str,
+        query: &cache_core::search::SearchQuery,
+        visit: impl FnMut(cache_core::search::SearchDocumentRef<'_>) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.0
+            .visit_search_documents(profile, bucket, query, visit)
+            .await
+    }
 
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         assert!(
@@ -127,6 +188,20 @@ impl Storage for OwnerOnlyStorage {
     ) -> Result<MutationUpsertResult, Self::Error> {
         self.0
             .upsert_mutation_with_shadow(entry, now_ms, reconciliation)
+            .await
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(
+            cache_core::queue::MutationId,
+            cache_core::queue::PersistedOptimisticLayer,
+        )],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> Result<(), Self::Error> {
+        self.0
+            .replace_optimistic_layers(layers, affected_projection_keys, projections)
             .await
     }
 

@@ -78,6 +78,7 @@ fn failed_rollback_never_overwrites_the_unidentified_snapshot() {
 #[test]
 fn hibernated_surface_metadata_retains_kind_and_strict_expiry() {
     let meta = WebSocketMetadata {
+        agent_correlation_id: None,
         user_id: Some("user".into()),
         access_level: AccessLevel::Edit,
         actor: Some("actor".into()),
@@ -104,6 +105,7 @@ fn legacy_metadata_is_only_valid_for_documents() {
     assert!(legacy.grant_active(SessionKind::Document, usize::MAX));
     assert!(!legacy.grant_active(SessionKind::Surface, 0));
     let missing_expiry = WebSocketMetadata {
+        agent_correlation_id: None,
         session_kind: SessionKind::Surface,
         ..legacy
     };

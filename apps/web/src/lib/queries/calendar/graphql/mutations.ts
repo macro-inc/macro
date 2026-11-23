@@ -1,4 +1,5 @@
 import type { OptimisticResponse } from '@graphql-cache/exchange/optimistic';
+import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import {
   type CacheHost,
   executeOptimisticMutation,
@@ -11,9 +12,9 @@ import type { CreateCalendarEventRequest } from '@service-calendar/generated/sch
 import {
   type CalendarEventFieldsFragment,
   CalendarEventFieldsFragmentDoc,
+  CalendarEventIdentityFragmentDoc,
   type CalendarMutationPayloadFieldsFragment,
   type CalendarOccurrenceItemFieldsFragment,
-  CalendarOccurrenceItemFieldsFragmentDoc,
   CalendarsDocument,
   CreateCalendarEventDocument,
   type CreateCalendarEventMutation,
@@ -35,7 +36,10 @@ import {
   UpdateCalendarEventDocument,
   type UpdateCalendarEventMutation,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
 import type { AnyVariables, Client, OperationResult } from '@urql/core';
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import type {
@@ -58,7 +62,7 @@ import {
   withInvitedGuests,
   withRsvp,
 } from './optimistic';
-import { epochDay } from './range';
+import { epochDay, readOccurrenceRecords } from './range';
 
 export type CalendarMutationHost = Pick<
   CacheHost,
@@ -84,7 +88,7 @@ export class CalendarMutationError extends Error {
 
 /** Committed with the server's answer, or held by the durable queue. */
 export type CalendarMutationOutcome =
-  | { kind: 'committed'; payload: Payload }
+  | { kind: 'committed'; payload?: Payload }
   | { kind: 'queued' };
 
 const EVENT_TYPENAME = 'GraphqlCalendarEvent';
@@ -103,9 +107,7 @@ const ALL_TIME = {
 const eventKey = (id: string) => `${EVENT_TYPENAME}:${id}`;
 
 const eventSelection = selectRecords(CalendarEventFieldsFragmentDoc);
-const occurrenceSelection = selectRecords(
-  CalendarOccurrenceItemFieldsFragmentDoc
-);
+const eventIdentitySelection = selectRecords(CalendarEventIdentityFragmentDoc);
 
 /** Events created while offline, until their create settles. */
 const pendingCreates = new Set<string>();
@@ -156,11 +158,7 @@ async function cachedOccurrences(
   if (range.kind === 'unsupported' || range.occurrenceKeys.length === 0) {
     return [];
   }
-  const { records } = await readRecordsByKeys(
-    host,
-    occurrenceSelection,
-    range.occurrenceKeys
-  );
+  const records = await readOccurrenceRecords(host, range.occurrenceKeys);
   return records.map(({ record }) => record);
 }
 
@@ -189,27 +187,33 @@ async function settle<TData, TVariables extends AnyVariables>(
     return { kind: 'queued' };
   }
   if (result.error) throw graphqlError(result);
+  if (!payload && optimisticMutationDispositionOf(result)?.kind === 'committed')
+    return { kind: 'committed' };
   if (!payload) throw new Error('Calendar mutation returned no data');
+  const generation = result.operation.context.cacheSessionGeneration;
   await host
-    .calendarCommit({
-      ...(payload.event
-        ? {
-            replacedEvents: [
-              {
-                eventKey: eventKey(payload.event.id),
-                occurrenceKeys: payload.occurrences
-                  .filter((occurrence) => !occurrence.isCancelled)
-                  .map(
-                    (occurrence) => `${OCCURRENCE_TYPENAME}:${occurrence.id}`
-                  ),
-              },
-            ],
-          }
-        : {}),
-      ...(payload.deletedEventId
-        ? { deletedEventKeys: [eventKey(payload.deletedEventId)] }
-        : {}),
-    })
+    .calendarCommit(
+      {
+        ...(payload.event
+          ? {
+              replacedEvents: [
+                {
+                  eventKey: eventKey(payload.event.id),
+                  occurrenceKeys: payload.occurrences
+                    .filter((occurrence) => !occurrence.isCancelled)
+                    .map(
+                      (occurrence) => `${OCCURRENCE_TYPENAME}:${occurrence.id}`
+                    ),
+                },
+              ],
+            }
+          : {}),
+        ...(payload.deletedEventId
+          ? { deletedEventKeys: [eventKey(payload.deletedEventId)] }
+          : {}),
+      },
+      typeof generation === 'string' ? generation : UNKNOWN_CACHE_GENERATION
+    )
     .catch((error) => {
       console.warn('Calendar mutation commit failed', error);
     });
@@ -560,11 +564,14 @@ async function targetCalendar(client: Client, calendarId: string | undefined) {
  * Creates an event through the durable queue. The event shows at once under
  * a client id that is also the request's idempotency key, so a replay after
  * a lost response cannot create it twice.
+ * A confirmed create may omit `event` when response retirement leaves its
+ * canonical identity temporarily unavailable; callers close and refresh.
  */
 export async function executeGraphqlCreate(
   args: CreateCalendarEventRequest,
-  client: Client = getGraphqlSoupClient()
-): Promise<{ outcome: CalendarMutationOutcome; event: CalendarEvent }> {
+  client: Client = getGraphqlSoupClient(),
+  host?: Pick<CacheHost, 'readRecordsByKeys'>
+): Promise<{ outcome: CalendarMutationOutcome; event?: CalendarEvent }> {
   const clientId = args.idempotencyKey ?? uuidv4();
   const calendar = await targetCalendar(client, args.calendarId ?? undefined);
   const now = new Date().toISOString();
@@ -758,9 +765,33 @@ export async function executeGraphqlCreate(
     return { outcome, event: mapCalendarEvent(event) };
   }
   pendingCreates.delete(clientId);
+  if (!outcome.payload?.event) {
+    // Settlement preserves the local-to-server alias even when its response
+    // content is retired. Navigation and later edits must use that server ID.
+    const cache = host ?? getGraphqlSoupCacheHost();
+    const selected = cache
+      ? await readRecordsByKeys(cache, eventIdentitySelection, [
+          eventKey(clientId),
+        ]).catch(() => undefined)
+      : undefined;
+    const identity = selected?.records[0];
+    if (
+      !identity?.record.id ||
+      identity.identity?.pending !== false ||
+      identity.identity.mutationUuid !== clientId
+    ) {
+      // Creation succeeded. The caller closes and refreshes without offering
+      // a duplicate create or navigating to an unconfirmed local identifier.
+      return { outcome };
+    }
+    return {
+      outcome,
+      event: mapCalendarEvent({ ...event, id: identity.record.id }),
+    };
+  }
   return {
     outcome,
-    event: mapCalendarEvent(outcome.payload.event ?? event),
+    event: mapCalendarEvent(outcome.payload.event),
   };
 
   async function settleCreate(
@@ -771,6 +802,11 @@ export async function executeGraphqlCreate(
     }
     if (created.error) throw graphqlError(created);
     const payload = created.data?.createCalendarEvent;
+    if (
+      !payload &&
+      optimisticMutationDispositionOf(created)?.kind === 'committed'
+    )
+      return { kind: 'committed' };
     if (!payload?.event) throw new Error('Calendar create returned no event');
     return { kind: 'committed', payload };
   }
@@ -780,7 +816,7 @@ export async function executeGraphqlCreate(
 export function committedEvent(
   outcome: CalendarMutationOutcome
 ): CalendarEvent | undefined {
-  return outcome.kind === 'committed' && outcome.payload.event
+  return outcome.kind === 'committed' && outcome.payload?.event
     ? mapCalendarEvent(outcome.payload.event)
     : undefined;
 }

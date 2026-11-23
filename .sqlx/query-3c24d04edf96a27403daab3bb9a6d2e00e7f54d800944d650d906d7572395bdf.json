@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH batch AS (\n                SELECT notification_id, was_unseen, group_key\n                FROM notification_bulk_action_item\n                WHERE action_id = $1 AND NOT undone\n                ORDER BY notification_id\n                LIMIT $3\n                FOR UPDATE\n            ),\n            reopened AS (\n                UPDATE user_notification un\n                SET state = CASE\n                        WHEN batch.was_unseen THEN 'unseen'::notification_state\n                        ELSE 'seen'::notification_state\n                    END,\n                    done_by = NULL\n                FROM batch\n                WHERE un.user_id = $2\n                    AND un.notification_id = batch.notification_id\n                    AND un.done_by = $1\n                    AND un.state = 'done'\n                    AND un.deleted_at IS NULL\n                RETURNING un.notification_id\n            ),\n            marked AS (\n                UPDATE notification_bulk_action_item item\n                SET undone = TRUE\n                FROM batch\n                WHERE item.action_id = $1 AND item.notification_id = batch.notification_id\n            )\n            SELECT\n                batch.group_key AS \"group_key!\",\n                (reopened.notification_id IS NOT NULL) AS \"reopened!\"\n            FROM batch\n            LEFT JOIN reopened USING (notification_id)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "group_key!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "reopened!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "3c24d04edf96a27403daab3bb9a6d2e00e7f54d800944d650d906d7572395bdf"
+}

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
   linkResolved: true,
   capturedParent: undefined as { type: string; id: string } | undefined,
+  bots: undefined as Accessor<{ id: string }[]> | undefined,
   linkError: null as unknown,
   refetchLink: vi.fn(),
   urlTarget: undefined as string | undefined,
@@ -30,9 +31,19 @@ vi.mock('./scroll-to-rendered-target', async (importOriginal) => ({
 }));
 
 vi.mock('@channel/Input', () => ({
-  ChannelInput: (props: { parent?: { type: string; id: string } }) => {
+  ChannelInput: (props: {
+    parent?: { type: string; id: string };
+    bots?: Accessor<{ id: string }[]>;
+    input: { placeholder: string };
+  }) => {
     mocks.capturedParent = props.parent;
-    return <textarea aria-label="Leave a comment..." />;
+    mocks.bots = props.bots;
+    return (
+      <textarea
+        aria-label={props.input.placeholder}
+        placeholder={props.input.placeholder}
+      />
+    );
   },
 }));
 vi.mock('@channel/Input/message-payload', () => ({}));
@@ -41,7 +52,9 @@ vi.mock('@channel/Thread/utils/message-actions', () => ({
     `/channel/${channelId}/${messageId}`,
 }));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
-  useMessageBotMentionUsers: () => [],
+  useMessageBotMentionUsers:
+    (_parent: unknown, load: Accessor<boolean>) => () =>
+      load() ? [{ id: 'agent' }] : [],
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -154,7 +167,7 @@ describe('EntityDiscussion target ownership', () => {
     expect(around()).toBeNull();
     expect(enabled()).toBe(true);
     expect(view.getByText('Latest workbook topic')).toBeTruthy();
-    expect(view.queryByText('Loading comments...')).toBeNull();
+    expect(view.queryByText('Loading conversation')).toBeNull();
     expect(mocks.scroll).not.toHaveBeenCalled();
     fireEvent.click(view.getByRole('button', { name: 'Discussion' }));
     expect(view.queryByText('Latest workbook topic')).toBeNull();
@@ -198,6 +211,39 @@ describe('EntityDiscussion target ownership', () => {
       );
     }
   );
+
+  it('lets a composed sheet own target scrolling while sharing the conversation source', () => {
+    mocks.urlTarget = 'reply';
+    mocks.timeline.mockReturnValue({
+      isSuccess: true,
+      data: {
+        pages: [
+          {
+            entries: [
+              { type: 'message', message: thread('root-of-reply', null) },
+            ],
+          },
+        ],
+      },
+    });
+    const view = render(() => (
+      <EntityDiscussion
+        parent={{ type: 'document', id: 'document' }}
+        canWrite={false}
+        link={{ type: 'task', id: 'document' }}
+      >
+        {(conversation) => (
+          <section aria-label="Phone discussion">
+            <span>{conversation.targetId()}</span>
+            {conversation.content()}
+          </section>
+        )}
+      </EntityDiscussion>
+    ));
+    expect(view.getByRole('region', { name: 'Phone discussion' })).toBeTruthy();
+    expect(view.getByRole('article').dataset.target).toBe('reply');
+    expect(mocks.scroll).not.toHaveBeenCalled();
+  });
 });
 
 function discussion(
@@ -239,6 +285,47 @@ function discussion(
 }
 
 describe('EntityConversation placement', () => {
+  it('uses discussion wording for the root message composer', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(view.getByPlaceholderText('Add to the discussion…')).toBeTruthy();
+  });
+  it('keeps the entry on the latest root while the sheet follows an older link', () => {
+    mocks.timeline.mockImplementation((_parent, around) => ({
+      isSuccess: true,
+      data: {
+        pages: [
+          {
+            entries: [
+              {
+                type: 'message',
+                message: thread(
+                  around() ? 'Linked older root' : 'Newest root',
+                  null
+                ),
+              },
+            ],
+          },
+        ],
+      },
+    }));
+    const view = render(() => (
+      <EntityConversation
+        parent={{ type: 'initiative', id: 'project' }}
+        canWrite={false}
+        targetId="old-reply"
+      >
+        {(conversation) => (
+          <>
+            <p>{conversation.messages().at(-1)?.content}</p>
+            {conversation.content()}
+          </>
+        )}
+      </EntityConversation>
+    ));
+    expect(view.getByText('Newest root')).toBeTruthy();
+    expect(view.getByRole('article').textContent).toBe('Linked older root');
+    mocks.timeline.mockReset();
+  });
   it('keeps spreadsheet range threads out of the workbook discussion', () => {
     const view = discussion(
       [
@@ -292,11 +379,25 @@ describe('EntityConversation placement', () => {
     expect(mocks.capturedParent).toEqual({ type: 'document', id: 'document' });
   });
 
+  it('lists the agents for mentions once someone focuses the composer', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(mocks.bots?.()).toEqual([]);
+    fireEvent.focusIn(view.getByRole('textbox'));
+    expect(mocks.bots?.()).toEqual([{ id: 'agent' }]);
+  });
+
+  it('lists the agents for mentions once the pointer reaches the composer', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(mocks.bots?.()).toEqual([]);
+    fireEvent.pointerEnter(view.getByRole('textbox').parentElement!);
+    expect(mocks.bots?.()).toEqual([{ id: 'agent' }]);
+  });
+
   it('shows nothing from the shared latest page while a link is still resolving', () => {
     mocks.linkResolved = false;
     const view = discussion([[thread('new discussion', null)]], 'reply');
     expect(view.queryAllByRole('article')).toEqual([]);
-    expect(view.getByText('Loading comments...')).toBeTruthy();
+    expect(view.getByText('Loading conversation')).toBeTruthy();
     const [, , enabled] = mocks.timeline.mock.calls.at(-1)!;
     expect(enabled()).toBe(false);
   });
@@ -439,7 +540,7 @@ it('retains loaded comments on a pagination failure and removes them immediately
       canWrite
     />
   ));
-  const load = view.getByRole('button', { name: 'Load earlier comments' });
+  const load = view.getByRole('button', { name: 'Load earlier messages' });
   expect(load.hasAttribute('disabled')).toBe(true);
   fireEvent.click(load);
   expect(loadMore).not.toHaveBeenCalled();
@@ -456,7 +557,7 @@ it('retains loaded comments on a pagination failure and removes them immediately
   expect(view.queryAllByRole('article')).toHaveLength(0);
   expect(view.queryByRole('textbox')).toBeNull();
   expect(
-    view.queryByRole('button', { name: 'Load earlier comments' })
+    view.queryByRole('button', { name: 'Load earlier messages' })
   ).toBeNull();
 });
 
@@ -510,7 +611,7 @@ it.each([false, true])(
       />
     ));
     expect(view.getByRole('alert').textContent).toBe(
-      'Comments are unavailable for this item.'
+      'Discussion is unavailable for this item.'
     );
     expect(view.queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(view.queryByRole('textbox')).toBeNull();

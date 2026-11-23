@@ -1,113 +1,60 @@
-import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import {
+  ListColumnHeader,
+  type ListColumnHeaderProps,
+} from '@app/components/list/ListColumnHeader';
+import type { SortSelection } from '@app/features/soup';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { cn, Tooltip } from '@ui';
-import { type JSX, Match, Show, Switch } from 'solid-js';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
+import { Tooltip } from '@ui';
+import { cn } from '@ui/utils/classname';
+import { Show } from 'solid-js';
 import { useTasksView } from '../../tasks-view-context';
 import type { TaskSortId } from '../../types';
 import { type TaskGridColumnId, taskGridTemplate } from './task-grid-template';
 
-function SortableHeader(props: {
-  label: string;
-  area: string;
+type SortableHeaderProps = Omit<
+  ListColumnHeaderProps,
+  'onClick' | 'active' | 'reversed'
+> & {
   sortId?: TaskSortId;
   reverseSortId?: TaskSortId;
-  align?: 'start' | 'end';
-  class?: string;
-  narrowIcon?: JSX.Element;
-  onWidthChange?: (width: number) => void;
-}) {
-  const { state, setPrimarySort } = useTasksView();
-  const active = () =>
-    state.sort[0]?.id === props.sortId ||
-    (props.reverseSortId !== undefined &&
-      state.sort[0]?.id === props.reverseSortId);
+};
+
+const SEARCH_SORT: SortSelection<TaskSortId> = { id: 'updated_at' };
+function SortableHeader(props: SortableHeaderProps) {
+  const { state, source, setPrimarySort } = useTasksView();
+  const keepsSearchOrder = () =>
+    Boolean(state.search.trim()) && !source.sortsSearchResults;
+  const shownSort = () => (keepsSearchOrder() ? SEARCH_SORT : state.sort[0]);
+  const sortable = () => !keepsSearchOrder() && props.sortId !== undefined;
+  const active = () => {
+    const id = shownSort()?.id;
+    return (
+      id !== undefined && (id === props.sortId || id === props.reverseSortId)
+    );
+  };
   const reversed = () =>
     active() &&
-    (state.sort[0]?.id === props.reverseSortId ||
-      state.sort[0]?.reversed === true);
-  const alignment = () => {
-    if (props.align === 'end') return 'justify-end';
-    return 'justify-start';
+    (shownSort()?.id === props.reverseSortId || shownSort()?.reversed === true);
+  const sort = () => {
+    if (!props.sortId) return;
+    if (props.reverseSortId && state.sort[0]?.id === props.sortId) {
+      setPrimarySort(props.reverseSortId);
+      return;
+    }
+    setPrimarySort(props.sortId);
   };
-  const label = () => (
-    <>
-      <span class={props.narrowIcon ? '@max-[840px]/u-list:hidden' : undefined}>
-        {props.label}
-      </span>
-      <Show when={props.narrowIcon}>
-        <span class="hidden @max-[840px]/u-list:inline-flex">
-          <Tooltip
-            label={props.label}
-            as="span"
-            tabIndex={props.sortId ? undefined : 0}
-          >
-            {props.narrowIcon}
-          </Tooltip>
-        </span>
-      </Show>
-    </>
-  );
-
   return (
-    <div
-      role="columnheader"
-      aria-label={props.label}
-      class={cn(
-        'ms-2 flex min-w-0 items-center',
-        alignment(),
-        props.narrowIcon &&
-          props.align !== 'end' &&
-          '@max-[840px]/u-list:justify-center',
-        props.class
-      )}
-      style={{ 'grid-area': props.area }}
-    >
-      <Switch>
-        <Match when={props.sortId}>
-          {(sortId) => (
-            <button
-              ref={(element) => {
-                if (props.onWidthChange) {
-                  createResizeObserver(element, ({ width }) =>
-                    props.onWidthChange?.(width)
-                  );
-                }
-              }}
-              type="button"
-              aria-label={props.label}
-              data-blocks-navigation
-              class={cn(
-                'flex h-full w-max shrink-0 items-center gap-1 whitespace-nowrap text-ink-extra-muted hover:text-ink',
-                active() && 'text-ink'
-              )}
-              onClick={() => {
-                if (props.reverseSortId && state.sort[0]?.id === sortId()) {
-                  setPrimarySort(props.reverseSortId);
-                  return;
-                }
-                setPrimarySort(sortId());
-              }}
-            >
-              {label()}
-              <ArrowDownIcon
-                class={cn(
-                  'size-3 shrink-0 transition-transform',
-                  reversed() && 'rotate-180'
-                )}
-              />
-            </button>
-          )}
-        </Match>
-        <Match when={true}>
-          <span class="truncate">{label()}</span>
-        </Match>
-      </Switch>
-    </div>
+    <ListColumnHeader
+      {...props}
+      active={active()}
+      reversed={reversed()}
+      onClick={sortable() ? sort : undefined}
+    />
   );
 }
 
@@ -116,20 +63,18 @@ export function TaskListHeader(props: {
   onTimestampWidthChange?: (width: number) => void;
 }) {
   const showTaskProject = () => props.columns.includes('initiative');
+  const startDateEnabled = useStartDateEnabled();
   return (
     <div
       role="row"
-      class="task-grid-row task-grid-icon-creator grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
+      class={cn(
+        'task-grid-row task-grid-icon-creator grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted',
+        startDateEnabled() && 'task-grid-dates'
+      )}
       style={taskGridTemplate(props.columns)}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
-      <span
-        role="columnheader"
-        class="ms-2 truncate"
-        style={{ 'grid-area': 'content' }}
-      >
-        Task
-      </span>
+      <SortableHeader label="Task" area="content" sortId="title" />
       <SortableHeader
         label="Due date"
         area="dueDate"

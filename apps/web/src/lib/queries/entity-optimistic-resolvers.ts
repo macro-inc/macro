@@ -1,6 +1,8 @@
 import { optimisticResolver } from '@graphql-cache/exchange/optimistic-resolvers';
 import {
   DeleteEntityPropertyDocument,
+  MoveEntitiesDocument,
+  type MoveEntityInput,
   RenameEntitiesDocument,
   type RenameEntityInput,
   UpdateInitiativeDocument,
@@ -39,7 +41,50 @@ function renamedEntity({ entity, displayName }: RenameEntityInput) {
     .otherwise(() => undefined);
 }
 
+function movedEntity({ entity, projectId }: MoveEntityInput) {
+  const fields = { id: String(entity.id) };
+  const folder = projectId == null ? null : String(projectId);
+  return match(entity.type)
+    .with('DOCUMENT', () => ({
+      ...fields,
+      __typename: 'GraphqlSoupDocument' as const,
+      projectId: folder,
+    }))
+    .with('CHAT', () => ({
+      ...fields,
+      __typename: 'GraphqlSoupChat' as const,
+      projectId: folder,
+    }))
+    .with('EMAIL_THREAD', () => ({
+      ...fields,
+      __typename: 'GraphqlSoupEmailThread' as const,
+      projectId: folder,
+    }))
+    .with('PROJECT', () => ({
+      ...fields,
+      __typename: 'GraphqlSoupProject' as const,
+      parentId: folder,
+    }))
+    .otherwise(() => undefined);
+}
+
 export const entityOptimisticResolvers = [
+  optimisticResolver(MoveEntitiesDocument, ({ inputs }) => {
+    const items = (Array.isArray(inputs) ? inputs : [inputs]).map(movedEntity);
+    if (items.some((item) => !item)) return undefined;
+    return {
+      results: items.flatMap((item) =>
+        item
+          ? [
+              {
+                __typename: 'GraphqlMutationSuccess' as const,
+                effects: [{ __typename: 'SoupUpdated' as const, item }],
+              },
+            ]
+          : []
+      ),
+    };
+  }),
   optimisticResolver(RenameEntitiesDocument, ({ inputs }) => {
     const items = (Array.isArray(inputs) ? inputs : [inputs]).map(
       renamedEntity

@@ -11,10 +11,20 @@ const [touchFirst, setTouchFirst] = createSignal(
   coarsePointerQuery?.matches ?? false
 );
 
+// The `touch:` styles read `data-touch-device`, which boot writes once. A
+// later flip has to reach it too, or touch views would render with desktop
+// styles (and the reverse) until a reload.
+const setTouch = (touch: boolean) => {
+  if (touch === touchFirst()) return;
+
+  setTouchFirst(touch);
+  document.documentElement.dataset.touchDevice = String(touch);
+};
+
 // Latch ON only. Transient flips to fine are ignored, because the most
 // common cause is DevTools' element picker borrowing the pointer.
 coarsePointerQuery?.addEventListener('change', (event) => {
-  if (event.matches) setTouchFirst(true);
+  if (event.matches) setTouch(true);
 });
 
 // A real viewport change (device emulation toggled off, rotation, window
@@ -22,7 +32,7 @@ coarsePointerQuery?.addEventListener('change', (event) => {
 // The picker never resizes the viewport, so it can never land here.
 if (coarsePointerQuery) {
   addEventListener('resize', () => {
-    setTouchFirst(coarsePointerQuery.matches);
+    setTouch(coarsePointerQuery.matches);
   });
 }
 

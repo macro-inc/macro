@@ -1,6 +1,6 @@
 .posts-index-shell.posts-index-list {
   margin-inline: auto;
-  max-width: 1000px;
+  max-width: 688px;
   padding: 144px 24px 80px;
 }
 
@@ -15,13 +15,13 @@
 
 .posts-index-list .posts-index-hero h1 {
   color: var(--post-ink);
-  font: calc(315 + var(--cream-slab-weight-increase, 0)) clamp(40px, 5.4vw, 68px)/1.12 'Roboto Slab Variable', display, serif;
+  font: calc(320 + var(--cream-slab-weight-increase, 0)) 40px/1.2 'Roboto Slab Variable', display, serif;
   letter-spacing: -0.035em;
 }
 
 .posts-index-list .posts-index-sub {
   color: var(--post-muted);
-  font: 400 15px/28px 'Inter Variable', Inter, sans-serif;
+  font: 370 17.5px/1.8 'Inter Variable', Inter, sans-serif;
   margin: 24px auto 0;
   max-width: 380px;
   text-wrap: balance;
@@ -58,7 +58,7 @@
 .post-list-title {
   color: var(--post-ink);
   flex: 1;
-  font: 400 17px/28px 'Inter Variable', Inter, sans-serif;
+  font: 370 17.5px/1.6 'Inter Variable', Inter, sans-serif;
   margin: 0;
   min-width: 0;
   overflow: hidden;
@@ -69,7 +69,7 @@
 .post-list-date {
   color: var(--post-faint);
   flex: none;
-  font: 400 12px/24px 'Inter Variable', Inter, sans-serif;
+  font: 370 12px/24px 'Inter Variable', Inter, sans-serif;
 }
 
 .post-list-arrow {
@@ -93,12 +93,13 @@
     padding: 120px 20px 56px;
   }
 
+  .posts-index-list .posts-index-hero h1 { font-size: 28px; }
+
   .posts-index-list .posts-index-hero {
     padding-bottom: 48px;
   }
 
   .posts-index-list .posts-index-sub {
-    font-size: 14px;
     max-width: 300px;
   }
 
@@ -109,8 +110,7 @@
   }
 
   .post-list-title {
-    font-size: 14px;
-    line-height: 24px;
+    white-space: normal;
   }
 
   .post-list-date {

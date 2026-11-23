@@ -8,10 +8,14 @@
 //! # Architecture
 //!
 //! - **domain**: rows, membership policy, and the page, recompute, done,
-//!   seen and undo use cases.
+//!   clear, seen and undo use cases.
+//! - **outbound**: clear updates to the viewer's sessions over the
+//!   connection gateway.
 //!
 //! Paging, notification loading, acknowledgment and the adapters over the
 //! services that own the data are the shared feed layer's
 //! (`crates/attention_feed`).
 
 pub mod domain;
+#[cfg(feature = "outbound")]
+pub mod outbound;

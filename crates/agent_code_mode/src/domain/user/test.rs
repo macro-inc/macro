@@ -11,6 +11,7 @@ impl UserExecutionCredentials for Credentials {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ToolCaller,
+        _session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError> {
         self.0
             .lock()
@@ -26,6 +27,14 @@ impl UserExecutionCredentials for Credentials {
 struct Returns(Value);
 #[async_trait]
 impl ProgramExecutor for Returns {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,
@@ -79,7 +88,7 @@ async fn runs_as_the_authenticated_user_and_returns_data_with_activity() {
         0xA1,
     )));
     let receipt = service
-        .execute(&user(), &caller, request(), CancellationToken::new())
+        .execute(&user(), &caller, None, request(), CancellationToken::new())
         .await
         .unwrap();
 
@@ -111,6 +120,7 @@ async fn review_references_fail_outside_a_session() {
         .execute(
             &user(),
             &ToolCaller::ApiKey,
+            None,
             request(),
             CancellationToken::new(),
         )
@@ -142,6 +152,7 @@ async fn invalid_requests_are_rejected_before_minting_a_credential() {
                 .execute(
                     &user(),
                     &ToolCaller::ApiKey,
+                    None,
                     request,
                     CancellationToken::new()
                 )
@@ -163,6 +174,7 @@ async fn an_empty_reviews_list_is_dropped() {
         .execute(
             &user(),
             &ToolCaller::ApiKey,
+            None,
             request(),
             CancellationToken::new(),
         )
@@ -171,4 +183,58 @@ async fn an_empty_reviews_list_is_dropped() {
 
     assert_eq!(receipt.status, ExecutionStatus::Succeeded);
     assert_eq!(receipt.result, Some(json!({"data": 1})));
+}
+
+/// Fails every program at its check, as the checker fails one with type
+/// errors; running one is a bug.
+struct RejectsTypes;
+#[async_trait]
+impl ProgramExecutor for RejectsTypes {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        shape: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        assert_eq!(shape, code_execution::domain::ContextShape::default());
+        Err(code_execution::domain::ExecutionFailure::new(
+            code_execution::domain::FailureCode::Compile,
+            "The program wasn't run: it doesn't type-check against the Macro SDK.",
+        )
+        .into())
+    }
+    async fn execute_program(
+        &self,
+        _: ExecuteRequest,
+        _: RunEnvironment,
+        _: CancellationToken,
+    ) -> Outcome {
+        unreachable!("a program with type errors never runs")
+    }
+}
+
+#[tokio::test]
+async fn a_program_with_type_errors_fails_before_minting_a_credential() {
+    let credentials = Arc::new(Credentials::default());
+    let service = UserCodeModeService::new(Arc::new(RejectsTypes), credentials.clone());
+
+    let receipt = service
+        .execute(
+            &user(),
+            &ToolCaller::ApiKey,
+            None,
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(receipt.status, ExecutionStatus::Failed);
+    assert!(
+        receipt
+            .error
+            .unwrap()
+            .contains("doesn't type-check against the Macro SDK")
+    );
+    assert!(credentials.0.lock().unwrap().is_empty());
 }

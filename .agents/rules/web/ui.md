@@ -10,6 +10,9 @@ alwaysApply: false
 
 Components, styling, and interaction conventions.
 
+- Give top-level More-menu actions one appropriate shared interface icon; use the same glyph for the same action in header, context, and mobile menus, following the [canonical action icons](../../../apps/web/src/components/icon/system/README.md#menu-action-icons), and keep simple choice lists such as mute durations text-only.
+- Keep clipboard menu actions open and transition their explicit icon to a plain green check with CSS blur/fade after success; share copy state, not DOM inspection, and preserve failure feedback and labels.
+
 - **FE-22** Pending or permission-gated actions render as a dimmed version of
   the real UI with inline accept/reject controls — not a generic placeholder
   icon.
@@ -22,6 +25,10 @@ Components, styling, and interaction conventions.
   default palette is disabled via `--color-*: initial` in
   `apps/web/src/index.css`, so classes like `text-red-500` silently render
   nothing. Enforced by ast-grep `tsx-no-raw-tailwind-palette`, CI error.
+  Use existing semantic surface tokens instead of component-local color mixes.
+- **FE-72** Shift a surface's lightness with `oklab(from X calc(l ± n) a b)`,
+  not `oklch(from X … c h)`: Chrome drops the hue of a near-neutral sRGB color
+  (a theme's `color-mix(in srgb, …)` surface) and `h` then paints it pink.
 - Keep runtime theme tokens together in `apps/web/src/index.css`: one
   `:root, [data-theme-light]` block for dark defaults, followed by one
   `[data-theme-light='true']` override block. Keep any narrower root/device
@@ -50,8 +57,9 @@ Components, styling, and interaction conventions.
 
 ## Components
 
-- Place skeletons at the loaded content's position and dimensions; use the shared
-  Macro `LoadingSpinner` when that geometry is unknown.
+- Place skeletons at the loaded content's position and dimensions; use them for
+  menu and picker loading instead of the Macro-logo `LoadingSpinner`, which is
+  reserved for dedicated branded loading surfaces.
 - Prefer composition over configurability. Follow slot-based patterns (see
   src/features/channel, src/features/entity, or Kobalte).
 - Keep reusable components small, atomic, and decoupled from queries/complex
@@ -75,9 +83,11 @@ Components, styling, and interaction conventions.
 - Use `Dropdown.MultiSelectItem` for multiselect filter rows; keep independent
   checkbox settings on `Dropdown.CheckboxItem`. Follow the
   [shared interaction pattern](../../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns).
-- **FE-54** Decide mobile behavior deliberately. Unless the change makes it
-  obvious, ask the user how a UI change should look and behave on mobile, then
-  follow [`mobile.md`](mobile.md).
+- **FE-54** Decide mobile behavior deliberately. A UI change lands in the
+  desktop view unless the task says otherwise; edit a file in `views/mobile/`
+  file only on purpose, so a desktop feature is absent on mobile until someone
+  adds it there. Unless the change makes it obvious, ask the user how it
+  should look and behave on mobile, then follow [`mobile.md`](mobile.md).
 - **FE-55** UI tests drive real interactions (click, type, keyboard, focus)
   through `@solidjs/testing-library` and assert what the user sees or can do.
   No tests that only render and check classes, snapshot markup, or mock the

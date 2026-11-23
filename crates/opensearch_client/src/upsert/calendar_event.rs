@@ -1,6 +1,6 @@
 use models_opensearch::SearchIndex;
 
-use super::properties::IndexedProperty;
+use super::properties::{IndexedProperty, PropertyUpdate};
 use crate::{
     Result,
     date_format::EpochMillis,
@@ -75,7 +75,7 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
 /// Upsert a single calendar event doc. Full-overwrite `index` semantics so
 /// omitted optional fields (e.g. `organizer_email`) get cleared on
 /// Some→None transitions.
-#[tracing::instrument(skip(client, args), fields(event_id=%args.event_id), err)]
+#[tracing::instrument(skip(client, args), fields(event_id=%args.event_id))]
 pub(crate) async fn upsert_calendar_event(
     client: &opensearch::OpenSearch,
     args: &UpsertCalendarEventArgs,
@@ -123,13 +123,14 @@ pub(crate) async fn upsert_calendar_event(
 }
 
 /// Update only the denormalized `properties` on an existing calendar event
-/// doc. A missing doc (404) is a no-op — the next full upsert carries them.
+/// doc. A missing doc (404) changes nothing and is
+/// [`PropertyUpdate::NotIndexed`]: the next full upsert carries them.
 pub(crate) async fn update_calendar_event_properties(
     client: &opensearch::OpenSearch,
     event_id: &str,
     properties: &[IndexedProperty],
     index_override: Option<&str>,
-) -> Result<()> {
+) -> Result<PropertyUpdate> {
     use serde_json::json;
 
     let index = resolve_destination(index_override);
@@ -155,7 +156,7 @@ pub(crate) async fn update_calendar_event_properties(
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(event_id=%event_id, "calendar event properties updated");
-        return Ok(());
+        return Ok(PropertyUpdate::Applied);
     }
     let body = response.text().await.map_err(|err| {
         OpensearchClientError::deserialization_failed(
@@ -176,7 +177,7 @@ pub(crate) async fn update_calendar_event_properties(
                 event_id=%event_id,
                 "calendar event not indexed yet; skipping property update"
             );
-            return Ok(());
+            return Ok(PropertyUpdate::NotIndexed);
         }
     }
 

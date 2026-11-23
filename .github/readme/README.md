@@ -1,81 +1,89 @@
-# README assets
+# README image assets
 
 ## Header
 
-`header.png` is the approved 2700×1050 banner: Julia’s supplied white Macro
-logo and wordmark above a fresh capture of the internal Sheets Improvements
-project board. The logo is placed at its native 867-pixel width; the board is
-downscaled from a 3010×916 crop to 2220 pixels wide. Neither raster is upscaled.
-The capture uses existing task content and statuses, with window chrome and
-the pointer excluded by cropping. No UI content was repainted or reconstructed.
-The editable composition and source assets remain in the local
-`Macro README header/2026-10-29-corrected-brand/` design package.
+`logo.png` centers the supplied Frame 10 full lockup above a compact native
+README title. The white logo is downscaled to 480 pixels wide on a dark backing;
+the 512×70 asset displays at 256×35. A regular-weight paragraph avoids heading margins
+and GitHub’s horizontal divider.
 
-## Product screenshots
+`header.png` is a 2400×1350 desktop workspace capture at the common UI scale.
+Three equal-width panes show the team request, linked code changes, and matching
+agent session, in that left-to-right order. This is the selected three-pane
+comparison captured in the desktop app, not reconstructed product content.
+The navigation rail, pane headers, and bottom composer remain intact.
+Only the native tab strip is excluded; ordinary split close controls remain
+inside the workspace rather than cutting away the headers to hide them.
+The product is 2280 pixels wide with a 60-pixel horizontal inset; its full
+height is retained on the transparent canvas. The outer corner radius is
+32 pixels, matching the feature images, with a subtle one-pixel border.
+The fresh capture has no blue desktop-update progress indicator.
+Keep the logo first, regular-weight title second, product third.
 
-The README references the nine PNGs in `framed/`. Each uses the marketing
-Calls hero’s `monterey-dark.jpg` background with `grayscale(1) brightness(1.6)
-contrast(1.05)`, reduced padding of 30 pixels per 1200-pixel frame, and the same
-proportional 16-pixel inner and outer corner radius. Outer corners are transparent
-so they work on both GitHub themes. Screenshot content is unchanged and never
-upscaled; CRM retains its lower source resolution. The header,
-security badges, and star-history charts are not part of this treatment.
+## Feature screenshots
 
-Unframed sources are retained below for future edits. Editable compositions and
-the rendering recipe are in the local
-`Macro README header/2026-11-02-all-framed/` package.
+The nine images in `framed/` use fixed 16:9 frames and the existing grayscale
+Monterey background, 60-pixel inset, 32-pixel corner radius, and one-pixel border.
+All nine frames use the same treatment, including replacement captures.
 
-The root README uses nine product screenshots. The October 29 final gallery
-supplies Databases, Agents, and Calendar. A subsequent sharpness review replaces
-Chat, Tasks, and Docs with the user's higher-resolution first-pass captures.
-CRM retains the clean demo JPEG pending an equivalent sharp recapture.
-Email and Chat were recaptured from the desktop app on November 4.
-Chat shows a feature request, agent handoff, and completed session card.
-Email shows the user-selected internal test thread. Both retain navigation,
-exclude the cursor and app tabs, and use the shared narrow background frame.
-Original November 4 captures and editable sources are in the local
-`Macro README screenshots/2026-11-04-refresh/` folder. The CRM pipeline and database contain fictional sample data.
-Calendar retains the real meeting names explicitly selected by the user.
-Calls uses the approved web capture of the internal Tasks & Docs design review
-at 3:45, with the recording and speaker-labelled transcript visible. The
-2374×1470 focused crop preserves the call header and actual playback frame.
+### UI scale
 
-Chat and Tasks use 3024-pixel-wide desktop sources, trimmed by 6 pixels left,
-8 right, and 12 bottom to remove capture edges. Docs uses the 2402×1308 compact
-capture unchanged. The existing new Databases/Agents/Calendar PNGs have the same
-6/8/12 edge trim. These are genuine source crops, with no upscaling or alteration
-of UI content. Original captures remain outside the repository.
+Capture at 100% desktop zoom in a 3024-pixel-wide window. Remove the native
+tab strip (92 pixels at this zoom), resize the product width to 2280, then let
+content stop at the fixed frame edge. Never enlarge a shorter image merely to
+fill the frame; recapture it at the baseline instead.
 
-Keep enough source pixels for a sharp display on high-density screens. Capture
-at a useful desktop viewport and retain roughly 2× pixels; do not downsample to
-the README's display width before saving. Use lossless PNG for cropped UI text.
+Email, Chat, Docs, CRM, and the header were recaptured at this baseline on
+November 6. Calls, Calendar, Databases, and Agents retain their matching-scale
+captures. The approved older Tasks image is retained: its older app design
+has different controls, but its text size was compared with the common set.
+Compare navigation icons and body text at equal output widths, not the number
+of rows or cards; each surface has its own layout density.
 
-| Unframed source | README asset | View |
-| --- | --- | --- |
-| November 4 desktop capture | `framed/email.png` | Internal team test thread with participants, replies, and email navigation |
-| November 4 desktop capture | `framed/chat.png` | Feature request with an agent mention and completed coding-session card |
-| `tasks-list.png` | `framed/tasks.png` | Search Surface Area project grouped by assignee, higher-resolution desktop capture |
-| `docs-prd.png` | `framed/docs.png` | PRD: Team Channels, compact desktop view with tags, assignees, and document content |
-| `crm-board.jpg` | `framed/crm.png` | Sales Demo pipeline, showing 9 fictional companies in Lead, Demo, and Customer; 2 Churned companies are outside the crop; all deal values are sample data |
-| `databases-table.png` | `framed/databases.png` | Donations Example, showing dates, amounts, designations, and donor relations |
-| `agents-task-handoff.png` | `framed/agents.png` | Add Reminder Icon To Tasks, recaptured on web with a successful audit and PR #8824 |
-| `calls-recording.png` | `framed/calls.png` | Tasks & Docs Page Design Review with Jacob, recording at 3:45 and speaker-labelled transcript |
-| `calendar-week.png` | `framed/calendar.png` | Populated weekly calendar with connected calendars and booking-link controls |
+Content stops at the viewport edge rather than using a
+different content-dependent aspect ratio for every image. Do not stretch product
+pixels. Email and CRM use the explicitly authorized, visibly labeled demo-content
+edits below; the remaining screenshots retain their original product content.
 
-Keep the navigation rail visible; show the expanded sidebar when it adds useful context. Capture browser page
-content so macOS screen-sharing indicators and window controls stay out of the
-image. Move the pointer away from controls and wait for tooltips to disappear.
+- Email: labeled demo correspondence in the Signal inbox. Fictional sender names,
+  subjects, previews, row-type icons, and account identity replace real email
+  content. Navigation, controls, row spacing, dates, and framing retain the
+  original capture pixels. Use a normal subject followed by muted-gray email-body
+  opening text, separated by spacing only; do not add a dash or a second title.
+- Chat: the November 4 feature-request conversation, distinct from the header.
+- Tasks: restored original split capture with mixed statuses, assigned work, and
+  a completed task with its linked discussion and code change.
+- Docs: the same PRD recaptured at baseline zoom.
+- Agents, Calendar: existing captures reframed consistently.
+- Databases: full original Donations Example capture, preserving all columns.
+- CRM: desktop board at 100% zoom with labeled demo company names. Only company
+  title regions change; stages, counts, owner labels and avatars, revenue values,
+  card sizes, and controls retain the original capture pixels. No live records
+  were edited. Neighboring columns stop naturally at the viewport edge.
+- Calls: An internal group recording, paused near 0:35. People are on
+  camera without a screen share. Portrait video and black bars are inherent in
+  the recording; the transcript was scrolled independently.
 
-Before refreshing screenshots, inspect all visible content, including sidebar
-items. Use navigation search or collapse unrelated sections where needed. Avoid
-private customer details, credentials, financial information, and personal
-conversations. Use a populated pipeline board with fictional sample companies
-for CRM and keep the root README's alt text consistent with each displayed
-view. Review every saved image before staging it.
-Previous Chat, Tasks, Docs, and Agents JPEGs remain available but are no longer
-referenced by the root README. A booking-link companion image remains optional.
+All feature exports are 2400×1350. Original captures and editable local builds
+are retained in the November 5 and 6 screenshot packages outside the repository.
 
-The marketing homepage's separate screenshot copies under
+Preserve the supplied logo proportions, never upscale its raster, and check the
+transparent header against light and dark backgrounds. Keep image alt text and
+this asset guide in sync with replacements. Keep demo-content images labeled
+and document their scope. Outside the authorized demo text and icon regions,
+preserve the original pixels; do not fabricate product controls, statuses,
+agent results, or live records.
+
+For the November 6 demo revisions, pixel comparison confirmed zero changes
+outside the declared content-edit regions and disclosure labels. Source images
+and edit-region manifests remain in the local demo screenshot package.
+
+Keep navigation when it adds context. Exclude system chrome, pointer highlights,
+and tooltips. Inspect all visible content before staging. Exclude credentials
+and private personal information; use real business records only when the user
+has authorized them for the screenshot. Prefer populated demo data otherwise.
+
+The marketing homepage screenshot copies under
 `apps/marketing/src/app/assets/desktop-feature-screens` are independent.
 
 ## Star history

@@ -11,7 +11,7 @@
 --     Erin's thread ts (12:00) is NEWER than Dave's (07:00). Own-copy
 --     preference must still pick the caller's copy over the newer one.
 --
--- Expected results for Sender(Domain("acme.com")) under team scope:
+-- Expected results for Sender(Domain("acme.example.com")) under team scope:
 --   Dave: td2(Z,11:00), td1(X,10:00), te2(Y,09:00), td3(W,07:00)
 --   Erin: te3(W,12:00), td2(Z,11:00), te2(Y,09:00), te1(X,08:00)
 
@@ -46,11 +46,16 @@ VALUES
     ('d0000001-0000-0000-0000-000000000001', 'macro|dave@beta.com', 'fa_dave', 'dave@beta.com', 'GMAIL', true, NOW(), NOW()),
     ('d0000002-0000-0000-0000-000000000002', 'macro|erin@beta.com', 'fa_erin', 'erin@beta.com', 'GMAIL', true, NOW(), NOW());
 
--- == Contacts — vendor@acme.com, one row per link ==
+-- Each team contributor has explicitly consented to this primary mailbox.
+INSERT INTO crm_email_consent (team_id, user_id, link_id, enabled)
+SELECT tu.team_id, tu.user_id, l.id, TRUE FROM team_user tu
+JOIN email_links l ON l.macro_id = tu.user_id AND l.is_primary;
+
+-- == Contacts — vendor@acme.example.com, one row per link ==
 INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)
 VALUES
-    ('c1000001-0000-0000-0000-000000000001', 'd0000001-0000-0000-0000-000000000001', 'vendor@acme.com', 'Vendor', NOW(), NOW()),
-    ('c1000002-0000-0000-0000-000000000002', 'd0000002-0000-0000-0000-000000000002', 'vendor@acme.com', 'Vendor', NOW(), NOW());
+    ('c1000001-0000-0000-0000-000000000001', 'd0000001-0000-0000-0000-000000000001', 'vendor@acme.example.com', 'Vendor', NOW(), NOW()),
+    ('c1000002-0000-0000-0000-000000000002', 'd0000002-0000-0000-0000-000000000002', 'vendor@acme.example.com', 'Vendor', NOW(), NOW());
 
 -- == Labels — INBOX + TRASH per link ==
 INSERT INTO email_labels (id, link_id, provider_label_id, name, message_list_visibility, label_list_visibility, type, created_at)
@@ -94,40 +99,40 @@ VALUES
     -- X root — both copies
     ('66660001-0000-0000-0000-000000000001', '55550001-0000-0000-0000-000000000001',
      'd0000001-0000-0000-0000-000000000001', 'md1', 'c1000001-0000-0000-0000-000000000001',
-     'Conv X', 'x root (dave copy)', '2026-05-01 08:00:00+00', '<x-1@acme.com>',
+     'Conv X', 'x root (dave copy)', '2026-05-01 08:00:00+00', '<x-1@acme.example.com>',
      false, false, false, false, NOW(), NOW()),
     ('66660002-0000-0000-0000-000000000001', '55550002-0000-0000-0000-000000000001',
      'd0000002-0000-0000-0000-000000000002', 'me1', 'c1000002-0000-0000-0000-000000000002',
-     'Conv X', 'x root (erin copy)', '2026-05-01 08:00:00+00', '<x-1@acme.com>',
+     'Conv X', 'x root (erin copy)', '2026-05-01 08:00:00+00', '<x-1@acme.example.com>',
      false, false, false, false, NOW(), NOW()),
     -- X reply — dave only (erin was dropped)
     ('66660001-0000-0000-0000-000000000002', '55550001-0000-0000-0000-000000000001',
      'd0000001-0000-0000-0000-000000000001', 'md2', 'c1000001-0000-0000-0000-000000000001',
-     'Conv X', 'x reply (dave only)', '2026-05-01 10:00:00+00', '<x-2@acme.com>',
+     'Conv X', 'x reply (dave only)', '2026-05-01 10:00:00+00', '<x-2@acme.example.com>',
      false, false, false, false, NOW(), NOW()),
     -- Y root — erin only
     ('66660002-0000-0000-0000-000000000002', '55550002-0000-0000-0000-000000000002',
      'd0000002-0000-0000-0000-000000000002', 'me2', 'c1000002-0000-0000-0000-000000000002',
-     'Conv Y', 'y root (erin only)', '2026-05-01 09:00:00+00', '<y-1@acme.com>',
+     'Conv Y', 'y root (erin only)', '2026-05-01 09:00:00+00', '<y-1@acme.example.com>',
      false, false, false, false, NOW(), NOW()),
     -- Z root — dave only
     ('66660001-0000-0000-0000-000000000003', '55550001-0000-0000-0000-000000000002',
      'd0000001-0000-0000-0000-000000000001', 'md3', 'c1000001-0000-0000-0000-000000000001',
-     'Conv Z', 'z root (dave only)', '2026-05-01 11:00:00+00', '<z-1@acme.com>',
+     'Conv Z', 'z root (dave only)', '2026-05-01 11:00:00+00', '<z-1@acme.example.com>',
      false, false, false, false, NOW(), NOW()),
     -- W root — both copies
     ('66660001-0000-0000-0000-000000000004', '55550001-0000-0000-0000-000000000003',
      'd0000001-0000-0000-0000-000000000001', 'md4', 'c1000001-0000-0000-0000-000000000001',
-     'Conv W', 'w root (dave copy)', '2026-05-01 07:00:00+00', '<w-1@acme.com>',
+     'Conv W', 'w root (dave copy)', '2026-05-01 07:00:00+00', '<w-1@acme.example.com>',
      false, false, false, false, NOW(), NOW()),
     ('66660002-0000-0000-0000-000000000003', '55550002-0000-0000-0000-000000000003',
      'd0000002-0000-0000-0000-000000000002', 'me3', 'c1000002-0000-0000-0000-000000000002',
-     'Conv W', 'w root (erin copy)', '2026-05-01 07:00:00+00', '<w-1@acme.com>',
+     'Conv W', 'w root (erin copy)', '2026-05-01 07:00:00+00', '<w-1@acme.example.com>',
      false, false, false, false, NOW(), NOW()),
     -- W reply — erin only (dave was dropped); makes erin's copy NEWER
     ('66660002-0000-0000-0000-000000000004', '55550002-0000-0000-0000-000000000003',
      'd0000002-0000-0000-0000-000000000002', 'me4', 'c1000002-0000-0000-0000-000000000002',
-     'Conv W', 'w reply (erin only)', '2026-05-01 12:00:00+00', '<w-2@acme.com>',
+     'Conv W', 'w reply (erin only)', '2026-05-01 12:00:00+00', '<w-2@acme.example.com>',
      false, false, false, false, NOW(), NOW()),
     -- X draft on dave's copy — EARLIEST message in the thread WITH a
     -- global_id (provider-synced drafts carry a mailbox-local Message-ID).

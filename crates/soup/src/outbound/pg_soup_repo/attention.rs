@@ -1,8 +1,8 @@
 //! The attention candidate query behind Home's work feed and the
 //! notifications inbox: one keyset-paginated page merging the viewer's
 //! attention (the newest pending, i.e. unseen or seen, notification) with,
-//! when asked, their own work (latest activity that counts as work), newest
-//! first.
+//! when asked, their own work (latest activity they did themselves that
+//! counts as work; an agent's work for them does not), newest first.
 //!
 //! An item's place in the feed is `sort_at = max(attention_at, touched_at)`.
 //! The query runs two streams, each ordered by its own timestamp: the
@@ -22,6 +22,8 @@
 //!
 //! Done notifications never place an item, so the query reads only the
 //! viewer's pending ones, once, and both streams look attention up there.
+//! A read restricted to known items reads only those items' pending
+//! notifications when the keying allows it (see [`pending`]).
 //! It also reads them only back to a floor: a full page of own work holds
 //! `limit` items placed at or after its oldest touch, so nothing placed
 //! earlier can reach the page. Reading every notification instead made a
@@ -32,8 +34,9 @@
 //! drops candidates their hydration legs reject and refills from the next
 //! page; a short page here still means the feed is exhausted.
 
-use activity::Action;
+use activity::{Action, Actor};
 use cowlike::CowLike;
+use item_filters::ast::properties::properties_filter_matches_propertyless;
 use model_entity::EntityType;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -45,14 +48,18 @@ use crate::outbound::pg_soup_repo::candidate_gates::{
     channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate, initiative_gate,
     project_gate, uuid_guarded,
 };
+use crate::outbound::pg_soup_repo::harness::harness_gate;
 use crate::outbound::pg_soup_repo::notified::{
     ID_SQL, agent_session_gate, calendar_event_gate, foreign_entity_gate, included_types,
 };
-use crate::outbound::pg_soup_repo::touched::view_tags_sql;
+use crate::outbound::pg_soup_repo::team::team_gate;
+use crate::outbound::pg_soup_repo::touched::non_touch_tags_sql;
 use crate::outbound::pg_soup_repo::type_err;
 
 /// Every type an attention feed can surface, in the order the notified-at
-/// feed decides them, then the CRM records only attention feeds list.
+/// feed decides them, then the CRM records, runtimes and teams only attention
+/// feeds list. Runtimes and teams carry no properties, so a properties filter
+/// rules them out.
 fn requested_types<'a>(req: &AttentionCandidateRequest<'a>) -> Vec<&'static str> {
     let notified = NotifiedSoupRequest {
         user_id: req.user_id.copied(),
@@ -69,25 +76,35 @@ fn requested_types<'a>(req: &AttentionCandidateRequest<'a>) -> Vec<&'static str>
     } else {
         &[]
     };
+    let propertyless_ok = req
+        .filter
+        .and_then(|filter| filter.properties_filter.as_deref())
+        .is_none_or(properties_filter_matches_propertyless);
+    // Teams carry no properties either.
+    let propertyless: &[&'static str] = if propertyless_ok {
+        &[EntityType::Harness.into(), EntityType::Team.into()]
+    } else {
+        &[]
+    };
     included_types(&notified)
         .into_iter()
         .chain(crm.iter().copied())
+        .chain(propertyless.iter().copied())
         .filter(|entity_type| requested.contains(entity_type))
         .collect()
 }
 
 /// The `crm_companies` row aliased `alias` is visible to the viewer: its
-/// team has CRM enabled, the viewer belongs to that team, and the company is
-/// not hidden (hidden records are listed only on explicit admin requests).
+/// viewer belongs to its team and the company is not hidden. Mailbox
+/// contribution consent does not control record visibility.
 fn visible_crm_record(alias: &str) -> String {
     format!(
         r#"NOT {alias}.hidden
             AND EXISTS (
                 SELECT 1 FROM team_user tu
-                JOIN team_crm_settings tcs ON tcs.team_id = tu.team_id
                 WHERE tu.team_id = {alias}.team_id
                 AND tu.user_id = $1
-                AND tcs.crm_enabled
+                AND (tu.crm_access OR tu.team_role <> 'member')
             )"#
     )
 }
@@ -140,17 +157,53 @@ fn email_inbox_gate() -> String {
 }
 
 /// Whether the `activity_events` row aliased `alias` is the viewer's own work:
-/// any action but a view, except that an email thread is only worked on by
-/// sending from it. Archiving, starring, labeling and moving a thread record
-/// edits, and done itself archives, so counting them would bring every
-/// completed email back as own work.
+/// any action but a view that they did themselves, except that an email
+/// thread is only worked on by sending from it. Archiving, starring, labeling
+/// and moving a thread record edits, and done itself archives, so counting
+/// them would bring every completed email back as own work.
+///
+/// What an agent did for the viewer is the agent's work, not theirs: a bot
+/// acting on their behalf, or any write made inside an agent session's
+/// code-mode invocation (a correlation is recorded, whatever the actor). The
+/// one bot whose work for them counts is the system bot, which writes only
+/// the starter documents and support channel a new account starts with.
+///
+/// The actor is matched against bot ids, not compared with the subject:
+/// Postgres has no statistics for a comparison between two columns, and its
+/// fixed guess made the planner read a heavy viewer's whole history.
 fn own_work(alias: &str) -> String {
     let sent: &'static str = Action::Sent.into();
+    let system = Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID);
     format!(
-        "{alias}.action NOT IN ({views}) \
+        "({alias}.actor_id NOT LIKE '{bots}|%' OR {alias}.actor_id = '{system}') \
+         AND {alias}.agent_correlation_id IS NULL \
+         AND {alias}.action NOT IN ({views}) \
          AND ({alias}.entity_type <> 'email_thread' OR {alias}.action = '{sent}')",
-        views = view_tags_sql(),
+        bots = bot_id::BOT_STORAGE_PREFIX,
+        system = system.as_ref(),
+        views = non_touch_tags_sql(),
     )
+}
+
+/// The viewer's latest own work on each item, as `(entity_type, entity_id,
+/// touched_at)` rows, newest first and before access gates.
+///
+/// A whole feed walks the viewer's activity. A read of known items looks up
+/// each item's latest work instead (`own_work_latest_only.sql`), for the same
+/// reason as [`pending`]: recomputes run on every realtime change, and a
+/// viewer with a long history would otherwise pay for all of it each time.
+fn own_work_latest(req: &AttentionCandidateRequest<'_>) -> String {
+    match req.only {
+        Some(_) => format!(
+            include_str!("attention/own_work_latest_only.sql"),
+            own_work_ae = own_work("ae"),
+        ),
+        None => format!(
+            include_str!("attention/own_work_latest.sql"),
+            own_work_ae = own_work("ae"),
+            own_work_newer = own_work("newer"),
+        ),
+    }
 }
 
 /// Whether the `notification` row `n` places the `channel_message` candidate
@@ -164,13 +217,68 @@ fn thread_keyed(keying: AttentionKeying) -> &'static str {
     }
 }
 
+/// The viewer's pending notifications as `(entity_type, entity_id,
+/// attention_at)` rows, one per candidate.
+///
+/// A whole feed reads every pending notification of the viewer's. A read of
+/// known items reads only those items' notifications instead: recomputes run
+/// on every realtime change, and a viewer with a long pending history would
+/// otherwise pay for all of it each time. Under thread-scoped keying a thread
+/// key is reached through the notifications naming it as their secondary item
+/// (`pending_only_thread.sql`): a thread's own history, never the viewer's
+/// other notifications on its channel. A probe reads none of them (see
+/// [`probe_skips_pending`]).
+fn pending(req: &AttentionCandidateRequest<'_>) -> String {
+    match (req.assume_attention, req.only, req.keying) {
+        (false, Some(_), AttentionKeying::FiledEntity) => {
+            include_str!("attention/pending_only.sql").to_string()
+        }
+        (false, Some(_), AttentionKeying::ThreadScoped) => format!(
+            include_str!("attention/pending_only_thread.sql"),
+            thread_keyed = thread_keyed(req.keying),
+        ),
+        _ => format!(
+            include_str!("attention/pending.sql"),
+            thread_keyed = thread_keyed(req.keying),
+            probe_skips_pending = probe_skips_pending(req.assume_attention),
+        ),
+    }
+}
+
+/// Where the attention stream reads candidates from: the viewer's pending
+/// notifications, or, when probing, each `only` key as if a notification
+/// about it were pending now. Normal pages read `pending`, so their SQL is
+/// unchanged by the probe.
+fn attention_source(assume_attention: bool) -> &'static str {
+    if assume_attention {
+        r#"(
+                SELECT k.entity_type, k.entity_id, now() AS attention_at
+                FROM only_keys k
+                WHERE k.entity_type = ANY($2)
+            ) assumed"#
+    } else {
+        "pending"
+    }
+}
+
+/// A probe never reads the viewer's pending notifications: whether the probed
+/// item would be listed does not depend on them. Emptying `pending` keeps the
+/// probe's cost flat however many the viewer has, and keeps the planner's
+/// estimate low enough that Postgres does not JIT-compile the query (which
+/// cost a viewer with 50,000 pending notifications about 225 ms a probe).
+/// Normal pages get an empty string, so their SQL is unchanged.
+fn probe_skips_pending(assume_attention: bool) -> &'static str {
+    if assume_attention { " AND FALSE" } else { "" }
+}
+
 fn build_query(req: &AttentionCandidateRequest<'_>) -> String {
     let filter = req.filter;
     format!(
         include_str!("attention/query.sql"),
-        thread_keyed = thread_keyed(req.keying),
+        pending = pending(req),
+        attention_source = attention_source(req.assume_attention),
+        own_work_latest = own_work_latest(req),
         own_work_ae = own_work("ae"),
-        own_work_newer = own_work("newer"),
         email_inbox_gate = email_inbox_gate(),
         document_gate = document_gate(ID_SQL, filter),
         chat_gate = chat_gate(ID_SQL, filter),
@@ -184,6 +292,8 @@ fn build_query(req: &AttentionCandidateRequest<'_>) -> String {
         agent_session_gate = agent_session_gate(filter),
         crm_company_gate = crm_company_gate(),
         crm_contact_gate = crm_contact_gate(),
+        harness_gate = harness_gate(),
+        team_gate = team_gate(),
     )
 }
 
@@ -224,7 +334,8 @@ pub(super) async fn attention_soup_page(
         None => (None, None),
     };
 
-    sqlx::QueryBuilder::<sqlx::Postgres>::new(sql)
+    let mut builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(sql);
+    let query = builder
         .build()
         .bind(req.user_id.as_ref())
         .bind(&types)
@@ -250,9 +361,22 @@ pub(super) async fn attention_soup_page(
                 touched_at: row.try_get("touched_at")?,
                 sort_at: row.try_get("sort_at")?,
             })
-        })
-        .fetch_all(db)
-        .await
+        });
+
+    if req.only.is_none() {
+        return query.fetch_all(db).await;
+    }
+    // A read of known items runs on every live change, on the primary for
+    // the feeds' recomputes. Its keys bound it (`pending_only*.sql`,
+    // `own_work_latest_only.sql`), so it costs what they hold however much
+    // the viewer does; a plan gone wrong must still not run on.
+    let mut transaction = db.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *transaction)
+        .await?;
+    let candidates = query.fetch_all(&mut *transaction).await?;
+    transaction.commit().await?;
+    Ok(candidates)
 }
 
 #[cfg(test)]

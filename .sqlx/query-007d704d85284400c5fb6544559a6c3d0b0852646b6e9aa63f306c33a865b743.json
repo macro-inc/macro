@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id AS link_id, email_address FROM email_links\n               WHERE id = $1 AND macro_id = $2 AND is_primary AND deleting_at IS NULL\n                 AND disconnect_requested_at IS NULL AND NOT needs_reauth",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_address",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "007d704d85284400c5fb6544559a6c3d0b0852646b6e9aa63f306c33a865b743"
+}

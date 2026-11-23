@@ -16,6 +16,11 @@ export type MeetingMediaAccess = {
   enumerate?: () => Promise<MediaDeviceInfo[]>;
   onDeviceChange?: (refresh: () => void) => () => void;
   canSelectSpeaker?: () => boolean;
+  /** Reports the input level (0–1) of a microphone stream until disposed. */
+  monitorLevel?: (
+    stream: MediaStream,
+    onLevel: (level: number) => void
+  ) => () => void;
   processBackground?: (
     track: MediaStreamTrack,
     effect: BackgroundEffect
@@ -87,6 +92,7 @@ export function createMeetingMedia(
   const [microphoneEnabled, setMicrophone] = createSignal(true);
   const [cameraEnabled, setCamera] = createSignal(false);
   const [video, setVideo] = createSignal<MediaStream>();
+  const [microphoneLevel, setMicrophoneLevel] = createSignal(0);
   const [pending, setPending] = createSignal({
     microphone: false,
     camera: false,
@@ -110,6 +116,7 @@ export function createMeetingMedia(
   const [backgroundPending, setBackgroundPending] = createSignal(false);
   const [backgroundError, setBackgroundError] = createSignal<string>();
   let preview: { dispose: () => void } | undefined;
+  let stopLevel: (() => void) | undefined;
   let previewGeneration = 0;
   let enumerationGeneration = 0;
   let watchingDevices: (() => void) | undefined;
@@ -137,6 +144,11 @@ export function createMeetingMedia(
     generations[device]++;
     streams[device]?.getTracks().forEach((track) => track.stop());
     delete streams[device];
+    if (device === 'microphone') {
+      stopLevel?.();
+      stopLevel = undefined;
+      setMicrophoneLevel(0);
+    }
     if (device === 'camera') {
       previewGeneration++;
       preview?.dispose();
@@ -236,6 +248,7 @@ export function createMeetingMedia(
       fireAndForget(refreshDevices(), 'meeting-media');
     });
     if (device === 'camera') fireAndForget(updatePreview(), 'meeting-media');
+    else stopLevel = access?.monitorLevel?.(stream, setMicrophoneLevel);
   };
   const captureConstraints = (device: Device) => {
     const deviceId = selectedDevices()[device];
@@ -364,6 +377,8 @@ export function createMeetingMedia(
     microphoneEnabled,
     cameraEnabled,
     video,
+    /** Live input level (0–1) of the previewed microphone; 0 while it is off. */
+    microphoneLevel,
     backgroundEffect,
     backgroundPending,
     backgroundError,

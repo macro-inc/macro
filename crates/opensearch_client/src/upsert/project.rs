@@ -1,6 +1,6 @@
 use models_opensearch::SearchIndex;
 
-use super::properties::IndexedProperty;
+use super::properties::{IndexedProperty, PropertyUpdate};
 use crate::{
     Result,
     date_format::EpochMillis,
@@ -38,7 +38,7 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
 /// Upsert a single project doc. Full-overwrite `index` semantics so omitted
 /// optional fields (e.g. `parent_project_id`) get cleared on Some→None
 /// transitions.
-#[tracing::instrument(skip(client, args), fields(project_id=%args.project_id), err)]
+#[tracing::instrument(skip(client, args), fields(project_id=%args.project_id))]
 pub(crate) async fn upsert_project(
     client: &opensearch::OpenSearch,
     args: &UpsertProjectArgs,
@@ -84,14 +84,14 @@ pub(crate) async fn upsert_project(
 
 /// Update only the denormalized `properties` on an existing project doc.
 /// Used when an entity's properties change independently of its metadata.
-/// A missing doc (404) is treated as a no-op — the next full upsert will
-/// include the properties.
+/// A missing doc (404) changes nothing and is [`PropertyUpdate::NotIndexed`]:
+/// the next full upsert will include the properties.
 pub(crate) async fn update_project_properties(
     client: &opensearch::OpenSearch,
     project_id: &str,
     properties: &[IndexedProperty],
     index_override: Option<&str>,
-) -> Result<()> {
+) -> Result<PropertyUpdate> {
     use serde_json::json;
 
     let index = resolve_destination(index_override);
@@ -117,7 +117,7 @@ pub(crate) async fn update_project_properties(
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(project_id=%project_id, "project properties updated");
-        return Ok(());
+        return Ok(PropertyUpdate::Applied);
     }
     let body = response.text().await.map_err(|err| {
         OpensearchClientError::deserialization_failed(
@@ -138,7 +138,7 @@ pub(crate) async fn update_project_properties(
                 project_id=%project_id,
                 "project not indexed yet; skipping property update"
             );
-            return Ok(());
+            return Ok(PropertyUpdate::NotIndexed);
         }
     }
 

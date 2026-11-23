@@ -18,6 +18,8 @@ pub struct GraphqlSavedView {
     name: String,
     /// Versioned filter configuration interpreted by the consuming feature.
     config: Json<serde_json::Value>,
+    /// Icon and color metadata, separate from the filter configuration.
+    appearance: Option<Json<model_entity::EntityAppearance>>,
     /// Team with effective access, or null when the definition is private.
     shared_team_id: Option<ID>,
     /// Current revision required for conditional updates and deletion.
@@ -35,6 +37,7 @@ impl From<View> for GraphqlSavedView {
             owner_id: view.user_id.into(),
             name: view.name,
             config: Json(view.config),
+            appearance: view.appearance.map(Json),
             shared_team_id: view.shared_team_id.map(Into::into),
             revision: view.revision,
             created_at: view.created_at.to_rfc3339(),
@@ -43,7 +46,8 @@ impl From<View> for GraphqlSavedView {
     }
 }
 
-/// A page ordered by creation time and ID after effective visibility checks.
+/// A page in the viewer's own order, then by creation time and ID, after
+/// effective visibility checks.
 #[derive(SimpleObject)]
 pub struct GraphqlSavedViewPage {
     /// Definitions the authenticated viewer can currently access.
@@ -97,8 +101,12 @@ pub async fn list(
     }
     let after = after
         .map(|raw| {
-            serde_json::from_str::<(chrono::DateTime<chrono::Utc>, Uuid)>(&raw)
-                .map(|(created_at, id)| Cursor { created_at, id })
+            serde_json::from_str::<(Option<i32>, chrono::DateTime<chrono::Utc>, Uuid)>(&raw)
+                .map(|(position, created_at, id)| Cursor {
+                    position,
+                    created_at,
+                    id,
+                })
                 .map_err(|_| error(Error::Invalid))
         })
         .transpose()?;
@@ -110,7 +118,7 @@ pub async fn list(
         nodes: page.views.into_iter().map(Into::into).collect(),
         next_cursor: page
             .next
-            .map(|c| serde_json::to_string(&(c.created_at, c.id)))
+            .map(|c| serde_json::to_string(&(c.position, c.created_at, c.id)))
             .transpose()
             .map_err(|_| error(Error::Invalid))?,
     })
@@ -141,6 +149,8 @@ pub struct CreateSavedViewInput {
     config: Json<serde_json::Value>,
     /// Current team to share with, or null for a private definition.
     shared_team_id: Option<ID>,
+    /// Initial icon and color metadata, validated on first creation.
+    appearance: Option<Json<model_entity::EntityAppearance>>,
 }
 
 /// Explicit sharing action: an omitted input leaves sharing unchanged; null team ID makes it private.
@@ -174,6 +184,16 @@ pub struct DeleteSavedViewInput {
     expected_revision: i64,
 }
 
+/// Inputs for setting the viewer's own order of one kind of saved view.
+#[derive(InputObject)]
+pub struct ReorderSavedViewsInput {
+    /// Consumer kind whose order is replaced, such as `email`.
+    kind: String,
+    /// Visible views of that kind in their new order, at most 200; views left
+    /// out follow them by creation time.
+    ids: Vec<ID>,
+}
+
 /// Owner-scoped saved-view mutations.
 #[derive(Default)]
 pub struct SavedViewMutationRoot;
@@ -194,6 +214,7 @@ impl SavedViewMutationRoot {
                 input.name,
                 input.config.0,
                 input.shared_team_id.map(parse_id).transpose()?,
+                input.appearance.map(|appearance| appearance.0),
             )
             .await
             .map(Into::into)
@@ -245,6 +266,26 @@ impl SavedViewMutationRoot {
             )
             .await
             .map(Into::into)
+            .map_err(error)
+    }
+
+    /// Set the authenticated viewer's personal order; definitions and their
+    /// revisions are unchanged. Returns the views in their new order.
+    async fn reorder_saved_views(
+        &self,
+        ctx: &Context<'_>,
+        input: ReorderSavedViewsInput,
+    ) -> async_graphql::Result<Vec<GraphqlSavedView>> {
+        let viewer = ctx.data::<macro_user_id::user_id::MacroUserIdStr<'static>>()?;
+        let ids = input
+            .ids
+            .into_iter()
+            .map(parse_id)
+            .collect::<async_graphql::Result<Vec<_>>>()?;
+        service(ctx)?
+            .reorder(viewer.as_ref(), &input.kind, ids)
+            .await
+            .map(|views| views.into_iter().map(Into::into).collect())
             .map_err(error)
     }
 }

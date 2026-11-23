@@ -1,36 +1,30 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import type { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { Accessor } from 'solid-js';
-import {
-  andEmailFilters,
-  emailFilterForAddress,
-  emailFilterForSignal,
-} from './email-filter';
+import { andEmailFilters, emailFilterForSignal } from './email-filter';
 
 export type EmailView = 'team' | 'me';
 export type EmailSignalView = 'signal' | 'all';
 
 /**
- * Email threads involving a single CRM contact, fetched via the
- * `/soup/ast` endpoint.
+ * Email threads involving any address of a single CRM contact, fetched via
+ * the `/soup/ast` endpoint.
  *
  * - `team` (default): widens visibility to every teammate's mailbox via
  *   the CRM-scoped address filter (`eca`).
- * - `me`: drops `eca` and uses a raw `ef` any-direction OR-tree on the
- *   contact's address, so the default per-user mailbox scope applies and
- *   only the current user's own emails come back.
+ * - `me`: retains CRM consent/exclusions and narrows to the caller's mailbox.
  * - `signal`: ANDs an Importance leaf into `ef` (the server AND-merges
  *   `ef` with the CRM scope tree, so it composes with `eca` too).
  */
 export function useContactEmailsQuery(
   createQuery: typeof useSoupAstItemsQuery,
-  email: Accessor<string | undefined>,
+  emails: Accessor<string[]>,
   view: Accessor<EmailView>,
-  signalView: Accessor<EmailSignalView>
+  signalView: Accessor<EmailSignalView>,
+  primaryLinkId: Accessor<string | undefined>
 ) {
   return createQuery(
     () => {
-      const addr = email();
       const base = {
         calf: { l: { id: NIL_UUID } },
         df: { l: { id: NIL_UUID } },
@@ -45,21 +39,23 @@ export function useContactEmailsQuery(
       };
       const signal =
         signalView() === 'signal' ? emailFilterForSignal() : undefined;
-      const body =
-        view() === 'me'
-          ? {
-              ...base,
-              ef: andEmailFilters(
-                addr ? emailFilterForAddress(addr) : undefined,
-                signal
-              ),
-            }
-          : { ...base, eca: addr ? [addr] : [], ef: signal };
+      const body = {
+        ...base,
+        eca: emails(),
+        ef: andEmailFilters(
+          signal,
+          view() === 'me'
+            ? { l: { Owner: primaryLinkId() ?? NIL_UUID } }
+            : undefined
+        ),
+      };
       return {
         params: { limit: 100, sort_method: 'updated_at' },
         body,
       };
     },
-    () => ({ enabled: !!email() })
+    () => ({
+      enabled: emails().length > 0 && (view() !== 'me' || !!primaryLinkId()),
+    })
   );
 }

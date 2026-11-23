@@ -36,7 +36,6 @@ roles_and_permissions = { path = "../roles_and_permissions", default-features = 
 http = { workspace = true }
 http-body-util = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
-mcp_select = { path = "../mcp_select" }
 mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
 model-entity = { path = "../model-entity" }
@@ -71,3 +70,4 @@ opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util"] }
+trigger_context = { path = "../trigger_context" }

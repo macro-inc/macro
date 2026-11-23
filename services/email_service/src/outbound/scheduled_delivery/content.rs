@@ -1,7 +1,7 @@
 //! Reconstruct approved GraphQL delivery without consulting mutable message content.
 
+use email::domain::scheduled_delivery::state::DeliveryClaim;
 use email::domain::send_attempt::{PreparedSendContent, PreparedSendContentUnavailable};
-use email_db_client::messages::scheduled::delivery::DeliveryClaim;
 use models_email::service::{address::ContactInfo, message::MessageToSend};
 use sqlx::PgPool;
 

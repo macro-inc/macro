@@ -7,7 +7,9 @@
  */
 export class Lazy<T> {
   private value?: T;
+  private listed: Partial<T> = {};
   private inflight?: Promise<T>;
+  private generation = 0;
 
   constructor(
     private readonly loader: () => Promise<T>,
@@ -18,11 +20,34 @@ export class Lazy<T> {
 
   get(): Promise<T> {
     if (this.value !== undefined) return Promise.resolve(this.value);
+    const generation = this.generation;
     this.inflight ??= this.loader().then((v) => {
-      this.value = v;
+      if (generation === this.generation) this.value = v;
       return v;
     });
     return this.inflight;
+  }
+
+  /**
+   * Keep fields a listing already returned, so reading one needs no fetch.
+   * `null` and `undefined` values are skipped: a field the listing did not
+   * carry still loads. A full load, {@link set} or {@link clear} supersedes
+   * them.
+   */
+  know(fields: Partial<T>): void {
+    for (const [key, value] of Object.entries(fields) as [
+      keyof T,
+      T[keyof T],
+    ][])
+      if (value !== null && value !== undefined) this.listed[key] = value;
+  }
+
+  /**
+   * One field from a listing, while the full value has not loaded; `undefined`
+   * means read it through {@link get}.
+   */
+  listedField<K extends keyof T>(key: K): T[K] | undefined {
+    return this.value === undefined ? this.listed[key] : undefined;
   }
 
   /** The cached value, if already loaded — never triggers a fetch. */
@@ -30,9 +55,22 @@ export class Lazy<T> {
     return this.value;
   }
 
-  /** Drop the cached value so the next read refetches. */
+  /**
+   * Replace the cached value with one known to be current, such as a write's
+   * response, and fence older loads so they cannot overwrite it.
+   */
+  set(value: T): void {
+    this.generation++;
+    this.value = value;
+    this.listed = {};
+    this.inflight = undefined;
+  }
+
+  /** Drop cached detail and fence older loads so the next read refetches. */
   clear(): void {
+    this.generation++;
     this.value = undefined;
+    this.listed = {};
     this.inflight = undefined;
   }
 }

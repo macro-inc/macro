@@ -1,9 +1,9 @@
+import Reply from '@icon/system/regular/arrow-bend-up-left.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import Reply from '@phosphor/arrow-bend-up-left.svg';
-import LinkIcon from '@phosphor/link.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Sparkle from '@phosphor/sparkle.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { WorkspaceComment } from '../../../core/dummy-workspace';
 import { homepagePeople } from '../../../core/homepage-demo-people';

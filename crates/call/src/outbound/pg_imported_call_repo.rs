@@ -185,6 +185,46 @@ impl ImportedCallRepository for PgImportedCallRepository {
         .await?)
     }
 
+    async fn list_source_records(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        provider: CallProvider,
+    ) -> Result<Vec<ImportedCallRecord>, rootcause::Report> {
+        let provider: &'static str = provider.into();
+        let rows = sqlx::query!(
+            r#"SELECT c.id, c.title, c.started_at, c.ended_at,
+                s.external_id, s.external_url, s.metadata->>'summary' AS summary, s.external_updated_at,
+                ARRAY(
+                    SELECT p.display_name FROM call_entity_participants p
+                    WHERE p.call_id = c.id AND p.display_name IS NOT NULL
+                    ORDER BY p.display_name, p.id
+                ) AS "attendees!: Vec<String>"
+            FROM call_entity_sources s
+            JOIN call_entities c ON c.id = s.call_id
+            WHERE s.user_id = $1 AND s.provider = $2 AND c.user_id = $1 AND c.created_via = 'import'
+            ORDER BY c.started_at DESC NULLS LAST, c.id DESC"#,
+            user.as_ref(),
+            provider
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ImportedCallRecord {
+                id: row.id,
+                title: row.title,
+                started_at: row.started_at,
+                ended_at: row.ended_at,
+                attendees: row.attendees,
+                external_id: ExternalCallId(row.external_id),
+                external_url: row.external_url,
+                summary: row.summary,
+                external_updated_at: row.external_updated_at,
+            })
+            .collect())
+    }
+
     async fn read_owned(
         &self,
         user: &MacroUserIdStr<'static>,

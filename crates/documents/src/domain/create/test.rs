@@ -15,7 +15,9 @@ use crate::domain::notion_markdown::NotionMarkdown;
 use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
-use crate::domain::ports::markdown::{MarkdownInitializationPort, MarkdownSnapshot};
+use crate::domain::ports::markdown::{
+    MarkdownInitializationOptions, MarkdownInitializationPort, MarkdownSnapshot,
+};
 use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent,
@@ -61,6 +63,7 @@ impl DocumentCreationService for FakeCreationService {
             document_response: DocumentResponse {
                 document_metadata: DocumentResponseMetadataWithContent::new(
                     DocumentResponseMetadata {
+                        appearance: None,
                         document_id: DOCUMENT_ID.to_string(),
                         document_version_id: 1,
                         owner: principal.owner(),
@@ -136,6 +139,7 @@ impl MarkdownInitializationPort for FakeMarkdownInitializer {
         &self,
         _document_id: &str,
         _markdown: &str,
+        _options: MarkdownInitializationOptions,
     ) -> Result<Vec<u8>, DocumentError> {
         Ok(vec![1, 2, 3])
     }
@@ -154,6 +158,7 @@ impl MarkdownInitializationPort for FakeMarkdownInitializer {
 
 struct RecordingMarkdownInitializer {
     lifecycle: Arc<Mutex<Vec<&'static str>>>,
+    received_pins: Arc<Mutex<Vec<Option<Vec<String>>>>>,
     fail: bool,
 }
 
@@ -162,8 +167,13 @@ impl MarkdownInitializationPort for RecordingMarkdownInitializer {
         &self,
         _document_id: &str,
         _markdown: &str,
+        options: MarkdownInitializationOptions,
     ) -> Result<Vec<u8>, DocumentError> {
         self.lifecycle.lock().unwrap().push("initialize");
+        self.received_pins
+            .lock()
+            .unwrap()
+            .push(options.initial_pins);
         if self.fail {
             return Err(DocumentError::Internal(anyhow::anyhow!(
                 "initialization failed"
@@ -236,6 +246,7 @@ fn task_document(markdown: &str) -> NewMarkdownTextDocument {
         markdown: markdown.to_string(),
         subtype: MarkdownSubtype::Task {
             property_values: None,
+            pinned_property_definition_ids: None,
             share_with_team: false,
             team_id: None,
         },
@@ -253,6 +264,7 @@ async fn task_assignments_are_applied_only_after_content_is_readable() {
         },
         RecordingMarkdownInitializer {
             lifecycle: lifecycle.clone(),
+            received_pins: Arc::new(Mutex::new(Vec::new())),
             fail: false,
         },
         FakeBytesUploader,
@@ -274,6 +286,42 @@ async fn task_assignments_are_applied_only_after_content_is_readable() {
 }
 
 #[tokio::test]
+async fn task_creation_forwards_empty_field_pins_to_the_first_snapshot() {
+    let lifecycle = Arc::new(Mutex::new(Vec::new()));
+    let received_pins = Arc::new(Mutex::new(Vec::new()));
+    let tracker = RecordingMentionTracker::default();
+    let creator = DocumentCreator::new(
+        FakeCreationService {
+            lifecycle: lifecycle.clone(),
+            ..Default::default()
+        },
+        RecordingMarkdownInitializer {
+            lifecycle,
+            received_pins: received_pins.clone(),
+            fail: false,
+        },
+        FakeBytesUploader,
+        &tracker,
+    );
+    let mut task = task_document("");
+    if let MarkdownSubtype::Task {
+        pinned_property_definition_ids,
+        ..
+    } = &mut task.subtype
+    {
+        *pinned_property_definition_ids = Some(vec!["empty-field".to_owned()]);
+    }
+    creator
+        .create_markdown_text(&CreationPrincipal::User(owner()), task)
+        .await
+        .unwrap();
+    assert_eq!(
+        *received_pins.lock().unwrap(),
+        [Some(vec!["empty-field".to_owned()])]
+    );
+}
+
+#[tokio::test]
 async fn failed_task_content_never_applies_assignments() {
     for fail_initialization in [true, false] {
         let lifecycle = Arc::new(Mutex::new(Vec::new()));
@@ -286,6 +334,7 @@ async fn failed_task_content_never_applies_assignments() {
             },
             RecordingMarkdownInitializer {
                 lifecycle: lifecycle.clone(),
+                received_pins: Arc::new(Mutex::new(Vec::new())),
                 fail: fail_initialization,
             },
             FakeBytesUploader,
@@ -559,6 +608,7 @@ fn task_flag_shares_only_when_a_team_was_resolved() {
             share_with_team,
             team_id: numbering_team,
             property_values,
+            pinned_property_definition_ids,
         } = MarkdownSubtype::from_task_flag(true, resolved_team)
         else {
             panic!("a task flag builds a task subtype");
@@ -566,11 +616,44 @@ fn task_flag_shares_only_when_a_team_was_resolved() {
         assert_eq!(share_with_team, expected_share);
         assert_eq!(numbering_team, resolved_team);
         assert!(property_values.is_none());
+        assert!(pinned_property_definition_ids.is_none());
     }
     assert!(matches!(
         MarkdownSubtype::from_task_flag(false, Some(team_id)),
         MarkdownSubtype::Note
     ));
+}
+
+/// A session that may not share numbers a task in its team without sharing
+/// it, and a create request that omits `shareWithTeam` defaults to private.
+#[tokio::test]
+async fn a_session_that_may_not_share_makes_private_tasks() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let team_id = uuid::Uuid::from_u128(7);
+    let parse = || -> CreateTaskRequest {
+        serde_json::from_value(serde_json::json!({ "taskName": "task" })).unwrap()
+    };
+    assert!(parse().share_with_team);
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    scope_attribution(no_send, async {
+        assert!(!parse().share_with_team);
+        let MarkdownSubtype::Task {
+            share_with_team,
+            team_id: numbering_team,
+            ..
+        } = MarkdownSubtype::from_task_flag(true, Some(team_id))
+        else {
+            panic!("a task flag builds a task subtype");
+        };
+        assert!(!share_with_team);
+        assert_eq!(numbering_team, Some(team_id));
+    })
+    .await;
 }
 
 #[test]

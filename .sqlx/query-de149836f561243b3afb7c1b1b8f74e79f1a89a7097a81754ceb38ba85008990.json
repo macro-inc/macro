@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        WITH reaped AS (\n                            DELETE FROM harness_runtime_connection\n                            WHERE harness_id = $1 AND lease_expires_at <= now()\n                        ), added AS (\n                            INSERT INTO harness_runtime_connection\n                                (harness_id, id, replica_id, lease_expires_at)\n                            VALUES ($1, $2, $3, now() + make_interval(secs => $4))\n                            ON CONFLICT (harness_id, id) DO NOTHING\n                        )\n                        UPDATE harnesses SET last_connected_at = now() WHERE id = $1\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "de149836f561243b3afb7c1b1b8f74e79f1a89a7097a81754ceb38ba85008990"
+}

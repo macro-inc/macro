@@ -145,16 +145,16 @@ it('shows channel access in Share and retains the chosen permission after reopen
   vi.advanceTimersByTime(600);
   expect(
     view.queryByRole('combobox', {
-      name: 'Access for Julia, Teo, Gabriel +1 other',
+      name: 'Access for Eric Hayes, Rahul Batra, Wolf Mermelstein +1 other',
     })
   ).toBeNull();
   advanceTo(() =>
     view.queryByRole('combobox', {
-      name: 'Access for Julia, Teo, Gabriel +1 other',
+      name: 'Access for Eric Hayes, Rahul Batra, Wolf Mermelstein +1 other',
     })
   );
   const access = view.getByRole('combobox', {
-    name: 'Access for Julia, Teo, Gabriel +1 other',
+    name: 'Access for Eric Hayes, Rahul Batra, Wolf Mermelstein +1 other',
   });
   fireEvent.pointerDown(access);
   expect((access as HTMLSelectElement).value).toBe('view');
@@ -164,7 +164,7 @@ it('shows channel access in Share and retains the chosen permission after reopen
   expect(
     (
       view.getByRole('combobox', {
-        name: 'Access for Julia, Teo, Gabriel +1 other',
+        name: 'Access for Eric Hayes, Rahul Batra, Wolf Mermelstein +1 other',
       }) as HTMLSelectElement
     ).value
   ).toBe('comment');
@@ -197,7 +197,7 @@ it('turns a message into a task assigned to the person who offered', () => {
   for (const assignee of work.getAllByRole('button', {
     name: 'Change assignee',
   }))
-    expect(assignee.textContent).toContain('Julia');
+    expect(assignee.textContent).toContain('Eric');
   expect(work.getByRole('button', { name: 'From launch' })).toBeTruthy();
 });
 
@@ -342,7 +342,7 @@ it('keeps scrollable history and visibly clicks the doc before switching the spl
   ).toBeTruthy();
 });
 
-it('lets Julia bring Cursor into the same agent thread and keeps her task ownership', () => {
+it('lets Eric bring Cursor into the same agent thread and keeps her task ownership', () => {
   const view = render(() => <ChannelAgentDemo />);
   visible(true);
   vi.advanceTimersByTime(5700);
@@ -369,7 +369,7 @@ it('lets Julia bring Cursor into the same agent thread and keeps her task owners
   for (const status of work.getAllByRole('button', { name: 'Change status' }))
     expect(status.textContent).toContain('In Progress');
   for (const owner of work.getAllByRole('button', { name: 'Change assignee' }))
-    expect(owner.textContent).toContain('Julia');
+    expect(owner.textContent).toContain('Eric');
 });
 
 it('keeps document edits when email opens in a third split and closes only the selected pane', async () => {
@@ -430,7 +430,7 @@ it('types and selects the channel, grants access, then opens the delivered docum
   expect(
     (
       view.getByRole('combobox', {
-        name: 'Access for Julia, Teo, Gabriel +1 other',
+        name: 'Access for Eric Hayes, Rahul Batra, Wolf Mermelstein +1 other',
       }) as HTMLSelectElement
     ).value
   ).toBe('view');
@@ -468,7 +468,7 @@ it('uses the same channel grant and delivery when a visitor shares manually', as
   fireEvent.click(dialog.getByRole('button', { name: /^Share/ }));
   expect(
     view.getByRole('combobox', {
-      name: 'Access for Julia, Teo, Gabriel +1 other',
+      name: 'Access for Eric Hayes, Rahul Batra, Wolf Mermelstein +1 other',
     })
   ).toBeTruthy();
   fireEvent.click(view.getByRole('button', { name: 'Open #launch' }));

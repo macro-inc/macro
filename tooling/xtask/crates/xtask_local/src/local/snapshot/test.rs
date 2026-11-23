@@ -1,31 +1,64 @@
 use super::*;
 use crate::local::instance::Instance;
 
-/// The key must change when any init-defining input changes, and only then —
-/// two computes over identical inputs agree, and the kickstart (which encodes
-/// the instance's ports) is part of the key, so snapshots can't cross
-/// instances with different port windows.
+/// Two computes over identical inputs agree, and instances that differ only in
+/// their ports share a key: the kickstart's redirect URLs are left out of it,
+/// and FusionAuth gets each instance's own list after it starts.
 #[test]
-fn key_is_deterministic_and_kickstart_sensitive() {
+fn key_is_deterministic_and_port_free() {
     let instance = Instance::derive(None, None).unwrap();
-    crate::local::fusionauth::write_kickstart(&instance, None, None).unwrap();
+    crate::local::fusionauth::write_kickstart(&instance, None, None, None).unwrap();
 
     let a = Plan::compute(&instance).unwrap();
     let b = Plan::compute(&instance).unwrap();
     assert_eq!(a.key, b.key, "same inputs must produce the same key");
     assert_eq!(a.key.len(), 64, "sha256 hex");
 
-    // A named instance generates a kickstart with different ports → new key.
     let other = Instance::derive(Some("snapshot-key-test"), None).unwrap();
-    crate::local::fusionauth::write_kickstart(&other, None, None).unwrap();
+    crate::local::fusionauth::write_kickstart(&other, None, None, None).unwrap();
     let c = Plan::compute(&other).unwrap();
-    assert_ne!(
-        a.key, c.key,
-        "instances with different ports must not share snapshots"
-    );
-
-    // Cleanup the test instance's generated dir.
     let _ = std::fs::remove_dir_all(other.artifact_dir());
+    assert_eq!(
+        a.key, c.key,
+        "a different port window must share the snapshot"
+    );
+}
+
+/// Any kickstart change other than the redirect URLs is a different init, so
+/// it must miss.
+#[test]
+fn kickstart_without_instance_urls_keeps_everything_else() {
+    let doc = |urls: &[&str], lambda: &str| {
+        crate::local::kickstart::build(
+            urls.iter().map(|url| url.to_string()).collect(),
+            lambda,
+            "function reconcile() {}",
+            None,
+            None,
+        )
+    };
+    let strip = crate::local::kickstart::without_instance_urls;
+
+    assert_eq!(
+        strip(doc(
+            &["http://localhost:3000/app"],
+            "function populate() {}"
+        )),
+        strip(doc(
+            &["http://localhost:20110/app"],
+            "function populate() {}"
+        )),
+    );
+    assert_ne!(
+        strip(doc(
+            &["http://localhost:3000/app"],
+            "function populate() {}"
+        )),
+        strip(doc(
+            &["http://localhost:3000/app"],
+            "function populate() { changed }"
+        )),
+    );
 }
 
 /// `exists()` trusts only a manifest that matches the key and format — a
@@ -70,4 +103,30 @@ fn exists_requires_a_matching_manifest() {
     assert!(!plan.exists(), "key mismatch → miss");
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A save that crashed before its manifest leaves a temp dir; once it is
+/// older than the cutoff, pruning removes it like any unused snapshot.
+#[test]
+fn pruning_removes_an_old_temp_dir_without_a_manifest() {
+    let root = std::env::temp_dir().join(format!("snapshot-prune-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let old = root.join(".tmp-abandoned-1");
+    let fresh = root.join(".tmp-in-progress-2");
+    for dir in [&old, &fresh] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("postgres.tar.gz"), "partial").unwrap();
+    }
+    let month_ago =
+        std::time::SystemTime::now() - std::time::Duration::from_secs(30 * 24 * 60 * 60);
+    std::fs::File::open(&old)
+        .unwrap()
+        .set_modified(month_ago)
+        .unwrap();
+
+    prune_unused(&root, "current-key");
+
+    assert!(!old.exists(), "the abandoned temp dir is pruned");
+    assert!(fresh.exists(), "a recent one is left alone");
+    std::fs::remove_dir_all(&root).unwrap();
 }

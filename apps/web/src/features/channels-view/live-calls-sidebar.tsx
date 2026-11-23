@@ -9,7 +9,7 @@ import { openChannelCallTab } from '@channel/Call/open-channel-call-tab';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -22,15 +22,18 @@ import {
   LiveCallsSidebar,
 } from '../meetings/components/live-calls-sidebar';
 import { useActiveQuickCallsSource } from '../meetings/queries/active-quick-calls';
-import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 
 type ChatLiveCall = LiveCallRow &
   ({ kind: 'channel'; channelId: string } | { kind: 'quick'; url: string });
 
-async function selectChannelCall(call: { channelId: string; joined: boolean }) {
+async function selectChannelCall(call: {
+  id: string;
+  channelId: string;
+  joined: boolean;
+}) {
   if (call.joined) return openChannelCallTab(call.channelId);
   try {
-    await joinChannelCall(call.channelId);
+    await joinChannelCall(call.channelId, { kind: 'join', callId: call.id });
   } catch (error) {
     console.error('Failed to join call', error);
     toast.failure('Failed to join call');
@@ -41,13 +44,10 @@ function ChatLiveCalls() {
   const userId = useUserId();
   const navigate = useNavigate();
   const callCtx = useCallContextOptional();
-  const channelsCtx = useChannelsContext();
+  const directory = useChannelDirectory();
   const channelCalls = useActiveCallsQuery();
   const incomingCalls = useVisibleIncomingCalls();
-  const flag = useQuickCallsFlag();
-  const quickCalls = useActiveQuickCallsSource(() =>
-    !flag().loading && flag().enabled ? userId() : undefined
-  );
+  const quickCalls = useActiveQuickCallsSource(() => userId());
 
   const joinedCallId = () =>
     callCtx?.isInCall() ? callCtx.activeCallId() : null;
@@ -55,14 +55,15 @@ function ChatLiveCalls() {
   const calls = (): ChatLiveCall[] => {
     const quick = quickCalls.calls();
     const quickCallIds = new Set(quick.map((call) => call.callId));
-    const channelsById = channelsCtx.channelsById();
     const ringingCallIds = new Set(incomingCalls().map((call) => call.callId));
 
     // A quick call is backed by a channel call; list it once, as the meeting.
     const channelRows = (channelCalls.data ?? []).flatMap(
       (call): ChatLiveCall[] => {
-        const channel = channelsById[call.channelId];
-        if (!channel || quickCallIds.has(call.callId)) return [];
+        if (quickCallIds.has(call.callId)) return [];
+        const lookup = directory.lookup(call.channelId);
+        if (lookup.status !== 'loaded') return [];
+        const channel = lookup.channel;
         return [
           {
             kind: 'channel',

@@ -1,8 +1,8 @@
 use super::*;
+use crate::domain::scheduled_delivery::state::claim_delivery;
 use crate::domain::send_attempt::{
     EmailSendRepo, EmailSendService, PreparedSendContent, SendAttemptId, SendSnapshot,
 };
-use email_db_client::messages::scheduled::delivery::claim_delivery;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

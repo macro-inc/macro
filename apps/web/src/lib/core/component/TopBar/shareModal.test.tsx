@@ -1,6 +1,9 @@
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { AppProviders } from '@components/app/AppProviders';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { createBlockOrchestrator } from '@core/orchestrator';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { render, screen } from '@solidjs/testing-library';
 import { ImperativeDialogHost } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -8,10 +11,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
 import { openShareModal, useShareModal } from './shareModal';
 
+// The real flag provider owns its normal context; only its transport is inert here.
+vi.mock('@app/lib/analytics/analytics-context', () => ({
+  useAnalytics: () => ({
+    posthog: {
+      featureFlags: { getFlags: () => [] },
+      onFeatureFlags: () => () => {},
+    },
+  }),
+}));
+
 let observedOrchestrator:
   | ReturnType<typeof useGlobalBlockOrchestrator>
   | undefined;
 
+vi.mock('@app/features/agent-navigation/views/agent-navigation', () => ({
+  AgentNavigationProvider: (props: { children: unknown }) => props.children,
+}));
 vi.mock('@app/features/meetings/incoming-meeting-invitations', () => ({
   IncomingMeetingInvitationsProvider: (props: { children: unknown }) =>
     props.children,
@@ -22,6 +38,9 @@ vi.mock(
     usePendingNotificationNavigationEffect: () => {},
   })
 );
+vi.mock('@app/features/routines/routine-drafts-host', () => ({
+  RoutineDraftsHost: (props: { children: unknown }) => props.children,
+}));
 vi.mock('@app/features/soup/search/context', () => ({
   SearchProvider: (props: { children: unknown }) => props.children,
 }));
@@ -49,9 +68,6 @@ vi.mock('@app/signal/splitLayout', () => ({
 }));
 vi.mock('@components/app/useReactiveFavicon', () => ({
   useReactiveFavicon: () => {},
-}));
-vi.mock('@core/component/AI/signal/globalAttachments', () => ({
-  useGlobalAttachableHistory: () => {},
 }));
 vi.mock('@core/context/team', () => ({
   TeamContextProvider: (props: { children: unknown }) => props.children,
@@ -207,11 +223,17 @@ describe('useShareModal', () => {
 
     const view = render(() => (
       <Show when={showApp()}>
-        <AppProviders>
-          <Show when={showMenu()}>
-            <Menu />
-          </Show>
-        </AppProviders>
+        <PosthogProvider>
+          <ChannelDirectoryProvider
+            directory={staticChannelDirectory(() => [])}
+          >
+            <AppProviders>
+              <Show when={showMenu()}>
+                <Menu />
+              </Show>
+            </AppProviders>
+          </ChannelDirectoryProvider>
+        </PosthogProvider>
       </Show>
     ));
 

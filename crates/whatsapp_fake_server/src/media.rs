@@ -6,18 +6,20 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
 use crate::Shared;
 
 /// The router: `POST /mms/{type}/{token}` uploads (also with a
-/// `newsletter`/other prefix), `GET /v/{id}` downloads.
+/// `newsletter`/other prefix), `GET /v/{id}` downloads, `GET /pps/{file}`
+/// serves profile pictures.
 pub(crate) fn router(shared: Arc<Shared>) -> Router {
     Router::new()
         .route("/{prefix}/{media_type}/{token}", post(upload))
         .route("/v/fake/{id}", get(download))
+        .route("/pps/{file}", get(picture))
         .with_state(shared)
 }
 
@@ -36,6 +38,15 @@ async fn upload(
 async fn download(State(shared): State<Arc<Shared>>, Path(id): Path<String>) -> Response {
     match shared.lock().media.get(&id) {
         Some(data) => data.clone().into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn picture(State(shared): State<Arc<Shared>>, Path(file): Path<String>) -> Response {
+    match shared.lock().picture_files.get(&file) {
+        Some((mime, data)) => {
+            ([(header::CONTENT_TYPE, mime.clone())], data.clone()).into_response()
+        }
         None => StatusCode::NOT_FOUND.into_response(),
     }
 }

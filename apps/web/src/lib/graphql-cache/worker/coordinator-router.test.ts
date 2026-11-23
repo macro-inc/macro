@@ -1327,7 +1327,7 @@ describe('CoordinatorRouter', () => {
         message: expect.objectContaining({
           id: 5,
           ok: false,
-          errorCode: 'owner-lock-unavailable',
+          errorCode: 'cache-superseded',
         }),
       }),
     ]);
@@ -2442,5 +2442,47 @@ describe('CoordinatorRouter', () => {
       ownerEpoch: 2,
       databaseAction: 'wipe-before-open',
     });
+  });
+});
+
+describe('registration acknowledgement', () => {
+  const newRouter = () =>
+    new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+    });
+  const registered = (port: FakePort) => messagesOfKind(port, 'registered');
+
+  it("tells a joining tab when another visible tab's engine runs", async () => {
+    const router = newRouter();
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+
+    expect(registered(tabA)).toEqual([
+      { ...version, kind: 'registered', tabId: 'tab-a' },
+    ]);
+    expect(registered(tabB)).toEqual([
+      { ...version, kind: 'registered', tabId: 'tab-b', ownerElsewhere: true },
+    ]);
+  });
+
+  it('says nothing of a hidden owner, which a joining visible tab takes over', async () => {
+    const router = newRouter();
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'tab-visibility',
+      tabId: 'tab-a',
+      visible: false,
+    });
+    await register(router, tabB, 'tab-b');
+
+    expect(registered(tabB)).toEqual([
+      { ...version, kind: 'registered', tabId: 'tab-b' },
+    ]);
   });
 });

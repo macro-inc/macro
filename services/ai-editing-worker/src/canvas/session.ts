@@ -19,6 +19,7 @@ import {
   worldMatrix,
 } from '@macro-inc/graphics';
 import {
+  type ArtifactLibrary,
   createLoroGraphicsBackendFromDoc,
   type PeerPresence,
 } from '@macro-inc/graphics/loro';
@@ -34,12 +35,13 @@ import {
   canvasAnimation,
   runCanvasAnimation,
 } from './animation';
+import ARTIFACT_GUIDE from './artifact-prompt.md';
 import { CanvasScheduler, dependencies, dependencyState } from './dependencies';
 import { canvasUserMentions } from './mentions';
-import { prepareCanvasEdit } from './operations';
+import { artifactLibraryEdits, prepareCanvasEdit } from './operations';
 import { canvasOverview } from './overview';
 import type { CanvasMeasurer, CanvasSnapshot } from './render';
-import type { CanvasOp } from './schema';
+import { type CanvasOp, isArtifactOp } from './schema';
 import { applyTextMeasurements, textFitRequests } from './text-layout';
 
 export type CanvasSource = LiveSyncSource & {
@@ -49,6 +51,8 @@ export type CanvasSource = LiveSyncSource & {
 /** A committed update may already have reached peers; never replay its intent. */
 export class CanvasWriteError extends Error {}
 export class CanvasConflictError extends Error {}
+/** A batch that failed validation or planning before anything was committed. */
+export class CanvasRejectedError extends Error {}
 export type CanvasApplyOptions = {
   baseline?: GraphicsDocument;
   present?: (value: CanvasPresentation | undefined) => void;
@@ -76,7 +80,8 @@ export async function withCanvasSession<T>(
   source: CanvasSource,
   signal: AbortSignal,
   run: (session: CanvasSession) => Promise<T>,
-  editorName = 'Macro'
+  editorName = 'Macro',
+  artifacts = false
 ): Promise<T> {
   const manager = new LoroManager(schema({}), {
     documentId: source.documentId,
@@ -195,7 +200,11 @@ export async function withCanvasSession<T>(
       check();
       return format === 'overview'
         ? JSON.stringify(canvasOverview(backend.getDocument(), itemIds))
-        : describeCanvas(backend.getDocument(), itemIds);
+        : describeCanvas(
+            backend.getDocument(),
+            itemIds,
+            artifacts ? backend.artifactLibrary.read() : undefined
+          );
     };
     const present = (value: CanvasPresentation | undefined) => {
       if (!value) {
@@ -222,6 +231,143 @@ export async function withCanvasSession<T>(
             !peer.selection.name.endsWith('(AI)') &&
             !peer.selection.reducedMotion
         );
+    const applyBatch = async (
+      ops: CanvasOp[],
+      options: CanvasApplyOptions,
+      stage: { committed: boolean }
+    ) => {
+      check();
+      if (!artifacts && ops.some(isArtifactOp))
+        throw new Error(
+          'Artifact operations are not available for this user. Nothing was committed.'
+        );
+      const baseline = options.baseline ?? backend.getDocument();
+      let planned = await Telemetry.span('canvas.ai.validate', async (span) => {
+        span.setAttr('edit.ops_total', ops.length);
+        return prepareCanvasEdit(baseline, ops);
+      });
+      const requests = textFitRequests(baseline, planned, ops);
+      let measured: TextFitResult | undefined;
+      if (options.measure && requests.length) {
+        measured = await options.measure(
+          {
+            documentId: source.documentId,
+            document: planned,
+            clock: { ...backend.getClock() },
+          },
+          requests,
+          signal
+        );
+        planned = measured.document;
+      }
+      const deps = dependencies(baseline, planned, ops);
+      const expected = dependencyState(baseline, deps);
+      const validate = () => {
+        check();
+        if (dependencyState(backend.getDocument(), deps) !== expected)
+          throw new CanvasConflictError(
+            'Canvas targets or reserved space changed. ReadCanvas and replan this batch; nothing from this batch was committed.'
+          );
+      };
+      const queued = performance.now();
+      return scheduler.run(deps, async () => {
+        await Telemetry.span('canvas.ai.schedule', async (span) => {
+          span.setAttr('canvas.schedule.wait_ms', performance.now() - queued);
+          span.setAttr('canvas.schedule.targets', deps.writes.size);
+        });
+        validate();
+        const show = options.present ?? present;
+        try {
+          if (options.animate ?? watching())
+            await Telemetry.span('canvas.ai.animate', async () =>
+              runCanvasAnimation(
+                canvasAnimation(baseline, planned, deps),
+                show,
+                signal,
+                validate,
+                options.sleep
+              )
+            );
+          const commit = async () => {
+            check();
+            // A peer's ACK can precede delivery on this socket. Pull a server
+            // barrier after presentation so already-accepted human changes are
+            // included in final dependency validation, even if live delivery lags.
+            await Telemetry.span('canvas.ai.revalidate', async () => {
+              const updates = await source.requestUpdatesSince(manager.version);
+              check();
+              if (
+                updates.isErr() ||
+                manager.importUpdate(updates.value).isErr()
+              )
+                throw new CanvasConflictError(
+                  'Canvas could not refresh current targets. ReadCanvas and replan; nothing from this batch was committed.'
+                );
+            });
+            validate();
+            // Rebuild against fresh canonical state; unrelated human/AI changes survive.
+            const fresh = prepareCanvasEdit(backend.getDocument(), ops);
+            const next = measured
+              ? applyTextMeasurements(fresh, measured)
+              : fresh;
+            check();
+            const selectedIds = [
+              ...new Set(
+                ops.flatMap((op) => {
+                  if ('ids' in op) return op.ids;
+                  return 'id' in op ? [op.id] : [];
+                })
+              ),
+            ]
+              .filter((id) => next.items[id])
+              .slice(0, 100);
+            const first = selectedIds[0];
+            const bounds = first ? worldBounds(next, first) : undefined;
+            show({
+              cursor: bounds ? { x: bounds.x, y: bounds.y } : null,
+              selectedIds,
+              preview: null,
+            });
+            await Telemetry.span('canvas.ai.apply', async (span) => {
+              span.setAttr('edit.ops_total', ops.length);
+              span.setAttr(
+                'edit.user_mentions',
+                ops.filter((op) => op.kind === 'mentionUser').length
+              );
+              span.setAttr(
+                'edit.artifact_ops',
+                ops.filter(isArtifactOp).length
+              );
+              stage.committed = true;
+              backend.commit(next, artifactLibraryEdits(ops));
+              try {
+                await lastAppend;
+                await wal.flush();
+                if ((await wal.summary()).dirty)
+                  throw new Error('Canvas write acknowledgement was lost.');
+              } catch {
+                throw new CanvasWriteError(
+                  'Canvas write acknowledgement was lost. Read the canvas before retrying; the edit may have applied.'
+                );
+              }
+            });
+            return {
+              operationsApplied: ops.length,
+              canvas: read(),
+              textLayout: measured?.effects ?? [],
+            };
+          };
+          const result = pendingCommit.then(commit);
+          pendingCommit = result.then(
+            () => {},
+            () => {}
+          );
+          return await result;
+        } finally {
+          show(undefined);
+        }
+      });
+    };
     const result = await run({
       read,
       present,
@@ -232,133 +378,29 @@ export async function withCanvasSession<T>(
           documentId: source.documentId,
           document: structuredClone(backend.getDocument()),
           clock: { ...backend.getClock() },
+          artifacts,
+          artifactLibrary: artifacts
+            ? backend.artifactLibrary.read()
+            : undefined,
         };
       },
       async apply(ops, options = {}) {
-        check();
-        const baseline = options.baseline ?? backend.getDocument();
-        let planned = await Telemetry.span(
-          'canvas.ai.validate',
-          async (span) => {
-            span.setAttr('edit.ops_total', ops.length);
-            return prepareCanvasEdit(baseline, ops);
-          }
-        );
-        const requests = textFitRequests(baseline, planned, ops);
-        let measured: TextFitResult | undefined;
-        if (options.measure && requests.length) {
-          measured = await options.measure(
-            {
-              documentId: source.documentId,
-              document: planned,
-              clock: { ...backend.getClock() },
-            },
-            requests,
-            signal
+        // Anything that fails before the commit left the scene untouched.
+        const stage = { committed: false };
+        try {
+          return await applyBatch(ops, options, stage);
+        } catch (error) {
+          if (
+            stage.committed ||
+            signal.aborted ||
+            error instanceof CanvasConflictError
+          )
+            throw error;
+          throw new CanvasRejectedError(
+            error instanceof Error ? error.message : String(error),
+            { cause: error }
           );
-          planned = measured.document;
         }
-        const deps = dependencies(baseline, planned, ops);
-        const expected = dependencyState(baseline, deps);
-        const validate = () => {
-          check();
-          if (dependencyState(backend.getDocument(), deps) !== expected)
-            throw new CanvasConflictError(
-              'Canvas targets or reserved space changed. ReadCanvas and replan this batch; nothing from this batch was committed.'
-            );
-        };
-        const queued = performance.now();
-        return scheduler.run(deps, async () => {
-          await Telemetry.span('canvas.ai.schedule', async (span) => {
-            span.setAttr('canvas.schedule.wait_ms', performance.now() - queued);
-            span.setAttr('canvas.schedule.targets', deps.writes.size);
-          });
-          validate();
-          const show = options.present ?? present;
-          try {
-            if (options.animate ?? watching())
-              await Telemetry.span('canvas.ai.animate', async () =>
-                runCanvasAnimation(
-                  canvasAnimation(baseline, planned, deps),
-                  show,
-                  signal,
-                  validate,
-                  options.sleep
-                )
-              );
-            const commit = async () => {
-              check();
-              // A peer's ACK can precede delivery on this socket. Pull a server
-              // barrier after presentation so already-accepted human changes are
-              // included in final dependency validation, even if live delivery lags.
-              await Telemetry.span('canvas.ai.revalidate', async () => {
-                const updates = await source.requestUpdatesSince(
-                  manager.version
-                );
-                check();
-                if (
-                  updates.isErr() ||
-                  manager.importUpdate(updates.value).isErr()
-                )
-                  throw new CanvasConflictError(
-                    'Canvas could not refresh current targets. ReadCanvas and replan; nothing from this batch was committed.'
-                  );
-              });
-              validate();
-              // Rebuild against fresh canonical state; unrelated human/AI changes survive.
-              const fresh = prepareCanvasEdit(backend.getDocument(), ops);
-              const next = measured
-                ? applyTextMeasurements(fresh, measured)
-                : fresh;
-              check();
-              const selectedIds = [
-                ...new Set(
-                  ops.flatMap((op) => ('ids' in op ? op.ids : [op.id]))
-                ),
-              ]
-                .filter((id) => next.items[id])
-                .slice(0, 100);
-              const first = selectedIds[0];
-              const bounds = first ? worldBounds(next, first) : undefined;
-              show({
-                cursor: bounds ? { x: bounds.x, y: bounds.y } : null,
-                selectedIds,
-                preview: null,
-              });
-              await Telemetry.span('canvas.ai.apply', async (span) => {
-                span.setAttr('edit.ops_total', ops.length);
-                span.setAttr(
-                  'edit.user_mentions',
-                  ops.filter((op) => op.kind === 'mentionUser').length
-                );
-                backend.commit(next);
-                try {
-                  await lastAppend;
-                  await wal.flush();
-                  if ((await wal.summary()).dirty)
-                    throw new Error('Canvas write acknowledgement was lost.');
-                } catch {
-                  throw new CanvasWriteError(
-                    'Canvas write acknowledgement was lost. Read the canvas before retrying; the edit may have applied.'
-                  );
-                }
-              });
-              return {
-                operationsApplied: ops.length,
-                canvas: read(),
-                textLayout: measured?.effects ?? [],
-              };
-            };
-            const result = pendingCommit.then(commit);
-            pendingCommit = result.then(
-              () => {},
-              () => {}
-            );
-            return await result;
-          } finally {
-            show(undefined);
-          }
-        });
       },
     });
     await Telemetry.span('canvas.ai.flush', async () => {
@@ -385,7 +427,9 @@ export async function withCanvasSession<T>(
 /** Bounded scene inspection includes stable IDs, local/world geometry and order. */
 export function describeCanvas(
   document: GraphicsDocument,
-  itemIds?: string[]
+  itemIds?: string[],
+  /** Present only when the user has artifacts. */
+  artifactLibrary?: ArtifactLibrary
 ): string {
   const all = Object.values(document.items).filter(
     (item) => item.type !== 'surface'
@@ -418,30 +462,47 @@ export function describeCanvas(
         item.type === 'pencil' && item.geometry.points.length > 64,
       world: worldMatrix(document, item.id),
       bounds: worldBounds(document, item.id),
+      htmlLength:
+        item.type === 'artifact' ? item.geometry.html.length : undefined,
     };
   });
-  const text = JSON.stringify(
-    {
-      rootId: document.rootId,
-      totalItems: all.length,
-      matchedItems: selected.length,
-      truncated:
-        selected.length > 300 ||
-        items.some(
-          (item) =>
-            item.textTruncated ||
-            item.pointsTruncated ||
-            item.userMentionsTruncated
-        ),
-      items,
-    },
-    (key, value: unknown) =>
-      key === 'content'
+  // Source is large, so it comes only from a read of specific items.
+  const withSource = !!artifactLibrary && !!itemIds;
+  // The replacer is for scene items only: library entries can use any of these names.
+  const sceneItems: unknown = JSON.parse(
+    JSON.stringify(items, (key, value: unknown) =>
+      key === 'content' || (key === 'html' && !withSource)
         ? undefined
         : key === 'points' && Array.isArray(value)
           ? value.slice(0, 64)
           : value
+    )
   );
+  const text = JSON.stringify({
+    rootId: document.rootId,
+    totalItems: all.length,
+    matchedItems: selected.length,
+    truncated:
+      selected.length > 300 ||
+      items.some(
+        (item) =>
+          item.textTruncated ||
+          item.pointsTruncated ||
+          item.userMentionsTruncated
+      ),
+    items: sceneItems,
+    ...(artifactLibrary
+      ? {
+          artifactGuide: ARTIFACT_GUIDE,
+          artifactLibrary: withSource
+            ? artifactLibrary
+            : {
+                styles: Object.keys(artifactLibrary.styles),
+                components: Object.keys(artifactLibrary.components),
+              },
+        }
+      : {}),
+  });
   if (text.length > 500_000)
     throw new Error(
       'Canvas too large for AI inspection. Reduce its content before editing.'

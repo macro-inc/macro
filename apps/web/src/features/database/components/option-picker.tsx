@@ -71,6 +71,7 @@ export function OptionPicker(props: {
     );
   };
   const creatable = () => {
+    if (props.column.fixedOptions) return undefined;
     const label = optionLabelFor(props.column, props.search);
     return label !== undefined &&
       !props.column.options.some(
@@ -142,7 +143,9 @@ export function OptionPicker(props: {
           aria-controls={listId}
           aria-activedescendant={active() >= 0 ? rowId(active()) : undefined}
           aria-autocomplete="list"
-          placeholder="Search or create…"
+          placeholder={
+            props.column.fixedOptions ? 'Search…' : 'Search or create…'
+          }
           value={props.search}
           maxlength={200}
           class="h-9 w-full bg-transparent px-3.5 text-xs text-ink outline-none placeholder:text-ink-placeholder"
@@ -208,7 +211,7 @@ export function OptionPicker(props: {
                       <Show when={props.selected.includes(option().label)}>
                         <CheckIcon class="size-3.5 shrink-0 text-ink-muted" />
                       </Show>
-                      <Show when={props.editing}>
+                      <Show when={!props.column.fixedOptions && props.editing}>
                         {(editing) => (
                           <OptionEditor
                             column={props.column}
@@ -229,7 +232,7 @@ export function OptionPicker(props: {
           <p class="px-2 py-1 text-xs text-ink-placeholder">No options</p>
         </Show>
       </div>
-      <Show when={props.selected.length}>
+      <Show when={props.column.nullable !== false && props.selected.length}>
         <div class="-mx-1.5 mt-1.5 border-t border-edge-divider px-1.5 pt-1.5">
           <button
             type="button"

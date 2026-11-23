@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id\n            FROM notification_bulk_action\n            WHERE id = $1 AND user_id = $2 AND lease_token = $3 AND status = 'undoing'\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7d83f9aea0f5e4e110d3ded2dd2d7f1102cc834a24d073048eb5df75afa6a984"
+}

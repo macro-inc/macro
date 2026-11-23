@@ -1,6 +1,13 @@
 //! Google Analytics 4 Measurement Protocol provider.
 
+use std::time::Duration;
+
 use serde::Serialize;
+
+/// Longest a track call may take, connecting included. Callers await it
+/// inline (the Stripe inbox's analytics consumer), so a hung GA must not
+/// hold them.
+const TRACK_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Google Analytics 4 Measurement Protocol provider.
 #[derive(Clone, Debug)]
@@ -45,6 +52,7 @@ impl GoogleAnalyticsProvider {
 
         self.client
             .post(&url)
+            .timeout(TRACK_TIMEOUT)
             .json(&payload)
             .send()
             .await?

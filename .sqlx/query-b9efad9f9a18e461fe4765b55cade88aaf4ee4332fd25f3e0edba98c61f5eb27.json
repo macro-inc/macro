@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM password_import_activity WHERE team_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b9efad9f9a18e461fe4765b55cade88aaf4ee4332fd25f3e0edba98c61f5eb27"
+}

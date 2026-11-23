@@ -51,6 +51,20 @@ owners survive responsive mode changes. The all-diffs collapse/expand button sta
 in the floating diff controls; a hidden or drawer tree puts its count there too.
 Another host composes the same components its own way.
 
+Agent replies link code into the pane (`code-links.ts`, pure parsing in
+`core/code-reference.ts`). `AgentMessage` passes `createCodeLinkOpener` to
+`AgentReplyLinks` as `openOther`, so a link that is neither a Macro mention nor
+an app route is offered to it. Before the prose renders, `linkChangedCode` turns
+inline code naming a changed file into such a link, and rewrites links to a
+changed file that the markdown import would drop (`file://…`, `package.json:5`)
+into the `path#L…` form. A resolved link calls `layout.open()` and
+`review.activate(path, lines)`; `review.pointed()` lights the lines through
+`DiffView.Stack`'s `selection` (a note's range or the link's lines, whichever was set last, via `createLitRange`) and its
+`reveal` scrolls the pointed line in once the file settles. A line outside the
+diff's hunks has no row, so nothing lights and the file header stays in view.
+Unchanged relative files open on GitHub at the head commit. `browser-test/`
+clicks a rendered reply through all of it, in unified and split view.
+
 Native PR and Agents workspace hosts put their title row and content together
 inside `ChangesSplit`, so changes occupy the full height beside that row.
 Host title, sharing, and sidebar actions remain available on the left. The Changes
@@ -71,7 +85,9 @@ cancels exit without remounting the pane. Patch parsing and diff bodies are queu
 after the pane shell mounts, and off-screen bodies wait until needed.
 Split/full toggles retain the host and diff owners and restore the dragged split
 ratio without replaying the visibility slide or reparsing unchanged patch text.
-Hosts at 720px or narrower open Changes at full width and hide the width toggle,
+A host passes `hostMinWidth` to `ChangesSplit` (320px by default; a PR passes
+560px, which its header's title and actions need). A host no wider than that plus
+the pane's 400px opens Changes at full width and hides the width toggle,
 without changing the saved split ratio or route layout. Widening restores the
 requested wide layout and keeps the same conversation and diff owners.
 A spotlight request during a slide applies after the slide settles. A full-width
@@ -94,7 +110,7 @@ and session hosts supply titles and GitHub totals from existing queries; no extr
 Missing titles stay hidden, and unavailable GitHub totals never fall back to
 captured estimates.
 Legacy embedded agent hosts still render their frame-owned chrome above both
-panes. Moving `AgentSplitHeader` does not change that portal placement; full-height
+panes. Moving the agent session header does not change that portal placement; full-height
 embedded changes require a separate host-layout migration.
 
 The source owns fetching, cache identity, and conversion into the feature's core

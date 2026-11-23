@@ -7,7 +7,17 @@ export type IdentityBindingWire = {
   revalidationVariables?: string[];
 };
 
+import { CacheAuthoritySchema } from './authority.generated';
 import type { EntityResolverWire } from './exchange/entity-resolvers';
+import type {
+  ContactReconcile,
+  ContactSnapshotRequest,
+  PeopleContextUpdate,
+  PeopleReferenceRequest,
+  PeopleScope,
+  PeopleSearch,
+  PeopleSqlRequest,
+} from './people/generated';
 
 /**
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
@@ -58,13 +68,15 @@ export function parseCacheRevision(value: unknown): CacheRevision {
 export const INITIAL_CACHE_REVISION = '0' as CacheRevision;
 
 /** Validates the durable database-generation UUID shared by cache hosts. */
+export function isStorageGeneration(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)
+  );
+}
+
 export function parseStorageGeneration(value: unknown): string {
-  if (
-    typeof value !== 'string' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
-      value
-    )
-  ) {
+  if (!isStorageGeneration(value)) {
     throw new TypeError('invalid cache storage generation');
   }
   return value;
@@ -73,8 +85,42 @@ export function parseStorageGeneration(value: unknown): string {
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
 
+/** Ranks a record read with the typed search whose rows it loads. */
+export type RecordReadPriority = 'typed-search';
+
 /** Recursive partial-variable object used to limit query inspection work. */
 export type QueryVariableFilter = Record<string, unknown>;
+
+/** Rust engine::HydrationScope: captured before fetching a background page. */
+export type HydrationScope = PeopleScope;
+
+/** Scope rejection is expected cancellation, not a storage failure. */
+export function isStaleHydrationScopeError(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message === 'cache hydration scope changed'
+  );
+}
+
+export type PeopleRequest =
+  | {
+      kind: 'contact-snapshot';
+      request: ContactSnapshotRequest;
+      traceparent?: string;
+    }
+  | {
+      kind: 'contact-reconcile';
+      request: ContactReconcile;
+      traceparent?: string;
+    }
+  | { kind: 'people-sql'; request: PeopleSqlRequest; traceparent?: string }
+  | {
+      kind: 'people-references';
+      request: PeopleReferenceRequest;
+      traceparent?: string;
+    }
+  | { kind: 'people-context'; scope: PeopleScope; traceparent?: string }
+  | { kind: 'people-update'; update: PeopleContextUpdate; traceparent?: string }
+  | { kind: 'people-search'; request: PeopleSearch; traceparent?: string };
 
 export type SearchProfile = 'quick-access-v1';
 
@@ -103,6 +149,9 @@ export type SearchCacheArgs = {
 };
 
 export type SearchCachePage = {
+  /** Engine projection revision; absent on older native binaries. Contact
+   * ingestion/search requires revision 5 (including page-retention support). */
+  projectionVersion?: number;
   documents: SearchDocumentWire[];
   nextCursor: SearchCursor | null;
 };
@@ -285,6 +334,8 @@ export type ReadRecordsByKeysArgs = {
   fragmentName: string;
   /** Canonical normalized entity keys; bounded by the selection page size. */
   keys: string[];
+  /** Set when the records are the rows of a typed search someone waits on. */
+  priority?: RecordReadPriority;
 };
 
 export type SelectedRecordByKeyWire = {
@@ -671,7 +722,11 @@ export type MutationUpsertKind =
   | { kind: 'replaced-pending'; removedTransactionId: string }
   | { kind: 'appended-after-active'; activeTransactionId: string };
 
-/** Read-only request snapshot; never contains a settlement lease token. */
+/**
+ * Read-only request snapshot. Its lease lets a runner release a claim whose
+ * owner has gone; every settlement still presents the owner and generation,
+ * which the engine checks. Native engines built before the lease omit it.
+ */
 export type MutationInspection = Pick<
   ClaimedMutation,
   | 'transactionId'
@@ -682,7 +737,13 @@ export type MutationInspection = Pick<
   | 'variables'
   | 'clientMetadata'
   | 'enqueuedAtMs'
-> & { optimisticData: unknown };
+> & { optimisticData: unknown; lease?: MutationLease };
+
+/** A queued mutation's current claim. */
+export type MutationLease = MutationClaim & {
+  /** When another runner may claim the mutation, in epoch milliseconds. */
+  expiresAtMs: number;
+};
 
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {
@@ -772,10 +833,21 @@ export type MutationSettlement = { mutationUuid?: string } & (
     }
 );
 
-export type CacheRequest = { id: number } & (
+export type CacheRequest = {
+  id: number;
+  generation?: string;
+} & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }
   | { kind: 'current-storage-generation' }
+  | { kind: 'current-authority'; identity: string; traceparent?: string }
+  | {
+      kind: 'transition-authority';
+      traceparent?: string;
+      identity: string;
+      expected: string;
+      policy: string;
+    }
   | { kind: 'inspect-mutations' }
   | {
       kind: 'read';
@@ -811,6 +883,7 @@ export type CacheRequest = { id: number } & (
   | {
       /** Background cache warming; ordinary writes do not publish pushes. */
       kind: 'hydrate';
+      hydrationScope?: HydrationScope;
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;
@@ -876,7 +949,10 @@ export type CacheRequest = { id: number } & (
       document: string;
       fragmentName: string;
       keys: string[];
+      /** May overtake reads, fences and queued network results, never a local change. */
+      priority?: RecordReadPriority;
     }
+  | PeopleRequest
   | {
       kind: 'search';
       request: SearchCacheArgs & { nowMs: number };
@@ -922,6 +998,7 @@ export type CacheRequest = { id: number } & (
 export type CacheResponseErrorCode =
   | 'owner-epoch-lost'
   | 'owner-lock-unavailable'
+  | 'cache-superseded'
   | 'owner-handoff-blocked'
   | 'admitted-enqueue-uncertain';
 
@@ -938,6 +1015,30 @@ export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
   'owner-lock-unavailable';
 
 /**
+ * A newer app build took the database over. Like an unavailable owner lock the
+ * request never reached an engine, but this build never gets the cache back:
+ * only a reload into the newer build does.
+ */
+export const CACHE_SUPERSEDED_ERROR_CODE: CacheResponseErrorCode =
+  'cache-superseded';
+
+/** A text search someone is waiting on; an empty query only browses a list. */
+export function isTypedSearch(request: CacheRequest): boolean {
+  if (request.kind !== 'search') return false;
+
+  const query = request.request.query ?? '';
+  return query.trim() !== '';
+}
+
+/** The rows a typed search named: the search is not answered until they load. */
+export function isTypedSearchRowRead(request: CacheRequest): boolean {
+  return (
+    request.kind === 'read-records-by-keys' &&
+    request.priority === 'typed-search'
+  );
+}
+
+/**
  * A read-only request was refused because the database was moving between
  * owners and the foreground wait ran out. Storage is untouched and the engine
  * keeps running, so the request can be retried once an owner is ready.
@@ -950,7 +1051,7 @@ export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
   'admitted-enqueue-uncertain';
 
 export type CacheResponse =
-  | { id: number; ok: true; result: unknown }
+  | { id: number; ok: true; result: unknown; authorityGeneration?: string }
   | {
       id: number;
       ok: false;
@@ -963,7 +1064,11 @@ export type CacheResponse =
  * operations whose underlying records changed. The host filters by its own
  * clientId prefix and re-executes.
  */
-export type CachePush =
+export type CachePush = { authorityGeneration?: string } & (
+  | {
+      kind: 'authority-changed';
+      authority: import('./authority').CacheAuthority;
+    }
   | {
       kind: 'ops-affected';
       opIds: string[];
@@ -980,7 +1085,8 @@ export type CachePush =
       kind: 'cache-hydrated';
       revision: CacheRevision;
     } & CacheChangeHints)
-  | { kind: 'mutation-settled'; settlement: MutationSettlement };
+  | { kind: 'mutation-settled'; settlement: MutationSettlement }
+);
 
 export type WorkerMessage = CacheResponse | CachePush;
 
@@ -1003,6 +1109,7 @@ export const isCacheResponseErrorCode = (
 ): value is CacheResponseErrorCode =>
   value === OWNER_EPOCH_LOST_ERROR_CODE ||
   value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
+  value === CACHE_SUPERSEDED_ERROR_CODE ||
   value === OWNER_HANDOFF_BLOCKED_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
@@ -1014,13 +1121,26 @@ export const isOwnerEpochLostError = (
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
 
-/** Identifies a request refused because another context holds the database. */
+/** Identifies a request refused because another context holds the database,
+ * including a newer build that took it over. */
 export const isOwnerLockUnavailableError = (
   value: unknown
-): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+): value is Error & {
+  errorCode: 'owner-lock-unavailable' | 'cache-superseded';
+} =>
   value instanceof Error &&
   'errorCode' in value &&
-  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
+  (value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
+    value.errorCode === CACHE_SUPERSEDED_ERROR_CODE);
+
+/** Identifies a request refused because a newer build took the database over;
+ * this page session never gets the cache back. */
+export const isCacheSupersededError = (
+  value: unknown
+): value is Error & { errorCode: 'cache-superseded' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === CACHE_SUPERSEDED_ERROR_CODE;
 
 /** Identifies a read refused while the database moved between owners. */
 export const isOwnerHandoffBlockedError = (
@@ -1049,7 +1169,10 @@ export function isCacheResponse(value: unknown): value is CacheResponse {
   }
   if (value.ok === true) {
     return (
-      hasOnlyWireKeys(value, ['id', 'ok', 'result']) &&
+      hasOnlyWireKeys(value, ['id', 'ok', 'result', 'authorityGeneration']) &&
+      (value.authorityGeneration === undefined ||
+        (typeof value.authorityGeneration === 'string' &&
+          /^[0-9a-f-]{36}$/.test(value.authorityGeneration))) &&
       Object.hasOwn(value, 'result')
     );
   }
@@ -1090,7 +1213,21 @@ export function isRecordFieldChanges(
 /** Strictly validates a pushed cache notification. */
 export function isCachePush(value: unknown): value is CachePush {
   if (!isWireRecord(value)) return false;
+  if (Object.hasOwn(value, 'authorityGeneration')) {
+    const { authorityGeneration, ...push } = value;
+    return (
+      (authorityGeneration === undefined ||
+        (typeof authorityGeneration === 'string' &&
+          /^[0-9a-f-]{36}$/.test(authorityGeneration))) &&
+      isCachePush(push)
+    );
+  }
   switch (value.kind) {
+    case 'authority-changed':
+      return (
+        hasOnlyWireKeys(value, ['kind', 'authority']) &&
+        CacheAuthoritySchema.safeParse(value.authority).success
+      );
     case 'ops-affected':
       return (
         hasOnlyWireKeys(value, ['kind', 'opIds', 'keys', 'fieldChanges']) &&

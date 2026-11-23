@@ -7,6 +7,8 @@
 //! container is asked for - decides which runtime a session's transport comes
 //! from.
 
+use std::sync::Arc;
+
 use agent_egress::domain::model::SessionToken;
 use agent_harness::domain::error::{HarnessError, Result};
 use agent_harness::domain::model::{AgentKind, SpawnContainer};
@@ -20,7 +22,7 @@ use agent_runtime_protocol::domain::connection::ServerChannel;
 use agent_runtime_protocol::domain::ports::{Transport, TransportError, TransportSender};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::model::{AgentSessionId, SandboxSize, SessionManagement};
+use agent_session::domain::model::{AgentSession, AgentSessionId, SandboxSize, SessionManagement};
 use agent_session::domain::service::AgentSessionService;
 
 #[cfg(test)]
@@ -71,8 +73,8 @@ impl TransportSender<ToRuntimeMessage> for RoutedSender {
 
 /// The shared in-memory runtime used by every in-memory agent session.
 pub struct InMemRuntime {
-    /// In-memory session provisioner.
-    pub manager: InMemAgentManager,
+    /// In-memory session provisioner, shared with the runtime gauges.
+    pub manager: Arc<InMemAgentManager>,
 }
 
 /// The deployment's [`ContainerManager`]: the sandbox provider for the
@@ -81,6 +83,22 @@ pub struct RoutedContainers<Sessions> {
     sandbox: HarnessContainers,
     inmem: Option<InMemRuntime>,
     sessions: Sessions,
+}
+
+/// How an in-process session's replies reach whoever reads them. Nobody
+/// reads a background session whose opener gave it instructions of its own (a
+/// routine draft); an accepted suggestion's run is a background session too,
+/// opened without any, and people open it to read the result. A thread's
+/// reply is one message, rewritten only as each passage finishes; an opening
+/// line lands with what follows it.
+fn reply_delivery(row: &AgentSession) -> ReplyDelivery {
+    if row.is_background() && row.instructions.is_some() {
+        ReplyDelivery::Unseen
+    } else if row.thread_id.is_some() {
+        ReplyDelivery::Whole
+    } else {
+        ReplyDelivery::Streamed
+    }
 }
 
 #[derive(Debug)]
@@ -130,16 +148,17 @@ where
                 .session_bot(row.bot_id)
                 .await
                 .map_err(HarnessError::Session)?;
+            let billing = self
+                .sessions
+                .session_billing(session)
+                .await
+                .map_err(HarnessError::Session)?;
+            let delivery = reply_delivery(&row);
             return Ok(Route::InMem(Box::new(SessionFacts {
                 id: session,
                 owner: row.owner_id,
-                // A thread's reply is one message, rewritten only as each
-                // passage finishes; an opening line lands with what follows it.
-                delivery: if row.thread_id.is_some() {
-                    ReplyDelivery::Whole
-                } else {
-                    ReplyDelivery::Streamed
-                },
+                billing,
+                delivery,
                 model: row.model,
                 identity: Some(AgentIdentity {
                     bot: row.bot_id,
@@ -276,6 +295,36 @@ where
                 Ok(())
             }
             Route::Sandbox => self.sandbox.teardown(session).await,
+        }
+    }
+
+    /// Drops this process's in-process conversation, agent task and egress
+    /// token for `session`, if it holds any. Map removals only, so no route
+    /// lookup: a session of any other runtime has nothing here to drop.
+    async fn release_idle(&self, session: AgentSessionId) -> Result<()> {
+        if let Some(inmem) = &self.inmem {
+            inmem.manager.teardown(session);
+        }
+        Ok(())
+    }
+
+    /// Asks the in-process manager, which compares the session's live state
+    /// with what a cold attach would rebuild. The route is looked up only
+    /// when this process holds the session's conversation. A session whose
+    /// row is gone has no log to come back from, so dropping what is held
+    /// for it loses nothing.
+    async fn idle_release_is_lossless(&self, session: AgentSessionId) -> Result<bool> {
+        let Some(inmem) = &self.inmem else {
+            return Ok(true);
+        };
+        if !inmem.manager.holds(session) {
+            return Ok(true);
+        }
+        match self.route(session).await {
+            Ok(Route::InMem(facts)) => Ok(inmem.manager.rebuilds_identically(&facts).await?),
+            Ok(Route::Sandbox) => Ok(true),
+            Err(HarnessError::Session(AgentSessionError::NotFound(_))) => Ok(true),
+            Err(error) => Err(error),
         }
     }
 }

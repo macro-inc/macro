@@ -5,10 +5,14 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import type { useSearchSoupQuery } from '@queries/soup/search';
-import { batch, createRoot, createSignal } from 'solid-js';
+import { batch, createEffect, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmailTab, EmailViewState } from '../types';
+import {
+  EMPTY_PAGES_LOAD_MORE_LABEL,
+  MAX_PAGES_PER_LOAD,
+} from './advance-empty-pages';
 import { buildEmailQuery } from './email-query';
 import {
   type EmailDataSource,
@@ -52,13 +56,20 @@ vi.mock('@app/features/soup/search/context', () => ({
 }));
 vi.mock('@notifications', async () => await import('@notifications/types'));
 vi.mock('@queries/soup/search', () => ({
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
   useSearchSoupQuery: searchQueryMock,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ notificationsByEntity: () => ({}) }),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'alice' }));
+// A test can swap in a signal to change the signed-in account.
+const viewer = vi.hoisted(() => ({
+  current: (): string | undefined => 'alice',
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => viewer.current(),
+}));
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: vi.fn() }));
 vi.mock('./use-scheduled-email-source', () => ({
   useScheduledEmailSource: () => ({
@@ -119,7 +130,7 @@ const ids = (source: EmailDataSource) =>
     .flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []));
 
 let dispose: (() => void) | undefined;
-function mount(search = '') {
+function mount(search = '', keepRowsWhileSearching = false) {
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [state, setState] = createStore<EmailViewState>({
@@ -179,6 +190,8 @@ function mount(search = '') {
       });
     const [searchHasMore, setSearchHasMore] = createSignal(true);
     const [searchFetching, setSearchFetching] = createSignal(false);
+    const [searchUnanswered, setSearchUnanswered] = createSignal(false);
+    const [searchPaging, setSearchPaging] = createSignal(false);
     const searchNext = vi.fn(async () => {
       setSearchHasMore(false);
     });
@@ -201,13 +214,15 @@ function mount(search = '') {
             return options?.().enabled ?? true;
           },
           get isSuccess() {
-            return discovery || !retentionLoading();
+            return discovery ? !searchUnanswered() : !retentionLoading();
           },
           isPlaceholderData: false,
           get isFetching() {
             return discovery && searchFetching();
           },
-          isFetchingNextPage: false,
+          get isFetchingNextPage() {
+            return discovery && searchPaging();
+          },
           get hasNextPage() {
             return discovery && searchHasMore();
           },
@@ -229,6 +244,9 @@ function mount(search = '') {
       },
       get isLoading() {
         return loading();
+      },
+      get hasPageData() {
+        return !loading() && !paused();
       },
       get isPlaceholderData() {
         return placeholder();
@@ -259,6 +277,9 @@ function mount(search = '') {
       const [missing, setMissing] = createSignal(false);
       const lookup: SoupAstItemsQuery = {
         isFetching: false,
+        get hasPageData() {
+          return !retentionLoading() && !missing();
+        },
         get error() {
           return lookupError() ?? null;
         },
@@ -291,6 +312,7 @@ function mount(search = '') {
     const source = useEmailDataSource(state, {
       tagSets: () => [],
       tagSetsReady,
+      keepRowsWhileSearching: () => keepRowsWhileSearching,
     });
     return {
       source,
@@ -299,6 +321,8 @@ function mount(search = '') {
       searchNext,
       setSearchHasMore,
       setSearchFetching,
+      setSearchUnanswered,
+      setSearchPaging,
       setState,
       setEntities,
       setDiscoveryEntities,
@@ -322,6 +346,91 @@ function mount(search = '') {
 }
 
 describe('Email list query transitions', () => {
+  it('keeps the rows on screen as previous rows while a search loads', () => {
+    vi.useFakeTimers();
+    try {
+      const root = mount('', true);
+      expect(ids(root.source)).toEqual(['noise']);
+
+      root.setSearchFetching(true);
+      root.setState('search', 'budget');
+      vi.advanceTimersByTime(1000);
+      expect(ids(root.source)).toEqual(['noise']);
+      expect(root.source.showsPreviousRows?.()).toBe(true);
+      expect(root.source.isLoading()).toBe(false);
+
+      // The request has settled its debounce but not started: nothing is
+      // fetching, and the rows still must not blank.
+      root.setSearchUnanswered(true);
+      root.setSearchFetching(false);
+      expect(ids(root.source)).toEqual(['noise']);
+      expect(root.source.showsPreviousRows?.()).toBe(true);
+
+      root.setSearchUnanswered(false);
+      expect(ids(root.source)).toEqual(['search']);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+
+      // Loading a further page of the same search is not a new wait.
+      batch(() => {
+        root.setSearchPaging(true);
+        root.setSearchFetching(true);
+      });
+      expect(ids(root.source)).toEqual(['search']);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+      batch(() => {
+        root.setSearchPaging(false);
+        root.setSearchFetching(false);
+      });
+
+      // Another tab's rows are never shown under this one's name.
+      root.setSearchFetching(true);
+      root.setState('tab', 'important');
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.isLoading()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never keeps rows from another account while a search loads', () => {
+    vi.useFakeTimers();
+    const [account, setAccount] = createSignal<string | undefined>('alice');
+    viewer.current = account;
+    try {
+      const root = mount('', true);
+      root.setSearchFetching(true);
+      root.setState('search', 'budget');
+      vi.advanceTimersByTime(1000);
+      expect(ids(root.source)).toEqual(['noise']);
+      expect(root.source.showsPreviousRows?.()).toBe(true);
+
+      setAccount('bob');
+
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+      expect(root.source.isLoading()).toBe(true);
+    } finally {
+      viewer.current = () => 'alice';
+      vi.useRealTimers();
+    }
+  });
+
+  it('blanks the list while a search loads unless rows are kept', () => {
+    vi.useFakeTimers();
+    try {
+      const root = mount('');
+      root.setSearchFetching(true);
+      root.setState('search', 'budget');
+      vi.advanceTimersByTime(1000);
+
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+      expect(root.source.isLoading()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   const alias = { inboxId: 'inbox-a', emailAddress: 'resident@example.com' };
 
   it.each(['spam', 'trash'] as const)(
@@ -579,6 +688,39 @@ describe('Email list query transitions', () => {
     expect(source.isLoading()).toBe(false);
   });
 
+  it('keeps search hits the service matched by attachment kind or invitation', () => {
+    const { source, setState, setSearchEntities } = mount('invoice');
+    batch(() => {
+      setState('tab', 'all');
+      setState('facets', {
+        attachments: ['attachment-pdf'],
+        calendar: ['has-calendar-invite'],
+      });
+      setSearchEntities([email('pdf-invite-hit')]);
+    });
+    expect(ids(source)).toEqual(['pdf-invite-hit']);
+  });
+
+  it('still drops list rows without the selected attachment kind', () => {
+    const { source, setState, setEntities } = mount();
+    batch(() => {
+      setState('tab', 'all');
+      setState('facets', { attachments: ['attachment-pdf'] });
+      setEntities([email('no-attachment')]);
+    });
+    expect(ids(source)).toEqual([]);
+  });
+
+  it('keeps Drafts search hits whose latest message is not the draft', () => {
+    const { source, setState, setSearchEntities } = mount('invoice');
+    const replyDraft = { ...email('reply-draft'), isDraft: false };
+    batch(() => {
+      setState('tab', 'drafts');
+      setSearchEntities([replyDraft]);
+    });
+    expect(ids(source)).toEqual(['reply-draft']);
+  });
+
   it('keeps archived hits when searching Signal and Noise', () => {
     const { source, setState, setSearchEntities } = mount('invoice');
     const archived = { ...email('archived'), done: true };
@@ -589,7 +731,81 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual(['archived', 'active']);
   });
 
-  it('trims archived search results to done threads', () => {
+  it('offers no inbox pages while the search text holds nothing the service can search for', async () => {
+    const { source, query } = mount('"');
+    expect(source.items()).toEqual([]);
+    expect(source.hasMore()).toBe(false);
+    expect(source.isLoading()).toBe(false);
+    await source.loadMore();
+    expect(query.fetchNextPage).not.toHaveBeenCalled();
+  });
+
+  it('pages past search hits the tab drops instead of offering Load More over no rows', async () => {
+    const { source, setState, setSearchEntities, searchNext } =
+      mount('invoice');
+    searchNext.mockImplementationOnce(async () => {
+      setSearchEntities([
+        { ...email('active'), done: false },
+        { ...email('archived'), done: true },
+      ]);
+    });
+    batch(() => {
+      setState('tab', 'archived');
+      setSearchEntities([{ ...email('active'), done: false }]);
+    });
+    await vi.waitFor(() => expect(ids(source)).toEqual(['archived']));
+    expect(searchNext).toHaveBeenCalledOnce();
+  });
+
+  it('pages past a search page the server filtered to nothing instead of reading as empty', async () => {
+    const root = mount('invoice');
+    const match = email('unread-match');
+    root.setRetainedEntities([]);
+    let seenEmptyAndIdle = false;
+    const stopWatching = createRoot((stop) => {
+      createEffect(() => {
+        if (ids(root.source).length === 0 && !root.source.isLoading())
+          seenEmptyAndIdle = true;
+      });
+      return stop;
+    });
+    let deliverNextPage = () => {};
+    root.searchNext.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          deliverNextPage = () => {
+            batch(() => {
+              root.setSearchEntities([match]);
+              root.setRetainedEntities([match]);
+              root.setSearchHasMore(false);
+            });
+            resolve();
+          };
+        })
+    );
+    try {
+      batch(() => {
+        root.setState('tab', 'all');
+        root.setState('facets', { read: ['unread'] });
+        root.setSearchEntities([]);
+      });
+      await vi.waitFor(() => expect(root.searchNext).toHaveBeenCalledOnce());
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.isLoading()).toBe(true);
+
+      deliverNextPage();
+      await vi.waitFor(() =>
+        expect(ids(root.source)).toEqual(['unread-match'])
+      );
+    } finally {
+      stopWatching();
+    }
+    expect(seenEmptyAndIdle).toBe(false);
+    expect(root.source.isLoading()).toBe(false);
+    expect(root.source.hasMore()).toBe(false);
+  });
+
+  it('trims archived search results to done threads', async () => {
     const { source, setState, setSearchEntities } = mount('invoice');
     const archived = { ...email('archived'), done: true };
     const active = { ...email('active'), done: false };
@@ -602,7 +818,56 @@ describe('Email list query transitions', () => {
 
     setSearchEntities([{ ...archived, done: false }, active]);
     expect(ids(source)).toEqual([]);
-    expect(source.isLoading()).toBe(false);
+    await vi.waitFor(() => expect(source.isLoading()).toBe(false));
+    expect(source.hasMore()).toBe(false);
+  });
+
+  it('reads on after Load More through pages that keep no archived hit', async () => {
+    const root = mount('invoice');
+    const first = { ...email('first'), done: true };
+    const later = { ...email('later'), done: true };
+    batch(() => {
+      root.setState('tab', 'archived');
+      root.setSearchEntities([first]);
+    });
+    expect(ids(root.source)).toEqual(['first']);
+    root.searchNext
+      .mockImplementationOnce(async () => {})
+      .mockImplementationOnce(async () => {})
+      .mockImplementationOnce(async () => {
+        root.setSearchEntities([first, later]);
+      });
+
+    await root.source.loadMore();
+    await vi.waitFor(() =>
+      expect(ids(root.source)).toEqual(['first', 'later'])
+    );
+    expect(root.searchNext).toHaveBeenCalledTimes(3);
+    expect(root.source.items().at(-1)).toMatchObject({
+      kind: 'load-more',
+      isLoading: false,
+    });
+    expect(root.source.items().at(-1)).not.toHaveProperty('label');
+  });
+
+  it('stops a Load More after a bounded run of empty pages and says so', async () => {
+    const root = mount('invoice');
+    batch(() => {
+      root.setState('tab', 'archived');
+      root.setSearchEntities([{ ...email('first'), done: true }]);
+    });
+    root.searchNext.mockImplementation(async () => {});
+
+    await root.source.loadMore();
+    await vi.waitFor(() =>
+      expect(root.source.items().at(-1)).toMatchObject({
+        kind: 'load-more',
+        label: EMPTY_PAGES_LOAD_MORE_LABEL,
+      })
+    );
+    expect(root.searchNext).toHaveBeenCalledTimes(MAX_PAGES_PER_LOAD);
+    expect(ids(root.source)).toEqual(['first']);
+    expect(root.source.hasMore()).toBe(true);
   });
 
   it('does not suspend on pending native data while its fetch is paused', () => {

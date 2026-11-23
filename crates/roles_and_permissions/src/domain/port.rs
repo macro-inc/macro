@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{
     Permission, PermissionId, ProductTier, RoleId, SubscriptionStatus, UserRolesAndPermissionsError,
@@ -10,15 +10,6 @@ use crate::domain::model::{
 
 #[cfg(test)]
 mod test;
-
-/// The UserRepository defines a set of actions to perform on the users
-pub trait UserRepository: Clone + Send + Sync + 'static {
-    /// Gets the user id for a given email
-    fn get_user_id_by_email(
-        &self,
-        email: &Email<Lowercase<'_>>,
-    ) -> impl Future<Output = Result<MacroUserIdStr<'_>, UserRolesAndPermissionsError>> + Send;
-}
 
 /// The UserRolesAndPermissionsRepository defines a set of actions to perform on the users roles and permissions
 pub trait UserRolesAndPermissionsRepository: Clone + Send + Sync + 'static {
@@ -64,7 +55,7 @@ pub trait UserRolesAndPermissionsService: Clone + Send + Sync + 'static {
     /// Given a user id and a subscription status, update the user's roles accordingly
     fn update_user_roles_and_permissions_for_subscription(
         &self,
-        email: Email<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         subscription_status: SubscriptionStatus,
         product_tier: ProductTier,
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send;

@@ -9,6 +9,7 @@
             NULL as "branched_from_version_id",
             NULL as "document_family_id",
             NULL as "file_type",
+            NULL::jsonb as "appearance",
             r.created_at as "created_at",
             r.updated_at as "updated_at",
             NULL::text as "project_id",

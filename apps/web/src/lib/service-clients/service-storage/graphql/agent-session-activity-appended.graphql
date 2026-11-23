@@ -1,0 +1,11 @@
+subscription AgentSessionActivityAppended($sessionId: ID!) {
+	agentSessionActivityAppended(sessionId: $sessionId) {
+		id
+		agentCorrelationId
+		agentVerb
+		entityType
+		entityId
+		occurredAt
+		actionTag
+	}
+}

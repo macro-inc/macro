@@ -25,9 +25,9 @@ use external_chat::{
     outbound::pg::PgExternalChatRepository,
 };
 use macro_authorization::{
-    BotActingUserClaims, BotAuthentication, BotScope, CredentialOrigin, HarnessAuthentication,
-    HarnessAuthorizationOwner, InternalIdentityClaims, MacroAuthorizationError,
-    MacroUserAuthentication, ValidatedCredential, ValidatedIdentity,
+    AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication, BotScope, CredentialOrigin,
+    HarnessAuthentication, HarnessAuthorizationOwner, InternalIdentityClaims,
+    MacroAuthorizationError, MacroUserAuthentication, ValidatedCredential, ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_user::UserContext;
@@ -51,6 +51,9 @@ const CUSTOMER_JID: &str = "15558880001@s.whatsapp.net";
 const ALICE_SESSION: &str = "alice-session";
 const BOB_SESSION: &str = "bob-session";
 const ALICE_API_JWT: &str = "alice-api-jwt";
+/// Macro API JWTs signed for an agent and for a routine run, as Alice.
+const ALICE_AGENT_JWT: &str = "alice-agent-jwt";
+const ALICE_ROUTINE_JWT: &str = "alice-routine-jwt";
 const ALICE_API_KEY: &str = "alice-api-key";
 const BOT_TOKEN: &str = "bot-token";
 const HARNESS_TOKEN: &str = "harness-token";
@@ -69,6 +72,7 @@ fn acting(user: &str, origin: CredentialOrigin) -> MacroUserAuthentication {
         origin,
         agent_id: None,
         agent_via: None,
+        routine_id: None,
         macro_user_id: user.to_owned().try_into().unwrap(),
         user_context: context(user),
     }
@@ -96,13 +100,16 @@ impl MacroAuthorizationService for Credentials {
         let (user, origin) = match jwt {
             ALICE_SESSION => (ALICE, CredentialOrigin::Session),
             BOB_SESSION => (BOB, CredentialOrigin::Session),
-            ALICE_API_JWT => (ALICE, CredentialOrigin::MacroApiJwt),
+            ALICE_API_JWT | ALICE_AGENT_JWT | ALICE_ROUTINE_JWT => {
+                (ALICE, CredentialOrigin::MacroApiJwt)
+            }
             _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         };
         Ok(ValidatedCredential {
             identity: ValidatedIdentity {
-                agent_id: None,
+                agent_id: (jwt == ALICE_AGENT_JWT).then_some(bot_id::MACRO_AI_BOT_ID),
                 agent_via: None,
+                routine_id: (jwt == ALICE_ROUTINE_JWT).then(Uuid::nil),
                 user_id: user.to_owned(),
                 fusion_user_id: "fusion-user-id".to_owned(),
                 organization_id: None,
@@ -115,9 +122,12 @@ impl MacroAuthorizationService for Credentials {
     async fn authorize_user_api_key(
         &self,
         api_key: &str,
-    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+    ) -> Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>> {
         match api_key {
-            ALICE_API_KEY => Ok(context(ALICE)),
+            ALICE_API_KEY => Ok(AuthorizedUserApiKey {
+                user_context: context(ALICE),
+                account_manager: None,
+            }),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
     }
@@ -523,4 +533,75 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
         .filter(|(_, _, _, status, expected)| status != expected)
         .collect();
     assert!(mismatches.is_empty(), "{mismatches:#?}");
+}
+
+/// A pairing links a WhatsApp phone to the account for as long as it stays
+/// linked, and its QR code or passkey is all a phone needs: only a person
+/// starts one or reads its code, whatever a program's credential or the
+/// code-mode header says.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_program_cannot_pair_a_linked_device(pool: PgPool) {
+    user(&pool, ALICE).await;
+    let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
+    let service = Arc::new(WhatsAppService::new(repository));
+    let pairing = service
+        .connect(&person(ALICE), false, SendAuthority::Human)
+        .await
+        .unwrap();
+    let app: Router = Router::new().nest(
+        "/whatsapp",
+        whatsapp_router(WhatsAppRouterState {
+            service,
+            authorization_state: MacroAuthorizationState::new(Arc::new(Credentials)),
+        }),
+    );
+
+    let routes = [
+        (
+            Method::POST,
+            "/whatsapp/connect".to_owned(),
+            r#"{"replace": false}"#,
+        ),
+        (Method::GET, format!("/whatsapp/pairing/{}", pairing.id), ""),
+        (
+            Method::POST,
+            format!("/whatsapp/pairing/{}/passkey", pairing.id),
+            "{}",
+        ),
+    ];
+    for (program, bearer, code_execution) in [
+        ("an agent run", ALICE_AGENT_JWT, false),
+        ("an owner-identity routine run", ALICE_ROUTINE_JWT, false),
+        ("the code-mode runtime", ALICE_SESSION, true),
+    ] {
+        for (method, path, body) in &routes {
+            let mut request = Request::builder()
+                .method(method.clone())
+                .uri(path)
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, format!("Bearer {bearer}"));
+            if code_execution {
+                request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
+            }
+            let status = app
+                .clone()
+                .oneshot(request.body(Body::from(*body)).unwrap())
+                .await
+                .unwrap()
+                .status();
+            assert_eq!(status, StatusCode::FORBIDDEN, "{program} {method} {path}");
+        }
+    }
+
+    let person_connects = app
+        .oneshot(request(
+            Principal::Session,
+            Method::POST,
+            "/whatsapp/connect",
+            Body::from(r#"{"replace": false}"#),
+        ))
+        .await
+        .unwrap()
+        .status();
+    assert_eq!(person_connects, StatusCode::OK);
 }

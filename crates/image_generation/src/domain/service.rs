@@ -70,6 +70,7 @@ impl<Store: ImageStore, References: ImageReferenceReader> ImageGenerationService
             prompt,
             aspect_ratio,
             reference_images,
+            agent_session_id,
         } = image;
         let prompt = prompt.trim();
         if prompt.is_empty() {
@@ -114,7 +115,8 @@ impl<Store: ImageStore, References: ImageReferenceReader> ImageGenerationService
         let usage = match principal.user() {
             Some(user) => UsageContext::new(AiFeature::ImageGeneration, user.clone()),
             None => UsageContext::system(AiFeature::ImageGeneration),
-        };
+        }
+        .with_agent_session(agent_session_id);
         let generated = self
             .generator
             .generate_image(

@@ -13,7 +13,8 @@ export type InboxRowType =
   | 'calendar_event'
   | 'calendar_join_request'
   | 'access_requested'
-  | 'access_granted';
+  | 'access_granted'
+  | 'access_removed';
 
 /** Who a row is from, per its newest notification. */
 export type InboxActor =
@@ -49,6 +50,11 @@ export type InboxRow<Content> = {
   id: string;
   /** `other` for a kind this build doesn't know, shown as a generic row. */
   type: InboxRowType | 'other';
+  /**
+   * Other kinds the server lists the row under, because what it shows is
+   * that too: a thread whose reply mentions you is a mention as well.
+   */
+  alsoListedAs: readonly InboxRowType[];
   /** What a done of this row acknowledges. */
   revision: string;
   /** When the row's newest notification was created, epoch milliseconds. */
@@ -77,6 +83,7 @@ export type InboxCardKind =
   | 'invite'
   | 'access'
   | 'agent'
+  | 'ping'
   | 'task'
   | 'pull_request'
   | 'event'
@@ -137,6 +144,33 @@ export function withSeenRows<Content>(
       ? { ...row, unseen: false }
       : row
   );
+}
+
+/**
+ * The rows without the notifications marked done one at a time: a stack
+ * shows one less and counts one less. A row whose shown notifications are
+ * all marked keeps them, since completing its last one completes the row.
+ */
+export function withoutDoneNotifications<
+  Content extends { notifications: readonly { id: string }[] },
+>(
+  rows: readonly InboxRow<Content>[],
+  doneIds: readonly string[]
+): InboxRow<Content>[] {
+  if (doneIds.length === 0) return [...rows];
+  const done = new Set(doneIds);
+  return rows.map((row) => {
+    const shown = row.content.notifications.filter(
+      (notification) => !done.has(notification.id)
+    );
+    const removed = row.content.notifications.length - shown.length;
+    if (removed === 0 || shown.length === 0) return row;
+    return {
+      ...row,
+      count: row.count - removed,
+      content: { ...row.content, notifications: shown },
+    };
+  });
 }
 
 /** Mark rows at the revision each acknowledged. */

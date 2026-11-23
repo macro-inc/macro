@@ -75,7 +75,28 @@ entire cache in browser memory. With 10s of thousands of cached objects
     database (`__meta:identity`), so compare-and-wipe is atomic with the
     triggering write (no stale-in-flight-write races). A mismatch wipes and
     rebinds (“silent restart”) and all active operations re-execute. Eager
-    path: clear on logout.
+    path: clear on logout. REST contact-edit responses use a separate captured
+    write-session token: logout closes admission and drains admitted durable
+    write/delete operations before clearing registered hosts. Independent local
+    auth cleanup and server sign-out begin without waiting for this drain; reload
+    and replacement admission still wait for all cleanup. Tracked contact writes
+    retain their exact physical host even if auth propagation retires the public
+    wrapper, whose callbacks and subsequent operations are silenced immediately.
+    Successful login
+    also retires this token, drains writes and deletes only the contact records
+    written by that session before refetching. This preserves unrelated durable
+    queues during same-account reauthentication, while handling native account
+    replacement that keeps the same client and host objects. A readiness probe
+    precedes tracking so failed initialization cannot strand a never-written key.
+    Logical retirement keeps narrow cleanup usable through the retained owner.
+    Typed recoverable bootstrap/owner failures may reconstruct a cleanup-only host
+    from the original backend/scope factory without booting a user client or queue;
+    unknown or quarantined failures cannot use this path. Failed repair retains
+    keys/ownership, reports the failure, and leaves admission closed for retry.
+    A no-op delete is not proof of storage cleanup, and a never-settling durable
+    write cannot be bypassed by a timeout. Login waits for all logout wipes and teardown, not just
+    normalized-cache clearing. A post-write identity check cannot
+    undo a native mutation already dispatched.
     Additive GraphQL schema changes retain existing normalized records;
     fragment reads can continue projecting fields already present. Manually
     bump the schema compatibility epoch when identity, field storage shape, or
@@ -114,7 +135,25 @@ entire cache in browser memory. With 10s of thousands of cached objects
     `attempt_count` still counts every claim for backoff and coalescing safety.
     Settlement removes the pending mutation and counter; there is no retained DLQ.
     Each queued network attempt has a one-minute timeout, comfortably inside its
-    five-minute lease.
+    five-minute lease. A page that reloads or closes mid-attempt never settles
+    its claim, so each page holds a Web Lock named after its lease owner
+    (`mutation-queue-owner.ts`) while it is shown and lets it go on
+    `pagehide`, as the coordinator does with its own lock, so the lock never
+    keeps a page out of the back/forward cache; a page restored from it claims
+    under a new owner. A runner that finds the head leased by another page's
+    live owner waits for that lock, which is granted only once the page has
+    been hidden or gone. It then waits one more second for a request the page
+    left in flight, as long as a runner waits before it resends an attempt
+    whose connection dropped (which may also still reach the server), looks
+    at the head again, and releases the claim that owner holds on it then by
+    deferring it with the holder's owner and generation; the engine refuses a
+    release once the claim has moved on. Queue inspections therefore carry the
+    head's lease; they read the whole queue, so a runner looks at most once
+    per 30-second poll, plus those two looks per departed owner. A page sends
+    a claim only while it still holds the owner it claimed under. Claims made
+    without Web Locks, before the lock is granted, while hidden, or by older
+    bundles keep their full lease, as do claims on a native app built before
+    inspections carried the lease.
 
 ### Open questions
 
@@ -129,8 +168,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
 - urql usage is imperative-only: `@urql/core` + `fetchExchange`, called via
   `fetchGraphqlSoup()` (`src/lib/service-clients/service-storage/graphql-soup.ts`),
   results mapped to REST `SoupApiItem` shapes and fed into TanStack
-  solid-query infinite queries (`src/lib/queries/soup/items.ts`), gated by
-  `ENABLE_GRAPHQL_SOUP` with REST fallback.
+  solid-query infinite queries (`src/lib/queries/soup/items.ts`), then gated
+  by a feature flag (since removed) with REST fallback.
 - A separate normalization layer exists at the tanstack level:
   `@normy/query-core` (`src/lib/queries/soup/normalized-cache/`).
 - WASM precedent: loro-crdt via `vite-plugin-wasm`; note the documented
@@ -187,6 +226,19 @@ One Rust core engine, two hosts:
   is the shared singleton: it gets us the multi-webview requirement for
   free, with native Turso filesystem storage instead of webview storage. The
   wasm/worker path is **browser-only**.
+
+Each tab return starts a new engine worker. The owner page keeps the engine's
+compiled `WebAssembly.Module` and passes it to the next worker, which then skips
+the download and, more importantly, the browser's lazy recompilation of every
+function on first call. The module is keyed by the asset URL it was compiled
+from and travels on a port of its own (`worker/compiled-engine.ts`); it cannot
+pass through the coordinator, which is a different agent cluster. If the module
+cannot be passed or instantiated, the worker loads the engine as before.
+The page also compiles the engine before its first worker exists, starting
+before its liveness lock, since a page that becomes owner otherwise downloads
+and compiles only after the lock, the coordinator and the election. A page the
+coordinator registers while another visible tab owns the cache drops that
+compile.
 
 ### 4.2 Multi-consumer strategy (browser only)
 
@@ -250,11 +302,43 @@ records how many hints each coalesced broadcast replaced, without payloads.
 
 While parked or transitioning, `waiting` pauses read/init deadlines without
 creating a second page-side request queue. Reads, writes, and teardown retain
-coordinator admission order. A visible consumer starts a one-second read budget
+coordinator admission order, except that a typed search (a `search` with a
+query) reaches a new engine first and, inside the engine worker, runs ahead of
+list rereads and past generation checks and operation teardowns. It registers
+nothing and writes nothing, so those fences do not order it; it never passes
+`init` or `clear`. It can run before a write queued ahead of it, returning rows
+that are only older; that write's cache change then refreshes the list.
+The record reads that load the rows a typed search named (`read-records-by-keys`
+with `priority: 'typed-search'`, set by Quick Access through `searchRowHost`)
+rank with it: they run ahead of list rereads and past the same fences, since the
+search is not answered for the user until its rows list. Like the search they
+can run before a network result queued ahead of them, whose cache change then
+refreshes the list. The list keeps those rows until that refresh, so a row read
+that arrives while a change made on this device is queued (an optimistic
+mutation or its settlement) orders like any other record read instead.
+The desktop host ignores the field.
+Rereads of mounted queries are `user-visible` reads, ahead of ordinary ones. A
+query that feeds app state rather than a view sets `backgroundReader` in its
+operation context and is reread at ordinary rank, behind the views on screen;
+the notification feed (500 entities with their notifications) does.
+The engine worker does not start a request the moment it arrives. The browser
+delivers one message per task and engine calls run to completion, so a request
+started on arrival usually finishes before the next is seen: the queue would
+rarely hold two and its priorities would rarely apply. The worker instead yields
+to its event loop before starting (and again after each request), repeating
+while requests keep arriving (up to a bound), and then picks by priority. A
+typed search with nothing else queued starts at once. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
 hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
-Only read callers are canceled, not admitted engine work or writes. Readiness
+Only read callers are canceled, not admitted engine work or writes. A typed
+search already sent is the exception: it has no network fallback, so it stays
+queued and the replacement engine answers it. It gets the ordinary read
+timeout from the moment reads are blocked, so an owner change that never
+completes still ends the wait with the same refusal. One issued while reads are
+blocked is refused like any read, and Quick Access replays it. `search` takes an
+`AbortSignal`: a caller that has moved on to another query aborts it and the
+host stops waiting, though the coordinator may still run its copy. Readiness
 restores deadlines and refreshes dependency registrations with preserved-storage
 semantics, including when startup finishes on its original owner.
 
@@ -281,6 +365,13 @@ subscription effects) and `graphql.subscription.cache_apply` (cache application,
 including parked-storage waits) to that receipt, even after its immediate span
 ends. Cache failures mark the application phase without recording payloads or
 replaying delivery. This context never enters GraphQL extensions or the wire.
+
+A subscription whose payloads no reader takes from the cache opts out of these
+effects with the exchange's `isUncachedSubscription` option; its results are
+delivered unchanged. `ActivityUpdates` is one: a push only tells mounted
+activity queries to refetch, and a bulk upload or delete sends one push per
+item to everyone with access. Writing each would advance the revision and make
+open lists and broadly registered live queries read again.
 
 Already-sent HTTP mutations may finish while parked. Their local commit, rollback,
 or defer requests wait for storage and retain their position ahead of later
@@ -356,7 +447,19 @@ between owners (`owner-handoff-blocked`) leaves the host running, so recovery
 proves that same host readable on its next attempt instead of registering
 another. Unknown storage failures still require explicit recovery or an update
 (the compose banner offers Reload then); retry never rotates the scope or clears
-persisted data.
+persisted data. A page whose build was superseded (`cache-superseded`) never
+retries: that coordinator never hands the database back, so the page waits for
+the reload prompt. A page also stops after ten relapses in a row
+(`MAX_RECOVERY_RELAPSES`): restarts that succeeded but whose cache failed again
+before staying up for a minute. A successful restart no longer resets the
+backoff on its own; the count and backoff reset only once the restarted cache
+stays up. A restart that fails outright, such as a lock another context still
+holds, keeps retrying at the capped backoff. `graphql.cache_recovery` records
+each attempt and its failure, `graphql.cache_recovery_relapse` a restarted host
+that failed before staying up, and `graphql.cache_recovery_stopped` why the page
+stopped.
+Cache failure telemetry adds `cache.error_name` and `cache.error_detail`, each
+from a fixed list (`describeCacheError`), so the message itself never leaves.
 
 A build's coordinator has its build time in the SharedWorker name, so builds
 use separate coordinators even when their coordinator script URL is identical.
@@ -373,7 +476,8 @@ and only the coordinator whose engine holds the database, or is opening or
 draining it, answers:
 
 - **Yield**, if the requester is strictly newer. Every tab registered there gets
-  `cache-superseded`. Each page retires its host to the network. The owner's
+  `cache-superseded`, and later requests are refused with the
+  `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. The owner's
   page leaves the way a navigating page does: it terminates its engine, which
   releases the owner lock without counting as a lost owner. An enqueue that was
   already sent is reported as uncertain rather than sent again, because it may
@@ -394,7 +498,8 @@ while hidden, online, not holding work (a call or an upload, via
 Otherwise it retries the next time it is hidden or comes back online. A page
 that registers with a superseded coordinator later, for example after a
 rollback or from stale HTML, only runs uncached, because a reload could land on
-the same build again.
+the same build again. Its `cache-unavailable` notice carries `superseded: true`,
+so its host retires with `cache-superseded` and recovery does not retry it.
 
 A coordinator that holds nothing but gets a request from a newer build sends
 its tabs there too, without answering. An unanswered request is posted again
@@ -602,7 +707,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   reads), all four request policies, push-driven re-execution downgraded to
   `cache-first`, write-through of network results, cache errors degrade to
   network. 8 vitest cases against a scripted fake host.
-- Wired into `graphql-soup.ts` behind `ENABLE_GRAPHQL_SOUP` override
+- Wired into `graphql-soup.ts` (then behind a since-removed override)
   (browser: worker host; Tauri: native host): lazily builds the cached
   client; `fetchGraphqlSoup` uses
   `cache-and-network` (`.toPromise()` skips stale emissions → identical
@@ -622,8 +727,8 @@ apps/web/src/lib/graphql-cache/ # JS glue
   `satisfies EntityResolverConfig`; TypeScript `any`/assertions can bypass
   static checks, but malformed values are rejected during exchange
   construction and validated again by the Rust engine.
-- **Manual smoke test pending**: dev-server run with the override enabled
-  (localStorage `ENABLE_GRAPHQL_SOUP=true`), verify hit/miss + offline
+- **Manual smoke test pending**: dev-server run with the cache enabled,
+  verify hit/miss + offline
   behavior in the browser.
 
 **Phase 5 — write path & coexistence**
@@ -708,7 +813,7 @@ Use one default per data shape:
 | Data shape | Default | Notes |
 | --- | --- | --- |
 | GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
-| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the GraphQL Soup flag, REST fallback, grouping, and entity mapping. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. |
 
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result
@@ -791,11 +896,14 @@ unrelated fields.
 
 Mounted project details, project identity chips, and agent-session mentions use
 this live path as well. Project identity reads are cache-first; the shared
-`GraphqlUser.initiative` entity resolver lets them reuse complete authorized
+`GraphqlUser.visibleInitiative` entity resolver lets them reuse complete authorized
 project records loaded by Soup or detail queries, without fetching on row remount.
 Missing fields still require an authorized network read. Detail reads retain
 cache-and-network behavior, and identity reads retain explicit permission
-revalidation. Mention lookups share stable batches: adding another visible item
+revalidation. A missing or hidden project reads as `null`, and a stored null
+outranks the project's record when it arrives later (a project shared with
+the viewer again), so project reads show a cached null only after the server
+has confirmed it during that read. Mention lookups share stable batches: adding another visible item
 does not clear an existing item's data or restart its request.
 Project creation links the complete server-normalized record to its detail query,
 including when the user root is not cached yet. Async creation stops publishing
@@ -806,10 +914,12 @@ separate assignment mutations no longer exist. Task creation includes that
 property in its ordinary create request. Project descriptions use the project's
 collaborative surface, provisioned by an authoritative ensure mutation.
 
-Permissions and server-owned membership still revalidate on activity, focus, and
-the existing project polling interval. Project denials are scoped to the client,
-viewer, project, and operation, surviving row remounts until a fresh authorized
-network response succeeds. Recovery requests capture the current denial version;
+Permissions and server-owned membership revalidate only through the activity
+registry: activity pushes, Soup websocket connects and reconnects, and the app's
+own project writes. Projects have no polling or focus refetch, so an access
+change reaches an open project with the next of those or a reopen. Project
+denials are scoped to the client, viewer, project, and operation, surviving row
+remounts until a fresh authorized network response succeeds. Recovery requests capture the current denial version;
 older responses and cache updates cannot clear a newer denial. A rejected
 previous-viewer cache hit triggers one immediate network recovery per activation.
 Disabled reads and results for another viewer are not exposed. Other query
@@ -818,8 +928,89 @@ deletion, metadata updates, and reconnect when the normalized cache is unavailab
 Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
+CRM member-access changes are rare session transitions. One primary
+`/crm/member-access` read runs on boot, focus and reconnect. A changed
+`x-macro-crm-access` response hint or a CRM 403 triggers that read in the
+background. Ordinary requests, subscription frames and local cache reads never
+wait for permission proof. There are no GraphQL-field or REST-route admission
+classifiers.
+
+Startup installs the cache host before request producers but initializes it in
+the background. The host's phase deadlines bound initialization and retain its
+classified failure and queue-recovery paths. No outer owner timer interrupts
+worker retries or converts them into permanent failures. Root and first render
+never await the owner or permission HTTP. A synchronous
+profile-local mirror supplies account, policy and generation as hints; missing
+or unreadable hints stamp an explicit nonmatching UUID. Same-account/same-policy
+observations correct future write stamps without retiring in-memory responses.
+Copied writes keep their original stamp and recover their own query if rejected.
+Subscriptions restart with the baseline stamp without replaying old-source frames.
+
+A missing mirror with a first non-denied owner initializes the baseline while
+preserving query observers, rows, open menus and persisted snapshots, including
+legacy upgrades. TanStack keeps its active reads without cancelling or refetching;
+urql rereads only rejected copied writes in the background, keeping visible rows.
+These reads use the exchange's network dispatch directly: a queued cache reread
+cannot replace or suppress recovery. Only the still-mounted latest response can
+recover, and an already pending network request prevents a duplicate. A newer
+operation stamp from a cache-only miss does not establish successful persistence.
+Denied or incomplete owners and known account/policy mismatches still retire copied
+content.
+Actual account replacement retains the full session fence.
+First allowed/team-less proofs, first account binding without a policy, and
+unchanged ready boot/focus proofs without failed cleanup do not advance the owner
+generation or refetch. Unchanged proofs still retry failed local cleanup.
+
+On web, a ready allowed mirror can open CRM UI before storage. With no mirror or
+owner snapshot, a short UI-only proof runs in parallel with initialization and
+may also open CRM. Login/host changes and owner observations fence its completion;
+denial, unfinished cleanup and mismatching accounts override it. Only a separate
+proof dispatched after reading the owner generation can commit durable policy.
+This successful missing-mirror launch makes two permission reads, versus one on
+a normal returning launch with a valid mirror. Native uses neither early UI
+path: CRM email-list REST pages can restore independently from IndexedDB before
+the owner finishes interrupted cleanup. A ready allowed local owner still opens
+native CRM without waiting for a network proof.
+
+The shared owner persists the new policy and generation before selective
+retirement. The application adapter removes CRM records, derived email and
+property content, mixed viewer lists and projection-only orphans. An interrupted
+retirement resumes before cached content is returned. Initial allowed/team-less
+proofs preserve both legacy offline data and the existing generation. Denial or
+a team change retires old content; an unchanged ready policy needs no owner
+transition. Client snapshots may still need cleanup after an earlier failure.
+
+Every request and subscription source captures one owner-issued generation.
+The TS exchange and response observer discard older query results and frames;
+active queries refetch after transition. Cache writes compare that generation
+under the native owner lock or browser worker, so a delayed write from another
+window cannot restore retired content. Reads need no proof or readiness token.
+This fence supplements the existing account-switch wipe and queue lease fence.
+
+Retirement preserves authored commands, UUIDs, leases, retry state, identity
+bindings and draft recovery metadata. In-flight mutations retain their actual
+server outcome. A stale queued commit atomically settles canonical identities
+and removes its queue entry without publishing copied content, projections or
+link recipes, then revalidates active queries. The draft journal sees the full
+server result before content is discarded. A confirmed local settlement retry
+keeps its original generation; a new HTTP attempt captures the current one.
+
+Initial access stays pending until proof succeeds. Network failures and stale
+proof generations retry once; network retries wait 250 ms and use a 3-second
+second deadline instead of 15 seconds. Terminal failures and timeouts do not
+retry. Exhausted initial verification shows the existing retry state and retries
+on reconnect. Transient failure preserves a previously proven UI state.
+
+Coordinator protocol 18 and the native current/transition commands are required
+for this bundle. An offline or idle device can display cached CRM content until
+its next server signal, including a boot proof after a revocation while closed;
+already-rendered content remains until rerender. There is no offline TTL.
+Queue inspection on this native build omits copied optimistic data for legacy
+queued drafts, so an older OTA bundle cannot recover that data during rollback;
+authored variables and current-bundle draft recovery metadata remain intact.
+
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-37 mutation documents and fails when a document has no declared strategy.
+47 mutation documents and fails when a document has no declared strategy.
 Because predictions are keyed by mutation field, it also checks that local
 resolver documents select only resolved fields, and that any other document
 reaching a field resolver is a listed exception the resolver declines.
@@ -830,15 +1021,18 @@ every schema argument of its field with the schema's type:
 
 | Strategy | Operations |
 | --- | --- |
-| Local resolver (7) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, UpdateInitiative, DeleteEntityProperty |
-| Existing domain optimistic recipe (12) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone |
-| Authoritative outcome (11) | SendEmailMessage, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone |
-| Document only; no production caller (7) | MoveEntities, UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities, SetEntityFavorite |
+| Local resolver (9) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, SetEmailThreadsArchived, UpdateNotifications, RenameEntities, MoveEntities, UpdateInitiative, DeleteEntityProperty |
+| Existing domain optimistic recipe (18) | SaveEmailDraft, DeleteEmailDraft, SendEmailMessage, CancelEmailSend, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone, MarkNotificationInboxRowsDone, ClearNotificationInbox, MarkNotificationInboxNotificationDone, MarkNotificationInboxRowsSeen |
+| Authoritative outcome (14) | CreateSavedView, UpdateSavedView, DeleteSavedView, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone, UndoNotificationInboxRowsDone |
+| Authoritative entity mutation (5) | UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities |
+| Inactive (1) | SetEntityFavorite |
 
 The project resolver predicts names and members; sharing waits for the server.
 Notification optimism predicts MARK_DONE; conditional seen/reopen transitions
 remain authoritative. Renames patch both displayName and the selected source-name
-alias. Property removal unlinks only the assignment from its parent, retaining a
+alias. Moves predict the destination folder (`projectId`, or `parentId` for a
+project), which folder lists filter on locally; a batch that moves a database or
+form waits for the server. Property removal unlinks only the assignment from its parent, retaining a
 rollbackable link until the server confirms deletion.
 
 Server-generated identities, per-task permission outcomes, and exact notification
@@ -909,6 +1103,19 @@ so equal IDs in different entity types remain independent. Channel lookups use
 refreshes. Soup exposes generic revalidation descriptors rather than registering
 channel notification readers. Consumers receive rows and unresolved IDs without
 coordinating query lifetimes.
+
+A predicate that still trails the observed cache revision after three consecutive
+reads reports a cache error instead of holding initial hydration indefinitely.
+The existing missing-record hydration path can then fetch unresolved identities.
+Already-resolved rows remain visible without a forced full-identity refresh;
+a later cache change retries the predicate and replaces its membership on success.
+Explicit refreshes still use the existing query refresh path. Recovery does not
+depend on the selected projection or add a second row/removal store.
+A change received during the final stale read is deferred to a new task rather
+than lost or retried indefinitely in the same microtask chain. Revision and
+generation checks continue to govern which local or network snapshot is shown;
+there is no separate recovery authority.
+
 Deletion markers use the same `typename:id` identity through pending mutations,
 retention, display filtering, and restore confirmation. Deleting or restoring a
 document must not hide or restore an unrelated channel with the same ID. The
@@ -1004,7 +1211,7 @@ measurements, not production p90s.
 #### Cache notification coalescing
 
 Native maintained views return a `registrationId` bound to the engine's retained
-validated specification. The native host keeps at most 32 descriptors; subsequent
+validated specification. The native host keeps at most 256 descriptors; subsequent
 reads of the same descriptor send only its view id, registration token and
 subscriber revision. Token lookup and the read share the engine lease. Replacement,
 release, eviction or reset makes resume miss, so the host registers the complete
@@ -1125,6 +1332,252 @@ lane retains normal cursor pagination, retries, cancellation, storage-generation
 checks, and `graphql_cache.backfill` telemetry. Subsequent passes refresh all
 visible contacts because the contact filter has no updated-at watermark.
 
+## Channel directory lane
+
+The channel lane (`CHANNEL_SOUP_BACKFILL_LANE`, checkpoint `channel-directory-reconciled`)
+caches every channel the viewer joined with the fields a channel list needs
+(`ChannelDirectoryFields` in `channel-directory.graphql`): members, bots in
+`botParticipants`, team, agent DM and latest messages. The channel filter has no
+updated-at watermark, so every run is a full pass (`refreshAll`), 100 channels
+a page with 250 ms between pages. Every page, the first and each continuation
+(the cursor does not carry it), asks for `channelReads: PRIMARY`, so it reads
+memberships as the REST channel list does: a replica that lags a join or a
+leave would put a stale membership back. The server takes it only on a
+channel directory page (`SoupRequest::is_channel_directory_page`), so a page naming no channel id with
+an id filter is never sent. It pages by creation time (`CREATED_AT`),
+which never changes: by updated or viewed time, activity or a view on another
+device could move a channel the pass had not reached ahead of its cursor, and
+the pass would never return it.
+
+The lane's page fetcher (`queries/channel/directory-reconcile.ts`) also removes
+what a pass proves stale. When a pass that started at its first page finishes,
+each cached channel it did not return is read again by id, a hundred at a
+time, on the primary, as the lane's pages are. A by-id page is evidence only
+when it lists entity ids and either ends or returned every id it was asked for (a page
+that reaches its limit carries a cursor). Its answer is as of the moment it
+ran, and the viewer can be added back since, so each channel it no longer
+returns is read once more on its own
+(`ChannelDirectoryReconcileEntity`, the `user.soupEntity` read, four at a
+time) before it is deleted, and one the primary shows is kept and written back
+(`channel_directory.kept_by_primary`). At most 500 are confirmed on the
+primary in a pass: the rest wait, and the pass fails (`deferred`) so the next
+one goes on, rather than send the whole cache to single-channel reads when the
+by-id read answers with nothing. Its reads are tried three times. A cached id the server
+could not parse as a channel id is gone without a read: one such id would fail
+the whole read. The deletes carry the cache session taken before the reads, so
+the cache refuses them after a session transition, and a channel whose cached
+record changed while it was read (the viewer was added back) is read again
+instead of deleted, three rounds in all. The recheck and the delete are still
+two cache calls, so a write landing between them is deleted too: every deleted
+channel is read on the primary once more at the start of the next round (a
+round of its own after the last), and one the viewer can read again is written
+back by that read (`channel_directory.restored`). A failed read fails the
+attempt. The page fetcher keeps the channels still to look at again, so the
+next attempt, or the lane's retry of the last page, reads them first, and a
+pass never completes with a deleted channel it has not looked at again.
+A pass that cannot reconcile (it resumed from a cursor, a page lacked entity
+ids, or the cache belongs to another viewer) deletes nothing; one whose cache
+changed hands or generation, or whose reads or records kept failing or
+changing, stops before its next round of deletes and keeps what earlier rounds
+proved stale and deleted. Either fails its last page
+(`ChannelDirectoryPassUnproven`), so its checkpoint is never marked complete;
+the checkpoint id changed when this rule did, so a pass recorded complete
+without reconciling is never read as one. The lane restarts every run at its
+first page (`restartOnRun`); the previous pass's completion keeps the
+directory complete meanwhile. A retry within a run goes on from the failed
+page's cursor with the same page fetcher, which holds the evidence of the
+pages before it (`resumesAfter`), unless the pass was unproven or storage
+was replaced, which start the retry at the top. A page counts only once the
+lane asks for the page after it: the lane saves a page's cursor after the
+checks that follow its read, so a page whose checks failed is read again and
+only that answer counts. A by-id read also returns
+public and team channels the viewer opened without joining
+(`isParticipant: false`), so the cache holds those too: a joined list filters
+them out.
+
+`queries/channel/directory.ts` is the app's only reader of the viewer's
+channels: `ChannelDirectoryProvider` in `Root` supplies it, and
+`core/context/channels.ts` reads it (`useChannelDirectory`, `useChannel`,
+`useChannelLookup`, `useChannelName`). With the cache and its backfill on, it
+reads the lane's records from the cache's channel search buckets, again on
+visible cache changes and when the lane's checkpoint completes or fails, and
+is `complete` once a pass of the lane finished in the cache's current storage
+generation and the by-id read of every joined record that lacks a directory
+field (another query cached it thinner) has returned it or found it absent;
+another viewer's cache reads as empty. A read that failed keeps the directory
+incomplete until a later read answers, so callers that decide from absence
+never decide from it, and `readComplete()` reads the network. Only a scan
+that read the checkpoint as complete before it started may make the directory
+complete, and
+a scan is dropped when the viewer or storage generation changed while it ran;
+a storage reset (`onCacheGenerationChanged`) retires what it read at once.
+Without the cache it pages the lane's own query (`ChannelDirectoryPage`) into
+memory, never the REST channel list.
+
+A cold cache takes about a minute to fill on a large account, so a lookup of
+one channel answers `loaded`, `pending` or `missing`. An id no channel can
+have (not a UUID, such as a mistyped link) is missing at once and never read,
+since one would fail every id read with it. A channel a filling
+directory lacks is pending, and the lookup reads it by id (batched, 100 ids
+or 25 ms, two batches at a time), then rereads only the records that read
+wrote; it is missing once that read returns nothing for it or the directory
+completes without it. A returned id whose record cannot be read yet is read
+again, and so is one a read without complete evidence did not return. A read
+answers only for the record cached when it was sent, so a channel whose
+record lost a field after a read returned it is read again, and so is one
+whose record the cache wrote or changed after a read was sent that found it
+absent (the viewer may have joined it since), whether that write lands
+before the answer or after it. A read that wrote no record leaves the
+directory as it was, and one whose records match what the directory held
+publishes nothing. A batch still unanswered after 20 seconds has failed, so
+one that never settles cannot hold a read slot. An id that failed twice stays
+pending, and the failed ids are forgotten together at most every 30 seconds,
+once the tab is visible: a lookup still asking for one, the queue of records
+lacking a field, or the fallback's confirmations read it again, and an id
+nobody asks for any more is not read. Readers that decide from absence
+(section membership, scope checks) wait for `complete()`. Actions on a whole
+built-in section (mute, snooze, mark read) call `readComplete(signal)`, which
+always pages the network, as the REST list did for each action: a complete
+directory can still miss a channel joined on another device since its last
+pass. The pages read the primary page by page over seconds, so a change that
+lands meanwhile can reach the cache and not the walk; the cached directory
+settles each channel the walk and the cache disagree on
+(joined in one and not the other) with a read from the primary
+(`ChannelDirectoryEntity`, up to 200 of them, four at a time); a read that
+fails keeps the walk's answer, and so does every disagreement past the 200th.
+The walk is the action's own, not the directory's pages query, so the rail
+aborts it, and the primary reads after it, when it unmounts. When the lane gives up in a generation, the backfill marks it
+(`markSoupBackfillLaneFailed`, cleared by its next saved page, and kept in
+memory for the tab when storage refuses the write) and the directory pages the
+joined channels from the network instead. It does the same when the lane
+stalls: the lane saves its checkpoint after every page in whichever tab runs
+it, and 30 seconds with no save while the lane is unfinished (that tab closed
+or froze, or a request hung) starts the walk too. Its membership is the
+network's list, updated by each cached record that changed or was removed
+after that read began; a cached record unchanged since is older than the
+network's row, so a stale joined row the network left out stays out. A change
+proves no membership by itself: a changed record the network did not list
+shows only once a by-id read returns it, and a listed channel the cache never
+held is dropped once a by-id read finds it absent. So does every record the
+cache holds without every field: what the walk or the cache last showed of it
+no longer holds. A channel joined after the walk read its page, or rejoined
+after the viewer lost it (its record removed, or kept as a nonmember's),
+cached first by a query without the directory's fields, is listed only once a
+by-id read lands it with them, and a lookup of it waits for that read; a
+listed one the read finds absent is dropped. A read that returned a channel is
+forgotten once the cache removes that channel's record or holds it without a
+field, so a rejoin is read again.
+Those reads decide only with complete evidence (a cached record cannot vouch for a channel the viewer
+may have lost), and the directory is complete only once each has returned
+its channel or found it absent; until then a lookup of an unlisted channel
+one of them decides is pending, and a listed one answers with the network's
+row, as `channels()` shows it. A channel such a read found absent whose
+record the cache changes after that read was sent (the viewer may have
+rejoined it) is read again. A record that loses a field keeps what the walk
+last saw of it, so its later removal still drops the row. The rows, the walk's
+status and the reads still open are published as one value, so `complete()`
+never pairs one with another's older state, and a read that settles without
+adding or removing a row (it failed, or returned a listed channel) changes
+only which reads are open. The cache writes the walk's pages after answering
+them, so the directory waits for those writes (at most 10 seconds; the
+`channel_directory.fallback_pages_written` span attribute counts the pages
+the cache wrote, -1 when they did not settle in time) and then reads the
+cache again before showing them: what the walk wrote counts as
+held, and only the rest wait for a by-id read. A storage reset or a
+change of viewer under the walk starts it again, since what it saw went with
+the old cache. A lane pass that finishes later stops the walk and makes the
+cache answer alone again. `failed()` says
+the directory is not complete and that read failed; `retry()` reads again.
+Channel writes outside the cache's soup updates (join links, renames, new
+DMs, people added or removed) call `refreshChannelDirectory`, which rereads the in-memory directory,
+reading again after a first read that was already in flight; a full read
+(`readComplete()`) walks the pages itself (`walkCurrentJoinedChannels`) and
+walks again until no write of that QueryClient landed during its walk. Those pages, and the cache's soup update, trail the write: the
+pages take seconds to read again, and the update arrives a second or more later. So a
+caller that names the channels it wrote (`refreshChannelDirectory([id])`;
+message sends name none) also reads each one from the primary
+(`ChannelDirectoryEntity`, network only), and both directories of that
+QueryClient show the result (`own-writes.ts`) over whatever their source
+still holds, for at most a minute, until the source shows it or a later
+update. A channel the viewer can no longer read leaves the list the same
+way, and channels the write deleted (`removed`) leave it without a read. A
+read's writes share one hold, and those its source caught up with go in one
+change, so a bulk deletion of thousands of channels publishes the directory
+once as it lands and once as it goes. Once
+the source shows a write, it is let go for every directory, so a later
+removal or update is the source's to show. Each directory watches a channel
+from the moment its read is sent (`send`, then `settle` with what it found),
+so a channel its source lost while the read was in flight counts as removed
+after the write. Whether the viewer is in a channel is judged by their join
+time, since removing someone leaves the update time as it was: a write that
+has them in lets go once the source showed them in since that join and then
+out, and one that has them out (a leave, or a channel they can no longer
+read) holds only while the source lists them in it as it first did. Writes
+carry the account, the sign-in session and the order their reads were sent
+in, so an earlier read never replaces a later one; a storage reset or a new
+sign-in lets them all go, with the reads still in flight. A write of many channels reads at most twenty, four at a
+time; a link join, whose response names no channel, reads none. A read that fails, or that lands after the account
+changed, holds nothing (`channel_directory.own_writes` span).
+
+A read sent before the viewer left a channel (an event's refetch, a by-id
+read, another list's page), or a replica read sent just after, can land the
+channel back in the cache as joined. The cached directory remembers each
+joined channel it saw leave its complete list (removed, or kept as a
+nonmember's) and, 10 and 60 seconds after the leave, reads any that came back
+joined from the primary (`queries/channel/directory-departures.ts`, at most
+200 followed at once, four reads at a time): a channel the viewer is in again
+is forgotten, one they are out of is written back by that read, and one they
+can no longer read is deleted the way the lane deletes
+(`removeChannelsGoneOnPrimary`: only the record the read decided on, read on
+the primary once more after the delete). Nothing is hidden meanwhile: the
+channel shows as the cache has it until a check decides. A failed read waits
+for the next check. Departures live only in the page: a reload or a new
+storage generation forgets them, and so does a leave no open page saw; the
+lane's next pass reconciles those (`channel_directory.departure_recheck`
+span). The viewer's
+own views reach no soup update, so the channel view
+hands each recorded view to its tab's directory (`recordView`). That
+directory lays it over every record it reads for the rest of its life, so in
+that tab a page, a by-id read or a refetch read before the view never shows an
+older one. The cached directory also writes it onto the channel's cached record
+(`queries/channel/viewed-at.ts`, one stamp of a channel at a time, never
+moving back the view it read; two tabs stamping one channel at once can leave
+the older view), once the record exists, and again over a later record that
+holds an older view; other tabs see it when they read that record. Without
+the cache another tab shows it once its own pages are read again. Views made
+on another device reach no soup update either, so a cached record keeps the
+view it was read with until a pass of the lane rereads it: the cached
+directory's `viewsCurrent()` turns true only once a pass that started after
+the page loaded (`performance.timeOrigin`) has finished in the current storage
+generation, judged by the checkpoint's watermark, which is that pass's start.
+The in-memory directory is current once its pages were read in this page:
+pages restored from the device (kept for a week) are read again on mount and
+count only once that read lands. Until
+then `useChannelLastViewed` also asks `user.channelViewedAt` when a joined
+channel opens and shows the later of the record's view and the answer (the
+record's on no answer within five seconds); a tab that does not run the
+backfill stays not current until a pass starts after it loaded. A channel
+mention in rendered Markdown waits up to five seconds for a pending lookup.
+
+A by-id batch is a `channel_directory.by_id` span in the trace of the view
+whose lookup asked for its first id (`useChannelLookup` passes
+`useFlowTrace()`), so a channel opened on a cold cache shows its read under
+`view.*`. It records `requested`, `returned`, `unreadable`, `timed_out`,
+`retried` (ids read before) and `queued_ms`: from the oldest id's request or
+retry to the read, the batching wait plus the wait for a free read slot. A
+retry is read in that view's trace too, until the id settles.
+`channel_directory.read_keys` records `keys_outcome` (`read`, `unchanged`,
+`stale`, `scope_changed`) and
+`channel_directory.fallback` its `fallback_outcome` (`loaded`, `failed`). The
+reads under these spans, under `channel_directory.reconcile` (each by-id batch
+of a pass) and under `channel_directory.own_writes`, are sent inside the span,
+including those that start after an await. `useChannelLastViewed`'s ask is a
+`channel.last_view` span in the opening view's trace, whose
+`channel.last_view.outcome` says whether the open used the answer (`used`) or
+why it stopped waiting: five seconds passed (`timed_out`), the directory's
+record settled the open first (`superseded`), or the open closed (`closed`).
+Each stop aborts the request, so the span ends as the open stops waiting.
+
 ## Authoritative Mail membership repair
 
 The shared Soup adapter reconciles supported `UPDATED_AT` Mail first pages
@@ -1136,17 +1589,224 @@ Missing matches become durable incomplete projections, not deleted records or
 invented archive/signal facts. Mail retention excludes explicitly invalidated
 (`Dirty`) baseline rows in the same projection scope unless an optimistic shadow
 takes precedence; an older open view cannot restore the revoked evidence.
+While a write to the row is queued, an older view's baseline can still list it,
+until the write settles.
 This differs from missing metadata, which still retains same-query membership.
 Full canonical snapshots restore their proof;
 partial patches cannot. Backfills, cursor pages, incomplete responses,
-unsupported predicates, identity switches, and pending optimistic rows do not
-supply this negative evidence. The existing authoritative-write telemetry covers
+unsupported predicates, and identity switches do not supply this negative
+evidence. A row with queued writes is invalidated only when its authoritative
+facts, and those facts after each prefix of the queue, all still match the page:
+then no queued write explains the omission. A queued mark read cannot keep a
+thread trashed through REST listed, while an archive whose Undo is still queued
+keeps the restored row. The existing authoritative-write telemetry covers
 this preparation/write path; no new worker command or database migration is needed.
 See [cached Mail verification](../../../docs/agent-guide/email.md#cached-mail-filtering).
 
+## Bounded Quick Access search
+
+Typed cache search binds normalized subsequence patterns into Turso and streams
+matching compact projections into a Rust heap of at most `limit + 1` documents.
+It no longer retains per-bucket text catalogs. Matching and ranking semantics,
+optimistic overlays, and indexed empty-query browsing are preserved; leading
+wildcards still scan selected buckets. Storage schema 12 makes the browse index
+covering by appending search text and source hashes. This is an incompatible
+cutover, not a migration: native caches reset, including queued mutations;
+browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
+Existing cleanup safeguards for those older files remain. That streaming-search
+cutover did not change the record format or schema epoch. See
+[streaming text search](../../../crates/client/README.md#streaming-text-search)
+for the memory boundary and native/OPFS verification.
+
+## Contact cache foundation
+
+Projection 5 indexes only viewer-scoped `GraphqlContact` records into `person`;
+public profiles and the authenticated viewer record do not establish directory
+membership. Names and emails share the existing streamed matcher. Search replies
+advertise `projectionVersion`, absent on older native engines, so future callers
+can gate contact search rather than interpreting unsupported projection as empty.
+
+`ContactDirectoryBackfill` persists nodes through hydration and returns the
+generated cursor-only projection. Hydration omits viewer contact-page and exact
+lookup wrappers. Foreground contact query variants share Soup/database views' 64-page / 2 MiB
+budget; retention version 2 compacts older viewers without clearing entities,
+queue state, or storage generation.
+
+Contact synchronization shares Soup's authenticated leader and rollout gate.
+Fetch-only transport returns one 500-row page for explicit scoped admission:
+the core checks the captured generation and expected/response identities under
+the same engine lock as the write, without switching accounts. Coordinator
+protocol 17 forwards that scope and contact admission fence; native hosts refuse
+guarded writes on older engines. Capture admission before fetching. Checkpoints
+advance only after persistence and a generation recheck.
+Invalidations coalesce on a 15-minute cadence without interrupting active scans;
+hourly passes refresh names. Scan omissions never delete records. The same lane
+then scans at most 500 raw cached contact records per keyset window and verifies
+scoped IDs through the existing exact lookup. Only validated requested-ID omissions
+permit removal. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes only
+after the verification pass; failures/interruption resume at the last committed
+cursor. No directory-sized seen set or extra synchronization endpoint is used.
+
+Contact admission is fenced by the existing single-owner engine, including
+identical positive responses and no-removal verification. This prevents late
+hydration resurrecting removals and late absence deleting newer observations.
+Unfenced network/optimistic contact writes reject; context-only stubs remain
+non-membership. Deletions publish committed dependency/person invalidations,
+not hydration-only hints. Deploy the canonical-ID lookup fix before client
+removal checks; older lookup omissions cannot safely prove absence.
+
+The first UI consumer is `/app/debug/data`: its contact card uses one replaceable
+50-row window, with immediately collected query history. The reader validates
+viewer identity and storage generation around cache reads, preserves target user
+IDs, and uses bounded server pages for cold/unsupported caches. Offline windows
+remain explicitly incomplete; authorization failures never become cached successes.
+Server continuations stay server-side even if hydration finishes between pages.
+Exact ID/email resolution derives only requested viewer-scoped UUIDv5 keys
+(verified against shared backend fixtures) and projects bounded records offline.
+Online batches check current membership; omissions never resurrect cached rows.
+Guarded foreground hydration warms returned contacts on supported engines.
+Calendar search organizer/attendee filters now combine bounded suggestions with
+independent selected-email labels and do not use the global full-list hook.
+Their avatars consume resolved names rather than adding name-store history.
+Drive creators and CRM Notes creators now use the same reads via lazy option
+sources in the shared list filter menu and mobile drawer. Selected IDs and Me
+remain separate from the bounded visible page; selection changes do not shuffle
+clicked rows or accumulate prior pages. Only replaces the whole current group,
+including selected IDs outside the page. Tasks' AI-filter catalog and CRM company
+owner/team semantics have not been changed.
+Remaining ranking end-to-end validation and whole-app acceptance are tracked in
+[the contacts checklist](../../../docs/design/disk-backed-contacts.md).
+
+### Deterministic person-policy foundation
+
+Ordinary entity/name scoring remains corpus-independent. Personal suggestions use
+policy 5: exact names, all-word prefixes, then literal contains, then address
+terms, recent-first with
+identity ties. Complete addresses and Macro IDs cannot match display-name aliases.
+Command keywords keep their separate matcher; reference evidence stays policy 4.
+
+The core's new person-policy API stores local DM recency/command-target and
+secondary-inbox facts as private fields on existing normalized record keys. Only
+server-supplied complete contact records can rank. Context snapshots use scoped,
+compare-and-set begin/patch/commit epochs; patches cap at 500 and incomplete
+snapshots report pending, not an empty directory. The indexed reader probes bounded
+posting/rank windows in the existing predicate index and retains at most `limit + 1`
+winners, applying exclusions and DM deduplication before stopping. Complete matching
+streams handle insufficient rank probes; arbitrary candidate truncation is not valid.
+Point reads use the covering contact-payload index in unpublished schema 12. There
+is no new database/table, schema cutover or remote search fallback.
+The core hoists viewer namespace hashing and keeps exact key validation with a
+stack buffer. Shared automated-mailbox eligibility retains all existing semantics
+while fast-rejecting nonmatching local parts. `CacheHost.people` now exposes state,
+update, search, bounded reference resolution and local SQL through coordinator
+protocol 17 and dedicated native commands. Local SQL uses the existing predicate
+index, not another database or a directory-sized Rust/JS relation; its adapter
+returns only bounded final results. Browser SQL now consumes this capability,
+including offline; it never sends statements to a new server read endpoint.
+Reference results retain at most two witnesses per
+requested label, not a directory catalog. The reference read requires a bound viewer
+without binding one itself, and publication is required only for inbox exclusions.
+Missing reference support is independently unsupported on older hosts; scope/storage
+failures remain fatal. The app-wrapper/worker/OPFS fixture exercises this complete
+boundary, including retirement and stale/foreign scope rejection.
+The frontend reference query owns one current label set and a serialized reader
+(one active physical scan, one replaceable pending input). It captures backfill
+completeness before the scan, keeps incomplete evidence unknown, and uses fetch-only
+exact server stages when necessary; literal identities have separate point lookup.
+Cache hints wake readiness transitions, not an HTTP rescan on every hydrated page.
+The app's retiring-host wrapper forwards this capability through the current host,
+including methods captured before disposal. Retired reads report unsupported;
+retired context writes reject instead of acknowledging a discarded publication.
+Ranked continuations bind scope, policy/layout, publication epoch and live contact/
+context tokens. Same-epoch patches invalidate pages without staling them on unrelated
+cache writes. Bounded target lookups suppress prior DM aliases; short/empty pages
+still continue. Frontend person invalidations fence pending replies and restart paging.
+Rust-derived Zod contracts validate ingress and bounded replies; missing native
+commands/older WASM report unsupported reads and reject writes. Scope and storage
+errors are never swallowed. Context updates publish person hydration hints only.
+Host/worker/native spans record operation, counts and opaque correlation metadata,
+never names, addresses or search text; live trace connectivity remains unverified.
+The channel/inbox context publisher now runs under Soup's existing leader and
+rollout/generation gate. Ownership-tagged selectors reuse scoped query data without
+contact-directory reads or app suspension. A committed snapshot is followed by
+changed/removed-peer patches, at most 500 rows per write and 500 pending IDs. Changes
+to an in-flight ID survive its earlier ack; overflow and uncertain writes start a
+new epoch. Missing inputs pause rather than publish emptiness. Source changes
+coalesce for 250 ms, with three exponential retries and reconnect wakeup; lost
+scope or unsupported hosts stop until the lifecycle changes. Context maps scale
+with existing DM peers/inboxes; full channel sources are still in memory.
+The web full-list query/hooks, shared recipient pool and manual contacts GET
+wrapper are removed. Message/native-share/websocket invalidations now issue only
+coalesced `requestContactRefresh()` hints; deployed backend and SDK APIs remain
+compatible. Quick Access reads a bounded, growing person list rather than a global
+contact item index. Commands/mentions forward typed queries; CRM alias matching
+uses exact lookup for only the current 50-row CRM window. Soup facets and property
+pickers preserve selections separately. General Soup creator menus and chips use
+lazy contact windows; assignees stay team/agent-scoped. Closed-chip labels resolve explicit IDs independently,
+without directory-sized maps. Unassigned is a local value, not membership.
+Query-driven comboboxes retain typed input across page/metadata replacement.
+CRM Owner chips use the same lazy source/selected-label separation, while header
+options stay team-scoped. Local empty values never enter membership lookup.
+Native policy 5 order survives command/DM merging, mention ranking, recipient
+composition and property selection. Empty property browsing alone pins self. Document/project/call discussion mentions
+also delegate to that window; channel/CRM/explicit rosters stay scoped even while
+empty. Agent transforms decorate only current rows, keeping original native
+metadata for unchanged people. Recipient policy excludes automated mailboxes
+before the result limit unless a full address was typed. The policy floor is generated
+from Rust alongside the transport schemas; older replies remain unavailable. Partial
+sync returns local partial windows, and explicit refresh schedules background sync.
+Creation/sharing and main email recipient controls now own paged sources; email
+threads retain scoped addresses, not an address book. Channel invitations and
+participant pickers also use those sources, with existing roster IDs excluded and
+empty continuations retained when a roster exceeds the native exclusion budget.
+Universal Input recipient/search/guest references now use complete per-label evidence
+and independent picker/mention windows. Tasks filters use lazy windows too; their
+planner extracts references without a personal catalog and resolves complete evidence
+before applying any constraints. Inline checklist labels resolve only task-referenced
+IDs in bounded batches, not a directory map. Onboarding filters bounded local browse
+windows to its approved domain and retains at most six non-self emails, with zero-history scoped queries.
+Linear import resolves only uploaded assignee labels in serial bounded exact batches;
+manual mapping uses personal property windows and keeps explicit choices separate.
+Its retained names scale with the uploaded file, not the personal directory.
+Browser SQL compiles dependency metadata and executes direct people reads through
+`CacheHost.people.readSql` in existing local Turso. The ordinary row source accepts
+only bounded explicit people keys for joins, never a directory array. A complete
+same-generation backfill checkpoint is required before and after a read; its final
+commit notification wakes pending queries after the page acknowledgement. Scope,
+compiler metadata and input ownership fence answers, and each observer retains one
+physical operation plus one replaceable input. The unnecessary `/databases/read`
+endpoint/client is removed. Fresh queries work offline once synchronization is
+complete; unsupported/incomplete reads stay explicit. The frontend correctness
+pass covers real compiler/controller/local-cache composition, including explicit
+refusal of non-ID join hints rather than misleading empty results. Current whole-app
+memory/latency and physical-device acceptance remain open. PostgreSQL SQL feature
+parity and arbitrary join expansion are not requirements of the contacts-memory plan.
+Calendar create/edit, event-detail guest actions and AI-draft
+composers now use bounded property windows with event-owned guest extras. Chosen
+names stay in selection metadata rather than a directory map, and person pages
+are not truncated again by the property UI. Shared scoped exclusions bind the
+full roster while capping native IPC; continuations retain oversized-roster gaps.
+Universal task-property inference now uses complete
+per-label reference evidence instead of the shared pool, with ambiguous/incomplete
+names unresolved and manual properties taking precedence. Other Universal Input
+modes prefer a unique full name before first-name matching; explicit addresses
+never match another person's display-name alias. Chosen display metadata stays
+separate from automatic name evidence.
+Shared display-name getters and participant labels now share the existing QueryClient:
+active readers pin their names, while idle entries cap at 512/512 KiB and expire after
+ten minutes. Requests are serialized in at most 500-ID batches with 500 queued IDs;
+no separate promise backlog or directory map is retained. Scope changes/disposal
+cancel transport and a 30-second abort deadline bounds requests. Name TTL is ten minutes,
+with stale labels retained during refresh and a 30-second later-access failure retry;
+reconnection wakes active failures without refetching idle history.
+Private labels and bearer-token reuse are fenced by account/session transitions;
+manual overrides and released/replaced entries reject old responses. Debug seeds
+are session-owned. This cache does not establish personal-contact membership.
+Whole-app memory/latency acceptance remains pending.
+
 ## Cached email Quick Access
 
-The disposable Quick Access projection is version 4; version 4 added task
+The disposable Quick Access projection is version 6; version 6 includes the local-part contact label fallback in matching. Version 4 added task
 projects (`GraphqlSoupInitiative`, bucket `initiative`), searched on their display
 name with viewed-first recency read from their embedded `metadata`. Email rows index the thread
 subject, latest sender name/address, and embedded `senders` names/addresses, so an
@@ -1161,14 +1821,10 @@ subjects take precedence over stale cached copies; sync retires the recovery row
 The backfill leader also warms `MailAccounts` concurrently with paged hydration
 so first-use offline composition can resolve sender ownership and aliases.
 
-Normalized email Quick Access results require the existing `enable-graphql-soup`
-rollout and a healthy normalized cache; local recovery rows remain available while
-that rollout is enabled even if the cache host is unavailable. The legacy REST
-sources do not supply email Quick Access rows.
-Quick Access observes flag loading reactively so a cold launch can attach the cache
-after PostHog responds. For a local native preview without PostHog configuration,
-build with `VITE_ENABLE_GRAPHQL_SOUP=true` to exercise this path; do not change the
-remote rollout or backfill to make a test pass.
+Normalized email Quick Access results require a healthy normalized cache; local
+recovery rows remain available even if the cache host is unavailable. The legacy
+REST sources do not supply email Quick Access rows. Do not change the backfill
+to make a test pass.
 
 Opening an older cache rebuilds search documents through the existing projection
 version mechanism, preserving normalized records, pending mutations, and storage
@@ -1185,7 +1841,13 @@ a foreground authoritative write advances the admission epoch. A waiting page
 whose epoch is superseded returns an error before touching storage. The worker
 owner applies the same rule by rejecting earlier queued hydration within the
 current lifecycle segment. Foreground write order is preserved. An already
-running storage transaction finishes atomically.
+running storage transaction finishes atomically. The browser worker runs a
+hydrate in steps (`prepareHydrate`, one `stepHydrate` per projection pass,
+`stageHydrate`, then `commitHydrate`) and answers the read-only requests that
+arrived between them, the ones its queue would rank ahead of the hydrate's
+write; nothing that writes runs between them. The passes and the stage
+compute the write while they only read, so a read waits for one step and the
+commit that blocks reads is short.
 
 Soup backfill treats this supersession as flow control: it refetches the same
 cursor after a short interruptible delay, preserving its checkpoint. Ordinary
@@ -1218,7 +1880,20 @@ flushes earlier invalidations so other observers cannot overtake them. Disposal
 drops pending callbacks.
 
 Tauri cannot cancel a command, and the engine runs commands one at a time, so a
-caller that stops waiting only loses the outcome of work that still happens.
+caller that stops waiting loses only the outcome of work that still happens,
+with one exception. Timed commands other than init carry a `requestId`, and on
+timeout the host sends it to `graphql_cache_abandon`. A read on the engine's
+read path (`read`, `watch`, explicit keys, search, people context and search,
+entity filter and resume, calendar range, query inspection, current authority)
+that has not yet started reading keeps its place in the queue, and when its
+turn comes it finishes any interrupted retirement, as every read does, and
+gives the engine back without reading, so reads nobody waits for
+do not hold the engine ahead of live ones after a stall. An abandoned read of
+an operation registers that operation against every change and drops its
+retained watch view instead of reading: the next write reports it, and its
+next watch reads it whole. A read marked after it started reading finishes.
+Native ignores the id on a live-view release, so a disposed view still frees
+its slot, and on the other timed commands.
 As in worker-host, only reads and initialization have the ten-second deadline:
 a read falls back to the network, and every request waits behind init. Writes,
 hydration, queue claims and settlements, deletes, invalidations, teardown and
@@ -1235,7 +1910,7 @@ request in flight at once, so a timer that fires more than a second late starts
 a new window.
 
 Native live views advertise a specification-bound registration token. The host
-retains at most 32 descriptors and resumes an unchanged specification from its
+retains at most 256 descriptors and resumes an unchanged specification from its
 id, token and revision; a missing registration triggers a full request. Changed
 specifications, release, reset and disposal invalidate retention. Older
 installed binaries omit the token and keep receiving full requests. Empty record

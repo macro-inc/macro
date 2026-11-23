@@ -8,22 +8,29 @@ use utoipa::ToSchema;
 use super::{CursorApiKeyError, CursorApiKeyStatus};
 use crate::api::context::{ApiContext, AuthorizationService};
 
-/// The model the user chose for their sessions.
+/// The model the user chose for their sessions, and its effort.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PutCursorDefaultModelRequest {
     /// A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and
     /// fall back to the deployment default.
     pub model_id: Option<String>,
+    /// The value of the model's reasoning-effort parameter (e.g. `high`), or
+    /// `null` for the model's own default. Ignored without a model.
+    #[serde(default)]
+    pub effort: Option<String>,
 }
 
-/// Choose the model this user's `@cursor` sessions start on.
+/// Choose the model, and optionally the effort, this user's `@cursor` sessions
+/// start on.
 ///
-/// Stores the id only; its parameters are resolved from Cursor's own default
-/// variant at session start. Not validated against the live model list here —
-/// the settings dropdown offers only real ids, and a stale id degrades to the
-/// deployment default at spawn rather than failing, so a round trip to Cursor
-/// on every save would buy nothing.
+/// Stores the id and effort value only; the other parameters are resolved from
+/// Cursor's own variants at session start. Saving a model without an effort
+/// clears the previous effort, which belonged to the previous model. Not
+/// validated against the live model list here — the settings controls offer
+/// only real values, and a stale id or effort degrades to the deployment or
+/// model default at spawn rather than failing, so a round trip to Cursor on
+/// every save would buy nothing.
 #[utoipa::path(
     put,
     path = "/cursor-api-key/default-model",
@@ -44,10 +51,11 @@ pub async fn handler(
 ) -> Result<Json<CursorApiKeyStatus>, CursorApiKeyError> {
     let user_id = &user_context.authorization.macro_user_id;
 
-    let updated = cursor_api_key::store::set_default_model_id(
+    let updated = cursor_api_key::store::set_default_model(
         &ctx.db,
         user_id.as_ref(),
         req.model_id.as_deref(),
+        req.effort.as_deref(),
     )
     .await
     .map_err(|error| {
@@ -73,6 +81,7 @@ pub async fn handler(
     Ok(Json(CursorApiKeyStatus {
         registered: stored.is_some(),
         default_model_id: stored.as_ref().and_then(|s| s.default_model_id.clone()),
+        default_effort: stored.as_ref().and_then(|s| s.default_effort.clone()),
         updated_at: stored.map(|stored| stored.updated_at),
     }))
 }

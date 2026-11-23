@@ -3,7 +3,7 @@ import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import type { PipelineTransfer } from '../context/pipelines';
-import type { Pipeline } from '../core/pipeline';
+import type { TrackedPipeline } from '../core/pipeline';
 import {
   type PipelineCsvRow,
   PipelineImportRefusal,
@@ -13,7 +13,7 @@ import {
   createPipelineImport,
 } from './pipeline-transfer';
 
-const pipeline: Pipeline = {
+const pipeline: TrackedPipeline = {
   id: 'pipeline',
   teamId: 'team',
   name: 'Q4 Deals',

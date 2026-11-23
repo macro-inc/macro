@@ -26,44 +26,29 @@ pub(super) struct Legacy {
 }
 
 impl Legacy {
-    /// Let Herdr create and register a fresh worktree from the fetched main ref.
-    pub(super) async fn create_worktree(
-        &self,
-        source: &Path,
-        path: &Path,
-        branch: &str,
-    ) -> Result<(), HerdrError> {
-        self.run(&[
-            "worktree",
-            "create",
-            "--cwd",
-            &source.to_string_lossy(),
-            "--path",
-            &path.to_string_lossy(),
-            "--branch",
-            branch,
-            "--base",
-            "origin/main",
-            "--no-focus",
-        ])
-        .await
-        .map(drop)
-    }
-
+    /// Open the agent's own workspace and start it in its shell pane. Not
+    /// a tab in macrod's workspace, nor a `herdr worktree`, which herdr
+    /// groups under the operator's repository workspace.
     pub(super) async fn launch_agent(
         &self,
         launch: &AgentLaunch<'_>,
     ) -> Result<Window, HerdrError> {
-        let window = match launch.worktree_source {
-            Some(source) => {
-                self.open_worktree(source, launch.cwd, launch.label, launch.focus)
-                    .await?
-            }
-            None => {
-                self.open_window(launch.cwd, launch.label, launch.focus)
-                    .await?
-            }
-        };
+        let output = self
+            .run(&[
+                "workspace",
+                "create",
+                "--cwd",
+                &launch.cwd.to_string_lossy(),
+                "--label",
+                launch.label,
+                if launch.focus {
+                    "--focus"
+                } else {
+                    "--no-focus"
+                },
+            ])
+            .await?;
+        let window = parse_window("workspace create", &output)?;
         if let Some(environment) = launch.environment {
             self.run(&[
                 "pane",
@@ -176,31 +161,6 @@ impl Legacy {
         self.run(&args).await.map(drop)
     }
 
-    /// Reuse Herdr's workspace and its shell pane for a managed session worktree.
-    async fn open_worktree(
-        &self,
-        source: &Path,
-        path: &Path,
-        label: &str,
-        focus: bool,
-    ) -> Result<Window, HerdrError> {
-        let path = path.to_string_lossy();
-        let output = self
-            .run(&[
-                "worktree",
-                "open",
-                "--cwd",
-                &source.to_string_lossy(),
-                "--path",
-                &path,
-                "--label",
-                label,
-                if focus { "--focus" } else { "--no-focus" },
-            ])
-            .await?;
-        parse_window(&output)
-    }
-
     /// Open a tab in macrod's workspace, switching herdr to it when `focus`.
     async fn open_window(
         &self,
@@ -220,7 +180,7 @@ impl Legacy {
             if focus { "--focus" } else { "--no-focus" }.to_owned(),
         ]);
         let output = self.run(&args).await?;
-        parse_window(&output)
+        parse_window("tab create", &output)
     }
 
     /// Start a recognized agent CLI in an idle shell pane under a unique
@@ -266,13 +226,14 @@ impl Legacy {
     }
 }
 
+/// `tab create`'s or `workspace create`'s answer.
 #[derive(Deserialize)]
-struct TabCreated {
-    result: TabCreatedResult,
+struct Created {
+    result: CreatedResult,
 }
 
 #[derive(Deserialize)]
-struct TabCreatedResult {
+struct CreatedResult {
     root_pane: CreatedPane,
 }
 
@@ -282,11 +243,11 @@ struct CreatedPane {
     tab_id: String,
 }
 
-/// Read the new window out of `tab create`'s JSON answer.
-pub(crate) fn parse_window(output: &str) -> Result<Window, HerdrError> {
-    let created: TabCreated =
+/// Read the new window out of `command`'s JSON answer.
+pub(crate) fn parse_window(command: &str, output: &str) -> Result<Window, HerdrError> {
+    let created: Created =
         serde_json::from_str(output.trim()).map_err(|source| HerdrError::Unparsable {
-            command: "tab create".to_owned(),
+            command: command.to_owned(),
             source,
         })?;
     Ok(Window {

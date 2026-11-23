@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n                EXISTS (\n                    SELECT 1 FROM calls c\n                    JOIN comms_channel_participants p ON p.channel_id = c.channel_id\n                    WHERE c.id = $1 AND p.user_id = $2 AND p.left_at IS NULL\n                ) OR EXISTS (\n                    SELECT 1 FROM calls c\n                    JOIN call_meetings m ON m.id = c.meeting_id\n                    WHERE c.id = $1 AND c.channel_id IS NULL AND m.cancelled_at IS NULL\n                      AND (m.user_id = $2 OR EXISTS (\n                          SELECT 1 FROM call_participants p\n                          WHERE p.call_id = c.id AND p.user_id = $2\n                      ) OR EXISTS (\n                          SELECT 1 FROM call_invitees i\n                          WHERE i.call_id = c.id AND i.user_id = $2\n                      ))\n                )\n            ) AS \"allowed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "db773176d34fd31126967b3cf7eb6e64128552591ec56d4f36f40795f0cad5ce"
+}

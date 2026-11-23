@@ -17,6 +17,8 @@ export function mountReplyComposer(
   callbacks: Pick<
     ReplyComposerOptions,
     | 'draft'
+    | 'initialSavedDraftId'
+    | 'localDraft'
     | 'preloadedHtml'
     | 'sideEffectOnSend'
     | 'onMarkDone'
@@ -56,6 +58,7 @@ export function mountReplyComposer(
             inbox_visible: thread.inboxVisible ?? false,
           }),
           recipientOptions: () => [],
+          ownsThreadInbox: () => true,
           isPersonalReply: () => false,
           onDraftRemoved() {},
           exitToThread: () => false,

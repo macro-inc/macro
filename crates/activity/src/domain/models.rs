@@ -21,7 +21,7 @@ mod test;
 
 use std::sync::LazyLock;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::CreationPrincipal;
 use serde::{Deserialize, Serialize};
@@ -123,8 +123,57 @@ pub enum CommonAction {
     /// definition id; `from` is unset until the source event carries the
     /// previous value; `to` is `None` when the value was cleared.
     PropertyChanged(PropertyChange),
+    /// Entity presentation changed without touching content recency.
+    AppearanceChanged(AppearanceChange),
 }
 
+/// Previous and new entity-owned appearance overrides.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppearanceChange {
+    /// Previous appearance; absent means type defaults.
+    pub from: Option<model_entity::EntityAppearance>,
+    /// New appearance; absent means type defaults.
+    pub to: Option<model_entity::EntityAppearance>,
+}
+
+/// An appearance replacement persisted atomically with its attributed history.
+#[derive(Debug, Clone)]
+pub struct AppearanceUpdate {
+    /// Replacement entity-owned overrides.
+    pub appearance: model_entity::EntityAppearance,
+    /// The principal responsible for the write, when the caller is attributed.
+    pub attribution: Option<Attribution>,
+    /// Stable identity for the history event of this write.
+    pub event_id: Uuid,
+    /// When the change was requested.
+    pub occurred_at: DateTime<Utc>,
+}
+
+impl AppearanceUpdate {
+    /// Describe a stored transition without inventing attribution for internal callers.
+    pub fn activity(
+        &self,
+        entity_type: EntityType,
+        entity_id: impl Into<String>,
+        previous: &model_entity::EntityAppearance,
+    ) -> Option<Activity> {
+        if previous == &self.appearance {
+            return None;
+        }
+        Some(Activity::attributed(
+            self.event_id,
+            0,
+            self.attribution.clone()?,
+            entity_type,
+            entity_id,
+            CommonAction::AppearanceChanged(AppearanceChange {
+                from: (!previous.is_default()).then(|| previous.clone()),
+                to: (!self.appearance.is_default()).then(|| self.appearance.clone()),
+            }),
+            self.occurred_at,
+        ))
+    }
+}
 /// Payload of [`Action::PropertyChanged`]. Serde-derived so the write and
 /// (future) read codecs share one shape definition.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -156,6 +205,32 @@ pub struct CallStart {
 pub struct AccessRequest {
     /// The request; the owning domain serves its current outcome.
     pub request_id: Uuid,
+    /// The requester's profile name when they asked, so the timeline can show
+    /// it before current names load. Absent on older rows and for requesters
+    /// without a name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requester_name: Option<String>,
+}
+
+/// Payload of [`Action::TimeLogged`]. The entry's note is never stored.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TimeLog {
+    /// Whole minutes logged.
+    pub minutes: u32,
+    /// The day the time counts for, as the person chose it.
+    pub entry_date: NaiveDate,
+    /// How the time was logged.
+    pub source: TimeLogSource,
+}
+
+/// How time was logged: typed, or saved by stopping a timer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeLogSource {
+    /// Typed as a length.
+    Manual,
+    /// Saved by stopping a timer.
+    Timer,
 }
 
 /// Task referenced by a project membership event. No task name is stored.
@@ -224,8 +299,12 @@ pub enum Action {
     TaskAdded(InitiativeTaskChange),
     /// A task was removed from an initiative.
     TaskRemoved(InitiativeTaskChange),
+    /// A history-only icon or color change.
+    AppearanceChanged(AppearanceChange),
     /// A principal asked to join the entity (channel membership).
     AccessRequested(AccessRequest),
+    /// Time was logged on the entity (a task).
+    TimeLogged(TimeLog),
 }
 
 /// The names captured when an entity is renamed.
@@ -254,20 +333,23 @@ impl From<CommonAction> for Action {
             CommonAction::Opened => Action::Opened,
             CommonAction::Deleted => Action::Deleted,
             CommonAction::PropertyChanged(change) => Action::PropertyChanged(change),
+            CommonAction::AppearanceChanged(change) => Action::AppearanceChanged(change),
         }
     }
 }
 
 /// The stored `action` tags that [`Action::is_view`] classifies as views.
 ///
-/// SQL surfaces that must exclude views (e.g. the soup touched-by-me page,
-/// which counts mutations only) filter on these tags instead of decoding
-/// every row; the pinned codec test keeps this list and `is_view` agreeing.
+/// SQL surfaces can identify views without decoding every row; the pinned
+/// codec test keeps this list and `is_view` agreeing. Attribution recency
+/// uses `NON_TOUCH_ACTION_TAGS` to exclude history-only changes as well.
 pub const VIEW_ACTION_TAGS: &[&str] = &["opened"];
 
+/// Actions that must not affect attribution recency or mutation ranking.
+pub const NON_TOUCH_ACTION_TAGS: &[&str] = &["opened", "appearance_changed"];
+
 impl Action {
-    /// Whether this action is a view rather than a mutation — the only
-    /// classification activity queries need.
+    /// Whether this action records viewing an entity.
     pub fn is_view(&self) -> bool {
         matches!(self, Action::Opened)
     }
@@ -301,7 +383,9 @@ impl Action {
             Action::Renamed(change) => payload(change),
             Action::CallEnded(end) => payload(end),
             Action::TaskAdded(change) | Action::TaskRemoved(change) => payload(change),
+            Action::AppearanceChanged(change) => payload(change),
             Action::AccessRequested(request) => payload(request),
+            Action::TimeLogged(log) => payload(log),
         };
         (tag, payload)
     }
@@ -345,7 +429,9 @@ impl Action {
             ActionTag::CallEnded => Ok(Action::CallEnded(parsed(payload)?)),
             ActionTag::TaskAdded => Ok(Action::TaskAdded(parsed(payload)?)),
             ActionTag::TaskRemoved => Ok(Action::TaskRemoved(parsed(payload)?)),
+            ActionTag::AppearanceChanged => Ok(Action::AppearanceChanged(parsed(payload)?)),
             ActionTag::AccessRequested => Ok(Action::AccessRequested(parsed(payload)?)),
+            ActionTag::TimeLogged => Ok(Action::TimeLogged(parsed(payload)?)),
         }
     }
 }
@@ -418,6 +504,10 @@ impl RecordedAction {
 /// construction invariants to seal; the row already exists.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActivityRecord {
+    /// Originating code-mode invocation; absent for non-agent and historical activity.
+    pub agent_correlation_id: Option<Uuid>,
+    /// SDK display verb, absent for non-agent and historical activity.
+    pub agent_verb: Option<agent_correlation::AgentVerb>,
     /// The stored activity id.
     pub id: Uuid,
     /// Who mechanically acted.
@@ -491,6 +581,10 @@ pub enum Ingest {
 #[readonly::make]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Activity {
+    /// Originating code-mode invocation; absent for non-agent and historical activity.
+    pub agent_correlation_id: Option<Uuid>,
+    /// SDK display verb, absent for non-agent and historical activity.
+    pub agent_verb: Option<agent_correlation::AgentVerb>,
     /// Deterministic id: uuidv5 over (source event id, ordinal), so replays
     /// of the same broker event re-derive the same activity ids.
     pub id: Uuid,
@@ -510,6 +604,16 @@ pub struct Activity {
 }
 
 impl Activity {
+    /// Retain a specific editor's invocation when one event contains multiple editors.
+    /// A different invocation cannot inherit the event's display verb.
+    pub fn with_agent_correlation(mut self, id: Option<Uuid>) -> Self {
+        if self.agent_correlation_id != id {
+            self.agent_verb = None;
+        }
+        self.agent_correlation_id = id;
+        self
+    }
+
     /// Builds an activity for a [`CommonAction`] from a resolved
     /// [`Attribution`].
     pub fn attributed(
@@ -597,6 +701,8 @@ impl Activity {
             .unwrap_or_else(|| actor.as_ref().to_owned());
         Self {
             id: activity_id(source_event_id, ordinal),
+            agent_correlation_id: agent_correlation::context::current(),
+            agent_verb: agent_correlation::context::current_verb(),
             actor,
             subject_id,
             entity_type,

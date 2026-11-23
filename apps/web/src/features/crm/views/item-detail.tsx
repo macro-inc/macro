@@ -1,8 +1,10 @@
 import {
   EntityDetail,
   entityDetailBlockType,
+  entityDetailHostsSplitHeader,
 } from '@app/components/entity-detail/EntityDetail';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
+import { EntityDetailFrame } from '@app/components/entity-detail/EntityDetailFrame';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { FileDetailBreadcrumbItem } from '@app/features/drive-view/views/FileDetailBreadcrumbItem';
@@ -20,15 +22,16 @@ import { createRecordName } from './record-detail';
 
 type DocumentTarget = Extract<EntityDetailTarget, { type: 'document' }>;
 
-/** A linked item retains the Customers shell and its route-owned source trail. */
-export function CrmItemDetail(props: {
-  sourceName: string;
-  navigation: JSX.Element;
-}) {
+/**
+ * A linked item retains the Customers shell and its route-owned source trail.
+ * Its headers are top bars, which carry the shell's navigation controls.
+ */
+export function CrmItemDetail(props: { sourceName: string }) {
+  const crm = useCrmContext();
   const route = useCrmWorkspace().host.record;
   const panel = useSplitPanelOrThrow();
   const item = () => route.item()!;
-  const records = route.records;
+  const records = () => (crm.canAccess() ? route.records() : []);
   const value = () => `item:${item().itemType}:${item().itemId}`;
   const target = (): EntityDetailTarget => {
     const current = item();
@@ -65,7 +68,7 @@ export function CrmItemDetail(props: {
     if (!current) return;
     return { documentId: current.target.id, blockAlias: current.blockType };
   });
-  onCleanup(useCrmContext().registerTaskComposerRecord(() => records().at(-1)));
+  onCleanup(crm.registerTaskComposerRecord(() => records().at(-1)));
 
   return (
     <ViewBreadcrumbs.Root
@@ -123,63 +126,60 @@ export function CrmItemDetail(props: {
         }}
       </For>
       <SidePanel.Root floating>
-        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <Show when={nativeDocument()}>
-            {(current) => (
-              <ViewShell.TopBar class="touch:flex">
-                {props.navigation}
-                <ViewBreadcrumbs.Outlet
-                  aria-label="CRM item location"
-                  fallback={<EntityDetailBreadcrumbSkeleton />}
-                />
-                <div class="ml-auto flex shrink-0 items-center gap-1">
-                  <SidePanel.HeaderActionsOutlet />
-                  <ShareTrigger
-                    onClick={openShare}
-                    id={current().target.id}
-                    blockType={current().blockType}
-                    hotkeyScope={panel.splitHotkeyScope}
-                  />
-                  <SidePanel.Toggle />
-                </div>
-              </ViewShell.TopBar>
-            )}
-          </Show>
-          <div class="relative min-h-0 min-w-0 flex-1">
-            {/* Preview headers own the live item title and menu after this source prefix. */}
-            <Show
-              when={document()}
-              fallback={
-                <EntityDetail
-                  target={target()}
-                  previewHeaderLeading={
-                    <>
-                      {props.navigation}
-                      <ViewBreadcrumbs.Outlet
-                        aria-label="CRM item location"
-                        class="max-w-[min(40vw,24rem)] overflow-hidden"
-                      />
-                    </>
-                  }
-                />
-              }
-            >
+        <EntityDetailFrame
+          target={document()}
+          topBar={
+            <Show when={nativeDocument()}>
               {(current) => (
-                <CrmDocumentDetail
-                  target={current()}
-                  value={value()}
-                  order={records().length + 1}
-                  headerLeading={
-                    <>
-                      {props.navigation}
-                      <ViewBreadcrumbs.Outlet aria-label="CRM item location" />
-                    </>
-                  }
-                />
+                <ViewShell.TopBar class="touch:flex">
+                  <ViewShell.TopBarTitle>
+                    <ViewBreadcrumbs.Outlet
+                      aria-label="CRM item location"
+                      fallback={<EntityDetailBreadcrumbSkeleton />}
+                    />
+                  </ViewShell.TopBarTitle>
+                  <ViewShell.TopBarActions>
+                    <SidePanel.HeaderActionsOutlet />
+                    <ShareTrigger
+                      onClick={openShare}
+                      id={current().target.id}
+                      blockType={current().blockType}
+                      hotkeyScope={panel.splitHotkeyScope}
+                    />
+                    <SidePanel.Toggle />
+                  </ViewShell.TopBarActions>
+                </ViewShell.TopBar>
               )}
             </Show>
-          </div>
-        </div>
+          }
+        >
+          {/* Preview headers own the live item title and menu after this source prefix. */}
+          <Show
+            when={document()}
+            fallback={
+              <EntityDetail
+                target={target()}
+                previewHeaderLeading={
+                  <ViewBreadcrumbs.Outlet
+                    aria-label="CRM item location"
+                    class="max-w-[min(40vw,24rem)] overflow-hidden"
+                  />
+                }
+              />
+            }
+          >
+            {(current) => (
+              <CrmDocumentDetail
+                target={current()}
+                value={value()}
+                order={records().length + 1}
+                headerLeading={
+                  <ViewBreadcrumbs.Outlet aria-label="CRM item location" />
+                }
+              />
+            )}
+          </Show>
+        </EntityDetailFrame>
       </SidePanel.Root>
     </ViewBreadcrumbs.Root>
   );
@@ -192,15 +192,8 @@ function CrmDocumentDetail(props: {
   headerLeading: JSX.Element;
 }) {
   const route = useCrmWorkspace().host.record;
-  const markdown = () => {
-    const blockType = entityDetailBlockType(props.target);
-    return blockType === 'md' ||
-      blockType === 'task' ||
-      blockType === 'snippet' ||
-      blockType === 'skill'
-      ? props.target
-      : undefined;
-  };
+  const markdown = () =>
+    entityDetailHostsSplitHeader(props.target) ? props.target : undefined;
   const duplicate = (id: string, name: string) =>
     route.openItem({ ...props.target, name, id });
   return (
@@ -210,6 +203,8 @@ function CrmDocumentDetail(props: {
         <EntityDetail
           target={props.target}
           previewHeaderLeading={props.headerLeading}
+          onClose={route.closeItem}
+          onDuplicate={duplicate}
         >
           {(context) => {
             if (context.type !== 'document') return null;
@@ -237,6 +232,8 @@ function CrmDocumentDetail(props: {
           documentId={current().id}
           kind={current().subType?.type ?? 'document'}
           fallbackName={current().fallbackName}
+          onDuplicate={duplicate}
+          onDelete={route.closeItem}
         >
           {(context) => (
             <MarkdownDetailBreadcrumbItem

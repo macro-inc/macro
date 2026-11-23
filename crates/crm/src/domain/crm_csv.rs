@@ -24,7 +24,15 @@ const CONTACT_NAME_HEADERS: &[&str] = &["contact", "name", "contact name"];
 /// Headers holding a contact's email.
 const CONTACT_KEY_HEADERS: &[&str] = &["email", "email address"];
 /// Company columns that pipeline entries hold now, rather than companies.
-pub const COMPANY_PIPELINE_FIELDS: &[&str] = &["stage", "owner", "revenue"];
+pub const COMPANY_PIPELINE_FIELDS: &[&str] = &[
+    "stage",
+    "outcome",
+    "owner",
+    "revenue",
+    "revenue currency",
+    "amount",
+    "amount currency",
+];
 
 /// A parsed CSV: its header row and data rows, every row as wide as the header.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -32,6 +32,7 @@ vi.mock('@macro-inc/observability', async (importOriginal) => ({
 vi.mock('@service-storage/graphql-soup', () => ({
   assertEmailDraftQueueAvailable: () => {},
   dssGraphqlFetch: vi.fn(),
+  graphqlSoupTransportDocument: (document: string) => document,
   getGraphqlCacheHost: () => undefined,
   getGraphqlSoupClient: () => undefined,
   graphqlCacheEnabled: () => true,

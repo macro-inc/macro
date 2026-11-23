@@ -43,7 +43,6 @@ pub type DcsAuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtVal
 pub type DcsUserPermissionsService =
     roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
         roles_and_permissions::outbound::pgpool::MacroDB,
-        roles_and_permissions::outbound::pgpool::MacroDB,
     >;
 
 /// The AI billing gate: reads plan allowances, credits, and overage state.
@@ -96,45 +95,30 @@ pub type DcsMemoryService =
 pub type DcsUsageService =
     ai_usage::domain::service::UsageServiceImpl<ai_usage::outbound::PgUsageRepo>;
 
-/// The AI projections service wired to the Postgres projection repo, the SQS
-/// materialization queue, and the connection-gateway update notifier.
-pub type DcsAiProjectionService =
-    ai_projections::domain::ai_projection_service::AiProjectionServiceImpl<
-        ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl,
-        sqs_client::SQS,
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator,
-        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier,
-    >;
-
-/// Concrete MCP router state for DCS.
-pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
-    mcp_client::outbound::NativeServerStore,
-    mcp_client::outbound::oauth::OAuthService<
-        mcp_client::outbound::NativeServerStore,
-        mcp_client::outbound::redis_state_store::RedisOAuthStateStore,
-    >,
+/// The `/connectors` routes' state over the process's connectors.
+pub type DcsConnectorsRouterState = connectors::inbound::axum_router::ConnectorsRouterState<
+    connectors::Connectors,
+    connectors::composition::ConnectorCatalog,
     DcsAuthorizationService,
 >;
+
+/// The public callback routes' state over the process's server sign-ins.
+pub type DcsCallbacksState =
+    connectors::inbound::callbacks::CallbacksState<connectors::composition::ServerSignIns>;
 
 /// The import pipeline service, shared between the import router and the
 /// chat toolset.
 pub type DcsImportService = ai_tools::ToolImportService;
 
-/// The onboarding orchestrator wired to the Postgres repo and the MCP server
-/// store.
+/// The onboarding orchestrator wired to the Postgres repo and the connectors.
 pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceImpl<
     onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
-    mcp_client::outbound::NativeServerStore,
+    connectors::Connectors,
 >;
 
-/// Concrete Pipedream MCP router state for DCS: the Postgres connection
-/// store plus the connector backends (None when not configured — endpoints
-/// answer 501).
-pub type DcsPipedreamRouterState = pipedream_mcp::inbound::PipedreamRouterState<
-    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    pipedream_mcp::outbound::dispatch::ConnectorBackends,
-    DcsAuthorizationService,
->;
+/// Redis-backed rate limiting for the web routes.
+pub type WebRateLimiter =
+    rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
@@ -167,7 +151,6 @@ pub struct ApiContext {
     pub document_tool_context: ToolDocumentToolContext,
     pub memory_service: Arc<DcsMemoryService>,
     pub usage_service: Arc<DcsUsageService>,
-    pub ai_projections_service: Arc<DcsAiProjectionService>,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
@@ -177,11 +160,14 @@ pub struct ApiContext {
     pub entity_access_service: Arc<DcsEntityAccessService>,
     pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,
-    pub mcp_state: DcsMcpRouterState,
-    pub pipedream_state: DcsPipedreamRouterState,
+    /// Per-user limit on `/web/search` and `/web/fetch`.
+    pub web_rate_limiter: WebRateLimiter,
+    pub connectors_state: DcsConnectorsRouterState,
+    pub callbacks_state: DcsCallbacksState,
+    /// The process's connections, already decided by the rules: chat loads
+    /// a user's MCP tools through them.
+    pub connectors: connectors::Connectors,
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,
-    /// Selects which MCP stack (Pipedream vs native) serves a user's tools.
-    pub mcp_selector: Arc<ai_tools::ToolMcpSelector>,
     pub import_service: Arc<DcsImportService>,
     pub onboarding_service: Arc<DcsOnboardingService>,
     /// Kafka-backed macro event broker for publishing domain events.

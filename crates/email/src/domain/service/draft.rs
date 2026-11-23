@@ -10,6 +10,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use frecency::domain::ports::FrecencyQueryService;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::EmailServiceImpl;
@@ -98,7 +99,7 @@ where
             .await
     }
 
-    #[tracing::instrument(err, skip(self, input))]
+    #[tracing::instrument(err, skip(self, macro_id, input))]
     pub(crate) async fn save_draft_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -239,7 +240,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, macro_id))]
     pub(crate) async fn delete_draft_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -311,8 +312,7 @@ where
                 Some(macro_id.as_ref()),
                 expected_generation,
             )
-            .await
-            .map_err(anyhow::Error::from)?;
+            .await?;
 
         let Some(deletion) = deletion else {
             // The guarded delete matched nothing: between the read above and
@@ -469,12 +469,32 @@ where
             input.provider_id = None;
             input.provider_thread_id = None;
         }
+        let adopted_from = self
+            .keep_stored_reply_target(&mut input, &accessible_link_ids)
+            .await?;
+        // Authorize the reply target before validate_existing_message can move
+        // the draft to another inbox, so a refused target leaves it in place.
+        let reply_target = match self
+            .authorized_reply_target(&input, &accessible_link_ids)
+            .await
+        {
+            // A draft save that named no target and stays in its inbox drops a
+            // stored target the user can no longer reach (a shared thread's
+            // grant revoked) instead of refusing the content. A send, or a save
+            // that moves the draft to another inbox, is still refused: the
+            // draft stays where it is and never goes out as a new email.
+            Err(EmailErr::MessageNotFound(_)) if is_draft && adopted_from == Some(link_id) => {
+                input.replying_to_id = None;
+                None
+            }
+            result => result?,
+        };
         let source_inbox = self
             .validate_existing_message(link_id, accessible_inboxes, &mut input, defer_inbox_move)
             .await?;
 
         let source_message_id = input.db_id;
-        self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
+        self.validate_replying_to(link_id, reply_target.as_ref(), &mut input)
             .await?;
         if source_inbox.is_some() && input.db_id != source_message_id {
             return Err(EmailErr::InvalidSendSnapshot(
@@ -494,6 +514,7 @@ where
         }
 
         // Build parsed addresses
+        let from_name = sender.name.clone();
         let addresses = ParsedAddresses {
             from_email: sender.email,
             from_name: sender.name,
@@ -531,6 +552,7 @@ where
             provider_thread_id: input.provider_thread_id,
             thread_db_id,
             subject: input.subject,
+            from_name,
             to: input.to,
             cc: input.cc,
             bcc: input.bcc,
@@ -664,8 +686,7 @@ where
                     input.actor.as_ref().map(|actor| actor.as_ref()),
                     input.draft_generation,
                 )
-                .await
-                .map_err(anyhow::Error::from)?;
+                .await?;
             if deleted.is_none()
                 && let Some(retained) = self
                     .email_repo
@@ -691,44 +712,126 @@ where
         Ok(None)
     }
 
+    /// A save of a stored draft that names no reply target keeps the one the
+    /// draft has: clients that edit only the content (the SDK, REST) omit it,
+    /// and saving it as null would drop the draft from its reply thread. The
+    /// adopted target is then authorized like one the client sent. Returns
+    /// the stored draft's inbox when it adopted one.
+    async fn keep_stored_reply_target(
+        &self,
+        input: &mut CreateDraftInput,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<Option<Uuid>, EmailErr> {
+        let Some(db_id) = input.db_id.filter(|_| input.replying_to_id.is_none()) else {
+            return Ok(None);
+        };
+        let Some((target, stored_inbox)) = self
+            .email_repo
+            .get_simple_message(db_id, accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .filter(|stored| stored.is_draft && !stored.is_sent)
+            .and_then(|stored| Some((stored.replying_to_id?, stored.link_id)))
+        else {
+            return Ok(None);
+        };
+        input.replying_to_id = Some(target);
+        Ok(Some(stored_inbox))
+    }
+
+    /// The reply target, authorized on every save, before an existing reply
+    /// draft is reused: that draft is found by a header the client can write.
+    async fn authorized_reply_target(
+        &self,
+        input: &CreateDraftInput,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<Option<SimpleMessageInfo>, EmailErr> {
+        let Some(replying_to_id) = input.replying_to_id else {
+            return Ok(None);
+        };
+        let reply_target = self
+            .reply_target(input.actor.as_ref(), replying_to_id, accessible_link_ids)
+            .await?;
+        if reply_target.is_draft {
+            return Err(EmailErr::CannotReplyToDraft);
+        }
+        Ok(Some(reply_target))
+    }
+
     async fn validate_replying_to(
         &self,
         link_id: Uuid,
-        accessible_link_ids: &[Uuid],
+        reply_target: Option<&SimpleMessageInfo>,
         input: &mut CreateDraftInput,
     ) -> Result<(), EmailErr> {
-        let Some(replying_to_id) = input.replying_to_id else {
+        let Some(reply_target) = reply_target else {
             return Ok(());
         };
 
-        // An explicit, validated identity must never be retargeted to a newer
-        // reply draft by a delayed save from an obsolete composer.
+        // A resolved identity already identifies the reply being saved.
         if input.db_id.is_some() {
-            let parent = self
-                .email_repo
-                .get_simple_message(replying_to_id, accessible_link_ids)
-                .await
-                .map_err(anyhow::Error::from)?
-                .ok_or(EmailErr::MessageNotFound(replying_to_id))?;
-            if parent.is_draft {
-                return Err(EmailErr::CannotReplyToDraft);
-            }
             return Ok(());
         }
-        // The draft replying to this message lives in the inbox being sent from.
         if let Some(existing_draft) = self
             .email_repo
-            .get_draft_replying_to(link_id, replying_to_id)
+            .get_draft_replying_to(link_id, reply_target.db_id)
             .await
             .map_err(anyhow::Error::from)?
         {
-            self.apply_existing_draft(input, existing_draft);
-        } else {
-            self.apply_reply_target(link_id, accessible_link_ids, input, replying_to_id)
-                .await?;
+            // A first save can adopt an unbound draft. Undo can also restore
+            // a bound draft for this target while another composer is writing.
+            let bound_to_another = match input.draft_client_binding {
+                Some(handle) => self
+                    .email_repo
+                    .draft_bound_to_another_handle(existing_draft.db_id, link_id, handle)
+                    .await
+                    .map_err(anyhow::Error::from)?,
+                None => false,
+            };
+            if !bound_to_another {
+                self.apply_existing_draft(input, existing_draft);
+                return Ok(());
+            }
         }
 
+        apply_reply_target(link_id, input, reply_target);
         Ok(())
+    }
+
+    /// A message the caller may reply to: one in their own inboxes, or one in
+    /// a thread shared with them at edit access. A shared target lives in its
+    /// owner's inbox, so the reply always starts a thread in the caller's.
+    async fn reply_target(
+        &self,
+        actor: Option<&MacroUserIdStr<'static>>,
+        replying_to_id: Uuid,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<SimpleMessageInfo, EmailErr> {
+        if let Some(target) = self
+            .email_repo
+            .get_simple_message(replying_to_id, accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+        {
+            return Ok(target);
+        }
+
+        let Some(actor) = actor else {
+            return Err(EmailErr::MessageNotFound(replying_to_id));
+        };
+        let Some(shared_link_id) = self
+            .shared_thread_replies
+            .reply_target_inbox(actor, replying_to_id)
+            .await?
+        else {
+            return Err(EmailErr::MessageNotFound(replying_to_id));
+        };
+
+        self.email_repo
+            .get_simple_message(replying_to_id, &[shared_link_id])
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(EmailErr::MessageNotFound(replying_to_id))
     }
 
     fn apply_existing_draft(
@@ -741,45 +844,6 @@ where
         input.thread_db_id = Some(existing_draft.thread_db_id);
         input.provider_thread_id = existing_draft.provider_thread_id;
         input.headers_json = existing_draft.headers_json;
-    }
-
-    async fn apply_reply_target(
-        &self,
-        link_id: Uuid,
-        accessible_link_ids: &[Uuid],
-        input: &mut CreateDraftInput,
-        replying_to_id: Uuid,
-    ) -> Result<(), EmailErr> {
-        let reply_target = self
-            .email_repo
-            .get_simple_message(replying_to_id, accessible_link_ids)
-            .await
-            .map_err(anyhow::Error::from)?
-            .ok_or(EmailErr::MessageNotFound(replying_to_id))?;
-
-        if reply_target.is_draft {
-            return Err(EmailErr::CannotReplyToDraft);
-        }
-
-        if reply_target.link_id == link_id {
-            // Same inbox: thread into the target's existing thread.
-            input.thread_db_id = Some(reply_target.thread_db_id);
-            input.provider_thread_id = reply_target.provider_thread_id;
-        } else {
-            // The target lives in a different inbox (a different provider
-            // account), so it cannot thread into that account's provider
-            // thread. Start a fresh thread in the sending inbox; the
-            // Macro-In-Reply-To header below preserves the reference.
-            input.thread_db_id = None;
-            input.provider_thread_id = None;
-        }
-
-        // Generate Macro-In-Reply-To header
-        input.headers_json = Some(serde_json::json!([{
-            "Macro-In-Reply-To": reply_target.db_id.to_string()
-        }]));
-
-        Ok(())
     }
 
     /// Validate a client-supplied thread hint on the no-reply-target path.
@@ -849,6 +913,32 @@ where
         let thread_db_id = thread.db_id;
         (thread_db_id, Some(thread))
     }
+}
+
+/// Thread a new reply draft under an authorized target.
+fn apply_reply_target(
+    link_id: Uuid,
+    input: &mut CreateDraftInput,
+    reply_target: &SimpleMessageInfo,
+) {
+    if reply_target.link_id == link_id {
+        // Same inbox: thread into the target's existing thread.
+        input.thread_db_id = Some(reply_target.thread_db_id);
+        input.provider_thread_id = reply_target.provider_thread_id.clone();
+    } else {
+        // The target lives in a different inbox (a different provider
+        // account, possibly another user's through a share), so it cannot
+        // thread into that account's provider thread. Start a fresh thread in
+        // the sending inbox; the Macro-In-Reply-To header below preserves the
+        // reference.
+        input.thread_db_id = None;
+        input.provider_thread_id = None;
+    }
+
+    // Generate Macro-In-Reply-To header
+    input.headers_json = Some(serde_json::json!([{
+        "Macro-In-Reply-To": reply_target.db_id.to_string()
+    }]));
 }
 
 /// The decision for a compose draft's client-supplied thread hint.

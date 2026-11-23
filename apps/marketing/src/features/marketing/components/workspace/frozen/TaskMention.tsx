@@ -1,4 +1,4 @@
-import ListChecks from '@phosphor/list-checks.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
 import { Show } from 'solid-js';
 import type { WorkspaceTask } from '../../../core/dummy-workspace';
 import { PropertyValueIcon } from './PropertyValueIcon';

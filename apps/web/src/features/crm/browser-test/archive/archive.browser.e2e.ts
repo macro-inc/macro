@@ -159,17 +159,25 @@ test('compact record controls keep separate full-height touch targets', async ({
       });
       await expect(restore).toBeVisible();
       const controls = [chip, restore];
-      if (kind === 'contact')
-        controls.push(
-          page.getByRole('button', { name: companyName, exact: true })
-        );
+      const companyNavigation = page.getByRole('button', {
+        name: 'Go to company',
+        exact: true,
+      });
+      if (kind === 'contact') controls.push(companyNavigation);
 
       for (const control of controls) {
         const bounds = (await control.boundingBox())!;
         expect(bounds.height).toBe(24);
         await expect(control).toHaveCSS('font-size', '12px');
         if (!isMobile) continue;
-        expect(bounds.width).toBeGreaterThanOrEqual(44);
+        if (control !== companyNavigation)
+          expect(bounds.width).toBeGreaterThanOrEqual(44);
+        else
+          expect(
+            await control.evaluate(
+              (element) => getComputedStyle(element, '::before').width
+            )
+          ).toBe('44px');
         // The visible face is compact; the reserved margin and transparent
         // extension must still deliver taps across a separate 44px target.
         for (const y of [bounds.y - 9.5, bounds.y + bounds.height + 9.5]) {
@@ -224,10 +232,7 @@ test('compact record controls keep separate full-height touch targets', async ({
         await expect(
           page.getByRole('button', { name: 'Archive', exact: true })
         ).toBeVisible();
-        const company = page.getByRole('button', {
-          name: companyName,
-          exact: true,
-        });
+        const company = companyNavigation;
         const bounds = (await company.boundingBox())!;
         if (isMobile)
           await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y - 9);

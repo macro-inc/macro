@@ -63,7 +63,7 @@ impl<Svc: EmailService, ESvc: EntityAccessService> AttachmentService
 }
 
 impl<Svc: EmailService, ESvc: EntityAccessService> EmailAttachmentService<Svc, ESvc> {
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn resolve_one(
         &self,
         user_id: &MacroUserIdStr<'_>,

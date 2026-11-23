@@ -40,7 +40,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
   const modelSections = createMemo(() => {
     const options = catalog.models().map((option) => ({
       id: option.id,
-      label: modelLabel(option.id, option.name),
+      label: modelLabel(option.id, option.name, option.description),
       group: option.group ?? undefined,
     }));
     const { frontier, providers } = buildModelCatalog(options, true);

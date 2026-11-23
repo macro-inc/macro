@@ -8,6 +8,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import type { CrmActivityViewState } from '../core/activity-view';
+import type { ContactEmailChange, CrmContact } from '../core/contact';
 
 export type ActivityFilters = {
   groups: Accessor<ListFilterGroup<string, string>[]>;
@@ -22,11 +23,19 @@ import type {
   CrmDisplayOptions,
   CrmListColumnId,
 } from '../core/display-options';
-import type { CrmSoupActivityTab } from '../core/navigation';
+import type {
+  EmailPrivacy,
+  EmailPrivacyChange,
+  ExcludedThreads,
+} from '../core/email-privacy';
+import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
+import type { PipelineEntryRecord } from '../core/pipeline-entry';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
   BlockedDomainsSource,
+  CompanyContactsFilter,
+  CompanyContactsSource,
   CompanyImporter,
   CompanySource,
   ContactSource,
@@ -34,6 +43,7 @@ import type {
   CrmEmailScope,
   CrmEmailSignal,
   CrmMutation,
+  CrmQuery,
   CrmStageInput,
   CrmStagesResult,
   DealStages,
@@ -46,7 +56,9 @@ import type {
   TeamSource,
   TeamViewsSource,
 } from './crm-sources';
+import type { EmailPolicySource } from './email-policy';
 import type {
+  AddToPipelineSource,
   PipelineEditor,
   PipelineEntriesView,
   PipelineSharing,
@@ -55,17 +67,44 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  /** Admitted record data; pending/error stay gated. Pipeline grants are separate. */
+  canAccess: Accessor<boolean>;
+  accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
+  retryAccess(): Promise<unknown>;
+  createEmailPolicy(): EmailPolicySource;
+  /** Owner-scoped email reference, available independently of CRM viewing access. */
+  EmailThreadMention: Component<{
+    threadId: string;
+    subject: string;
+    onOpened?: () => void;
+  }>;
+  createEmailPrivacy(): {
+    createExcludedThreads(
+      after: Accessor<string | undefined>
+    ): CrmQuery<ExcludedThreads>;
+    query: CrmQuery<EmailPrivacy>;
+    update: CrmMutation<EmailPrivacyChange, EmailPrivacy>;
+  };
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
   PipelineEntries: PipelineEntriesView;
+  /** Call when the record page's Add to pipeline menu first opens. */
+  createAddToPipeline(
+    record: Accessor<PipelineEntryRecord>
+  ): AddToPipelineSource;
   PipelineSharing: PipelineSharing;
+  /** CRM settings' Who can use CRM; renders nothing for viewers who can't change it. */
+  MemberAccess: Component;
   createPipelineTransfer(pipeline: Pipeline): PipelineTransfer;
   downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
   /** Profile picture lookup for a contact; presentation owns the fallback. */
   createContactPhoto?(email: string): Accessor<string | undefined>;
   contactInitials(name: string | null | undefined, email: string): string;
   userEmail(id: string): string;
-  copyViewLink(config: import('../core/saved-view').CrmViewConfig): void;
+  copyViewLink(
+    config: import('../core/saved-view').CrmViewConfig,
+    options?: { silent?: boolean }
+  ): Promise<boolean>;
   copyPipelineLink(pipelineId: string): void;
   copyRecordLink(target: {
     type: 'company' | 'contact';
@@ -74,7 +113,7 @@ export type CrmContext = {
   createNavigation(): {
     splitId: string | undefined;
     openWithSplit(
-      target: { type: 'company' | 'contact'; id: string },
+      target: { type: 'company' | 'contact' | 'email'; id: string },
       options?: { activate?: boolean; preferNewSplit?: boolean }
     ): void;
     showCompanies(): void;
@@ -82,7 +121,6 @@ export type CrmContext = {
     openEntity(entity: import('@entity').EntityData): void;
   };
   listsEnabled(): Accessor<boolean>;
-  pipelinesEnabled(): Accessor<boolean>;
 
   feedback: { success(message: string): void; failure(message: string): void };
   createCompanyEmails(
@@ -91,27 +129,25 @@ export type CrmContext = {
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   createContactEmails(
-    email: Accessor<string | undefined>,
+    emails: Accessor<string[]>,
     scope: Accessor<CrmEmailScope>,
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   /** Paged CRM-wide activity, limited to associated records. */
   createActivity(
-    tab: Accessor<CrmSoupActivityTab>,
+    tab: Accessor<CrmActivityTab>,
     options?: Accessor<CrmActivityViewState>
   ): ItemListSource;
-  /** Databases containing CRM-linked rows; undefined selects the workspace scope. */
-  createDatabases(scope: Accessor<CrmRecordScope | undefined>): ItemListSource;
-  openCreateItem(kind: 'notes' | 'calls' | 'databases'): void;
+  openCreateItem(kind: 'notes' | 'calls'): void;
   openEmailComposer(recipient?: string): void;
   createActivityState(
-    tab: CrmSoupActivityTab
+    tab: CrmActivityTab
   ): readonly [
     Store<CrmActivityViewState>,
     SetStoreFunction<CrmActivityViewState>,
   ];
   createActivityFilters(
-    tab: CrmSoupActivityTab,
+    tab: CrmActivityTab,
     state: Store<CrmActivityViewState>,
     setState: SetStoreFunction<CrmActivityViewState>
   ): ActivityFilters;
@@ -171,6 +207,10 @@ export type CrmContext = {
   userId: Accessor<string | undefined>;
   isTeamAdmin: () => Accessor<boolean>;
   createCompanySource(id: Accessor<string>): CompanySource;
+  /** A company's Team list; disabled while `filter` is undefined. */
+  createCompanyContactsSource(
+    filter: Accessor<CompanyContactsFilter | undefined>
+  ): CompanyContactsSource;
   createContactSource(id: Accessor<string>): ContactSource;
   createTeamSource(): TeamSource;
   createTeamConfigSource(): TeamConfigSource;
@@ -195,6 +235,14 @@ export type CrmContext = {
     companyId?: string | null;
     name: string;
   }>;
+  editContactEmail(): CrmMutation<
+    { contact: CrmContact; email: string; change: ContactEmailChange },
+    CrmContact
+  >;
+  editContactCompany(): CrmMutation<
+    { contact: CrmContact; companyId: string | null },
+    CrmContact
+  >;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;
   hideContact(): CrmMutation<{ contactId: string; hidden: boolean }>;
   setEmailSync(): CrmMutation<{ companyId: string; emailSync: boolean }>;

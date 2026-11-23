@@ -1,18 +1,24 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { sanitizeEmailHtml } from '@macro-inc/email-renderer';
+import { authKeys } from '@queries/auth/keys';
 import { emailKeys } from '@queries/email/keys';
 import type {
   Link,
   ListLinksResponse,
   Settings,
 } from '@service-email/generated/schemas';
+import type { ChannelDirectoryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { QueryClient, useQuery } from '@tanstack/solid-query';
+import type { Client } from '@urql/core';
 import { ok } from 'neverthrow';
-import { createMemo, createSignal } from 'solid-js';
+import { batch, createMemo, createSignal } from 'solid-js';
+import { fromPromise } from 'wonka';
 import { signatureHtml } from './sample';
 
 export const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
+export const queryPersistence = { restoreQuery: async () => {} };
 export const link: Link = {
   id: 'signature-fixture-inbox',
   email_address: 'alex@example.com',
@@ -32,11 +38,106 @@ export const link: Link = {
 };
 let settings = { ...link.settings };
 const patches: Settings[] = [];
-queryClient.setQueryData(emailKeys.links.queryKey, { links: [link] });
+queryClient.setQueryData(authKeys.userInfo.queryKey, {
+  id: link.macro_id,
+  authenticated: true,
+});
+queryClient.setQueryData(emailKeys.links(link.macro_id).queryKey, {
+  links: [link],
+});
+const [activeViewer, setActiveViewer] = createSignal(link.macro_id);
+export const useUserId = () => activeViewer;
+let holdSources = false;
+let sourceRefresh: Promise<void> | undefined;
+const sourceWaiters: Array<() => void> = [];
+let heldSources = Promise.withResolvers<void>();
+async function holdSourceResponse() {
+  if (!holdSources) return;
+  const waiting = new Promise<void>((resolve) => sourceWaiters.push(resolve));
+  if (sourceWaiters.length === 2) heldSources.resolve();
+  await waiting;
+}
+function waitForHeldSources() {
+  return heldSources.promise;
+}
+export function refreshHeldAccountSources() {
+  holdSources = true;
+  heldSources = Promise.withResolvers<void>();
+  sourceRefresh = queryClient.refetchQueries({ type: 'active' });
+  fireAndForget(sourceRefresh, 'account-fixture');
+}
+export function switchFixtureAccount() {
+  holdSources = false;
+  batch(() => {
+    queryClient.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'macro|other@example.com',
+      authenticated: true,
+    });
+    setActiveViewer('macro|other@example.com');
+  });
+}
+export function releaseAccountSources() {
+  for (const resolve of sourceWaiters.splice(0)) resolve();
+}
+export function waitForReleasedSources() {
+  return sourceRefresh ?? Promise.resolve();
+}
+/** The account's directory page, held like the other sources. */
+async function channelDirectoryPage() {
+  const owner = activeViewer();
+  const name =
+    activeViewer() === link.macro_id ? 'First channel' : 'Second channel';
+  await holdSourceResponse();
+  const id = '00000000-0000-4000-8000-000000000001';
+  const at = '2026-01-01T00:00:00Z';
+  const participant = (userId: string) => ({
+    channelId: id,
+    userId,
+    role: 'MEMBER',
+    joinedAt: at,
+    leftAt: null,
+  });
+  const channel: ChannelDirectoryFieldsFragment = {
+    __typename: 'GraphqlSoupChannel',
+    id,
+    name,
+    channelType: 'DIRECT_MESSAGE',
+    ownerId: owner,
+    organizationId: null,
+    teamId: null,
+    autoJoinTeam: false,
+    createdAt: at,
+    updatedAt: at,
+    viewedAt: null,
+    interactedAt: null,
+    isParticipant: true,
+    frecencyScore: null,
+    participants: [participant(owner), participant('macro|peer@example.com')],
+    botParticipants: [],
+    agentDm: null,
+    latestMessage: null,
+    latestNonThreadMessage: null,
+  };
+  return {
+    data: {
+      __typename: 'Query',
+      user: {
+        __typename: 'GraphqlUser',
+        soup: { items: [channel], nextCursor: null },
+      },
+    },
+  };
+}
+/** The soup client the app's directory pages read through, answering each
+ * page with the account's held page. */
+export const fixtureSoupClient = {
+  query: () => fromPromise(channelDirectoryPage()),
+} as unknown as Pick<Client, 'query'>;
+export const useIsAuthenticated = () => () => true;
 export const useNonPrimaryEmailLinkIdHeader = () => (id: string) => id;
 export function useEmailLinksQuery() {
   return useQuery(() => ({
-    queryKey: emailKeys.links.queryKey,
+    queryKey: emailKeys.links(link.macro_id).queryKey,
     queryFn: async (): Promise<ListLinksResponse> => ({
       links: [{ ...link, settings }],
     }),
@@ -68,6 +169,16 @@ function releaseAccountRefresh() {
   finishRefresh = undefined;
 }
 export const emailClient = {
+  async getLinks() {
+    const email =
+      activeViewer() === link.macro_id
+        ? 'first@example.com'
+        : 'second@example.com';
+    await holdSourceResponse();
+    return ok({
+      links: [{ ...link, email_address: email, is_primary: false }],
+    });
+  },
   async patchSettings(input: { settings: Settings }) {
     patches.push(structuredClone(input.settings));
     const next = { ...input.settings };
@@ -97,6 +208,7 @@ export async function createStaticUploadFile() {
 }
 export function readState() {
   return {
+    pendingSourceReads: sourceWaiters.length,
     savedSignature: settings.signature,
     patches: structuredClone(patches),
   };
@@ -106,6 +218,8 @@ declare global {
   interface Window {
     signatureFixture: {
       readState: typeof readState;
+      waitForHeldSources: typeof waitForHeldSources;
+      waitForReleasedSources: typeof waitForReleasedSources;
       holdAccountRefresh: typeof holdAccountRefresh;
       releaseAccountRefresh: typeof releaseAccountRefresh;
     };
@@ -113,6 +227,8 @@ declare global {
 }
 window.signatureFixture = {
   readState,
+  waitForHeldSources,
+  waitForReleasedSources,
   holdAccountRefresh,
   releaseAccountRefresh,
 };

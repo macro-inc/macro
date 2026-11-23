@@ -45,17 +45,16 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import {
-  enableDatabases,
-  enableWhatsappLinked,
-} from '@core/constant/featureFlags';
+import { enableWhatsappLinked } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useNativeNavigationEdge } from '@core/mobile/nativeNavigationEdge';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { hasLoginCookie, updateCookie } from '@core/util/cookies';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isDesktopPlatform, isPlatform } from '@core/util/platform';
 import { useDesktopZoom } from '@macro/tauri/zoom';
@@ -67,14 +66,12 @@ import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
-  lazy,
   onCleanup,
   onMount,
   type ParentProps,
   Show,
   Suspense,
 } from 'solid-js';
-import { installIconMotion } from '../icon/system/icon-motion';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -86,6 +83,7 @@ import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { SessionExpiredRedirect } from './SessionExpiredRedirect';
+import { useCloseTabShortcut } from './tab-layout/close-tab-shortcut';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const StarterDatabase = lazy(async () => {
@@ -150,6 +148,7 @@ export function RootFrame(props: ParentProps) {
   // Here rather than in GlobalShortcuts so zoom also works on the pages that
   // render without app chrome (login, booking, meetings).
   useDesktopZoom();
+  useCloseTabShortcut();
 
   // save last_path to cookie
   createEffect(() => {
@@ -169,7 +168,6 @@ export function RootFrame(props: ParentProps) {
 
   onMount(() => {
     onCleanup(installGlassPress());
-    onCleanup(installIconMotion());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -184,7 +182,7 @@ export function RootFrame(props: ParentProps) {
     <MobileSettingsProvider>
       <div
         class={cn(
-          'relative flex flex-col justify-between not-touch:bg-page w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
+          'relative flex flex-col justify-between not-touch:bg-page touch:bg-panel w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
           hasOverlayTitleBar && 'pt-[40px]'
         )}
       >
@@ -257,8 +255,20 @@ function useNewOnboardingRedirect() {
  * and the mobile dock — around a page. Route shells supply the providers and
  * content; auth, booking, and meeting pages render without this chrome.
  */
+const MobileCallIsland = lazyNamed(
+  () => import('../../features/channel/Call/views/MobileCallIsland'),
+  'MobileCallIsland'
+);
+
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
+  const navigationEdge = useNativeNavigationEdge();
+  const dockEdge = (): 'left' | 'right' | 'bottom' =>
+    SearchState.isOpen() ? 'bottom' : navigationEdge();
+  const navigationInset = (side: 'left' | 'right') =>
+    isTouchDevice() && isAuthenticated() && dockEdge() === side
+      ? 'var(--native-navigation-content-inset, calc(var(--mobile-chrome-button-size) + 2 * var(--mobile-chrome-gutter)))'
+      : '0px';
   // A login cookie shows the rail while sign-in is confirmed; a stale one
   // goes through SessionExpiredRedirect instead of leaving the app blank.
   const sidebarVisible = () =>
@@ -269,7 +279,8 @@ export function AppChrome(props: ParentProps) {
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
   useNewOnboardingRedirect();
-  const systemStatus = useBannerStatus();
+  const { status: systemStatus, dismiss: dismissSystemStatus } =
+    useBannerStatus();
 
   const companyDialogUsed = hasOpened(companyCreation.open);
   const contactDialogUsed = hasOpened(
@@ -279,11 +290,9 @@ export function AppChrome(props: ParentProps) {
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
       <Show when={isAuthenticated() === true}>
-        <ShowFeatureFlag flag={enableDatabases}>
-          <Suspense>
-            <StarterDatabase />
-          </Suspense>
-        </ShowFeatureFlag>
+        <Suspense>
+          <StarterDatabase />
+        </Suspense>
       </Show>
       <Suspense>
         <Show when={isAuthenticated()}>
@@ -334,11 +343,17 @@ export function AppChrome(props: ParentProps) {
         </Show>
       </Suspense>
       <Show when={systemStatus()}>
-        {(status) => <StatusBanner {...status()} />}
+        {(status) => (
+          <StatusBanner {...status()} onDismiss={dismissSystemStatus} />
+        )}
       </Show>
       {/* The banner already sits below the status bar on touch devices. */}
       <div
         class="min-h-0 flex-1 flex"
+        style={{
+          'padding-left': navigationInset('left'),
+          'padding-right': navigationInset('right'),
+        }}
         classList={{ 'touch:[--safe-top:0px]': systemStatus() !== undefined }}
       >
         <ItemDndProvider>
@@ -358,7 +373,10 @@ export function AppChrome(props: ParentProps) {
         </ItemDndProvider>
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>
-        <FloatRegionHost />
+        <FloatRegionHost navigationEdge={dockEdge()} />
+        <Suspense>
+          <MobileCallIsland />
+        </Suspense>
         <Suspense>
           <UserCardDrawer />
         </Suspense>
@@ -377,7 +395,7 @@ export function AppChrome(props: ParentProps) {
           region="dock"
           active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
         >
-          <MobileDockRow />
+          <MobileDockRow vertical={dockEdge() !== 'bottom'} />
         </FloatRegion>
       </Show>
       <InitialInteractiveOnboardingModal />

@@ -123,6 +123,13 @@ impl TranscriptionProvider for WhisperTranscriber {
             DictationError::Provider
         })?
         .map_err(|error| {
+            if let OpenAIError::ApiError(api_error) = &error {
+                genai_telemetry::provider_account::report_provider_error(
+                    "openai",
+                    None,
+                    &api_error.to_string(),
+                );
+            }
             let kind = match &error {
                 OpenAIError::Reqwest(error) if error.is_timeout() => "timeout",
                 OpenAIError::Reqwest(error) if error.is_connect() => "connection",

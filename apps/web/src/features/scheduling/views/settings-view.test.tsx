@@ -10,7 +10,8 @@ import {
 import { QueryObserver } from '@tanstack/solid-query';
 import { createSignal, type JSX, type ParentProps } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
 import type { BookingLinksState } from '../booking-links-search';
 import { BookingRange } from '../components/booking-range';
 import {
@@ -86,6 +87,7 @@ vi.mock('@app/components/view-shell', async () => {
       CloseButton: () => null,
       Title: Slot,
       Content: Slot,
+      Section: Slot,
       Nav,
       Item,
       Icon: Slot,
@@ -788,4 +790,60 @@ it('consumes Calendar booking-link creation once and keeps it unsaved until Save
   fireEvent.click(screen.getByRole('button', { name: 'Cancel test event' }));
   expect(screen.queryByRole('button', { name: 'Save test event' })).toBeNull();
   expect(saves).not.toHaveBeenCalled();
+});
+
+it('shows availability hours on the calendar’s 24-hour clock', async () => {
+  const [, setPreferences] = useCalendarPreferences();
+  setPreferences('timeFormat', '24-hour');
+  onTestFinished(() => setPreferences('timeFormat', '12-hour'));
+  const { setSearch } = fixture();
+  setSearch({ tab: 'availability' });
+  expect((await screen.findAllByText(/09:00–17:00/)).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/9:00 AM/)).toBeNull();
+});
+
+it('keeps availability hours on a 12-hour calendar’s clock', async () => {
+  const [, setPreferences] = useCalendarPreferences();
+  setPreferences('timeFormat', '12-hour');
+  const { setSearch } = fixture();
+  setSearch({ tab: 'availability' });
+  expect(
+    (await screen.findAllByText(/9:00 AM–5:00 PM/)).length
+  ).toBeGreaterThan(0);
+});
+
+it('shows the owner’s bookings on the calendar’s 24-hour clock', async () => {
+  const [, setPreferences] = useCalendarPreferences();
+  setPreferences('timeFormat', '24-hour');
+  onTestFinished(() => setPreferences('timeFormat', '12-hour'));
+  fixture();
+  fireEvent.click(
+    within(
+      screen.getByRole('navigation', { name: 'Booking calendar owner' })
+    ).getByRole('button', { name: 'Design' })
+  );
+  fireEvent.click(
+    within(screen.getByRole('navigation', { name: 'Booking tabs' })).getByRole(
+      'button',
+      { name: 'Bookings' }
+    )
+  );
+  const card = await screen.findByRole('button', {
+    name: /^Team planning with Guest,/,
+  });
+  const clock = (hour12: boolean) =>
+    new Intl.DateTimeFormat(undefined, {
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12,
+    }).format(new Date(teammateBooking.startsAt));
+  expect(clock(false)).not.toBe(clock(true));
+  expect(screen.getAllByText(clock(false)).length).toBeGreaterThan(0);
+  expect(screen.queryAllByText(clock(true))).toHaveLength(0);
+
+  fireEvent.click(card);
+  const dialog = await screen.findByRole('dialog', { name: 'Booking details' });
+  expect(dialog.textContent).toContain(clock(false));
+  expect(dialog.textContent).not.toContain(clock(true));
 });

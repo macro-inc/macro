@@ -17,6 +17,7 @@ use crate::domain::{
 };
 use agent_session::domain::events::{AgentSessionLifecycleEvent, AgentSessionLifecycleEventName};
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
+use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use chrono::Utc;
 use documents::domain::events::DocumentTopicEvent;
@@ -27,15 +28,20 @@ use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::models::MessageParent;
 use messages::outbound::broker::MessageTopicEvent;
+use password_events::PasswordTopicEvent;
 use std::future::Future;
 use std::sync::Arc;
 use tracing::Instrument as _;
+use user_events::UserTopicEvent;
 use uuid::Uuid;
 
 const DOCUMENT_ENTITY_TYPE: &str = "document";
 const CHANNEL_ENTITY_TYPE: &str = "channel";
+const CALL_ENTITY_TYPE: &str = "call";
+const USER_ENTITY_TYPE: &str = "user";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
 const AGENT_SESSION_ENTITY_TYPE: &str = "agent_session";
+const PASSWORD_ITEM_ENTITY_TYPE: &str = "password_item";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -51,6 +57,9 @@ pub enum WebhookEventIngestionError {
         /// Invalid entity identifier.
         entity_id: String,
     },
+    /// A private call notification has no explicit recipient.
+    #[error("private call notification has no recipient")]
+    MissingCallRecipient,
     /// The broker envelope could not be represented by the queue contract.
     #[error("failed to serialize broker envelope: {0}")]
     Serialization(#[from] serde_json::Error),
@@ -101,6 +110,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
         event: Event<ChannelTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 
+    /// Ingest one access-checked call notification.
+    fn ingest_call_notification_event(
+        &self,
+        event: Event<CallNotificationEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
     /// Ingest one `macro.messages` event envelope.
     fn ingest_message_event(
         &self,
@@ -123,6 +138,18 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     fn ingest_agent_session_lifecycle_event(
         &self,
         event: Event<AgentSessionLifecycleEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.users` event envelope.
+    fn ingest_user_event(
+        &self,
+        event: Event<UserTopicEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.passwords` event envelope.
+    fn ingest_password_event(
+        &self,
+        event: Event<PasswordTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
@@ -258,15 +285,21 @@ pub(crate) fn normalized_document_event(
 ) -> Result<Option<NormalizedWebhookEvent>, WebhookEventIngestionError> {
     let (event_name, entity_id) = match &event.event {
         DocumentTopicEvent::Created(metadata) => ("document.created", &metadata.document_id),
+        DocumentTopicEvent::Updated(metadata) if metadata.appearance_change.is_some() => {
+            return Ok(None);
+        }
         DocumentTopicEvent::Updated(metadata) => ("document.updated", &metadata.document_id),
         DocumentTopicEvent::Deleted(metadata) => ("document.deleted", &metadata.document_id),
         DocumentTopicEvent::Copied(metadata) => ("document.copied", &metadata.document_id),
         DocumentTopicEvent::Interaction(metadata) => {
             ("document.interaction", &metadata.document_id)
         }
+        // A system release of mail's attachments is delivered no more than the
+        // documents of a trashed folder are.
         DocumentTopicEvent::ContentUploaded(_)
         | DocumentTopicEvent::SyncContentUpdated(_)
-        | DocumentTopicEvent::Purged(_) => return Ok(None),
+        | DocumentTopicEvent::Purged(_)
+        | DocumentTopicEvent::EmailAttachmentsReleased(_) => return Ok(None),
     };
 
     if Uuid::parse_str(entity_id).is_err() {
@@ -285,6 +318,45 @@ pub(crate) fn normalized_document_event(
         entity_id,
         broker_envelope,
     )))
+}
+
+/// Normalize a call event and remove its private routing field before delivery.
+pub(crate) fn normalized_call_notification_event(
+    event: &Event<CallNotificationEvent>,
+) -> Result<(NormalizedWebhookEvent, Option<String>), WebhookEventIngestionError> {
+    let metadata = event.event.metadata();
+    let recipient = match &event.event {
+        CallNotificationEvent::Ringing(_)
+        | CallNotificationEvent::Answered(_)
+        | CallNotificationEvent::Declined(_)
+        | CallNotificationEvent::Invited(_) => Some(
+            metadata
+                .recipient_user_id
+                .clone()
+                .filter(|id| !id.is_empty())
+                .ok_or(WebhookEventIngestionError::MissingCallRecipient)?,
+        ),
+        _ => None,
+    };
+    let mut broker_envelope = serde_json::to_value(event)?;
+    if let Some(metadata) = broker_envelope
+        .get_mut("metadata")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        metadata.remove("recipient_user_id");
+    }
+    let call_id = metadata.call_id.to_string();
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event.event.name(),
+            CALL_ENTITY_TYPE,
+            &call_id,
+            broker_envelope,
+        ),
+        recipient,
+    ))
 }
 
 pub(crate) fn normalized_channel_event(
@@ -317,6 +389,71 @@ pub(crate) fn normalized_channel_event(
         CHANNEL_ENTITY_TYPE,
         &entity_id,
         broker_envelope,
+    ))
+}
+
+/// The user a user fact is about.
+pub(crate) fn user_event_subject(event: &Event<UserTopicEvent>) -> MacroUserIdStr<'static> {
+    match &event.event {
+        UserTopicEvent::PictureChanged(metadata) => metadata.user_id.clone(),
+    }
+}
+
+/// Normalize one user fact. The entity is the user whose profile changed, and
+/// they are also the only audience.
+pub(crate) fn normalized_user_event(
+    event: &Event<UserTopicEvent>,
+) -> Result<(NormalizedWebhookEvent, MacroUserIdStr<'static>), WebhookEventIngestionError> {
+    let (event_name, user_id) = match &event.event {
+        UserTopicEvent::PictureChanged(metadata) => {
+            ("user.picture_changed", metadata.user_id.clone())
+        }
+    };
+
+    let broker_envelope = serde_json::to_value(event)?;
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event_name,
+            USER_ENTITY_TYPE,
+            user_id.as_ref(),
+            broker_envelope,
+        ),
+        user_id,
+    ))
+}
+
+/// Normalize one vault fact addressed to a single account and remove its
+/// private routing field. The entity is the vault item; the recipient is the
+/// only audience.
+pub(crate) fn normalized_password_event(
+    event: &Event<PasswordTopicEvent>,
+) -> Result<(NormalizedWebhookEvent, MacroUserIdStr<'static>), WebhookEventIngestionError> {
+    let (event_name, recipient, item_id) = match &event.event {
+        PasswordTopicEvent::AccessRequestResolved(metadata) => (
+            "passwords.access_request.resolved",
+            metadata.recipient_user_id.clone(),
+            metadata.item_id.to_string(),
+        ),
+    };
+    let mut broker_envelope = serde_json::to_value(event)?;
+    if let Some(metadata) = broker_envelope
+        .get_mut("metadata")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        metadata.remove("recipientUserId");
+    }
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event_name,
+            PASSWORD_ITEM_ENTITY_TYPE,
+            &item_id,
+            broker_envelope,
+        ),
+        recipient,
     ))
 }
 
@@ -606,6 +743,34 @@ where
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
+    async fn ingest_call_notification_event(
+        &self,
+        event: Event<CallNotificationEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (normalized, recipient) = normalized_call_notification_event(&event)?;
+        match recipient {
+            Some(recipient) => {
+                // The recipient is the grant for a private notification.
+                // In particular, an invitation precedes call entity access.
+                self.match_and_enqueue(normalized, vec![recipient]).await
+            }
+            None => {
+                let accessors = self
+                    .users_with_access(&normalized.entity_id, EntityType::Call)
+                    .await?;
+                let workspace_ids = self
+                    .repository
+                    .resolve_workspace_ids(accessors)
+                    .await
+                    .map_err(|error| {
+                        WebhookEventIngestionError::WorkspaceResolution(error.into())
+                    })?;
+                self.match_and_enqueue(normalized, workspace_ids).await
+            }
+        }
+    }
+
+    #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_message_event(
         &self,
         event: Event<MessageTopicEvent>,
@@ -677,5 +842,37 @@ where
                 self.match_and_enqueue(normalized, workspace_ids).await
             }
         }
+    }
+
+    #[tracing::instrument(
+        name = "webhook.ingest_user_event",
+        skip(self, event),
+        fields(event_id = %event.event_id),
+        err
+    )]
+    async fn ingest_user_event(
+        &self,
+        event: Event<UserTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (normalized, user_id) = normalized_user_event(&event)?;
+        // Only the changed user's own workspaces see their profile change;
+        // contacts and entity access are deliberately not resolved.
+        let workspace_ids = self
+            .repository
+            .resolve_workspace_ids(vec![user_id])
+            .await
+            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
+        self.match_and_enqueue(normalized, workspace_ids).await
+    }
+
+    #[tracing::instrument(skip_all, fields(event_id = %event.event_id), err)]
+    async fn ingest_password_event(
+        &self,
+        event: Event<PasswordTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (normalized, recipient) = normalized_password_event(&event)?;
+        // Only the addressed account's personal workspace receives it.
+        self.match_and_enqueue(normalized, vec![recipient.as_ref().to_string()])
+            .await
     }
 }

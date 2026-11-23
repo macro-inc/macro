@@ -3,7 +3,6 @@ import {
   $convertToMarkdownString,
   type ElementTransformer,
   type MultilineElementTransformer,
-  TRANSFORMERS,
 } from '@lexical/markdown';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import type { ElementNode, LexicalNode } from 'lexical';
@@ -13,7 +12,11 @@ import {
   ClassedBlockNode,
   isAllowedTagName,
 } from '../nodes/ClassedBlockNode';
-import { CUSTOM_TRANSFORMERS } from './customTransformers';
+import {
+  CUSTOM_TRANSFORMERS,
+  STANDARD_TRANSFORMERS,
+} from './customTransformers';
+import { createDetailsTransformer } from './details';
 import { I_HTML_RENDER } from './htmlRender';
 import { I_EQUATION_NODE } from './katex';
 import {
@@ -41,11 +44,16 @@ const MACRO_QUOTE_TRANSFORMERS = [
   I_USER_MENTION,
   I_DOCUMENT_MENTION,
   I_CONTACT_MENTION,
-  ...TRANSFORMERS,
+  ...STANDARD_TRANSFORMERS,
 ];
+
+// GitHub quotes can hold `<details>`; the transformer does nothing where the
+// details nodes aren't registered.
+const QUOTED_DETAILS = createDetailsTransformer(htmlBlockquoteTransformers);
 
 function htmlBlockquoteTransformers() {
   return [
+    QUOTED_DETAILS,
     HTML_BLOCKQUOTE,
     I_HTML_RENDER,
     ...CUSTOM_TRANSFORMERS,
@@ -53,7 +61,7 @@ function htmlBlockquoteTransformers() {
     I_USER_MENTION,
     I_DOCUMENT_MENTION,
     I_CONTACT_MENTION,
-    ...TRANSFORMERS,
+    ...STANDARD_TRANSFORMERS,
   ];
 }
 

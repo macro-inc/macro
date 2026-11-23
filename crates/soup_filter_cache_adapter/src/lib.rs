@@ -4,7 +4,8 @@
 //! This crate owns the application GraphQL schema and Soup projection policy.
 //! Cache crates receive only the generic query and projection IR produced here.
 
-use cache_core::document::{Document, FieldNode, OperationKind, Selection};
+use crate::parsed_document::parsed_document;
+use cache_core::document::{FieldNode, OperationKind, Selection};
 use cache_core::meta::FieldKind;
 use cache_core::predicate::{ProjectionIncompleteKind, ProjectionMutation};
 use graphql_soup_filter_input::materialize_graphql_filter;
@@ -29,10 +30,17 @@ mod direct_patch;
 pub mod live_query;
 pub mod mail;
 mod notifications;
+mod parsed_document;
+pub mod permissions;
 pub mod properties;
+mod write_passes;
+mod write_response;
 pub use notifications::{
-    notification_deletion_updates, notification_projection_updates, optimistic_notification_updates,
+    notification_deletion_updates, notification_projection_updates,
+    notification_projection_updates_for, optimistic_notification_updates,
 };
+pub use write_passes::{WritePassError, WritePassStep, WritePasses, write_passes};
+pub use write_response::WriteResponse;
 
 /// Failure to materialize or compile a Soup filter request.
 #[derive(Debug, thiserror::Error)]
@@ -151,7 +159,7 @@ pub fn authoritative_projection_mutations(
     data: &serde_json::Value,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
     let document =
-        Document::parse(query).map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+        parsed_document(query).map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
     let operation = document
         .operation(operation_name)
         .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
@@ -301,12 +309,16 @@ fn walk_authoritative_object(
 
     let mut visited = HashSet::new();
     for field in fields {
+        // Only objects and arrays are walked. Every duplicate of a field reads the
+        // same value, so a scalar skip before the visited check changes nothing.
+        let Some(value @ (serde_json::Value::Object(_) | serde_json::Value::Array(_))) =
+            object.get(&field.response_key)
+        else {
+            continue;
+        };
         if !visited.insert((field.name.as_str(), field.response_key.as_str())) {
             continue;
         }
-        let Some(value) = object.get(&field.response_key) else {
-            continue;
-        };
         let Some(field_meta) = schema.field_meta(concrete_type, &field.name) else {
             continue;
         };

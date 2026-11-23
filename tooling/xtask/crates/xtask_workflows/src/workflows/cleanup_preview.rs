@@ -1,15 +1,32 @@
 //! `Cleanup Preview` — removes a PR's preview files from S3 when the PR
-//! closes (companion to `deploy_preview`). Generated into
+//! closes (companion to the web `Build` job's preview steps). Generated into
 //! `cleanup_preview.yml` (replaces the hand-written `cleanup-preview.yml`).
 
+use gh_workflow::expr::typed::{StepHandle, StepOutput, Str, github};
 use gh_workflow::{
-    Env, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
-    Workflow,
+    Env, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
+    ZizmorRule,
 };
 
+use crate::workflows::actions::{
+    ActionsCheckout, AwsActionsConfigureAwsCredentials, OvenShSetupBun,
+};
 use crate::workflows::{runners, vars};
 
 const PREVIEW_BUCKET: &str = "macro-preview-assets-dev";
+
+pub(crate) struct PreviewIdOutputs {
+    /// The PR's preview id, from its preview comment.
+    pub id: StepOutput<Str>,
+}
+
+/// The step that reads the PR's preview id.
+pub(crate) const PREVIEW_ID: StepHandle<PreviewIdOutputs> = StepHandle::new(
+    "preview-id",
+    PreviewIdOutputs {
+        id: StepOutput::new("preview-id", "id"),
+    },
+);
 
 /// Build the workflow.
 pub fn cleanup_preview() -> Workflow {
@@ -35,31 +52,21 @@ fn cleanup() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
+    ActionsCheckout::new("Checkout Repo").step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "preview scripts call the GitHub API",
+    )
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun").uses(
-        "oven-sh",
-        "setup-bun",
-        "0c5077e51419868618aeaa5fe8019c62421857d6",
-    ) // v2
+    OvenShSetupBun::new("Setup Bun").step()
 }
 
 fn configure_aws_credentials() -> Step<Use> {
-    Step::new("Configure AWS Credentials")
-        .uses(
-            "aws-actions",
-            "configure-aws-credentials",
-            "e7f100cf4c008499ea8adda475de1042d6975c7b",
-        ) // v5
-        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
-        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
-        .add_with(("aws-region", "us-east-1"))
+    AwsActionsConfigureAwsCredentials::new("Configure AWS Credentials", "us-east-1")
+        .aws_access_key_id(vars::AWS_ACCESS_KEY)
+        .aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .step()
 }
 
 /// The branch name is attacker-controlled, so it reaches the script via env
@@ -68,25 +75,32 @@ fn get_preview_id() -> Step<Run> {
     Step::new("Get preview ID from comments")
         .run(indoc::indoc! {r#"
             PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
-              --pr ${{ github.event.pull_request.number }} \
-              --repo ${{ github.repository }} \
-              --token ${{ secrets.GITHUB_TOKEN }} \
+              --pr "$PR_NUMBER" \
+              --repo "$REPOSITORY" \
+              --token "$GITHUB_TOKEN" \
               --branch "$BRANCH")
-            echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
+            echo "id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
             echo "Preview ID: $PREVIEW_ID"
         "#})
-        .id("preview-id")
+        .id(PREVIEW_ID.id())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(Env::new("BRANCH", "${{ github.head_ref }}"))
+        .add_env(Env::new(
+            "PR_NUMBER",
+            github().event::<Str>("pull_request.number"),
+        ))
+        .add_env(Env::new("REPOSITORY", github().repository()))
+        .add_env(Env::new("GITHUB_TOKEN", vars::GITHUB_TOKEN))
+        .add_env(Env::new("BRANCH", github().head_ref()))
 }
 
 fn cleanup_preview_files() -> Step<Run> {
     Step::new("Cleanup preview")
         .run(indoc::indoc! {r#"
             bun scripts/preview/deploy.ts \
-              --preview-id ${{ steps.preview-id.outputs.id }} \
+              --preview-id "$PREVIEW_ID" \
               --cleanup
         "#})
-        .if_condition(Expression::new("steps.preview-id.outputs.id != ''"))
+        .if_condition(PREVIEW_ID.outputs.id.read().ne(""))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .add_env(Env::new("PREVIEW_ID", PREVIEW_ID.outputs.id.read()))
 }

@@ -6,11 +6,12 @@ import {
   eventDisplayTitle,
   eventForwardSummary,
 } from '@app/features/calendar/utils/event-forward-summary';
+import { EMAIL_COMPOSE_TO_INPUT_SELECTOR } from '@app/features/email-compose/core/constants';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { Telemetry } from '@macro-inc/observability';
 import { fetchCalendarEventIcs } from '@queries/calendar/ics';
-import { focusNewComposerTo } from './focus-new-composer';
 
 /**
  * Opens a new email that passes the event on, as Gmail forwards an
@@ -32,7 +33,7 @@ export function useForwardEventEmail() {
       span.setAttr('calendar.event_id', event.eventId);
       options.closeDetails();
       // The composer mounts after the file arrives; the focus waits for it.
-      focusNewComposerTo();
+      triggerFocusNewElement(EMAIL_COMPOSE_TO_INPUT_SELECTOR);
       const ics = await fetchCalendarEventIcs(event.eventId);
       if (ics.isErr()) {
         span.error('Calendar event .ics fetch failed');

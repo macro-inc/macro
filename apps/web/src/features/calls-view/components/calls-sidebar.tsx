@@ -1,11 +1,12 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
-import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { NewCallButton } from '@app/features/next-soup/soup-view/NewCallButton';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
+import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { fireAndForget } from '@core/util/fireAndForget';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
@@ -18,7 +19,6 @@ import {
   SidebarTagsSection,
   selectSidebarTag,
 } from '@property/tags/SidebarTagsSection';
-import { Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -76,6 +76,7 @@ function Row(props: {
 }
 
 function Section(props: {
+  id: SectionId;
   title: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -83,13 +84,17 @@ function Section(props: {
 }) {
   return (
     <CollapsibleSection.Root
+      sectionId={props.id}
+      sectionLabel={props.title}
       open={props.open}
       onOpenChange={props.onOpenChange}
     >
-      <CollapsibleSection.Trigger>
-        <span class="min-w-0 truncate">{props.title}</span>
-        <CollapsibleSection.Indicator />
-      </CollapsibleSection.Trigger>
+      <CollapsibleSection.Header>
+        <CollapsibleSection.Trigger>
+          <span class="min-w-0 truncate">{props.title}</span>
+          <CollapsibleSection.Indicator />
+        </CollapsibleSection.Trigger>
+      </CollapsibleSection.Header>
       <CollapsibleSection.Content>
         <ViewSidebar.Nav aria-label={props.title}>
           {props.children}
@@ -155,17 +160,8 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
   };
 
   return (
-    <ViewSidebar.Root aria-label="Calls navigation">
-      <ViewSidebar.Header
-        searchLabel="Search calls"
-        search={() => (
-          <div onFocusIn={props.onNavigate}>
-            <Layer depth={2}>
-              <SoupSearchbar variant="secondary" placeholder="Search calls" />
-            </Layer>
-          </div>
-        )}
-      >
+    <ViewSidebar.Root reorderId="calls" aria-label="Calls navigation">
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton class="shrink-0" />
           <ViewSidebar.Title>Calls</ViewSidebar.Title>
@@ -176,23 +172,31 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
       </ViewSidebar.Primary>
 
       <ViewSidebar.Content>
-        <ViewSidebar.Nav aria-label="Call views">
-          <For each={VIEW_TAB_LISTS.calls}>
-            {(tab) => (
-              <Row
-                active={activeTab() === tab.value}
-                icon={TAB_ICONS[tab.value] ?? PhoneIcon}
-                label={tab.label}
-                onClick={() => {
-                  props.onNavigate();
-                  applyTabPreset('calls', tab.value);
-                }}
-              />
-            )}
-          </For>
-        </ViewSidebar.Nav>
+        <SidebarRoutineSuggestions surface="calls" />
+        <ViewSidebar.Section
+          id="views"
+          label={t('viewMenus.callViews')}
+          headerless
+        >
+          <ViewSidebar.Nav aria-label="Call views">
+            <For each={VIEW_TAB_LISTS.calls}>
+              {(tab) => (
+                <Row
+                  active={activeTab() === tab.value}
+                  icon={TAB_ICONS[tab.value] ?? PhoneIcon}
+                  label={tab.label}
+                  onClick={() => {
+                    props.onNavigate();
+                    applyTabPreset('calls', tab.value);
+                  }}
+                />
+              )}
+            </For>
+          </ViewSidebar.Nav>
+        </ViewSidebar.Section>
 
         <Section
+          id="type"
           title="Type"
           open={isOpen('type')}
           onOpenChange={(open) => setOpen('type', open)}
@@ -211,6 +215,7 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
 
         <Show when={channels().length > 0}>
           <Section
+            id="channels"
             title="Channels"
             open={isOpen('channels')}
             onOpenChange={(open) => setOpen('channels', open)}
@@ -242,7 +247,9 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
       {/* Hidden while loading so a connected user never sees it flash. */}
       <Show
         when={
-          granola.status() === 'available' || granola.status() === 'disabled'
+          granola.status() === 'available' ||
+          granola.status() === 'disabled' ||
+          granola.status() === 'needs-reauth'
         }
       >
         <ViewSidebar.Footer class="border-0">

@@ -7,7 +7,7 @@
  * shift sideways once reasoning arrives and the row becomes one.
  *
  * The label is the caller's: it says what the session is doing (`Sending`,
- * `Running tools`, `Stopping`), so it changes only when the state does.
+ * `Planning`, `Stopping`), so it changes only when the state does.
  */
 
 import { TextShimmer } from './TextShimmer';

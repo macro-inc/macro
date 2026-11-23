@@ -81,3 +81,20 @@ fn release_previous_gc_root_deletes_the_prev_link() {
     assert!(!prev.exists());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A native build links Nix's loader and libraries, so the store mount is what
+/// lets it start inside the runtime image.
+#[test]
+fn every_binary_source_mounts_the_nix_store() {
+    for dir in [
+        BinariesDir::TargetDir(PathBuf::from("/ws/target/debug")),
+        BinariesDir::NixStore(PathBuf::from("/nix/store/abc-binaries/bin")),
+    ] {
+        let mounts = dir.compose_mounts();
+        assert!(mounts.contains(&"/nix/store:/nix/store:ro".to_string()));
+        assert_eq!(
+            mounts[0],
+            format!("{}:/app/out:ro", dir.host_dir().display())
+        );
+    }
+}

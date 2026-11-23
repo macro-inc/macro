@@ -28,6 +28,14 @@ impl Sortable for CreatedAt {
     type Value = DateTime<Utc>;
 }
 
+/// we are sorting by when the item was moved to the trash
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct DeletedAt;
+
+impl Sortable for DeletedAt {
+    type Value = DateTime<Utc>;
+}
+
 impl Sortable for SimpleSortMethod {
     type Value = DateTime<Utc>;
 }

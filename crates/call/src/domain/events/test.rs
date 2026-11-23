@@ -48,6 +48,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         ),
         (
             CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
+                channel_thread: false,
                 call_id: uuid(CALL_ID),
                 channel_id: Some(uuid(CHANNEL_ID)),
                 created_by: user_id("macro|creator@example.com"),
@@ -75,6 +76,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
                     "participants": ["macro|creator@example.com", "macro|guest@example.com"],
                     "has_recording": true,
                     "archive_reason": "last_participant_left",
+                    "channel_thread": false,
                 },
             }),
         ),

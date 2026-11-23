@@ -51,11 +51,22 @@ between the sandbox and the rest of the product.
 - Add a trigger source: `crates/agent_trigger` (context) →
   `src/domain/trigger_router.rs` → `src/inbound/kafka.rs`.
 
-External runtimes receive the session's configured MCP selection when binding,
-including enabled owner connections and custom servers under `OwnerConnections`.
-Under `Selected`, an overlaid app (`pipedream_mcp` `mcp_overlays`) the owner
-authorized natively is advertised as that custom server instead of its slug;
-an app connected that way also satisfies the `app.connected` resume check.
+External runtimes receive the session's configured MCP selection when binding.
+`outbound/egress.rs` lists it from `connectors::McpConnectionsService`
+(`connections(owner).scoped(selection).destinations()`): under
+`OwnerConnections` every app and custom server the owner can use (a native
+server several overlaid apps share once, under the first), under
+`Selected` exactly the selected apps, connected or not, so an unconnected one
+answers with a connect prompt. Every app, overlaid ones included, is
+advertised by its app slug. The `app.connected` resume check
+(`outbound/connected_apps.rs`) reads the same service's `status`. Never
+filter connections by source, flag or `enabled` here. A wake made only of
+`app.connected` events continues the owner's own work when the turn before it
+acted for the owner and ended offering each app's `<m-connect-app>` button:
+`stage_notifications` opens it as a `Program` turn for
+them (`domain/app_connections.rs` `continues_for_owner`), so their own calls
+are not held as a bot's. Any other wake, or one after someone else's turn,
+acts for nobody.
 Use `external_mcp_servers` to preserve the host-reachable egress URL override.
 
 External chat replies use `domain/service/external_replies.rs` and the
@@ -69,13 +80,90 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+External runtimes pass container preflight without a managed provider; only
+managed runtimes require provider account setup.
+
+Prompts to an external runtime pass `authorize_runtime` when accepted and
+`runtime_refusal` again when they dispatch, so a prompt queued before access was
+removed never runs: `RuntimeAccessFacts::may_run` requires a coding agent's
+prompter to have access and a resident's (a bound non-coding agent's) owner to
+have access (`agent_owner_can_run` in SQL), so removing access shuts a resident
+down without touching its binding. A turn nobody prompted runs on the agent
+owner's access. A refused prompt fails its conversation turn, publishes
+`command_rejected` with code `no_runtime_access`, and posts the reason into the
+conversation it came from as a `ReplyOutcome::Refused` reply under an id derived
+from the action, so redelivery finds the same message. The session API answers
+it with a 403 whose JSON `code` is `no_runtime_access`.
+
 External runtimes bind sessions lazily. On each dial `RuntimeRegistry` has the
 connection run `initialize` (shared with every session through its handshake)
 and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
-restoring each (`session/load` or `session/resume`) without a prompt; attached,
-archived and managed sessions are skipped. macrod's herdr-acp lists native
-sessions whose Herdr agent still runs.
+restoring each (`session/load` or `session/resume`) without a prompt, then
+dispatching whatever its durable queue still holds when no turn is running;
+archived and managed sessions are skipped, and so are sessions already attached on
+the runtime's current connection. A session whose actor is still on the socket the
+redial displaced (each `RuntimeConnection` has a `RuntimeConnectionId`, which its
+sessions' attachments carry) is closed first, waiting for its `disconnected` frame,
+then attached to the new connection. A dial always restores sessions
+with a command in flight here, an unfinished turn (`has_unfinished_turn`: open, or
+open when the session disconnected, from `agent_session.turn_interrupted`), or a
+durable queue, however many; it fills the rest of `MAX_EAGER_PER_DIAL` (50) with
+sessions active in the last hour (`modified_at`, or the listing's `updatedAt`),
+most recent first. Recent sessions beyond the cap, and idle ones, bind on their
+next prompt or delivery (`service/reattach.rs`). Every dial on a replica shares `REATTACH_CONCURRENCY`
+permits, each held until the session's `session/load` or `session/resume`
+finishes; a harness dialing again stops its previous dial from starting more.
+Permanent errors are not retried; others are, with jittered backoff, while the
+runtime stays connected. A session whose load keeps failing stays disconnected
+with its turn unfinished, so every dial tries it again (three attempts, under a
+permit). The `agent.runtime.reattach` span counts eager, lazy, capped (recent but
+left lazy by the cap), required (restored past any cap), dormant, skipped,
+failed and abandoned sessions and retries. macrod's herdr-acp lists
+native sessions whose Herdr agent still runs, each with `updatedAt` from its
+transcript's last write, so a session worked on in its Herdr pane within the
+hour is restored at dial time.
+
+`HarnessBindings::sessions_on_harness` resolves a dial's listed sessions in one
+query: archived ones are dropped, and dormant ones (`ListedSessions::dormant`:
+no `modified_at` or log activity for `DORMANT_AFTER`, 7 days, never the
+listing's `updatedAt`, and no unfinished or interrupted turn, queued prompt,
+pending tool approval, undelivered notification or current conversation) are
+only counted. A dial does no per-session work for them and nothing is stored;
+their next prompt or delivery reconnects them like any lazy session. Dormancy
+is invisible to users. A per-runtime cap on live sessions counts
+`ListedSessions::live` only.
+
+Each session's commands run one at a time on its command worker
+(`service/queue.rs`). After `WORKER_IDLE_TIMEOUT` with nothing queued, the
+worker tries to release its session (`service/idle.rs`) and exits only when
+nothing is left to free (`IdleRelease::holds_nothing`: released, or another
+runtime's session, such as Cursor, a sandboxed coder or an external (macrod)
+runtime, whose queue copy and `hydrated` mark are forgotten too); a session
+still held keeps its worker, which tries again.
+A try that replayed the log and kept the session, or failed, pushes the next
+one out to twice, four times, then every sixteen times the timeout
+(`idle_wait`, `IdleRelease::backs_off`), because each such try replays the
+whole log; a try that found work open (a running turn, a busy actor) does not,
+so the session is tried again at the plain timeout. The PostHog kill switch
+`disable-agent-idle-release-retry` (`IDLE_RELEASE_NO_RETRY_FLAG`, read for the
+session's owner) turns retries off: the worker tries once and exits. A worker also exits with
+the session it deletes. Both remove its map entry through `retire_worker`;
+commands are sent under the same entry lock, so one racing the exit either
+keeps the worker or starts a new one. A try silently releases a quiet session
+(nothing admitted in `busy`, empty queue, no notification batch) whose runtime
+says the release is lossless (`ContainerManager::idle_release_is_lossless`:
+the in-process manager compares its live state with what the log rebuilds). A
+session whose row is gone has nothing left to keep and is released. An in-process
+session's actor attached here goes through
+`AgentSessionService::release_session`, never `close_session`: no
+`disconnected` frame, no `SessionStopped`, no lifecycle event or webhook, its
+claim given back under its own fence. Then `ContainerManager::release_idle`
+drops this process's runtime state, and the queue copy and `hydrated` mark are
+forgotten. The next command finds no actor and resumes from the log. Unclaimed
+warm sessions never get a worker, so they stay warm until
+`reap_warm_sessions` expires and deletes them. The `agent.session.idle_release`
+span's `outcome` names where a release stopped.
 
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session
@@ -93,6 +181,55 @@ Reconcile active leases against terminal log evidence too: an observer can miss 
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
 
+`RuntimeRegistry::computer_control` forwards typed computer commands to the
+local live connection, returning `None` when another replica owns it. The
+service composition owns cross-replica carriage and request deadlines.
+
+Each dial costs a replica a handshake, `session/list` and a reattach, so
+`inbound/runtime_gateway.rs` gives every authenticated harness a per-replica,
+in-memory `DialBudget` (6 dials a minute, as a burst or one every 10 s) and
+refuses the rest before the upgrade with `429` and `Retry-After`. Refusals warn
+and set `agent.runtime.dial_outcome:rate_limited` on the `agent.runtime.dial`
+span. macrod treats a 429 as retryable on its own exponential backoff
+(1 s doubling to 30 s) and does not read `Retry-After`.
+
+Harness presence is per connection, because a runtime's redial can land on a
+different replica than the socket it replaced, and a stalled replica can notice
+that socket's end long after. `RuntimeRegistry` mints a `RuntimeConnectionId` per
+dial and reports it to `HarnessPresence`; a close removes only its own row, and
+each replica renews the leases of what it holds, so a crash reads offline within
+the lease. A renewal that restores the row of a connection the registry no
+longer holds (it closed after the renewal's snapshot) closes it again through
+`HarnessPresence::disconnected`, so a Macro computer still gets its disconnect.
+To debug a harness in Datadog, search `@harness:<id>` for
+`@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR
+harness_runtime_lease_restored OR harness_runtime_lease_restore_undone)`: each
+carries `connection`, all but the undo carry `replica` (the undo's own close
+follows as a `harness_runtime_disconnected` that does, in the same trace), and a disconnect's
+`other_live_connections` above 0 is a stale close that changed nothing. A
+restore just before a connection's `harness_runtime_connected` is a renewal
+that beat the attach write, and harmless. Each renewal is one trace: a
+`harness.registry.renew` span (`connections`, `restored`, `undone`) around the
+adapter's `harness.presence.renew` (`replica`, `renewed`, `restored`, `error`),
+with each undo's `harness.presence.disconnected` under it.
+When recording a dial bound an agent (`HarnessPresence::connected` returns
+`ConnectionRecorded::AgentBound`: a Macro computer gets its first agent on its
+first connect), the registry sends the runtime `ToRuntimeMessage::AgentsChanged`,
+and macrod re-reads its agents and reopens its trigger stream at once instead
+of at its next poll. It goes only to a runtime that listed `agents-changed` in
+the `x-macro-runtime-accepts` dial header (`RuntimeAccepts`, read by
+`inbound/runtime_gateway.rs`), so older runtimes never see it. Presence
+gets the `RuntimeAccepts` too: a Macro computer's macrod that doesn't list
+`apply-agent` can't take `ToRuntimeMessage::ApplyAgent`, so an agent
+teammate's computer fails its start at once (hosted_runtimes
+`Failure::AgentUnsupported`).
+
+Only directly authenticated users with edit access may answer ACP permissions or
+elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or
+cancel held tool calls, but cannot approve or approve and remember them; the
+HTTP boundary refuses any program (`macro_authorization::is_program_run`:
+agent or routine attribution, or the execution header).
+
 ## Checks
 
 - `cargo nextest run -p agent_harness --lib --test-threads=2` (`SQLX_OFFLINE`
@@ -107,6 +244,9 @@ wakes; interrupted quiet batches return to the next real prompt.
   Background channel messages are not attached. `trigger_router` fills each
   context attachment's `url` from `StaticFileLinks`, and `<m-agent-context>`
   lists them per message; ACP `resource_link`s are what vision models fetch.
+- Every composed prompt's `<m-agent-context>` opens with `<you>`, the
+  session bot's name and handle, so the agent can tell a message naming it
+  from one naming someone else.
 - Every composed prompt's `<m-agent-context>` states `<current_time>` in the
   sender's (else owner's) primary calendar time zone, via the
   `UserTimeZones` port, or UTC when unknown. Models have no other source

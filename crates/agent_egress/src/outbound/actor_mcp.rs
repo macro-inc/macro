@@ -4,9 +4,12 @@ use crate::domain::{
     model::{AgentSessionId, UpstreamCall},
     ports::ActorMcpTransport,
 };
+use connectors::guarded_http::{self, AddressPolicy};
 use macro_user_id::user_id::MacroUserIdStr;
-use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
-use rmcp::{ServiceExt, model::ClientInfo, transport::StreamableHttpClientTransport};
+use rmcp::transport::streamable_http_client::{
+    StreamableHttpClientTransportConfig, StreamableHttpError,
+};
+use rmcp::{ServiceExt, model::ClientConfig, transport::StreamableHttpClientTransport};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
@@ -14,13 +17,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::sync::OnceCell;
+use tracing::Instrument as _;
 
 mod traced_client;
 use traced_client::TracedClient;
 #[cfg(test)]
 mod test;
 
-type Client = rmcp::service::RunningService<rmcp::RoleClient, ClientInfo>;
+type Client = rmcp::service::RunningService<rmcp::RoleClient, ClientConfig>;
 type Connection = Arc<OnceCell<Arc<Client>>>;
 
 #[derive(Hash, PartialEq, Eq)]
@@ -33,20 +37,22 @@ struct AccountSession {
 
 /// A bounded pool isolated by session, selected user, endpoint, and credential.
 pub struct HttpActorMcpTransport {
+    policy: AddressPolicy,
     client: TracedClient,
     sessions: Mutex<lru::LruCache<AccountSession, Connection>>,
 }
 
 impl HttpActorMcpTransport {
-    /// Reuse an HTTP client with bounded requests and no credential-bearing redirects.
-    pub fn new() -> Result<Self, EgressError> {
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
+    /// Reuse an HTTP client with bounded requests, no credential-bearing
+    /// redirects, and only the addresses `policy` allows.
+    pub fn new(policy: AddressPolicy) -> Result<Self, EgressError> {
+        let client = guarded_http::client_builder(policy)
             .timeout(std::time::Duration::from_secs(30 * 60))
             .connect_timeout(std::time::Duration::from_secs(15))
             .build()
             .map_err(|error| EgressError::Internal(rootcause::report!(error).into()))?;
         Ok(Self {
+            policy,
             client: TracedClient(client),
             sessions: Mutex::new(lru::LruCache::new(
                 NonZeroUsize::new(128).expect("pool capacity is positive"),
@@ -60,6 +66,8 @@ impl HttpActorMcpTransport {
         actor: MacroUserIdStr<'static>,
         upstream: UpstreamCall,
     ) -> Result<Arc<Client>, EgressError> {
+        guarded_http::check_url(self.policy, upstream.url())
+            .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
         let mut config = StreamableHttpClientTransportConfig::with_uri(upstream.url().to_string());
         for (name, value) in upstream.scope_headers() {
             config.custom_headers.insert(name.clone(), value.clone());
@@ -99,16 +107,21 @@ impl HttpActorMcpTransport {
                 cell
             }
         };
-        cell.get_or_try_init(|| async {
-            let transport = StreamableHttpClientTransport::with_client(self.client.clone(), config);
-            let client = tokio::time::timeout(
-                std::time::Duration::from_secs(30),
-                ClientInfo::default().serve(transport),
-            )
-            .await
-            .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
-            .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
-            Ok(Arc::new(client))
+        cell.get_or_try_init(|| {
+            async {
+                let transport =
+                    StreamableHttpClientTransport::with_client(self.client.clone(), config);
+                let client = tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    mcp_toolset::client_info().serve(transport),
+                )
+                .await
+                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
+                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
+                Ok(Arc::new(client))
+            }
+            // A new upstream session's handshake, apart from the call it serves.
+            .instrument(tracing::info_span!("connected_app.mcp_connect"))
         })
         .await
         .cloned()
@@ -117,7 +130,7 @@ impl HttpActorMcpTransport {
 
 #[async_trait::async_trait]
 impl ActorMcpTransport for HttpActorMcpTransport {
-    #[tracing::instrument(skip_all, err, fields(session_id = %session, host = upstream.url().host_str()))]
+    // The caller's `connected_app.mcp_exchange` span is the outbound span.
     async fn exchange(
         &self,
         session: AgentSessionId,
@@ -148,7 +161,7 @@ impl ActorMcpTransport for HttpActorMcpTransport {
                 client
                     .call_tool(params)
                     .await
-                    .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))
+                    .map_err(call_error)
                     .and_then(|result| {
                         serde_json::to_value(result).map_err(|error| {
                             EgressError::Internal(rootcause::report!(error).into())
@@ -160,4 +173,35 @@ impl ActorMcpTransport for HttpActorMcpTransport {
             )),
         }
     }
+}
+
+/// A failed call: a 429 the upstream answered is a typed rate limit, since
+/// the request did not run and may be sent again; anything else broke the
+/// exchange.
+fn call_error(error: rmcp::ServiceError) -> EgressError {
+    if let rmcp::ServiceError::TransportSend(transport) = &error
+        && let Some(StreamableHttpError::HttpStatus(status)) = transport
+            .error
+            .downcast_ref::<StreamableHttpError<reqwest::Error>>()
+        && status.status == http::StatusCode::TOO_MANY_REQUESTS.as_u16()
+    {
+        return EgressError::RateLimited {
+            retry_after: status.retry_after.as_deref().and_then(retry_after),
+        };
+    }
+    EgressError::Upstream(rootcause::report!(error).into())
+}
+
+/// A `Retry-After` value as a wait: delay-seconds, or an HTTP date, which
+/// counts from now (a date already past is no wait).
+fn retry_after(value: &str) -> Option<std::time::Duration> {
+    let value = value.trim();
+    if let Ok(seconds) = value.parse() {
+        return Some(std::time::Duration::from_secs(seconds));
+    }
+    let at = httpdate::parse_http_date(value).ok()?;
+    Some(
+        at.duration_since(std::time::SystemTime::now())
+            .unwrap_or_default(),
+    )
 }

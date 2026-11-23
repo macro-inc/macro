@@ -11,7 +11,9 @@ export function createAppDealStages() {
     feedback: toast,
   });
   return useDealStages(
-    useListPropertiesQuery(() => ({ scope: 'team', includeOptions: true })),
+    // The full listing other CRM surfaces already read; the team's stage
+    // definition is picked out by owner, so no team-only request is needed.
+    useListPropertiesQuery(() => ({ scope: 'all', includeOptions: true })),
     settings
   );
 }

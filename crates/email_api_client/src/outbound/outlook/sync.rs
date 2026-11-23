@@ -1,33 +1,60 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use reqwest::Method;
 use serde_json::json;
 
-use super::{OutlookApiClientRepository, transport::invalid_response, wire};
+use super::{
+    OutlookApiClientRepository,
+    transport::{invalid_response, read_json},
+    wire,
+};
 use crate::domain::models::{
-    AccessToken, EmailApiError, MailboxChangePage, MailboxSubscription, ProviderId, StreamPosition,
-    StreamToken,
+    AccessToken, EmailApiError, MailboxChangePage, MailboxSubscription, ProviderId, RoundStart,
+    StreamPosition, StreamToken,
 };
 use crate::domain::ports::{FolderChangeReader, MailboxWatchClient};
 
+#[cfg(test)]
+mod test;
+
 impl FolderChangeReader for OutlookApiClientRepository {
+    // 1: a round is not capped at 100 items by `$top`. Rounds started before
+    // it hold at most the folder's newest 100 messages.
+    const READER_REVISION: i16 = 1;
+
     async fn folder_changes(
         &self,
         token: &AccessToken,
         folder: &ProviderId,
         position: Option<&StreamToken>,
+        start: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         let url = match position {
             Some(position) => self.continuation(position)?,
             None => {
                 let mut url =
                     self.endpoint(&["me", "mailFolders", folder.as_str(), "messages", "delta"])?;
-                url.query_pairs_mut()
-                    .append_pair("$select", "id")
-                    .append_pair("$top", "100");
+                {
+                    let mut query = url.query_pairs_mut();
+                    query.append_pair("$select", "id");
+                    // Message delta takes only this order and only `ge`/`gt`
+                    // on `receivedDateTime`, and its links carry both. The
+                    // time drops its fraction, so nothing received in the
+                    // cutoff's second is left out.
+                    match start {
+                        RoundStart::Unordered => {}
+                        RoundStart::NewestFirst => {
+                            query.append_pair("$orderby", "receivedDateTime desc");
+                        }
+                        RoundStart::ReceivedSince(since) => {
+                            let since = since.to_rfc3339_opts(SecondsFormat::Secs, true);
+                            query.append_pair("$filter", &format!("receivedDateTime ge {since}"));
+                        }
+                    }
+                }
                 url
             }
         };
-        let page: wire::Page<wire::Change> = self.get(token, url).await?;
+        let page: wire::Page<wire::Change> = self.get_delta_page(token, url).await?;
         let mut changed = Vec::new();
         let mut removed = Vec::new();
         for message in page.value {
@@ -41,7 +68,11 @@ impl FolderChangeReader for OutlookApiClientRepository {
         let position = match (page.next, page.delta) {
             (Some(next), None) => StreamPosition::Continue(StreamToken::new(next)),
             (None, Some(delta)) => StreamPosition::Checkpoint(StreamToken::new(delta)),
-            _ => return Err(invalid_response()),
+            _ => {
+                return Err(invalid_response(
+                    "delta page lacks one of nextLink and deltaLink",
+                ));
+            }
         };
         // Reject unsafe URLs before they can become durable checkpoints.
         let next = match &position {
@@ -52,6 +83,7 @@ impl FolderChangeReader for OutlookApiClientRepository {
             changed,
             removed,
             position,
+            reader_revision: Self::READER_REVISION,
         })
     }
 }
@@ -75,7 +107,7 @@ impl MailboxWatchClient for OutlookApiClientRepository {
         let mut url = self.endpoint(&["subscriptions"])?;
         loop {
             if !visited.insert(url.as_str().to_owned()) {
-                return Err(invalid_response());
+                return Err(invalid_response("subscriptions pages repeat"));
             }
             let page: wire::Page<Watch> = self.get(token, url).await?;
             for value in page.value {
@@ -108,18 +140,15 @@ impl MailboxWatchClient for OutlookApiClientRepository {
             "notificationUrl":notification_url, "lifecycleNotificationUrl":lifecycle_url,
             "clientState":client_state, "expirationDateTime":expires_at.to_rfc3339(),
         });
-        let result: wire::Subscription = self
+        let result = self
             .request(
                 token,
                 Method::POST,
                 self.endpoint(&["subscriptions"])?,
                 Some(&body),
             )
-            .await?
-            .json()
-            .await
-            .map_err(|_| invalid_response())?;
-        subscription(result)
+            .await?;
+        subscription(read_json(result).await?)
     }
 
     async fn renew_watch(
@@ -129,18 +158,15 @@ impl MailboxWatchClient for OutlookApiClientRepository {
         expires_at: DateTime<Utc>,
     ) -> Result<MailboxSubscription, EmailApiError> {
         let body = json!({"expirationDateTime":expires_at.to_rfc3339()});
-        let result: wire::Subscription = self
+        let result = self
             .request(
                 token,
                 Method::PATCH,
                 self.endpoint(&["subscriptions", id.as_str()])?,
                 Some(&body),
             )
-            .await?
-            .json()
-            .await
-            .map_err(|_| invalid_response())?;
-        subscription(result)
+            .await?;
+        subscription(read_json(result).await?)
     }
 
     async fn remove_watch(

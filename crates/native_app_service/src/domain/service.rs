@@ -1,11 +1,15 @@
 use crate::domain::{
     models::{
-        BundleAction, BundleClear, BundleNativeUpdateRequired, BundlePolicyAction, BundleUpdate,
-        BundleUpdatePolicy, BundleUpdateRequest, PlatformData, PlatformVerifier, UpdateErr,
+        AllTargets, BundleAction, BundleClear, BundleNativeUpdateRequired, BundlePolicyAction,
+        BundleUpdate, BundleUpdatePolicy, BundleUpdateRequest, PlatformData, PlatformVerifier,
+        UpdateErr,
     },
     ports::{GetJsBundleManifest, NativeAppService},
 };
 use rootcause::Report;
+
+/// Desktop updaters that send no `manifest_schema` read schema 2 only.
+const LEGACY_DESKTOP_MANIFEST_SCHEMA: u64 = 2;
 
 /// the concrete struct which implements [NativeAppService]
 pub struct NativeAppServiceImpl<T> {
@@ -31,6 +35,8 @@ where
             arch: _,
             current_bundle_build,
             native_build,
+            manifest_schema,
+            current_git_sha,
         } = req;
 
         let manifest = self.bundle_fetcher.get_app_bundle_manifest().await?;
@@ -48,6 +54,22 @@ where
         }
 
         if manifest.bundle_build <= current_bundle_build {
+            return Ok(None);
+        }
+
+        // A native release embeds the bundle from its own commit, numbered by
+        // commit time, while the web deploy of that commit is numbered by its
+        // later build time. Same commit, same bundle: nothing to download.
+        if current_git_sha
+            .as_deref()
+            .is_some_and(|sha| manifest.built_from(sha))
+        {
+            return Ok(None);
+        }
+
+        if matches!(target, AllTargets::Desktop(_))
+            && manifest.schema_version > manifest_schema.unwrap_or(LEGACY_DESKTOP_MANIFEST_SCHEMA)
+        {
             return Ok(None);
         }
 

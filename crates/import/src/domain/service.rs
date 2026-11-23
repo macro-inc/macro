@@ -20,10 +20,10 @@ use crate::inbound::toolset::{ImportToolContext, notion_import_toolset};
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, PredefinedModel};
 use ai_toolset::{RequestContext, ToolResult, ToolSet, ToolSetError};
+use connectors::{ConnectorKey, McpConnectionsService, UserMcpTools};
 use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::{ConnectorSelect, UserMcpTools};
 use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -32,6 +32,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 mod admission;
+pub(crate) mod lifecycle;
 mod notion_workspace;
 mod tracker_workspace;
 mod workspace;
@@ -323,6 +324,15 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
     admission: Arc<dyn ai_billing::AiAdmissionService>,
     notifier: Option<ImportNotify>,
     jobs: WorkspaceJobs,
+    mirror_locks: Arc<PersonalMirrorLocks>,
+}
+
+/// Weak slots keep in-run mirror exclusion per user without retaining inactive locks.
+#[derive(Default)]
+struct PersonalMirrorLocks {
+    users: tokio::sync::Mutex<
+        std::collections::HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>,
+    >,
 }
 
 /// Where this process runs Notion workspace imports: its identity on the
@@ -359,6 +369,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             admission: self.admission.clone(),
             notifier: self.notifier.clone(),
             jobs: self.jobs.clone(),
+            mirror_locks: self.mirror_locks.clone(),
         }
     }
 }
@@ -383,6 +394,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             notifier: None,
             jobs: WorkspaceJobs::new(),
+            mirror_locks: Arc::new(PersonalMirrorLocks::default()),
         }
     }
 }
@@ -404,6 +416,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             admission: self.admission,
             notifier: self.notifier,
             jobs: self.jobs,
+            mirror_locks: self.mirror_locks,
             slack_source: source,
         }
     }
@@ -456,6 +469,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             admission: self.admission,
             notifier: self.notifier,
             jobs: self.jobs,
+            mirror_locks: self.mirror_locks,
             slack_source: self.slack_source,
         }
     }
@@ -470,7 +484,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
 impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     /// Fail discovery runs that outlived their own timeout: their process died
@@ -618,9 +632,7 @@ where
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
     ) -> anyhow::Result<Arc<UserMcpTools>> {
-        let mcp_tools = self
-            .mcp_tools
-            .connector_toolset(user, source.connector_ref())
+        let mcp_tools = source_tools(self.mcp_tools.as_ref(), user, source)
             .await?
             .ok_or_else(|| anyhow::anyhow!("no {} connection", source.as_ref()))?;
         anyhow::ensure!(
@@ -878,7 +890,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportService
     for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user), err)]
@@ -975,7 +987,7 @@ where
 impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user, metadata), err)]
@@ -1066,7 +1078,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportStager
     for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     async fn stage(
@@ -1095,6 +1107,14 @@ where
             .normalize_foreign_id(foreign_id)
             .ok_or_else(|| ImportError::Other(anyhow::anyhow!("foreign_id must not be empty")))?;
         let metadata = validate_metadata(source, metadata)?;
+        let visible = self
+            .creator
+            .can_view(user, source, entity_id)
+            .await
+            .map_err(ImportError::AccessCheck)?;
+        if !visible {
+            return Err(ImportError::EntityNotAccessible(entity_id.to_owned()));
+        }
 
         // Channels always associate with the user's team when they have one.
         let team_id = match source {
@@ -1150,7 +1170,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> NotionPageImpor
     for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user), fields(page = page_url_or_id), err)]
@@ -1286,10 +1306,10 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportFinalizer
     for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
-    #[tracing::instrument(skip(self, user, content_markdown), err)]
+    #[tracing::instrument(skip(self, user, name, content_markdown, properties), fields(properties = properties.values.len(), tags = properties.tags.len()), err)]
     async fn finalize_document(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1369,6 +1389,21 @@ where
 
 /// The mangled name of the connector's Notion fetch tool. Notion exposes this
 /// as `notion-fetch` generally and as `fetch` on OpenAI-compatible surfaces.
+/// The tools of the user's connection to `source`'s app, when the connectors
+/// services count one as usable; `None` otherwise.
+pub(crate) async fn source_tools<S: McpConnectionsService>(
+    service: &S,
+    user: &MacroUserIdStr<'static>,
+    source: ImportSource,
+) -> anyhow::Result<Option<UserMcpTools>> {
+    let app = ConnectorKey::App(source.connector()?);
+    let connections = service.connections(user).await?;
+    let Some(handle) = connections.handles().find(|handle| *handle.key() == app) else {
+        return Ok(None);
+    };
+    Ok(Some(service.toolset(std::slice::from_ref(handle)).await))
+}
+
 fn notion_fetch_tool_name(mcp_tools: &impl ToolSet<()>) -> Option<String> {
     ToolSet::<()>::request_schemas(mcp_tools)?
         .into_iter()

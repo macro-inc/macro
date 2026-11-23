@@ -16,4 +16,6 @@ export type ColumnConfigOneOfThree = {
   /** How its cells are computed. */
   formula: Formula;
   kind: ColumnConfigOneOfThreeKind;
+  /** Whether a number formula is shown as a percent. */
+  percentage?: boolean;
 };

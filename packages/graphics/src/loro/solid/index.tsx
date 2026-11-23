@@ -10,9 +10,9 @@ import {
 import { corners, cssMatrix } from '../../core/affine';
 import { worldToScreen } from '../../core/camera';
 import type { GraphicsEditor } from '../../core/editor';
-import type { Point, ShapeItem } from '../../core/model';
+import type { Point } from '../../core/model';
 import { nodeCorners, roots, worldBounds } from '../../core/scene';
-import { isShape, shapePayload } from '../../core/shapes/registry';
+import { isShape } from '../../core/shapes/registry';
 import { createGraphicsProjection, GraphicsSurface } from '../../solid';
 import {
   defaultRenderers,
@@ -25,6 +25,7 @@ import {
   type PeerPresence,
   type PresenceShape,
 } from '../presence-state';
+import { presenceGhostItem } from './ghost';
 import { attachPresencePointer } from './pointer';
 
 export { attachPresencePointer } from './pointer';
@@ -37,47 +38,7 @@ function GhostShape(props: {
   scale: number;
   renderers?: Partial<ItemRenderers>;
 }) {
-  const payload = () => {
-    const value = props.shape.item;
-    if (!value) return undefined;
-    const geometry: unknown = JSON.parse(value.geometry);
-    return shapePayload(
-      value.type,
-      geometry && typeof geometry === 'object' && 'width' in geometry
-        ? {
-            ...geometry,
-            width: Math.max(0.01, props.shape.width),
-            height: Math.max(0.01, props.shape.height),
-          }
-        : geometry
-    );
-  };
-  const item = (): ShapeItem =>
-    props.shape.item
-      ? {
-          id: props.shape.id,
-          ...payload()!,
-          appearance: props.shape.item.appearance,
-          transform: props.shape.world,
-          placement: { parentId: 'presence-root', sortKey: 'a0' },
-        }
-      : {
-          id: props.shape.id,
-          ...shapePayload(
-            props.shape.kind,
-            props.shape.kind === 'pencil'
-              ? props.shape.pencil
-              : { width: props.shape.width, height: props.shape.height }
-          ),
-          placement: { parentId: 'presence-root', sortKey: 'a0' },
-          transform: props.shape.world,
-          appearance: {
-            fill: 'transparent',
-            stroke: props.color,
-            strokeWidth: props.shape.strokeWidth,
-            cornerRadius: props.shape.cornerRadius,
-          },
-        };
+  const item = () => presenceGhostItem(props.shape, props.color);
   return (
     <div
       data-presence-preview={props.shape.id}
@@ -91,14 +52,19 @@ function GhostShape(props: {
         'transform-origin': '0 0',
       }}
     >
-      <ShapeView
-        item={item()}
-        renderers={{ ...defaultRenderers, ...props.renderers }}
-        scale={
-          props.scale * Math.hypot(props.shape.world[0], props.shape.world[1])
-        }
-        preview
-      />
+      <Show when={item()}>
+        {(item) => (
+          <ShapeView
+            item={item()}
+            renderers={{ ...defaultRenderers, ...props.renderers }}
+            scale={
+              props.scale *
+              Math.hypot(props.shape.world[0], props.shape.world[1])
+            }
+            preview
+          />
+        )}
+      </Show>
     </div>
   );
 }

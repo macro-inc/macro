@@ -1,7 +1,7 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { Accordion } from '@kobalte/core/accordion';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { useDriveView } from '../context/drive-context';
 import { DRIVE_SORT_OPTIONS } from '../core/types';
 import { useDriveFilters } from '../filters/use-drive-filters';
@@ -10,6 +10,7 @@ export function DriveFilterDrawer() {
   const { state } = useDriveView();
 
   const filters = useDriveFilters();
+  const [open, setOpen] = createSignal(false);
 
   const isRecent = () => {
     const location = state.value().location;
@@ -19,6 +20,8 @@ export function DriveFilterDrawer() {
 
   return (
     <MobileFilterDrawer
+      open={open()}
+      onOpenChange={setOpen}
       triggerLabel="Open file filters"
       label="File list controls"
       activeCount={filters.activeCount()}
@@ -60,11 +63,9 @@ export function DriveFilterDrawer() {
               {(group) => {
                 const activeCount = createMemo(
                   () =>
-                    group.options.filter(
-                      (option) =>
-                        option.id !== group.defaultOptionId &&
-                        filters.isSelected(group.id, option.id)
-                    ).length
+                    filters
+                      .selectedIds(group.id)
+                      .filter((id) => id !== group.defaultOptionId).length
                 );
 
                 return (
@@ -73,20 +74,42 @@ export function DriveFilterDrawer() {
                     label={group.label}
                     activeCount={activeCount()}
                   >
-                    <For each={group.options}>
-                      {(option) => (
-                        <MobileFilterDrawer.Option
-                          selectionMode={group.selectionMode}
-                          checked={filters.isSelected(group.id, option.id)}
-                          onChange={(checked) =>
-                            filters.setSelected(group.id, option.id, checked)
+                    <Show
+                      when={group.createSource}
+                      fallback={
+                        <For each={group.options}>
+                          {(option) => (
+                            <MobileFilterDrawer.Option
+                              selectionMode={group.selectionMode}
+                              checked={filters.isSelected(group.id, option.id)}
+                              onChange={(checked) =>
+                                filters.setSelected(
+                                  group.id,
+                                  option.id,
+                                  checked
+                                )
+                              }
+                              icon={option.icon?.()}
+                            >
+                              {option.label}
+                            </MobileFilterDrawer.Option>
+                          )}
+                        </For>
+                      }
+                    >
+                      {(createSource) => (
+                        <MobileFilterDrawer.SourceOptions
+                          groupId={group.id}
+                          createSource={createSource()}
+                          enabled={open}
+                          activeIds={() => filters.selectedIds(group.id)}
+                          placeholder={group.searchPlaceholder}
+                          onChange={(id, checked) =>
+                            filters.setSelected(group.id, id, checked)
                           }
-                          icon={option.icon?.()}
-                        >
-                          {option.label}
-                        </MobileFilterDrawer.Option>
+                        />
                       )}
-                    </For>
+                    </Show>
                   </MobileFilterDrawer.Section>
                 );
               }}

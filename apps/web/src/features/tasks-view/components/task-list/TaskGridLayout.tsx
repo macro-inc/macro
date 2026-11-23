@@ -15,7 +15,10 @@ import {
 import { SharedBadgeSmall } from '@entity/components/Badges';
 import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
-import { soupPropertyToProperty } from '@entity/extractors-property';
+import {
+  buildStartDateDefaultProperty,
+  soupPropertyToProperty,
+} from '@entity/extractors-property';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
 import { TaskPropertyControl } from '@entity/extractors-property/task-property-control';
 import { getTaskDueDate, isTaskClosed } from '@entity/utils/task-properties';
@@ -25,8 +28,13 @@ import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
+import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityRowTags } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
+import { isDateProperty } from '@property/utils';
+import { formatStartDueCompact, startDueOf } from '@property/utils/start-due';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
@@ -81,6 +89,7 @@ function buildStubProperty(col: TaskGridColumn): Property {
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
   onFilterByTag?: (optionId: string) => void;
+  onFilterByAssignee?: (userId: string) => void;
   compact?: boolean;
   calendar: Accessor<DateBucketBoundaries>;
   referencePropertyIds?: readonly string[];
@@ -137,11 +146,36 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
+  // With start dates the due date cell reads as the range and edits both ends.
+  const startDateEnabled = useStartDateEnabled();
+  const startProperty = () => {
+    const property =
+      propertyMap().get(SYSTEM_PROPERTY_IDS.START_DATE) ??
+      buildStartDateDefaultProperty();
+    return isDateProperty(property) ? property : undefined;
+  };
+  const dueDatesText = () => {
+    if (!startDateEnabled()) return undefined;
+    return formatStartDueCompact(
+      startDueOf(startProperty(), propertyMap().get(TASK_DUE_DATE_COLUMN.defId))
+    );
+  };
+  const dueDatesEditor = startDueEditorFor({
+    field: 'due',
+    enabled: startDateEnabled,
+    other: startProperty,
+    saveOther: (property, value) => saveOne(property, value),
+  });
+
   const dueDateClass = () => {
+    const due = propertyMap().get(TASK_DUE_DATE_COLUMN.defId);
     const urgency = taskDueDateUrgency(
       getTaskDueDate(props.entity),
       isTaskClosed(props.entity),
-      props.calendar()
+      props.calendar(),
+      startDateEnabled() && due && isDateProperty(due) && due.hasTime
+        ? { now: Date.now() }
+        : undefined
     );
     return cn({
       'text-failure': urgency === 'danger',
@@ -173,6 +207,8 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
                   buildStubProperty(TASK_DUE_DATE_COLUMN)
                 }
                 class={dueDateClass()}
+                valueText={dueDatesText()}
+                editor={dueDatesEditor}
               />
             </div>
           </NarrowLayout>
@@ -181,6 +217,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           <Entity.Layout
             class={cn(
               'task-grid-row task-grid-icon-creator w-full min-h-[inherit] items-center text-sm px-2',
+              startDateEnabled() && 'task-grid-dates',
               'gap-2 grid grid-rows-[1fr]'
             )}
             style={taskGridTemplate(columns())}
@@ -292,8 +329,17 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
                   <ListPropertyValue
                     entityId={props.entity.id}
                     class={col.id === 'dueDate' ? dueDateClass() : undefined}
+                    valueText={
+                      col.id === 'dueDate' ? dueDatesText() : undefined
+                    }
+                    editor={col.id === 'dueDate' ? dueDatesEditor : undefined}
                     property={
                       propertyMap().get(col.defId) ?? buildStubProperty(col)
+                    }
+                    onFilterByUser={
+                      col.id === 'assignees'
+                        ? props.onFilterByAssignee
+                        : undefined
                     }
                   />
                 </Entity.Slot>

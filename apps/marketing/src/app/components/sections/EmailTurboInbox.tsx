@@ -1,10 +1,10 @@
+import IconReply from '@icon/system/regular/arrow-bend-up-left.svg';
+import IconForward from '@icon/system/regular/arrow-bend-up-right.svg';
+import IconDocMd from '@icon/system/regular/file.svg';
+import IconTask from '@icon/system/regular/list-checks.svg';
+import IconStar from '@icon/system/regular/star.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import IconReplyAll from '../../../assets/icons/phosphor/arrow-bend-double-up-left.svg';
-import IconReply from '../../../assets/icons/phosphor/arrow-bend-up-left.svg';
-import IconForward from '../../../assets/icons/phosphor/arrow-bend-up-right.svg';
-import IconDocMd from '../../../assets/icons/wide-file-md.svg';
-import IconStar from '../../../assets/icons/wide-star.svg';
-import IconTask from '../../../assets/icons/wide-task.svg';
 import { AiComposeGraphic } from '../graphics/AiComposeGraphic';
 import {
   CalendarIcon,

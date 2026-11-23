@@ -38,6 +38,8 @@ export class DatabaseColumn {
   /**
    * The column's record as the API returns it: the placement and the bound
    * property definition.
+   *
+   * @readonly
    */
   async detail(): Promise<ColumnDetail> {
     const { columns } = await this.table.detail();
@@ -50,7 +52,11 @@ export class DatabaseColumn {
     return found;
   }
 
-  /** The placement's display name, falling back to its property definition. */
+  /**
+   * The placement's display name, falling back to its property definition.
+   *
+   * @readonly
+   */
   async name(): Promise<string> {
     const detail = await this.detail();
     return (
@@ -61,19 +67,32 @@ export class DatabaseColumn {
   /**
    * Rename this placement, only if its last-read name is still current,
    * without changing its shared property definition.
+   *
+   * @write
+   * @idempotent
    */
   async rename(name: string): Promise<DatabaseColumn> {
     await this.table.database.renameColumn(this, name);
     return this;
   }
 
-  /** Settle the type of an empty column created with inferType enabled. */
+  /**
+   * Settle the type of an empty column created with inferType enabled.
+   *
+   * @write
+   * @idempotent
+   */
   async inferType(options: InferColumnTypeOptions): Promise<DatabaseColumn> {
     await this.table.database.inferColumnType(this, options);
     return this;
   }
 
-  /** Change this column's type. See {@link Database.changeColumnType}. */
+  /**
+   * Change this column's type. See {@link Database.changeColumnType}.
+   *
+   * @write
+   * @idempotent
+   */
   changeType(
     options: ChangeColumnTypeOptions,
   ): Promise<OpResultOf<'column', 'type_changed'>> {
@@ -84,6 +103,8 @@ export class DatabaseColumn {
    * Add a column of another type right after this one, filled with the
    * values that convert, leaving this one as it is. See
    * {@link Database.convertColumnIntoNewColumn}.
+   *
+   * @write
    */
   convertIntoNewColumn(
     options: ConvertIntoNewColumnOptions,
@@ -95,27 +116,46 @@ export class DatabaseColumn {
    * What changing this column to each type would do to its values: `safe`,
    * `checked` (with how many would not convert, and a few of them), or
    * `never` (with why). Changes nothing.
+   *
+   * @readonly
    */
   casts(): Promise<ColumnCast[]> {
     return this.table.database.columnCasts(this);
   }
 
-  /** Delete this placement and its cells at the table version last read. */
+  /**
+   * Delete this placement and its cells at the table version last read.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.table.database.deleteColumn(this);
   }
 
-  /** The value type the column holds. */
+  /**
+   * The value type the column holds.
+   *
+   * @readonly
+   */
   async dataType(): Promise<DataType> {
     return (await this.detail()).definition.definition.data_type;
   }
 
-  /** Whether the column holds multiple values. */
+  /**
+   * Whether the column holds multiple values.
+   *
+   * @readonly
+   */
   async isMultiSelect(): Promise<boolean> {
     return (await this.detail()).definition.definition.is_multi_select;
   }
 
-  /** The column's fractional index within the table's column order. */
+  /**
+   * The column's fractional index within the table's column order.
+   *
+   * @readonly
+   */
   async position(): Promise<string> {
     return (await this.detail()).column.position;
   }
@@ -123,6 +163,8 @@ export class DatabaseColumn {
   /**
    * The bound property definition together with its select options — the
    * source of the column's name, type, and allowed values.
+   *
+   * @readonly
    */
   async definition(): Promise<PropertyDefinitionWithOptions> {
     return (await this.detail()).definition;
@@ -131,6 +173,8 @@ export class DatabaseColumn {
   /**
    * Column-kind configuration (a link), or `undefined` for a plain
    * value column.
+   *
+   * @readonly
    */
   async config(): Promise<ColumnConfig | undefined> {
     return (await this.detail()).column.config ?? undefined;
@@ -139,6 +183,9 @@ export class DatabaseColumn {
   /**
    * Add select options to the column. Labels it already has are skipped, so
    * the call is safe to repeat. Only select and tag columns accept options.
+   *
+   * @write
+   * @idempotent
    */
   async addOptions(labels: string[]): Promise<DatabaseColumn> {
     await this.table.database.addColumnOptions(this, labels);

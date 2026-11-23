@@ -1,15 +1,34 @@
 use super::constants::*;
+use crate::bounded_html::{self, MAX_HTML_DEPTH};
+use ego_tree::iter::Edge;
 use ego_tree::{NodeId, NodeRef};
 use scraper::{ElementRef, Html, Node};
 use std::ops::Deref;
+
 // --- Public API ---
 
 /// Parses an email's HTML content and returns the cleaned, latest reply.
+///
+/// A body whose parse reaches a bound of [`bounded_html`] is returned whole,
+/// as one with no reply separator is: looking for its reply would take too
+/// much memory or time.
 pub fn extract_reply_html(subject: Option<&str>, html_content: &str) -> String {
-    let document = Html::parse_document(html_content);
-
     if subject.is_some() && subject.unwrap().starts_with("Fwd:") {
         // If it's a forward, the entire original HTML is the desired content.
+        return html_content.to_string();
+    }
+
+    let parsed = bounded_html::parse_document(html_content);
+    if parsed.clipped {
+        record_kept_whole(html_content, "clipped");
+        return html_content.to_string();
+    }
+    let document = parsed.html;
+    // The parse bounds the depth it inserts at, but moving a node (misnested
+    // formatting tags) can nest it deeper, and cutting before the quote
+    // recurses once per level.
+    if nested_deeper_than(&document, MAX_HTML_DEPTH) {
+        record_kept_whole(html_content, "depth");
         return html_content.to_string();
     }
 
@@ -249,6 +268,33 @@ fn is_horizontal_rule(element: ElementRef<'_>) -> bool {
 }
 
 // --- Low-Level Utilities ---
+
+fn record_kept_whole(html: &str, reason: &'static str) {
+    tracing::info!(
+        html_len = html.len(),
+        reason,
+        "keeping an email body whole without looking for its reply"
+    );
+}
+
+/// Whether any element sits more than `limit` elements deep, found without
+/// recursion.
+fn nested_deeper_than(document: &Html, limit: usize) -> bool {
+    let mut depth = 0usize;
+    for edge in document.tree.root().traverse() {
+        match edge {
+            Edge::Open(node) if node.value().is_element() => {
+                depth += 1;
+                if depth > limit {
+                    return true;
+                }
+            }
+            Edge::Close(node) if node.value().is_element() => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    false
+}
 
 /// Finds the previous non-trivial sibling element of a given element, skipping
 /// insignificant nodes like whitespace or empty elements.

@@ -1,5 +1,6 @@
 //! Postgres-backed repository for call state.
 
+mod call_list;
 mod edit;
 mod imported;
 mod lifecycle;
@@ -39,7 +40,6 @@ use crate::domain::models::{
     TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
-use property_clauses::{clause_params, property_clauses};
 
 /// Name of the partial unique index enforcing one active call per user.
 const ACTIVE_CALL_UNIQUE_INDEX: &str = "call_participants_one_active_per_user";
@@ -256,6 +256,95 @@ impl PgCallRepo {
 impl CallRepository for PgCallRepo {
     type Err = sqlx::Error;
 
+    async fn can_join_call(&self, call_id: &Uuid, user_id: &str) -> Result<bool, Self::Err> {
+        sqlx::query_scalar!(
+            r#"SELECT (
+                EXISTS (
+                    SELECT 1 FROM calls c
+                    JOIN comms_channel_participants p ON p.channel_id = c.channel_id
+                    WHERE c.id = $1 AND p.user_id = $2 AND p.left_at IS NULL
+                ) OR EXISTS (
+                    SELECT 1 FROM calls c
+                    JOIN call_meetings m ON m.id = c.meeting_id
+                    WHERE c.id = $1 AND c.channel_id IS NULL AND m.cancelled_at IS NULL
+                      AND (m.user_id = $2 OR EXISTS (
+                          SELECT 1 FROM call_participants p
+                          WHERE p.call_id = c.id AND p.user_id = $2
+                      ) OR EXISTS (
+                          SELECT 1 FROM call_invitees i
+                          WHERE i.call_id = c.id AND i.user_id = $2
+                      ))
+                )
+            ) AS "allowed!""#,
+            call_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    async fn list_joinable_calls(&self, user_id: &str) -> Result<Vec<Call>, Self::Err> {
+        sqlx::query_as!(
+            Call,
+            r#"
+            SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id
+            FROM calls c
+            WHERE EXISTS (
+                SELECT 1 FROM comms_channel_participants p
+                WHERE p.channel_id = c.channel_id AND p.user_id = $1 AND p.left_at IS NULL
+            ) OR (c.channel_id IS NULL AND EXISTS (
+                SELECT 1 FROM call_meetings m
+                WHERE m.id = c.meeting_id AND m.cancelled_at IS NULL
+                  AND (m.user_id = $1 OR EXISTS (
+                      SELECT 1 FROM call_participants p WHERE p.call_id = c.id AND p.user_id = $1
+                  ) OR EXISTS (
+                      SELECT 1 FROM call_invitees i WHERE i.call_id = c.id AND i.user_id = $1
+                  ))
+            ))
+            ORDER BY c.created_at DESC
+        "#,
+            user_id
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    async fn is_agent_account(&self, user_id: &str) -> Result<bool, Self::Err> {
+        Ok(
+            sqlx::query_scalar!(r#"SELECT "isAgent" FROM "User" WHERE id = $1"#, user_id)
+                .fetch_optional(&self.pool)
+                .await?
+                .unwrap_or(false),
+        )
+    }
+
+    async fn set_participant_client(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+        client: &str,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "UPDATE call_participants SET client = $3 WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL",
+            call_id, user_id, client,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn archive_call_if_program_only(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<ArchivedCall>, CallError> {
+        self.archive_session(
+            call_id,
+            false,
+            Some(Utc::now() - chrono::TimeDelta::seconds(60)),
+        )
+        .await
+    }
+
     async fn insert_meeting_preparation(
         &self,
         actor: &str,
@@ -354,6 +443,7 @@ impl CallRepository for PgCallRepo {
         channel_id: &Uuid,
         room_name: &str,
         created_by: MacroUserIdStr<'_>,
+        channel_thread: bool,
     ) -> Result<Option<Call>, CallError> {
         let mut tx = self.pool.begin().await?;
 
@@ -411,13 +501,17 @@ impl CallRepository for PgCallRepo {
         )
         .await?;
 
-        // `share_with_team` keeps its column default (on): it is the pending
-        // intent participants toggle during the call, translated into
-        // canonical team sharing when the call is archived.
+        // `share_with_team` is the pending intent participants toggle during
+        // the call, translated into canonical team sharing when the call is
+        // archived. Calls in DMs and private channels start private; calls in
+        // team and public channels start shared.
         let row = sqlx::query!(
             r#"
-            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id, share_with_team)
+            VALUES (
+                $1, $2, $3, $4, $5,
+                (SELECT c.channel_type NOT IN ('direct_message', 'private') FROM comms_channels c WHERE c.id = $2)
+            )
             ON CONFLICT (channel_id) DO NOTHING
             RETURNING id, channel_id, room_name, created_by, created_at, egress_id
             "#,
@@ -435,6 +529,16 @@ impl CallRepository for PgCallRepo {
         let Some(r) = row else {
             return Ok(None);
         };
+
+        // The insert above created the durable entity through its trigger.
+        if channel_thread {
+            sqlx::query!(
+                "UPDATE call_entities SET discussion = 'channel_thread' WHERE id = $1",
+                call_id,
+            )
+            .execute(tx.as_mut())
+            .await?;
+        }
 
         tx.commit().await?;
 
@@ -1032,7 +1136,7 @@ impl CallRepository for PgCallRepo {
     }
 
     async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, CallError> {
-        self.archive_session(call_id, false)
+        self.archive_session(call_id, false, None)
             .await?
             .ok_or_else(|| CallError::NotFound(call_id.to_string()))
     }
@@ -1040,7 +1144,7 @@ impl CallRepository for PgCallRepo {
         &self,
         call_id: &Uuid,
     ) -> Result<Option<ArchivedCall>, CallError> {
-        self.archive_session(call_id, true).await
+        self.archive_session(call_id, true, None).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1270,8 +1374,10 @@ impl CallRepository for PgCallRepo {
             SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id, c.recording_key, c.preview_url, c.recording_started_at,
                    (SELECT title FROM call_meetings WHERE id = c.meeting_id) AS custom_name,
                    c.share_with_team,
+                   ce.discussion,
                    sp.team_share_access_level AS "team_share_access_level?: AccessLevel"
             FROM calls c
+            JOIN call_entities ce ON ce.id = c.id
             JOIN "SharePermission" sp ON sp.id = c.share_permission_id
             WHERE c.id = $1
             "#,
@@ -1348,6 +1454,11 @@ impl CallRepository for PgCallRepo {
                 call_id: active.id,
                 user_access_level: None,
                 channel_id: active.channel_id,
+                discussion: crate::domain::models::CallDiscussion::from_stored(
+                    &active.discussion,
+                    active.id,
+                    active.channel_id,
+                ),
                 room_name: Some(active.room_name),
                 created_by: active.created_by,
                 started_at: active.created_at,
@@ -1380,8 +1491,10 @@ impl CallRepository for PgCallRepo {
         let Some(archived) = sqlx::query!(
             r#"
             SELECT cr.id, cr.channel_id, cr.room_name, cr.created_by, cr.started_at, cr.ended_at, cr.duration_ms, cr.egress_id, cr.recording_key, cr.preview_url, cr.recording_started_at, cr.custom_name, cr.summary,
+                   ce.discussion,
                    sp.team_share_access_level AS "team_share_access_level?: AccessLevel"
             FROM call_records cr
+            JOIN call_entities ce ON ce.id = cr.id
             JOIN "SharePermission" sp ON sp.id = cr.share_permission_id
             WHERE cr.id = $1
             "#,
@@ -1464,6 +1577,11 @@ impl CallRepository for PgCallRepo {
             call_id: archived.id,
             user_access_level: None,
             channel_id: archived.channel_id,
+            discussion: crate::domain::models::CallDiscussion::from_stored(
+                &archived.discussion,
+                archived.id,
+                archived.channel_id,
+            ),
             room_name: Some(archived.room_name),
             created_by: archived.created_by,
             started_at: archived.started_at,
@@ -1584,7 +1702,17 @@ impl CallRepository for PgCallRepo {
         Ok(previews)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(
+        err,
+        skip(self, user_id, filter),
+        fields(
+            filter.call_ids = tracing::field::Empty,
+            filter.channel_ids = tracing::field::Empty,
+            filter.status = tracing::field::Empty,
+            filter.property_clauses = tracing::field::Empty,
+            rows = tracing::field::Empty,
+        )
+    )]
     async fn get_call_records_by_user<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -1592,439 +1720,7 @@ impl CallRepository for PgCallRepo {
         filter: &LiteralTree<CallLiteral>,
         page: CallRecordPage,
     ) -> Result<Vec<CallRecord>, Self::Err> {
-        // Fetch active and archived headers without transcripts. Channel calls
-        // accept matching user, channel, or team grants; standalone calls require
-        // an individual user grant so group grants cannot add them to team memory.
-        let channel_ids = extract_channel_ids(filter);
-        let has_channel_filter = !channel_ids.is_empty();
-        let call_ids = extract_call_ids(filter);
-        let has_call_id_filter = !call_ids.is_empty();
-        let status_filter = extract_status_filter(filter);
-        let has_status_filter = status_filter.is_some();
-        let status_filter_values: Vec<String> = status_filter
-            .as_deref()
-            .unwrap_or(&[])
-            .iter()
-            .copied()
-            .map(call_status_sql_value)
-            .map(str::to_string)
-            .collect();
-        let property = clause_params(&property_clauses(filter));
-
-        let rows = sqlx::query!(
-            r#"
-            WITH user_source_ids AS (
-                SELECT cp.channel_id::text AS source_id
-                FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-                UNION ALL
-                SELECT t.team_id::text AS source_id
-                FROM team_user t
-                WHERE t.user_id = $1
-                UNION ALL
-                SELECT $1 AS source_id
-            ),
-            visible_calls AS (
-                SELECT
-                    c.id AS call_id,
-                    c.channel_id,
-                    c.room_name,
-                    c.created_by,
-                    c.created_at AS started_at,
-                    NULL::timestamptz AS ended_at,
-                    NULL::bigint AS duration_ms,
-                    c.egress_id,
-                    c.recording_key,
-                    c.preview_url,
-                    c.recording_started_at,
-                    (SELECT title FROM call_meetings WHERE id = c.meeting_id) AS custom_name,
-                    NULL::text AS summary,
-                    c.share_with_team,
-                    sp.team_share_access_level,
-                    true AS is_active,
-                    false AS is_imported,
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1 FROM call_participants cp
-                            WHERE cp.call_id = c.id AND cp.user_id = $1
-                        ) THEN 'ATTENDED'::text
-                        WHEN EXISTS (
-                            SELECT 1 FROM comms_channel_participants ccp
-                            WHERE ccp.channel_id = c.channel_id
-                              AND ccp.user_id = $1
-                              AND ccp.left_at IS NULL
-                        ) THEN 'MISSED'::text
-                        ELSE 'UNATTENDED'::text
-                    END AS status
-                FROM calls c
-                JOIN "SharePermission" sp ON sp.id = c.share_permission_id
-                WHERE EXISTS (
-                    SELECT 1 FROM entity_access ea
-                    JOIN user_source_ids u ON u.source_id = ea.source_id
-                    WHERE ea.entity_id = c.id
-                      AND ea.entity_type = 'call'
-                      AND (c.channel_id IS NOT NULL OR (ea.source_type = 'user' AND ea.source_id = $1))
-                )
-                AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
-                AND ($5::bool IS FALSE OR c.id = ANY($6))
-                -- Property conditions in conjunctive normal form: every
-                -- clause needs a term the call satisfies. Tags (no
-                -- definition) match any property value; entity references
-                -- match their definition's value.
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM generate_series(0, $9::int - 1) AS clause(idx)
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])
-                            AS term(clause_idx, negated, definition_id, value)
-                        WHERE term.clause_idx = clause.idx
-                          AND term.negated <> EXISTS (
-                              SELECT 1 FROM entity_properties ep
-                              WHERE ep.entity_id = c.id::text
-                                AND ep.entity_type = 'CALL_RECORD'
-                                AND jsonb_typeof(ep.values -> 'value') = 'array'
-                                AND CASE
-                                    WHEN term.definition_id IS NULL
-                                        THEN jsonb_exists(ep.values -> 'value', term.value)
-                                    ELSE ep.property_definition_id = term.definition_id
-                                        AND ep.values -> 'value' @> jsonb_build_array(
-                                            jsonb_build_object('entity_id', term.value)
-                                        )
-                                END
-                          )
-                    )
-                )
-                UNION ALL
-                SELECT
-                    cr.id AS call_id,
-                    cr.channel_id,
-                    cr.room_name,
-                    cr.created_by,
-                    cr.started_at,
-                    cr.ended_at,
-                    cr.duration_ms,
-                    cr.egress_id,
-                    cr.recording_key,
-                    cr.preview_url,
-                    cr.recording_started_at,
-                    cr.custom_name,
-                    cr.summary,
-                    (sp.team_share_access_level IS NOT NULL) AS share_with_team,
-                    sp.team_share_access_level,
-                    false AS is_active,
-                    false AS is_imported,
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1 FROM call_record_participants crp
-                            WHERE crp.call_record_id = cr.id AND crp.user_id = $1
-                        ) THEN 'ATTENDED'::text
-                        WHEN EXISTS (
-                            SELECT 1 FROM comms_channel_participants ccp
-                            WHERE ccp.channel_id = cr.channel_id
-                              AND ccp.user_id = $1
-                              AND ccp.left_at IS NULL
-                        ) THEN 'MISSED'::text
-                        ELSE 'UNATTENDED'::text
-                    END AS status
-                FROM call_records cr
-                JOIN "SharePermission" sp ON sp.id = cr.share_permission_id
-                WHERE EXISTS (
-                    SELECT 1 FROM entity_access ea
-                    JOIN user_source_ids u ON u.source_id = ea.source_id
-                    WHERE ea.entity_id = cr.id
-                      AND ea.entity_type = 'call'
-                      AND (cr.channel_id IS NOT NULL OR (ea.source_type = 'user' AND ea.source_id = $1))
-                )
-                AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
-                AND ($5::bool IS FALSE OR cr.id = ANY($6))
-                -- Property conditions in conjunctive normal form: every
-                -- clause needs a term the call satisfies. Tags (no
-                -- definition) match any property value; entity references
-                -- match their definition's value.
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM generate_series(0, $9::int - 1) AS clause(idx)
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])
-                            AS term(clause_idx, negated, definition_id, value)
-                        WHERE term.clause_idx = clause.idx
-                          AND term.negated <> EXISTS (
-                              SELECT 1 FROM entity_properties ep
-                              WHERE ep.entity_id = cr.id::text
-                                AND ep.entity_type = 'CALL_RECORD'
-                                AND jsonb_typeof(ep.values -> 'value') = 'array'
-                                AND CASE
-                                    WHEN term.definition_id IS NULL
-                                        THEN jsonb_exists(ep.values -> 'value', term.value)
-                                    ELSE ep.property_definition_id = term.definition_id
-                                        AND ep.values -> 'value' @> jsonb_build_array(
-                                            jsonb_build_object('entity_id', term.value)
-                                        )
-                                END
-                          )
-                    )
-                )
-                UNION ALL
-                -- Imported calls (e.g. Granola) exist only as call entities;
-                -- native calls are mirrored there too, so exclude them.
-                SELECT
-                    ce.id AS call_id,
-                    ce.channel_id,
-                    NULL::text AS room_name,
-                    ce.user_id AS created_by,
-                    COALESCE(ce.started_at, ce.created_at) AS started_at,
-                    ce.ended_at,
-                    ce.duration_ms,
-                    NULL::text AS egress_id,
-                    NULL::text AS recording_key,
-                    NULL::text AS preview_url,
-                    NULL::timestamptz AS recording_started_at,
-                    ce.title AS custom_name,
-                    (
-                        SELECT s.metadata ->> 'summary' FROM call_entity_sources s
-                        WHERE s.call_id = ce.id
-                        ORDER BY s.synced_at DESC NULLS LAST
-                        LIMIT 1
-                    ) AS summary,
-                    (sp.team_share_access_level IS NOT NULL) AS share_with_team,
-                    sp.team_share_access_level,
-                    false AS is_active,
-                    true AS is_imported,
-                    -- The importer was in the meeting; everyone else only
-                    -- sees it when shared, so it is not theirs to attend.
-                    CASE WHEN ce.user_id = $1 THEN 'ATTENDED'::text ELSE 'UNATTENDED'::text END AS status
-                FROM call_entities ce
-                JOIN "SharePermission" sp ON sp.id = ce.share_permission_id
-                WHERE ce.created_via <> 'native'
-                AND EXISTS (
-                    SELECT 1 FROM entity_access ea
-                    JOIN user_source_ids u ON u.source_id = ea.source_id
-                    WHERE ea.entity_id = ce.id
-                      AND ea.entity_type = 'call'
-                      AND (ce.channel_id IS NOT NULL OR (ea.source_type = 'user' AND ea.source_id = $1))
-                )
-                AND ($3::bool IS FALSE OR ce.channel_id = ANY($4))
-                AND ($5::bool IS FALSE OR ce.id = ANY($6))
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM generate_series(0, $9::int - 1) AS clause(idx)
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])
-                            AS term(clause_idx, negated, definition_id, value)
-                        WHERE term.clause_idx = clause.idx
-                          AND term.negated <> EXISTS (
-                              SELECT 1 FROM entity_properties ep
-                              WHERE ep.entity_id = ce.id::text
-                                AND ep.entity_type = 'CALL_RECORD'
-                                AND jsonb_typeof(ep.values -> 'value') = 'array'
-                                AND CASE
-                                    WHEN term.definition_id IS NULL
-                                        THEN jsonb_exists(ep.values -> 'value', term.value)
-                                    ELSE ep.property_definition_id = term.definition_id
-                                        AND ep.values -> 'value' @> jsonb_build_array(
-                                            jsonb_build_object('entity_id', term.value)
-                                        )
-                                END
-                          )
-                    )
-                )
-            )
-            SELECT
-                call_id as "call_id!",
-                channel_id as "channel_id?",
-                room_name,
-                created_by as "created_by!",
-                started_at as "started_at!",
-                ended_at,
-                duration_ms,
-                egress_id,
-                recording_key,
-                preview_url,
-                recording_started_at,
-                custom_name,
-                summary,
-                share_with_team as "share_with_team!",
-                team_share_access_level as "team_share_access_level?: AccessLevel",
-                is_active as "is_active!",
-                is_imported as "is_imported!",
-                status as "status!"
-            FROM visible_calls
-            WHERE ($7::bool IS FALSE OR status = ANY($8::text[]))
-              -- Soup's keyset: calls sort by start, or by last activity.
-              AND (
-                  $15::timestamptz IS NULL
-                  OR (
-                      CASE WHEN $14 THEN started_at ELSE COALESCE(ended_at, started_at) END,
-                      call_id::text
-                  ) < ($15, $16::text)
-              )
-            ORDER BY
-                CASE WHEN $14 THEN started_at ELSE COALESCE(ended_at, started_at) END DESC,
-                call_id::text DESC
-            LIMIT $2
-            "#,
-            user_id.as_ref(),
-            limit as i64,
-            has_channel_filter,
-            &channel_ids,
-            has_call_id_filter,
-            &call_ids,
-            has_status_filter,
-            &status_filter_values,
-            property.clause_count,
-            &property.clause_indices,
-            &property.negated,
-            &property.definition_ids as &[Option<Uuid>],
-            &property.values,
-            page.by_start,
-            page.after.map(|(sort_ts, _)| sort_ts),
-            page.after.map(|(_, call_id)| call_id.to_string()),
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        // Split ids by source table: active participants live in
-        // `call_participants` (keyed call_id), archived in
-        // `call_record_participants` (keyed call_record_id). Ids are disjoint
-        // across the two tables, so a single UNION ALL fetches all participants
-        // in one round-trip; we then group by id in memory (avoids N+1).
-        let mut active_ids: Vec<Uuid> = Vec::new();
-        let mut archived_ids: Vec<Uuid> = Vec::new();
-        let mut imported_ids: Vec<Uuid> = Vec::new();
-        for row in &rows {
-            if row.is_imported {
-                imported_ids.push(row.call_id);
-            } else if row.is_active {
-                active_ids.push(row.call_id);
-            } else {
-                archived_ids.push(row.call_id);
-            }
-        }
-
-        let mut participants_by_call: HashMap<Uuid, Vec<CallRecordParticipant>> =
-            HashMap::with_capacity(rows.len());
-
-        for p in sqlx::query!(
-            r#"
-            SELECT call_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at
-            FROM call_participants
-            WHERE call_id = ANY($1)
-            UNION ALL
-            SELECT call_record_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at
-            FROM call_record_participants
-            WHERE call_record_id = ANY($2)
-            ORDER BY 3 ASC
-            "#,
-            &active_ids,
-            &archived_ids,
-        )
-        .fetch_all(&self.pool)
-        .await?
-        {
-            participants_by_call
-                .entry(p.id)
-                .or_default()
-                .push(CallRecordParticipant {
-                    user_id: p.user_id,
-                    joined_at: p.joined_at,
-                    left_at: p.left_at,
-                });
-        }
-
-        let mut guests_by_call: HashMap<Uuid, Vec<CallRecordGuest>> = HashMap::new();
-
-        for g in sqlx::query!(
-            r#"
-            SELECT call_id AS "call_id!", id AS "guest_id!", display_name AS "display_name!", joined_at AS "joined_at!", left_at
-            FROM call_guests
-            WHERE call_id = ANY($1)
-            UNION ALL
-            SELECT call_record_id AS "call_id!", id AS "guest_id!", display_name AS "display_name!", joined_at AS "joined_at!", left_at
-            FROM call_record_guests
-            WHERE call_record_id = ANY($2)
-            ORDER BY 4 ASC
-            "#,
-            &active_ids,
-            &archived_ids,
-        )
-        .fetch_all(&self.pool)
-        .await?
-        {
-            guests_by_call
-                .entry(g.call_id)
-                .or_default()
-                .push(CallRecordGuest {
-                    id: GuestId::from_uuid(g.guest_id),
-                    display_name: g.display_name,
-                    joined_at: g.joined_at,
-                    left_at: g.left_at,
-                });
-        }
-
-        let mut conn = self.pool.acquire().await?;
-        guests_by_call.extend(imported::imported_guests(&mut conn, &imported_ids).await?);
-        drop(conn);
-
-        let mut records = Vec::with_capacity(rows.len());
-        for row in rows {
-            let participants = participants_by_call
-                .remove(&row.call_id)
-                .unwrap_or_default();
-            let guests = guests_by_call.remove(&row.call_id).unwrap_or_default();
-
-            records.push(CallRecord {
-                call_id: row.call_id,
-                user_access_level: None,
-                channel_id: row.channel_id,
-                room_name: row.room_name,
-                created_by: row.created_by,
-                started_at: row.started_at,
-                ended_at: row.ended_at,
-                duration_ms: row.duration_ms,
-                egress_id: row.egress_id,
-                recording_started_at: row.recording_started_at,
-                recording_key: row.recording_key,
-                preview_key: row.preview_url,
-                recording_url: None,
-                recording_preview_url: None,
-                channel_name: None,
-                custom_name: row.custom_name,
-                summary: row.summary,
-                share_with_team: row.share_with_team,
-                team_share_access_level: row.team_share_access_level,
-                is_active: row.is_active,
-                status: Some(call_status_from_sql(&row.status)),
-                viewer_has_declined: false,
-                participants,
-                guests,
-                transcript: Vec::new(),
-                source: None,
-            });
-        }
-
-        // --- Resolve channel names ---
-        let unique_channel_ids: Vec<Uuid> = {
-            let mut seen = HashSet::new();
-            records
-                .iter()
-                .filter_map(|r| r.channel_id)
-                .filter(|id| seen.insert(*id))
-                .collect()
-        };
-
-        let channel_names =
-            batch_resolve_channel_names(&self.pool, &unique_channel_ids, user_id.copied()).await?;
-
-        for record in &mut records {
-            record.channel_name = record
-                .channel_id
-                .and_then(|id| channel_names.get(&id).cloned());
-        }
-
-        Ok(records)
+        call_list::list_call_records(&self.pool, user_id, limit, filter, page).await
     }
 
     #[tracing::instrument(err, skip(self))]

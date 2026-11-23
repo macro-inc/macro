@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action_draft SET state = 'cancelled'\n            WHERE session_id = $1 AND owner_id = $2 AND state IN ('drafting', 'ready', 'failed')\n            RETURNING finished_at IS NOT NULL AS \"finished!\", bot_id, progress, traceparent\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "finished!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "progress",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "22205e9a75cc5f264d992fbe407219ffac9f77ff795e7501b8bd1e22f257a25d"
+}

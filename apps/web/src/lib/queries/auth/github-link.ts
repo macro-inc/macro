@@ -1,9 +1,8 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { authServiceClient } from '@service-auth/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import { connectorKeys } from '../connectors/keys';
 import { authKeys } from './keys';
 
 const GITHUB_LINK_STATUS_STALE_TIME = 5 * 60 * 1000;
@@ -89,6 +88,10 @@ export function useGithubLinkStatusQuery(
 
 export async function invalidateGithubLinkStatus() {
   const options = githubLinkStatusQueryOptions();
+  // The account link is also GitHub's connector.
+  await queryClient.invalidateQueries({
+    queryKey: connectorKeys.list.queryKey,
+  });
   // A pre-OAuth request must not overwrite the newly verified connection.
   await queryClient.cancelQueries({ queryKey: options.queryKey });
   await queryClient.invalidateQueries({
@@ -99,6 +102,18 @@ export async function invalidateGithubLinkStatus() {
   // skipPreviewFetch mentions). Explicit fetching refreshes those readers too.
   // Keep refresh failures in query state, not in the completed OAuth result.
   return queryClient.prefetchQuery({ ...options, staleTime: 0 });
+}
+
+/**
+ * The viewer's GitHub link status, read fresh, so a decision to send the
+ * browser to GitHub does not rest on a stale cache.
+ */
+export async function readGithubLinkStatus(): Promise<GithubLinkStatus> {
+  const link = await queryClient.fetchQuery({
+    ...githubLinkStatusQueryOptions(),
+    staleTime: 0,
+  });
+  return link.status;
 }
 
 /**
@@ -122,16 +137,5 @@ export function useReauthenticateGithubMutation() {
       await throwOnErr(() =>
         authServiceClient.reauthenticateGithub(originalUrl)
       ),
-  }));
-}
-
-export function useDeleteGithubLinkMutation() {
-  return useMutation(() => ({
-    mutationFn: async () =>
-      await throwOnErr(() => authServiceClient.deleteGithubLink()),
-    onSuccess: () => {
-      fireAndForget(invalidateGithubLinkStatus(), 'github-link');
-      invalidateAllSoup();
-    },
   }));
 }

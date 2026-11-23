@@ -10,7 +10,6 @@ import type {
   DatabaseColumnKind,
   DatabaseSchemaChange,
 } from '../../database/core/column-schema';
-import { opColumnKind } from './column-schema';
 
 /**
  * Add a column at the table's end and return its id. A select column's
@@ -81,13 +80,12 @@ export function convertDatabaseColumn(params: {
   name: string;
 }): DatabaseSchemaChange<string> {
   const table = params.tableId;
-  const type = opColumnKind(params.databaseId, params.to);
   return storageServiceClient.databases
     .convertColumn({
       id: params.databaseId,
       tableId: table,
       columnId: params.columnId,
-      to: type,
+      to: params.to,
     })
     .mapErr(([error]) => error)
     .andThen((conversion) => {
@@ -102,7 +100,7 @@ export function convertDatabaseColumn(params: {
             definition: {
               source: 'new',
               name: params.name,
-              type,
+              type: params.to,
               options: conversion.options.map((label) => ({
                 id: uuidv7(),
                 label,

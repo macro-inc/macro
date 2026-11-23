@@ -67,6 +67,7 @@ fn brief() -> TaskBrief {
         markdown: "Include archived rows.".to_owned(),
         status: Some("In Progress".to_owned()),
         priority: None,
+        start: None,
         due: None,
         assignee_ids: vec![BotId::TEST_A.to_string()],
         project: Some(ProjectRef {
@@ -128,6 +129,7 @@ fn named(project: InitiativeId, name: &'static str) -> MockProjects {
         .return_once(move |id| {
             Box::pin(async move {
                 Ok(Some(InitiativeBasic {
+                    appearance: None,
                     id,
                     name: name.to_owned(),
                     owner_id: user(),
@@ -168,6 +170,7 @@ async fn current_project_replaces_stale_context_after_authorizing_the_same_user(
             markdown: "Include archived rows.".to_owned(),
             status: Some("In Progress".to_owned()),
             priority: None,
+            start: None,
             due: None,
             assignee_ids: vec![BotId::TEST_A.to_string()],
             project: Some(ProjectRef {

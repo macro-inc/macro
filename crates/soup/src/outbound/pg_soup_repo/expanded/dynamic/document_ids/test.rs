@@ -1,9 +1,9 @@
 use super::DocumentIdArrays;
 use crate::domain::models::{DynamicSort, SoupSortDirection, grouping::ItemGroupingInfo};
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, build_document_filter,
-    build_grouped_query, build_query, expanded_dynamic_cursor_soup,
-    expanded_dynamic_cursor_soup_grouped, first_document_id_slot,
+    DocumentGrants, ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, ItemSource,
+    MAX_NAMED_CANDIDATES, build_document_filter, build_grouped_query, build_query_from,
+    expanded_dynamic_cursor_soup, expanded_dynamic_cursor_soup_grouped, first_document_id_slot,
 };
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
@@ -175,6 +175,12 @@ fn bind_free_rendering_keeps_every_id_inline() {
 
 #[test]
 fn arrays_follow_each_querys_fixed_binds() {
+    for item_source in [ItemSource::ItemTables, ItemSource::SourceItems] {
+        arrays_follow_fixed_binds(item_source);
+    }
+}
+
+fn arrays_follow_fixed_binds(item_source: ItemSource) {
     for sort in [
         SimpleSortMethod::UpdatedAt.into(),
         DynamicSort::Property {
@@ -194,17 +200,32 @@ fn arrays_follow_each_querys_fixed_binds() {
                 Expr::is_not(any_of(&absent(2, count))),
             ));
             let mut flat_ids = DocumentIdArrays::starting_at(flat_first);
-            let flat = build_query(&filter, false, sort, &mut flat_ids)
-                .sql()
-                .to_owned();
+            let flat = build_query_from(
+                &filter,
+                false,
+                sort,
+                DocumentGrants::Estimated,
+                item_source,
+                "macro|viewer@example.com",
+                &mut flat_ids,
+            )
+            .0
+            .sql()
+            .to_owned();
             let grouping = GroupingConfig {
                 field: status(Some("TASK")),
                 group_key: None,
                 per_group_limit: None,
             };
             let mut grouped_ids = DocumentIdArrays::starting_at(grouped_first);
-            let (grouped, _) =
-                build_grouped_query(&filter, false, &grouping, sort, &mut grouped_ids);
+            let (grouped, _) = build_grouped_query(
+                &filter,
+                false,
+                &grouping,
+                sort,
+                DocumentGrants::Estimated,
+                &mut grouped_ids,
+            );
             (
                 flat,
                 flat_ids.into_binds().len(),
@@ -212,8 +233,10 @@ fn arrays_follow_each_querys_fixed_binds() {
                 grouped_ids.into_binds().len(),
             )
         };
+        // One shape up to the per-candidate cap, another past it.
         let few = render(2);
-        assert_eq!(few, render(5_000));
+        assert_eq!(few, render(MAX_NAMED_CANDIDATES as u128));
+        assert_eq!(render(MAX_NAMED_CANDIDATES as u128 + 1), render(10_000));
         let (flat, flat_arrays, grouped, grouped_arrays) = few;
         assert_eq!((flat_arrays, grouped_arrays), (2, 2));
         for (sql, first) in [(&flat, flat_first), (&grouped, grouped_first)] {
@@ -224,15 +247,24 @@ fn arrays_follow_each_querys_fixed_binds() {
             assert!(!sql.contains(&format!("${}", first + 2)));
             assert!(!sql.contains("sort_parameters"));
         }
+        // A source_items lookup checks each named id's grants itself; the item tables and
+        // the grouped query match the bound source ids.
+        if item_source == ItemSource::ItemTables {
+            assert!(flat.contains(&format!("ea.source_id = ANY(${}::text[])", flat_first - 1)));
+        }
+        assert!(grouped.contains(&format!(
+            "ea.source_id = ANY(${}::text[])",
+            grouped_first - 1
+        )));
         assert!(grouped.contains("ep.entity_type = $10::property_entity_type"));
         if matches!(sort, DynamicSort::Property { .. }) {
-            assert_eq!((flat_first, grouped_first), (11, 13));
+            assert_eq!((flat_first, grouped_first), (12, 14));
             assert!(flat.contains("WHERE id = $9::uuid"));
             assert!(flat.contains("$10::double precision"));
             assert!(grouped.contains("WHERE id = $11::uuid"));
             assert!(grouped.contains("$12::double precision"));
         } else {
-            assert_eq!((flat_first, grouped_first), (9, 11));
+            assert_eq!((flat_first, grouped_first), (10, 12));
             assert!(!flat.contains("property_sort"));
             assert!(!grouped.contains("property_sort"));
         }
@@ -399,7 +431,7 @@ async fn grouped_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
     };
     let by_status = vec![(IN_PROGRESS, IN_C), ("", IN_A)];
     for (label, field, filter, arrays, expected) in [
-        // The entity type takes `$10`, the arrays `$11` and `$12`.
+        // The entity type takes `$10`, the source ids `$11`, the arrays `$12` and `$13`.
         (
             "status of tasks",
             status(Some("TASK")),
@@ -407,7 +439,7 @@ async fn grouped_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
             2,
             by_status.clone(),
         ),
-        // `$10` is NULL and unreferenced before the arrays.
+        // `$10` is NULL and unreferenced before the source ids.
         ("status", status(None), associated(), 2, by_status.clone()),
         (
             "entity type",
@@ -416,7 +448,7 @@ async fn grouped_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
             2,
             vec![("document", IN_C), ("document", IN_A)],
         ),
-        // `$10` is NULL, unreferenced, and the last bind.
+        // `$10` is NULL and unreferenced; the source ids are the last bind.
         (
             "status without arrays",
             status(None),
@@ -447,6 +479,7 @@ async fn grouped_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
             false,
             &grouping,
             SimpleSortMethod::UpdatedAt.into(),
+            DocumentGrants::Estimated,
             &mut document_ids,
         );
         assert_eq!(document_ids.into_binds().len(), arrays, "{label}");

@@ -2,6 +2,7 @@
 use crate::domain::{
     CodeModeError, ExecutionId, ExecutionReceipt, SessionCodeMode, SymbolReferences,
     TaskDocumentation, UserCodeMode, UserExecutionReceipt, documentation_for_task, read_symbols,
+    with_attached_skill,
 };
 use agent_session::domain::model::AgentSession;
 use ai_toolset::{
@@ -49,6 +50,8 @@ pub struct UserCodeModeToolContext {
     /// Who the authenticated request came from; the adapter builds a context
     /// per call, so there is no default.
     pub caller: ai_toolset::ToolCaller,
+    /// Session provenance verified by the managed MCP bearer middleware.
+    pub session: Option<uuid::Uuid>,
 }
 
 /// Code mode for clients outside agent sessions, such as the public MCP.
@@ -68,34 +71,58 @@ enum CodeHost {
     User,
 }
 
-/// Execute a JavaScript module with the real Macro SDK.
+/// What a session program is and how to read the SDK before writing one.
+const SESSION_EXECUTE_CODE: &str = include_str!("toolset/session/execute_code.md");
+/// Reviews and views: how a program shows the person what it drafted, made
+/// or found.
+const SESSION_PRESENT: &str = include_str!("toolset/session/present.md");
+/// Checking back later without waiting in a program.
+const SESSION_CHECK_BACK: &str = include_str!("toolset/session/check_back.md");
+/// Read the SDK instead of guessing it; both hosts' ExecuteCode carry it.
+const NEVER_GUESS: &str = include_str!("toolset/shared/never_guess.md");
+const PROGRAM: &str = include_str!("toolset/shared/program.md");
+const RUNTIME: &str = include_str!("toolset/shared/runtime.md");
+
+/// The running-code text's sentence on a program's `reviews` result.
+const REVIEWS_RESULT: &str = " Optional reviews: [{kind: \"email\" | \"calendar\", id: \"...\"}] defaults to an empty list when omitted.";
+
+/// `ExecuteCode`'s description for a session nobody watches, such as a
+/// routine draft: no reviews or views to present, so neither their guidance,
+/// the `reviews` result, nor the PresentView schema, which is most of the
+/// full description.
+pub fn unseen_execute_code_description() -> String {
+    let running = SESSION_EXECUTE_CODE.replacen(REVIEWS_RESULT, "", 1);
+    format!("{running}\n{NEVER_GUESS}\n{SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}")
+}
+
+/// Execute a type-checked TypeScript module with the real Macro SDK.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{}\n{}\n{}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
-        include_str!("toolset/session/execute_code.md"),
-        include_str!("toolset/shared/program.md"),
-        include_str!("toolset/shared/runtime.md"),
+        "{SESSION_EXECUTE_CODE}\n{NEVER_GUESS}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
+        SESSION_PRESENT.trim_end(),
         dynamic_ui::present_view_schema(),
     )
 )]
 pub struct ExecuteCode {
-    /// Fresh UUID for this execution, recorded in the tool input so results can
-    /// be recovered even if the session stops before the tool replies.
+    /// Optional caller-chosen ID, recorded in the tool input so a call whose
+    /// reply was lost can be retried without running twice. When absent, the
+    /// server assigns one; the receipt always reports the ID used.
+    #[serde(default)]
     #[schemars(
-        description = "A fresh unique UUID for this execution, used to recover saved results if interrupted. Never use a placeholder, repeated-digit example, or an ID from another session. Reusing your existing ID with identical source returns its saved receipt without running again; different source is rejected. If an ID is unavailable, choose a fresh UUID."
+        description = "Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID."
     )]
-    pub execution_id: ExecutionId,
+    pub execution_id: Option<ExecutionId>,
     /// Choose whose account authenticates every SDK operation in this execution.
     pub acting_as: ai_toolset::actor::ToolActor,
     /// Copy the current server-issued turn_id from the prompt's execution context.
     /// Never reuse an ID from another turn or discover a replacement for a stale call.
     pub turn_id: macro_uuid::Uuid,
-    /// A JavaScript ES module, with imports and an exported async main function.
+    /// A TypeScript ES module, with imports and an exported async main function.
     #[schemars(
-        description = "JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts}) { const macro = new Macro({token, hosts}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token and hosts are supplied by the runner; never return or log the token."
+        description = "TypeScript module, at most 64 KiB, type-checked against the SDK before it runs. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}: CodeContext) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token."
     )]
     pub source: String,
     /// Deadline including queueing and API calls.
@@ -128,7 +155,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
             .service
             .execute(
                 &context.session,
-                self.execution_id,
+                self.execution_id.unwrap_or_else(ExecutionId::mint),
                 self.acting_as,
                 self.turn_id,
                 ExecuteRequest {
@@ -142,7 +169,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
     }
 }
 
-/// Execute a JavaScript module with the real Macro SDK as the signed-in user.
+/// Execute a type-checked TypeScript module with the real Macro SDK as the signed-in user.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(
@@ -150,15 +177,17 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
     description = concat!(
         include_str!("toolset/user/execute_code.md"),
         "\n",
+        include_str!("toolset/shared/never_guess.md"),
+        "\n",
         include_str!("toolset/shared/program.md"),
         "\n",
         include_str!("toolset/shared/runtime.md")
     )
 )]
 pub struct UserExecuteCode {
-    /// A JavaScript ES module, with imports and an exported async main function.
+    /// A TypeScript ES module, with imports and an exported async main function.
     #[schemars(
-        description = "JavaScript module, at most 64 KiB. Export async function main({macro}) { return {data: ...}; }. Optional imports: {Macro} from '@macro-inc/sdk' and Handlebars from 'handlebars'. Dependencies are preinstalled; no TypeScript syntax or package downloads. Never return or log the token main receives."
+        description = "TypeScript module, at most 64 KiB, type-checked against the SDK before it runs. Export async function main({macro}: CodeContext) { return {data: ...}; }. Optional imports: {Macro} from '@macro-inc/sdk' and Handlebars from 'handlebars'. Dependencies are preinstalled; no package downloads. Never return or log the token main receives."
     )]
     pub source: String,
     /// Deadline including queueing and API calls.
@@ -188,6 +217,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
             .execute(
                 &request.user_id,
                 &context.caller,
+                context.session,
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
@@ -204,7 +234,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "DescribeCodeTools",
-    description = "Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog."
+    description = "Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Never guess a method, its arguments or its result's fields. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog."
 )]
 pub struct DescribeCodeTools {
     /// What the next program must do; selects relevant references.
@@ -368,7 +398,7 @@ impl DescribeCodeTools {
                     catalog
                         .iter()
                         .find(|doc| &doc.name == name)
-                        .cloned()
+                        .map(with_attached_skill)
                         .ok_or_else(|| {
                             CodeModeError::Invalid(format!(
                                 "Unknown SDK entity {name}; request the catalog first."
@@ -426,7 +456,7 @@ impl DescribeCodeTools {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ReadCodeDocs",
-    description = "Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; symbols it names in backticks can be read the same way."
+    description = "Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; read a result's type before using its fields. Symbols a reference names in backticks can be read the same way."
 )]
 pub struct ReadCodeDocs {
     /// Symbols exactly as an index or reference names them.

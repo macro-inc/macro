@@ -97,7 +97,8 @@ export async function editWithInstructions(
   };
 }
 
-function isRefusal(error: unknown): error is DocumentAiEditRefused {
+/** Whether an error body is the editor's refusal. */
+export function isRefusal(error: unknown): error is DocumentAiEditRefused {
   return (
     typeof error === 'object' &&
     error !== null &&

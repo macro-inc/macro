@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { fireAndForget } from '@core/util/fireAndForget';
+import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { MacrodPairingApprover } from '@macro/tauri/MacrodPairingApprover';
 import { macrodInspect, macrodSupport } from '@macro/tauri/macrod';
 import { createSignal, onMount, Show } from 'solid-js';
@@ -48,6 +49,9 @@ export function LocalRuntimeHost() {
     itemsLoaded: () => probe() !== undefined,
     toast: (_key, dismiss) => ({
       title: t('localRuntime.promptTitle'),
+      icon: DesktopIcon,
+      color: 'var(--color-accent)',
+      dismissLabel: t('common.notNow'),
       content(): string {
         return t('localRuntime.promptBody');
       },

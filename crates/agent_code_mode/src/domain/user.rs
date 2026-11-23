@@ -1,11 +1,11 @@
-//! Code execution for an authenticated user outside any agent session.
+//! Authenticated MCP code execution, optionally attributed to a managed session.
 use super::{
     CodeModeError, ExecutionActivity, ExecutionStatus,
-    service::{Reviews, settle, validate_request},
+    service::{Reviews, settle, settle_unrun, validate_request},
 };
 use ai_toolset::ToolCaller;
 use async_trait::async_trait;
-use code_execution::domain::{ExecuteRequest, ProgramExecutor, RunEnvironment};
+use code_execution::domain::{ContextShape, ExecuteRequest, ProgramExecutor, RunEnvironment};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,10 +22,11 @@ pub trait UserExecutionCredentials: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ToolCaller,
+        session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError>;
 }
 
-/// Outcome returned straight to the caller; nothing is persisted.
+/// Outcome returned to the caller without a saved execution journal.
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserExecutionReceipt {
@@ -41,7 +42,8 @@ pub struct UserExecutionReceipt {
     pub error: Option<String>,
 }
 
-/// Run a program as the authenticated user, with no session, journal or reviews.
+/// Run a program as the authenticated user, with optional session attribution
+/// but no execution journal or reviews.
 #[async_trait]
 pub trait UserCodeMode: Send + Sync + 'static {
     /// Execute and wait for the outcome. Cancelling stops the process; completed
@@ -50,6 +52,7 @@ pub trait UserCodeMode: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ToolCaller,
+        session: Option<uuid::Uuid>,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError>;
@@ -91,11 +94,29 @@ impl UserCodeMode for UserCodeModeService {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ToolCaller,
+        session: Option<uuid::Uuid>,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError> {
         validate_request(&request)?;
-        let environment = self.credentials.issue(user, caller).await?;
+        // A program with type errors stops here, before a credential is
+        // minted for it. The program gets no session or execution handle.
+        if let Err(outcome) = self
+            .executor
+            .check_program(&request, ContextShape::default(), cancel.clone())
+            .await
+        {
+            let (status, result, error) = settle_unrun(outcome, Reviews::Rejected);
+            tracing::Span::current().record("status", tracing::field::debug(status));
+            return Ok(UserExecutionReceipt {
+                status,
+                activity: Vec::new(),
+                activity_truncated: false,
+                result,
+                error,
+            });
+        }
+        let environment = self.credentials.issue(user, caller, session).await?;
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution = self.executor.execute_program_with_progress(
             request,

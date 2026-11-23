@@ -33,8 +33,15 @@ account, Docker, sudo, or local backend stack is required.
 
 ### Expected result
 
-Both suites must pass. The full suite checks native Soup predicate evaluation via
-`graphql_cache_entity_filter`, including filter combinations never fetched online.
+Both suites must pass. Both resize the window to 400px wide while online and
+expect every Email list header control, Search included, inside the header,
+then restore the size and expect the view options (the reading pane toggle) back.
+The full suite checks native Soup predicate evaluation via
+`graphql_cache_entity_filter`, including filter combinations never fetched online,
+then reloads the webview with the API still down and expects All mail to render
+from the native cache (identity comes from the persisted user-info query), with
+the rail avatar still showing the user's initials (`OF`), not the email's first
+letter.
 Neither IPC nor cache results are replaced. Establish a passing smoke run first
 when diagnosing an environment/startup failure.
 
@@ -50,7 +57,15 @@ queries against `static_assets/schema.graphql`, and returns two pages each of
 signal and noise Mail metadata. Metadata requests must carry a recency cutoff,
 but fixture timestamps are fixed, so the server does not apply it. Projection
 capsules reuse the existing Rust-encoded fixtures.
-Unrelated app-chrome reads return explicit empty resources. Unexpected requests,
+The runner starts from a fresh profile, so it first leaves the login hint
+(`localStorage['macro:login']`) and reloads: the app checks identity only when a
+hint exists (`user-info-gate.ts`), and reads it once at startup. Unrelated
+app-chrome reads (billing, language, system status, routines, MCP connections,
+calendars, forms, harnesses, saved views, work feed, contacts) return explicit
+empty resources, in `fixtures/bootstrap.ts` and as empty `GraphqlUser` fields in
+`fixtures/server.ts`. The fixture user joined no channels, so the channel
+backfill lane (`SoupChannelDirectoryBackfill`) and the directory's network
+fallback (`ChannelDirectoryPage`) read an empty directory. Unexpected requests,
 unknown cursors and GraphQL validation errors are recorded and fail the smoke
 suite; nothing forwards to hosted services. This does not test the Rust HTTP
 server's authorization, SQL, or Gmail synchronization.
@@ -68,8 +83,9 @@ Mail response. The badge gets only unread Signal rows; Noise and All remain
 unavailable online. The other rows arrive via metadata backfill. Tests wait for
 the real signal and noise completion checkpoints (four pages), then read the six
 normalized records through native IPC before changing filters. Tab changes
-activate the labeled sidebar buttons with DOM `click()` and verify
-`aria-current` before checking results. This exercises the real UI handlers, but
+activate the labeled controls (the Inbox view radio for Noise, the All mail
+sidebar row for All) with DOM `click()` and verify the selected state before
+checking results. This exercises the real UI handlers, but
 not pointer hit-testing: WebKitWebDriver's native clicks can land on an adjacent
 row in the Tauri window, and All is now beyond the numeric tab shortcuts.
 Assertions compare exact row identities, not just counts.
@@ -148,7 +164,7 @@ intersections without using the production compiler or cache results.
 This suite does not claim coverage of non-Mail offline pagination or every
 possible real-world user/tag/file value.
 
-After all seven real backfill lanes finish, the fixture API and WebSockets are
+After all nine real backfill lanes finish, the fixture API and WebSockets are
 closed. The browser-side runner calls the real Tauri cache host in bounded
 read-only batches and asserts exact matching IDs against fixture truth. No
 query-specific network baselines are supplied. Mail attachment selections also
@@ -210,7 +226,8 @@ native cache reads still work. All external routes are absent for the entire run
 so native HTTP/WebSocket clients cannot bypass browser-only interception.
 
 Vite/WebDriver remain reachable to load lazy frontend chunks and drive controls.
-This models **API transport loss**, not an offline packaged-app cold launch.
+This models **API transport loss** and a webview reload during it, not an
+offline packaged-app cold launch.
 Linux has no iOS `NWPathMonitor`: the test does not fake `navigator.onLine` or
 native reachability notifications. The matrix covers filter evaluation, while
 the smoke scenario drives the real Mail tabs. Clicking every dropdown sequence,
@@ -228,7 +245,7 @@ Every run writes `apps/web/test-results/native/<timestamp>/`:
 
 ```sh
 bun run native:e2e:fixtures   # fast schema/pagination/disconnect fixture tests
-bun run native:e2e:check      # standalone harness TypeScript check
+bun run native:e2e:check      # standalone harness TypeScript check (needs NODE_OPTIONS=--max-old-space-size=16384)
 ```
 
 - Missing WebKitWebDriver/Xvfb: enter `.#tauri-e2e`, not the default shell.

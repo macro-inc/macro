@@ -5,6 +5,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
+  versionEnvironment,
   withTelemetry,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -150,7 +151,10 @@ export class EmailService extends pulumi.ComponentResource {
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 512 : 256,
               memory: stack === 'prod' ? 1024 : 717,
-              environment: [...containerEnvVars],
+              environment: [
+                ...containerEnvVars,
+                versionEnvironment(image.image.imageUri),
+              ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',

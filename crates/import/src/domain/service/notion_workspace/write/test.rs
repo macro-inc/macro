@@ -1,7 +1,7 @@
 use macro_user_id::cowlike::CowLike;
 
-use super::super::values::Person;
 use super::*;
+use import_notion::domain::macro_cells::Person;
 
 fn id(hex: char) -> NotionId {
     NotionId::parse(&hex.to_string().repeat(32)).unwrap()

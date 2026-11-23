@@ -15,6 +15,8 @@ inbound = [
   "entity_access/inbound",
   "ports",
 ]
+# Resolves which Chat sections hold a channel for notification ingress.
+notification_sections = ["dep:notification", "dep:rootcause", "postgres"]
 outbound = ["ports"]
 ports = ["dep:tokio"]
 postgres = ["dep:sqlx", "outbound"]
@@ -29,6 +31,8 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
+notification = { path = "../notification", default-features = false, optional = true }
+rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
@@ -39,5 +43,6 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

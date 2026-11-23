@@ -54,37 +54,13 @@ fn filter_binary_cache_is_trusted_only() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|step| step["name"] == "Mount nextest-filter binary cache")
+        .find(|step| step["name"] == "Mount nextest-filter and cargo registry cache")
         .expect("binary cache mount");
     let condition = mount["if"].as_str().unwrap();
     assert!(
         condition.contains("github.event.pull_request.head.repo.full_name == github.repository"),
         "{condition}"
     );
-}
-
-/// The required status check fails when any job it gathers failed, including
-/// the new Doppler job.
-#[test]
-fn status_check_covers_every_job() {
-    let status = serde_json::to_value(status_check()).unwrap();
-    let script = status["steps"][0]["run"].as_str().unwrap();
-    for needed in [
-        "path-check",
-        "check",
-        "doppler-config",
-        "test",
-        "graphql-schema-compat",
-    ] {
-        let check = format!(r#"[[ "${{{{ needs.{needed}.result }}}}" == "failure" ]]"#);
-        assert!(script.contains(&check), "{check}: {script}");
-        assert!(
-            status["needs"]
-                .as_array()
-                .unwrap()
-                .contains(&serde_json::json!(needed))
-        );
-    }
 }
 
 #[test]
@@ -237,6 +213,13 @@ fn tests_build_dependencies_without_debug_info() {
 }
 
 #[test]
+fn test_job_builds_workspace_crates_without_debug_info() {
+    let job = serde_json::to_value(test()).unwrap();
+    assert_eq!(job["env"]["CARGO_PROFILE_DEV_DEBUG"], "0");
+    assert_eq!(job["env"]["CARGO_PROFILE_TEST_DEBUG"], "0");
+}
+
+#[test]
 fn test_job_keeps_one_sccache_server_for_the_whole_run() {
     let job = serde_json::to_value(test()).unwrap();
     assert_eq!(job["env"]["SCCACHE_IDLE_TIMEOUT"], "0");
@@ -282,4 +265,198 @@ fn schema_changes_run_the_compatibility_check() {
     );
     let job = job.to_string();
     assert!(job.contains("graphql-schema-compat --base HEAD^1"), "{job}");
+}
+
+/// A stalled step must not hold a runner for the default six hours, and the dev
+/// shell, where stalls have happened, must fail well before the job limit.
+#[test]
+fn rust_jobs_have_timeouts() {
+    for job in [
+        path_check(),
+        check(),
+        doppler_config(),
+        graphql_schema_compat(),
+        test(),
+    ] {
+        let job = serde_json::to_value(job).unwrap();
+        assert!(job["timeout-minutes"].is_u64(), "{job}");
+    }
+    for job in [check(), doppler_config(), test()] {
+        let job = serde_json::to_value(job).unwrap();
+        let shell = job["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|step| step["name"] == "Setup Nix dev shell")
+            .expect("dev shell step");
+        assert_eq!(shell["timeout-minutes"], vars::DEV_SHELL_TIMEOUT_MINUTES);
+    }
+}
+
+/// Plain `cargo test` here rebuilt hundreds of crates under different flags to run
+/// about four seconds of tests.
+#[test]
+fn deno_tests_reuse_the_test_run_build() {
+    let deno_step = serde_json::to_value(test_execution_runtime()).unwrap();
+    let test_step = serde_json::to_value(run_tests()).unwrap();
+    assert_eq!(deno_step["run"], test_step["run"]);
+    assert_eq!(deno_step["env"]["NEXTEST_RUN_DENO_TESTS"], "true");
+}
+
+/// Per-test database creation is the bulk of the test run's time, and the
+/// settings `configure_postgres` applies only survive its restart on a bind mount.
+#[test]
+fn test_postgres_keeps_its_data_in_shared_memory_across_a_restart() {
+    let service = serde_json::to_value(postgres_service()).unwrap();
+    let options = service["options"].as_str().unwrap();
+    assert!(
+        options.contains("-v /dev/shm/pgdata:/var/lib/postgresql/data"),
+        "{options}"
+    );
+    assert!(!options.contains("--tmpfs"), "{options}");
+}
+
+/// The gate may run the job with nothing to build, but it must never hide a
+/// service the script builds, or a real-build failure in it passes the PR.
+#[test]
+fn service_bins_gate_covers_every_service_the_script_builds() {
+    let script = include_str!("../scripts/build_service_bins.sh");
+    let services = script
+        .split("for service in ")
+        .nth(1)
+        .and_then(|rest| rest.split("; do").next())
+        .expect("service list");
+
+    for service in services.split_whitespace() {
+        assert!(
+            build_service_bins_condition()
+                .to_string()
+                .contains(&format!("'{service}'")),
+            "{service} is built by the script but missing from the job's gate"
+        );
+    }
+}
+
+/// The jobs that compile the workspace date the checkout for the `target` they
+/// keep, and rebuild everything when the pull request changes query data:
+/// `CARGO_TARGET_REBUILD_ALL` reads path-check's output, which reads the
+/// filter that lists `.sqlx` paths.
+#[test]
+fn compiling_jobs_rebuild_everything_when_query_data_changes() {
+    let workflow = serde_json::to_value(code_check_cloud_storage()).unwrap();
+    for id in ["check", "test", "build-service-bins", "doppler-config"] {
+        let job = &workflow["jobs"][id];
+        let reason = job["env"]["CARGO_TARGET_REBUILD_ALL"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            reason.contains("needs.path-check.outputs.query_data == 'true'"),
+            "{id}: {reason}"
+        );
+        let names: Vec<&str> = job["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|step| step["name"].as_str().unwrap_or_default())
+            .collect();
+        assert!(
+            names.contains(&"Reuse the kept cargo target"),
+            "{id} reuses its target: {names:?}"
+        );
+    }
+
+    assert_eq!(
+        workflow["jobs"]["path-check"]["outputs"]["query_data"].as_str(),
+        Some("${{ steps.filter.outputs.query_data }}")
+    );
+    let with = serde_json::to_value(&paths_filter().value.with).unwrap();
+    let filters: serde_yaml::Value =
+        serde_yaml::from_str(with["filters"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        filters["query_data"],
+        serde_yaml::from_str::<serde_yaml::Value>("['**/.sqlx/**']").unwrap()
+    );
+}
+
+/// The test job compiles the crates whose `.env` names the test database
+/// against this run's schema, never a kept unit: those `.env` files exist only
+/// after `setup_test_envs`, and the databases are migrated after the dating.
+#[test]
+fn test_job_rebuilds_the_crates_that_check_queries_live() {
+    let run = serde_json::to_value(prepare_tests()).unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let at = |text: &str| run.find(text).unwrap_or_else(|| panic!("{text}: {run}"));
+    assert!(at("just setup_test_envs") < at(DATE_LIVE_QUERY_CRATES));
+    assert!(at(DATE_LIVE_QUERY_CRATES) < at("just initialize_dbs"));
+}
+
+/// [`DATE_LIVE_QUERY_CRATES`] looks for `.env` files under `crates` and
+/// `services`; one `setup_test_envs` writes anywhere else would compile against
+/// a kept unit.
+#[test]
+fn live_query_crates_are_where_the_dating_looks() {
+    let just = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../just/rust.just"
+    ));
+    let recipe = just
+        .split("\nsetup_test_envs:\n")
+        .nth(1)
+        .expect("setup_test_envs recipe");
+    let envs: Vec<&str> = recipe
+        .lines()
+        .take_while(|line| line.starts_with(' '))
+        .filter_map(|line| line.split(">> ./").nth(1))
+        .collect();
+    assert!(!envs.is_empty(), "{recipe}");
+    assert!(DATE_LIVE_QUERY_CRATES.contains("find crates services -name .env"));
+    for env in envs {
+        assert!(
+            env.ends_with("/.env") && (env.starts_with("crates/") || env.starts_with("services/")),
+            "{env}"
+        );
+    }
+}
+
+/// The content search target is `test = false`, and cargo's `--tests` drops it
+/// even when `--test` names it, so its step must never pass `--tests`, or a
+/// full run reports success without running it.
+#[test]
+fn the_content_search_step_runs_its_target_on_every_selection() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let stub_bin = tempfile::tempdir().unwrap();
+    let cargo = stub_bin.path().join("cargo");
+    std::fs::write(&cargo, "#!/bin/sh\necho \"$@\"\n").unwrap();
+    std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    for packages in ["all", "opensearch_client search_service"] {
+        let output = std::process::Command::new("bash")
+            .args([
+                "-c",
+                "export PATH=\"$STUB_BIN:$PATH\"\nexec bash \"$STUB_SCRIPT\"",
+            ])
+            // CI's dev shell sets BASH_ENV, which puts the real cargo back in
+            // front of the stand-in.
+            .env_remove("BASH_ENV")
+            .env("STUB_BIN", stub_bin.path())
+            .env(
+                "STUB_SCRIPT",
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("src/workflows/scripts/run_tests.sh"),
+            )
+            .env("RUST_PACKAGES", packages)
+            .env("NEXTEST_RUN_OPENSEARCH_TESTS", "true")
+            .output()
+            .unwrap();
+        let command = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{packages}: {output:?}");
+        assert!(
+            command.contains("--test content_search"),
+            "{packages}: {command}"
+        );
+        assert!(!command.contains("--tests"), "{packages}: {command}");
+    }
 }

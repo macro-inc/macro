@@ -1,4 +1,3 @@
-import { ViewShell } from '@app/components/view-shell';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { buildChannelMessageListMeta } from '@channel/Channel/message-list-meta';
 import { ChannelInput } from '@channel/Input/ChannelInput';
@@ -11,7 +10,6 @@ import { DateDivider } from '@channel/Message/DateDivider';
 import { NewDivider } from '@channel/Message/NewDivider';
 import { SenderName } from '@channel/Message/SenderName';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -26,9 +24,13 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  captureFirstVisibleScrollAnchor,
+  restoreScrollAnchor,
+  type ScrollAnchor,
+} from '@core/util/scrollAnchor';
 import ShareFatIcon from '@phosphor/share-fat.svg';
-import TimerIcon from '@phosphor/timer.svg';
-import { Button, ConfirmDialog, Tooltip } from '@ui';
+import { Button, ConfirmDialog } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -39,9 +41,9 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { ChatDetails } from '../components/chat-details';
+import { ExternalChatHeader } from '../components/chat-header';
 import { AttachmentChip } from '../components/inbound-attachment';
 import { MessageMedia } from '../components/message-media';
 import { RichCard } from '../components/rich-cards';
@@ -149,12 +151,9 @@ export function ExternalChatView(props: {
   const detailsBeside = () => !isTouchDevice() && !!sidePanel?.isOpen();
   const [stopped, setStopped] = createSignal(false);
   let scroller: HTMLDivElement | undefined;
+  let content: HTMLDivElement | undefined;
   let alive = true;
   let newest: string | undefined;
-  let oldest: string | undefined;
-  // Distance from the bottom at the last scroll, to hold the view in place
-  // when imported history lands above it.
-  let fromBottom = 0;
   // The reader is at the bottom and stays there as rows and media grow.
   // Only the reader's own scrolling changes it: layout (media loading,
   // shrinking, clamping) fires scroll events that say nothing about intent.
@@ -166,17 +165,44 @@ export function ExternalChatView(props: {
   onCleanup(() => {
     alive = false;
   });
+  // The row a reader scrolled up to, and where it sat, taken as they
+  // scroll. Rows landing or growing above it (an earlier page, imported
+  // history, media loading) would push it down: the scroller turns the
+  // browser's scroll anchoring off so following the bottom works alike in
+  // every engine, and WebKit has none, so the view holds the row itself.
+  let reading: ScrollAnchor | undefined;
+  // The content's height when the observer last saw it. A scroll event can
+  // fire after rows land but before the observer restores the view; taking
+  // the anchor then would record the row where it was pushed to.
+  let settledHeight: number | undefined;
+  const captureReading = () => {
+    if (!scroller || content?.offsetHeight !== settledHeight) return;
+    reading = captureFirstVisibleScrollAnchor(
+      scroller,
+      scroller.querySelectorAll('[data-message-id], [data-system-activity]')
+    );
+  };
   // Media WhatsApp sent no size for grows after it loads; a reader who was
-  // at the bottom stays there whenever the timeline's content changes size.
+  // at the bottom stays there whenever the timeline's content changes size,
+  // or its viewport does (on touch the scroller pads the floating composer,
+  // which grows with the draft). A reader scrolled up keeps the message they
+  // were reading where it was. Observers run after layout and before paint,
+  // so neither shows a jump.
   const grown = new ResizeObserver(() => {
-    if (alive && scroller && following)
+    if (!alive || !scroller) return;
+    settledHeight = content?.offsetHeight;
+    if (following) {
       scroller.scrollTop = scroller.scrollHeight;
+      return;
+    }
+    if (reading) restoreScrollAnchor(scroller, reading);
   });
   onCleanup(() => grown.disconnect());
   const [scrollerElement, setScrollerElement] = createSignal<HTMLDivElement>();
   const setScroller = (element: HTMLDivElement) => {
     scroller = element;
     setScrollerElement(element);
+    grown.observe(element);
   };
 
   /** Choosing a reply or an edit puts the composer in that mode. */
@@ -207,11 +233,7 @@ export function ExternalChatView(props: {
     scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
   /** Rows render only once the chat, and so its provider, has loaded. */
   const messageData = (message: ChatMessage) =>
-    chatMessageData(
-      message,
-      props.userId,
-      provider()?.formatting.toMarkdown ?? (() => '')
-    );
+    chatMessageData(message, provider()?.formatting.toMarkdown ?? (() => ''));
   const markRead = () =>
     fireAndForget(conversation.markRead(), 'external-chat.read');
   const rows = () => (source.chat.data ? conversation.rows() : []);
@@ -291,14 +313,6 @@ export function ExternalChatView(props: {
       markRead();
     });
   });
-  createEffect(() => {
-    const first = rows()[0]?.id;
-    const grewAbove = !!oldest && !!first && first !== oldest;
-    oldest = first;
-    if (!grewAbove || !scroller || following) return;
-    scroller.scrollTop =
-      scroller.scrollHeight - scroller.clientHeight - fromBottom;
-  });
   const importing = () =>
     backfillStatus(
       source.chat.data?.backfill,
@@ -323,14 +337,10 @@ export function ExternalChatView(props: {
     source.hasOlder()
       ? undefined
       : source.chat.data && historyStartNote(source.chat.data);
-  const older = async () => {
+  const older = () => {
     following = false;
-    const height = scroller?.scrollHeight ?? 0;
-    const offset = scroller?.scrollTop ?? 0;
-    const loaded = await source.loadOlder();
-    if (alive && scroller)
-      scroller.scrollTop = offset + scroller.scrollHeight - height;
-    return loaded;
+    captureReading();
+    return source.loadOlder();
   };
   const openQuoted = async (id: string) => {
     const find = () =>
@@ -346,9 +356,15 @@ export function ExternalChatView(props: {
     }
     if (!alive) return;
     const row = find();
-    if (row) following = false;
-    if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    else toast.alert('This quoted message is no longer available.');
+    if (!row) {
+      toast.alert('This quoted message is no longer available.');
+      return;
+    }
+    following = false;
+    // The page just loaded is laid out only at the next frame; restoring the
+    // row the reader left then would cancel this scroll.
+    reading = undefined;
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
 
   /**
@@ -441,50 +457,19 @@ export function ExternalChatView(props: {
   };
 
   return (
-    <div class="flex h-full min-h-0 min-w-0 flex-col bg-panel text-ink">
-      {/* Desktop chrome is the view shell's top bar; touch keeps it as the
-          page header, below the safe area. */}
-      <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
-        {props.leading}
-        <Show when={provider()}>
-          {(provider) => (
-            <span
-              aria-hidden="true"
-              class={`flex size-5 shrink-0 items-center justify-center rounded-full ${provider().badgeClass}`}
-            >
-              <Dynamic component={provider().icon} class="size-3" />
-            </span>
-          )}
-        </Show>
-        <div class="flex min-w-0 flex-1 items-baseline gap-2">
-          <h1 class="ph-no-capture min-w-0 truncate text-sm font-semibold">
-            {source.chat.data ? chatTitle(source.chat.data) : 'Chat'}
-          </h1>
-          <Show when={source.chat.data && disappearingNote(source.chat.data)}>
-            {(note) => (
-              <Tooltip
-                label={note()}
-                as="span"
-                class="flex shrink-0 self-center"
-              >
-                <TimerIcon
-                  class="size-3.5 text-ink-extra-muted"
-                  aria-label={note()}
-                  data-whatsapp-disappearing
-                />
-              </Tooltip>
-            )}
-          </Show>
-          <span class="shrink-0 truncate text-xs text-ink-extra-muted mobile:hidden">
-            {provider()?.label}
-            <Show when={importing()}>{(status) => <> · {status()}</>}</Show>
-          </span>
-        </div>
-        <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
-          <HeaderActionGroup label="Sharing">{props.share}</HeaderActionGroup>
-          <SidePanel.Toggle />
-        </div>
-      </ViewShell.TopBar>
+    <div class="flex h-full min-h-0 min-w-0 flex-col bg-panel text-ink touch:pt-(--mobile-content-inset-top)">
+      <ExternalChatHeader
+        title={source.chat.data ? chatTitle(source.chat.data) : 'Chat'}
+        provider={provider()}
+        pictureUrl={source.chat.data?.pictureUrl}
+        leading={props.leading}
+        share={props.share}
+        details={<SidePanel.Toggle />}
+        disappearing={
+          source.chat.data ? disappearingNote(source.chat.data) : undefined
+        }
+        importing={importing()}
+      />
       {/* Always reachable, however far back the timeline is scrolled. */}
       <Show when={canImport()}>
         <div class="flex min-w-0 items-center gap-3 border-b border-edge-muted px-4 py-2 text-xs text-ink-muted">
@@ -543,7 +528,7 @@ export function ExternalChatView(props: {
                   <div class="relative min-h-0 flex-1">
                     <div
                       ref={setScroller}
-                      class="scrollbar-hidden h-full overflow-y-auto overscroll-contain px-2 pb-4 [overflow-anchor:none] mobile:pb-(--mobile-content-inset-bottom)"
+                      class="scrollbar-hidden h-full overflow-y-auto overscroll-contain px-2 pb-4 [overflow-anchor:none] touch:pb-(--mobile-content-inset-bottom)"
                       role="log"
                       aria-label={`${provider()?.label} messages`}
                       onWheel={intent}
@@ -552,18 +537,22 @@ export function ExternalChatView(props: {
                       onPointerDown={intent}
                       onScroll={() => {
                         if (!scroller) return;
-                        fromBottom =
+                        const fromBottom =
                           scroller.scrollHeight -
                           scroller.scrollTop -
                           scroller.clientHeight;
                         if (Date.now() - intentAt < 1000)
                           following = fromBottom < 80;
+                        if (!following) captureReading();
                         if (fromBottom < 60) markRead();
                       }}
                     >
                       <div class="flex w-full justify-center">
                         <div
-                          ref={(content) => grown.observe(content)}
+                          ref={(element) => {
+                            content = element;
+                            grown.observe(element);
+                          }}
                           class="macro-message-width relative"
                         >
                           <Show

@@ -52,4 +52,16 @@ pub enum ValidationError {
         "schema has a $ref loop of required fields closing at {0}; make a field on the loop optional or nullable, or reach it through an array that may be empty"
     )]
     RequiredRefLoop(String),
+    /// The schema nests deeper than Gemini accepts; Gemini rejects the whole
+    /// request without naming the tool.
+    #[error(
+        "schema nests {depth} levels deep at {path}; Gemini rejects tool schemas deeper than {max}, so remove a level of nesting from the tool's input type",
+        max = crate::schema::GEMINI_MAX_SCHEMA_DEPTH
+    )]
+    TooDeep {
+        /// Levels of non-empty JSON objects and arrays on the deepest path.
+        depth: usize,
+        /// Dotted path to the deepest value.
+        path: String,
+    },
 }

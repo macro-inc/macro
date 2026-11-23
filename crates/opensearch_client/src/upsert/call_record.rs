@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
-use crate::upsert::properties::IndexedProperty;
+use crate::upsert::properties::{IndexedProperty, PropertyUpdate};
 use crate::{
     Result,
     date_format::EpochMillis,
@@ -14,10 +14,10 @@ use crate::{
 mod test;
 
 /// Relation name for parent docs in the call_records join field.
-const PARENT_RELATION: &str = "call";
+pub(crate) const PARENT_RELATION: &str = "call";
 
 /// Relation name for child (segment) docs in the call_records join field.
-const CHILD_RELATION: &str = "segment";
+pub(crate) const CHILD_RELATION: &str = "segment";
 
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertCallRecordSegmentArgs {
@@ -48,7 +48,7 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
     index_override.unwrap_or(SearchIndex::CallRecords.as_ref())
 }
 
-#[tracing::instrument(skip(client), err)]
+#[tracing::instrument(skip(client))]
 pub(crate) async fn upsert_call_record_segment(
     client: &opensearch::OpenSearch,
     args: &UpsertCallRecordSegmentArgs,
@@ -60,7 +60,7 @@ pub(crate) async fn upsert_call_record_segment(
         .map(|_| ())
 }
 
-#[tracing::instrument(skip(client, segments), err)]
+#[tracing::instrument(skip(client, segments))]
 pub(crate) async fn bulk_upsert_call_record_segments(
     client: &opensearch::OpenSearch,
     segments: &[UpsertCallRecordSegmentArgs],
@@ -160,13 +160,14 @@ async fn bulk_upsert_call_record_segments_inner(
 
 /// Update only the denormalized `properties` on an existing parent call doc,
 /// without touching segments. Used when a call's properties change
-/// independently of its content. A missing doc (404) is treated as a no-op —
-/// the next segment upsert will include the properties.
+/// independently of its content. A missing doc (404) changes nothing and is
+/// [`PropertyUpdate::NotIndexed`]: the next segment upsert will include the
+/// properties.
 pub(crate) async fn update_call_record_properties(
     client: &opensearch::OpenSearch,
     call_id: &str,
     properties: &[IndexedProperty],
-) -> Result<()> {
+) -> Result<PropertyUpdate> {
     use serde_json::json;
 
     let properties_value =
@@ -195,7 +196,7 @@ pub(crate) async fn update_call_record_properties(
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(call_id=%call_id, "call record properties updated");
-        return Ok(());
+        return Ok(PropertyUpdate::Applied);
     }
     let body = response.text().await.map_err(|err| {
         OpensearchClientError::deserialization_failed(
@@ -216,7 +217,7 @@ pub(crate) async fn update_call_record_properties(
                 call_id=%call_id,
                 "call record not indexed yet; skipping property update"
             );
-            return Ok(());
+            return Ok(PropertyUpdate::NotIndexed);
         }
     }
 

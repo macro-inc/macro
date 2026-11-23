@@ -1,8 +1,4 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
@@ -479,18 +475,6 @@ export function removeSoupEntitiesFromQueriesReferencing(
 }
 
 /**
- * Remove entities from soup queries that filter out done content, leaving
- * them in place everywhere else (e.g. mail "All", which shows done threads).
- * Use with an entity-level done patch so the remaining rows reflect the new
- * state.
- */
-export function removeSoupEntitiesFromDoneFilteredQueries(
-  entityIds: Set<string>
-): SoupTransaction {
-  return removeSoupEntitiesWhere(entityIds, soupQueryExcludesDone);
-}
-
-/**
  * Prepend a cached entity to the done-excluding soup queries (see
  * `soupQueryExcludesDone`) whose pages don't contain it. A fresh notification
  * puts its entity back into those feeds server-side, but the client row may
@@ -760,6 +744,9 @@ export async function refetchSoupEntity(
     notified?: boolean;
   }
 ): Promise<void> {
+  // Team notifications hydrate through their inbox feed, never the generic REST cache.
+  if (entityType === 'team') return;
+
   if (options?.refreshGraphql) {
     fireAndForget(refreshActiveGraphqlSoupQueries(), 'soup-normalized-cache');
   }
@@ -771,7 +758,6 @@ export async function refetchSoupEntity(
     !options?.ownTouch &&
     !options?.created &&
     !(options?.notified && mountedNotifiedLists().length > 0) &&
-    isFeatureEnabled(enableGraphqlSoup) &&
     !hasSoupEntity(entityId)
   ) {
     return;
@@ -936,6 +922,12 @@ export function buildSingleEntityFilter(
     .with('crmContact', () => {
       throw new Error('CRM contacts are read through GraphQL Soup only');
     })
+    .with('harness', () => {
+      throw new Error('Runtimes are read through GraphQL Soup only');
+    })
+    .with('team', () => {
+      throw new Error('Teams are notification-only GraphQL Soup entries');
+    })
     .exhaustive(() => {
       throw new Error(`Unknown soup entity type: ${entityType}`);
     });
@@ -999,7 +991,7 @@ export function optimisticUpdateSoupItemUpdatedAt(
   updatedAt: string
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(itemId);
-  if (!current || current.tag !== tag) return;
+  if (!current || current.tag !== tag || current.tag === 'team') return;
 
   if (current.tag === 'channel') {
     if (

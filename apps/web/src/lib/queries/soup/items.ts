@@ -1,6 +1,4 @@
 import { filterSoupItemByRequestBody } from '@app/features/next-soup/filters/query-filters';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import {
@@ -377,6 +375,8 @@ export type SoupAstItemsQuery = {
   readonly isFetchNextPageError: boolean;
   readonly isEnabled: boolean;
   readonly hasNextPage: boolean;
+  /** A cached or fetched page answered; a local predicate alone is not a page. */
+  readonly hasPageData: boolean;
   readonly transport: SoupAstItemsQueryTransport;
   readonly cacheStatus?: PredicateQueryStatus;
   /** GraphQL reads used by transport-specific revalidation subscribers. */
@@ -390,24 +390,16 @@ export type SoupAstItemsQuery = {
 };
 
 /**
- * Queries Soup through urql-solid when the feature is enabled and the current
- * AST has a complete GraphQL translation. Unsupported requests retain the REST
- * behavior. Explicit `rest` and `graphql` transport values remain available
- * for rollout controls; forced GraphQL still falls back safely when unsupported.
+ * Queries Soup through urql-solid when the current AST has a complete GraphQL
+ * translation. Unsupported requests retain the REST behavior. An explicit
+ * `rest` transport forces REST.
  */
 export function useSoupAstItemsQuery(
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ): SoupAstItemsQuery {
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
-
   const queryEnabled = () => options?.().enabled !== false;
-  const graphqlRequested = () => {
-    const requestedTransport = args().transport;
-    if (requestedTransport === 'rest') return false;
-    if (requestedTransport === 'graphql') return true;
-    return graphqlSoupFlag().enabled;
-  };
+  const graphqlRequested = () => args().transport !== 'rest';
 
   const graphqlFlatQuery = createGraphqlSoupAstItemsQuery(
     () => ({ params: args().params, body: args().body }),
@@ -505,6 +497,15 @@ export function useSoupAstItemsQuery(
       if (!usesGraphql()) return restQuery.error ?? null;
       const query = activeGraphqlQuery();
       return query.fetchError?.() ?? query.error() ?? null;
+    },
+    get hasPageData() {
+      if (!usesGraphql())
+        return (
+          !restQuery.isPending &&
+          !restQuery.isPlaceholderData &&
+          restQuery.data !== undefined
+        );
+      return activeGraphqlQuery().hasPageData();
     },
     get isPending() {
       if (!usesGraphql()) return restQuery.isPending;

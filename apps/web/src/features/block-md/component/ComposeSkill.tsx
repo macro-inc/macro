@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -242,24 +243,28 @@ export function ComposeSkill(props: ComposeSkillProps) {
 
     toast.success('Skill created', {
       subtext: linkCopied ? 'Link copied' : undefined,
+      dismissStyle: 'icon',
       actions: [
         {
-          label: 'Open',
-          icon: ArrowSquareOutIcon,
-          onClick: () => {
-            openWithSplit(
-              { type: 'skill', id: documentId },
-              { referredFrom: null }
-            );
-          },
-        },
-        {
-          label: 'Open (New Split)',
+          label: t('entityActions.toastOpenSplit'),
           icon: SplitIcon,
+          trailingIcon: true,
+          variant: 'secondary',
           onClick: () => {
             openWithSplit(
               { type: 'skill', id: documentId },
               { referredFrom: null, preferNewSplit: true }
+            );
+          },
+        },
+        {
+          label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
+          onClick: () => {
+            openWithSplit(
+              { type: 'skill', id: documentId },
+              { referredFrom: null }
             );
           },
         },

@@ -7,18 +7,22 @@ export function WorkspaceTexture(props: { accent: string; filterId: string }) {
     <>
       <div
         aria-hidden="true"
-        class="pointer-events-none absolute inset-0 opacity-20"
+        class="pointer-events-none absolute inset-0"
         style={{
           'background-image': `radial-gradient(${props.accent} .7px, transparent .7px)`,
           'background-size': '8px 8px',
-          'mask-image': textureMask,
+          'mask-image': `var(--workspace-texture-mask, ${textureMask})`,
+          opacity: 'var(--workspace-dots-opacity, .2)',
         }}
       />
       <svg
         data-workspace-texture
         aria-hidden="true"
         class="pointer-events-none absolute inset-0 size-full"
-        style={{ opacity: 0.2, 'mask-image': textureMask }}
+        style={{
+          opacity: 'var(--workspace-grain-opacity, .2)',
+          'mask-image': `var(--workspace-texture-mask, ${textureMask})`,
+        }}
       >
         <filter id={props.filterId}>
           <feTurbulence

@@ -59,6 +59,75 @@ pub enum FusionAuthClientError {
     /// The grant is invalid - user may have revoked access.
     #[error("Invalid grant - user may have revoked access")]
     InvalidGrant,
+    /// FusionAuth's OAuth2 token endpoint refused the request with an
+    /// RFC 6749 section 5.2 error, such as `invalid_grant` for a refresh
+    /// token it no longer holds.
+    #[error("{SERVICE_NAME} refused the OAuth2 token request: {0}")]
+    OAuth2TokenRefused(OAuth2TokenError),
+    /// The provider refused to refresh this user's grant by policy, such as a
+    /// Google Workspace admin not approving Macro. Retrying will not help
+    /// until the user's organization allows access.
+    #[error("access blocked by the user's organization: {reason}")]
+    GrantBlocked {
+        /// The provider's OAuth error code.
+        reason: GrantBlockReason,
+    },
+}
+
+/// An RFC 6749 section 5.2 error from FusionAuth's `/oauth2/token`. Carries no
+/// credential, so it is safe to log.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct OAuth2TokenError {
+    /// The RFC 6749 error code, e.g. `invalid_grant` or `invalid_client`.
+    pub error: String,
+    /// FusionAuth's finer-grained cause, e.g. `refresh_token_not_found`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_reason: Option<String>,
+    /// FusionAuth's human-readable description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_description: Option<String>,
+}
+
+impl OAuth2TokenError {
+    /// Whether the grant itself (code or refresh token) was refused as
+    /// invalid, expired, or revoked. Only the user signing in again fixes
+    /// that; every other code means the request or our client is wrong.
+    /// FusionAuth answers a dead authorization code with `invalid_request` and
+    /// the reason `auth_code_not_found`, not with `invalid_grant`.
+    pub fn is_invalid_grant(&self) -> bool {
+        self.error == "invalid_grant" || self.error_reason.as_deref() == Some("auth_code_not_found")
+    }
+}
+
+impl std::fmt::Display for OAuth2TokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.error)?;
+        if let Some(reason) = &self.error_reason {
+            write!(f, " ({reason})")?;
+        }
+        if let Some(description) = &self.error_description {
+            write!(f, ": {description}")?;
+        }
+        Ok(())
+    }
+}
+
+/// Google OAuth error codes for a grant the user's organization does not let
+/// Macro use, such as a Workspace admin who has not approved the app. Only
+/// that organization can lift them. `invalid_client` and `unauthorized_client`
+/// are deliberately absent: they mean Macro's own OAuth client is broken.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, strum::EnumString, strum::Display,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum GrantBlockReason {
+    /// A Workspace admin has not reviewed and configured access for Macro.
+    AccessNotConfigured,
+    /// A Workspace admin policy forbids the requested scopes.
+    AdminPolicyEnforced,
+    /// The user or their organization denied access.
+    AccessDenied,
 }
 
 impl FusionAuthClientError {

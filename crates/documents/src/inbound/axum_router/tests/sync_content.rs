@@ -30,6 +30,7 @@ async fn sync_notifications_require_internal_auth_and_forward_only_identity_and_
         [SyncContentCall {
             document_id: "doc-1".into(),
             editors: vec![crate::domain::events::DocumentSyncEditor {
+                agent_correlation_id: None,
                 actor: activity::Actor::try_from(
                     "bot|00000000-0000-0000-0000-00000000a1a1".to_owned()
                 )

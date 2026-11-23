@@ -19,8 +19,18 @@ consumer talks to.
   same fold run server-side for the SDK and agents.
 - `src/domain/read.rs` and `src/inbound/toolset/read_agent_session.rs`: bounded,
   view-authorized conversation reads using the shared transcript fold.
+- `src/domain/coding_agents.rs` + `src/inbound/coding_agents.rs`: coding persona
+  discovery and dispatch; `GET /coding-agents` serves the signed-in user's
+  listing to the SDK, the `/internal/coding-agents` commands serve tools.
 - `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
-  capped to 25 sessions before folding their logs.
+  capped to 25 sessions before folding their logs. Served to the caller by
+  `GET /agent-sessions/updates` (`inbound/axum_router/updates.rs`) and to the
+  `ListAgentUpdates` tool by `/internal/coding-agents/updates`. In code mode,
+  `macro.agentSessions.updates()` reads the route and an `agentUpdates` view
+  draws the cards, only for sessions the viewer owns.
+- `src/domain/session_task.rs`: a session's task. The `link_task` MCP tool and
+  `PUT /agent-sessions/{id}/task` (`inbound/axum_router/task.rs`, owner only)
+  share `SessionTasks::link_task`.
 - `src/outbound/postgres.rs`: the session repository.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.
@@ -39,7 +49,8 @@ consumer talks to.
   `macro_authorization`.
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
   `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent
-  toolset), `complete_graph`, `webhook`, `search_service`, `soup_realtime`,
+  toolset), `complete_graph`, `graphql_registered_work`, `webhook`,
+  `search_service`, `soup_realtime`,
   and the cloud-agent crates (`cursor_cloud_agents`, `codex_cloud_agents`).
 
 ## Recipes
@@ -52,11 +63,21 @@ consumer talks to.
 
 ## Tool contracts
 
-- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
+- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. Only directly authenticated users with edit access may answer permissions or elicitations; agent programs and runtimes cannot answer. `link_task` returns a `mention` chip to paste when naming the task.
+
+`release_session` stops an idle actor silently (`CloseReason::Released`): the
+actor refuses with `SessionRelease::Busy` unless its machine is live with no
+turn, permission request, elicitation or queued action; otherwise it flushes
+buffered frames and stops without the `disconnected` frame, telemetry close or
+`session_stopped` callback that every other stop has, and its claim is
+released under its fence. Use it only to free memory; a stop anyone should
+see goes through `close_session`.
 
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the
 effective history served to transcript readers: replayed prompts lose action IDs.
+A prompt sent again after a disconnect reads as running; only a disconnect
+after its latest send makes it interrupted.
 
 `domain/notifications.rs` owns durable typed system-event production and the
 transaction-aware producer port. `outbound/notifications.rs` owns the outbox
@@ -68,14 +89,35 @@ Await rollback on empty or blocked claims so their session lock is released
 before the next real prompt attempts to attach quiet events.
 Discovery uses bounded cursor pages so callers can
 advance past unavailable sessions. Quiet batches bind to the actual prompt action ID;
-notification-only turns record `PrompterKind::System` and no human authority.
+notification-only turns record `PrompterKind::System` and no human authority,
+except a batch of only `app.connected` events after the owner's turn that
+offered those apps' connect buttons, which the harness records as `Program`
+for the owner (see
+`agent_harness`'s `continues_for_owner`).
+A prompt from a program (`ControlPrincipal::Program`, including a session
+created with a first prompt) or a routine's agent step, and a queued prompt a
+program rewrote, record `PrompterKind::Program`: the user's access, never the
+user's decision. The kind rides `ControlEvent` and three decoded paths: the
+`turn_prompter_kind` column, `StoredQueuedAction.prompter`, and the harness
+command's `prompter` (`DeliverAction`, `EditQueued`). All three decode through
+`PrompterKind::from_stored`: an unknown kind reads as `System`, with no acting
+user and so no owner access, and logs a warning; a missing one reads as
+`user`. An edit keeps the less trusted of the prompt's and the editor's kinds.
 Never expose notification metadata through public session controls. Notification
 sessions read original log frames across load boundaries to retain trusted event
-provenance when runtimes echo their prompt history. Queue reads discard legacy
+provenance when runtimes echo their prompt history. A log trigger records this
+once as `agent_session.has_trusted_notifications`; history reads test that flag,
+never the log's JSON. Queue reads discard legacy
 private-context entries; the migration bridge preserves their review outcomes
 without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
 persisted prompter, never from an old wire actor or a newer user turn.
+`TurnPrompter.client` (`turn_prompter_client`) is the app tab a person typed
+the turn's prompt in (`ControlRequest.clientId`, or `promptClientId` on a
+create carrying the first prompt). `ControlPrincipal::admit_client` admits it
+on both paths: refused from runtimes, dropped for programs. Every
+`set_turn_prompter` overwrites it, a system turn never stores one, and it only
+addresses that person's own tab (`agent_code_mode`'s `ui_commands`).
 
 Archive state lives on `agent_session`: `archived_by`
 (`agent_session_archive_cause`: `user`, `pull_request_merged`,
@@ -95,6 +137,19 @@ restore, so a session auto-archives at most once. A session archives for pull
 requests once every linked pull request is closed and at least one merged;
 links with no `github_pull_request` row count as open.
 
+Registered work (`domain/work_registration.rs`, `outbound/postgres/work_registration.rs`,
+`inbound/axum_router/work_registration.rs`, `inbound/work_registration_sweep.rs`): any account
+registers a session it can edit as its work; registering shares nothing, and readers see only
+sessions they can view. Rows in `work_registration` end, never delete, and a later turn does
+not bring one back. Finished pull requests end them from the pull request consumer regardless
+of auto-archive preferences; every archive path ends them in its own transaction, so a new
+archive path must call `end_work_registrations_on_archive`; the sweep ends idle and blocked
+sessions and catches up on the rest, in one guarded statement that is safe across replicas.
+`WorkRegistrationRealtime` wraps a session service's realtime so turn, rename, and archive
+changes reach viewers of registered sessions as Soup patches
+(`soup_realtime::outbound::agent_sessions::SoupWorkRegistrationSignal`); wrap any new
+publisher of list-field changes. GraphQL is `graphql_registered_work`.
+
 Followers: a session started from a thread (`SessionPurpose::visibility`, any
 agent) is `hidden`. The harness calls `add_follower` beside `set_turn_prompter`
 for a prompt typed into the session itself (`QueuedEntry::direct_prompter`: a
@@ -110,12 +165,55 @@ whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
 one. Only names with `agent_session.name_is_generated` are retitled; a rename
 through `set_name` clears it, so a name a person chose is never replaced.
 
+Activity: `domain/lifecycle_activity.rs` maps lifecycle events for DSS's activity
+consumer. `opened` for a person-started session is their Created activity,
+which places it in Home's own work as soon as its row commits; `deleted` purges
+it. The harness publishes `opened` before provisioning the sandbox, so keep it
+there.
+
+Activity summaries: `domain/activity_summary.rs` is a turn observer the
+harness binds next to the queue. For each running turn it keeps one task that
+summarizes the newest activity rows of `TurnSignal::Progressed` (labels and
+details already shown to readers, never tool input or output) with
+`outbound/activity_summarizer.rs` (Nemotron), resting 4s for the first 10 lines
+and 15s after, at most 120 per turn; calls made while it rests coalesce. Lines go
+to viewers only, through `AgentSessionRealtime::publish_activity_summarized`
+(`agent_session_activity`), and a `null` line clears it when the turn ends.
+Admission and usage are against the session's owner (`AiFeature::AgentActivitySummary`,
+non-billable); a session with no person owner gets none. The PostHog flag
+`disable-agent-activity-summary` (`KILL_SWITCH_FLAG`), when on for the owner,
+skips the turn before any model call; unset or unreadable, summaries run.
+
 ## Checks
 
 - `cargo test -p agent_session` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
+- Persist `AcpReady` through the fenced session log before opening or restoring
+  a session on an already-initialized shared runtime; MCP and model-gateway
+  credentials remain revoked while the durable status is disconnected.
+- The scheduler's routine-session operations (`domain/routines.rs`,
+  `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
+  a session the scheduler opened for its owner, a routine's run (source
+  `routine`) or a draft's background session, and refuses any other;
+  `activity` returns content-free counts (tool calls, turns).
+- A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
+  is work the owner asked for that runs out of sight: source `user`, origin
+  `requested` by the owner, `hidden`, opened from no message. A routine
+  draft's session is one. The harness sends no
+  notifications about it, and it is never named or retitled
+  (`AdmittedAgentSessionNameGenerator`).
+
+- What opened a session is an `agent_session_source` row, referenced by
+  `agent_session.source_id` and written in the transaction that writes the session
+  (`outbound/postgres/source.rs`). It holds references only, as
+  `trigger_context::TriggerOrigin`. Null means unknown: a session older than this,
+  an unclaimed warm session, or an older runtime. It describes a session; `source`
+  and `visibility` decide what happens to it (only `is_background` also reads the
+  origin), and a runtime's claim never sets them.
+  Whoever can view a session reads its origin: `AgentSessionResponse`, the SDK's
+  `AgentSession.origin()`, and `ReadAgentSession`.
 - Where a session is shown is `agent_session.visibility` (`listed`,
   `unlisted`, `hidden`), set at creation and changed later only by warm
   claims and the DM-context backfill (`list_visibility.rs`).
@@ -125,12 +223,22 @@ through `set_name` clears it, so a name a person chose is never replaced.
   code, and it must keep sorting before `agent_session_legacy_warm_write`
   (triggers fire in name order).
 
+- Whether an in-process session's turns are billed is
+  `agent_session.billing` (`SessionBilling`: `billable`, the default, or
+  `non_billable`), set at creation from `OpenManagedSession` /
+  `PrepareRoutineSession` and read at attach (`session_billing`). A
+  non-billable session never claims a warm row, which is billable.
 - `ReadAgentSession` bounds its response, not storage work: it folds the full
   effective history like the app. Raw log limits break replay and turn numbering;
   bounded reads need a persisted conversation projection or a fold-aware port.
 - The row's fenced log writer and the Cursor projection both lock the
   session row `FOR UPDATE`; never add a second `NOWAIT` locker without
   checking both paths (see git history on `src/domain/control.rs`).
+- The search indexing lease (`SearchIndexingRepo::lock`) returns
+  `GrantedLease::granted_at`, read from the database clock in the locking
+  statement itself. search-processing sends it as the version of every write
+  and delete it makes in the index, so it must stay one clock for all workers,
+  never a process clock.
 - `modified_at` is Agents/Home list recency. Bump it for user-visible work
   (`moves_session_list`: starting/running/stopping/blocked) and metadata
   the viewer asked to change. Do not bump it for claim, release, recovery,
@@ -139,3 +247,10 @@ through `set_name` clears it, so a name a person chose is never replaced.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+- The activity route requires session view access, including for rows affecting other entities; its optional invocation filter stays scoped to the session.
+- No session opens for a bot bound to an agent teammate's computer
+  (`BotFacts::on_team_agent_computer`): `persona_for_owner` and a runtime's
+  external create refuse it with `TeamAgentComputer` (409).
+- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set, skipping archived sessions and flagging dormant ones; runtime wiring obtains assignments through the bots port.
+- Structured session activity additionally requires current access for CRM records, including acting-user bot credentials. Preserve the raw cursor when filtering denied rows; saved transcript text remains a received snapshot.

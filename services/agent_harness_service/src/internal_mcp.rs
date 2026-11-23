@@ -3,6 +3,7 @@
 use agent_code_mode::{domain::SessionCodeMode, inbound::toolset::CodeModeToolContext};
 use agent_code_mode::{domain::reviews::ReviewService, inbound::reviews::ReviewToolContext};
 use std::sync::{Arc, OnceLock};
+use tracing::Instrument as _;
 
 use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::{
@@ -20,8 +21,8 @@ use cognition::domain::Cognition;
 use rmcp::{
     ServerHandler,
     model::{
-        CallToolRequestParams, CallToolResult, Content, ListToolsResult, PaginatedRequestParams,
-        ServerCapabilities, ServerInfo, Tool, ToolAnnotations,
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult,
+        PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool, ToolAnnotations,
     },
     transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
@@ -41,20 +42,35 @@ fn toolset() -> AsyncToolCollection<SessionToolContext> {
         .add_tool::<TaskPullRequestsTool, SessionToolContext>()
 }
 
+/// Admit only the explicitly configured egress origins and standard gateway hosts.
+pub(super) fn configured_hosts(urls: &[&str]) -> anyhow::Result<Vec<String>> {
+    use anyhow::Context as _;
+    urls.iter()
+        .map(|value| {
+            let url = url::Url::parse(value).context("invalid internal MCP egress URL")?;
+            Ok(url
+                .host_str()
+                .context("internal MCP egress URL needs a host")?
+                .to_owned())
+        })
+        .collect()
+}
+
 /// Build the internal endpoint with per-request session authentication.
 pub(super) fn router<A: AgentSessionRepo + 'static>(
     authority: Arc<A>,
-    host: String,
+    hosts: Vec<String>,
     tools: InternalTools,
 ) -> Router {
-    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
-        host,
+    let mut hosts = hosts;
+    hosts.extend([
         "localhost".into(),
         "127.0.0.1".into(),
         "gateway.macro.com".into(),
         "dev-gateway.macro.com".into(),
     ]);
-    config.stateful_mode = false;
+    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts(hosts);
+    config.legacy_session_mode = false;
     config.json_response = true;
     let server = StreamableHttpService::new(
         move || Ok(tools.clone()),
@@ -84,8 +100,8 @@ pub(super) struct InternalTools {
 }
 
 impl ServerHandler for InternalTools {
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+    fn get_info(&self) -> ServerConfig {
+        let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
         info.server_info = rmcp::model::Implementation::new(
             agent_harness::domain::model::INTERNAL_MCP_NAME,
             env!("CARGO_PKG_VERSION"),
@@ -93,11 +109,11 @@ impl ServerHandler for InternalTools {
         .with_title("Macro Internal MCP");
         info.instructions = Some(prompt::pull_requests::internal_mcp_instructions());
         info.instructions.as_mut().expect("instructions are set").push_str(
-            " macro_internal.PresentReview presents editable email/calendar draft stacks or questions through the shared session stream. It completes immediately as Presented to the user and never waits for approval. Later account-holder decisions deliver typed review.decided and review.settled system events. GetReview reads saved drafts and outcomes by reviewId. DecideReview uses the same claim/execute path and requires a real request from the review’s account holder in the current turn; system notifications never authorize decisions. After presenting an import plan, ask \"Should I kick it off?\"; when the review’s account holder says yes, submit it with macro_internal.DecideReview. These tools are available even when code mode is disabled.",
+            " macro_internal.PresentReview presents editable email/calendar draft stacks or questions through the shared session stream. It completes immediately as Presented to the user and never waits for approval. Later account-holder decisions deliver typed review.decided and review.settled system events. GetReview reads saved drafts and outcomes by reviewId. DecideReview uses the same claim/execute path and requires a real request from the review’s account holder in the current turn; system notifications never authorize decisions. After presenting an import plan, ask \"Should I kick it off?\"; when the review’s account holder says yes, submit it with macro_internal.DecideReview.",
         );
         if self.code_mode.is_some() {
             info.instructions.as_mut().expect("instructions are set").push_str(
-                " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the JavaScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.",
+                " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the type-checked TypeScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.",
             );
         }
         info
@@ -185,9 +201,27 @@ impl ServerHandler for InternalTools {
 
     async fn call_tool(
         &self,
+        request: CallToolRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
+        // The in-process agent sends its turn's trace context in `_meta`, so
+        // a code execution and the SDK calls under it join the session trace.
+        let span = tracing::info_span!(
+            "internal_mcp.call_tool",
+            mcp.tool.name = %request.name,
+            agent_session_id = tracing::field::Empty,
+        );
+        genai_telemetry::propagation::set_parent_from_mcp(&span, &context.meta);
+        self.run_tool(request, context).instrument(span).await
+    }
+}
+
+impl InternalTools {
+    async fn run_tool(
+        &self,
         mut request: CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
-    ) -> Result<CallToolResult, rmcp::ErrorData> {
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
         let AuthenticatedSession(grant) = context
             .extensions
             .get::<axum::http::request::Parts>()
@@ -195,6 +229,7 @@ impl ServerHandler for InternalTools {
             .ok_or_else(|| {
                 rmcp::ErrorData::invalid_request("Missing session authorization", None)
             })?;
+        tracing::Span::current().record("agent_session_id", tracing::field::display(grant.id));
         // Resolve actor choices from a user-owned session and its verified turn.
         // Sessions owned by anything else have no account authority.
         let owner = grant
@@ -209,9 +244,9 @@ impl ServerHandler for InternalTools {
             let (_, cleaned) = match ai_toolset::actor::ToolActor::take(&arguments) {
                 Ok(selection) => selection,
                 Err(error) => {
-                    return Ok(CallToolResult::error(vec![Content::text(
-                        error.to_string(),
-                    )]));
+                    return Ok(
+                        CallToolResult::error(vec![ContentBlock::text(error.to_string())]).into(),
+                    );
                 }
             };
             use agent_inmem::domain::tool_gate::NativeToolVerdict;
@@ -222,7 +257,7 @@ impl ServerHandler for InternalTools {
             {
                 NativeToolVerdict::RunAs(user) => acting_user = user,
                 NativeToolVerdict::Refuse(reason) => {
-                    return Ok(CallToolResult::error(vec![Content::text(reason)]));
+                    return Ok(CallToolResult::error(vec![ContentBlock::text(reason)]).into());
                 }
                 NativeToolVerdict::Run => {}
             }
@@ -245,10 +280,11 @@ impl ServerHandler for InternalTools {
                 )
                 .await
                 .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
-            return Ok(match result {
+            let result = match result {
                 Ok(value) => CallToolResult::structured(value),
-                Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-            });
+                Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+            };
+            return Ok(result.into());
         }
         if let Some(code_mode) = &self.code_mode {
             let tools = agent_code_mode::inbound::toolset::toolset();
@@ -271,12 +307,15 @@ impl ServerHandler for InternalTools {
                     )
                     .await
                     .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
-                return Ok(match result {
+                let result = match result {
                     // A failed program is a completed execution with a receipt.
                     // MCP errors discard structured content in some runtimes.
-                    Ok(value) => CallToolResult::structured(value),
-                    Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-                });
+                    Ok(value) => code_result(value),
+                    Err(error) => {
+                        CallToolResult::error(vec![ContentBlock::text(error.description)])
+                    }
+                };
+                return Ok(result.into());
             }
         }
         let result = toolset()
@@ -304,9 +343,34 @@ impl ServerHandler for InternalTools {
                     rmcp::ErrorData::resource_not_found(message, None)
                 }
             })?;
-        Ok(match result {
-            Ok(value) => CallToolResult::success(vec![Content::text(value.to_string())]),
-            Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-        })
+        let result = match result {
+            Ok(value) => CallToolResult::success(vec![ContentBlock::text(value.to_string())]),
+            Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+        };
+        Ok(result.into())
     }
+}
+
+/// The receipt as structured content, which Macro's own agent reads with its
+/// `modelMedia`; other clients read the text and image blocks, so the pixels
+/// reach them as images rather than base64 text.
+fn code_result(value: serde_json::Value) -> CallToolResult {
+    let mut text = value.clone();
+    let media = text
+        .as_object_mut()
+        .and_then(|object| object.remove("modelMedia"));
+    let mut content = vec![ContentBlock::text(text.to_string())];
+    for image in media
+        .as_ref()
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if let Some(data) = image.get("data").and_then(serde_json::Value::as_str) {
+            content.push(ContentBlock::image(data, "image/png"));
+        }
+    }
+    let mut result = CallToolResult::success(content);
+    result.structured_content = Some(value);
+    result
 }

@@ -16,7 +16,7 @@ use super::ics::{
 use super::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
 use super::labels::{EventCopy, EventLabels};
 use super::meeting_links::{
-    CreateEventWithMacroCallError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
+    MacroCallEventError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
 };
 use super::models::{
     ActorInboxes, AlignedGuestCopy, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
@@ -26,11 +26,11 @@ use super::models::{
     CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionPreview,
     CalendarMentionRequestItem, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
     CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
-    CalendarSyncStatus, DisconnectedCalendar, DueCalendarReminder, EventDetails,
-    GoogleCalendarSyncSnapshot, GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan,
-    GoogleWatchChannel, GoogleWatchConfig, GuestPolicy, MeetingCopy, OccurrenceListing,
-    OccurrenceRange, OwnedInbox, ProviderCalendar, ProviderCalendarTarget, StoredGoogleCalendar,
-    TeamOutOfOffice, VisibleCalendar,
+    CalendarSyncFailure, CalendarSyncHealth, CalendarSyncStatus, DisconnectedCalendar,
+    DueCalendarReminder, EventDetails, GoogleCalendarSyncSnapshot, GoogleEventSyncBatch,
+    GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, GuestPolicy,
+    MeetingCopy, OccurrenceListing, OccurrenceRange, OwnedInbox, ProviderCalendar,
+    ProviderCalendarTarget, StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -47,6 +47,10 @@ pub enum CalendarProviderErrorKind {
     /// The provider will not open push channels for this resource; only
     /// polling can keep it in sync.
     PushUnsupported,
+    /// Macro's own per-mailbox request admission refused the call, so nothing
+    /// reached the provider. A sync retries after
+    /// [`CalendarProviderError::retry_after`] without counting a failure.
+    Deferred,
 }
 
 /// Typed calendar provider failure returned across the provider port.
@@ -55,6 +59,8 @@ pub enum CalendarProviderErrorKind {
 pub struct CalendarProviderError {
     kind: CalendarProviderErrorKind,
     message: String,
+    retry_after: Option<std::time::Duration>,
+    refused: bool,
 }
 
 impl CalendarProviderError {
@@ -63,7 +69,44 @@ impl CalendarProviderError {
         Self {
             kind,
             message: message.into(),
+            retry_after: None,
+            refused: false,
         }
+    }
+
+    /// A call Macro's own request admission refused before sending it, to
+    /// retry after `retry_after` when the admission names a delay.
+    pub fn deferred(retry_after: Option<std::time::Duration>, message: impl Into<String>) -> Self {
+        Self {
+            kind: CalendarProviderErrorKind::Deferred,
+            message: message.into(),
+            retry_after,
+            refused: false,
+        }
+    }
+
+    /// A [`CalendarProviderErrorKind::Permanent`] change the adapter refuses
+    /// before sending anything to the provider, with a message written for
+    /// the user. Mutations show the message alone, without the "request
+    /// failed" prefix, since no request was made.
+    pub fn refused(message: impl Into<String>) -> Self {
+        Self {
+            kind: CalendarProviderErrorKind::Permanent,
+            message: message.into(),
+            retry_after: None,
+            refused: true,
+        }
+    }
+
+    /// Whether the adapter refused the change before any provider request;
+    /// see [`Self::refused`].
+    pub fn is_refused(&self) -> bool {
+        self.refused
+    }
+
+    /// When a [`CalendarProviderErrorKind::Deferred`] call may be retried.
+    pub fn retry_after(&self) -> Option<std::time::Duration> {
+        self.retry_after
     }
 
     /// Return the retry/reauthorization classification.
@@ -75,6 +118,31 @@ impl CalendarProviderError {
     pub fn message(&self) -> &str {
         &self.message
     }
+}
+
+impl From<CalendarProviderErrorKind> for CalendarSyncFailure {
+    /// A sync that fails for any reason a retry can clear is transient.
+    fn from(kind: CalendarProviderErrorKind) -> Self {
+        match kind {
+            CalendarProviderErrorKind::Permanent => Self::Permanent,
+            CalendarProviderErrorKind::ReauthRequired => Self::ReauthRequired,
+            CalendarProviderErrorKind::Transient
+            | CalendarProviderErrorKind::SyncTokenExpired
+            | CalendarProviderErrorKind::PushUnsupported
+            | CalendarProviderErrorKind::Deferred => Self::Transient,
+        }
+    }
+}
+
+/// Reads how current a requester's calendar data is.
+pub trait CalendarSyncHealthReader: Send + Sync + 'static {
+    /// The freshness of every calendar visible to the requester, as
+    /// `list_visible_calendars` lists them, and the inboxes whose first sync
+    /// has listed none yet.
+    fn calendar_sync_health(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<CalendarSyncHealth, Report>> + Send;
 }
 
 /// Stable identifiers and sync policy for one provider calendar fetch.
@@ -439,6 +507,19 @@ pub trait CalendarCopyConfirmation: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<CopyRefusal>, CalendarMutationError>> + Send;
 }
 
+/// Reads what an update builds on when it has to add to stored content.
+pub trait CalendarEventDetailsReader: Send + Sync + 'static {
+    /// The stored details of the event or occurrence `scope` addresses,
+    /// refused like an update when the requester cannot write that copy.
+    fn details_for_update(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        scope: &CalendarUpdateScope,
+    ) -> impl Future<Output = Result<EventDetails, CalendarMutationError>> + Send;
+}
+
 /// Inbound service port labelling events for a reader outside the calendar,
 /// such as search. Those readers hold it as a trait object, so it boxes its
 /// future.
@@ -749,13 +830,15 @@ pub trait CalendarRepository: Send + Sync + 'static {
     /// fencing token: store the message, stamp the time, and bump the
     /// consecutive-failure counter that gates whether the failure surfaces to
     /// the user. The calendar's sync state is left untouched so the next poll
-    /// retries it. A successful `commit_google_calendar_sync` clears all three.
+    /// retries it. A successful `commit_google_calendar_sync` clears them all,
+    /// as it does the failure's `kind`.
     fn record_google_calendar_sync_error(
         &self,
         key: CalendarBackfillJobKey,
         lease_token: Uuid,
         account_id: Uuid,
         calendar_id: Uuid,
+        kind: CalendarSyncFailure,
         message: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
@@ -1135,15 +1218,15 @@ pub trait CalendarEventForwardSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send;
 }
 
-/// Inbound service port creating events that carry a Macro call.
+/// Inbound service port writing events that carry a Macro call.
 ///
-/// The meeting is minted before the calendar write, so the one invitation
-/// attendees receive already names the call, and its join link travels in
-/// the event's description and location. Hosts that mint meetings compose a
+/// The meeting is minted before the calendar write, so the one invitation or
+/// update attendees receive already names the call, and its join link travels
+/// in the event's description and location. Hosts that mint meetings compose a
 /// [`CalendarMutationService`] with a [`MeetingLinkProvider`] through
-/// [`super::meeting_links::create_event_with_macro_call`]; hosts that are
-/// not the calendar write authority forward the request to the calendar
-/// service.
+/// [`super::meeting_links::create_event_with_macro_call`] and
+/// [`super::meeting_links::update_event_with_macro_call`]; hosts that are not
+/// the calendar write authority forward the request to the calendar service.
 pub trait CalendarMacroCallService: Send + Sync + 'static {
     /// Mint a Macro call for `draft` and create the event carrying its link.
     fn create_event_with_macro_call(
@@ -1152,7 +1235,17 @@ pub trait CalendarMacroCallService: Send + Sync + 'static {
         email_link_id: Option<Uuid>,
         calendar_id: Option<Uuid>,
         draft: CalendarEventDraft,
-    ) -> impl Future<Output = Result<CalendarEvent, CreateEventWithMacroCallError>> + Send;
+    ) -> impl Future<Output = Result<CalendarEvent, MacroCallEventError>> + Send;
+
+    /// Switch an event to a Macro call, applying `patch` in the same write.
+    fn update_event_with_macro_call(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
+    ) -> impl Future<Output = Result<CalendarEvent, MacroCallEventError>> + Send;
 }
 
 /// Outbound port minting Macro meetings for calendar events.
@@ -1289,6 +1382,7 @@ pub trait GoogleCalendarProvider: Send + Sync + 'static {
         &self,
         access_token: &str,
         email_link_id: Uuid,
+        calendar_id: Uuid,
         provider_calendar_id: &str,
         channel_id: Uuid,
         config: &GoogleWatchConfig,
@@ -1311,6 +1405,14 @@ pub trait GoogleCalendarSyncRepository: Send + Sync + 'static {
     fn reap_wedged_google_syncs(
         &self,
         stalled_before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<usize, Report>> + Send;
+
+    /// Turn calendar off for Google accounts whose current grant lacks
+    /// Macro's calendar capability, as a grant that loses it does: the
+    /// account is disabled and its local copy removed, and a new grant
+    /// re-imports it. Returns how many accounts were turned off.
+    fn disable_google_accounts_without_calendar_capability(
+        &self,
     ) -> impl Future<Output = Result<usize, Report>> + Send;
 }
 
@@ -1361,6 +1463,15 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         disposition: CalendarBackfillFailureDisposition,
         message: &str,
     ) -> impl Future<Output = Result<CalendarBackfillFailureOutcome, Report>> + Send;
+
+    /// Release the lease of a round Macro's own request admission stopped,
+    /// returning the job to pending with its round start kept and recording
+    /// no failure on the job or the account: nothing reached Google.
+    fn defer_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Dispatch use cases driven by the calendar reminder queue worker.

@@ -1,7 +1,7 @@
 use async_graphql::{Context, ErrorExtensions, Object};
 use calendar_events::domain::{
     changes::CalendarEventChange,
-    meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
+    meeting_links::{MacroCallEventError, MeetingLinkError},
     ports::CalendarMutationError,
 };
 use graphql_common::require_authenticated_user;
@@ -290,13 +290,13 @@ pub(crate) fn mutation_error(error: CalendarMutationError) -> async_graphql::Err
 /// Map a failure creating an event together with its Macro call. A meeting
 /// that could not be minted leaves the calendar untouched, so the client may
 /// retry the same create.
-fn macro_call_error(error: CreateEventWithMacroCallError) -> async_graphql::Error {
+fn macro_call_error(error: MacroCallEventError) -> async_graphql::Error {
     match error {
-        CreateEventWithMacroCallError::Calendar(error) => mutation_error(error),
-        CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::InvalidInput(message)) => {
+        MacroCallEventError::Calendar(error) => mutation_error(error),
+        MacroCallEventError::MeetingLink(MeetingLinkError::InvalidInput(message)) => {
             invalid_input(async_graphql::Error::new(message))
         }
-        CreateEventWithMacroCallError::MeetingLink(error) => {
+        MacroCallEventError::MeetingLink(error) => {
             tracing::error!(error = ?error, "calendar event macro call creation failed");
             async_graphql::Error::new(
                 "the Macro call for the event could not be created; the event was not saved",

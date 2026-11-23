@@ -9,11 +9,10 @@
  * Request body for `PUT /crm/companies/{company_id}/email-sync`.
  */
 export interface SetEmailSyncRequest {
-  /** New value for `crm_companies.email_sync`. Purely a read-side
-visibility/permission gate — `soup` queries and email-permission
-checks require `email_sync = true` before exposing the
-company's emails team-wide. Populate continues to write CRM
-history regardless, so toggling never destroys data and
-re-enabling never requires a backfill. */
+  /** Allow eligible email contributions for this company's domains.
+Disabling excludes new ingestion and CRM thread access while preserving
+records. Re-enabling requires an admin, removes exact team exclusions,
+and schedules backfill only for explicitly consenting primary mailboxes.
+Personal and broader team exclusions continue to apply. */
   email_sync: boolean;
 }

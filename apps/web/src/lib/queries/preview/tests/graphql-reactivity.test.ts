@@ -8,12 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fixture = vi.hoisted(() => ({ client: undefined as Client | undefined }));
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: true }),
-}));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: () => true,
   LOCAL_ONLY: false,
 }));
 vi.mock('@service-storage/client', () => ({ DEFAULT_ITEM_TYPE: 'document' }));
@@ -28,6 +23,7 @@ vi.mock('@app/lib/graphql-cache', () => ({
 }));
 vi.mock('@tanstack/solid-query', () => ({
   useQuery: () => ({ isPending: false, isSuccess: false }),
+  useMutationState: () => () => [],
 }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('../dataloader', () => ({ previewDataLoader: {} }));
@@ -64,6 +60,7 @@ describe('GraphQL preview hover reactivity', () => {
       { __typename: 'GraphqlSoupDocument' }
     > = {
       __typename: 'GraphqlSoupDocument',
+      appearance: null,
       id,
       displayName: 'Roadmap',
       documentName: 'Roadmap',

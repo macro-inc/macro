@@ -34,7 +34,12 @@ export class UserApiKey extends MacroEntity<UserApiKeyInfo> {
   /** Creation time. */
   readonly createdAt = this.field('createdAt');
 
-  /** Revoke this key. */
+  /**
+   * Revoke this key.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.deleteUserApiKey({ path: { id: this.id } }),

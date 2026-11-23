@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM agent_repos WHERE agent_user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2c7432c451c6b48fef57b1c1e8351c2c0c365d8104c0f1f3526b6a2383f951f6"
+}

@@ -2,6 +2,16 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EmailReminderMenu as EmailReminderForm } from '../views/email-reminder-menu';
 
+// The browser loader can't run under the test runner; hand over the real
+// reader it would load.
+vi.mock('@core/natural-time/wasm-module', async () => {
+  const { loadNaturalTimeForTest } = await import(
+    '@core/natural-time/tests/load-wasm'
+  );
+  const reader = await loadNaturalTimeForTest();
+  return { loadNaturalTimeWasm: async () => reader };
+});
+
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   window.scrollTo = vi.fn();
@@ -40,28 +50,22 @@ it('selects a typed time with Enter, defaulting to if no reply', () => {
     'if_no_reply'
   );
 });
-it('resolves reminder shorthand like tmrw 8 and tmrw 8p', () => {
+it('previews both readings of a guessed hour and explains unread phrases', async () => {
   setup();
   const input = screen.getByRole('combobox', { name: 'Remind me when' });
 
-  fireEvent.input(input, { target: { value: 'tmrw' } });
-  expect(screen.getByRole('option', { name: /Tomorrow/i })).toBeTruthy();
-  expect(
-    screen.queryByText('Enter a future time, like in 2 hours or tomorrow 9am.')
-  ).toBeNull();
-
   fireEvent.input(input, { target: { value: 'tmrw 8' } });
-  expect(
-    screen.getByRole('option', { name: /Tomorrow at 8 AM/i })
-  ).toBeTruthy();
+  const [guess, other] = await screen.findAllByRole('option', {
+    name: /^tmrw 8/,
+  });
+  expect(guess.textContent).toContain('Oct 2, 2026 at 8:00 AM · AM assumed');
+  expect(other.textContent).toContain('Oct 2, 2026 at 8:00 PM');
 
-  fireEvent.input(input, { target: { value: 'tmrw 8p' } });
+  fireEvent.input(input, { target: { value: 'every friday' } });
+  expect(screen.queryByRole('option')).toBeNull();
   expect(
-    screen.getByRole('option', { name: /Tomorrow at 8 PM/i })
+    screen.getByText('Repeating reminders aren’t supported.')
   ).toBeTruthy();
-
-  fireEvent.input(input, { target: { value: 'fri' } });
-  expect(screen.getByRole('option', { name: /fri|Friday/i })).toBeTruthy();
 });
 it('supports arrow-key selection and preserves the condition when editing', () => {
   const { onSave } = setup({

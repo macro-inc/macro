@@ -1,4 +1,5 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
+import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
 import { externalChatRoute, externalRoute } from '@app/routes/routes';
 import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
@@ -105,11 +106,19 @@ export function ExternalView() {
           WhatsApp
         </h1>
       </ViewShell.TopBar>
-      <ViewShell.Content class="overflow-y-auto pb-4 mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
-        {/* The top bar is desktop chrome; touch layouts title the page here. */}
-        <h1 class="hidden px-4 pt-2 text-lg font-semibold text-ink touch:block">
-          WhatsApp
-        </h1>
+      <ViewShell.Header class="hidden touch:block touch:pb-2">
+        <h1 class="text-lg font-semibold text-ink">WhatsApp</h1>
+      </ViewShell.Header>
+      <ViewShell.Content
+        class="overflow-y-auto pb-4 touch:pb-(--mobile-content-inset-bottom)"
+        style={{ '--mobile-content-inset-top': '0px' }}
+      >
+        {/* Above the chats, so people who haven't linked WhatsApp see it too.
+            Its rows are sidebar-style items, so the entry is one, inset to
+            line up with the chats below it. Touch devices show no tutorial. */}
+        <div class="px-4 pt-2 empty:hidden">
+          <TutorialSidebarItem tutorial="whatsapp" />
+        </div>
         {/* Touch has no sidebar: the chats in Macro lead the page. */}
         <Show when={isTouchDevice()}>
           <section aria-labelledby="external-chats" class="px-2">
@@ -132,11 +141,14 @@ export function ExternalView() {
       <SplitPanel.Body>
         <ViewShell.Root
           asidePreferenceKey="external"
-          aside={isTouchDevice() ? false : undefined}
-          resizable={!isTouchDevice()}
+          aside={{ preserveDuringResize: false }}
+          resizable
         >
           <ViewShell.Aside>
-            <ViewSidebar.Root aria-label="External navigation">
+            <ViewSidebar.Root
+              reorderId="external"
+              aria-label="External navigation"
+            >
               <ViewSidebar.Header>
                 <div class="flex min-w-0 items-center gap-1">
                   <ViewSidebar.CloseButton class="shrink-0" />
@@ -144,12 +156,18 @@ export function ExternalView() {
                 </div>
               </ViewSidebar.Header>
               <ViewSidebar.Content>
-                <ViewSidebar.Nav aria-label="External apps">
-                  <For each={PROVIDERS}>
-                    {(provider) => {
-                      const open = () => !folded().includes(provider);
-                      return (
-                        <>
+                <For each={PROVIDERS}>
+                  {(provider) => {
+                    const open = () => !folded().includes(provider);
+                    return (
+                      <ViewSidebar.Section
+                        id={`provider:${provider}`}
+                        label={providerIdentity(provider).label}
+                        headerless
+                      >
+                        <ViewSidebar.Nav
+                          aria-label={providerIdentity(provider).label}
+                        >
                           <ViewSidebar.TreeItem
                             active={!params.chatId}
                             label={providerIdentity(provider).label}
@@ -172,15 +190,20 @@ export function ExternalView() {
                           <ViewSidebar.Branch open={open()}>
                             {inMacroChats(provider)}
                           </ViewSidebar.Branch>
-                        </>
-                      );
-                    }}
-                  </For>
-                </ViewSidebar.Nav>
+                        </ViewSidebar.Nav>
+                      </ViewSidebar.Section>
+                    );
+                  }}
+                </For>
               </ViewSidebar.Content>
             </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
+            <Show when={isTouchDevice()}>
+              <ViewShell.Header class="empty:hidden">
+                <ViewSidebar.Toggle action="expand" presentation="pill" />
+              </ViewShell.Header>
+            </Show>
             <SplitRouter.Outlet fallback={whatsappPage} />
           </ViewShell.Main>
         </ViewShell.Root>

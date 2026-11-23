@@ -1,7 +1,7 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Envelope from '@phosphor/envelope.svg';
-import File from '@phosphor/file.svg';
-import X from '@phosphor/x.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import File from '@icon/system/regular/file.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import {
   createSignal,

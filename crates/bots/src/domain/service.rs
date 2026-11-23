@@ -1,6 +1,7 @@
 //! Bot service implementation.
 
 mod agent_dm;
+mod harness_agents;
 
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
@@ -8,31 +9,36 @@ use super::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
         BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
         BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId, HarnessOwner,
-        MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessFacts, HarnessId,
+        MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, ReplacedAgent,
+        UpdateAgentRequest,
     },
-    ports::{BotError, BotRepo, BotService, McpAppCatalog},
+    ports::{BotError, BotRepo, BotService, HarnessRemoved, McpAppCatalog},
     tokens,
 };
 use bot_token::HashedBotToken;
+use channels::domain::broker_events::{ChannelMacroEvent, ChannelUpdatedMetadata};
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     MemberParticipantRole, ParticipantRole,
 };
+use harnesses::domain::ports::HarnessTeamAgents;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 /// Bot service implementation.
 ///
-/// `C` answers whether a Pipedream app slug is real. [`UncheckedMcpApps`]
-/// accepts every slug; hosts that configure agents from a conversation pass
-/// a directory-backed catalog instead.
+/// `T` answers which harnesses are agent teammates' computers, which no
+/// agent may be bound to. `C` answers whether a Pipedream app slug is real.
+/// [`UncheckedMcpApps`] accepts every slug; hosts that configure agents from
+/// a conversation pass a directory-backed catalog instead.
 #[derive(Debug, Clone)]
-pub struct BotServiceImpl<R, B, C = UncheckedMcpApps> {
+pub struct BotServiceImpl<R, B, T, C = UncheckedMcpApps> {
     repo: R,
     event_broker: B,
+    team_agents: T,
     mcp_apps: C,
 }
 
@@ -50,23 +56,26 @@ impl McpAppCatalog for UncheckedMcpApps {
     }
 }
 
-impl<R, B, C> BotServiceImpl<R, B, C> {
+impl<R, B, T, C> BotServiceImpl<R, B, T, C> {
     /// Swap the MCP app directory this service consults.
-    pub fn with_mcp_apps<D>(self, mcp_apps: D) -> BotServiceImpl<R, B, D> {
+    pub fn with_mcp_apps<D>(self, mcp_apps: D) -> BotServiceImpl<R, B, T, D> {
         BotServiceImpl {
             repo: self.repo,
             event_broker: self.event_broker,
+            team_agents: self.team_agents,
             mcp_apps,
         }
     }
 }
 
-impl<R, B> BotServiceImpl<R, B, UncheckedMcpApps> {
-    /// Create a bot service that does not check MCP app slugs against Pipedream.
-    pub fn new(repo: R, event_broker: B) -> Self {
+impl<R, B, T> BotServiceImpl<R, B, T, UncheckedMcpApps> {
+    /// Create a bot service that does not check MCP app slugs against
+    /// Pipedream, reading agent teammates' computers from `team_agents`.
+    pub fn new(repo: R, event_broker: B, team_agents: T) -> Self {
         Self {
             repo,
             event_broker,
+            team_agents,
             mcp_apps: UncheckedMcpApps,
         }
     }
@@ -127,8 +136,6 @@ fn validate_handle(handle: &str) -> Result<(), BotError> {
 struct AgentFields<'a> {
     name: &'a str,
     handle: &'a str,
-    harness: &'a str,
-    harness_id: Option<HarnessId>,
     default_model: &'a str,
     channel_scope: AgentChannelScope,
     channel_ids: &'a [Uuid],
@@ -140,8 +147,6 @@ impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
         Self {
             name: &req.name,
             handle: &req.handle,
-            harness: &req.harness,
-            harness_id: req.harness_id,
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
@@ -155,8 +160,6 @@ impl<'a> From<&'a UpdateAgentRequest> for AgentFields<'a> {
         Self {
             name: &req.name,
             handle: &req.handle,
-            harness: &req.harness,
-            harness_id: req.harness_id,
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
@@ -169,8 +172,6 @@ fn validate_agent_fields(
     AgentFields {
         name,
         handle,
-        harness,
-        harness_id,
         default_model,
         channel_scope,
         channel_ids,
@@ -183,26 +184,6 @@ fn validate_agent_fields(
         return Err(BotError::BadRequest(
             "agent name must not be empty".to_string(),
         ));
-    }
-    if harness.trim().is_empty() {
-        return Err(BotError::BadRequest(
-            "agent harness must not be empty".to_string(),
-        ));
-    }
-    // The `macrod` slug and a registered harness travel together: the slug
-    // selects the external runtime path, the id says whose daemon serves it.
-    match (harness == harness_id::MACROD_HARNESS_SLUG, harness_id) {
-        (true, None) => {
-            return Err(BotError::BadRequest(
-                "agents on the macrod harness must reference a registered harness".to_string(),
-            ));
-        }
-        (false, Some(_)) => {
-            return Err(BotError::BadRequest(
-                "harness_id applies only to the macrod harness".to_string(),
-            ));
-        }
-        _ => {}
     }
     if default_model.trim().is_empty() {
         return Err(BotError::BadRequest(
@@ -232,7 +213,29 @@ fn validate_agent_fields(
     }
 }
 
+/// Check a runtime someone chose. The `macrod` slug and a registered harness
+/// travel together: the slug selects the external runtime path, the id says
+/// whose daemon serves it. A binding a patch leaves alone is not re-checked,
+/// so an agent whose harness was deleted stays editable until it is rebound.
+fn validate_runtime(harness: &str, harness_id: Option<HarnessId>) -> Result<(), BotError> {
+    if harness.trim().is_empty() {
+        return Err(BotError::BadRequest(
+            "agent harness must not be empty".to_string(),
+        ));
+    }
+    match (harness == harness_id::MACROD_HARNESS_SLUG, harness_id) {
+        (true, None) => Err(BotError::BadRequest(
+            "agents on the macrod harness must reference a registered harness".to_string(),
+        )),
+        (false, Some(_)) => Err(BotError::BadRequest(
+            "harness_id applies only to the macrod harness".to_string(),
+        )),
+        _ => Ok(()),
+    }
+}
+
 fn validate_agent_request(req: &CreateAgentRequest) -> Result<(), BotError> {
+    validate_runtime(&req.harness, req.harness_id)?;
     validate_agent_fields(req.into())
 }
 
@@ -254,15 +257,60 @@ struct ValidatedBotToken {
     token_id: Uuid,
 }
 
-impl<R, B, C> BotServiceImpl<R, B, C>
+impl<R, B, T, C> BotServiceImpl<R, B, T, C>
 where
     R: BotRepo,
     B: MacroEventBroker,
+    T: HarnessTeamAgents,
 {
     fn publish_bot_event(&self, event: &BotMacroEvent) {
         drop(self.event_broker.send_event(event).inspect_err(|error| {
             tracing::error!(error=?error, "failed to schedule bot lifecycle event");
         }));
+    }
+
+    /// Tell the members of these channels that the bots in them changed: each
+    /// member's copy of a channel lists its bots. The stored name goes out as
+    /// both the old and the new name, which tells consumers it was not a
+    /// rename. The change is already stored, so a failure is logged; the
+    /// members' next full read of their channels picks it up.
+    async fn announce_bot_membership(
+        &self,
+        actor: &MacroUserIdStr<'static>,
+        mut channel_ids: Vec<Uuid>,
+    ) {
+        channel_ids.sort_unstable();
+        channel_ids.dedup();
+        if channel_ids.is_empty() {
+            return;
+        }
+        let names = match self.repo.channel_names(&channel_ids).await {
+            Ok(names) => names,
+            Err(error) => {
+                let error: anyhow::Error = error.into();
+                tracing::error!(
+                    error = ?error,
+                    channels = channel_ids.len(),
+                    "failed to read the channels whose bots changed"
+                );
+                return;
+            }
+        };
+        for (channel_id, name) in names {
+            let event = ChannelMacroEvent::updated(ChannelUpdatedMetadata {
+                channel_id,
+                actor: actor.clone(),
+                previous_name: name.clone(),
+                channel_name: name,
+            });
+            drop(self.event_broker.send_event(&event).inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    %channel_id,
+                    "failed to schedule the update of a channel whose bots changed"
+                );
+            }));
+        }
     }
 
     async fn owner_for_request(
@@ -309,21 +357,20 @@ where
         })
     }
 
-    /// Ensure the resolved agent owner may run agents on a registered harness.
+    /// Ensure the resolved agent owner may run agents on a registered harness,
+    /// returning the harness's facts when one is chosen.
     ///
-    /// A team agent must run on its own team's harness - never on a private
-    /// one, so a teammate's mention can never execute on a machine only one
-    /// person controls. A private agent may run on the caller's own harness
-    /// or on a team harness of a team the caller belongs to.
+    /// A team agent must run on a harness open to its whole team, so a
+    /// teammate's mention can never execute on a machine shared only with some
+    /// of them. A private agent may run on any harness its owner may use.
     async fn ensure_harness_usable(
         &self,
-        caller: MacroUserIdStr<'static>,
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
         auto_accept_permissions: Option<bool>,
-    ) -> Result<(), BotError> {
+    ) -> Result<Option<HarnessFacts>, BotError> {
         let Some(harness_id) = harness_id else {
-            return Ok(());
+            return Ok(None);
         };
         let harness_owner = self
             .repo
@@ -331,40 +378,38 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::BadRequest("unknown harness".to_string()))?;
+        // An agent teammate is reached by message, like any member; nothing
+        // else runs on its computer.
+        if self
+            .team_agents
+            .harness_team_agent(harness_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .is_some()
+        {
+            return Err(BotError::AgentTeammateComputer);
+        }
 
         validate_permission_bypass(
             harness_owner.allow_permission_bypass,
             auto_accept_permissions,
         )?;
-        let usable = match (owner, harness_owner.owner) {
-            (
-                BotOwner::Team { team_id },
-                HarnessOwner::Team {
-                    team_id: harness_team,
-                },
-            ) => *team_id == harness_team,
-            (BotOwner::Team { .. }, HarnessOwner::User { .. }) => false,
-            (
-                BotOwner::User { user_id },
-                HarnessOwner::User {
-                    user_id: harness_user,
-                },
-            ) => *user_id == harness_user,
-            (
-                BotOwner::User { .. },
-                HarnessOwner::Team {
-                    team_id: harness_team,
-                },
-            ) => self
+        let usable = match owner {
+            BotOwner::Team { team_id } => self
                 .repo
-                .user_has_team(caller, harness_team)
+                .harness_granted_to_team(harness_id, *team_id)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?,
+            BotOwner::User { user_id } => self
+                .repo
+                .user_may_use_harness(harness_id, user_id)
                 .await
                 .map_err(|err| BotError::Repo(err.into()))?,
         };
         if !usable {
             return Err(BotError::Unauthorized);
         }
-        Ok(())
+        Ok(Some(harness_owner))
     }
 
     async fn owner_for_agent_update(
@@ -453,22 +498,20 @@ where
         let owner = self
             .owner_for_agent_update(caller.clone(), current, req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        self.ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+            .await?;
         let requested_name = req.name.clone();
         let requested_handle = req.handle.clone();
         let requested_description = req.description.clone();
         let requested_avatar_url = req.avatar_url.clone();
-        let agent = self
+        let ReplacedAgent {
+            agent,
+            mut previous_channel_ids,
+        } = self
             .repo
             .update_agent(current.id, owner, req)
             .await
-            .map_err(|err| BotError::Repo(err.into()))?
+            .map_err(binding_error)?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
 
         self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
@@ -478,13 +521,17 @@ where
                 .owner
                 .clone()
                 .expect("owned agent bot must have an owner"),
-            actor_user_id: caller,
+            actor_user_id: caller.clone(),
             name: Some(requested_name),
             handle: Some(requested_handle),
             description: requested_description,
             avatar_url: requested_avatar_url,
             updated_at: agent.bot.updated_at,
         }));
+        // A channel kept is joined again, which changes when the bot joined it.
+        previous_channel_ids.extend_from_slice(&agent.channel_ids);
+        self.announce_bot_membership(&caller, previous_channel_ids)
+            .await;
 
         Ok(agent)
     }
@@ -514,10 +561,11 @@ where
     }
 }
 
-impl<R, B, C> BotService for BotServiceImpl<R, B, C>
+impl<R, B, T, C> BotService for BotServiceImpl<R, B, T, C>
 where
     R: BotRepo,
     B: MacroEventBroker + Clone,
+    T: HarnessTeamAgents,
     C: McpAppCatalog,
 {
     async fn create_agent(
@@ -540,19 +588,23 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        let harness = self
+            .ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+            .await?;
+        let mut req = req;
+        // A Macro computer is a sandbox the team bought for its agents, so an
+        // agent on one runs without asking unless the request says otherwise.
+        if req.auto_accept_permissions.is_none()
+            && harness.is_some_and(|facts| facts.on_computer && facts.allow_permission_bypass)
+        {
+            req.auto_accept_permissions = Some(true);
+        }
         let created_by_user_id = caller.clone();
         let agent = self
             .repo
             .create_agent(owner, caller, req)
             .await
-            .map_err(|err| BotError::Repo(err.into()))?;
+            .map_err(binding_error)?;
 
         self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
             bot_id: agent.bot.id,
@@ -566,10 +618,12 @@ where
             handle: agent.bot.handle.clone(),
             description: agent.bot.description.clone(),
             avatar_url: agent.bot.avatar_url.clone(),
-            created_by_user_id,
+            created_by_user_id: created_by_user_id.clone(),
             channel_id: None,
             created_at: agent.bot.created_at,
         }));
+        self.announce_bot_membership(&created_by_user_id, agent.channel_ids.clone())
+            .await;
 
         Ok(agent)
     }
@@ -587,6 +641,7 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        validate_runtime(&req.harness, req.harness_id)?;
         validate_update_agent_request(&req)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, existing.mcp.servers()).await?;
         self.replace_agent(caller, &current, req).await
@@ -618,6 +673,9 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        if let Some(selection) = &req.harness {
+            validate_runtime(&selection.harness, selection.harness_id)?;
+        }
         let update = req.apply_to(&agent);
         validate_update_agent_request(&update)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &update.mcp, agent.mcp.servers()).await?;
@@ -693,10 +751,12 @@ where
             handle: bot.handle.clone(),
             description: bot.description.clone(),
             avatar_url: bot.avatar_url.clone(),
-            created_by_user_id,
+            created_by_user_id: created_by_user_id.clone(),
             channel_id: Some(channel_id),
             created_at: bot.created_at,
         }));
+        self.announce_bot_membership(&created_by_user_id, vec![channel_id])
+            .await;
 
         Ok(CreateChannelScopedBotResponse {
             bot,
@@ -808,20 +868,22 @@ where
                 return Err(BotError::Unauthorized);
             }
         }
-        if !self
+        let Some(left_channel_ids) = self
             .repo
             .delete_bot(bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
-        {
+        else {
             return Err(BotError::NotFound("bot not found".to_string()));
-        }
+        };
 
         self.publish_bot_event(&BotMacroEvent::deleted(BotDeletedMetadata {
             bot_id: bot.id,
             owner: bot.owner.expect("owned bot must have an owner"),
-            actor_user_id: caller,
+            actor_user_id: caller.clone(),
         }));
+        self.announce_bot_membership(&caller, left_channel_ids)
+            .await;
 
         Ok(())
     }
@@ -842,11 +904,14 @@ where
             .get_authenticated_user()
             .cloned()
             .map_err(|_| BotError::Unauthorized)?;
-        self.ensure_manageable(caller, bot_id).await?;
+        self.ensure_manageable(caller.clone(), bot_id).await?;
         self.repo
             .add_bot_to_channel(channel_id, bot_id)
             .await
-            .map_err(|err| BotError::Repo(err.into()))
+            .map_err(|err| BotError::Repo(err.into()))?;
+        self.announce_bot_membership(&caller, vec![channel_id])
+            .await;
+        Ok(())
     }
 
     async fn remove_bot_from_channel(
@@ -855,17 +920,18 @@ where
         channel_id: Uuid,
         bot_id: BotId,
     ) -> Result<(), BotError> {
-        self.ensure_manageable(caller, bot_id).await?;
-        if self
+        self.ensure_manageable(caller.clone(), bot_id).await?;
+        if !self
             .repo
             .remove_bot_from_channel(channel_id, bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
         {
-            Ok(())
-        } else {
-            Err(BotError::NotFound("channel bot not found".to_string()))
+            return Err(BotError::NotFound("channel bot not found".to_string()));
         }
+        self.announce_bot_membership(&caller, vec![channel_id])
+            .await;
+        Ok(())
     }
 
     async fn list_bot_channels(
@@ -1005,7 +1071,7 @@ where
     }
 }
 
-/// Refuse a selected MCP app Pipedream does not list.
+/// Refuse a selected MCP app the connector catalog does not list.
 ///
 /// Slugs already stored on the agent are left alone, so editing instructions
 /// does not depend on the directory staying reachable. A newly named slug
@@ -1031,6 +1097,16 @@ async fn reject_unknown_mcp_apps<C: McpAppCatalog>(
 }
 
 /// A persona cannot override its harness operator's permission policy.
+/// A failed agent write, as a bad request when its harness was deleted while
+/// it was being bound.
+fn binding_error(err: impl Into<anyhow::Error>) -> BotError {
+    let err = err.into();
+    if err.is::<HarnessRemoved>() {
+        return BotError::BadRequest(HarnessRemoved.to_string());
+    }
+    BotError::Repo(err)
+}
+
 fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<(), BotError> {
     if requested == Some(true) && !allowed {
         return Err(BotError::BadRequest(
@@ -1041,4 +1117,4 @@ fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<
 }
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;

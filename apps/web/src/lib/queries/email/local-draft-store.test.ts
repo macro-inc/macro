@@ -474,6 +474,71 @@ describe('durable email working copies', () => {
     await second.save(session, snapshot('Keep this draft', 1));
     expect(await second.file(session, 'local', 'file')).toBeUndefined();
   });
+  it('keeps the working-copy version a sent intent carried after removing the intent', async () => {
+    const store = open();
+    const owner = await store.activate('owner');
+    const local = await store.save(owner, snapshot());
+    const row = await store.putSend(
+      owner,
+      {
+        uuid: 'attempt',
+        dispatchVersion: 2,
+        phase: 'pending',
+        locallyCancelled: false,
+        metadata: {
+          kind: 'email-send-v1',
+          payload: {
+            workingCopy: {
+              key: local.key,
+              generation: local.generation,
+              revision: local.revision,
+              attachments: [],
+            },
+            input: {
+              attempt: { attemptId: 'attempt', linkId: 'inbox' },
+              message: { draftId: 'server-draft', subject: 'Keep this draft' },
+              attachmentIds: [],
+              forwardedAttachmentIds: [],
+            },
+            draft: {
+              draftId: 'server-draft',
+              threadDbId: 'thread',
+              subject: 'Keep this draft',
+              senderEmail: 'owner@example.invalid',
+              senderLinkId: 'inbox',
+              optimisticBodyHtml: null,
+            },
+          },
+        },
+      },
+      true
+    );
+    const claim = await store.claimSend(owner, row.uuid, 'tab', Date.now());
+    await store.settleSend(
+      owner,
+      row.uuid,
+      'tab',
+      claim!.dispatch!.generation,
+      {
+        attempt: {
+          attemptId: 'attempt',
+          status: 'SENT',
+          message: null,
+          threadId: 'thread',
+          sendTime: '2026-10-20T20:00:00Z',
+        },
+        nextAttemptAt: 0,
+      }
+    );
+
+    await store.removeSend(owner, row.uuid);
+
+    expect(await store.sends(owner)).toEqual([]);
+    expect(await store.sentCopy(owner, 'server-draft')).toEqual({
+      generation: 'generation',
+      revision: 1,
+    });
+  });
   it('rejects stale snapshots inside the transaction across tabs', async () => {
     const name = crypto.randomUUID();
     const first = open(name);
@@ -819,6 +884,40 @@ const sendIntent = (
 });
 
 describe('independent send recovery records', () => {
+  it('keeps a reserved reply out of the thread after reopening until it is restored', async () => {
+    const name = crypto.randomUUID();
+    const first = open(name);
+    const owner = await first.activate('owner');
+    const reply = snapshot('Approved');
+    reply.content.replying_to_id = 'parent';
+    await first.save(owner, reply);
+    await first.save(owner, {
+      ...reply,
+      key: 'other-reply',
+      draftId: 'other-reply',
+    });
+    const intent = sendIntent();
+    intent.metadata.payload.input.message.replyingToId = 'parent';
+    intent.metadata.payload.draft.replyingToId = 'parent';
+    await first.putSend(owner, intent, true);
+    await first.close();
+
+    const second = open(name);
+    const reopened = await second.activate('owner');
+    const threadDrafts = { omitSendLockedReplies: true };
+    expect(await second.list(reopened)).toHaveLength(2);
+    expect(await second.list(reopened, threadDrafts)).toMatchObject([
+      { key: 'other-reply' },
+    ]);
+
+    await second.putSend(reopened, { ...intent, cancellationRequested: true });
+    await second.restoreSend(reopened, intent.uuid);
+    expect(await second.list(reopened, threadDrafts)).toMatchObject([
+      { key: 'local', content: { replying_to_id: 'parent' } },
+      { key: 'other-reply' },
+    ]);
+  });
+
   it('retains the frozen snapshot and attempt identity independently of the cache', async () => {
     const name = crypto.randomUUID();
     const first = open(name);
@@ -905,6 +1004,59 @@ describe('independent send recovery records', () => {
       revision: restored?.draft.revision,
     });
     expect(await store.sends(owner)).toEqual([]);
+    landBeforeAbort();
+    expect(await store.takeCancellationReceipt(owner, sendIntent().uuid)).toBe(
+      true
+    );
+    expect(await store.takeCancellationReceipt(owner, sendIntent().uuid)).toBe(
+      false
+    );
+  });
+  it('shares the cancellation receipt across tabs of the same active account and consumes it once', async () => {
+    const name = crypto.randomUUID();
+    const recovery = open(name);
+    const undo = open(name);
+    const owner = await recovery.activate('owner');
+    await undo.activate('owner', owner.epoch);
+    await recovery.save(owner, snapshot());
+    const row = await recovery.putSend(
+      owner,
+      { ...sendIntent(), cancellationRequested: true },
+      true
+    );
+    expect(await undo.takeCancellationReceipt(owner, row.uuid)).toBe(false);
+
+    await recovery.restoreSend(owner, row.uuid);
+    expect(await undo.sends(owner)).toEqual([]);
+    expect(await undo.read(owner, 'local')).toBeDefined();
+    expect(
+      await undo.takeCancellationReceipt(
+        { ...owner, accountId: 'other' },
+        row.uuid
+      )
+    ).toBe(false);
+    expect(
+      await undo.takeCancellationReceipt(
+        { ...owner, epoch: 'retired' },
+        row.uuid
+      )
+    ).toBe(false);
+    expect(await undo.takeCancellationReceipt(owner, row.uuid)).toBe(true);
+    expect(await recovery.takeCancellationReceipt(owner, row.uuid)).toBe(false);
+  });
+  it('retains only the latest 64 unread cancellation receipts', async () => {
+    const store = open();
+    const owner = await store.activate('owner');
+    for (let index = 0; index < 65; index += 1) {
+      const row = sendIntent(`attempt-${index}`);
+      row.cancellationRequested = true;
+      row.metadata.payload.workingCopy = undefined;
+      await store.putSend(owner, row, true);
+      await store.restoreSend(owner, row.uuid);
+    }
+    expect(await store.takeCancellationReceipt(owner, 'attempt-0')).toBe(false);
+    expect(await store.takeCancellationReceipt(owner, 'attempt-1')).toBe(true);
+    expect(await store.takeCancellationReceipt(owner, 'attempt-64')).toBe(true);
   });
   it('clears send content and fences old sessions on account changes and logout', async () => {
     const store = open(),

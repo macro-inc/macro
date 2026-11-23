@@ -1,421 +1,224 @@
-import type { EmailEntity } from '@entity/types/entity';
-import type { UnifiedNotification } from '@notifications/types';
-import type { GetNotificationTypePreferencesResponse } from '@service-notification/generated/schemas/getNotificationTypePreferencesResponse';
-import type { NotificationState } from '@service-storage/graphql/generated/graphql';
-import { cleanup, render, screen } from '@solidjs/testing-library';
-import {
-  onlineManager,
-  QueryClient,
-  QueryClientProvider,
-  type UseQueryResult,
-  useQuery,
-} from '@tanstack/solid-query';
-import { createEffect, createRoot, createSignal, Suspense } from 'solid-js';
+import type { InboxUnreadCount } from '@app/features/notifications-inbox/core/inbox-unread';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useNavigationUnread } from './use-navigation-unread';
 
+type Flag = { enabled: boolean; loading: boolean; payload: undefined };
+
 const mocks = vi.hoisted(() => ({
-  home: vi.fn(),
-  email: vi.fn(),
-  notifications: vi.fn(),
-  graphqlFlag: vi.fn(),
-  channels: vi.fn(),
-  withLocalState: vi.fn(),
-  hasUnreadEntity: vi.fn(),
-  transformEntities: vi.fn(),
-  notificationPreferences: vi.fn(),
+  unified: undefined as unknown as () => Flag,
+  passwords: undefined as unknown as () => Flag,
+  numbersEnabled: true,
+  counts: undefined as unknown as () => readonly InboxUnreadCount[] | undefined,
+  countStreams: 0,
+  presenceSources: 0,
+  presence: ((_id: string) => false) as (id: string) => boolean,
 }));
 
+vi.mock('@core/constant/featureFlags', () => ({
+  enableNavigationUnreadCounts: 'navigation-unread-counts',
+  enableUnifiedNotifications: 'unified',
+  enablePasswords: 'passwords',
+  isFeatureEnabled: (flag: string) =>
+    flag === 'navigation-unread-counts' && mocks.numbersEnabled,
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => mocks.graphqlFlag,
+  useFeatureFlag: (flag: string) =>
+    flag === 'unified' ? mocks.unified : mocks.passwords,
 }));
-vi.mock('@queries/channel/unread-presence', () => ({
-  createChannelUnreadQuery: mocks.channels,
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => ({}),
+  subscribeGraphqlSoupReconnected: () => () => {},
 }));
-
-vi.mock('@app/features/email-view/queries/email-query', () => ({
-  buildEmailQuery: () => ({ params: {}, body: {} }),
-}));
-vi.mock('@app/features/home/queries/use-home-unread-query', () => ({
-  useHomeUnreadQuery: mocks.home,
-}));
-vi.mock('@queries/soup/items', () => ({
-  useSoupAstItemsQuery: mocks.email,
-}));
-vi.mock('@components/app/GlobalAppState', () => ({
-  useGlobalNotificationSource: () => ({
-    notifications: mocks.notifications,
-    withLocalState: mocks.withLocalState,
-  }),
-}));
-vi.mock('@queries/notification/type-preferences', () => ({
-  useNotificationTypePreferencesQuery: mocks.notificationPreferences,
-}));
-// Query builders import the soup barrel, which otherwise opens real sockets.
-vi.mock('@service-storage/websocket', () => ({
-  storageWS: { reconnectIfDisconnected: vi.fn() },
-  createWebSocketJob: vi.fn(),
-}));
-vi.mock('@service-connection/websocket', () => ({
-  ws: { addEventListener: vi.fn(), send: vi.fn() },
-  state: () => 'closed',
-  createConnectionBlockWebsocketEffect: vi.fn(),
-  createConnectionWebsocketEffect: vi.fn(),
-}));
-
-const unreadEmail: EmailEntity = {
-  id: 'email',
-  type: 'email',
-  name: 'Important email',
-  ownerId: 'user',
-  isRead: false,
-  isDraft: false,
-  isImportant: true,
-  done: false,
-};
-
-const message: UnifiedNotification = {
-  id: 'notification',
-  entity_id: 'channel',
-  entity_type: 'channel',
-  created_at: '2026-09-10T12:00:00Z',
-  updated_at: '2026-09-10T12:00:00Z',
-  state: 'unseen',
-  sent: true,
-  viewed_at: null,
-  notification_event_type: 'channel_message_send',
-  notification_metadata: {
-    tag: 'channel_message_send',
-    content: { channelType: 'directMessage', messageId: 'message' },
+vi.mock('@app/features/notifications-inbox/queries/inbox-unread', () => ({
+  createInboxUnread: () => {
+    mocks.countStreams += 1;
+    return () => mocks.counts();
   },
-};
+}));
+vi.mock('./use-presence-unread', () => ({
+  usePresenceUnread: () => {
+    mocks.presenceSources += 1;
+    return (id: string) => mocks.presence(id);
+  },
+}));
 
-let dispose: VoidFunction;
-const clients: QueryClient[] = [];
-afterEach(() => {
-  cleanup();
-  dispose?.();
-  for (const client of clients.splice(0)) client.clear();
-  onlineManager.setOnline(true);
-  vi.clearAllMocks();
+const flag = (enabled: boolean, loading = false): Flag => ({
+  enabled,
+  loading,
+  payload: undefined,
 });
 
-function setup(
-  graphql = false,
-  preferences?: () => UseQueryResult<GetNotificationTypePreferencesResponse>
-) {
-  return createRoot((cleanup) => {
-    dispose = cleanup;
-    const [graphqlEnabled, setGraphqlEnabled] = createSignal(graphql);
-    const [done, setDone] = createSignal(false);
-    const [disabledTypes, setDisabledTypes] = createSignal<string[]>([]);
-    mocks.withLocalState.mockImplementation(({ state }) =>
-      done() ? 'done' : state
-    );
-    mocks.notificationPreferences.mockImplementation(
-      preferences ??
-        (() => ({
-          isPending: false,
-          get data() {
-            return { disabled_types: disabledTypes() };
-          },
-        }))
-    );
-    const [witnesses, setWitnesses] = createSignal<
-      { id: string; state: NotificationState }[]
-    >([]);
-    mocks.graphqlFlag.mockImplementation(() => ({ enabled: graphqlEnabled() }));
-    const [loading, setLoading] = createSignal(true);
-    const [fetching, setFetching] = createSignal(true);
-    mocks.channels.mockReturnValue({
-      get isEnabled() {
-        return graphqlEnabled();
-      },
-      get isPending() {
-        return loading();
-      },
-      get isLoading() {
-        return loading() && fetching();
-      },
-      get data() {
-        if (loading()) throw new Error('Read pending unread query');
-        return witnesses();
-      },
-    });
-    const [emails, setEmails] = createSignal<EmailEntity[]>([]);
-    const [notifications, setNotifications] = createSignal<
-      UnifiedNotification[]
-    >([]);
-    const query = {
-      get isPending() {
-        return loading();
-      },
-      get isLoading() {
-        return loading() && fetching();
-      },
-      get data() {
-        if (loading()) throw new Error('Read pending resource');
-        return { entities: emails() };
-      },
-    };
-    mocks.hasUnreadEntity.mockImplementation((items: EmailEntity[]) =>
-      items.some((item) => !item.done && !item.isRead)
-    );
-    mocks.home.mockReturnValue(() =>
-      loading() ? false : mocks.hasUnreadEntity(emails())
-    );
-    mocks.email.mockReturnValue(query);
-    mocks.notifications.mockImplementation(notifications);
+let dispose: VoidFunction;
+afterEach(() => {
+  dispose?.();
+  mocks.countStreams = 0;
+  mocks.presenceSources = 0;
+  mocks.presence = () => false;
+});
+
+function setup(options: {
+  unified: Flag;
+  passwords?: boolean;
+  numbersEnabled?: boolean;
+  counts?: readonly InboxUnreadCount[];
+  homeIsNotifications?: boolean;
+}) {
+  return createRoot((disposer) => {
+    dispose = disposer;
+    const [unified, setUnified] = createSignal(options.unified);
+    const [counts, setCounts] = createSignal(options.counts);
+    mocks.unified = unified;
+    mocks.passwords = () => flag(options.passwords ?? false);
+    mocks.numbersEnabled = options.numbersEnabled ?? true;
+    mocks.counts = counts;
     return {
-      unread: useNavigationUnread(),
-      setLoading,
-      setFetching,
-      setEmails,
-      setNotifications,
-      setWitnesses,
-      setGraphqlEnabled,
-      setDone,
-      setDisabledTypes,
+      unread: useNavigationUnread({
+        homeIsNotifications: options.homeIsNotifications,
+      }),
+      setUnified,
+      setCounts,
     };
   });
 }
 
-describe('navigation unread presence', () => {
-  it('does not read pending email or channel data when their requests pause', () => {
-    const { unread, setFetching } = setup(true);
-    setFetching(false);
-    expect(unread('mail')).toBe(false);
-    expect(unread('channels')).toBe(false);
-  });
+const row = (
+  type: InboxUnreadCount['type'],
+  count: number,
+  passwordRequests = false
+): InboxUnreadCount => ({ type, passwordRequests, count });
 
-  it.each([true, false])(
-    'keeps the shell mounted with pending preferences (online=%s), then applies them',
-    async (online) => {
-      onlineManager.setOnline(online);
-      const response =
-        Promise.withResolvers<GetNotificationTypePreferencesResponse>();
-      const applied = Promise.withResolvers<void>();
-      const client = new QueryClient({
-        defaultOptions: { queries: { retry: false } },
+describe('useNavigationUnread with the unified Notifications view', () => {
+  it.each([false, true])(
+    'keeps live dots with numbers off (Home is Notifications: %s)',
+    (homeIsNotifications) => {
+      const { unread, setCounts } = setup({
+        unified: flag(true),
+        numbersEnabled: false,
+        counts: [row('email', 4), row('channel_mention', 1)],
+        homeIsNotifications,
       });
-      clients.push(client);
-      function Shell() {
-        const { unread, setLoading, setEmails } = setup(false, () =>
-          useQuery(() => ({
-            queryKey: ['preferences'],
-            queryFn: () => response.promise,
-          }))
-        );
-        setLoading(false);
-        setEmails([unreadEmail]);
-        createEffect(() => {
-          if (!unread('mail')) applied.resolve();
-        });
-        return <nav data-testid="shell" data-unread={unread('mail')} />;
+
+      for (const section of ['home', 'notifications', 'channels', 'mail']) {
+        expect(unread.has(section)).toBe(true);
+        expect(unread.count(section)).toBeUndefined();
       }
-      render(() => (
-        <QueryClientProvider client={client}>
-          <Suspense fallback={<div data-testid="suspended" />}>
-            <Shell />
-          </Suspense>
-        </QueryClientProvider>
-      ));
-      const shell = screen.getByTestId('shell');
-      expect(shell.dataset.unread).toBe('true');
-      expect(screen.queryByTestId('suspended')).toBeNull();
-      expect(client.getQueryState(['preferences'])?.fetchStatus).toBe(
-        online ? 'fetching' : 'paused'
-      );
-      onlineManager.setOnline(true);
-      response.resolve({ disabled_types: ['new_email'] });
-      await applied.promise;
-      expect(shell.dataset.unread).toBe('false');
-      expect(screen.getByTestId('shell')).toBe(shell);
-      expect(screen.queryByTestId('suspended')).toBeNull();
+      expect(mocks.countStreams).toBe(1);
+      expect(mocks.presenceSources).toBe(0);
+
+      setCounts([]);
+      expect(unread.has('home')).toBe(false);
+      expect(unread.has('mail')).toBe(false);
     }
   );
 
-  it('retains cached disabled preferences after a failed background refresh', async () => {
-    const response =
-      Promise.withResolvers<GetNotificationTypePreferencesResponse>();
-    const failed = Promise.withResolvers<void>();
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
+  it('counts each section from its kinds of inbox row', () => {
+    const { unread } = setup({
+      unified: flag(true),
+      counts: [
+        row('email', 4),
+        row('channel_mention', 1),
+        row('channel_messages', 2),
+        row('channel_thread', 3),
+        row('task', 5),
+        row('other', 1),
+      ],
     });
-    clients.push(client);
-    function Shell() {
-      const { unread, setLoading, setEmails } = setup(false, () => {
-        const query = useQuery(() => ({
-          queryKey: ['preferences'],
-          queryFn: () => response.promise,
-          initialData: { disabled_types: ['new_email'] },
-        }));
-        createEffect(() => {
-          if (query.isError) failed.resolve();
-        });
-        return query;
-      });
-      setLoading(false);
-      setEmails([unreadEmail]);
-      return <nav data-testid="shell" data-unread={unread('mail')} />;
-    }
-    render(() => (
-      <QueryClientProvider client={client}>
-        <Suspense fallback={<div data-testid="suspended" />}>
-          <Shell />
-        </Suspense>
-      </QueryClientProvider>
-    ));
-    const shell = screen.getByTestId('shell');
-    expect(shell.dataset.unread).toBe('false');
-    response.reject(new Error('Service unreachable'));
-    await failed.promise;
-    expect(client.getQueryState(['preferences'])?.status).toBe('error');
-    expect(screen.getByTestId('shell')).toBe(shell);
-    expect(shell.dataset.unread).toBe('false');
-    expect(screen.queryByTestId('suspended')).toBeNull();
+
+    expect(unread.count('notifications')).toBe(16);
+    expect(unread.count('channels')).toBe(6);
+    expect(unread.count('mail')).toBe(4);
+    expect(unread.has('channels')).toBe(true);
+    // Home shares the inbox's dot without repeating its number.
+    expect(unread.has('home')).toBe(true);
+    expect(unread.count('home')).toBeUndefined();
+    // Sections with no rows of their own show nothing.
+    expect(unread.has('documents')).toBe(false);
+    expect(unread.count('documents')).toBeUndefined();
+    expect(mocks.presenceSources).toBe(0);
   });
 
-  it('does not read pending resources or badge unrelated navigation', () => {
-    const { unread } = setup();
-    for (const id of ['home', 'mail', 'channels', 'documents', 'agents']) {
-      expect(unread(id)).toBe(false);
-    }
-    expect(mocks.hasUnreadEntity).not.toHaveBeenCalled();
-    expect(mocks.transformEntities).not.toHaveBeenCalled();
-    expect(mocks.home).toHaveBeenCalledWith(expect.any(Function));
-    expect(mocks.home.mock.calls[0][0]()).toBe(false);
-  });
-
-  it('reacts to read, unread, and done changes in loaded rows', () => {
-    const { unread, setLoading, setEmails } = setup();
-    setLoading(false);
-    setEmails([unreadEmail]);
-    expect(unread('home')).toBe(true);
-    expect(unread('mail')).toBe(true);
-    expect(mocks.hasUnreadEntity).toHaveBeenLastCalledWith([unreadEmail]);
-    expect(mocks.transformEntities).not.toHaveBeenCalled();
-    setEmails([{ ...unreadEmail, isRead: true }]);
-    expect(unread('home')).toBe(false);
-    expect(unread('mail')).toBe(false);
-    setEmails([unreadEmail]);
-    expect(unread('mail')).toBe(true);
-    setEmails([{ ...unreadEmail, done: true }]);
-    expect(unread('home')).toBe(false);
-    expect(unread('mail')).toBe(false);
-  });
-
-  it('uses bounded GraphQL witnesses without reading the full feed', () => {
-    const { unread, setLoading, setWitnesses, setDone } = setup(true);
-    expect(unread('channels')).toBe(false);
-    expect(mocks.notifications).not.toHaveBeenCalled();
-    expect(mocks.channels.mock.calls[0][0]).toMatchObject({
-      initial: {
-        limit: 500,
-        filters: {
-          channelFilter: { literal: { notificationState: 'UNSEEN' } },
-        },
-      },
+  it('puts the number on Home where Home stands in for Notifications', () => {
+    const { unread } = setup({
+      unified: flag(true),
+      counts: [row('email', 4), row('task', 1)],
+      homeIsNotifications: true,
     });
-    setLoading(false);
-    setWitnesses([{ id: 'witness', state: 'UNSEEN' }]);
-    expect(unread('channels')).toBe(true);
-    setDone(true);
-    expect(unread('channels')).toBe(false);
-    setDone(false);
-    expect(unread('channels')).toBe(true);
-    setWitnesses([{ id: 'witness', state: 'SEEN' }]);
-    expect(unread('channels')).toBe(false);
-    setWitnesses([]);
-    expect(unread('channels')).toBe(false);
-    expect(mocks.notifications).not.toHaveBeenCalled();
+
+    expect(unread.count('home')).toBe(5);
+    expect(unread.has('home')).toBe(true);
   });
 
-  it('follows cold-start transport changes without reading the inactive feed', () => {
-    const {
-      unread,
-      setLoading,
-      setGraphqlEnabled,
-      setWitnesses,
-      setNotifications,
-    } = setup();
-    setLoading(false);
-    setNotifications([message]);
-    expect(unread('channels')).toBe(true);
-    mocks.notifications.mockClear();
-    setGraphqlEnabled(true);
-    expect(unread('channels')).toBe(false);
-    setWitnesses([{ id: 'bounded', state: 'UNSEEN' }]);
-    expect(unread('channels')).toBe(true);
-    expect(mocks.notifications).not.toHaveBeenCalled();
-    setNotifications([]);
-    setGraphqlEnabled(false);
-    expect(unread('channels')).toBe(false);
-  });
-
-  it('badges top-level mentions but not thread mentions or reactions', () => {
-    const { unread, setNotifications } = setup();
-    const mention = (threadId?: string): UnifiedNotification => ({
-      ...message,
-      notification_metadata: {
-        tag: 'channel_mention',
-        content: {
-          channelType: 'directMessage',
-          messageId: 'message',
-          messageContent: 'Hello',
-          threadId,
-        },
-      },
+  it('follows the counts as they change, section by section', () => {
+    const { unread, setCounts } = setup({
+      unified: flag(true),
+      counts: [row('email', 1), row('channel_thread', 1)],
     });
-    setNotifications([mention('parent')]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([
-      {
-        ...message,
-        notification_metadata: {
-          tag: 'channel_message_reaction',
-          content: {
-            channelType: 'directMessage',
-            messageId: 'message',
-            emoji: '👍',
-            messageContent: 'Hello',
-          },
-        },
-      },
-    ]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([mention()]);
-    expect(unread('channels')).toBe(true);
+    expect(unread.count('notifications')).toBe(2);
+
+    // The viewer reads the channel thread: only mail is left.
+    setCounts([row('email', 1)]);
+    expect(unread.count('channels')).toBe(0);
+    expect(unread.has('channels')).toBe(false);
+    expect(unread.count('mail')).toBe(1);
+    expect(unread.count('notifications')).toBe(1);
+
+    setCounts([]);
+    expect(unread.has('mail')).toBe(false);
+    expect(unread.has('notifications')).toBe(false);
+    expect(unread.has('home')).toBe(false);
   });
 
-  it('uses unread channel messages, ignoring seen, completed, and other entities', () => {
-    const { unread, setNotifications } = setup();
-    setNotifications([message]);
-    expect(unread('channels')).toBe(true);
-    setNotifications([
-      { ...message, state: 'seen', viewed_at: message.created_at },
-    ]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([{ ...message, state: 'done' }]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([{ ...message, entity_type: 'document' }]);
-    expect(unread('channels')).toBe(false);
-    setNotifications([message, { ...message, id: 'another' }]);
-    expect(unread('channels')).toBe(true);
-    setNotifications([]);
-    expect(unread('channels')).toBe(false);
+  it('shows nothing until the first counts arrive', () => {
+    const { unread } = setup({ unified: flag(true), counts: undefined });
+
+    expect(unread.has('notifications')).toBe(false);
+    expect(unread.count('notifications')).toBe(0);
   });
 
-  it('hides email badge when email notifications are disabled', () => {
-    const { unread, setLoading, setEmails, setDisabledTypes } = setup();
-    setLoading(false);
-    setEmails([unreadEmail]);
-    expect(unread('mail')).toBe(true);
-    setDisabledTypes(['new_email']);
-    expect(unread('mail')).toBe(false);
-    setDisabledTypes([]);
-    expect(unread('mail')).toBe(true);
-    setDisabledTypes(['channel_mention', 'new_email', 'task_assigned']);
-    expect(unread('mail')).toBe(false);
+  it('counts vault access requests only where the inbox lists them', () => {
+    const counts = [row('access_requested', 2, true), row('task', 1)];
+
+    expect(
+      setup({ unified: flag(true), counts }).unread.count('notifications')
+    ).toBe(1);
+    dispose();
+    expect(
+      setup({ unified: flag(true), passwords: true, counts }).unread.count(
+        'notifications'
+      )
+    ).toBe(3);
+  });
+});
+
+describe('useNavigationUnread without the unified Notifications view', () => {
+  it('keeps the presence dots and shows no numbers', () => {
+    mocks.presence = (id) => id === 'mail';
+    const { unread } = setup({ unified: flag(false) });
+
+    expect(unread.has('mail')).toBe(true);
+    expect(unread.has('channels')).toBe(false);
+    expect(unread.count('mail')).toBeUndefined();
+    expect(mocks.countStreams).toBe(0);
+  });
+
+  it('starts neither source while the flag is undecided, then exactly one', () => {
+    mocks.presence = () => true;
+    const { unread, setUnified } = setup({
+      unified: flag(false, true),
+      counts: [row('email', 2)],
+    });
+    expect(unread.has('mail')).toBe(false);
+    expect(mocks.countStreams + mocks.presenceSources).toBe(0);
+
+    setUnified(flag(true));
+    expect(unread.count('mail')).toBe(2);
+    expect(mocks.countStreams).toBe(1);
+    expect(mocks.presenceSources).toBe(0);
+
+    // The same decision delivered again starts nothing new.
+    setUnified(flag(true));
+    expect(mocks.countStreams).toBe(1);
   });
 });

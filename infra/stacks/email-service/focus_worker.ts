@@ -5,6 +5,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
+  versionEnvironment,
   withTelemetry,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -12,6 +13,8 @@ import { type DopplerEcsEnvironment, stack } from '../../packages/shared';
 
 const BASE_NAME = 'email-focus-worker';
 const REPO_ROOT = '../../..';
+/** The worker's CloudWatch namespace (`cloudwatch_metrics.rs`). */
+const METRICS_NAMESPACE = 'Macro/EmailFocus';
 
 type Args = {
   role: aws.iam.Role;
@@ -68,8 +71,33 @@ export class EmailFocusWorker extends pulumi.ComponentResource {
     );
     this.ecr = image.ecr;
 
-    // The worker only calls out: Postgres, Kafka, the classifier API and the
-    // connection gateway.
+    // The worker publishes its rollout numbers as CloudWatch custom metrics.
+    // The role is shared with the email service, so the grant is limited to
+    // the worker's namespace. Inline, because the role manages its attached
+    // policies exclusively.
+    new aws.iam.RolePolicy(
+      `${BASE_NAME}-metrics-${stack}`,
+      {
+        role: role.name,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['cloudwatch:PutMetricData'],
+              Resource: '*',
+              Condition: {
+                StringEquals: { 'cloudwatch:namespace': METRICS_NAMESPACE },
+              },
+            },
+          ],
+        },
+      },
+      { parent: this }
+    );
+
+    // The worker only calls out: Postgres, Kafka, the classifier API, the
+    // agent harness, the connection gateway and CloudWatch.
     const serviceSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-sg-${stack}`,
       {
@@ -124,6 +152,7 @@ export class EmailFocusWorker extends pulumi.ComponentResource {
               environment: [
                 ...containerEnvVars.filter((env) => env.name !== 'DD_SERVICE'),
                 { name: 'DD_SERVICE', value: BASE_NAME },
+                versionEnvironment(image.image.imageUri),
               ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {

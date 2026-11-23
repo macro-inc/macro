@@ -13,7 +13,9 @@ import { toast } from '@core/component/Toast/Toast';
 import type { QuickAccessItem } from '@core/context/quickAccess';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { isTransientRequestError } from '@core/util/request-error';
+import { createSteadyFlag } from '@core/util/steady-flag';
 import {
   type EntityData,
   ListEntity,
@@ -22,10 +24,17 @@ import {
   type SearchLocation,
 } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import { Button, CommandMenuListItem } from '@ui';
-import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { ItemDisplay } from '../CommandItem';
@@ -37,7 +46,6 @@ import { createSearchPagination } from './create-search-pagination';
 import { createSearchResultWindow } from './create-search-result-window';
 import { createSearchScrollRestoration } from './create-search-scroll-restoration';
 import type { MobileSearchSession } from './mobileSearchState';
-import { useMobileSearchCategory } from './use-mobile-search-category';
 
 function MobileNameResults(props: {
   session: MobileSearchSession;
@@ -46,13 +54,32 @@ function MobileNameResults(props: {
   const state = props.session;
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [container, setContainer] = createSignal<HTMLDivElement>();
-  const category = useMobileSearchCategory(state.category);
+  const category = state.category;
   const source = useEntitySearch(state.query, category, {
     enabled: () => true,
     contactDiscovery: useCrmContactDiscovery,
   });
   usePending('search.names', source.isLoadingEntities);
+  const searchingShown = createSteadyFlag(source.isSearchingEntities);
   usePending('search.rank', source.isSettling);
+  let previousWindow: string | undefined;
+  let previousWindowQuery = '';
+  createEffect(
+    on(
+      () => source.pagination.windowKey(),
+      (key) => {
+        if (key === undefined) return;
+        if (
+          previousWindow !== undefined &&
+          key !== previousWindow &&
+          previousWindowQuery === state.query()
+        )
+          virtualizer()?.scrollTo(0);
+        previousWindow = key;
+        previousWindowQuery = state.query();
+      }
+    )
+  );
   useDatabaseDiscoverySync(() => true);
   const incoming = createMemo(() =>
     source.rankItems(source.items(), state.query())
@@ -125,7 +152,7 @@ function MobileNameResults(props: {
   });
   const { openWithSplit } = useSplitLayout();
   const panel = useSplitPanelOrThrow();
-  const directMessage = useGetOrCreateDirectMessageMutation();
+  const openDirectMessage = useOpenDirectMessage();
   const open = async (item: QuickAccessItem) => {
     await Telemetry.span('mobile.search.open', async (span) => {
       span.setAttr('entity.id', item.id);
@@ -136,14 +163,7 @@ function MobileNameResults(props: {
           id: projectRouteId({ id: item.id, section: 'overview' }),
         });
       } else if (item.kind === 'user') {
-        const result = await directMessage.mutateAsync({
-          recipient_id: item.id,
-          parentSpan: span,
-        });
-        openWithSplit(
-          { type: 'channel', id: result.channel_id },
-          { reopen: 'latest' }
-        );
+        await openDirectMessage(item.id, { parentSpan: span });
       } else {
         await openEntityInSplitFromUnifiedList(item.data, {
           splitHandle: panel.handle,
@@ -201,6 +221,11 @@ function MobileNameResults(props: {
           )}
         </VList>
       </Show>
+      <Show when={searchingShown() && items().length > 0}>
+        <p role="status" class="px-2 py-2 text-sm text-ink-muted">
+          {t('commandMenu.searching')}
+        </p>
+      </Show>
       <Show when={source.isLoadingEntities() && items().length === 0}>
         <p role="status" class="p-3 text-ink-muted">
           {t('commandMenu.loading')}
@@ -218,7 +243,7 @@ function MobileFullTextResults(props: {
   accountId: string;
 }) {
   const state = props.session;
-  const category = useMobileSearchCategory(state.category);
+  const category = state.category;
   const search = createMobileFullTextSearch(state.query, category);
   usePending('search.full-text', search.isSettling);
   const hasAuthoritativeError = () =>

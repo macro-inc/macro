@@ -12,6 +12,7 @@ import type { MessageDeletedAt } from './messageDeletedAt';
 import type { MessageEditedAt } from './messageEditedAt';
 import type { MessageGuestName } from './messageGuestName';
 import type { MessageImportedAuthor } from './messageImportedAuthor';
+import type { MessageKind } from './messageKind';
 import type { MessageParent } from './messageParent';
 import type { MessageThreadId } from './messageThreadId';
 import type { MessageTriggeredBy } from './messageTriggeredBy';
@@ -38,6 +39,8 @@ export interface Message {
   /** Message UUID. */
   id: string;
   imported_author?: MessageImportedAuthor;
+  /** What this message is. */
+  kind?: MessageKind;
   /** Tracked mentions, retained when a caller changes attachments only. */
   mentions: SimpleMention[];
   /** Entity that owns this conversation. */

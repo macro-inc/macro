@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                       SELECT 1 FROM suggestion_generation\n                       WHERE user_id = $1 AND status = 'generating') AS \"running!\",\n                   latest.status AS \"status?\",\n                   latest.attempt AS \"attempt?\",\n                   latest.started_at AS \"started_at?\"\n               FROM (SELECT 1) AS one\n               LEFT JOIN LATERAL (\n                   SELECT status, attempt, started_at FROM suggestion_generation\n                   WHERE user_id = $1 AND trigger = $2\n                   ORDER BY started_at DESC\n                   LIMIT 1) AS latest ON true",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "running!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "status?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "attempt?",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "started_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "8dac0b68e84412dea67ddfb23d45abef4f2b41d64948b6a92f2daa7abacc4c8b"
+}

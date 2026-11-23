@@ -5,12 +5,26 @@ use agent_harness::domain::error::HarnessError;
 use agent_harness::domain::model_load::{CursorModelProbe, ModelProbeError, RawModelProbe};
 use agent_harness::outbound::cursor::CursorApiKeys;
 use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
+use cursor_cloud_agents::domain::error::CredentialRejected;
 use cursor_cloud_agents::domain::model_options::cursor_model_config_options;
 use cursor_cloud_agents::domain::ports::CursorAgents;
 use macro_user_id::user_id::MacroUserIdStr;
 
 #[cfg(test)]
 mod test;
+
+/// Whether Cursor refused the caller's key itself, which only they can fix.
+fn is_credential_rejection(error: &rootcause::Report) -> bool {
+    let rejected = error.downcast_current_context::<CredentialRejected>();
+    if let Some(rejected) = rejected {
+        tracing::warn!(
+            status = rejected.status,
+            detail = %rejected.detail,
+            "cursor refused the caller's connected key"
+        );
+    }
+    rejected.is_some()
+}
 
 /// Cursor catalog adapter resolving one caller's key for every request.
 pub struct CursorModels<Keys> {
@@ -49,10 +63,13 @@ where
             record_dir: None,
         })
         .map_err(|error| ModelProbeError::Failed(error.to_string()))?;
-        let models = client
-            .list_models()
-            .await
-            .map_err(|error| ModelProbeError::Failed(error.to_string()))?;
+        let models = client.list_models().await.map_err(|error| {
+            if is_credential_rejection(&error) {
+                ModelProbeError::CredentialRejected(CredentialRejected::USER_MESSAGE.to_owned())
+            } else {
+                ModelProbeError::Failed(error.to_string())
+            }
+        })?;
         let current = config
             .default_model_id
             .filter(|current| models.iter().any(|model| model.id == *current));
@@ -87,19 +104,30 @@ impl<Keys: CursorApiKeys> agent_harness::domain::capability_discovery::Capabilit
             record_dir: None,
         })
         .map_err(|error| CapabilityProbeError::Failed(error.to_string()))?;
-        let models = client
-            .list_models()
-            .await
-            .map_err(|error| CapabilityProbeError::Failed(error.to_string()))?;
+        let models = client.list_models().await.map_err(|error| {
+            if is_credential_rejection(&error) {
+                CapabilityProbeError::CredentialRejected(
+                    CredentialRejected::USER_MESSAGE.to_owned(),
+                )
+            } else {
+                CapabilityProbeError::Failed(error.to_string())
+            }
+        })?;
         let selected = model.or(config.default_model_id.as_deref());
         let current = match selected {
-            Some(id) => Some(
-                models
+            Some(id) => {
+                let model = models
                     .iter()
                     .find(|model| model.id == id)
-                    .ok_or_else(|| CapabilityProbeError::Failed("unsupported model".to_owned()))?
-                    .default_choice(),
-            ),
+                    .ok_or_else(|| CapabilityProbeError::Failed("unsupported model".to_owned()))?;
+                // What a new session on this model starts on: the account's
+                // effort applies to the account's model alone.
+                let default_effort = config
+                    .default_effort
+                    .as_deref()
+                    .filter(|_| config.default_model_id.as_deref() == Some(id));
+                Some(model.choice_with_preferred_effort(default_effort))
+            }
             None => models
                 .iter()
                 .find(|model| model.id == "default")

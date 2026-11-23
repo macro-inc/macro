@@ -16,17 +16,32 @@ distribution.
 - `src/domain/service.rs` + `src/domain/ports.rs`: the ingest/query service
   and the ports it depends on.
 - `src/outbound/pg_activity_repo.rs`: the single `activity_events` table.
+- Use `AppearanceUpdate` and `pg_activity_repo::insert_activities` to commit attributed appearance history in the entity transaction; the adapter preserves agent correlation and SDK verbs, and appearance broker events must not insert duplicate history. `pg_activity_repo::appearance_changes_exceed` reads, in the same transaction, whether an entity's history holds more appearance changes than the domain counted, reading at most one entry past that count.
 - `src/inbound/kafka_consumer.rs` + `src/outbound/activity_topic_consumer.rs`:
   generic Kafka consumer wired to per-domain event mappings.
+- `src/domain/activity_range.rs` (`reads`) and `src/inbound/axum_router.rs`
+  (`axum`, mounted by cognition): `GET /activity`, the acting user's own
+  activity through `ReadActivityResponse::read`, which the SDK's
+  `macro.activity.mine()` reads. There is no direct AI tool for it.
+- `UserActivity::is_active(user, since)` (`src/outbound/pg_activity_repo/user_activity.rs`):
+  the check a per-user background job asks before spending work on someone.
+  Active means seen (a signed-in client open, in `user_last_seen`, which the
+  connection gateway writes through `SeenLog` on connect and hourly) or acted
+  (an activity the user made themselves, not through a code-mode run; views
+  and appearance changes don't count), read from `idx_activity_events_own`.
+  Agent and bot work for the user doesn't count. The check repeats that
+  index's predicate; change both together.
 
 ## Scope
 
 - Owns: the `Action` vocabulary, the `Activity`/`ActivityRecord` row shape,
   feeds/timeline/overview queries, and realtime distribution of new activity.
+  It also owns `user_last_seen`, the seen time the activity check reads.
 - Not here: deciding what counts as activity in a given domain — each domain
   crate depends on this with `default-features = false` (models only) and
   implements its own event → `DomainActivity` mapping; the hosting service
   declares consumed topics and dispatches.
+- Keep appearance changes in entity history, but exclude them from personal/team feeds, contribution totals, and attribution recency.
 
 ## Boundaries
 
@@ -39,7 +54,12 @@ distribution.
   `EntityAccessService::get_users_by_entity`; change both together.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
-  `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
+  `attention_feed`, `projects`, `github`, `email`, `properties`,
+  `time_tracking`) and `ai_tools`.
+  `ai_tools` reads `SubjectActivityPresence` so memory skips days without
+  activity. `connection_gateway` writes seen times through `SeenLog`;
+  `email_focus_worker` asks `UserActivity` over 7 days before working an
+  inbox.
 
 ## Recipes
 
@@ -52,10 +72,18 @@ distribution.
 
 ## Checks
 
-- `cargo test -p activity` (`SQLX_OFFLINE` unset).
+- `cargo test -p activity --features reads` (`SQLX_OFFLINE` unset); without
+  `reads` the range tests in `domain/activity_range/test.rs` don't compile in.
 
 - External chats have their own unread state and are excluded from activity ranking/Soup until that integration is added.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+- Session and other activity reads preserve `agent_correlation_id` and nullable `agent_verb`; session visibility and existing entity/subject authorization still apply. The materializer restores both envelope fields before classifying an event.
+- The session read is one scan of `activity_events_agent_session_idx`. A trigger stamps `agent_session_id` from the row's correlation on insert, so writers never set it; reads (`opened`) are left out of both the read and session delivery.
+- Correlated rows publish a separate `SessionRecorded` activity-topic event even when no subject or entity viewer is addressable. The realtime consumer broadcasts those rows to session subscribers; the GraphQL adapter resolves correlation ownership through the existing agent correlation repository.
+- The activity topic schema is v2 for the session event; older realtime consumers skip v2 frames during a rolling deployment, and new consumers skip v1 frames. Both feeds recover missed frames through authorized reads on reconnect.
+
+- `domain/visible_reads.rs` owns current project and CRM visibility for personal/team/range reads and overview references. Compose it with the primary-backed `outbound/entity_access_audience` adapter. Keep raw cursors when filtering denied rows; subscription adapters also recheck retained events before emission.

@@ -1,12 +1,14 @@
 import { ViewShell } from '@app/components/view-shell';
 import {
   CALENDAR_PAGE_IDS,
+  type CalendarPageId,
   CalendarPagerContextProvider,
   useCalendarPager,
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import {
   useSplitDisplayName,
@@ -35,14 +37,69 @@ import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
-import { SetupStatus } from './SetupStatus';
+import { SetupBanner, SetupStatus } from './SetupStatus';
 import { SyncStatus } from './SyncStatus';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
+const NEIGHBOR_MOUNT_DEADLINE_MS = 600;
+
+/** One period's grid, starting beside what the active page shows by then. */
+function CalendarPeriodPage(props: {
+  id: CalendarPageId;
+  useNarrowDayHeaders: boolean;
+}) {
+  const calendarPager = useCalendarPager();
+  // Read once: FullCalendar takes its initial date only when it mounts.
+  const initialDate = calendarPager.initialDateFor(props.id);
+
+  return (
+    <Suspense>
+      <Page
+        id={props.id}
+        initialDate={initialDate}
+        useNarrowDayHeaders={props.useNarrowDayHeaders}
+      />
+    </Suspense>
+  );
+}
 
 function CalendarPages() {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
+  // Opening the calendar paints the visible period alone. Its neighbors only
+  // matter once someone swipes, so they mount on later tasks.
+  const mountQueue = createRenderQueue();
+  const [mountedPages, setMountedPages] = createSignal<
+    readonly CalendarPageId[]
+  >([calendarPager.activePageId()]);
+
+  const mountNeighbors = () => {
+    const neighbors = CALENDAR_PAGE_IDS.filter(
+      (id) => !mountedPages().includes(id)
+    );
+
+    for (const id of neighbors) {
+      mountQueue.enqueue(id, () => setMountedPages((pages) => [...pages, id]));
+    }
+  };
+
+  // Neighbors wait for the visible period's events, so mounting them never
+  // holds up what is on screen; a slow load releases them after a moment.
+  createEffect(() => {
+    const visiblePeriodLoaded =
+      calendarPager.activeData()?.isLoading() === false;
+
+    if (!visiblePeriodLoaded) {
+      const deadline = setTimeout(mountNeighbors, NEIGHBOR_MOUNT_DEADLINE_MS);
+      onCleanup(() => clearTimeout(deadline));
+      return;
+    }
+
+    // After the frame that paints those events.
+    const frame = requestAnimationFrame(mountNeighbors);
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
+
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const viewportSize = createElementSize(viewport);
   const breakpoints = createSizeBreakpoints(
@@ -83,6 +140,10 @@ function CalendarPages() {
           class={isMobile() ? 'order-last' : undefined}
           fullWidth={isMobile()}
         />
+        <SetupBanner
+          class={isMobile() ? 'order-last' : undefined}
+          fullWidth={isMobile()}
+        />
         <div
           ref={setViewport}
           class="relative flex min-w-0 min-h-0 flex-1 overflow-hidden"
@@ -93,13 +154,12 @@ function CalendarPages() {
             <For each={CALENDAR_PAGE_IDS}>
               {(pageId) => (
                 <Pager.Page id={pageId}>
-                  <Suspense>
-                    <Page
+                  <Show when={mountedPages().includes(pageId)}>
+                    <CalendarPeriodPage
                       id={pageId}
-                      initialDate={calendarPager.initialDateFor(pageId)}
                       useNarrowDayHeaders={useNarrowDayHeaders()}
                     />
-                  </Suspense>
+                  </Show>
                 </Pager.Page>
               )}
             </For>
@@ -168,15 +228,13 @@ function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
             <ViewShell.Root
               asidePreferenceKey="calendar"
               resizable
-              aside={isMobile() ? false : { preserveDuringResize: false }}
+              aside={{ preserveDuringResize: false }}
               main={{ preferredWidth: 640 }}
             >
-              <Show when={!isMobile()}>
-                <ViewShell.Aside>
-                  <CalendarSidebar />
-                </ViewShell.Aside>
-              </Show>
-              <ViewShell.Main>
+              <ViewShell.Aside>
+                <CalendarSidebar />
+              </ViewShell.Aside>
+              <ViewShell.Main class="relative">
                 <Header presentation="workspace" />
                 <ViewTour tour={calendarTour} />
                 <ViewShell.Content class="flex min-h-0 flex-1">

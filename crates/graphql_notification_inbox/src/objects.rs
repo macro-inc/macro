@@ -2,7 +2,8 @@ use async_graphql::{Enum, ID, Object, SimpleObject, Union};
 use graphql_notification::GraphqlNotification;
 use graphql_soup::{GraphqlSoupEntity, SoupEntityEdges};
 use notification_inbox::domain::models::{
-    InboxActor, InboxChange, InboxEntry, InboxPage, InboxRow, InboxRowAction, InboxRowActionKind,
+    ClearAction, ClearStatus, InboxActor, InboxChange, InboxEntry, InboxPage, InboxRow,
+    InboxRowAction, InboxRowActionKind, UnreadRows,
 };
 use soup::domain::models::SoupProjectionHydration;
 
@@ -139,6 +140,18 @@ impl GraphqlNotificationInboxRow {
     /// The row's kind.
     async fn row_type(&self) -> GraphqlNotificationInboxRowType {
         self.0.row_type.into()
+    }
+
+    /// Other kinds an inbox scope lists the row under, because what it shows
+    /// is that too: a thread whose reply mentions the viewer is listed under
+    /// mentions as well. A clear of any of these kinds takes the row.
+    async fn also_listed_as(&self) -> Vec<GraphqlNotificationInboxRowType> {
+        self.0
+            .also_listed_as
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect()
     }
 
     /// For a thread row, the channel root message or discussion root
@@ -361,6 +374,110 @@ impl<E: SoupEntityEdges> From<InboxChange<SoupProjectionHydration>>
             InboxChange::Removed(group) => Self::Removed(GraphqlNotificationInboxEntryRemoved {
                 group_id: ID(group.id()),
             }),
+        }
+    }
+}
+
+/// How many unread rows of one kind the viewer's inbox holds.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+#[graphql(name = "NotificationInboxUnreadCount")]
+pub struct GraphqlNotificationInboxUnreadCount {
+    /// The kind of row.
+    row_type: GraphqlNotificationInboxRowType,
+    /// Its unread rows across the whole inbox. Counting stops soon after
+    /// 100, so present a total of 100 or more as "99+".
+    count: i32,
+}
+
+impl GraphqlNotificationInboxUnreadCount {
+    /// The counts of every kind with an unread row, in the kinds' declared
+    /// order.
+    pub fn list(unread: &UnreadRows) -> Vec<Self> {
+        let mut counts: Vec<Self> = unread
+            .counts()
+            .into_iter()
+            .map(|(row_type, count)| Self {
+                row_type: row_type.into(),
+                count: i32::try_from(count).unwrap_or(i32::MAX),
+            })
+            .collect();
+        counts.sort_by_key(|count| count.row_type as usize);
+        counts
+    }
+}
+
+/// Where a clear of the inbox is in its life. Values may be added; treat one
+/// you do not know as still running.
+#[derive(Enum, Clone, Copy, Debug, PartialEq, Eq)]
+#[graphql(name = "NotificationInboxClearStatus")]
+pub enum GraphqlNotificationInboxClearStatus {
+    /// Rows are still being cleared.
+    Applying,
+    /// Every matching row is cleared.
+    Done,
+    /// An undo is restoring what the clear changed.
+    Undoing,
+    /// The undo finished.
+    Undone,
+    /// The clear stopped partway and was given up; what it cleared can still
+    /// be undone.
+    Failed,
+}
+
+impl From<ClearStatus> for GraphqlNotificationInboxClearStatus {
+    fn from(status: ClearStatus) -> Self {
+        match status {
+            ClearStatus::Applying => Self::Applying,
+            ClearStatus::Done => Self::Done,
+            ClearStatus::Undoing => Self::Undoing,
+            ClearStatus::Undone => Self::Undone,
+            ClearStatus::Failed => Self::Failed,
+        }
+    }
+}
+
+/// A clear of the notification inbox: what it covers, frozen when it
+/// started, and how far it has got. While it is applying, hide every row it
+/// covers; once it is undone, show them again.
+#[derive(SimpleObject)]
+#[graphql(name = "NotificationInboxClear")]
+pub struct GraphqlNotificationInboxClear {
+    /// The clear's id. Not `id`: the client cache reads an `id` field as
+    /// entity identity.
+    clear_id: ID,
+    /// Where the clear is in its life.
+    status: GraphqlNotificationInboxClearStatus,
+    /// The row kinds it clears; never empty.
+    row_types: Vec<GraphqlNotificationInboxRowType>,
+    /// Whether it clears unread rows only.
+    unread_only: bool,
+    /// RFC 3339 time; it clears only rows whose newest notification arrived
+    /// at or after it. Absent when it clears rows of any age.
+    since: Option<String>,
+    /// RFC 3339 time the clear started. Notifications that arrived later
+    /// are not cleared.
+    as_of: String,
+    /// Rows cleared so far.
+    row_count: i32,
+    /// Notifications an undo has reopened so far.
+    restored_count: i32,
+    /// Grows with every change to the clear; drop a copy older than one you
+    /// already have.
+    revision: i32,
+}
+
+impl From<ClearAction> for GraphqlNotificationInboxClear {
+    fn from(action: ClearAction) -> Self {
+        Self {
+            clear_id: ID(action.id.to_string()),
+            status: action.status.into(),
+            row_types: action.scope.row_types.into_iter().map(Into::into).collect(),
+            unread_only: action.scope.unread_only,
+            since: action.since.map(|since| since.to_rfc3339()),
+            as_of: action.as_of.to_rfc3339(),
+            row_count: i32::try_from(action.rows).unwrap_or(i32::MAX),
+            restored_count: i32::try_from(action.restored).unwrap_or(i32::MAX),
+            revision: i32::try_from(action.revision).unwrap_or(i32::MAX),
         }
     }
 }

@@ -96,7 +96,7 @@ impl CallbackState {
 
 /// Why a consent screen came back without an authorization code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ConsentFailure {
+pub(in crate::api) enum ConsentFailure {
     /// The directory lets only an administrator consent to Macro's permissions.
     AdminConsentRequired,
     /// The person on the consent screen declined or closed it.
@@ -112,7 +112,7 @@ impl ConsentFailure {
     /// `AADSTS65001` in the description (`AADSTS90094` for the admin-consent
     /// endpoint itself); some tenants answer `consent_required` or
     /// `interaction_required` instead.
-    fn classify(error: Option<&str>, error_description: Option<&str>) -> Self {
+    pub(in crate::api) fn classify(error: Option<&str>, error_description: Option<&str>) -> Self {
         let code = error_description.and_then(aadsts_code);
         if matches!(code, Some("AADSTS65001" | "AADSTS90094"))
             || matches!(error, Some("consent_required" | "interaction_required"))
@@ -125,8 +125,8 @@ impl ConsentFailure {
         Self::Failed
     }
 
-    /// The `email_link_error` query value the app reads.
-    fn as_str(self) -> &'static str {
+    /// The `email_link_error` and `sso_error` query value the app reads.
+    pub(in crate::api) fn as_str(self) -> &'static str {
         match self {
             Self::AdminConsentRequired => "admin_consent_required",
             Self::Cancelled => "cancelled",

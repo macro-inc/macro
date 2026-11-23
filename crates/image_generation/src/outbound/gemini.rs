@@ -106,6 +106,11 @@ impl ImageGenerator for GeminiImageGenerator {
             .context("failed to read Gemini response")
             .map_err(ImageGenerationError::Provider)?;
         if !status.is_success() {
+            genai_telemetry::provider_account::report_provider_error(
+                "google",
+                Some(status.as_u16()),
+                &body,
+            );
             let message = serde_json::from_str::<ErrorEnvelope>(&body)
                 .ok()
                 .map(|envelope| envelope.error.message)

@@ -32,6 +32,8 @@ internal class PrepareJoinArgs { lateinit var channelId: String }
 @InvokeArg
 internal class AbortJoinArgs { lateinit var lease: String }
 @InvokeArg
+internal class SelectOutputArgs { lateinit var callId: String; lateinit var id: String }
+@InvokeArg
 internal class EnabledArgs { var enabled = false }
 @InvokeArg
 internal class TitleArgs { var channelTitle: String? = null }
@@ -44,7 +46,7 @@ internal class ModeArgs { var mode = "hidden" }
 @InvokeArg
 internal class TracingArgs { var tracesUrl: String? = null; var environment = "" }
 
-@TauriPlugin(permissions = [Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone"), Permission(strings = [Manifest.permission.CAMERA], alias = "camera")])
+@TauriPlugin(permissions = [Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone"), Permission(strings = [Manifest.permission.CAMERA], alias = "camera"), Permission(strings = [Manifest.permission.BLUETOOTH_CONNECT], alias = "bluetooth")])
 class CallPlugin(private val activity: Activity) : Plugin(activity) {
     @Command fun configureTracing(invoke: Invoke) {
         try {
@@ -70,6 +72,28 @@ class CallPlugin(private val activity: Activity) : Plugin(activity) {
     @Command fun watchConnectionState(invoke: Invoke) { watch(invoke, "connection"); Calls.publish() }
     @Command fun watchParticipantIdentities(invoke: Invoke) { watch(invoke, "participants"); Calls.publish() }
     @Command fun watchDrawerOpened(invoke: Invoke) { watch(invoke, "drawer") }
+    @Command fun getAudioOutput(invoke: Invoke) {
+        invoke.resolve(JSObject().apply { put("state", Calls.outputState(activity) ?: org.json.JSONObject.NULL) })
+    }
+    @Command fun selectAudioOutput(invoke: Invoke) {
+        val args = invoke.parseArgs(SelectOutputArgs::class.java)
+        if (Calls.offer?.callId != args.callId) { invoke.reject("Audio output is unavailable for this call"); return }
+        if (Build.VERSION.SDK_INT >= 31 && Calls.outputRequiresBluetooth(activity, args.id) && activity.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissionForAlias("bluetooth", invoke, "audioOutputPermission"); return
+        }
+        if (!Calls.selectOutput(activity, args.callId, args.id)) {
+            invoke.reject("Audio output is unavailable for this call"); return
+        }
+        getAudioOutput(invoke)
+    }
+    @PermissionCallback fun audioOutputPermission(invoke: Invoke) {
+        if (activity.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) selectAudioOutput(invoke)
+        else invoke.reject("Bluetooth permission is required for this audio output")
+    }
+    @Command fun watchAudioOutput(invoke: Invoke) {
+        watch(invoke, "audioOutput")
+        Calls.publishAudioOutput(activity)
+    }
     @Command fun getActiveCallState(invoke: Invoke) { invoke.resolve(JSObject().apply { put("state", Calls.snapshot() ?: org.json.JSONObject.NULL) }) }
     @Command fun getPendingAnsweredCall(invoke: Invoke) {
         val channel = Calls.pendingAnswered; Calls.pendingAnswered = null
@@ -175,6 +199,11 @@ class CallPlugin(private val activity: Activity) : Plugin(activity) {
             runCatching { activity.startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${activity.packageName}"))) }
                 .onFailure { invoke.reject("Unable to open full-screen notification settings"); return }
         }
+        invoke.resolve()
+    }
+    @Command fun openMicrophoneSettings(invoke: Invoke) {
+        runCatching { Calls.openAppSettings(activity) }
+            .onFailure { invoke.reject("Unable to open microphone settings"); return }
         invoke.resolve()
     }
     override fun onDestroy(activity: AppCompatActivity) {

@@ -1,5 +1,9 @@
 # iOS releases and breaking Tauri changes
 
+The optional `layout_plugin` enables iPhone Duo navigation using UIKit 27.1
+traits. It requires a rebuilt native app; older binaries retain the bottom dock
+without invoking a missing command. The native/web contract remains compatible.
+
 Native reload history and UIKit memory-warning diagnostics require an App Store
 binary update. Their IPC is optional: OTA-only clients retain frontend reload
 markers and instance IDs, with missing native coverage explicitly reported.
@@ -14,7 +18,10 @@ release; see [file exports](../tauri/file_export_plugin/AGENTS.md).
 Play as the source of truth — is described in `docs/development/android.md`.)
 
 Web bundles ship to installed apps over the air (see
-`tauri/macro_bundle_updater_plugin`), but native code — anything under
+`tauri/macro_bundle_updater_plugin`). On iOS they persist in a backup-excluded
+Application Support directory so storage pressure cannot purge them; the
+updater ignores legacy cache contents (see
+`tauri/src-tauri/README.md#ota-bundle-storage`). Native code — anything under
 `apps/web/tauri/` — only reaches users through the App Store. A bundle that
 depends on new native code must therefore only reach native builds that have
 it, and users on older native builds must be pushed to update instead of
@@ -32,9 +39,10 @@ icon and app-name branding are Android-only.
 ## The flow for a PR with breaking native changes
 
 1. **`iOS Native Check`**, a job of the web app PR checks
-   (`.github/workflows/web-app-check-main.yml`), runs on every PR against
-   `main`. The required `Web App Status Check` depends on it, so no branch
-   ruleset change is needed. If the PR touches the iOS native code (see
+   (`.github/workflows/web-app-check-main.yml`), runs whenever CI runs on a PR
+   against `main` (the `run-ci` label). The required `CI gate` status depends
+   on it, so no branch ruleset change is needed. The release starts only
+   after CI has run on the head. If the PR touches the iOS native code (see
    "What counts as native code" below) it requires:
    - the iOS release numbers to be bumped relative to `main`, and
    - Apple to have **approved** that exact version + build (held for
@@ -71,8 +79,11 @@ icon and app-name branding are Android-only.
 3. Add the **`ios-update`** label to the PR — once it is ready to merge: the
    **`iOS App Store Release`** workflow
    (`.github/workflows/ios-app-store-release.yml`) first refuses drafts and
-   PRs with failing checks (pending ones are waited on, up to 30 minutes), then builds the app from
-   the PR head on the Namespace macOS runner inside the Nix dev shell (like
+   PRs with failing checks (pending ones are waited on, up to 30 minutes; the
+   native checks and either platform's release checks don't count, so a failed
+   or in-flight Android release never holds this one back), then builds the app from
+   the PR head on the Namespace macOS runner with Xcode 27.1 (see
+   [Xcode version](#xcode-version)) inside the Nix dev shell (like
    the `ios-preview` label), uploads it to TestFlight, waits for App Store
    Connect processing + export compliance, and submits it for App Review
    (release type: manual, so Apple's approval holds it as "Pending
@@ -97,13 +108,15 @@ icon and app-name branding are Android-only.
    (`.github/workflows/ios-release-watch.yml`, every 30 minutes) notices: for
    each open PR labeled `ios-update` it asks App Store Connect whether Apple
    approved the version + build at the PR head and, when it did, re-runs the
-   PR's failed `iOS Native Check` job and comments. The
-   gate turns green on its own and the PR merges if auto-merge is on.
+   failed jobs of the PR's latest `PR CI` run and comments. It also checks
+   the latest standalone web workflow run on that same head, so failed checks
+   from before the CI migration get refreshed even when a newer `PR CI` run
+   passes. The gate turns green on its own and the PR merges if auto-merge is on.
    (Re-running the job by hand works too. The watcher stops after two
-   automatic re-runs — counted by its own comments on the PR — so a check
+   automatic re-runs per run — counted by its own comments on the PR — so a check
    failing for another reason doesn't retry forever, and GitHub refuses to
-   re-run runs older than 30 days: after a review that long, push a commit to
-   get a fresh run.)
+   re-run runs older than 30 days: after a review that long, add the `run-ci`
+   label to get a fresh run.)
 5. The next prod deploy (`.github/workflows/release-production.yml`) ships
    the web bundle, then releases the App Store version:
    - The web build (`just build-prod`) reads both platform floors from
@@ -160,11 +173,36 @@ an acknowledgment those bundles cannot send. This opt-in contract does not
 require raising the OTA native floor; the improved cold-launch handoff still
 requires shipping the new native binary.
 
+The native cover exists only while a tap is pending. Earlier binaries also
+covered the app whenever it left the foreground, which blanked it in the app
+switcher and under system overlays; they keep doing so until updated. The web
+contract is the same for both, so the change needs no floor raise.
+
 Run `swift test --package-path tauri/ios_push_plugin/store` from `apps/web`
 for persisted intent/acknowledgment regressions. A simulator build checks the
 UIKit bridge; device verification must include notification launches after
 termination/WebContent eviction and ordinary icon resume, as well as auth
-failures, account switching, and rapid successive taps.
+failures, account switching, and rapid successive taps. Confirm the app stays
+visible in the app switcher and under Control Center and Notification Center.
+
+### CRM cache command compatibility
+
+New bundles use `current_authority` and `transition_authority` to observe and
+retire the cache's session generation. Response writes carry the generation
+captured before their request; a supplied stale generation is rejected under the
+shared owner lock. Reads and watches do not require a proof or admission claim.
+Older bundles omit the optional `generation` argument; the new native plugin
+preserves the deployed cache contract for those calls, including writes.
+The native plugin regression exercises the old bundle's argument shape. This
+preserves the older production bundle's command contract on a newer binary during
+rollback, with one known limitation: queue inspection removes copied optimistic
+data from legacy queued `SaveEmailDraft` entries for every caller. Authored
+command variables remain, but an older bundle may lose its optimistic draft
+display or recovery data. The minimum native build only protects the reverse
+combination. Older bundles
+do not acquire CRM cache retirement by upgrading native code alone. Keep CRM
+access changes disabled until all access consumers are upgraded, as described
+in [CRM email privacy](../../../docs/CRM_EMAIL_PRIVACY.md#member-access).
 
 ## What counts as native code
 
@@ -306,12 +344,29 @@ production OTLP proxy
 (`ios_production_telemetry` in `scripts/ios-native-env.sh`); set
 `VITE_OTEL_EXPORTER_URL` and `VITE_OTEL_ENV` to send them elsewhere.
 
+## Xcode version
+
+Every iOS build compiles with Xcode 27.1 and the iOS 27.1 SDK: the layout
+plugin calls iOS 27.1 UIKit APIs, which older SDKs reject at compile time.
+Build releases by hand with Xcode 27.1 too (select it with `xcode-select` or
+`DEVELOPER_DIR`; `scripts/ios-native-env.sh` honors either).
+
+CI pins it in `IOS_XCODE_VERSION` (`xtask_workflows/src/workflows/steps.rs`).
+The `ios-update` release and the `ios-preview` build run on Namespace's macOS
+Tahoe slim image (`Runner::MacOsTahoeArm`), which installs several Xcodes
+side by side; their first step, **Select Xcode 27.1**, selects that version
+with `xcode-select`, sets `DEVELOPER_DIR` to it for later steps, and fails
+with the installed list if the image lacks it. Inside `nix develop`,
+`DEVELOPER_DIR` points at Nix's macOS SDK, so the iOS toolchain split reads
+the `xcode-select` choice instead. To move to a newer Xcode,
+check Namespace's image feed for an image that ships it, then change the
+constant (and the runner, if needed) and run `cargo x workflows`.
+
 ## One-time repository setup
 
 - **Labels**: create `ios-update` and `skip-ios-update`.
 - **Branch protection**: nothing to do — the gate is a job of the web app PR
-  checks, and the already-required `Web App Status Check` fails when it
-  fails.
+  checks, and the already-required `CI gate` status fails when it fails.
 - **Doppler project `ios-release`, config `prd`** (same shape as
   `macos-release/prd`, which the desktop notarization uses; that key has only
   the Developer role, which cannot submit for review, hence a separate key):

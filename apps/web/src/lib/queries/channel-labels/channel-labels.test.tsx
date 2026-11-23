@@ -11,10 +11,9 @@ import {
 import { type Ok, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { channelKeys } from '../channel/keys';
+import { authKeys } from '../auth/keys';
 import { queryClient } from '../client';
 import {
-  useAvailableSectionChannelsQuery,
   useChannelLabelsData,
   useChannelLabelsQuery,
   useRenameChannelLabelMutation,
@@ -30,13 +29,16 @@ const mocks = vi.hoisted(() => ({
   preview: vi.fn(),
   assign: vi.fn(),
   rename: vi.fn(),
-  channels: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.enabled() }),
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled:
+      flag.key === 'enable-chat-sidebar-sections' ? false : mocks.enabled(),
+  }),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => mocks.userId(),
+  useIsAuthenticated: () => () => true,
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
@@ -48,7 +50,6 @@ vi.mock('@service-storage/client', () => ({
     },
   },
 }));
-vi.mock('../channel/channels', () => ({ fetchAllChannels: mocks.channels }));
 vi.mock('../client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
@@ -74,12 +75,15 @@ beforeEach(() => {
   mocks.userId = () => 'viewer';
   mocks.assign.mockReset().mockResolvedValue(ok(undefined));
   mocks.rename.mockReset();
-  mocks.channels.mockReset().mockResolvedValue([]);
   mocks.list.mockReset().mockResolvedValue(ok(labels));
   mocks.preview
     .mockReset()
     .mockResolvedValue(ok({ channels: [], totalCount: 0 }));
   client = queryClient;
+  client.setQueryData(authKeys.userInfo.queryKey, {
+    id: mocks.userId(),
+    authenticated: true,
+  });
   client.setDefaultOptions({
     queries: { retry: false },
     mutations: { retry: false },
@@ -92,43 +96,6 @@ afterEach(() => {
 });
 
 describe('channel tag query rollout', () => {
-  it('isolates available channels by account and follows channel-list invalidation', async () => {
-    mocks.enabled = () => true;
-    const [userId, setUserId] = createSignal('viewer');
-    mocks.userId = userId;
-    let finishOld!: (channels: { id: string }[]) => void;
-    mocks.channels.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishOld = resolve;
-        })
-    );
-    mocks.channels.mockResolvedValueOnce([{ id: 'current' }]);
-    let query!: ReturnType<typeof useAvailableSectionChannelsQuery>;
-    const Probe = () => {
-      query = useAvailableSectionChannelsQuery();
-      return null;
-    };
-    render(() => (
-      <QueryClientProvider client={client}>
-        <Probe />
-      </QueryClientProvider>
-    ));
-    await waitFor(() => expect(mocks.channels).toHaveBeenCalledTimes(1));
-    setUserId('new-viewer');
-    await waitFor(() => expect(query.isPending).toBe(false));
-    expect(query.data?.map((channel) => channel.id)).toEqual(['current']);
-    finishOld([{ id: 'old-account' }]);
-    await waitFor(() => expect(client.isFetching()).toBe(0));
-    expect(query.data?.map((channel) => channel.id)).toEqual(['current']);
-
-    mocks.channels.mockResolvedValueOnce([{ id: 'joined' }]);
-    await client.invalidateQueries({
-      queryKey: channelKeys.listChannels.queryKey,
-    });
-    expect(query.data?.map((channel) => channel.id)).toEqual(['joined']);
-  });
-
   it('does not fetch while disabled and hides cached labels when switched off', async () => {
     const [enabled, setEnabled] = createSignal(false);
     mocks.enabled = enabled;

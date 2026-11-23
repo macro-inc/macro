@@ -31,7 +31,9 @@ pub struct CrmCompanySearchCursor {
 }
 
 /// Persistence port for CRM company search.
-pub trait CrmSearchRepository: Clone + Send + Sync + 'static {
+pub trait CrmSearchRepository:
+    Clone + Send + Sync + 'static + super::auth::CrmMemberAccess
+{
     /// Searches a team's CRM companies by `term` over the company name and
     /// its domains (`crm_domains.domain`), case-insensitive substring
     /// match. `company_ids` restricts to those ids when non-empty;

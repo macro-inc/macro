@@ -1,11 +1,21 @@
-use super::{EventSink, ExecuteRequest, Limits, Outcome, RunEnvironment};
+use super::{ContextShape, EventSink, ExecuteRequest, Limits, Outcome, RunEnvironment};
 use async_trait::async_trait;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-/// Executes a JavaScript module with run-scoped credentials and cancellation.
+/// Executes a TypeScript module with run-scoped credentials and cancellation.
 #[async_trait]
 pub trait ProgramExecutor: Send + Sync + 'static {
+    /// Type-check an attended program for a run of `shape` before its host
+    /// does anything for it (approval, credentials). `Err` is the outcome to
+    /// report instead of running it. A pass is good for the next run of the
+    /// same source and shape, which isn't checked again.
+    async fn check_program(
+        &self,
+        request: &ExecuteRequest,
+        shape: ContextShape,
+        cancellation: CancellationToken,
+    ) -> Result<(), Outcome>;
     /// Observe advisory progress separately from the final model result.
     async fn execute_program_with_progress(
         &self,
@@ -48,4 +58,41 @@ pub trait CodeRunner: Send + Sync + 'static {
         events: &mut EventSink,
         cancellation: CancellationToken,
     ) -> Outcome;
+}
+
+/// Type-checks a TypeScript program against the SDK's declarations, without
+/// running it.
+#[async_trait]
+pub trait ProgramChecker: Send + Sync + 'static {
+    /// The fingerprint of the declarations programs are checked against.
+    fn sdk_fingerprint(&self) -> &str;
+
+    /// The problems the type checker found; empty when the program checks.
+    /// `declarations` is a module whose `declare global` types the program
+    /// can use without importing them, such as the type of `main`'s argument.
+    async fn check(
+        &self,
+        source: &str,
+        declarations: &str,
+        imports: super::ProgramImports,
+    ) -> Result<Vec<super::Diagnostic>, super::CheckError> {
+        self.check_files(
+            &[super::SourceFile {
+                name: "main.ts".to_owned(),
+                source: source.to_owned(),
+            }],
+            declarations,
+            imports,
+        )
+        .await
+    }
+
+    /// Type-check several modules together, so one can use the types
+    /// another exports (`import('./step_0.ts')`). Each problem names its file.
+    async fn check_files(
+        &self,
+        files: &[super::SourceFile],
+        declarations: &str,
+        imports: super::ProgramImports,
+    ) -> Result<Vec<super::Diagnostic>, super::CheckError>;
 }

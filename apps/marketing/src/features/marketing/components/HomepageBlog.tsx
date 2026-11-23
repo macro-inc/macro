@@ -1,6 +1,6 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import ArticleIcon from '@phosphor/article.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import ArticleIcon from '@icon/system/regular/article.svg';
 import { createSignal, For, onCleanup, onMount } from 'solid-js';
 import { homePosts } from '../../../routes/posts/homePosts';
 import { postGraphics } from '../../../routes/posts/PostGraphics';

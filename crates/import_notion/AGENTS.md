@@ -4,7 +4,9 @@
 
 Part of the Notion import feature. Reads a user's Notion workspace (pages,
 data sources and their rows, members, page bodies as markdown) into a typed
-model for the `import` crate to turn into Macro documents and databases.
+model for the `import` crate to turn into Macro documents and databases, and
+maps a data source onto Macro database columns and cells
+(`domain::macro_cells`).
 
 ## Start here
 
@@ -12,21 +14,25 @@ model for the `import` crate to turn into Macro documents and databases.
   `NotionConnections`, `NotionError`).
 - `src/domain/inventory.rs`: walking the workspace; scope, row draining,
   markdown splicing.
+- `src/domain/macro_cells.rs`: a data source's `ColumnPlan` (column kinds,
+  options, UUIDv5 ids derived from the database), its column-create ops, and
+  each row's `CellWrite`s.
 - `src/outbound/rest.rs`: requests, retries, pacing; `rest/wire.rs` maps
   Notion's wire shapes to the model.
-- `src/outbound/pipedream.rs`: reaching Notion through Pipedream's Connect
-  proxy with the user's `notion` connection.
+- `src/outbound/connected.rs`: reaching Notion through the user's `notion`
+  connection, over the connectors `ApiConnectionsService`.
 
 ## Scope
 
 - Owns: reading Notion over REST (`Notion-Version: 2026-03-11`, data sources
-  API).
+  API), and the Notion → Macro database column and cell mapping.
 - Not here: import planning, writing Macro entities → `crates/import`;
-  Pipedream connections and the proxy port → `crates/pipedream_mcp`.
+  which connection counts and how it reaches Notion → `crates/connectors`.
 
 ## Boundaries
 
-- Depends on: `pipedream_mcp` (`ConnectionStore`, `ConnectedAppProxy`).
+- Depends on: `connectors` (`ApiConnectionsService`; tests use its
+  `FakeConnectors`), `models_databases` (the column and cell vocabulary).
 - Used by: `import`.
 
 ## Checks
@@ -38,11 +44,14 @@ model for the `import` crate to turn into Macro documents and databases.
 - Read-only by construction: the REST client can only send a `NotionRead`
   (GETs, plus the read POSTs `/v1/search` and `/v1/data_sources/{id}/query`);
   never add a variant that writes to the user's Notion.
-- One `RequestPacer` per Pipedream account (~3 requests/second), shared by
-  every client of it; a `Retry-After` holds every request on the account.
+- One `RequestPacer` per user's Notion connection (~3 requests/second), shared
+  by every client of it; a `Retry-After` holds every request on it.
 - `query_data_source` cursors are this crate's own JSON, not Notion's: past
   Notion's 10,000-row cap the query restarts from the last row's
   `created_time`, so drain with `inventory::all_rows`, which de-duplicates.
+  When more rows share one `created_time` than the cap, the query cannot
+  progress: the page says `RowsNext::Truncated` and `DrainedRows.complete`
+  is `false`, so a caller never treats the missing rows as deleted.
 - `inventory` counts rows and samples titles from the search results (rows are
   pages there) and queries a data source only when search showed none of its
   rows; the ~3 requests/second pacing makes every extra request count.

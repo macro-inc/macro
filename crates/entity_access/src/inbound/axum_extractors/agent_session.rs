@@ -144,7 +144,7 @@ where
             tracing::warn!(
                 entity_id = %session_id,
                 entity_type = "agent_session",
-                viewer = macro_user_id.as_deref().map_or("anonymous", AsRef::as_ref),
+                signed_in = macro_user_id.is_some(),
                 "agent session access denied: grant does not reach the required permission"
             );
             return Err(ExtractorError::Unauthorized);

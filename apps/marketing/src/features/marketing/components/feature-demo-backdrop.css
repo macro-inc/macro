@@ -1,0 +1,37 @@
+.feature-demo-backdrop {
+  --workspace-texture-mask: radial-gradient(ellipse 48% 38% at 36% 43%, #0009, #0003 48%, transparent 85%), radial-gradient(ellipse 36% 46% at 66% 59%, #0007, transparent 82%);
+  --workspace-grain-opacity: .24;
+  --workspace-dots-opacity: .32;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent), linear-gradient(transparent, #000 16%, #000 84%, transparent);
+  mask-composite: intersect;
+  pointer-events: none;
+}
+.feature-demo-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 48% 38% at 35% 42%,
+      color-mix(in srgb, var(--feature-glow) 14%, transparent),
+      color-mix(in srgb, var(--feature-glow) 4%, transparent) 38%,
+      transparent 80%),
+    radial-gradient(ellipse 34% 48% at 65% 58%,
+      color-mix(in srgb, var(--feature-glow) 11%, transparent),
+      color-mix(in srgb, var(--feature-glow) 3%, transparent) 40%,
+      transparent 82%),
+    radial-gradient(ellipse 42% 26% at 49% 64%,
+      color-mix(in srgb, var(--feature-glow) 6%, transparent),
+      transparent 85%);
+  filter: blur(24px);
+}
+html[data-theme-light='true'] .feature-demo-backdrop { opacity: .6; }
+
+.feature-page-section :is(.calendar-story, .forms-story, .benefit-graphic) > .feature-demo-backdrop {
+  inset: -108px -120px;
+  --workspace-dots-opacity: .4;
+  --workspace-grain-opacity: .24;
+}
+.feature-page-section :is(.calendar-story, .forms-story, .benefit-graphic) > .feature-demo-backdrop::before { opacity: .7; }

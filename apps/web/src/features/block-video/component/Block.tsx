@@ -1,8 +1,11 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { Show } from 'solid-js';
 import { blockData } from '../signal/blockData';
-import { TopBar } from './TopBar';
+import { MobileVideoHeader } from '../views/mobile/video-header';
+import { VideoHeader } from '../views/video-header';
 import { VideoContent } from './VideoContent';
 
 export default function BlockVideo() {
@@ -14,7 +17,9 @@ export default function BlockVideo() {
           <FileSidePanelSections />
           <div class="flex size-full min-w-0 flex-col overflow-hidden">
             <div class="relative">
-              <TopBar />
+              <Show when={isTouchDevice()} fallback={<VideoHeader />}>
+                <MobileVideoHeader />
+              </Show>
             </div>
             <div class="w-full grow relative overflow-hidden">
               <VideoContent

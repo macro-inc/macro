@@ -31,7 +31,7 @@ use item_filters::{
         database_row::DatabaseRowLiteral,
         date::DateLiteral,
         document::DocumentLiteral,
-        email::{Email, EmailLiteral},
+        email::{AttachmentKind, Email, EmailLiteral, SubjectQuery},
         foreign_entity::ForeignEntityLiteral,
         github_pull_request::{
             GithubPullRequestLiteral, GithubPullRequestReviewStatus, GithubPullRequestState,
@@ -734,7 +734,8 @@ enum GraphqlDocumentLiteral {
     /// Uploaded from an email attachment sent by, or to, a matching address.
     EmailAttachmentParticipant(GraphqlEmailValue),
     /// Associated with a CRM record through its Companies or Contacts
-    /// property or a reference to the record. Requires an expanded query
+    /// property or a reference to the record; a task also through a custom
+    /// entity property that names the record. Requires an expanded query
     /// sorted by a timestamp or task due date.
     CrmAssociated(GraphqlCrmAssociation),
     /// Case-insensitive substring of the document name.
@@ -948,6 +949,8 @@ enum GraphqlEmailLiteral {
     Bcc(GraphqlEmailValue),
     /// The recipient option.
     Recipient(GraphqlEmailValue),
+    /// A message whose subject contains this text, ignoring case (1-200 characters).
+    Subject(String),
     /// The thread id option.
     ThreadId(ID),
     /// The owner option.
@@ -966,6 +969,8 @@ enum GraphqlEmailLiteral {
     Shared(GraphqlSharedEmailFilter),
     /// The calendar only option.
     CalendarOnly(bool),
+    /// Threads with at least one attachment of this kind.
+    Attachment(GraphqlAttachmentKind),
     /// The created at option.
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
@@ -982,6 +987,9 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::Cc(value) => EmailLiteral::Cc(value.into_ast()?),
             Self::Bcc(value) => EmailLiteral::Bcc(value.into_ast()?),
             Self::Recipient(value) => EmailLiteral::Recipient(value.into_ast()?),
+            Self::Subject(value) => EmailLiteral::Subject(
+                SubjectQuery::try_from(value).map_err(|err| InputError::new(err.to_string()))?,
+            ),
             Self::ThreadId(id) => EmailLiteral::ThreadId(parse_id(id, "threadId")?),
             Self::Owner(id) => EmailLiteral::Owner(parse_id(id, "owner")?),
             Self::ProjectId(id) => EmailLiteral::ProjectId(id),
@@ -991,6 +999,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::InboxVisible(visible) => EmailLiteral::InboxVisible(visible),
             Self::Shared(shared) => EmailLiteral::Shared(shared.into_model()),
             Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
+            Self::Attachment(kind) => EmailLiteral::Attachment(kind.into_model()),
             Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => EmailLiteral::UpdatedAt(date.into_ast()?),
             Self::ViewedAt(date) => EmailLiteral::ViewedAt(date.into_ast()?),
@@ -1026,6 +1035,30 @@ impl GraphqlEmailValue {
             ),
             Self::Domain(value) => Email::Domain(value),
         })
+    }
+}
+
+/// GraphQL input naming a kind of email attachment.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum GraphqlAttachmentKind {
+    /// PDF files.
+    Pdf,
+    /// PNG, JPEG, GIF, WebP or SVG images.
+    Image,
+    /// Word, Excel and PowerPoint files, plain text and CSV.
+    Document,
+}
+
+impl GraphqlAttachmentKind {
+    /// Convert this GraphQL option into the email-filter model.
+    fn into_model(self) -> AttachmentKind {
+        match self {
+            Self::Pdf => AttachmentKind::Pdf,
+            Self::Image => AttachmentKind::Image,
+            Self::Document => AttachmentKind::Document,
+        }
     }
 }
 
@@ -1076,7 +1109,8 @@ enum GraphqlChannelLiteral {
     Importance(bool),
     /// The is participant option. Filters by whether the requesting user is an
     /// active participant; its presence widens the candidate set to team channels
-    /// of the user's teams they have not joined.
+    /// of the user's teams they have not joined, and, when the filter admits only
+    /// channels it names by id, to public channels too.
     IsParticipant(bool),
     /// Exact notification state for the requester.
     NotificationState(GraphqlNotificationState),

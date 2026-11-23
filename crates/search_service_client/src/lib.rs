@@ -21,4 +21,14 @@ impl SearchServiceClient {
 
         Self { url, client }
     }
+
+    /// `request` carrying the current trace, so the search joins it.
+    pub(crate) fn with_trace_headers(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> reqwest::RequestBuilder {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        request.headers(headers)
+    }
 }

@@ -157,6 +157,17 @@ describe('selectFocusEmails', () => {
     ]);
   });
 
+  it('filters Focus by Calendar invite without requiring a file attachment', () => {
+    const emails = [
+      email('invite', {}, { hasIcsAttachment: true, attachments: [] }),
+      email('ordinary', {}, { hasIcsAttachment: false, attachments: [] }),
+    ];
+
+    expect(
+      select({ facets: { calendar: ['has-calendar-invite'] } }, emails)
+    ).toEqual(['invite']);
+  });
+
   it('scopes to the selected inboxes', () => {
     expect(select({ inboxIds: ['inbox-b'] })).toEqual(['report']);
     expect(select({ inboxIds: [] })).toEqual([]);
@@ -178,7 +189,7 @@ describe('selectFocusEmails', () => {
     ]);
   });
 
-  it('ignores Status and Done filters, which Focus does not offer', () => {
+  it('ignores Read status and Done filters, which Focus does not offer', () => {
     const [report, ...rest] = EMAILS;
     expect(
       select({ facets: { read: ['read'], done: ['done'] } }, [

@@ -55,6 +55,12 @@ invites, and the colleague-joined email.
   sender, `teams`' `invite_users_to_team`, derives it the way `join_team`
   grants entitlements: Pro only from an enterprise team or one with a
   subscription. Never let the copy promise more than the join grants.
+- The team invite email is sent on the inviter's behalf: `format_email` sets
+  `from_name` (their name), `reply_to` (their address) and a plain-text `text`
+  part that mirrors the HTML copy. `inviter_name` is untrusted and optional, so
+  the subject, body and text fall back to the inviter's address; `from_name`
+  stays unset without a name, since an address as a display name looks like
+  spoofing to mail filters. `teams` looks the name up when it sends the invite.
 - `InviteToTeamMetadata.reminder` marks the reminder emails `teams` sends for
   unanswered invites; it only prefixes the subject with "Reminder:". A
   reminder shares the invite's rate-limit bucket (one email per invite per

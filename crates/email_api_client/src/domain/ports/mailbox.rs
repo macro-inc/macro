@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     AccessToken, EmailApiError, MailFolder, MailboxAccess, MailboxChangePage, MailboxMessage,
-    MailboxSubscription, MessageAction, MessageWriteReceipt, ProviderId, StreamToken,
+    MailboxSubscription, MessageAction, MessageWriteReceipt, ProviderId, RoundStart, StreamToken,
     SubmissionOutcome,
 };
 
@@ -60,11 +60,12 @@ pub trait MailboxContentReader: Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<Option<crate::domain::models::MailboxOrganization>, EmailApiError>,
     > + Send;
-    /// Enumerate the physical folder hierarchy with resolved semantic roles.
+    /// Enumerate the physical folder hierarchy with resolved semantic roles,
+    /// or report that the account has no mailbox the provider will serve.
     fn folders(
         &self,
         token: &AccessToken,
-    ) -> impl Future<Output = Result<Vec<MailFolder>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<crate::domain::models::MailFolderCatalog, EmailApiError>> + Send;
 
     /// Fetch a current message snapshot. Missing means absent now, not permanently deleted.
     fn message(
@@ -74,6 +75,16 @@ pub trait MailboxContentReader: Send + Sync + 'static {
         id: &ProviderId,
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Option<MailboxMessage>, EmailApiError>> + Send;
+
+    /// The newest inbox messages, newest first, without attachment metadata,
+    /// for a quick look at a mailbox before it has synchronized.
+    fn recent_inbox_messages(
+        &self,
+        token: &AccessToken,
+        link_id: Uuid,
+        limit: u16,
+        folders: &[MailFolder],
+    ) -> impl Future<Output = Result<Vec<MailboxMessage>, EmailApiError>> + Send;
 
     /// Fetch decoded attachment bytes, including attached messages where supported.
     fn attachment(
@@ -93,12 +104,20 @@ pub trait MailboxContentReader: Send + Sync + 'static {
 
 /// Per-folder providers enumerate bounded pages for initial and incremental sync.
 pub trait FolderChangeReader: Send + Sync + 'static {
+    /// Revision of the folder delta request. Raise it with a change that lets
+    /// a fresh delta round list mail an older revision's round missed: each
+    /// folder stream records the revision its round started at, and a stream
+    /// whose round started at an older one is due a re-import.
+    const READER_REVISION: i16;
     /// Return one page. The caller must commit work atomically with its position.
+    /// Without a position the page is a new round's first, and `start` says
+    /// what the round lists; with one, the position carries it.
     fn folder_changes(
         &self,
         token: &AccessToken,
         folder: &ProviderId,
         position: Option<&StreamToken>,
+        start: RoundStart,
     ) -> impl Future<Output = Result<MailboxChangePage, EmailApiError>> + Send;
 }
 

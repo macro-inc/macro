@@ -28,7 +28,8 @@ const SWITCH_SIZES = {
   },
   sm: {
     control: 'h-4 w-8',
-    thumb: '-left-0.5 -top-px size-4 data-checked:translate-x-4.5',
+    thumb:
+      '-left-0.5 -top-px size-(--selection-thumb-size-sm) data-checked:translate-x-4.5',
     pressed:
       'group-active/switch:w-5 data-checked:group-active/switch:translate-x-3.5',
   },
@@ -71,7 +72,9 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
   // the hidden input so the whole component is one hit target.
   const handleRootClick = (event: MouseEvent) => {
     if (event.target !== event.currentTarget) return;
-    (event.currentTarget as HTMLElement).querySelector('input')?.click();
+    const input = (event.currentTarget as HTMLElement).querySelector('input');
+    input?.focus();
+    input?.click();
   };
 
   return (
@@ -97,7 +100,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       >
         <KobalteSwitch.Thumb
           class={cn(
-            'absolute rounded-full border border-border-secondary bg-[white] transition-[width,translate] duration-150 ease-out motion-reduce:transition-none',
+            'absolute rounded-full border border-(--selection-thumb-edge) bg-(--selection-thumb-fill) shadow-(--selection-thumb-shadow) transition-[width,translate] duration-150 ease-out motion-reduce:transition-none',
             sizing().thumb,
             !local.disabled && !others.readOnly && sizing().pressed
           )}

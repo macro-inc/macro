@@ -21,7 +21,11 @@ it('switches a controlled view by its visible label', () => {
         aria-label="Conversation view"
         options={[
           { value: 'all', label: 'All' },
-          { value: 'recent', label: 'Recent' },
+          {
+            value: 'recent',
+            label: 'Recent',
+            tooltip: 'Recently updated conversations',
+          },
           { value: 'threads', label: 'Threads' },
         ]}
         value={value()}
@@ -31,6 +35,11 @@ it('switches a controlled view by its visible label', () => {
     </>
   ));
 
+  expect(
+    screen
+      .getByRole('radio', { name: 'Recent' })
+      .getAttribute('aria-description')
+  ).toBe('Recently updated conversations');
   fireEvent.click(screen.getByText('Recent', { exact: true }));
   expect(screen.getByText('Current view: recent')).toBeTruthy();
   expect(
@@ -132,7 +141,11 @@ describe('on touch', () => {
         aria-label="Availability type"
         touch={touch}
         options={[
-          { value: 'available', label: 'Available' },
+          {
+            value: 'available',
+            label: 'Available',
+            tooltip: 'Within bookable hours',
+          },
           { value: 'unavailable', label: 'Unavailable' },
         ]}
         value={value()}
@@ -152,6 +165,11 @@ describe('on touch', () => {
   ])('selects with touch=$touch, sliding pill: $slides', (row) => {
     const { value, slidingPill } = renderTouch(row.touch);
     expect(value()).toBe('unavailable');
+    expect(
+      screen
+        .getByRole('radio', { name: 'Available' })
+        .getAttribute('aria-description')
+    ).toBe('Within bookable hours');
     expect(
       screen.getByRole('radio', { name: 'Unavailable', checked: true })
     ).toBeTruthy();

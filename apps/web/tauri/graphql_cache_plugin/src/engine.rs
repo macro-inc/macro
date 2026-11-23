@@ -14,8 +14,8 @@
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
-    InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
-    RollbackOptimisticWriteResult, WriteResult,
+    HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite, NormalizedResponse,
+    QueryRegistration, ReadResult, RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -29,12 +29,19 @@ use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
 use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
 use serde::Serialize;
+use soup_filter_cache_adapter::WritePassStep;
 use std::collections::HashMap;
 use std::sync::Arc;
+use uuid::Uuid;
+mod abandon;
 mod access;
-use access::EngineAccess;
+use access::{AccessGuard, EngineAccess};
+mod authority;
+mod idle;
+pub use authority::AuthorityTransitionWire;
 
 mod calendar;
+mod people;
 mod soup;
 pub use calendar::CalendarRangeResultWire;
 pub use soup::{
@@ -404,9 +411,37 @@ struct EngineState {
 #[derive(Clone)]
 pub struct EngineHandle {
     inner: Arc<EngineAccess<EngineState>>,
+    authority_listener: Option<(String, Arc<authority::AuthorityListener>)>,
+    // Per-command capture, never shared mutable state between windows.
+    generation: Option<Uuid>,
     // Shared by cloned handles, changed when the native engine is reopened.
     // Revisions alone may repeat across process restarts.
     mail_generation: String,
+    // Reads now running with a request id, shared by cloned handles.
+    abandons: Arc<abandon::Abandons>,
+    // Per-command: this read's registration, when it came with a request id.
+    abandon: Option<Arc<abandon::Registration>>,
+}
+
+#[cfg(test)]
+mod test_hooks {
+    thread_local! {
+        /// Off, hydrates run whole, for tests to compare with.
+        pub(super) static STAGING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+        pub(super) static STAGED_COMMITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// Set, the next staging read fails once.
+        pub(super) static FAIL_STAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        pub(super) static YIELDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+}
+
+/// Whether hydrates compute their write before taking the engine back to
+/// write it. Tests switch it off to compare with whole hydrates.
+fn staging() -> bool {
+    #[cfg(test)]
+    return test_hooks::STAGING.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    true
 }
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
@@ -428,6 +463,9 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         mutation_uuid: result.mutation_uuid,
     }
 }
+
+/// How long shutdown waits for an idle checkpoint that is copying.
+const SHUTDOWN_IDLE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 fn parse_u64(value: &str, label: &str) -> Result<u64, String> {
     value
@@ -458,22 +496,33 @@ impl EngineHandle {
                 .filter(|c| *c > 0)
                 .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
             schema,
-        );
+        )
+        .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
+        let inner = Arc::new(EngineAccess::new(EngineState {
+            engine,
+            ops: OpInterner::default(),
+            selections: RecordSelectionCache::default(),
+        }));
+        idle::install(&inner);
         EngineHandle {
+            generation: None,
+            authority_listener: None,
+            abandons: Arc::default(),
+            abandon: None,
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
-            inner: Arc::new(EngineAccess::new(EngineState {
-                engine,
-                ops: OpInterner::default(),
-                selections: RecordSelectionCache::default(),
-            })),
+            inner,
         }
     }
 
     /// Consumes the sole handle and explicitly closes native Turso storage.
+    /// An idle checkpoint holding the engine is waited for, up to
+    /// [`SHUTDOWN_IDLE_WAIT`]; none starts after this.
     pub fn shutdown(self) -> Result<(), String> {
-        let mutex = Arc::try_unwrap(self.inner)
-            .map_err(|_| "graphql cache still has active command handles".to_string())?;
-        let state = mutex.into_inner();
+        let deadline = std::time::Instant::now() + SHUTDOWN_IDLE_WAIT;
+        let Ok(access) = access::unwrap_after_idle(self.inner, deadline) else {
+            return Err("graphql cache still has active command handles".to_string());
+        };
+        let state = access.into_inner();
         let outcome = state
             .engine
             .into_storage()
@@ -532,7 +581,7 @@ impl EngineHandle {
         variables: Variables,
         entity_resolvers: Vec<EntityResolver>,
     ) -> Result<ReadResultWire, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.ready_op_read(op_id.as_deref()).await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let op = op_id.map(|name| ops.intern(&name));
         engine
@@ -566,7 +615,7 @@ impl EngineHandle {
             .map(|value| value.parse::<CacheRevision>())
             .transpose()
             .map_err(|error| error.to_string())?;
-        let mut state = self.inner.lock().await;
+        let mut state = self.ready_op_read(Some(&op_id)).await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let op = ops.intern(&op_id);
         engine
@@ -589,7 +638,7 @@ impl EngineHandle {
         fragment_name: String,
         keys: Vec<String>,
     ) -> Result<RecordSelectionResultWire, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.ready_read().await?;
         let schema = state.engine.schema_snapshot();
         let selection = state
             .selections
@@ -609,9 +658,8 @@ impl EngineHandle {
 
     /// Searches the compact materialized projection without record scans.
     pub async fn search(&self, request: SearchRequest) -> Result<SearchPage, String> {
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .search(&request)
             .await
@@ -623,7 +671,7 @@ impl EngineHandle {
         &self,
         request: EntityFilterRequest,
     ) -> Result<EntityFilterResult, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.ready_read().await?;
         let state = &mut *state;
         soup::filter(
             &mut state.engine,
@@ -645,9 +693,8 @@ impl EngineHandle {
             .map(|revision| revision.parse())
             .transpose()
             .map_err(|error: cache_core::revision::ParseCacheRevisionError| error.to_string())?;
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .resume_live_query(&id, registration_id, since)
             .await
@@ -662,9 +709,8 @@ impl EngineHandle {
         operation_name: Option<String>,
         path: Vec<String>,
     ) -> Result<Vec<CachedQueryVariant>, String> {
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .inspect_query_variants(&QueryInspection {
                 query,
@@ -684,9 +730,8 @@ impl EngineHandle {
         path: Vec<String>,
         variable_filters: Vec<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<Vec<CachedQueryInstance>, String> {
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .inspect_query(&QueryInspection {
                 query,
@@ -710,13 +755,31 @@ impl EngineHandle {
             data,
             identity,
         } = request;
-        let mut state = self.inner.write().await;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         let registration = registration.map(|registration| {
             let op_id = ops.intern(&registration.op_id);
             (op_id, registration.entity_resolvers)
         });
+        let input = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        let registration =
+            registration
+                .as_ref()
+                .map(|(op_id, entity_resolvers)| QueryRegistration {
+                    op_id: *op_id,
+                    entity_resolvers,
+                });
+        // One normalization serves the projection passes and the write. A
+        // response that fails it takes the path that normalizes twice, which
+        // reports its error where it always has.
+        let normalized = engine.normalize_network(registration, input).ok();
         let projections = soup::write_projections(
             engine,
             &query,
@@ -724,29 +787,30 @@ impl EngineHandle {
             &variables,
             &data,
             identity.as_deref(),
+            normalized.as_ref().map(NormalizedResponse::updates),
         )
         .await?;
-        engine
-            .write_query_with_registration_and_projections(
-                origin,
-                registration
-                    .as_ref()
-                    .map(|(op_id, entity_resolvers)| QueryRegistration {
-                        op_id: *op_id,
-                        entity_resolvers,
-                    }),
-                NetworkWrite {
-                    query: &query,
-                    operation_name: operation_name.as_deref(),
-                    variables: &variables,
-                    data: &data,
-                    identity: identity.as_deref(),
-                },
-                projections,
-            )
-            .await
-            .map(|result| wire_write_result(ops, result))
-            .map_err(|e| e.to_string())
+        let result = match normalized {
+            Some(normalized) => {
+                engine
+                    .write_normalized_query(origin, input, normalized, projections)
+                    .await
+            }
+            None => {
+                engine
+                    .write_query_with_registration_and_projections(
+                        origin,
+                        registration,
+                        input,
+                        projections,
+                    )
+                    .await
+            }
+        }
+        .map_err(|e| e.to_string())?;
+
+        self.publish_bound_generation(engine);
+        Ok(wire_write_result(ops, result))
     }
 
     /// Stores a query response and returns only fields not marked
@@ -759,40 +823,188 @@ impl EngineHandle {
         variables: Variables,
         data: serde_json::Value,
         identity: Option<String>,
+        hydration_scope: Option<HydrationScope>,
     ) -> Result<HydrationWriteResultWire, String> {
-        let mut state = self.inner.hydrate().await?;
-        let EngineState { engine, ops, .. } = &mut *state;
-        let projections = soup::write_projections(
-            engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
-            &data,
-            identity.as_deref(),
-        )
-        .await?;
-        let result = engine
-            .hydrate_query_with_projections(
+        let write = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        let mut state = self.snapshot_hydration().await?;
+        // One normalization serves the projection passes and the write, as in
+        // `write`.
+        let mut normalized = state.engine.normalize_network(None, write).ok();
+        // Compute the write in read-only steps (the authoritative rows, each
+        // projection pass, the merge), letting reads that queued meanwhile
+        // run after each. Only reads can: this hydrate keeps its turn. If
+        // storage moved anyway, the hydrate runs whole after rechecking the
+        // session.
+        let mut reuse = None;
+        if staging()
+            && let Ok(wal) = state.engine.storage().wal_position()
+        {
+            let unmoved =
+                |engine: &Engine<TursoStorage>| engine.storage().wal_position().ok() == Some(wal);
+            // A failed read is the hydrate's error, as it is for a whole
+            // one: retrying it whole could succeed where that failed.
+            let mut passes = soup::write_passes(
+                &mut state.engine,
+                &query,
+                operation_name.as_deref(),
+                &data,
+                identity.as_deref(),
+            )
+            .await?;
+            let schema = state.engine.schema_snapshot();
+            let response = soup::write_response(
+                &schema,
                 &query,
                 operation_name.as_deref(),
                 &variables,
                 &data,
-                identity.as_deref(),
-                projections,
-            )
-            .await
-            .map_err(|error| error.to_string())?;
+                normalized.as_ref().map(NormalizedResponse::updates),
+            );
+            let mut projections = None;
+            loop {
+                state = self.let_reads_run(state).await;
+                if !unmoved(&state.engine) {
+                    break;
+                }
+                if let WritePassStep::Done(done) = passes
+                    .step(&mut state.engine, &response)
+                    .await
+                    .map_err(|error| error.to_string())?
+                {
+                    projections = Some(done);
+                    state = self.let_reads_run(state).await;
+                    break;
+                }
+            }
+            drop(response);
+            if let Some(projections) = projections
+                && unmoved(&state.engine)
+            {
+                let staged = state
+                    .engine
+                    .stage_normalized_hydrate(
+                        write,
+                        &mut normalized,
+                        hydration_scope.as_ref(),
+                        &projections,
+                    )
+                    .await
+                    .map_err(|error| error.to_string());
+                #[cfg(test)]
+                let staged = match test_hooks::FAIL_STAGE.with(|fail| fail.replace(false)) {
+                    true => Err("injected staging failure".to_string()),
+                    false => staged,
+                };
+                let staged = staged?;
+                match staged {
+                    Some(staged) => {
+                        state = self.let_reads_run(state).await;
+                        let EngineState { engine, ops, .. } = &mut *state;
+                        if unmoved(engine) && engine.staged_hydrate_current(&staged) {
+                            let result = engine
+                                .commit_staged_hydrate(staged, projections)
+                                .await
+                                .map_err(|error| error.to_string())?;
+                            #[cfg(test)]
+                            test_hooks::STAGED_COMMITS
+                                .with(|commits| commits.set(commits.get() + 1));
+                            return Ok(self.hydration_wire(engine, ops, result).await);
+                        }
+                    }
+                    // Not staged (it binds the account, meets optimistic
+                    // layers, or fails admission): the projections still hold.
+                    None => reuse = Some(projections),
+                }
+            }
+            self.recheck_hydration(&mut state).await?;
+        }
+        let EngineState { engine, ops, .. } = &mut *state;
+        let projections = match reuse {
+            Some(projections) => projections,
+            None => {
+                soup::write_projections(
+                    engine,
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                    identity.as_deref(),
+                    normalized.as_ref().map(NormalizedResponse::updates),
+                )
+                .await?
+            }
+        };
+        let result = match (hydration_scope, normalized) {
+            (Some(scope), Some(normalized)) => {
+                engine
+                    .hydrate_normalized_query_in_scope(write, normalized, &scope, projections)
+                    .await
+            }
+            (Some(scope), None) => {
+                engine
+                    .hydrate_query_in_scope(write, &scope, projections)
+                    .await
+            }
+            (None, Some(normalized)) => {
+                engine
+                    .hydrate_normalized_query(write, normalized, projections)
+                    .await
+            }
+            (None, None) => {
+                engine
+                    .hydrate_query_with_projections(
+                        &query,
+                        operation_name.as_deref(),
+                        &variables,
+                        &data,
+                        identity.as_deref(),
+                        projections,
+                    )
+                    .await
+            }
+        }
+        .map_err(|error| error.to_string())?;
+        Ok(self.hydration_wire(engine, ops, result).await)
+    }
+
+    /// Gives the engine to reads that queued for it, keeping this hydrate's
+    /// turn, and takes it back after them.
+    async fn let_reads_run<'a>(
+        &'a self,
+        state: AccessGuard<'a, EngineState>,
+    ) -> AccessGuard<'a, EngineState> {
+        #[cfg(test)]
+        test_hooks::YIELDS.with(|yields| yields.set(yields.get() + 1));
+        match state.yield_to_reads(&self.inner) {
+            Ok(turn) => turn.resume().await,
+            Err(state) => state,
+        }
+    }
+
+    async fn hydration_wire(
+        &self,
+        engine: &mut Engine<TursoStorage>,
+        ops: &OpInterner,
+        result: HydrationWriteResult,
+    ) -> HydrationWriteResultWire {
         // Invalidation evidence is optional: a failed proof must not reject a committed hydration.
         let unchanged_views = engine
             .unchanged_observed_windows()
             .await
             .unwrap_or_default();
-        Ok(HydrationWriteResultWire {
+        self.publish_bound_generation(engine);
+        HydrationWriteResultWire {
             unchanged_views,
             search_changed_buckets: result.search_changed_buckets,
             write_result: wire_write_result(ops, result.write_result),
             data: result.data,
-        })
+        }
     }
 
     /// Durably queues a mutation and its optimistic layer, then attempts to
@@ -817,42 +1029,62 @@ impl EngineHandle {
         uncertain_calendar_event_keys: Vec<String>,
     ) -> Result<EnqueueOptimisticMutationResultWire, String> {
         let mut state = self.inner.write().await;
+        self.resume_retirement(&mut state).await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
-        let projections = soup::optimistic_projections(
-            engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
+        let client_metadata = soup_filter_cache_adapter::permissions::legacy_draft_metadata(
+            client_metadata,
             &data,
+            operation_name.as_deref(),
+        );
+        let admitted = engine
+            .snapshot_is_current(self.generation)
+            .await
+            .map_err(|error| error.to_string())?;
+        let projections = if admitted {
+            soup::optimistic_projections(
+                engine,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                created_at_ms,
+            )
+            .await?
+        } else {
+            Vec::new()
+        };
+        let input = BeginOptimisticWrite {
+            client_metadata: client_metadata.as_ref(),
+            uuid: &uuid,
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            link_patches: &link_patches,
+            revalidations: &revalidations,
             created_at_ms,
-        )
-        .await?;
+            identity_bindings: &identity_bindings,
+        };
+        let claim = MutationClaimRequest {
+            owner: lease_owner,
+            now_ms,
+            lease_expires_at_ms,
+        };
+        let uncertain = uncertain_calendar_event_keys
+            .into_iter()
+            .map(|key| EntityKey(key.into()))
+            .collect();
         let result = engine
-            .enqueue_optimistic_mutation_with_calendar(
+            .enqueue_optimistic_mutation_in_generation(
                 origin,
-                BeginOptimisticWrite {
-                    client_metadata: client_metadata.as_ref(),
-                    uuid: &uuid,
-                    query: &query,
-                    operation_name: operation_name.as_deref(),
-                    variables: &variables,
-                    data: &data,
-                    link_patches: &link_patches,
-                    revalidations: &revalidations,
-                    created_at_ms,
-                    identity_bindings: &identity_bindings,
+                input,
+                claim,
+                cache_core::engine::authority::OptimisticEffects {
+                    projections,
+                    uncertain_calendar_event_keys: uncertain,
                 },
-                MutationClaimRequest {
-                    owner: lease_owner,
-                    now_ms,
-                    lease_expires_at_ms,
-                },
-                projections,
-                uncertain_calendar_event_keys
-                    .into_iter()
-                    .map(|key| EntityKey(key.into()))
-                    .collect(),
+                self.generation,
             )
             .await
             .map_err(|error| error.to_string())?;
@@ -878,9 +1110,7 @@ impl EngineHandle {
         &self,
     ) -> Result<Vec<cache_core::queue::MutationInspection>, String> {
         let state = self.inner.lock().await;
-        state
-            .engine
-            .inspect_mutations()
+        soup_filter_cache_adapter::permissions::inspect_authored_mutations(&state.engine)
             .await
             .map_err(|error| error.to_string())
     }
@@ -961,29 +1191,44 @@ impl EngineHandle {
             generation: parse_u64(&lease_generation, "lease generation")?,
         };
         let mut state = self.inner.write().await;
+        self.resume_retirement(&mut state).await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        let projections = soup::write_projections(
-            engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
-            &data,
-            None,
-        )
-        .await?;
-        match engine
-            .commit_optimistic_write_with_projections_outcome(
-                transaction,
-                claim,
+        let admitted = engine
+            .snapshot_is_current(self.generation)
+            .await
+            .map_err(|error| error.to_string())?;
+        let projections = if admitted {
+            soup::write_projections(
+                engine,
                 &query,
                 operation_name.as_deref(),
                 &variables,
                 &data,
+                None,
+                None,
+            )
+            .await?
+        } else {
+            Vec::new()
+        };
+        let result = engine
+            .commit_optimistic_write_in_generation(
+                transaction,
+                claim,
+                NetworkWrite {
+                    query: &query,
+                    operation_name: operation_name.as_deref(),
+                    variables: &variables,
+                    data: &data,
+                    identity: None,
+                },
                 projections,
+                self.generation,
             )
             .await
-            .map_err(|e| e.to_string())?
-        {
+            .map_err(|e| e.to_string())?;
+
+        match result {
             CommitOptimisticWriteResult::Failed(result) => {
                 Ok(CommitOptimisticWriteResultWire::Failed {
                     error: result.error,
@@ -1045,7 +1290,7 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let mut state = self.inner.write().await;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::invalidation_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =
@@ -1066,7 +1311,7 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let mut state = self.inner.write().await;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::deletion_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =

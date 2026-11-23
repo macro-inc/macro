@@ -331,31 +331,14 @@ impl<C: ChannelAgentRepo, P: AgentDmEligibility, B: BotRepo, S: AgentConversatio
             },
         })
     }
-}
 
-impl<C: ChannelAgentRepo, P: AgentDmEligibility, B: BotRepo, S: AgentConversationRepo>
-    AgentConversations for AgentConversationsService<C, P, B, S>
-{
-    async fn start_fresh(
+    /// Start a fresh session, holding the old session's context lease.
+    async fn reset_held(
         &self,
-        caller: MacroUserIdStr<'static>,
+        store: &dyn super::conversation_turns::ConversationTurnStore,
         conversation: AgentConversation,
         expected: AgentSessionId,
     ) -> Result<(), ConversationError> {
-        let agent = self.joined(&caller, conversation).await?;
-        self.eligibility
-            .authorize_agent_dm(caller, agent.bot_id)
-            .await
-            .map_err(|error| match error {
-                BotError::Unauthorized | BotError::NotFound(_) => ConversationError::NotRetryable,
-                error => ConversationError::Unavailable(error.into()),
-            })?;
-        let store = self.turns.as_ref().ok_or(ConversationError::ContextBusy)?;
-        let _lease = store
-            .claim_context(expected)
-            .await
-            .map_err(|error| ConversationError::Unavailable(error.into()))?
-            .ok_or(ConversationError::ContextBusy)?;
         if self
             .sessions
             .current(conversation)
@@ -394,6 +377,66 @@ impl<C: ChannelAgentRepo, P: AgentDmEligibility, B: BotRepo, S: AgentConversatio
         Ok(())
     }
 
+    /// Queue a retry of a failed turn, holding its session's context lease.
+    async fn retry_held(
+        &self,
+        store: &dyn super::conversation_turns::ConversationTurnStore,
+        conversation: AgentConversation,
+        source: Uuid,
+        expected: agent_runtime_protocol::domain::action::AgentActionId,
+        session: AgentSessionId,
+    ) -> Result<(), ConversationError> {
+        if self
+            .sessions
+            .current(conversation)
+            .await
+            .map_err(|error| ConversationError::Unavailable(error.into()))?
+            != Some(session)
+        {
+            return Err(ConversationError::NotRetryable);
+        }
+        if !store
+            .retry(source, conversation.bot_id, expected)
+            .await
+            .map_err(|error| ConversationError::Unavailable(error.into()))?
+        {
+            return Err(ConversationError::NotRetryable);
+        }
+        Ok(())
+    }
+}
+
+impl<C: ChannelAgentRepo, P: AgentDmEligibility, B: BotRepo, S: AgentConversationRepo>
+    AgentConversations for AgentConversationsService<C, P, B, S>
+{
+    async fn start_fresh(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        conversation: AgentConversation,
+        expected: AgentSessionId,
+    ) -> Result<(), ConversationError> {
+        let agent = self.joined(&caller, conversation).await?;
+        self.eligibility
+            .authorize_agent_dm(caller, agent.bot_id)
+            .await
+            .map_err(|error| match error {
+                BotError::Unauthorized | BotError::NotFound(_) => ConversationError::NotRetryable,
+                error => ConversationError::Unavailable(error.into()),
+            })?;
+        let store = self.turns.as_ref().ok_or(ConversationError::ContextBusy)?;
+        let lease = store
+            .claim_context(expected)
+            .await
+            .map_err(|error| ConversationError::Unavailable(error.into()))?
+            .ok_or(ConversationError::ContextBusy)?;
+        let reset = self
+            .reset_held(store.as_ref(), conversation, expected)
+            .await;
+        // Whoever acts on the answer can claim again at once.
+        lease.release().await;
+        reset
+    }
+
     async fn retry(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -430,28 +473,22 @@ impl<C: ChannelAgentRepo, P: AgentDmEligibility, B: BotRepo, S: AgentConversatio
         if Some(record.session_id) != current || record.action_id != expected {
             return Err(ConversationError::NotRetryable);
         }
-        let _lease = store
+        let lease = store
             .claim_context(record.session_id)
             .await
             .map_err(|error| ConversationError::Unavailable(error.into()))?
             .ok_or(ConversationError::NotRetryable)?;
-        if self
-            .sessions
-            .current(conversation)
-            .await
-            .map_err(|error| ConversationError::Unavailable(error.into()))?
-            != Some(record.session_id)
-        {
-            return Err(ConversationError::NotRetryable);
-        }
-        if !store
-            .retry(source, conversation.bot_id, expected)
-            .await
-            .map_err(|error| ConversationError::Unavailable(error.into()))?
-        {
-            return Err(ConversationError::NotRetryable);
-        }
-        Ok(())
+        let retried = self
+            .retry_held(
+                store.as_ref(),
+                conversation,
+                source,
+                expected,
+                record.session_id,
+            )
+            .await;
+        lease.release().await;
+        retried
     }
 
     async fn list(

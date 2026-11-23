@@ -146,7 +146,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
 
   // Restore focus (registered early, before other plugins)
   if (config.restoreFocus) {
-    plugins.use(restoreFocusPlugin());
+    plugins.use(restoreFocusPlugin(config.restoreFocus));
   }
 
   // Text paste handling

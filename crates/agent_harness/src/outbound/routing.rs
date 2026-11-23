@@ -9,8 +9,8 @@
 //! `spawn` routes on the bot the command names. `resume` and `teardown` get
 //! only a session id, so they read the session's bot from the repo — the same
 //! key, recovered from the same durable row that spawn wrote it to. External
-//! sessions have no provider here: teardown is a no-op for them, and every
-//! other operation refuses.
+//! sessions have no provider here: preflight succeeds, teardown is a no-op,
+//! and operations requiring a managed runtime refuse.
 
 use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
@@ -71,7 +71,8 @@ where
             AgentKind::SandboxedCoder | AgentKind::InMemory => {
                 self.sandbox.preflight(kind, owner).await
             }
-            AgentKind::External => Err(external_is_unroutable()),
+            // A paired runtime needs no managed provider or account setup.
+            AgentKind::External => Ok(None),
         }
     }
 
@@ -146,6 +147,17 @@ where
             // release; refusing here would leave the session undeletable.
             AgentKind::External => Ok(()),
         }
+    }
+
+    /// Only the in-process runtime holds memory an idle session can give
+    /// back, and it sits behind the sandbox slot; sending every session there
+    /// saves a row read per release.
+    async fn release_idle(&self, session: AgentSessionId) -> Result<()> {
+        self.sandbox.release_idle(session).await
+    }
+
+    async fn idle_release_is_lossless(&self, session: AgentSessionId) -> Result<bool> {
+        self.sandbox.idle_release_is_lossless(session).await
     }
 
     // Sized sandboxes are a sandboxed-coder concept: the effect table is the

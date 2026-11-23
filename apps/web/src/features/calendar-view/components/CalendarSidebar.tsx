@@ -8,21 +8,22 @@ import { useCalendarPager } from '@app/features/calendar/components/CalendarPage
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
-import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import {
   type TeamOooWindow,
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
+import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import CloseIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -37,7 +38,6 @@ import {
   CalendarCreateEventItem,
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
-import { CalendarSearch } from './CalendarSearch';
 import { ConnectCalendarsPromotion } from './ConnectCalendarsPromotion';
 
 export function CalendarMiniCalendar() {
@@ -83,7 +83,12 @@ function UpcomingEventsSection() {
   const [open, setOpen] = createSignal(true);
 
   return (
-    <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+    <CollapsibleSection.Root
+      sectionId="upcoming"
+      sectionLabel="Upcoming events"
+      open={open()}
+      onOpenChange={setOpen}
+    >
       <CollapsibleSection.Header ref={tourTarget(CALENDAR_TOUR.upcoming)}>
         <CollapsibleSection.Trigger class="min-w-0 flex-1">
           <span class="min-w-0 truncate">Upcoming events</span>
@@ -104,11 +109,18 @@ function CalendarSourcesSection() {
 
   return (
     <Show when={calendarView.sources().length > 1}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Calendars</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+      <CollapsibleSection.Root
+        sectionId="calendars"
+        sectionLabel="Calendars"
+        open={open()}
+        onOpenChange={setOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Calendars</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <SourceControls
             ref={tourTarget(CALENDAR_TOUR.sources)}
@@ -278,7 +290,12 @@ function CalendarTeamOooSection() {
 
   return (
     <Show when={hasTeammates()}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+      <CollapsibleSection.Root
+        sectionId="team-ooo"
+        sectionLabel="Team out of office"
+        open={open()}
+        onOpenChange={setOpen}
+      >
         <CollapsibleSection.Header>
           <Checkbox
             size="sm"
@@ -309,52 +326,19 @@ function CalendarTeamOooSection() {
   );
 }
 
-function CalendarSidebarOverlayClose() {
-  const shell = useViewShell();
-  return (
-    <Show when={shell.aside.isOverlay() && isTouchDevice()}>
-      <ViewSidebar.Control
-        aria-label="Close calendar navigation"
-        onClick={shell.aside.collapse}
-      >
-        <CloseIcon class="size-4" />
-      </ViewSidebar.Control>
-    </Show>
-  );
-}
-
 export function CalendarSidebar() {
   const shell = useViewShell();
-  const searchEnabled = useCalendarSearchUiFlag();
-  const [searchOpen, setSearchOpen] = createSignal(false);
   const closeOverlay = () => {
     if (shell.aside.isOverlay()) shell.aside.collapse();
   };
 
   return (
-    <ViewSidebar.Root aria-label="Calendar navigation">
-      <ViewSidebar.Header
-        searchLabel="Search events"
-        searchOpen={searchOpen()}
-        onSearchOpenChange={setSearchOpen}
-        search={
-          searchEnabled()
-            ? () => (
-                <CalendarSearch
-                  inline
-                  expanded
-                  popupReady
-                  onDismiss={() => setSearchOpen(false)}
-                />
-              )
-            : undefined
-        }
-      >
+    <ViewSidebar.Root reorderId="calendar" aria-label="Calendar navigation">
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Calendar</ViewSidebar.Title>
         </div>
-        <CalendarSidebarOverlayClose />
       </ViewSidebar.Header>
       <ViewSidebar.Primary>
         <CalendarCreateMenu
@@ -377,7 +361,20 @@ export function CalendarSidebar() {
         </CalendarCreateMenu>
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">
-        <CalendarMiniCalendar />
+        <SidebarRoutineSuggestions surface="calendar" />
+        <ViewSidebar.Nav
+          aria-label={t('tutorials.watchTutorial')}
+          class="empty:hidden"
+        >
+          <TutorialSidebarItem tutorial="calendar" />
+        </ViewSidebar.Nav>
+        <ViewSidebar.Section
+          id="month"
+          label={t('viewMenus.monthCalendar')}
+          headerless
+        >
+          <CalendarMiniCalendar />
+        </ViewSidebar.Section>
         <Show when={shell.breakpoints.narrow?.()}>
           <CalendarSchedulingActions sidebar />
         </Show>
@@ -389,7 +386,7 @@ export function CalendarSidebar() {
       </ViewSidebar.Content>
       {/* Outside the scrolling list, so a long list never slides it under Settings. */}
       <ConnectCalendarsPromotion class="px-(--sidebar-gutter) pt-2" />
-      <ViewSidebar.Footer class="border-0">
+      <ViewSidebar.Footer class="border-0 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.75rem)]">
         <ViewSidebar.Nav aria-label="Calendar tools">
           <CalendarSettingsDropdown sidebar />
         </ViewSidebar.Nav>

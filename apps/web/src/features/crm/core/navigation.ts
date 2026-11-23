@@ -1,20 +1,50 @@
+import { t } from '@app/lib/i18n';
+
 /** The record types the CRM sidebar lists; ids are workspace tabs. */
 export const CRM_RECORDS = [
-  { id: 'active', label: 'Companies' },
-  { id: 'people', label: 'People' },
+  {
+    id: 'active',
+    get label() {
+      return t('crm.companies');
+    },
+  },
+  {
+    id: 'people',
+    get label() {
+      return t('crm.people');
+    },
+  },
 ] as const;
 
 /** Workspace feeds scoped to CRM-linked content, rather than one record. */
 export const CRM_ACTIVITY_TABS = [
-  { id: 'tasks', label: 'Tasks' },
-  { id: 'email', label: 'Email' },
-  { id: 'notes', label: 'Notes' },
-  { id: 'calls', label: 'Calls' },
-  { id: 'databases', label: 'Databases' },
+  {
+    id: 'tasks',
+    get label() {
+      return t('crm.salesTasks');
+    },
+  },
+  {
+    id: 'email',
+    get label() {
+      return t('crm.salesEmail');
+    },
+  },
+  {
+    id: 'notes',
+    get label() {
+      return t('crm.salesNotes');
+    },
+  },
+  {
+    id: 'calls',
+    get label() {
+      return t('crm.salesCalls');
+    },
+  },
 ] as const;
 
 export type CrmActivityTab = (typeof CRM_ACTIVITY_TABS)[number]['id'];
-export type CrmSoupActivityTab = Exclude<CrmActivityTab, 'databases'>;
 
 export function isCrmActivityTab(value: string): value is CrmActivityTab {
   return CRM_ACTIVITY_TABS.some((tab) => tab.id === value);

@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+pub mod origin;
+pub use origin::TriggerOrigin;
+
 #[cfg(test)]
 mod test;
 
@@ -349,6 +352,11 @@ pub struct MarkedPassage {
 pub struct FollowUpContext {
     /// How the message reached this agent.
     pub addressed_by: AddressedBy,
+    /// For an inferred message, the judge's confidence, as a whole
+    /// percentage, that it was meant for this agent. Absent otherwise, and
+    /// on events from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<u8>,
     /// The discussion it was posted in.
     pub discussion: DiscussionContext,
 }
@@ -393,6 +401,9 @@ pub struct TaskSnapshot {
     /// Priority option name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub priority: Option<String>,
+    /// Start date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<DateTime<Utc>>,
     /// Due date.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due: Option<DateTime<Utc>>,

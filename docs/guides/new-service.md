@@ -72,9 +72,10 @@ Listen on `8080` by default; the Dockerfile sets `PORT=8080`.
   runs locally. *Missed by both calendar and the Slack import worker;* the deploy
   fails at `nix build .#deploy-service-binaries-<name>`. Files you `include_str!`
   must also match the nix `assetFilter`.
-- **`.github/workflows/deploy-service-generic.yml`:** add the name to the dispatch
-  list. It's hand-maintained and was forgotten twice.
-- If you changed a workflow generator, run `cargo x workflows`.
+- **`SERVICES` in `tooling/xtask/crates/xtask_workflows/src/workflows/deploy_service_generic.rs`:**
+  add the name to the dispatch list, then run `cargo x workflows`. It was
+  forgotten twice.
+- If you changed another workflow generator, run `cargo x workflows`.
 
 ## 3. Infrastructure
 
@@ -124,8 +125,8 @@ Follow the [infrastructure guide](../development/infrastructure.md) for the patt
 - `tooling/xtask/crates/xtask_local/src/local/inventory.rs`: a `RustService` entry,
   and bump the count in `inventory/test.rs`. A worker that consumes shared queues
   must be `opt_in` or `modes: &[Mode::Local]`, or `run_dev` steals dev messages.
-- `local/instance.rs`: add the `Port` variant **at the end**; offsets come from
-  declaration order.
+- `tooling/xtask/crates/xtask_ports/src/layout.rs`: add the `Port` variant **at
+  the end**; offsets come from declaration order.
 - `local/resources.rs` and `crates/macro_queues`: any queue or bucket the service
   needs. A worker whose queue doesn't exist locally spins in a tight loop.
 
@@ -151,7 +152,7 @@ cargo build -p <package>
 just rust-check && just clippy
 cargo test -p <package>                 # with SQLX_OFFLINE unset
 cargo x deps --check && cargo x workflows --check
-just run_local                          # or just stack up
+just run_local                          # no terminal needed
 curl http://localhost:<port>/health
 curl https://localhost:8090/<prefix>/health   # through the local proxy
 ```

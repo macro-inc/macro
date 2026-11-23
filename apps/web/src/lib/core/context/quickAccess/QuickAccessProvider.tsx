@@ -34,12 +34,17 @@ const QuickAccessProviderValue: FlowComponent = (props) => {
     return {
       error: () => sourceList()?.error(),
       items: () => sourceList()?.items() ?? [],
+      windowKey: () => sourceList()?.windowKey?.(),
       totalCount: () => sourceList()?.totalCount() ?? 0,
       hasMore: () => sourceList()?.hasMore() ?? false,
       isLoading: () => sourceList()?.isLoading() ?? false,
+      isSearching: () => sourceList()?.isSearching?.() ?? false,
       isLoadingMore: () => sourceList()?.isLoadingMore() ?? false,
       loadMore: async () => {
         await sourceList()?.loadMore();
+      },
+      retry: async () => {
+        await sourceList()?.retry?.();
       },
     };
   }) as QuickAccessContextValue['useList'];
@@ -51,6 +56,7 @@ const QuickAccessProviderValue: FlowComponent = (props) => {
     isLoading: () => source()?.isLoading() ?? false,
     refresh: () => source()?.refresh(),
     getById: (id) => source()?.getById(id),
+    interactionForUser: (id) => source()?.interactionForUser(id),
   };
 
   return (

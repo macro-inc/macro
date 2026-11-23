@@ -27,10 +27,49 @@ through the same service.
   `SignedUnsubscribeLinks` signs `domain/models/signing.rs` unsubscribe
   placeholders per recipient), `repository.rs`
   (owned Postgres queries), `withdrawal.rs` (durable suppression),
-  `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute).
+  `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute, and
+  a channel's mentions-only level).
+- `domain/channel_settings.rs` + `outbound/channel_settings.rs`: a user's own
+  per-channel choice of which channel notification types they receive
+  (`ChannelNotificationKind`, one per event type), stored in
+  `user_channel_notification_setting`. A channel either follows its sections
+  for every type (`disabled_event_types` NULL) or has its own setting for all
+  of them, never a mix; `section_mute_override` keeps a channel notifying
+  inside muted sections. A kind change or reset also deletes the channel's
+  legacy mentions-only row, which these settings replace. Independent of mute
+  and snooze.
+- `domain/section_settings.rs` + `outbound/section_settings.rs`: a user's own
+  settings for Chat sidebar sections (`ChannelSection`: a custom section by
+  `channel_label` id, or Favorites, Direct messages, Team channels), stored in
+  `user_channel_section_notification_setting`: kinds off, and mute or snooze.
+  `channel_delivery` is the one place the rules combine: section mute (all
+  holding sections muted, unless the channel overrides it), then the channel's
+  own settings when it has them, else any holding section allowing the kind. A section
+  without a row allows everything and is unmuted; "All channels" is not a
+  section. Which sections hold a channel comes through the
+  `ChannelSectionMembershipReader` port, implemented by
+  `channel_labels::outbound::section_membership`; ingress without one
+  (`NoChannelSections`) applies no section settings.
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
+- `domain/active_notification_ids.rs` + `outbound/active_notification_ids.rs`:
+  the ids of a user's active notifications of known event types (default 100,
+  at most 500), for clients that act on a type without reading their feed.
+  The service takes the known types from its caller (`NotifEvent::EVENT_TYPES`).
+  No index leads with the event type, so a rare type walks the user's active
+  (not done, not deleted) notifications, usually through
+  `idx_user_notification_user_pending` with a heap check of each row's event
+  type, under a 5 s statement timeout; the `notification.active_ids` span records
+  `notification.id_count` and `db.statement_timed_out`, and logs a timeout
+  once at warn.
+- `domain/bulk_action.rs` + `outbound/bulk_action.rs`: marking many of one
+  user's notifications done as a stored action with a per-notification
+  ledger: chunked, leased, resumable and undoable. The inbox's clear runs on
+  it (`crates/notification_inbox`). Every state-changing step is one
+  transaction over the action row, the ledger and `user_notification`; keep
+  it that way. `user_notification.done_by` is cleared by a trigger on any
+  other state change, so new state writers need no change.
 
 ## Scope
 
@@ -70,9 +109,34 @@ through the same service.
 
 ## Gotchas
 
+- A `user_notification_item_unsubscribe` row with `mentions_only` silences its
+  channel for every event type except a direct mention
+  (`item_preferences::is_direct_mention`, today `channel_mention`). Ingress
+  drops the recipient before the notification row and queue messages exist,
+  so web, push and unread state agree. A new event type that names its
+  recipient directly must be added to `is_direct_mention`, or mentions-only
+  channels stay silent for it. Mute and snooze writes clear the flag.
+
+- Ingress drops a channel notification's recipient whose
+  `user_channel_notification_setting` turns that event type off
+  (`ExclusionReason::DisabledForChannel`), alongside mute and the global type
+  preferences. A new channel event type users should control needs a
+  `ChannelNotificationKind` variant; channel invites are deliberately not one.
+  A notification decided by another kind's setting names it with
+  `with_channel_settings_kind`: a document mention follows its message's
+  kind, top-level outside a thread and thread reply inside one.
+- A channel message or reply leaves the users it @mentions out of its own
+  recipients; the producer names them with `with_mention_fallback`, and
+  ingress adds back each one whose channel settings turn mentions off, so
+  they still hear about the message. Ingress resolves section membership only
+  for recipients that have section settings, and never for channel invites.
+  The `notification.filter_recipients` span records the fallback, exclusion
+  and section-muted counts.
+
 - `user_notification` carries copies of its notification's `event_item_type`,
   `event_item_id` and `notification_event_type`. Entity reads find a viewer's
-  rows through `idx_user_notification_viewer_entity` on those copies, so a row
+  rows through `idx_user_notification_viewer_entity` on those copies, and an
+  entity read's event-type filter reads the copied type from that index, so a row
   inserted without them never matches an entity read or mark-seen, and a
   migration that rewrites those `notification` columns must update
   `user_notification` too.
@@ -86,6 +150,9 @@ through the same service.
   delivery; keep tombstone checks when changing either delivery boundary.
 - Channel join requests count in both top-level and channel-feed notification
   filters; keep these filters aligned with the web notification classifier.
+  Channel invites count in the top-level filter only: the notifications inbox
+  lists an invite on its channel's top-level row, so Chat's unread edge must
+  show it too, while Home's channel feed leaves invites out.
 - A `calendar_event_join_request` insert is skipped by a `notification` trigger
   when its event has gone or been cancelled or its request is no longer pending,
   since queued ingress can run after that cleanup. `create_notification` reads
@@ -97,10 +164,22 @@ through the same service.
   librdkafka out of the self-hosted daemon; keep it that way.
 - Independent Kafka consumers have no durable group lag. Health logs distinguish
   stale/unknown measurements from zero; they are not client-delivery ACKs.
+- `EmailContent` is queued as JSON, so its optional `text`, `from_name` and
+  `reply_to` carry `#[serde(default)]`. `EmailAdapter` turns `from_name` into an
+  `"<name> (via Macro)"` display name on Macro's own From address (quoted when
+  ASCII, RFC 2047 encoded otherwise) and sends `text` as the plain-text part.
+  Unsubscribe placeholders are signed in the HTML `body` only.
+- `EmailAdapter` takes an optional SES configuration set; with one, every send
+  uses it and carries a `notification_type` message tag. A set name that does
+  not exist in SES fails every send, so create the set before configuring it.
 - Notification payloads must not be logged on tracing spans (see the
   `fix(notification): stop recording notification payloads` history).
 - Android call pushes carry W3C trace context inside their existing JSON offer;
   keep propagation in the outbound SNS adapter, with no baggage or payload logging.
+- Ingress queue messages carry the sender's `traceparent`/`tracestate`
+  (`IngressQueueMessage.trace_context`, `src/trace_context.rs`); the worker's
+  `notification.ingress.process` span links to it, keeping its own parent.
+  Never forward baggage or put payloads on that span.
 - iOS egress binds `recipientId` to each receiving account; channel pushes carry
   an optional typed `navigation` destination, with `threadId: null` for a root
   message. Preserve older payloads that omit these fields.

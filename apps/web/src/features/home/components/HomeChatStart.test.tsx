@@ -6,9 +6,9 @@ import { HomeChatStart } from './HomeChatStart';
 type ChildrenProps = { children?: JSX.Element };
 
 const mocks = vi.hoisted(() => ({
-  agentsEnabled: true,
   asideCollapsed: false,
   asideOverlay: false,
+  suggestionsEnabled: false,
 }));
 
 vi.mock('@app/components/view-shell', () => ({
@@ -27,12 +27,14 @@ vi.mock('@app/components/view-shell', () => ({
     Title: (props: ChildrenProps) => <span>{props.children}</span>,
   },
 }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.agentsEnabled }),
+vi.mock('@channel/DebugSuspense', () => ({
+  DebugSuspense: (props: ChildrenProps) => props.children,
 }));
-vi.mock('@core/constant/featureFlags', () => ({ enableChatV3Agents: {} }));
-vi.mock('@app/features/settings/components/local-runtime-prompt', () => ({
-  LocalRuntimePrompt: () => null,
+vi.mock('@app/features/suggestions/use-suggestions-flag', () => ({
+  useSuggestionsFlag: () => () => mocks.suggestionsEnabled,
+}));
+vi.mock('@app/features/suggestions/home-priorities', () => ({
+  HomePriorities: () => <div data-testid="home-today" />,
 }));
 vi.mock('@core/component/AI/component/DragDrop', () => ({
   DragDropWrapper: (props: ChildrenProps & { class?: string }) => (
@@ -44,22 +46,21 @@ vi.mock('@core/component/AI/component/DragDrop', () => ({
 vi.mock('@core/component/AI/context', () => ({
   ChatInputProvider: (props: ChildrenProps) => props.children,
 }));
-vi.mock('../home-chat-input', () => ({
-  HomeChatInput: () => <div data-testid="home-chat-input" />,
-}));
-vi.mock('./home-recommended-actions', () => ({
-  HomeRecommendedActions: () => <div data-testid="home-suggestions" />,
+vi.mock('../home-agent-composer', () => ({
+  HomeAgentComposer: () => <div data-testid="home-agent-composer" />,
 }));
 
 beforeEach(() => {
-  mocks.agentsEnabled = true;
   mocks.asideCollapsed = false;
   mocks.asideOverlay = false;
+  mocks.suggestionsEnabled = false;
 });
 afterEach(cleanup);
 
 function renderHome() {
-  return render(() => <HomeChatStart />);
+  return render(() => (
+    <HomeChatStart title="Home" onStartedSession={() => {}} />
+  ));
 }
 
 describe('Home agent composer alignment', () => {
@@ -86,17 +87,19 @@ describe('Home agent composer alignment', () => {
       document.querySelector('[data-home-composer-align="agents"]')
     ).toBeTruthy();
   });
+});
 
-  it('keeps the legacy 32px-above-center composer when agents are disabled', () => {
-    mocks.agentsEnabled = false;
+describe('Home below the composer', () => {
+  it('leaves the space empty while suggestions are off', () => {
     renderHome();
-    const grid = document.querySelector('[data-home-composer-align="legacy"]');
-    expect(grid).toBeTruthy();
-    expect(grid?.className).toContain('pb-16');
-    expect(grid?.className).not.toContain('pt-6');
-    expect(
-      document.querySelector('[data-home-composer-topbar-align]')
-    ).toBeNull();
-    expect(screen.getByText('What should we get done in Macro?')).toBeTruthy();
+
+    expect(screen.queryByTestId('home-today')).toBeNull();
+  });
+
+  it('shows today and the top priorities when suggestions are on', async () => {
+    mocks.suggestionsEnabled = true;
+    renderHome();
+
+    expect(await screen.findByTestId('home-today')).toBeTruthy();
   });
 });

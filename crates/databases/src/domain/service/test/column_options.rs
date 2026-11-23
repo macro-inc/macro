@@ -39,6 +39,7 @@ async fn a_select_column_with_no_options_accepts_nothing() {
                         column: stage,
                         value: CellValue::Options(vec![OptionRef::Label("Main".into())]),
                     }]],
+                    ids: None,
                 },
             }]),
         )
@@ -124,6 +125,7 @@ async fn add_options_extends_what_ops_accept_and_bumps_the_version() {
                         column: status.id,
                         value: CellValue::Options(vec![OptionRef::Label("Waitlisted".into())]),
                     }]],
+                    ids: None,
                 },
             }]),
         )

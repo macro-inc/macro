@@ -87,6 +87,18 @@ pub(crate) fn redact_original_url_for_logging(url: &Url) -> Url {
     redacted_url
 }
 
+/// FusionAuth's Sign in with Microsoft identity provider.
+const MICROSOFT_IDP_NAME: &str = "microsoft";
+
+/// The OpenID Connect `prompt` to pass to the identity provider named
+/// `idp_name`. Microsoft otherwise signs in whichever account the browser
+/// already has, so it is asked for its account picker; work and personal
+/// accounts often share a browser. Its IdP discovers its endpoints from the
+/// issuer, so the prompt can't live on its authorize URL in FusionAuth.
+fn sign_in_prompt(idp_name: &str) -> Option<&'static str> {
+    (idp_name == MICROSOFT_IDP_NAME).then_some("select_account")
+}
+
 /// Initiates an SSO login
 #[utoipa::path(
         get,
@@ -155,7 +167,7 @@ pub async fn handler(
             .into_response());
     }
 
-    let idp_id = if let Some(idp_id) = idp_id {
+    let (idp_id, prompt) = if let Some(idp_id) = idp_id {
         if idp_id.is_empty() {
             tracing::error!("idp_id is empty");
             return Err((
@@ -167,7 +179,7 @@ pub async fn handler(
                 .into_response());
         }
 
-        idp_id.clone()
+        (idp_id.clone(), None)
     } else {
         let idp_name = idp_name.unwrap_or_default();
 
@@ -199,7 +211,7 @@ pub async fn handler(
 
         tracing::trace!(sso_idp_id, "idp found from name");
 
-        sso_idp_id
+        (sso_idp_id, sign_in_prompt(&idp_name))
     };
 
     let state = SsoState {
@@ -217,19 +229,29 @@ pub async fn handler(
     .then_some(state);
 
     // Generate code
-    let sso_url = ctx
-        .auth_client
-        .construct_oauth2_authorize_url(&idp_id, login_hint.as_deref(), sso_state)
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to construct oauth2 authorize url");
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "unable to serialize state into string".into(),
-                }),
-            )
-                .into_response()
-        })?;
+    let sso_url = match prompt {
+        Some(prompt) => ctx.auth_client.construct_oauth2_authorize_url_with_prompt(
+            &idp_id,
+            login_hint.as_deref(),
+            prompt,
+            sso_state,
+        ),
+        None => ctx.auth_client.construct_oauth2_authorize_url(
+            &idp_id,
+            login_hint.as_deref(),
+            sso_state,
+        ),
+    }
+    .map_err(|e| {
+        tracing::error!(error=?e, "unable to construct oauth2 authorize url");
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: "unable to serialize state into string".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     tracing::info!(sso_url=%sso_url, "SSO URL");
 

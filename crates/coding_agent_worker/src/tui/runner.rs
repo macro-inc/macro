@@ -12,6 +12,7 @@ use super::quickstart::{Quickstart, QuickstartAction};
 use super::ui;
 use crate::config::Config;
 use crate::daemon::InheritedAgent;
+use crate::profiles::ConfigSelection;
 use crate::update::{self, StagedUpdate};
 
 /// What the caller does once the panel hands over to an updated macrod.
@@ -37,10 +38,11 @@ const TICK: Duration = Duration::from_millis(120);
 /// or until a self-update is installed and the caller should relaunch.
 /// `inherited` is the agent a previous macrod handed over.
 pub async fn run(
-    config_path: &Path,
+    selection: &ConfigSelection,
     logs: LogBuffer,
     inherited: Option<InheritedAgent>,
 ) -> rootcause::Result<Option<Restart>> {
+    let config_path = selection.path.as_path();
     let (input_tx, mut input_rx) = tokio::sync::mpsc::unbounded_channel();
     // A dedicated thread owns the blocking crossterm read; the loop below
     // stays async and free to poll the network.
@@ -52,6 +54,7 @@ pub async fn run(
         }
     });
 
+    let colors = ui::ColorSupport::detect();
     let mut terminal = ratatui::init();
     let existing_config = match Config::load(config_path) {
         Ok(config) => Some(config),
@@ -73,6 +76,7 @@ pub async fn run(
     } else {
         match run_quickstart(
             &mut terminal,
+            colors,
             config_path,
             existing_config.as_ref(),
             &mut input_rx,
@@ -94,20 +98,21 @@ pub async fn run(
         ratatui::restore();
         return Ok(None);
     }
-    let mut app = match App::load(config_path, logs, inherited) {
+    let mut app = match App::load(selection, logs, inherited) {
         Ok(app) => app,
         Err(error) => {
             ratatui::restore();
             return Err(error);
         }
     };
-    let outcome = run_loop(&mut terminal, &mut app, &mut input_rx, quickstarted).await;
+    let outcome = run_loop(&mut terminal, colors, &mut app, &mut input_rx, quickstarted).await;
     ratatui::restore();
     outcome
 }
 
 async fn run_quickstart(
     terminal: &mut ratatui::DefaultTerminal,
+    colors: ui::ColorSupport,
     config_path: &Path,
     existing_config: Option<&Config>,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
@@ -118,7 +123,10 @@ async fn run_quickstart(
     };
     loop {
         terminal
-            .draw(|frame| ui::render_quickstart(frame, &quickstart, config_path))
+            .draw(|frame| {
+                ui::render_quickstart(frame, &quickstart, config_path);
+                colors.fit_buffer(frame.buffer_mut());
+            })
             .context("failed to draw Quickstart")?;
         let Some(event) = input.recv().await else {
             return Ok(false);
@@ -155,7 +163,10 @@ async fn run_quickstart(
                     // returns.
                     quickstart.status = Some((format!("Installing {}...", install.package), false));
                     terminal
-                        .draw(|frame| ui::render_quickstart(frame, &quickstart, config_path))
+                        .draw(|frame| {
+                            ui::render_quickstart(frame, &quickstart, config_path);
+                            colors.fit_buffer(frame.buffer_mut());
+                        })
                         .context("failed to draw Quickstart")?;
                     if let Err(error) = install.run().await {
                         quickstart.status = Some((error, true));
@@ -164,17 +175,11 @@ async fn run_quickstart(
                 }
                 let saved = if existing_config.is_some() {
                     ConfigForm::load(config_path).and_then(|mut form| {
-                        form.apply_quickstart(&agent, &workspace, quickstart.scope);
-                        form.set_permission_bypass(quickstart.allow_permission_bypass);
+                        form.apply_quickstart(&agent, &workspace);
                         form.save()
                     })
                 } else {
-                    ConfigForm::create(config_path, &agent, &workspace).and_then(|()| {
-                        let mut form = ConfigForm::load(config_path)?;
-                        form.set_scope(quickstart.scope);
-                        form.set_permission_bypass(quickstart.allow_permission_bypass);
-                        form.save()
-                    })
+                    ConfigForm::create(config_path, &agent, &workspace)
                 };
                 match saved {
                     Ok(()) => {
@@ -196,6 +201,7 @@ fn config_is_working(config: &Config) -> bool {
 
 async fn run_loop(
     terminal: &mut ratatui::DefaultTerminal,
+    colors: ui::ColorSupport,
     app: &mut App,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
     pair_on_start: bool,
@@ -215,7 +221,10 @@ async fn run_loop(
 
     loop {
         terminal
-            .draw(|frame| ui::render(frame, app))
+            .draw(|frame| {
+                ui::render(frame, app);
+                colors.fit_buffer(frame.buffer_mut());
+            })
             .context("failed to draw the terminal UI")?;
 
         tokio::select! {
@@ -223,7 +232,10 @@ async fn run_loop(
                 match event {
                     Some(TermEvent::Key(key)) => app.on_key(key).await,
                     Some(_) => {}
-                    None => return Ok(None),
+                    None => {
+                        tracing::info!("terminal input closed; exiting");
+                        return Ok(None);
+                    }
                 }
                 apply_pending_browser(app);
             }
@@ -256,6 +268,7 @@ async fn run_loop(
         }
 
         if app.quit {
+            tracing::info!("quit from the panel");
             app.stop_daemon().await;
             return Ok(None);
         }

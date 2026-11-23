@@ -1,7 +1,6 @@
 import '../../../../index.css';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { storageServiceClient } from '@service-storage/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import { Button } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -13,18 +12,17 @@ import {
 } from '../../queries/contacts';
 import { CompanyContactsSection } from '../../views/company-contacts-section';
 import {
+  client,
   companyReads,
+  deps,
   failNext,
   role,
   setFailNext,
   setRole,
+  teamReads,
   writes,
 } from './preview-adapters';
 
-const client = new QueryClient({
-  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-});
-const deps = { client, storage: storageServiceClient };
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 function Team(props: { open(id: string): void }) {
@@ -32,7 +30,6 @@ function Team(props: { open(id: string): void }) {
   return (
     <CompanyContactsSection
       company={company.company()}
-      contacts={company.contacts()}
       onOpenContact={(contact) => props.open(contact.id)}
     />
   );
@@ -121,6 +118,7 @@ function Fixture() {
           </Show>
         </Suspense>
         <output aria-label="Company reads">{companyReads()}</output>
+        <output aria-label="Team reads">{teamReads()}</output>
         <output aria-label="Successful writes">{writes()}</output>
       </main>
     </QueryClientProvider>

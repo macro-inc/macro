@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE hosted_runtime SET state = '{}'::jsonb, name = 'Computer 102' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "faed3016092df0e10a2b872d1a26332673fbdb29daa10e69a2befd783d617083"
+}

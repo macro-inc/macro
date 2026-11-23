@@ -269,6 +269,7 @@ function fakeComputedStyle(element: Element) {
   return {
     color: toComputed(color, 'rgb(0, 0, 0)'),
     backgroundColor: toComputed(background, 'rgba(0, 0, 0, 0)'),
+    backgroundImage: 'none',
   } as CSSStyleDeclaration;
 }
 
@@ -435,5 +436,6 @@ describe('computeTextNodeColor caching is equivalent to main', () => {
       spy.mockRestore();
       attr.mockRestore();
     }
-  });
+    // Usually under 2 s, but over 5 s on a busy CI runner.
+  }, 20_000);
 });

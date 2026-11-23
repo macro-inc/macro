@@ -1,17 +1,75 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/actionlint.rs
 self-hosted-runner:
   labels:
     - db-migrator
-    - linux-extra-beefy
-    - linux-latest-middy
+    - linux-rust-ci-image-generation-small
+    - namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     - namespace-profile-linux-mid
-    - namespace-profile-linux-mid;overrides.cache-tag=web-ci
     - namespace-profile-linux-mid;overrides.cache-tag=desktop-linux
-    - namespace-profile-linux-small
-    - namespace-profile-linux-small;overrides.cache-tag=web-ci
-    - namespace-profile-linux-tiny-no-cache
+    - namespace-profile-linux-mid;overrides.cache-tag=observability-image
+    - namespace-profile-linux-mid;overrides.cache-tag=sync-service-deploy
+    - namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    - namespace-profile-linux-mid;overrides.cache-tag=web-codegen
     - namespace-profile-linux-rust-ci
     - namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
-    - nscloud-macos-sequoia-arm64-6x14
-    - nscloud-macos-sequoia-arm64-12x28-with-cache
-    - nscloud-cache-tag-macro-desktop-macos
+    - namespace-profile-linux-small
+    - namespace-profile-linux-small;overrides.cache-tag=nix-checks
+    - namespace-profile-linux-small;overrides.cache-tag=sccache-ci
+    - namespace-profile-linux-small;overrides.cache-tag=web-ci
+    - namespace-profile-linux-tiny-no-cache
     - nscloud-cache-size-100gb
+    - nscloud-cache-tag-macro-desktop-macos
+    - nscloud-macos-sequoia-arm64-12x28
+    - nscloud-macos-sequoia-arm64-12x28-with-cache
+    - nscloud-macos-sequoia-arm64-6x14
+    - nscloud-macos-tahoe-slim-arm64-6x14
+    - nscloud-windows-2022-amd64-8x16
+
+# shellcheck findings kept on purpose, one file and check per entry. A new
+# finding of another kind, or in another file, still fails.
+paths:
+  .github/workflows/android-play-publish.yml:
+    ignore:
+      # The GraphQL query passed to `gh api` is single-quoted so gh, not bash, binds $owner.
+      - 'SC2016:'
+  .github/workflows/android-release-drift.yml:
+    ignore:
+      # The GraphQL query passed to `gh api` is single-quoted so gh, not bash, binds $owner.
+      - 'SC2016:'
+  .github/workflows/android-release-watch.yml:
+    ignore:
+      # The GraphQL query passed to `gh api` is single-quoted so gh, not bash, binds $owner.
+      - 'SC2016:'
+      # The shared Android helper prelude defines functions this step does not call.
+      - 'SC2329:'
+  .github/workflows/code_check_cloud_storage.yml:
+    ignore:
+      # The loop over `find` counts the crates it dates in the shell itself; workspace `.env` paths have no spaces.
+      - 'SC2044:'
+  .github/workflows/deploy_all_services.yml:
+    ignore:
+      # Each matrix output is its own `>> "$GITHUB_OUTPUT"` line, kept for readability.
+      - 'SC2129:'
+  .github/workflows/ios_preview.yml:
+    ignore:
+      # The script for `nix develop -c bash -c` is single-quoted so the inner shell expands it.
+      - 'SC2016:'
+  .github/workflows/pr-privacy-check.yml:
+    ignore:
+      # The awk program is single-quoted so awk, not bash, reads `$text` fences.
+      - 'SC2016:'
+  .github/workflows/publish-android-play.yml:
+    ignore:
+      # The backticks are Markdown in a printf format string, not command substitution.
+      - 'SC2016:'
+  .github/workflows/pulumi_preview_pr.yml:
+    ignore:
+      # `[[ $file == $stack_path ]]` is a deliberate glob match against the stack path pattern.
+      - 'SC2053:'
+  .github/workflows/web-app-check-main.yml:
+    ignore:
+      # The GraphQL query passed to `gh api` is single-quoted so gh, not bash, binds $owner.
+      - 'SC2016:'
+      # The shared Android helper prelude defines functions this step does not call.
+      - 'SC2329:'

@@ -6,6 +6,7 @@
  */
 import type { ExternalChatParticipantAlternateJid } from './externalChatParticipantAlternateJid';
 import type { ExternalChatParticipantDisplayName } from './externalChatParticipantDisplayName';
+import type { ExternalChatParticipantPictureFileId } from './externalChatParticipantPictureFileId';
 
 /**
  * Someone in an external chat; Macro access is a separate grant.
@@ -19,4 +20,10 @@ export interface ExternalChatParticipant {
   displayName?: ExternalChatParticipantDisplayName;
   /** Their id at the provider (WhatsApp: phone-number or LID JID). */
   jid: string;
+  /** What to call them: their provider name, else their phone number,
+else a generic name. */
+  name: string;
+  /** Their profile picture as the chat owner's account sees it: a static
+file id; `null` when hidden, unset or not fetched yet. */
+  pictureFileId?: ExternalChatParticipantPictureFileId;
 }

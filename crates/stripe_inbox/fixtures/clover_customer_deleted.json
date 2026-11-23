@@ -1,0 +1,16 @@
+{
+  "id": "evt_1CustomerDeleted",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "created": 1800000050,
+  "livemode": false,
+  "type": "customer.deleted",
+  "data": {
+    "object": {
+      "id": "cus_Gone",
+      "object": "customer",
+      "email": "gone@example.com",
+      "metadata": {}
+    }
+  }
+}

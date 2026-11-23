@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::db_types::{DbLink, DbUserProvider};
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn link_by_fusionauth_and_macro_id(
     pool: &PgPool,
     fusionauth_user_id: &str,
@@ -43,7 +43,7 @@ pub(super) async fn link_by_fusionauth_and_macro_id(
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, email_address))]
 pub(super) async fn link_by_fusionauth_email_provider(
     pool: &PgPool,
     fusionauth_user_id: &str,
@@ -77,7 +77,7 @@ pub(super) async fn link_by_fusionauth_email_provider(
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn owned_link_for_thread(
     pool: &PgPool,
     thread_id: Uuid,
@@ -111,7 +111,7 @@ pub(super) async fn owned_link_for_thread(
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn inboxes_for_macro_id(
     pool: &PgPool,
     macro_id: MacroUserIdStr<'_>,
@@ -185,6 +185,8 @@ struct DbInboxDetailsRow {
     is_sync_active: bool,
     /// Whether the provider grant needs reauthorization.
     needs_reauth: bool,
+    /// Whether the provider serves no mailbox for the account.
+    mailbox_unavailable: bool,
     /// Whether this is the owner's primary inbox.
     is_primary: bool,
     /// Link creation timestamp.
@@ -221,6 +223,7 @@ impl DbInboxDetailsRow {
             },
             is_sync_active: self.is_sync_active,
             needs_reauth: self.needs_reauth,
+            mailbox_unavailable: self.mailbox_unavailable,
             settings: UserEmailLinkSettings {
                 signature_on_replies_forwards: self.signature_on_replies_forwards.unwrap_or(false),
                 signature: self.signature,
@@ -245,7 +248,7 @@ impl DbInboxDetailsRow {
 
 /// Fetch and map the enriched, user-scoped inbox details used by inbound
 /// email catalog adapters.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn inbox_details_for_macro_id(
     pool: &PgPool,
     macro_id: &MacroUserIdStr<'_>,
@@ -258,6 +261,7 @@ pub(super) async fn inbox_details_for_macro_id(
                l.provider as "provider!: _",
                l.is_sync_active as "is_sync_active!",
                l.needs_reauth as "needs_reauth!",
+               l.mailbox_unavailable_at IS NOT NULL as "mailbox_unavailable!",
                l.is_primary as "is_primary!",
                l.created_at as "created_at!",
                l.updated_at as "updated_at!",
@@ -267,7 +271,7 @@ pub(super) async fn inbox_details_for_macro_id(
                    CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
                        THEN 'Init'::email_backfill_job_status
                    WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
-                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import)
+                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import AND mr.available_at <> 'infinity')
                        THEN 'InProgress'::email_backfill_job_status
                    ELSE 'Complete'::email_backfill_job_status END
                ELSE bj.status END as "latest_backfill_status?: _",
@@ -280,13 +284,13 @@ pub(super) async fn inbox_details_for_macro_id(
         FROM (
             SELECT el.id, el.macro_id, el.email_address, el.provider,
                    el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at, el.sync_generation
+                   el.created_at, el.updated_at, el.sync_generation, el.mailbox_unavailable_at
             FROM email_links el
             WHERE el.macro_id = $1
             UNION
             SELECT el.id, el.macro_id, el.email_address, el.provider,
                    el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at, el.sync_generation
+                   el.created_at, el.updated_at, el.sync_generation, el.mailbox_unavailable_at
             FROM email_links el
             JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1

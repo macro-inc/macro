@@ -15,6 +15,7 @@ pub struct DocumentStorageServiceClient {
     url: String,
     client: reqwest::Client,
     external_client: reqwest::Client,
+    lifecycle_client: reqwest::Client,
 }
 
 impl DocumentStorageServiceClient {
@@ -32,12 +33,20 @@ impl DocumentStorageServiceClient {
 
         // Create a separate client for external API calls (without default auth headers)
         let external_client = reqwest::Client::new();
+        // Namespace erasure requires a bounded response from the owning route;
+        // redirects must never turn an unrelated response into acknowledgement.
+        let lifecycle_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("bounded lifecycle HTTP client");
 
         Self {
             internal_auth_key,
             url,
             client,
             external_client,
+            lifecycle_client,
         }
     }
 

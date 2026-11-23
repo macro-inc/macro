@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use axum::Router;
 use config::{Config, Environment};
+use contacts::domain::list_reads::{ContactListReads, FlaggedContactReads};
 use contacts::domain::service::{ContactsDomainService, ContactsOutboxServiceImpl};
 use contacts::inbound::http::{ApiDoc, ContactsRouterState, contacts_router};
 use contacts::inbound::worker::{ContactsWorker, OutboxWorker};
@@ -20,8 +21,12 @@ use macro_service_urls::ConnectionGatewayUrl;
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use sqlx::postgres::PgPoolOptions;
 use sqs_worker::SQSWorker;
+use std::time::Duration;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+
+/// PostHog's US origin, used when `POSTHOG_HOST` is unset.
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
 async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
     let (min_connections, max_connections): (u32, u32) = match config.environment {
@@ -90,6 +95,29 @@ async fn main() -> anyhow::Result<()> {
         notifier,
     });
 
+    // `GET /contacts` and `GET /contacts/search` read each viewer's directory
+    // from the legacy graph or the list-aware tables, by the per-viewer
+    // `contacts-list-reads` flag. Without a PostHog key, or when a flag read
+    // fails, a viewer reads the legacy graph.
+    let flags = config
+        .posthog_api_key()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+                key.to_owned(),
+                // Interactive reads fall back to the legacy graph promptly.
+                Duration::from_millis(300),
+                config.environment,
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error:?}"))?;
+    let contact_reads = Arc::new(FlaggedContactReads::new(
+        service.clone(),
+        Arc::new(DbContactsRepository::new(db.clone())),
+        ContactListReads::optional(flags),
+    ));
+
     let worker = ContactsWorker::new(sqs_worker, service.clone());
     tokio::spawn(async move {
         worker.poll().await;
@@ -111,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     let authorization_service = MacroAuthorizationServiceImpl::new(
-        MacroAuthJwtValidator::new(jwt_args),
+        MacroAuthJwtValidator::new(jwt_args.clone()),
         InternalAuthConfig {
             api_key: config.internal_api_key.to_string(),
             default_user_id: None,
@@ -133,9 +161,10 @@ async fn main() -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
     let port = config.port;
 
+    let correlation = agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args);
     let app = mount_at_root_and_prefix(
         contacts_router(ContactsRouterState {
-            contacts_service: service,
+            contacts_service: contact_reads,
             rate_limit_service,
             authorization_state,
         })
@@ -147,6 +176,10 @@ async fn main() -> anyhow::Result<()> {
         SwaggerUi::new("/contacts/docs").url("/contacts/api-doc/openapi.json", ApiDoc::openapi()),
     );
 
+    let app = app.layer(axum::middleware::from_fn_with_state(
+        correlation,
+        agent_correlation::inbound::propagate,
+    ));
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
         .unwrap();

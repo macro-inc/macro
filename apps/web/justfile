@@ -7,6 +7,11 @@ android-dev *ARGS:
 android-build *ARGS:
     bash scripts/android.sh build "$@"
 
+# Android: performance benchmark of a signed-in benchmark build on one emulator
+# (`--serial` is required). See scripts/android-benchmark/README.md.
+android-benchmark *ARGS:
+    bun scripts/android-benchmark/run.ts "$@"
+
 # Increment the versionCode and commit before preparing the next native APK or
 # Play AAB release. Also raises the Android floor in min-native-build.json to
 # the new versionCode, so the next prod web deploy stops serving shared JS to
@@ -130,32 +135,32 @@ local-email: ensure-cache-wasm
 #
 # The two wasm-pack crates do not share artifacts. Build them in parallel
 # with distinct CARGO_TARGET_DIR values so they do not serialize on the
-# workspace cargo lock. CI still always rebuilds (schema/engine changes can
-# alter wasm without a version bump); Namespace `web-ci` sccache makes the
-# rustc invocations cheap across deploys.
+# workspace cargo lock. CI reuses a package only when nothing it is built from
+# changed (scripts/cached-wasm-build.sh keys on its sources, not on a version
+# bump); in PR checks the Namespace `web-ci` sccache makes the rustc
+# invocations cheaper when it does rebuild, and deploy builds use a local one.
 #
 # Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
 # above that peak; CI builds use the same mid-size runner as preview deploys.
 node_heap := "--max-old-space-size=8192"
+
 cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
 agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
 database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wasm"
+natural_time_wasm_target := justfile_directory() / "../../target/natural-time-wasm"
 pptx_engine_wasm_target := justfile_directory() / "../../target/pptx-engine-wasm"
 docx_engine_wasm_target := justfile_directory() / "../../target/docx-engine-wasm"
 fig_engine_wasm_target := justfile_directory() / "../../target/fig-engine-wasm"
 psd_engine_wasm_target := justfile_directory() / "../../target/psd-engine-wasm"
 ai_engine_wasm_target := justfile_directory() / "../../target/ai-engine-wasm"
+password_import_wasm_target := justfile_directory() / "../../target/password-import-wasm"
 
 [parallel]
-build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm
+build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-natural-time-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm build-password-import-wasm
 
-build-dev: build-wasm
-    MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+build-dev: build-wasm (bundle "development")
 
-build-staging: build-wasm
-    MODE=staging NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+build-staging: build-wasm (bundle "staging")
 
 # Production bundles carry the native build floors checked in at
 # min-native-build.json (schema 3 manifest, see scripts/write-bundle-manifest.mjs);
@@ -166,16 +171,38 @@ build-prod: build-wasm
     set -euo pipefail
     export MIN_NATIVE_BUILD_ANDROID="${MIN_NATIVE_BUILD_ANDROID:-$(bun -e "console.log(require('./min-native-build.json').android)")}"
     export MIN_NATIVE_BUILD_IOS="${MIN_NATIVE_BUILD_IOS:-$(bun -e "console.log(require('./min-native-build.json').ios)")}"
-    MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
-    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+    just --justfile "{{justfile()}}" bundle production
 
-# Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
+# The Vite build into dist, plus the cache WASM's Brotli sidecar (package-dist).
+# Quality 11 takes about 20 s, so the sidecar is compressed from the wasm-pack
+# output while Vite runs: Vite copies that file into dist unchanged, and
+# package-dist uses the copy only if it decompresses to the bytes there.
+[private]
+bundle mode:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sidecar="{{cache_wasm_target}}/precompressed/cache_wasm_bg.wasm.br"
+    bun scripts/cache-wasm/cli.ts precompress --wasm src/lib/graphql-cache/wasm/cache_wasm_bg.wasm --out "$sidecar" &
+    precompress=$!
+    trap 'kill "$precompress" 2>/dev/null || true' EXIT
+    MODE="$1" NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    wait "$precompress" || echo "precompressing the cache WASM failed; package-dist compresses it instead" >&2
+    trap - EXIT
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist --precompressed "$sidecar"
+
+# Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly.
+# Tauri embeds every file in dist, so source maps are deleted: native crash
+# frames point at the public web copies, whose maps stay published.
+# Videos (dist/web-hosted, see `assetFileNames` in vite.base.ts) are deleted
+# too: the apps stream them from the web deploy.
 [private]
 build-tauri: build-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
+    find dist -type f -name '*.map' -delete
+    rm -rf dist/web-hosted
 
 # As build-tauri, but MODE=development so the bundle talks to dev.macro.com.
 # Used by `ios-build-sim`: a PR preview must never be wired to production.
@@ -185,6 +212,8 @@ build-tauri-dev: build-cache-wasm build-agent-fold-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
+    find dist -type f -name '*.map' -delete
+    rm -rf dist/web-hosted
 
 # Build the bundle, zip it, and install it at
 # tooling/native_app_server/app-archive.zip for the bundle
@@ -195,7 +224,7 @@ dist-archive: build-prod
     set -euo pipefail
     TARGET="$(cd {{ justfile_directory() }}/../../tooling/native_app_server && pwd)/app-archive.zip"
     rm -f "$TARGET"
-    (cd dist && zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br')
+    (cd dist && zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br' '*.map' 'web-hosted/*')
     echo "Archive: $TARGET"
 
 bundle-smoke-server *ARGS:
@@ -235,6 +264,104 @@ test-calendar-details-browser *ARGS:
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/functional/playwright.config.ts {{ARGS}}
+
+# The channels suite (tests/channels-e2e/README.md) in Chromium against a
+# running local stack instance, whose address is read from the instance. Seed
+# its people first: `just seed-scenario --instance <instance> apply --file
+# seed/scenarios/channels-e2e.json` from the repository root.
+test-channels-e2e instance *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    status=$(cd ../.. && just stack status --json --instance "{{instance}}")
+    # Assigned before it is exported: `export X=$(...)` hides a failure.
+    proxy=$(jq -er .proxy_url <<<"$status")
+    export CHANNELS_E2E_STACK_URL="$proxy"
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/channels-e2e/playwright.config.ts {{ARGS}}
+
+# The bundle the email browser suite serves (tests/email-e2e): every service on
+# the page's own origin, where the suite's front proxies to the email stack.
+# Suggestions are off: they are on in a development build only, and replace
+# the suggested actions of Home that the suite covers.
+build-email-e2e: build-wasm
+    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin VITE_LOCAL_ONLY=true VITE_ENABLE_GRAPHQL_SOUP=true VITE_ENABLE_INBOX_RESYNC=true VITE_ENABLE_SUGGESTIONS=false VITE_ENABLE_BROWSER_OTEL=false NODE_OPTIONS="{{node_heap}}" bun run --bun build
+
+# The built app in Chromium against the email stack; the root
+# `just email-e2e-browser` builds what this needs. Same LD_LIBRARY_PATH caveat
+# as the sign-up browser tests above.
+test-email-e2e-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
+
+# The same suite on a running local stack instance (tests/email-e2e/README.md,
+# "The full-stack tier"); the root `just email-e2e-full-stack` starts the
+# instance and builds the bundle. The addresses are read from the instance.
+test-email-e2e-full-stack instance *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    status=$(cd ../.. && just run_local status --json --instance "{{instance}}")
+    # A stack started with Doppler's config holds real Google, model and
+    # payment keys: its sign-ups and its assistant would reach those
+    # services. The tier runs only on a stack that was started without.
+    state="../../infra/local/generated/{{instance}}/stack.json"
+    if [ "$(jq -r '.no_doppler' "$state" 2>/dev/null)" != "true" ]; then
+        echo "The instance {{instance}} was not started with --no-doppler ($state): the full-stack tier does not run on it. Stop it and start it with: just email-e2e-full-stack" >&2
+        exit 1
+    fi
+    # Assigned before they are exported: `export X=$(...)` hides a failure.
+    project=$(jq -er .project <<<"$status")
+    port() { docker compose -p "$project" port "$1" "$2" | sed 's/.*://'; }
+    proxy=$(jq -er .proxy_url <<<"$status")
+    database=$(jq -er .postgres_url <<<"$status")
+    redis=$(port redis 6379)
+    gmail=$(port gmail_emulator 8080)
+    outlook=$(port outlook_emulator 8080)
+    queues=$(jq -er .localstack_url <<<"$status")
+    # A stack runs the three stand-ins only when its config holds no real
+    # key for what they stand for: without one of them, it would call the
+    # real service.
+    model=$(port model_emulator 8080 2>/dev/null || true)
+    if [ -z "$model" ]; then
+        echo "The instance {{instance}} has no model stand-in running, so the assistant would reach a real model. Stop it and start it with: just email-e2e-full-stack" >&2
+        exit 1
+    fi
+    export EMAIL_E2E_STACK_PROXY_URL="$proxy"
+    export EMAIL_E2E_STACK_DATABASE_URL="$database"
+    export EMAIL_E2E_STACK_REDIS_URL="redis://localhost:$redis"
+    export EMAIL_E2E_STACK_GMAIL_URL="http://localhost:$gmail"
+    export EMAIL_E2E_STACK_OUTLOOK_URL="http://localhost:$outlook"
+    export EMAIL_E2E_STACK_SQS_URL="$queues"
+    export EMAIL_E2E_STACK_MODEL_URL="http://localhost:$model"
+    export EMAIL_E2E_STACK_NO_DOPPLER=true
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
+
+# The coverage ledger of the email UI, from the last run of the browser suite
+# (tests/email-e2e/ledger/README.md). Reports only; `--enforce` fails on a
+# function or row with neither a passing test nor a waiver, `--record`
+# rewrites the list of what only the full-stack tier covers.
+email-e2e-ledger *ARGS:
+    bun tests/email-e2e/ledger/report.ts {{ARGS}}
+
+# The fixture tests that cover a class of email or calendar bug (real
+# components over scripted data, no backend). Each line is a Playwright
+# config and, where the suite holds more than those tests, the files or the
+# titles (`-g`, a dot for each space) to run:
+# the rest of such a suite is not run in CI. A dev server's first page load
+# can outlast a test's first wait, hence the retries. Tests tagged
+# `@known-bug` assert behaviour that is not fixed yet and stay out.
+test-email-fixtures-browser *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    while read -r config files; do
+        env -u LD_LIBRARY_PATH bunx playwright test --config "$config" $files --grep-invert @known-bug --retries 2 {{ARGS}} < /dev/null
+    done <<'SUITES'
+    src/features/email-compose/browser-test/playwright.config.ts -g alias.does.not.make|already-sent.background.save|sends.its.newest.text.once|sends.the.newest.text.once
+    src/features/email-compose/browser-test/playwright.app.config.ts recipient-commit.app
+    src/features/block-email/browser-test/playwright.config.ts
+    src/features/calendar/browser-test/playwright.config.ts
+    src/features/calendar-view/browser-test/playwright.config.ts
+    src/features/settings/browser-test/signatures/playwright.config.ts
+    src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts unavailable-mention.browser -g tapping.the.deleted.event.chip
+    ../../packages/email-renderer/playwright.config.ts rendering.pw
+    SUITES
 
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test
@@ -294,8 +421,9 @@ cycles-ci:
     bunx --bun biome lint --changed --only=suspicious/noImportCycles
 
 # Build the GraphQL cache wasm module into src/lib/graphql-cache/wasm
-# (gitignored). Unconditional — CI app builds must never skip it (schema or
-# engine changes alter the wasm without a cache-wasm version bump).
+# (gitignored). Unconditional: CI app builds must never gate it on the
+# cache-wasm version (schema or engine changes alter the wasm without a bump).
+# cached-wasm-build.sh reuses an earlier build only when its inputs match.
 build-cache-wasm:
     scripts/cached-wasm-build.sh cache-wasm {{justfile_directory()}}/src/lib/graphql-cache/wasm -- env CARGO_TARGET_DIR="{{cache_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
 
@@ -372,6 +500,41 @@ ensure-database-sql-wasm:
     done
     if [ -n "$(find "${SOURCES[@]}" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-database-sql-wasm
+    fi
+
+# Build the natural-time wasm module (English date phrases, read in the
+# browser) into src/lib/core/natural-time/wasm (gitignored).
+build-natural-time-wasm:
+    scripts/cached-wasm-build.sh natural_time {{justfile_directory()}}/src/lib/core/natural-time/wasm -- env CARGO_TARGET_DIR="{{natural_time_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/natural_time --target web --release --out-dir {{justfile_directory()}}/src/lib/core/natural-time/wasm
+
+# Build the password-import wasm module (1Password and Bitwarden export
+# parsing, hosted in a worker by the passwords import dialog) into
+# src/lib/core/password-import/wasm (gitignored).
+build-password-import-wasm:
+    scripts/cached-wasm-build.sh password_import_wasm {{justfile_directory()}}/src/lib/core/password-import/wasm -- env CARGO_TARGET_DIR="{{password_import_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/password_import_wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/core/password-import/wasm
+
+# Dev fast path: build the password-import wasm pkg only when it is missing or
+# the adapter or parser sources are newer than the built artifact.
+ensure-password-import-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/password-import/wasm/password_import_wasm_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/password_import_wasm"
+    PARSER="{{justfile_directory()}}/../../crates/password_import"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$PARSER/src" "$PARSER/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-password-import-wasm
+    fi
+
+# Dev fast path: build the natural-time wasm pkg only when it is missing or
+# any crate source is newer than the built artifact. The crate has no
+# workspace dependencies, so its own sources are the whole closure.
+ensure-natural-time-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/natural-time/wasm/natural_time_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/natural_time"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-natural-time-wasm
     fi
 
 # Build the pptx-engine wasm module (PPTX rendering and editing, hosted in a
@@ -468,7 +631,7 @@ ensure-ai-engine-wasm:
 # that, every regeneration would be a diff-format mismatch even with no real
 # change.
 gen-agent-fold-types:
-    cargo run -p agent_fold --bin export_types
+    if [ -n "${SPECTA_BIN_DIR:-}" ]; then "$SPECTA_BIN_DIR/agent_fold_types"; else cargo run -p agent_fold --bin agent_fold_types; fi
     bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-fold/generated/types.ts
 
 # Regenerate src/lib/service-clients/service-agent-reviews/generated/types.ts
@@ -478,7 +641,7 @@ gen-agent-fold-types:
 # their responses, the import report); biome reformats specta's output for the
 # same reason as gen-agent-fold-types.
 gen-agent-review-types:
-    SQLX_OFFLINE=true cargo run -p agent_code_mode --bin export_review_types
+    if [ -n "${SPECTA_BIN_DIR:-}" ]; then "$SPECTA_BIN_DIR/export_review_types"; else SQLX_OFFLINE=true cargo run -p agent_code_mode --bin export_review_types; fi
     bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-reviews/generated/types.ts
 
 # Regenerate the dynamic-UI view types (src/features/dynamic-ui/generated/types.ts
@@ -496,8 +659,23 @@ gen-database-sql-types:
     cargo run -p database_sql --features cli --bin database_sql_types
     bunx biome format --write {{justfile_directory()}}/src/lib/core/database-sql/generated/types.ts
 
-# Dev fast path: build the wasm pkg only when missing or its version drifts
+# Dev fast path: build the wasm pkg only when missing, when its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to
-# dev machines). See tooling/xtask/crates/xtask_cache_wasm/src/main.rs.
+# dev machines), or when the GraphQL schema is newer than it: the engine embeds
+# the schema's tables when it is built, so a schema edit needs a new engine.
+# CI app builds run `build-cache-wasm`, whose cache keys on the sources, so
+# deploys never depend on that bump. Runs no cargo, so it doesn't wait on a
+# service build holding the workspace target dir.
 ensure-cache-wasm:
-    cd {{justfile_directory()}}/../.. && SQLX_OFFLINE=true cargo run -q -p xtask -- cache-wasm
+    #!/usr/bin/env bash
+    set -euo pipefail
+    CRATE="{{justfile_directory()}}/../../crates/client/cache-wasm/Cargo.toml"
+    PKG="{{justfile_directory()}}/src/lib/graphql-cache/wasm/package.json"
+    WASM="{{justfile_directory()}}/src/lib/graphql-cache/wasm/cache_wasm_bg.wasm"
+    SDL="{{justfile_directory()}}/../../static_assets/schema.graphql"
+    WANT=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$CRATE" | head -1)
+    HAVE=$(jq -r '.version // empty' "$PKG" 2>/dev/null || true)
+    if [ "$HAVE" != "$WANT" ] || [ ! -f "$WASM" ] || [ "$SDL" -nt "$WASM" ]; then
+        echo "cache-wasm: built '${HAVE:-none}', crate $WANT, or the schema changed since; building"
+        just --justfile "{{justfile()}}" build-cache-wasm
+    fi

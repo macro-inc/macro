@@ -17,7 +17,11 @@ export class FormSection {
     return new FormSection(form, id);
   }
 
-  /** The section's current presentation. */
+  /**
+   * The section's current presentation.
+   *
+   * @readonly
+   */
   async detail(): Promise<FormSectionDetail> {
     const section = (await this.form.schema()).sections.find(
       (candidate) => candidate.id === this.id,
@@ -29,12 +33,20 @@ export class FormSection {
     return section;
   }
 
-  /** The section heading. */
+  /**
+   * The section heading.
+   *
+   * @readonly
+   */
   async title(): Promise<string> {
     return (await this.detail()).title;
   }
 
-  /** Questions in display order; gates contain no questions. */
+  /**
+   * Questions in display order; gates contain no questions.
+   *
+   * @readonly
+   */
   async questions(): Promise<FormQuestion[]> {
     const section = await this.detail();
     return section.kind === 'questions'

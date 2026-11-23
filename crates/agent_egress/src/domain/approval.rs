@@ -74,6 +74,30 @@ pub fn spends_owner_access(server_slug: &str, tool: &str) -> bool {
     server_slug != MACRO_SERVER_SLUG || !MACRO_TOOLS_WITHOUT_OWNER_ACCESS.contains(&tool)
 }
 
+/// Connected apps whose tools that change the owner's data wait for the
+/// owner even in a turn they prompted themselves, by tool name: Macro
+/// Connect's Google Drive, whose users confirm every change to their Drive.
+const OWNER_CONFIRMED_WRITES: [(&str, &[&str]); 1] = [(
+    "google_drive",
+    &[
+        "copy_file",
+        "create_file",
+        "edit_google_doc",
+        "restore_file",
+        "trash_file",
+        "update_file",
+    ],
+)];
+
+/// Whether calling `tool` on `server_slug` waits for the owner's approval
+/// even in their own turn: it changes their data in an app that asks first.
+#[must_use]
+pub fn owner_confirms(server_slug: &str, tool: &str) -> bool {
+    OWNER_CONFIRMED_WRITES
+        .iter()
+        .any(|(slug, tools)| *slug == server_slug && tools.contains(&tool))
+}
+
 /// Sends an approved call upstream. Built by the proxy over its own
 /// forwarder, so the hold never learns how.
 pub type ForwardOnce = Box<
@@ -120,6 +144,14 @@ pub trait OwnerApprovals: Send + Sync + 'static {
         session: AgentSessionId,
         request_id: &serde_json::Value,
     ) -> impl Future<Output = Result<(), EgressError>> + Send;
+
+    /// Hold an in-process `call`, one with no response to stream into,
+    /// until it is resolved, and say how. Dropping the future cancels the
+    /// hold, which is how a stopped turn gives up on it.
+    fn hold_in_process(
+        &self,
+        call: InProcessCall,
+    ) -> impl Future<Output = Result<ToolApprovalStatus, EgressError>> + Send;
 }
 
 impl<Approvals: OwnerApprovals> OwnerApprovals for Arc<Approvals> {
@@ -137,6 +169,13 @@ impl<Approvals: OwnerApprovals> OwnerApprovals for Arc<Approvals> {
     ) -> impl Future<Output = Result<(), EgressError>> + Send {
         (**self).withdraw(session, request_id)
     }
+
+    fn hold_in_process(
+        &self,
+        call: InProcessCall,
+    ) -> impl Future<Output = Result<ToolApprovalStatus, EgressError>> + Send {
+        (**self).hold_in_process(call)
+    }
 }
 
 /// For a proxy with no way to ask the owner: every held call is refused, in
@@ -148,10 +187,9 @@ pub struct RefuseHeldCalls;
 impl OwnerApprovals for RefuseHeldCalls {
     async fn hold(&self, call: HeldCall) -> Result<ProxyResponse, EgressError> {
         let text = format!(
-            "{tool} did not run. Someone other than {owner}, whose access this session uses, \
-             prompted this turn, and tool calls in such a turn need {owner} to approve them, \
-             which is not possible here. Tell the person who asked, and do not try to do the \
-             same thing another way.",
+            "{tool} did not run. It needs {owner}, whose access this session uses, to approve \
+             it, which is not possible here. Tell the person who asked, and do not try to do \
+             the same thing another way.",
             tool = call.call.name,
             owner = call.owner.email_str(),
         );
@@ -164,6 +202,14 @@ impl OwnerApprovals for RefuseHeldCalls {
         _request_id: &serde_json::Value,
     ) -> Result<(), EgressError> {
         Ok(())
+    }
+
+    /// Nobody can be asked, so the call is refused as though it expired.
+    async fn hold_in_process(
+        &self,
+        _call: InProcessCall,
+    ) -> Result<ToolApprovalStatus, EgressError> {
+        Ok(ToolApprovalStatus::Expired)
     }
 }
 
@@ -257,72 +303,6 @@ pub struct InProcessCall {
     pub tool_name: String,
     /// What it was called with.
     pub arguments: serde_json::Value,
-}
-
-impl<Store, Signals, Announcer> ToolApprovalService<Store, Signals, Announcer>
-where
-    Store: ToolApprovalStore,
-    Signals: ToolApprovalSignals,
-    Announcer: ToolApprovalAnnouncer,
-{
-    /// Hold `call` until it is resolved, and say how. Dropping the future
-    /// cancels the hold, which is how a stopped turn gives up on it.
-    pub async fn hold_in_process(
-        &self,
-        call: InProcessCall,
-    ) -> Result<ToolApprovalStatus, EgressError> {
-        if self
-            .inner
-            .is_standing(
-                call.session,
-                &call.prompter,
-                &call.server_slug,
-                &call.tool_name,
-            )
-            .await?
-        {
-            return Ok(ToolApprovalStatus::Approved);
-        }
-        let prompter = call.prompter.clone();
-        let approval = ToolApproval {
-            id: ToolApprovalId::mint(),
-            session: call.session,
-            turn_action_id: call.prompter.action_id,
-            // No JSON-RPC request to name; unique so nothing withdraws it.
-            request_id: serde_json::Value::String(macro_uuid::generate_uuid_v7().to_string()),
-            owner: call.owner.clone(),
-            requested_by: call.prompter.acting_user().cloned(),
-            server_slug: call.server_slug,
-            server_name: call.server_name,
-            tool_name: call.tool_name,
-            arguments: call.arguments,
-            status: ToolApprovalStatus::Pending,
-            resolved_by: None,
-            remembered: false,
-        };
-        self.inner.store.insert(&approval).await?;
-        if self.inner.settled_by_standing(&approval, &prompter).await? {
-            return Ok(ToolApprovalStatus::Approved);
-        }
-        tracing::info!(
-            approval = %approval.id,
-            session = %approval.session,
-            tool = %approval.tool_name,
-            "holding an in-process tool call for the owner's approval"
-        );
-        self.inner.announcer.requested(&approval, &call.owner).await;
-
-        let guard = CancelOnDrop {
-            inner: Some(Arc::clone(&self.inner)),
-            id: approval.id,
-        };
-        let resolved = self
-            .inner
-            .await_resolution(&approval, None, call.owner.email_str(), None)
-            .await;
-        guard.disarm();
-        Ok(resolved?.status)
-    }
 }
 
 /// Cancels a held call whose waiter went away before it was resolved.
@@ -770,6 +750,63 @@ where
                 .await?;
         }
         Ok(())
+    }
+
+    async fn hold_in_process(
+        &self,
+        call: InProcessCall,
+    ) -> Result<ToolApprovalStatus, EgressError> {
+        if self
+            .inner
+            .is_standing(
+                call.session,
+                &call.prompter,
+                &call.server_slug,
+                &call.tool_name,
+            )
+            .await?
+        {
+            return Ok(ToolApprovalStatus::Approved);
+        }
+        let prompter = call.prompter.clone();
+        let approval = ToolApproval {
+            id: ToolApprovalId::mint(),
+            session: call.session,
+            turn_action_id: call.prompter.action_id,
+            // No JSON-RPC request to name; unique so nothing withdraws it.
+            request_id: serde_json::Value::String(macro_uuid::generate_uuid_v7().to_string()),
+            owner: call.owner.clone(),
+            requested_by: call.prompter.acting_user().cloned(),
+            server_slug: call.server_slug,
+            server_name: call.server_name,
+            tool_name: call.tool_name,
+            arguments: call.arguments,
+            status: ToolApprovalStatus::Pending,
+            resolved_by: None,
+            remembered: false,
+        };
+        self.inner.store.insert(&approval).await?;
+        if self.inner.settled_by_standing(&approval, &prompter).await? {
+            return Ok(ToolApprovalStatus::Approved);
+        }
+        tracing::info!(
+            approval = %approval.id,
+            session = %approval.session,
+            tool = %approval.tool_name,
+            "holding an in-process tool call for the owner's approval"
+        );
+        self.inner.announcer.requested(&approval, &call.owner).await;
+
+        let guard = CancelOnDrop {
+            inner: Some(Arc::clone(&self.inner)),
+            id: approval.id,
+        };
+        let resolved = self
+            .inner
+            .await_resolution(&approval, None, call.owner.email_str(), None)
+            .await;
+        guard.disarm();
+        Ok(resolved?.status)
     }
 }
 

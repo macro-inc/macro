@@ -6,11 +6,13 @@ mod test;
 
 mod database_row;
 mod document_ids;
+mod feed;
 mod initiative;
 mod property_filter;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
 pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
+use feed::{Feed, FeedArm, FeedReads, OrderedScans};
 use initiative::initiative_top_clause;
 pub(in crate::outbound::pg_soup_repo) use initiative::{
     build_initiative_filter, initiative_access_clause, initiative_opted_in,
@@ -46,7 +48,10 @@ use models_soup::{
     project::SoupProject,
 };
 use recursion::CollapsibleExt;
-use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
+use sqlx::{
+    PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction, postgres::PgRow,
+    prelude::FromRow,
+};
 use system_properties::{StatusOption, SystemPropertyKey};
 use tracing::Instrument;
 use uuid::Uuid;
@@ -55,6 +60,7 @@ use crate::domain::models::{
     DynamicSort, SoupDocumentServerFacts, SoupProjectionHydration, SoupSortDirection,
     grouping::ItemGroupingInfo,
 };
+use crate::outbound::pg_soup_repo::candidate_gates::PER_CANDIDATE;
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_order_expr, group_select_expr,
     property_date_expression, property_value_sql,
@@ -95,18 +101,79 @@ fn sort_key_expression(enabled: bool) -> &'static str {
     }
 }
 
-/// First document-ID array after the existing query parameters and optional property sort.
-fn first_document_id_slot(sort: DynamicSort, grouped: bool) -> usize {
-    let fixed_parameters = if grouped { 10 } else { 8 };
-    let property_parameters = if matches!(sort, DynamicSort::Property { .. }) {
-        2
+/// The key a name sort orders and pages on.
+///
+/// ICU's root collation, not the database default: the web re-sorts loaded
+/// rows with `localeCompare(…, 'und')`, the same ICU root order, while the
+/// default libc collation ignores punctuation and would page "10. Wrap"
+/// before "1. Intro".
+fn name_sort_key(name_sql: &str) -> String {
+    format!(r#"lower({name_sql}) COLLATE "und-x-icu""#)
+}
+
+/// The `sort_name` column one union arm contributes to a name-sorted page.
+///
+/// Lower-cased and collated here so the page order, the keyset, and the
+/// cursor comparison all read the same expression.
+fn name_sort_column(enabled: bool, name_sql: &str) -> String {
+    if enabled {
+        format!(", {} as sort_name", name_sort_key(name_sql))
     } else {
-        0
+        String::new()
+    }
+}
+
+/// The caller's source-id array, after the existing query parameters and the
+/// optional property (definition plus key) or name (key only) sort binds.
+fn source_ids_slot(sort: DynamicSort, grouped: bool) -> usize {
+    let fixed_parameters = if grouped { 10 } else { 8 };
+    let sort_parameters = match sort {
+        DynamicSort::Property { .. } => 2,
+        DynamicSort::Name { .. } => 1,
+        DynamicSort::Timestamp(_) => 0,
     };
-    fixed_parameters + property_parameters + 1
+    fixed_parameters + sort_parameters + 1
+}
+
+/// First document-ID array, after the caller's source ids.
+fn first_document_id_slot(sort: DynamicSort, grouped: bool) -> usize {
+    source_ids_slot(sort, grouped) + 1
+}
+
+/// Direction of a keyed (property or name) page, or `None` for timestamps.
+fn keyed_direction(sort: DynamicSort) -> Option<SoupSortDirection> {
+    match sort {
+        DynamicSort::Property { direction, .. } | DynamicSort::Name { direction, .. } => {
+            Some(direction)
+        }
+        DynamicSort::Timestamp(_) => None,
+    }
 }
 
 // The non-null and missing-key branches both follow SQL's NULLS LAST order.
+fn keyed_keyset(
+    direction: SoupSortDirection,
+    key: &str,
+    cursor_key: &str,
+    timestamp: &str,
+    id: &str,
+) -> String {
+    let comparison = match direction {
+        SoupSortDirection::Asc => ">",
+        SoupSortDirection::Desc => "<",
+    };
+    format!(
+        "($4::timestamptz IS NULL OR (
+            ({cursor_key} IS NULL AND {key} IS NULL
+                AND ({timestamp}, {id}::text) < ($4, $5))
+            OR ({cursor_key} IS NOT NULL AND (
+                {key} IS NULL OR {key} {comparison} {cursor_key}
+                OR ({key} = {cursor_key}
+                    AND ({timestamp}, {id}::text) < ($4, $5))
+            ))))"
+    )
+}
+
 fn property_keyset(
     sort: DynamicSort,
     key: &str,
@@ -114,39 +181,45 @@ fn property_keyset(
     timestamp: &str,
     id: &str,
 ) -> String {
-    let comparison = match sort {
-        DynamicSort::Property {
-            direction: SoupSortDirection::Asc,
-            ..
-        } => ">",
-        DynamicSort::Property {
-            direction: SoupSortDirection::Desc,
-            ..
-        } => "<",
-        DynamicSort::Timestamp(_) => unreachable!("timestamp uses the deployed tuple predicate"),
-    };
-    format!(
-        "($4::timestamptz IS NULL OR (
-            (${cursor_key}::double precision IS NULL AND {key} IS NULL
-                AND ({timestamp}, {id}::text) < ($4, $5))
-            OR (${cursor_key}::double precision IS NOT NULL AND (
-                {key} IS NULL OR {key} {comparison} ${cursor_key}::double precision
-                OR ({key} = ${cursor_key}::double precision
-                    AND ({timestamp}, {id}::text) < ($4, $5))
-            ))))"
+    let direction = keyed_direction(sort).expect("timestamp uses the deployed tuple predicate");
+    keyed_keyset(
+        direction,
+        key,
+        &format!("${cursor_key}::double precision"),
+        timestamp,
+        id,
     )
 }
 
-fn property_order(sort: DynamicSort, key: &str, timestamp: &str, id: &str) -> String {
-    match sort {
-        DynamicSort::Property { direction, .. } => {
+/// The cursor's own name is stored with its original case; lower and collate
+/// it to match the `sort_name` column.
+fn name_keyset(
+    sort: DynamicSort,
+    key: &str,
+    cursor_name: usize,
+    timestamp: &str,
+    id: &str,
+) -> String {
+    let direction = keyed_direction(sort).expect("timestamp uses the deployed tuple predicate");
+    keyed_keyset(
+        direction,
+        key,
+        &name_sort_key(&format!("${cursor_name}::text")),
+        timestamp,
+        id,
+    )
+}
+
+fn page_order(sort: DynamicSort, key: &str, timestamp: &str, id: &str) -> String {
+    match keyed_direction(sort) {
+        Some(direction) => {
             let direction = match direction {
                 SoupSortDirection::Asc => "ASC",
                 SoupSortDirection::Desc => "DESC",
             };
             format!("{key} {direction} NULLS LAST, {timestamp} DESC, {id} DESC")
         }
-        DynamicSort::Timestamp(_) => format!("{timestamp} DESC, {id} DESC"),
+        None => format!("{timestamp} DESC, {id} DESC"),
     }
 }
 
@@ -186,6 +259,29 @@ static PREFIX: &str = r#"
     ),
 "#;
 
+/// The `user_source_ids` rows, bound into the document, chat, and project
+/// access gates by [`bound_access_semi_join`].
+async fn fetch_user_source_ids(
+    connection: &mut PgConnection,
+    user_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let source_ids = sqlx::query_scalar!(
+        r#"
+        SELECT cp.channel_id::text FROM comms_channel_participants cp
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        UNION ALL
+        SELECT t.team_id::text FROM team_user t
+            WHERE t.user_id = $1
+        UNION ALL
+        SELECT $1
+        "#,
+        user_id
+    )
+    .fetch_all(connection)
+    .await?;
+    Ok(source_ids.into_iter().flatten().collect())
+}
+
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
 
 static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
@@ -205,6 +301,7 @@ fn document_top_clause(
     sort_method: SimpleSortMethod,
     needs_sub_type_join: bool,
     property_sort: bool,
+    name_sort: bool,
     task_only: bool,
 ) -> String {
     let sub_type_join = if needs_sub_type_join || (property_sort && !task_only) {
@@ -220,12 +317,13 @@ fn document_top_clause(
         }
         (false, _) => "",
     };
+    let name_column = name_sort_column(name_sort, "d.name");
     format!(
         r#"
                 SELECT
                     'document'::text as item_type,
                     d.id,
-                    {}::timestamptz as sort_ts{property_column}
+                    {}::timestamptz as sort_ts{property_column}{name_column}
                 FROM "Document" d
 {}"#,
         top_sort_expr("d", sort_method),
@@ -233,7 +331,7 @@ fn document_top_clause(
     )
 }
 
-fn chat_top_clause(sort_method: SimpleSortMethod, property_sort: bool) -> String {
+fn chat_top_clause(sort_method: SimpleSortMethod, property_sort: bool, name_sort: bool) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
 "#
@@ -245,12 +343,13 @@ fn chat_top_clause(sort_method: SimpleSortMethod, property_sort: bool) -> String
     } else {
         ""
     };
+    let name_column = name_sort_column(name_sort, "c.name");
     format!(
         r#"
                 SELECT
                     'chat'::text as item_type,
                     c.id,
-                    {}::timestamptz as sort_ts{property_column}
+                    {}::timestamptz as sort_ts{property_column}{name_column}
                 FROM "Chat" c
 {}"#,
         top_sort_expr("c", sort_method),
@@ -258,7 +357,11 @@ fn chat_top_clause(sort_method: SimpleSortMethod, property_sort: bool) -> String
     )
 }
 
-fn project_top_clause(sort_method: SimpleSortMethod, property_sort: bool) -> String {
+fn project_top_clause(
+    sort_method: SimpleSortMethod,
+    property_sort: bool,
+    name_sort: bool,
+) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh
                     ON uh."itemId" = p.id
@@ -273,12 +376,13 @@ fn project_top_clause(sort_method: SimpleSortMethod, property_sort: bool) -> Str
     } else {
         ""
     };
+    let name_column = name_sort_column(name_sort, "p.name");
     format!(
         r#"
                 SELECT
                     'project'::text as item_type,
                     p.id,
-                    {}::timestamptz as sort_ts{property_column}
+                    {}::timestamptz as sort_ts{property_column}{name_column}
                 FROM "Project" p
 {}"#,
         top_sort_expr("p", sort_method),
@@ -291,6 +395,7 @@ fn project_top_clause(sort_method: SimpleSortMethod, property_sort: bool) -> Str
 fn grouped_document_top_clause(
     sort_method: SimpleSortMethod,
     needs_sub_type_join: bool,
+    name_sort: bool,
     task_only: bool,
 ) -> String {
     let sort_ts = top_sort_expr("d", sort_method);
@@ -304,6 +409,7 @@ fn grouped_document_top_clause(
     } else {
         ""
     };
+    let name_column = name_sort_column(name_sort, "d.name");
     format!(
         r#"
                 SELECT
@@ -311,20 +417,21 @@ fn grouped_document_top_clause(
                     d.id,
                     {sort_ts}::timestamptz as sort_ts,
                     d."projectId"::text as project_id,
-                    {property_entity_type} as property_entity_type
+                    {property_entity_type} as property_entity_type{name_column}
                 FROM "Document" d
                 {sub_type_join}
 "#
     )
 }
 
-fn grouped_chat_top_clause(sort_method: SimpleSortMethod) -> String {
+fn grouped_chat_top_clause(sort_method: SimpleSortMethod, name_sort: bool) -> String {
     let sort_ts = top_sort_expr("c", sort_method);
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1"#
     } else {
         ""
     };
+    let name_column = name_sort_column(name_sort, "c.name");
     format!(
         r#"
                 SELECT
@@ -332,20 +439,21 @@ fn grouped_chat_top_clause(sort_method: SimpleSortMethod) -> String {
                     c.id,
                     {sort_ts}::timestamptz as sort_ts,
                     c."projectId"::text as project_id,
-                    'CHAT'::property_entity_type as property_entity_type
+                    'CHAT'::property_entity_type as property_entity_type{name_column}
                 FROM "Chat" c
                 {user_history_join}
 "#
     )
 }
 
-fn grouped_project_top_clause(sort_method: SimpleSortMethod) -> String {
+fn grouped_project_top_clause(sort_method: SimpleSortMethod, name_sort: bool) -> String {
     let sort_ts = top_sort_expr("p", sort_method);
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"LEFT JOIN "UserHistory" uh ON uh."itemId" = p.id AND uh."itemType" = 'project' AND uh."userId" = $1"#
     } else {
         ""
     };
+    let name_column = name_sort_column(name_sort, "p.name");
     format!(
         r#"
                 SELECT
@@ -353,14 +461,14 @@ fn grouped_project_top_clause(sort_method: SimpleSortMethod) -> String {
                     p.id,
                     {sort_ts}::timestamptz as sort_ts,
                     p."parentId"::text as project_id,
-                    'PROJECT'::property_entity_type as property_entity_type
+                    'PROJECT'::property_entity_type as property_entity_type{name_column}
                 FROM "Project" p
                 {user_history_join}
 "#
     )
 }
 
-fn grouped_calendar_event_top_clause(sort_method: SimpleSortMethod) -> String {
+fn grouped_calendar_event_top_clause(sort_method: SimpleSortMethod, name_sort: bool) -> String {
     let sort_ts = match sort_method {
         SimpleSortMethod::CreatedAt => "event.created_at",
         SimpleSortMethod::ViewedAt => "'1970-01-01 00:00:00+00'",
@@ -368,6 +476,7 @@ fn grouped_calendar_event_top_clause(sort_method: SimpleSortMethod) -> String {
             "GREATEST(event.updated_at, event.last_reminder_fired_at)"
         }
     };
+    let name_column = name_sort_column(name_sort, "event.title");
     format!(
         r#"
                 SELECT
@@ -375,7 +484,7 @@ fn grouped_calendar_event_top_clause(sort_method: SimpleSortMethod) -> String {
                     event.id::text as id,
                     {sort_ts}::timestamptz as sort_ts,
                     NULL::text as project_id,
-                    'CALENDAR_EVENT'::property_entity_type as property_entity_type
+                    'CALENDAR_EVENT'::property_entity_type as property_entity_type{name_column}
                 FROM calendar_events event
                 WHERE (
                       event.owner_id = $1
@@ -403,6 +512,7 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d."branchedFromVersionId" as "branched_from_version_id",
             d."documentFamilyId" as "document_family_id",
             d."fileType" as "file_type",
+            d.appearance as "appearance",
             d."createdAt"::timestamptz as "created_at",
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
@@ -490,6 +600,7 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             NULL as "branched_from_version_id",
             NULL as "document_family_id",
             NULL as "file_type",
+            NULL::jsonb as "appearance",
             c."createdAt"::timestamptz as "created_at",
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
@@ -525,6 +636,7 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL as "branched_from_version_id",
             NULL as "document_family_id",
             NULL as "file_type",
+            NULL::jsonb as "appearance",
             p."createdAt"::timestamptz as "created_at",
             p."updatedAt"::timestamptz as "updated_at",
             p."parentId" as "project_id",
@@ -568,6 +680,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d."branchedFromVersionId" as "branched_from_version_id",
             d."documentFamilyId" as "document_family_id",
             d."fileType" as "file_type",
+            d.appearance as "appearance",
             d."createdAt"::timestamptz as "created_at",
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
@@ -659,6 +772,7 @@ static GROUPED_CHAT_DETAIL_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             c."createdAt"::timestamptz as "created_at",
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
@@ -698,6 +812,7 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             p."createdAt"::timestamptz as "created_at",
             p."updatedAt"::timestamptz as "updated_at",
             p."parentId" as "project_id",
@@ -745,6 +860,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             event.created_at as "created_at",
             event.updated_at as "updated_at",
             NULL::text as "project_id",
@@ -814,6 +930,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             NULL::timestamptz as "created_at",
             NULL::timestamptz as "updated_at",
             NULL::text as "project_id",
@@ -1140,6 +1257,30 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     }
 }
 
+/// The value `document_literal_sql` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn document_literal_constant(
+    literal: &DocumentLiteral,
+) -> Option<bool> {
+    match literal {
+        DocumentLiteral::IncludeCbmAtmNc(false) => Some(true),
+        DocumentLiteral::CrmAssociated(_) => Some(false),
+        DocumentLiteral::FileType(_)
+        | DocumentLiteral::Id(_)
+        | DocumentLiteral::ProjectId(_)
+        | DocumentLiteral::Owner(_)
+        | DocumentLiteral::Importance(_)
+        | DocumentLiteral::NotificationState(_)
+        | DocumentLiteral::IncludeCbmAtmNc(true)
+        | DocumentLiteral::SubType(_)
+        | DocumentLiteral::IsEmailAttachment(_)
+        | DocumentLiteral::CreatedAt(_)
+        | DocumentLiteral::UpdatedAt(_)
+        | DocumentLiteral::Property(_)
+        | DocumentLiteral::EmailAttachmentParticipant(_)
+        | DocumentLiteral::NameContains(_) => None,
+    }
+}
+
 fn document_literal_sql(literal: DocumentLiteral) -> String {
     match literal {
         DocumentLiteral::FileType(f) => {
@@ -1198,7 +1339,9 @@ fn document_literal_sql(literal: DocumentLiteral) -> String {
         }
         DocumentLiteral::CreatedAt(lit) => date_predicate(r#"d."createdAt""#, &lit),
         DocumentLiteral::UpdatedAt(lit) => date_predicate(r#"d."updatedAt""#, &lit),
-        DocumentLiteral::Property(lit) => property_literal_predicate(&lit, "d.id"),
+        DocumentLiteral::Property(lit) => {
+            property_literal_predicate(&lit, "d.id", PropertyProbe::Planned)
+        }
         DocumentLiteral::EmailAttachmentParticipant(email) => {
             email_attachment_participant_predicate(&email, "d.id")
         }
@@ -1311,6 +1454,22 @@ fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> Stri
     }
 }
 
+/// The value `build_chat_filter` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn chat_literal_constant(
+    literal: &ChatLiteral,
+) -> Option<bool> {
+    match literal {
+        ChatLiteral::Role(_) => Some(true),
+        ChatLiteral::Importance(important) => Some(*important),
+        ChatLiteral::ProjectId(_)
+        | ChatLiteral::ChatId(_)
+        | ChatLiteral::Owner(_)
+        | ChatLiteral::NotificationState(_)
+        | ChatLiteral::CreatedAt(_)
+        | ChatLiteral::UpdatedAt(_) => None,
+    }
+}
+
 pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
     ast: Option<&Expr<ChatLiteral>>,
 ) -> String {
@@ -1351,6 +1510,21 @@ pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
         String::new()
     } else {
         format!(" AND {}", formatting)
+    }
+}
+
+/// The value `build_project_filter` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn project_literal_constant(
+    literal: &ProjectLiteral,
+) -> Option<bool> {
+    match literal {
+        ProjectLiteral::Importance(important) => Some(*important),
+        ProjectLiteral::ProjectId(_)
+        | ProjectLiteral::ProjectIdSelf(_)
+        | ProjectLiteral::Owner(_)
+        | ProjectLiteral::NotificationState(_)
+        | ProjectLiteral::CreatedAt(_)
+        | ProjectLiteral::UpdatedAt(_) => None,
     }
 }
 
@@ -1400,10 +1574,39 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
     ast: Option<&Expr<PropertiesLiteral>>,
     entity_id_sql: &str,
 ) -> String {
+    build_probed_properties_filter(ast, entity_id_sql, PropertyProbe::Planned)
+}
+
+/// How a property `EXISTS` reaches `entity_properties`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PropertyProbe {
+    /// Postgres may turn the `EXISTS` into a semi-join, such as a bitmap over
+    /// every row the property's partial index holds, which suits a broad arm.
+    Planned,
+    /// One lookup per candidate, behind an `OFFSET` fence: for an id-bounded
+    /// arm, whose candidates are far fewer than the property's rows.
+    PerCandidate,
+}
+
+impl PropertyProbe {
+    /// Ends the `EXISTS` subquery: nothing, or the fence.
+    fn fence(self) -> String {
+        match self {
+            Self::Planned => String::new(),
+            Self::PerCandidate => format!(" {PER_CANDIDATE}"),
+        }
+    }
+}
+
+fn build_probed_properties_filter(
+    ast: Option<&Expr<PropertiesLiteral>>,
+    entity_id_sql: &str,
+    probe: PropertyProbe,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
-    let formatting = property_filter::predicate(expr, entity_id_sql);
+    let formatting = property_filter::predicate(expr, entity_id_sql, probe);
     if formatting.is_empty() {
         String::new()
     } else {
@@ -1413,7 +1616,11 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
 
 /// An EXISTS check that the entity identified by `entity_id_sql` has a
 /// property value matching `literal`.
-fn property_literal_predicate(literal: &PropertiesLiteral, entity_id_sql: &str) -> String {
+fn property_literal_predicate(
+    literal: &PropertiesLiteral,
+    entity_id_sql: &str,
+    probe: PropertyProbe,
+) -> String {
     let PropertiesLiteral {
         property_definition_id,
         entity_type,
@@ -1456,8 +1663,9 @@ fn property_literal_predicate(literal: &PropertiesLiteral, entity_id_sql: &str) 
             WHERE ep_prop.entity_id = {entity_id_sql}
             {entity_type_clause}
             AND ep_prop.property_definition_id = '{property_definition_id}'
-            AND {value_predicate}
-        )"#
+            AND {value_predicate}{fence}
+        )"#,
+        fence = probe.fence(),
     )
 }
 
@@ -1537,12 +1745,22 @@ pub(in crate::outbound::pg_soup_repo) fn document_filter_is_impossible(
 pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
     ast: Option<&Expr<ProjectLiteral>>,
 ) -> bool {
+    project_filter_never_matches(ast, false)
+}
+
+/// Whether a project filter can match no project. With `nil_parent`, a parent
+/// pinned to the nil id counts too: `parentId` references `Project(id)`, and
+/// no project has the nil id.
+fn project_filter_never_matches(ast: Option<&Expr<ProjectLiteral>>, nil_parent: bool) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
             filter_ast::ExprFrame::Or(a, b) => a && b,
             filter_ast::ExprFrame::Not(_) => false,
             filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectIdSelf(id)) => id.is_nil(),
+            filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectId(id)) => {
+                nil_parent && id.is_nil()
+            }
             filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => true,
             filter_ast::ExprFrame::Literal(_) => false,
         })
@@ -1561,6 +1779,54 @@ pub(in crate::outbound::pg_soup_repo) fn calendar_event_filter_is_impossible(
             filter_ast::ExprFrame::Literal(_) => false,
         })
     })
+}
+
+/// The union arms a dynamic query reads for a filter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DynamicArms {
+    documents: bool,
+    chats: bool,
+    projects: bool,
+    initiatives: bool,
+    database_rows: bool,
+}
+
+impl DynamicArms {
+    fn new(filter_ast: &EntityFilterAst) -> Self {
+        let properties = filter_ast.properties_filter.as_deref();
+        Self {
+            documents: !document_filter_is_impossible(filter_ast.document_filter.as_deref())
+                && properties_filter_can_apply_to(
+                    properties,
+                    &[PropertyEntityType::Document, PropertyEntityType::Task],
+                ),
+            chats: !chat_filter_is_impossible(filter_ast.chat_filter.as_deref())
+                && properties_filter_can_apply_to(properties, &[PropertyEntityType::Chat]),
+            projects: !project_filter_is_impossible(filter_ast.project_filter.as_deref())
+                && properties_filter_can_apply_to(properties, &[PropertyEntityType::Project]),
+            initiatives: initiative_opted_in(filter_ast.initiative_filter.as_deref())
+                && properties_filter_can_apply_to(properties, &[PropertyEntityType::Initiative]),
+            database_rows: database_row_opted_in(filter_ast.database_row_filter.as_deref())
+                && properties_filter_can_apply_to(properties, &[PropertyEntityType::DatabaseRow]),
+        }
+    }
+
+    /// Whether the query can return a row. With no arm, it is a `WHERE false`
+    /// placeholder; with only a project arm under the nil parent, it reads no
+    /// row either. Callers skip both, and their transaction.
+    ///
+    /// A nil parent keeps its arm in a union with other live arms. Without
+    /// it, the hydration reads `TopItems` once, Postgres inlines the CTE, and
+    /// CRM record Files then scanned `document_sub_type` once per page row.
+    fn can_match(filter_ast: &EntityFilterAst) -> bool {
+        let arms = Self::new(filter_ast);
+        arms.documents
+            || arms.chats
+            || arms.initiatives
+            || arms.database_rows
+            || (arms.projects
+                && !project_filter_never_matches(filter_ast.project_filter.as_deref(), true))
+    }
 }
 
 fn push_union_separator(builder: &mut QueryBuilder<'_, Postgres>, needs_separator: &mut bool) {
@@ -1614,74 +1880,446 @@ pub(in crate::outbound::pg_soup_repo) fn access_semi_join(
     )
 }
 
-fn document_top_where_clause(sort_method: SimpleSortMethod) -> String {
+/// [`access_semi_join`] over the caller's source ids, bound as a constant
+/// array at parameter `source_ids`. Postgres costs the `user_source_ids` join at the average
+/// source's grant count, so it planned callers holding hundreds of thousands
+/// of grants with one item probe per grant; it estimates the array from
+/// `entity_access.source_id` statistics and hashes the grants instead.
+fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) -> String {
+    format!(
+        r#"{id_sql} IN (
+                    SELECT ea.entity_id::text
+                    FROM entity_access ea
+                    WHERE ea.source_id = ANY(${source_ids}::text[])
+                        AND ea.entity_type = '{entity_type}'
+                )"#
+    )
+}
+
+/// The document arm's access gate for a caller whose grants were counted
+/// ([`DocumentGrants::Counted`]): the semi-join over their distinct granted
+/// ids, with the count as its `LIMIT`. Postgres estimates every source it has
+/// no statistics for at the table's average grant count, so a caller with a
+/// few hundred channels looked like a holder of hundreds of thousands of
+/// grants and got a hash join over a scan of every live document. A constant
+/// `LIMIT` is the one estimate Postgres takes as given, so it now plans
+/// with the real number: one index probe per granted document for a broad
+/// list, the list's own index for a selective one. The `LIMIT` never removes
+/// a row: the count read the same grant rows in the same snapshot
+/// ([`begin_dynamic_query`]), and there are no more distinct ids than rows.
+/// The fence reads the grants by source before the `DISTINCT`; without it,
+/// `DISTINCT ... LIMIT` was answered by walking an entity-ordered index over
+/// all of `entity_access`.
+fn counted_document_access_semi_join(source_ids: usize, grants: u32) -> String {
+    format!(
+        r#"d.id IN (
+                    SELECT DISTINCT held.entity_id::text
+                    FROM (
+                        SELECT ea.entity_id
+                        FROM entity_access ea
+                        WHERE ea.source_id = ANY(${source_ids}::text[])
+                            AND ea.entity_type = 'document'
+                        OFFSET 0
+                    ) held
+                    LIMIT {grants}
+                )"#
+    )
+}
+
+/// Callers holding at most this many document grants have them counted for
+/// [`counted_document_access_semi_join`]. At the limit a broad page costs
+/// about half a second warm, one lookup per granted document. Above it, one
+/// scan of the live documents can cost less than that many random reads, and
+/// the statistics list the sources that hold that many, so the planner
+/// chooses. The search lookup (`get_user_accessible_items`) switches at the
+/// same count.
+const COUNTED_DOCUMENT_GRANTS: u32 = 50_000;
+
+/// How many document grants the caller's sources hold, as far as the
+/// document arm's access gate needs to know.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::outbound::pg_soup_repo) enum DocumentGrants {
+    /// Not counted: the document arm does not gate on the count
+    /// ([`document_arm_gates_on_count`]), or the caller holds more than
+    /// [`COUNTED_DOCUMENT_GRANTS`]. Postgres estimates them.
+    Estimated,
+    /// The grant rows the caller's sources hold, counted in the query's
+    /// snapshot.
+    Counted(u32),
+}
+
+impl DocumentGrants {
+    /// Counts the caller's document grants, up to one past
+    /// [`COUNTED_DOCUMENT_GRANTS`], when the document arm gates on the count.
+    async fn count(
+        connection: &mut PgConnection,
+        filter: &EntityFilterAst,
+        source_ids: &[String],
+    ) -> Result<Self, sqlx::Error> {
+        if !document_arm_gates_on_count(filter) {
+            return Ok(Self::Estimated);
+        }
+        let span = tracing::info_span!(
+            "soup.sql.count_document_grants",
+            grants = tracing::field::Empty
+        );
+        let counted = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) AS "count!"
+            FROM (
+                SELECT 1
+                FROM entity_access ea
+                WHERE ea.source_id = ANY($1)
+                    AND ea.entity_type = 'document'
+                LIMIT $2
+            ) held
+            "#,
+            source_ids,
+            i64::from(COUNTED_DOCUMENT_GRANTS) + 1
+        )
+        .persistent(false)
+        .fetch_one(connection)
+        .instrument(span.clone())
+        .await?;
+        span.record("grants", counted);
+        Ok(u32::try_from(counted)
+            .ok()
+            .filter(|&grants| grants <= COUNTED_DOCUMENT_GRANTS)
+            .map_or(Self::Estimated, Self::Counted))
+    }
+}
+
+/// Whether the document arm checks access against the caller's counted
+/// grants. It does not when it can return no document, when it checks its
+/// named documents after its filters ([`DocumentArmAccess::AfterFilters`]),
+/// or when its filter requires a folder or a notification
+/// ([`requires_a_folder_or_notification`]).
+fn document_arm_gates_on_count(filter: &EntityFilterAst) -> bool {
+    let document_filter = filter.document_filter.as_deref();
+    DynamicArms::new(filter).documents
+        && !names_few_documents(document_filter)
+        && !requires_a_folder_or_notification(document_filter)
+}
+
+/// Whether every document the filter admits is in a named folder, or has a
+/// notification for the caller. Postgres reads those few documents by index
+/// first and probes each one's grants, which costs less than reading every
+/// grant the caller holds: a folder's page took under a millisecond with the
+/// grants estimated, and up to a tenth of a second with them counted.
+fn requires_a_folder_or_notification(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(
+                DocumentLiteral::ProjectId(_) | DocumentLiteral::NotificationState(_),
+            ) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
+/// The most named ids an arm checks access for after its filters. Each
+/// survivor costs a few index probes, so the per-candidate form grows with
+/// the list while the planned semi-join and property bitmaps do not. CRM
+/// scopes measured up to about 2,000 ids. On a filtered task list the two
+/// forms read the same warm buffers at 4,000 ids, and the per-candidate form
+/// read about 9% more at 8,000.
+const MAX_NAMED_CANDIDATES: usize = 4_000;
+
+/// At most how many documents the filter admits when it admits only
+/// documents it names by id (a resolved CRM association, or ids passed in),
+/// or `None` when it can admit any document.
+fn named_document_bound(ast: Option<&Expr<DocumentLiteral>>) -> Option<usize> {
+    ast.and_then(|expr| {
+        expr.collapse_frames(
+            |frame: filter_ast::ExprFrame<Option<usize>, _>| match frame {
+                filter_ast::ExprFrame::And(a, b) => match (a, b) {
+                    (Some(a), Some(b)) => Some(a.min(b)),
+                    (a, b) => a.or(b),
+                },
+                filter_ast::ExprFrame::Or(a, b) => a.zip(b).map(|(a, b)| a.saturating_add(b)),
+                filter_ast::ExprFrame::Not(_) => None,
+                filter_ast::ExprFrame::Literal(DocumentLiteral::Id(_)) => Some(1),
+                filter_ast::ExprFrame::Literal(_) => None,
+            },
+        )
+    })
+}
+
+/// How a flat timestamp page reads a fenced arm: in page order, past the
+/// cursor, so access probes stop at its `LIMIT` and skip earlier pages. The
+/// outer `TopItems` keeps the same cursor predicate.
+const FLAT_TIMESTAMP_PAGE: FencedPage = FencedPage {
+    order_by: "sort_ts DESC, id DESC",
+    after_cursor: "($4::timestamptz IS NULL OR (bounded_documents.sort_ts, bounded_documents.id::text) < ($4, $5))",
+};
+
+/// The page order and cursor a fenced arm applies before probing access.
+struct FencedPage {
+    order_by: &'static str,
+    after_cursor: &'static str,
+}
+
+/// Whether the filter names at most [`MAX_NAMED_CANDIDATES`] documents, and
+/// admits no other.
+fn names_few_documents(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+    named_document_bound(ast).is_some_and(|bound| bound <= MAX_NAMED_CANDIDATES)
+}
+
+/// How a document arm gates access. A broad arm keeps a flattenable
+/// semi-join: [`counted_document_access_semi_join`] when the caller's grants
+/// were counted, [`bound_access_semi_join`] otherwise, so Postgres can hash
+/// the caller's grants or probe them per candidate. An arm bounded by at
+/// most [`MAX_NAMED_CANDIDATES`] named ids reads its candidates and their
+/// own filters behind an `OFFSET` fence and probes `entity_access` once per
+/// survivor afterwards ([`bounded_access_probe`]): Postgres otherwise checks
+/// access first, on every listed id, and pays a grant lookup for each
+/// document the sub-type, file-type and property filters then reject.
+#[derive(Clone, Copy)]
+enum DocumentArmAccess {
+    Joined,
+    Counted(u32),
+    AfterFilters,
+}
+
+impl DocumentArmAccess {
+    fn new(document_filter: Option<&Expr<DocumentLiteral>>, grants: DocumentGrants) -> Self {
+        match grants {
+            _ if names_few_documents(document_filter) => Self::AfterFilters,
+            DocumentGrants::Counted(grants) => Self::Counted(grants),
+            DocumentGrants::Estimated => Self::Joined,
+        }
+    }
+
+    fn property_probe(self) -> PropertyProbe {
+        match self {
+            Self::Joined | Self::Counted(_) => PropertyProbe::Planned,
+            Self::AfterFilters => PropertyProbe::PerCandidate,
+        }
+    }
+
+    /// Opens the arm, before its top clause.
+    fn open(self) -> &'static str {
+        match self {
+            Self::Joined | Self::Counted(_) => "",
+            Self::AfterFilters => "SELECT * FROM (",
+        }
+    }
+
+    /// Closes the arm, after its filters. A flat timestamp page passes
+    /// [`FLAT_TIMESTAMP_PAGE`]; property and name sorts, and grouped pages,
+    /// which count every candidate, pass `None` and probe them all.
+    fn close(self, page: Option<&FencedPage>, source_ids: usize) -> String {
+        let probe = bounded_access_probe("bounded_documents.id", "document", source_ids);
+        match (self, page) {
+            (Self::Joined | Self::Counted(_), _) => String::new(),
+            (Self::AfterFilters, None) => {
+                format!(" {PER_CANDIDATE}) bounded_documents WHERE {probe}\n")
+            }
+            (
+                Self::AfterFilters,
+                Some(FencedPage {
+                    order_by,
+                    after_cursor,
+                }),
+            ) => format!(
+                " ORDER BY {order_by} {PER_CANDIDATE}) bounded_documents WHERE {after_cursor} AND {probe}\n"
+            ),
+        }
+    }
+}
+
+/// The access check for one candidate of an id-bounded arm: does any grant of
+/// the bound sources name it. It compares the uuid column, not
+/// `entity_id::text`, so the two partial unique indexes answer it from the
+/// index alone; the text expression index needs a heap read per probe. The
+/// cast is exact: every candidate matched a [`DocumentLiteral::Id`], whose
+/// text is a lowercase canonical uuid, and the fence keeps the probe from
+/// running before that filter.
+fn bounded_access_probe(id_sql: &str, entity_type: &str, source_ids: usize) -> String {
+    let entity_id = format!("{id_sql}::uuid");
+    let probe = |project: &str| {
+        format!(
+            r#"EXISTS (
+                    SELECT 1 FROM entity_access ea
+                    WHERE ea.entity_id = {entity_id}
+                        AND ea.entity_type = '{entity_type}'
+                        AND ea.source_id = ANY(${source_ids}::text[])
+                        AND ea.granted_from_project_id {project}
+                    {PER_CANDIDATE}
+                )"#
+        )
+    };
+    format!("({} OR {})", probe("IS NULL"), probe("IS NOT NULL"))
+}
+
+fn document_top_where_clause(
+    sort_method: SimpleSortMethod,
+    access: DocumentArmAccess,
+    source_ids: usize,
+) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
 "#
     } else {
         ""
     };
+    let access_clause = match access {
+        DocumentArmAccess::Joined => format!(
+            "\n                AND {}",
+            bound_access_semi_join("d.id", "document", source_ids)
+        ),
+        DocumentArmAccess::Counted(grants) => format!(
+            "\n                AND {}",
+            counted_document_access_semi_join(source_ids, grants)
+        ),
+        DocumentArmAccess::AfterFilters => String::new(),
+    };
     format!(
-        r#"{user_history_join}                WHERE d."deletedAt" IS NULL
-                AND {}
-"#,
-        access_semi_join("d.id", "document")
+        r#"{user_history_join}                WHERE d."deletedAt" IS NULL{access_clause}
+"#
     )
 }
 
-fn chat_top_where_clause() -> String {
+fn chat_top_where_clause(source_ids: usize) -> String {
     format!(
         r#"                WHERE c."deletedAt" IS NULL
                 AND {}
 "#,
-        access_semi_join("c.id", "chat")
+        bound_access_semi_join("c.id", "chat", source_ids)
     )
 }
 
-fn project_top_where_clause() -> String {
+fn project_top_where_clause(source_ids: usize) -> String {
     format!(
         r#"                WHERE p."deletedAt" IS NULL
                 AND {}
 "#,
-        access_semi_join("p.id", "project")
+        bound_access_semi_join("p.id", "project", source_ids)
     )
 }
 
+/// Source scans read up to a page from every source the user holds, where the item tables read
+/// each visible item once. Past this many sources × page size the query reads the item tables. A
+/// routing threshold fit to the production-scale benchmark, not a bound on rows read.
+const SOURCE_SCAN_ROWS: i64 = 5_000;
+
+/// Each source also costs an index descent per kind before it yields a row. The benchmark's users
+/// held up to 354 sources; past this many the query reads the item tables.
+const SOURCE_SCAN_SOURCES: i64 = 400;
+
+/// What decides whether a page may read `source_items`: asked once, on the page's connection,
+/// before any page with a projected arm, and never with the projection disabled.
+struct ScanBound {
+    /// How many sources `fetch_user_source_ids` returned for the user.
+    sources: i64,
+    /// Whether the session's time zone is UTC. Projected scans order and bound the stored
+    /// `timestamp` values, which order like the item-table path's `timestamptz` casts only
+    /// where no daylight-saving jump reorders them.
+    utc: bool,
+    /// Whether the table is maintained and was backfilled since (`source_items_exact()`). Without
+    /// it the table can be empty or stale, so the page reads the item tables: a revoked grant
+    /// must not keep listing an item.
+    exact: bool,
+}
+
+impl ScanBound {
+    fn allows(&self, reads: FeedReads, limit: i64) -> bool {
+        self.exact
+            && match reads.ordered {
+                None => true,
+                Some(OrderedScans::Owner) => self.utc,
+                Some(OrderedScans::Sources) => {
+                    self.utc
+                        && self.sources <= SOURCE_SCAN_SOURCES
+                        && self.sources * limit <= SOURCE_SCAN_ROWS
+                }
+            }
+    }
+}
+
+async fn scan_bound(
+    connection: &mut sqlx::PgConnection,
+    source_ids: &[String],
+) -> Result<ScanBound, sqlx::Error> {
+    let sources = i64::try_from(source_ids.len()).unwrap_or(i64::MAX);
+    let span = tracing::info_span!(
+        "soup.source_items.bound",
+        sources,
+        utc = tracing::field::Empty,
+        exact = tracing::field::Empty
+    );
+    let state = sqlx::query!(
+        r#"SELECT current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS "utc!",
+            source_items_exact() AS "exact!""#
+    )
+    .fetch_one(connection)
+    .instrument(span.clone())
+    .await?;
+    span.record("utc", state.utc);
+    span.record("exact", state.exact);
+    Ok(ScanBound {
+        sources,
+        utc: state.utc,
+        exact: state.exact,
+    })
+}
+
+/// Where `build_query` finds documents, chats and projects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ItemSource {
+    /// `source_items`, under every sort it can order.
+    SourceItems,
+    /// The item tables, which `CreatedAt` always reads.
+    ItemTables,
+}
+
+/// The flat query over the item tables, as production builds it with the projection disabled.
+#[cfg(test)]
 fn build_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     sort: DynamicSort,
+    document_grants: DocumentGrants,
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
-    let sort_method = sort.timestamp_method();
-    let property_sort = matches!(sort, DynamicSort::Property { .. });
-    let mut builder = sqlx::QueryBuilder::new(PREFIX);
+    build_query_from(
+        filter_ast,
+        exclude_frecency,
+        sort,
+        document_grants,
+        ItemSource::ItemTables,
+        "",
+        document_ids,
+    )
+    .0
+}
 
-    let include_initiatives = initiative_opted_in(filter_ast.initiative_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Initiative],
-        );
-    let include_database_rows = database_row_opted_in(filter_ast.database_row_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::DatabaseRow],
-        );
-    let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Document, PropertyEntityType::Task],
-        );
-    let include_chats = !chat_filter_is_impossible(filter_ast.chat_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Chat],
-        );
-    let include_projects = !project_filter_is_impossible(filter_ast.project_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Project],
-        );
+/// The flat query, reading documents, chats and projects from `item_source` where it can.
+/// Also returns the in-order scans whose bound the caller must check before running it.
+fn build_query_from<'a>(
+    filter_ast: &'a EntityFilterAst,
+    exclude_frecency: bool,
+    sort: DynamicSort,
+    document_grants: DocumentGrants,
+    item_source: ItemSource,
+    viewer: &str,
+    document_ids: &mut DocumentIdArrays,
+) -> (QueryBuilder<'a, Postgres>, Option<FeedReads>) {
+    let sort_method = sort.timestamp_method();
+    let source_ids = source_ids_slot(sort, false);
+    let property_sort = matches!(sort, DynamicSort::Property { .. });
+    let name_sort = matches!(sort, DynamicSort::Name { .. });
+
+    let DynamicArms {
+        documents: include_documents,
+        chats: include_chats,
+        projects: include_projects,
+        initiatives: include_initiatives,
+        database_rows: include_database_rows,
+    } = DynamicArms::new(filter_ast);
 
     let document_notification = filter_ast.document_filter.as_deref().and_then(|expr| {
         strip_notification_conjunction(expr, |lit| match lit {
@@ -1741,6 +2379,57 @@ fn build_query<'a>(
             filter_ast.project_filter.as_deref()
         };
 
+    let properties_filter = filter_ast.properties_filter.as_deref();
+    // An arm comes from source_items when the projection can order this sort and
+    // the arm's filter lets a source scan stop at the page; otherwise it reads its
+    // item table, as every arm does with the projection disabled. Building the
+    // document arm binds its id arrays, so only the arm the query reads is built.
+    let projected = item_source == ItemSource::SourceItems
+        && matches!(sort, DynamicSort::Timestamp(method) if Feed::serves(method));
+    let document_arm = (projected && include_documents)
+        .then(|| {
+            FeedArm::document(
+                document_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && document_notification.is_some(),
+                viewer,
+                document_ids,
+            )
+        })
+        .flatten();
+    let chat_arm = (projected && include_chats)
+        .then(|| {
+            FeedArm::chat(
+                chat_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && chat_notification.is_some(),
+            )
+        })
+        .flatten();
+    let project_arm = (projected && include_projects)
+        .then(|| {
+            FeedArm::project(
+                project_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && project_notification.is_some(),
+            )
+        })
+        .flatten();
+    let documents_from_table = include_documents && document_arm.is_none();
+    let chats_from_table = include_chats && chat_arm.is_none();
+    let projects_from_table = include_projects && project_arm.is_none();
+    let feed = projected
+        .then(|| {
+            Feed::new(
+                sort_method,
+                exclude_frecency,
+                source_ids,
+                [document_arm, chat_arm, project_arm].into_iter().flatten(),
+            )
+        })
+        .flatten();
+
+    let mut builder = sqlx::QueryBuilder::new(PREFIX);
     if let Some(predicate) = optimized_notification_predicate {
         let mut item_types = Vec::with_capacity(3);
         if include_documents && document_notification.is_some() {
@@ -1754,23 +2443,36 @@ fn build_query<'a>(
         }
         build_notification_items_cte(&mut builder, predicate, &item_types);
     }
+    if let Some(feed) = &feed {
+        feed.push_ctes(&mut builder);
+    }
 
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
     builder.push("SELECT all_items.item_type, all_items.id, all_items.sort_ts, ");
+    if name_sort {
+        builder.push("all_items.sort_name, ");
+    }
     builder.push(sort_key_expression(property_sort));
     builder.push(" AS sort_key FROM (");
 
     let mut needs_separator = false;
 
-    if include_documents {
+    if let Some(feed) = &feed {
+        feed.push_members(&mut builder, &mut needs_separator);
+    }
+
+    if documents_from_table {
         push_union_separator(&mut builder, &mut needs_separator);
         // Subtype is needed only for task-property filters or property-sort namespaces.
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
+        let access = DocumentArmAccess::new(document_filter, document_grants);
+        builder.push(access.open());
         builder.push(document_top_clause(
             sort_method,
             needs_task_property_joins,
             property_sort,
+            name_sort,
             document_filter_is_task_only(document_filter),
         ));
         if optimized_notification_predicate.is_some() && document_notification.is_some() {
@@ -1779,22 +2481,25 @@ fn build_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method));
+        builder.push(document_top_where_clause(sort_method, access, source_ids));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
-        builder.push(build_properties_filter(
+        builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
+            access.property_probe(),
         ));
+        let page = (!property_sort && !name_sort).then_some(&FLAT_TIMESTAMP_PAGE);
+        builder.push(access.close(page, source_ids));
     }
 
-    if include_chats {
+    if chats_from_table {
         push_union_separator(&mut builder, &mut needs_separator);
         // Chat top clause (lightweight)
-        builder.push(chat_top_clause(sort_method, property_sort));
+        builder.push(chat_top_clause(sort_method, property_sort, name_sort));
         if optimized_notification_predicate.is_some() && chat_notification.is_some() {
             builder.push(build_notification_join("c", "chat"));
         }
-        builder.push(chat_top_where_clause());
+        builder.push(chat_top_where_clause(source_ids));
         builder.push(build_chat_filter(chat_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -1802,14 +2507,14 @@ fn build_query<'a>(
         ));
     }
 
-    if include_projects {
+    if projects_from_table {
         push_union_separator(&mut builder, &mut needs_separator);
         // Project top clause (lightweight)
-        builder.push(project_top_clause(sort_method, property_sort));
+        builder.push(project_top_clause(sort_method, property_sort, name_sort));
         if optimized_notification_predicate.is_some() && project_notification.is_some() {
             builder.push(build_notification_join("p", "project"));
         }
-        builder.push(project_top_where_clause());
+        builder.push(project_top_where_clause(source_ids));
         builder.push(build_project_filter(project_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -1819,7 +2524,13 @@ fn build_query<'a>(
 
     if include_initiatives {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(initiative_top_clause(sort_method, false, property_sort));
+        builder.push(initiative_top_clause(
+            sort_method,
+            false,
+            property_sort,
+            name_sort,
+            filter_ast.initiative_filter.as_deref(),
+        ));
         builder.push(build_initiative_filter(
             filter_ast.initiative_filter.as_deref(),
         ));
@@ -1831,7 +2542,12 @@ fn build_query<'a>(
 
     if include_database_rows {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(database_row_top_clause(sort_method, false, property_sort));
+        builder.push(database_row_top_clause(
+            sort_method,
+            false,
+            property_sort,
+            name_sort,
+        ));
         builder.push(build_database_row_filter(
             filter_ast.database_row_filter.as_deref(),
         ));
@@ -1847,6 +2563,9 @@ fn build_query<'a>(
         );
         if property_sort {
             builder.push(", NULL::property_entity_type as property_entity_type");
+        }
+        if name_sort {
+            builder.push(", NULL::text as sort_name");
         }
         builder.push(" WHERE false");
     }
@@ -1876,6 +2595,14 @@ fn build_query<'a>(
             "all_items.sort_ts",
             "all_items.id",
         ));
+    } else if name_sort {
+        builder.push(name_keyset(
+            sort,
+            "all_items.sort_name",
+            9,
+            "all_items.sort_ts",
+            "all_items.id",
+        ));
     } else {
         // Preserve the deployed timestamp predicate and its tie-breaking order.
         builder.push(
@@ -1887,11 +2614,15 @@ fn build_query<'a>(
         builder.push(")");
     }
 
-    if property_sort {
+    if property_sort || name_sort {
         builder.push(" ORDER BY ");
-        builder.push(property_order(
+        builder.push(page_order(
             sort,
-            "sort_key",
+            if name_sort {
+                "all_items.sort_name"
+            } else {
+                "sort_key"
+            },
             "all_items.sort_ts",
             "all_items.id",
         ));
@@ -1939,6 +2670,7 @@ fn build_query<'a>(
                 NULL::bigint as "branched_from_version_id",
                 NULL::bigint as "document_family_id",
                 NULL::text as "file_type",
+                NULL::jsonb as "appearance",
                 NULL::timestamptz as "created_at",
                 NULL::timestamptz as "updated_at",
                 NULL::text as "project_id",
@@ -1960,19 +2692,26 @@ fn build_query<'a>(
         );
     }
     builder.push(") SELECT * FROM Combined ORDER BY ");
-    builder.push(property_order(
+    // Hydrated rows carry each item's own name, which is the expression the
+    // page was selected on; `sort_name` is only needed inside `TopItems`.
+    builder.push(page_order(
         sort,
-        "\"sort_key\"",
+        &if name_sort {
+            name_sort_key("\"name\"")
+        } else {
+            "\"sort_key\"".to_owned()
+        },
         "\"sort_ts\"",
         "\"id\"",
     ));
     builder.push(" LIMIT $3");
 
-    builder
+    (builder, feed.as_ref().map(Feed::reads))
 }
 
 #[derive(Debug, FromRow)]
 struct DocumentRow {
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     id: String,
     user_id: String,
     document_version_id: String,
@@ -2026,6 +2765,7 @@ struct ProjectRow {
 
 #[derive(Debug, FromRow)]
 struct InitiativeRow {
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     id: String,
     user_id: String,
     name: String,
@@ -2113,6 +2853,7 @@ impl SoupRow {
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
             SoupRow::Document(DocumentRow {
+                appearance,
                 id,
                 user_id,
                 document_version_id,
@@ -2133,6 +2874,7 @@ impl SoupRow {
                 is_completed,
                 deleted_at,
             }) => SoupItem::Document(SoupDocument {
+                appearance: appearance.map(|value| value.0),
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 document_version_id: document_version_id
                     .parse()
@@ -2213,6 +2955,7 @@ impl SoupRow {
                 extra: (),
             }),
             SoupRow::Initiative(row) => SoupItem::Initiative(SoupInitiative {
+                appearance: row.appearance.map(|value| value.0),
                 id: row.id.parse().map_err(type_err)?,
                 name: row.name,
                 owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,
@@ -2240,7 +2983,7 @@ impl SoupRow {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ExpandedDynamicCursorArgs<'a> {
     /// the user for which we are performing the query
     pub user_id: MacroUserIdStr<'a>,
@@ -2253,10 +2996,32 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
     pub exclude_frecency: bool,
 }
 
-#[tracing::instrument(skip(db), err)]
+/// Opens the transaction a dynamic query runs in. A parallel worker costs
+/// this query tens of milliseconds to start, so at the default
+/// `parallel_setup_cost` callers with a few thousand grants ran twice as slow
+/// in parallel; the raised cost keeps parallel plans for the largest callers.
+/// Its statements read one snapshot, so the grants [`DocumentGrants::count`]
+/// counts are the rows [`counted_document_access_semi_join`] reads.
+async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
+    let mut transaction = db
+        .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .instrument(tracing::info_span!(
+            "soup.pool.acquire",
+            pool_size = db.size(),
+            pool_idle = db.num_idle()
+        ))
+        .await?;
+    sqlx::query!("SET LOCAL parallel_setup_cost = 10000")
+        .execute(&mut *transaction)
+        .await?;
+    Ok(transaction)
+}
+
+#[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
+    item_source: ItemSource,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
@@ -2269,19 +3034,44 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let (cursor_id, cursor_position) = cursor.vals();
     let cursor_timestamp = cursor_position.map(|position| position.timestamp());
     let cursor_key = cursor_position.and_then(|position| position.key());
+    let cursor_name = cursor_position.and_then(|position| position.name().map(ToOwned::to_owned));
     let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let mut document_ids =
-        DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
-    let mut builder = build_query(
-        cursor.filter(),
-        exclude_frecency,
-        *cursor.sort_method(),
-        &mut document_ids,
-    );
+    // A filter that pins every arm to nothing (CRM tabs, the pipeline card)
+    // would read the caller's sources only to run a query that returns no row.
+    if !DynamicArms::can_match(cursor.filter()) {
+        return Ok(Vec::new());
+    }
+
+    let mut transaction = begin_dynamic_query(db).await?;
+    let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
+    let document_grants =
+        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
+    let first_document_ids = first_document_id_slot(*cursor.sort_method(), false);
+    let mut document_ids = DocumentIdArrays::starting_at(first_document_ids);
+    let build = |item_source, document_ids: &mut DocumentIdArrays| {
+        build_query_from(
+            cursor.filter(),
+            exclude_frecency,
+            *cursor.sort_method(),
+            document_grants,
+            item_source,
+            user_id.as_ref(),
+            document_ids,
+        )
+    };
+    let (mut builder, feed_reads) = build(item_source, &mut document_ids);
+    if let Some(reads) = feed_reads
+        && !scan_bound(&mut transaction, &source_ids)
+            .await?
+            .allows(reads, query_limit)
+    {
+        document_ids = DocumentIdArrays::starting_at(first_document_ids);
+        (builder, _) = build(ItemSource::ItemTables, &mut document_ids);
+    }
     let mut query = builder
         .build()
         .bind(user_id.as_ref())
@@ -2292,24 +3082,22 @@ async fn expanded_dynamic_cursor_soup_hydrated(
         .bind(completed_option_id)
         .bind(status_property_id)
         .bind(assignees_property_id);
-    if let DynamicSort::Property {
-        property_definition_id,
-        ..
-    } = *cursor.sort_method()
-    {
-        query = query.bind(property_definition_id).bind(cursor_key);
+    match *cursor.sort_method() {
+        DynamicSort::Property {
+            property_definition_id,
+            ..
+        } => {
+            query = query.bind(property_definition_id).bind(cursor_key);
+        }
+        DynamicSort::Name { .. } => {
+            query = query.bind(cursor_name);
+        }
+        DynamicSort::Timestamp(_) => {}
     }
+    query = query.bind(&source_ids);
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
-    let mut connection = db
-        .acquire()
-        .instrument(tracing::info_span!(
-            "soup.pool.acquire",
-            pool_size = db.size(),
-            pool_idle = db.num_idle()
-        ))
-        .await?;
     let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     let items = query
         // Unnamed statement: the SQL text varies per filter shape and per
@@ -2324,33 +3112,71 @@ async fn expanded_dynamic_cursor_soup_hydrated(
             item.sort_key = row.try_get("sort_key")?;
             Ok(item)
         })
-        .fetch_all(&mut *connection)
+        .fetch_all(&mut *transaction)
         .instrument(query_span.clone())
         .await?;
     query_span.record("rows", items.len());
     drop(query_span);
+    transaction.commit().await?;
 
     Ok(items)
 }
 
 /// Execute a flat expanded dynamic query and retain document server facts.
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
+    source_items_enabled: bool,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
-    expanded_dynamic_cursor_soup_hydrated(db, args).await
+    let item_source = if source_items_enabled {
+        ItemSource::SourceItems
+    } else {
+        ItemSource::ItemTables
+    };
+    expanded_dynamic_cursor_soup_hydrated(db, args, item_source).await
 }
 
-/// Execute a flat expanded dynamic query without exposing projection metadata.
+/// Execute a flat expanded dynamic query on both listing paths, require the same
+/// page from each, and return it without projection metadata.
 #[cfg(test)]
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    Ok(expanded_dynamic_cursor_soup_hydrated(db, args)
-        .await?
+    let item_tables =
+        expanded_dynamic_cursor_soup_hydrated(db, args.clone(), ItemSource::ItemTables).await?;
+    // The migrations install no maintenance triggers: turn them on and rebuild the projection
+    // from what the fixtures wrote, so reads trust it; `crates/source_items` tests the triggers.
+    sqlx::query!("SELECT source_items_install_triggers()")
+        .execute(db)
+        .await?;
+    let backfill = source_items::backfill::run(db).await?;
+    assert!(
+        backfill.readable,
+        "the projection was not maintained while backfilled"
+    );
+    let mismatches = source_items::audit::run(db).await?;
+    assert!(
+        mismatches.is_empty(),
+        "source_items drifted: {mismatches:?}"
+    );
+    let source_items =
+        expanded_dynamic_cursor_soup_hydrated(db, args, ItemSource::SourceItems).await?;
+    let shown = |page: &[SoupProjectionHydration]| {
+        page.iter()
+            .map(|hydration| serde_json::to_value(&hydration.item).unwrap())
+            .collect::<Vec<_>>()
+    };
+    // Production reads the item tables unless the projection is enabled, so
+    // every query test checks both listings and asserts on the default one.
+    assert_eq!(
+        shown(&source_items),
+        shown(&item_tables),
+        "source_items and the item tables listed different pages"
+    );
+    Ok(item_tables
         .into_iter()
         .map(|hydration| hydration.item)
         .collect())
@@ -2427,12 +3253,19 @@ fn build_grouped_items_cte(
     builder.push(&select_expr);
     builder.push(") as group_total_count, ROW_NUMBER() OVER (PARTITION BY ");
     builder.push(&select_expr);
-    if matches!(sort, DynamicSort::Property { .. }) {
-        builder.push(" ORDER BY ");
-        builder.push(property_order(sort, "t.sort_key", "t.sort_ts", "t.id"));
-        builder.push(") as row_in_group FROM TopItems t ");
-    } else {
-        builder.push(" ORDER BY t.sort_ts DESC, t.id DESC) as row_in_group FROM TopItems t ");
+    match sort {
+        DynamicSort::Property { .. } | DynamicSort::Name { .. } => {
+            let key = match sort {
+                DynamicSort::Name { .. } => "t.sort_name",
+                _ => "t.sort_key",
+            };
+            builder.push(" ORDER BY ");
+            builder.push(page_order(sort, key, "t.sort_ts", "t.id"));
+            builder.push(") as row_in_group FROM TopItems t ");
+        }
+        DynamicSort::Timestamp(_) => {
+            builder.push(" ORDER BY t.sort_ts DESC, t.id DESC) as row_in_group FROM TopItems t ");
+        }
     }
     let bind = if let Some(GroupJoinClause {
         sql,
@@ -2463,10 +3296,16 @@ fn build_grouped_items_cte(
         builder.push(") = $9 ");
     }
     builder.push("), FilteredGroupedItems AS (SELECT * FROM GroupedItems WHERE ");
-    if matches!(sort, DynamicSort::Property { .. }) {
-        builder.push(property_keyset(sort, "sort_key", 12, "sort_ts", "id"));
-    } else {
-        builder.push("($4::timestamptz IS NULL OR (sort_ts, id::text) < ($4, $5))");
+    match sort {
+        DynamicSort::Property { .. } => {
+            builder.push(property_keyset(sort, "sort_key", 12, "sort_ts", "id"));
+        }
+        DynamicSort::Name { .. } => {
+            builder.push(name_keyset(sort, "sort_name", 11, "sort_ts", "id"));
+        }
+        DynamicSort::Timestamp(_) => {
+            builder.push("($4::timestamptz IS NULL OR (sort_ts, id::text) < ($4, $5))");
+        }
     }
     if grouping.group_key.is_none() {
         builder.push(" AND row_in_group <= ");
@@ -2490,38 +3329,22 @@ fn build_grouped_query<'a>(
     exclude_frecency: bool,
     grouping: &'a GroupingConfig,
     sort: DynamicSort,
+    document_grants: DocumentGrants,
     document_ids: &mut DocumentIdArrays,
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let sort_method = sort.timestamp_method();
+    let source_ids = source_ids_slot(sort, true);
     let property_sort = matches!(sort, DynamicSort::Property { .. });
+    let name_sort = matches!(sort, DynamicSort::Name { .. });
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
-    // Determine which entity types to include based on filters (same logic as build_query)
-    let include_initiatives = initiative_opted_in(filter_ast.initiative_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Initiative],
-        );
-    let include_database_rows = database_row_opted_in(filter_ast.database_row_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::DatabaseRow],
-        );
-    let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Document, PropertyEntityType::Task],
-        );
-    let include_chats = !chat_filter_is_impossible(filter_ast.chat_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Chat],
-        );
-    let include_projects = !project_filter_is_impossible(filter_ast.project_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Project],
-        );
+    let DynamicArms {
+        documents: include_documents,
+        chats: include_chats,
+        projects: include_projects,
+        initiatives: include_initiatives,
+        database_rows: include_database_rows,
+    } = DynamicArms::new(filter_ast);
     // Gated like the other three legs. Beyond skipping a union branch that can
     // never match, this keeps the NIL-id exclusion every Soup query now sends
     // from reaching `push_filter` below — see the bind-numbering note there.
@@ -2541,6 +3364,9 @@ fn build_grouped_query<'a>(
     builder.push(
         "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id, all_items.property_entity_type, ",
     );
+    if name_sort {
+        builder.push("all_items.sort_name, ");
+    }
 
     builder.push(sort_key_expression(property_sort));
     builder.push(" AS sort_key FROM (");
@@ -2550,29 +3376,32 @@ fn build_grouped_query<'a>(
         push_union_separator(&mut builder, &mut needs_separator);
         let document_filter = filter_ast.document_filter.as_deref();
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
+        let access = DocumentArmAccess::new(document_filter, document_grants);
+        builder.push(access.open());
         builder.push(grouped_document_top_clause(
             sort_method,
             needs_task_property_joins,
+            name_sort,
             document_filter_is_task_only(document_filter),
         ));
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method));
-        builder.push(build_document_filter(
-            filter_ast.document_filter.as_deref(),
-            Some(document_ids),
-        ));
-        builder.push(build_properties_filter(
+        builder.push(document_top_where_clause(sort_method, access, source_ids));
+        builder.push(build_document_filter(document_filter, Some(document_ids)));
+        builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
+            access.property_probe(),
         ));
+        // Group totals count every candidate, so no early stop to order for.
+        builder.push(access.close(None, source_ids));
     }
 
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(grouped_chat_top_clause(sort_method));
-        builder.push(chat_top_where_clause());
+        builder.push(grouped_chat_top_clause(sort_method, name_sort));
+        builder.push(chat_top_where_clause(source_ids));
         builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2582,8 +3411,8 @@ fn build_grouped_query<'a>(
 
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(grouped_project_top_clause(sort_method));
-        builder.push(project_top_where_clause());
+        builder.push(grouped_project_top_clause(sort_method, name_sort));
+        builder.push(project_top_where_clause(source_ids));
         builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2593,7 +3422,7 @@ fn build_grouped_query<'a>(
 
     if include_calendar_events {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(grouped_calendar_event_top_clause(sort_method));
+        builder.push(grouped_calendar_event_top_clause(sort_method, name_sort));
         builder.push(build_calendar_event_filter(
             filter_ast.calendar_event_filter.as_deref(),
         ));
@@ -2605,7 +3434,13 @@ fn build_grouped_query<'a>(
 
     if include_initiatives {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(initiative_top_clause(sort_method, true, false));
+        builder.push(initiative_top_clause(
+            sort_method,
+            true,
+            false,
+            name_sort,
+            filter_ast.initiative_filter.as_deref(),
+        ));
         builder.push(build_initiative_filter(
             filter_ast.initiative_filter.as_deref(),
         ));
@@ -2617,7 +3452,7 @@ fn build_grouped_query<'a>(
 
     if include_database_rows {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(database_row_top_clause(sort_method, true, false));
+        builder.push(database_row_top_clause(sort_method, true, false, name_sort));
         builder.push(build_database_row_filter(
             filter_ast.database_row_filter.as_deref(),
         ));
@@ -2630,8 +3465,12 @@ fn build_grouped_query<'a>(
     // Fallback when all entity types are filtered out
     if !needs_separator {
         builder.push(
-            "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts, NULL::text as project_id, NULL::property_entity_type as property_entity_type WHERE false",
+            "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts, NULL::text as project_id, NULL::property_entity_type as property_entity_type",
         );
+        if name_sort {
+            builder.push(", NULL::text as sort_name");
+        }
+        builder.push(" WHERE false");
     }
 
     builder.push(") all_items ");
@@ -2734,10 +3573,14 @@ fn build_grouped_query<'a>(
         }
     }
     builder.push(", ");
-    if property_sort {
-        builder.push(property_order(
+    if property_sort || name_sort {
+        builder.push(page_order(
             sort,
-            "\"sort_key\"",
+            &if name_sort {
+                name_sort_key("\"name\"")
+            } else {
+                "\"sort_key\"".to_owned()
+            },
             "\"sort_ts\"",
             "\"id\"",
         ));
@@ -2757,7 +3600,7 @@ fn build_grouped_query<'a>(
 }
 
 /// Execute a grouped dynamic cursor soup query.
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 pub async fn expanded_dynamic_cursor_soup_grouped(
     db: &PgPool,
     args: GroupedDynamicCursorArgs<'_>,
@@ -2775,11 +3618,16 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let (cursor_id, cursor_position) = cursor.vals();
     let cursor_timestamp = cursor_position.map(|position| position.timestamp());
     let cursor_key = cursor_position.and_then(|position| position.key());
+    let cursor_name = cursor_position.and_then(|position| position.name().map(ToOwned::to_owned));
     let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
+    let mut transaction = begin_dynamic_query(db).await?;
+    let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
+    let document_grants =
+        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), true));
     let (mut query_builder, entity_type_bind) = build_grouped_query(
@@ -2787,10 +3635,12 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         exclude_frecency,
         &grouping,
         *cursor.sort_method(),
+        document_grants,
         &mut document_ids,
     );
 
-    // Keep main's fixed grouping parameters; property sorts append their two values.
+    // Keep main's fixed grouping parameters; property sorts append their two
+    // values and name sorts their one.
     let mut query = query_builder
         .build_query_as::<'_, GroupedSoupRow>()
         .bind(user_id.as_ref())
@@ -2815,37 +3665,35 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         }))
         // The entity type of property grouping with an entity type filter.
         .bind(entity_type_bind);
-    if let DynamicSort::Property {
-        property_definition_id,
-        ..
-    } = *cursor.sort_method()
-    {
-        query = query.bind(property_definition_id).bind(cursor_key);
+    match *cursor.sort_method() {
+        DynamicSort::Property {
+            property_definition_id,
+            ..
+        } => {
+            query = query.bind(property_definition_id).bind(cursor_key);
+        }
+        DynamicSort::Name { .. } => {
+            query = query.bind(cursor_name);
+        }
+        DynamicSort::Timestamp(_) => {}
     }
+    query = query.bind(&source_ids);
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
 
-    let mut connection = db
-        .acquire()
-        .instrument(tracing::info_span!(
-            "soup.pool.acquire",
-            pool_size = db.size(),
-            pool_idle = db.num_idle()
-        ))
-        .await?;
     let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     let rows: Vec<GroupedSoupRow> = query
         // Unnamed statement — same rationale as expanded_dynamic_cursor_soup:
         // filter-shaped SQL text gets no reuse from the statement cache but
         // does get generic-plan flips.
         .persistent(false)
-        .fetch_all(&mut *connection)
+        .fetch_all(&mut *transaction)
         .instrument(query_span.clone())
         .await?;
     query_span.record("rows", rows.len());
     drop(query_span);
-    drop(connection);
+    transaction.commit().await?;
 
     let items = tracing::info_span!("soup.rows.convert", rows = rows.len()).in_scope(|| {
         rows.into_iter()

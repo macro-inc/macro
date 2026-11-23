@@ -1,6 +1,9 @@
 //! Handlers for project folder uploads.
 
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
     ports::EntityAccessService,
@@ -14,17 +17,31 @@ use model::{
 };
 use models_bulk_upload::{
     MarkProjectUploadedRequest, MarkProjectUploadedResponse, UploadExtractFolderRequest,
-    UploadExtractFolderResponseData,
+    UploadExtractFolderResponseData, UploadExtractStatusResponseData,
 };
+use serde::Deserialize;
 
 use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};
+
+/// The extractor registers a whole folder in one request; 10,000 files with
+/// realistic names and paths run past axum's 2 MiB default body limit.
+pub const UPLOAD_FOLDER_MAX_BODY_BYTES: usize = 32 * 1024 * 1024;
 
 /// Successful folder-upload response.
 pub type UploadFolderResponse = TypedSuccessResponse<UploadFolderResponseData>;
 
 /// Successful upload-extract response.
 pub type UploadExtractFolderResponse = TypedSuccessResponse<UploadExtractFolderResponseData>;
+
+/// Successful upload-extract status response.
+pub type UploadExtractStatusResponse = TypedSuccessResponse<UploadExtractStatusResponseData>;
+
+/// Path parameters naming an upload-extract request.
+#[derive(Deserialize)]
+pub struct UploadExtractParams {
+    request_id: String,
+}
 
 /// Upload a folder tree and create its upload destinations.
 #[utoipa::path(
@@ -99,6 +116,43 @@ where
         .await?;
 
     Ok(Json(UploadExtractFolderResponse { error: false, data }))
+}
+
+/// Where the caller's folder upload stands, so the uploader can follow it to
+/// the end even when a websocket update is missed.
+#[utoipa::path(
+    tag = "project",
+    get,
+    path = "/projects/upload_extract/{request_id}",
+    params(("request_id" = String, Path, description = "The upload request id")),
+    responses(
+        (status = 200, body = inline(UploadExtractStatusResponse)),
+        (status = 401, body = model::response::GenericErrorResponse),
+        (status = 404, body = model::response::GenericErrorResponse),
+        (status = 500, body = model::response::GenericErrorResponse),
+    )
+)]
+#[tracing::instrument(
+    skip(state, user),
+    fields(user_id = %user.authorization.user.macro_user_id),
+    err
+)]
+pub async fn get_upload_extract_status_handler<T, Svc, Auth>(
+    State(state): State<ProjectRouterState<T, Svc, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(UploadExtractParams { request_id }): Path<UploadExtractParams>,
+) -> Result<Json<UploadExtractStatusResponse>, ProjectError>
+where
+    T: ProjectService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let data = state
+        .service
+        .get_upload_extract_status(user.authorization.user.macro_user_id.clone(), &request_id)
+        .await?;
+
+    Ok(Json(UploadExtractStatusResponse { error: false, data }))
 }
 
 async fn ensure_parent_edit_access<T, Svc, Auth>(

@@ -6,7 +6,7 @@ import MeetIcon from '@icon/onboarding-googlemeet.svg';
 import HubSpotIcon from '@icon/onboarding-hubspot.svg';
 import SuperhumanIcon from '@icon/onboarding-superhuman.svg';
 import ZoomIcon from '@icon/onboarding-zoom.svg';
-import PlayIcon from '@phosphor/play.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
 import { For, type JSX } from 'solid-js';
 import { ContinueButton, SkipButton } from '../flow/shared';
 import { MODULE_LOGOS } from '../moduleLogos';
@@ -131,13 +131,16 @@ export function WelcomeStep(props: {
   description?: JSX.Element;
 }) {
   return (
-    <div class="ob-welcome relative isolate flex flex-col items-center gap-7 overflow-x-clip [overflow-clip-margin:200px] text-center md:[--welcome-scale:1.25] md:gap-[35px] md:[overflow-clip-margin:250px]">
+    // Trim the rings 200px past each side with a clip path, not `overflow-x:
+    // clip`: WebKit on iOS also clips the vertical axis for that until the
+    // first repaint, slicing the top of the scene on load.
+    <div class="ob-welcome relative isolate flex flex-col items-center gap-7 [clip-path:inset(-100vmax_-200px)] text-center md:[--welcome-scale:1.25] md:gap-[35px] md:[clip-path:inset(-100vmax_-250px)]">
       <ContextScene />
       <div class="relative mt-[15px] flex flex-col gap-4 md:mt-[18.75px] md:gap-5">
         <h1
           tabindex="-1"
           data-welcome-heading
-          class="font-[Roboto_Slab_Variable] font-[315] text-[clamp(24px,8vw,36px)] leading-[1.12] tracking-tight sm:text-5xl md:text-[60px]"
+          class="font-[Roboto_Slab_Variable] font-[315] text-[clamp(24px,8.4vw,36px)] leading-[1.12] tracking-tight sm:text-5xl md:text-[60px]"
         >
           {props.title ?? (
             <>
@@ -151,7 +154,7 @@ export function WelcomeStep(props: {
         </h1>
         <p
           data-welcome-copy
-          class="mx-auto max-w-[288px] text-balance text-[13px] leading-[1.8] text-ink-muted sm:max-w-[384px] md:max-w-[480px] md:text-[clamp(14px,1.4vw,17.5px)]"
+          class="mx-auto max-w-[336px] text-balance text-[13px] leading-[1.8] text-ink-muted sm:max-w-[384px] md:max-w-[480px] md:text-[clamp(14px,1.4vw,17.5px)]"
         >
           {props.description ?? (
             <>

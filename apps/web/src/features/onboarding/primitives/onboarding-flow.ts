@@ -12,6 +12,7 @@ import type {
   Viewer,
 } from '../context/onboarding-context';
 import type { CheckoutReturn } from '../core/checkout';
+import type { SignupProvider } from '../core/signup-draft';
 import {
   nextOnboardingStep,
   ONBOARDING_STEPS,
@@ -58,6 +59,9 @@ export function createOnboardingFlow(
   }
 ) {
   const [step, setStep] = createSignal<OnboardingStep>();
+  // Read once from the sign-up draft, which restore clears, so a later return
+  // (an inbox consent round-trip) does not repeat what it triggers.
+  const [signupProvider, setSignupProvider] = createSignal<SignupProvider>();
   const index = () => {
     const current = step();
     return current ? ONBOARDING_STEPS.indexOf(current) : -1;
@@ -82,6 +86,7 @@ export function createOnboardingFlow(
     saveStep(userId, initial);
     if (draft?.authenticating && draft.accent)
       context.applyAccent(draft.accent, userId);
+    if (draft?.authenticating) setSignupProvider(draft.provider);
     clearSignupDraft();
     setStep(initial);
   };
@@ -164,5 +169,5 @@ export function createOnboardingFlow(
     return nextOnboardingStep(current, outcome);
   };
 
-  return { status, step, index, commit, leave };
+  return { status, step, index, commit, leave, signupProvider };
 }

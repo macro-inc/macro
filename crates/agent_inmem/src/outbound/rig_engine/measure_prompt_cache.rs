@@ -93,7 +93,6 @@ async fn turn(
     };
     let system_prompt = system_prompt(
         &native.prompt,
-        "",
         agent_session::domain::model::AgentSessionId::new(),
         ReplyDelivery::Streamed,
         Some(&identity),
@@ -218,11 +217,12 @@ async fn measure_prompt_cache() {
 
 /// Three turns of one code-mode session, each replaying the persisted
 /// history the way production does, with SDK documentation that differs per
-/// turn. Turns 2 and 3 should read most of their input from the cache.
+/// turn on each request. Turns 2 and 3 should read most of their input from
+/// the cache.
 #[tokio::test]
 #[ignore = "calls the Anthropic API; run under doppler with --nocapture"]
 async fn measure_prompt_cache_turns() {
-    let native = NativeTools::from_factory(ai_tools::tools_for_agent_code_mode, true);
+    let native = NativeTools::new();
     let run = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -234,14 +234,24 @@ async fn measure_prompt_cache_turns() {
         handle: "macro".to_owned(),
     };
     let session_id = agent_session::domain::model::AgentSessionId::new();
+    let session_docs = crate::domain::turn_docs::SessionDocs::default();
     let prompts = [
         "Call ExecuteCode once with source `export async function main() { return {data: 1}; }`. \
          After it answers, reply with the single word done.",
         "Reply with the single word hi. Do not call any tool.",
         "Reply with the single word bye. Do not call any tool.",
     ];
+    // A long first request stands in for the history a real session carries
+    // into its later turns.
+    let history = "The quarterly plan covers documents, tasks and email threads.\n".repeat(2000);
     let mut messages: Vec<agent::types::ChatMessage> = Vec::new();
+    let mut requests: Vec<String> = Vec::new();
     for (index, prompt) in prompts.iter().enumerate() {
+        let prompt = if index == 0 {
+            format!("{history}{prompt}")
+        } else {
+            (*prompt).to_owned()
+        };
         // Stands in for `select_documentation`, which picks different SDK
         // references for each request.
         let sdk_docs = format!(
@@ -251,19 +261,30 @@ async fn measure_prompt_cache_turns() {
         );
         let system_prompt = system_prompt(
             &native.prompt,
-            &sdk_docs,
             session_id,
             ReplyDelivery::Streamed,
             Some(&identity),
             None,
             None,
         );
+        requests.push(prompt.clone());
         messages.push(agent::types::ChatMessage {
-            content: agent::types::ChatMessageContent::Text((*prompt).to_owned()),
+            content: agent::types::ChatMessageContent::Text(prompt),
             role: agent::types::Role::User,
             attachments: None,
         });
-        let (calls, parts) = send(&native, system_prompt, &messages).await;
+        let received = session_docs.add(session_id, &requests, sdk_docs);
+        // The model's copy, as each turn rebuilds it from the log.
+        let mut model_copy: Vec<agent::types::ChatMessage> = messages
+            .iter()
+            .map(|message| agent::types::ChatMessage {
+                content: message.content.clone(),
+                role: message.role,
+                attachments: None,
+            })
+            .collect();
+        crate::domain::turn_docs::inject(&mut model_copy, &received);
+        let (calls, parts) = send(&native, system_prompt, &model_copy).await;
         print(&format!("turn {}", index + 1), &calls);
         if index > 0 {
             let (input, read, write) = calls[0];

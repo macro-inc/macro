@@ -43,7 +43,10 @@ describe('handleRefreshCalendar', () => {
       queryKey: calendarKeys.invitations._def,
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: calendarKeys.visibleCalendars.queryKey,
+      queryKey: calendarKeys.visibleCalendars._def,
+    });
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: calendarKeys.firstSync._def,
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
       queryKey: calendarKeys.joinRequests._def,
@@ -63,7 +66,7 @@ describe('handleRefreshCalendar', () => {
       queryKey: [...calendarKeys.mentionPreview._def, 'shared-event'],
     });
     expect(invalidateQueriesMock).not.toHaveBeenCalledWith({
-      queryKey: calendarKeys.visibleCalendars.queryKey,
+      queryKey: calendarKeys.visibleCalendars._def,
     });
     expect(invalidateCalendarOccurrencesMock).not.toHaveBeenCalled();
     expect(refreshTeamCalendarQueriesMock).not.toHaveBeenCalled();
@@ -82,7 +85,7 @@ describe('handleRefreshCalendar', () => {
       queryKey: calendarKeys.invitations._def,
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: calendarKeys.visibleCalendars.queryKey,
+      queryKey: calendarKeys.visibleCalendars._def,
     });
   });
 

@@ -2,17 +2,24 @@ use crate::outbound::email_api::GmailApi;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_client::document::CreateDocumentInternalError;
 use email_api_client::domain::models::EmailApiError;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
-use model::document::MAX_DOCUMENT_NAME_GRAPHEMES;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
+use model::document::{FileTypeExt, MAX_DOCUMENT_NAME_GRAPHEMES};
+use model_file_type::FileType;
 use models_email::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
 use models_email::service::link;
+use nom::Parser;
+use nom::bytes::complete::{tag, take_until};
+use nom::character::complete::alphanumeric1;
+use nom::sequence::{preceded, terminated};
 use sha2::{Digest, Sha256};
 use static_file_service_client::StaticFileServiceClient;
+use std::str::FromStr;
 use std::sync::Arc;
 use system_properties::{
     EmailAttachmentInput, EmailAttachmentProperty, PgSystemPropertiesRepository, SourceEntity,
@@ -40,7 +47,7 @@ pub enum UploadAttachmentError {
     ParseError(String),
 
     #[error("Database error: {0}")]
-    DatabaseError(String),
+    DatabaseError(anyhow::Error),
 
     #[error("Attachment filename is missing")]
     FilenameMissing,
@@ -53,11 +60,25 @@ pub enum UploadAttachmentError {
     #[error("Failed to create document record in DSS: {0}")]
     DssCreateFailed(String),
 
-    #[error("DSS response did not include a presigned URL")]
-    PresignedUrlMissing,
+    /// The attachment row was deleted before DSS could link it, e.g. a
+    /// superseded draft revision. There is nothing left to import.
+    #[error("Attachment was deleted before it could be imported")]
+    AttachmentDeleted,
 
-    #[error("Failed to upload attachment to presigned URL. Status: {0}, Body: {1}")]
-    PresignedUrlUploadFailed(reqwest::StatusCode, String),
+    /// The upload never got an answer. The error carries no URL: a presigned
+    /// URL's query holds its credentials and session token.
+    #[error("Failed to send attachment to presigned URL: {0}")]
+    PresignedUrlUnreachable(reqwest::Error),
+
+    #[error(
+        "Failed to upload attachment to presigned URL. Status: {status}, code: {}",
+        code.as_deref().unwrap_or("none")
+    )]
+    PresignedUrlRefused {
+        status: reqwest::StatusCode,
+        /// The S3 error `<Code>`, the only part of the body kept.
+        code: Option<String>,
+    },
 
     #[error("Failed to set email attachment properties: {0}")]
     SystemPropertiesSetFailed(String),
@@ -126,7 +147,11 @@ pub async fn store_attachment(
 }
 
 /// Uploads an image or video attachment to SFS.
-#[tracing::instrument(skip(ctx, attachment_data), err)]
+#[tracing::instrument(
+    skip(ctx, args, attachment_data),
+    fields(attachment_id = %args.attachment_metadata.attachment_db_id),
+    err
+)]
 async fn upload_media_attachment(
     ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
@@ -155,14 +180,32 @@ async fn upload_media_attachment(
         },
     )
     .await
-    .map_err(|e| UploadAttachmentError::DatabaseError(e.to_string()))?;
+    .map_err(UploadAttachmentError::DatabaseError)?;
 
     Ok(sfs_response.id)
 }
 
 /// Uploads a document attachment to DSS.
-#[tracing::instrument(skip(ctx, attachment_data), err)]
+#[tracing::instrument(
+    skip(ctx, args, attachment_data),
+    fields(attachment_id = %args.attachment_metadata.attachment_db_id)
+)]
 async fn upload_document_attachment(
+    ctx: &AttachmentStorageContext<'_>,
+    args: &AttachmentUploadArgs,
+    attachment_data: Vec<u8>,
+) -> Result<String, UploadAttachmentError> {
+    // A deleted attachment is an expected outcome, not a failure.
+    store_document_attachment(ctx, args, attachment_data)
+        .await
+        .inspect_err(|error| {
+            if !matches!(error, UploadAttachmentError::AttachmentDeleted) {
+                tracing::error!(error = %error, "document attachment upload failed");
+            }
+        })
+}
+
+async fn store_document_attachment(
     ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
     attachment_data: Vec<u8>,
@@ -185,8 +228,14 @@ async fn upload_document_attachment(
     )
     .await?;
 
-    if dss_response.data.document_response.presigned_url.is_some() {
-        upload_data_to_presigned_url(&dss_response, attachment_data, &base64_hash).await?;
+    if let Some(presigned_url) = &dss_response.data.document_response.presigned_url {
+        upload_data_to_presigned_url(
+            presigned_url,
+            &dss_response.data.content_type,
+            attachment_data,
+            &base64_hash,
+        )
+        .await?;
     }
 
     // 5. Get document id
@@ -232,8 +281,17 @@ fn calculate_hashes(data: &[u8]) -> (String, String) {
     (hex_hash, base64_hash)
 }
 
-/// Determines the file name (without extension) and file type (extension) from the payload.
-fn determine_file_metadata(
+/// Determines the document name and file type (extension) from the payload.
+///
+/// The name is the filename without a Macro file type's extension, as uploads
+/// name documents, or the whole filename without one. That extension is also
+/// the file type unless the MIME type names a different Macro file type: mail
+/// clients send many files as `application/octet-stream`, and the first
+/// extension `mime_guess` lists for a broad MIME type is often not a Macro
+/// type at all (`text/plain` gives `asm`), but a specific MIME type such as
+/// `application/pdf` describes the content better than a mismatched name.
+/// Without such an extension the MIME type decides.
+pub fn determine_file_metadata(
     p: &AttachmentUploadMetadata,
 ) -> Result<(String, String), UploadAttachmentError> {
     // documents must have a file name to be inserted into Document table.
@@ -241,20 +299,17 @@ fn determine_file_metadata(
         .filename
         .as_deref()
         .ok_or(UploadAttachmentError::FilenameMissing)?;
+    let trimmed_file_name = original_file_name.trim();
 
-    let file_name = original_file_name
-        .split('.')
-        .next()
-        .unwrap_or(original_file_name);
-    let file_name = truncate_document_name(file_name).to_string();
+    let known = FileType::split_suffix_match(trimmed_file_name)
+        .filter(|(name, _)| !name.trim().is_empty())
+        .and_then(|(name, extension)| Some((name, FileType::from_str(extension).ok()?)));
+    let file_name = known.map_or(trimmed_file_name, |(name, _)| name);
 
-    let file_type = match original_file_name
-        .rsplit_once('.')
-        .map(|(_, ext)| ext.trim())
-        .filter(|ext| !ext.is_empty())
-    {
-        // if it's a heic, the mime_type can sometimes be heif. hardcode file_type to match file name
-        Some(ext) if ext.eq_ignore_ascii_case("heic") => "heic".to_string(),
+    let file_type = match known {
+        Some((_, file_type)) if !names_another_type(file_type, &p.mime_type) => {
+            file_type.as_str().to_string()
+        }
         _ => mime_guess::get_mime_extensions_str(&p.mime_type)
             .and_then(|exts| exts.first().map(|s| s.to_string()))
             .or_else(|| {
@@ -271,7 +326,39 @@ fn determine_file_metadata(
             })?,
     };
 
-    Ok((file_name, file_type))
+    Ok((truncate_document_name(file_name).to_string(), file_type))
+}
+
+/// MIME types that say nothing about a file's format: a byte stream, or a zip
+/// container such as every Office document is.
+const GENERIC_MIME_TYPES: [&str; 3] = [
+    "application/octet-stream",
+    "application/zip",
+    "application/x-zip-compressed",
+];
+
+/// Whether `mime_type` names a Macro file type other than `file_type`: its
+/// first `mime_guess` extension is one, the MIME type is not generic or
+/// `file_type`'s own, and `mime_guess` does not list `file_type`'s extension
+/// for it.
+fn names_another_type(file_type: FileType, mime_type: &str) -> bool {
+    // if it's a heic, the mime_type can sometimes be heif. hardcode file_type to match file name
+    if file_type == FileType::Heic
+        || GENERIC_MIME_TYPES
+            .iter()
+            .any(|generic| generic.eq_ignore_ascii_case(mime_type))
+        || file_type.mime_type().eq_ignore_ascii_case(mime_type)
+    {
+        return false;
+    }
+    let extensions = mime_guess::get_mime_extensions_str(mime_type).unwrap_or_default();
+    !extensions
+        .iter()
+        .any(|extension| extension.eq_ignore_ascii_case(file_type.as_str()))
+        && extensions
+            .first()
+            .and_then(|extension| FileType::from_str(extension).ok())
+            .is_some_and(|named| named != file_type)
 }
 
 /// DSS rejects longer names, so keep only the leading graphemes rather than drop the attachment.
@@ -317,45 +404,55 @@ async fn create_dss_document_record(
     dss_client
         .create_document_internal(request, link.macro_id.0.as_ref())
         .await
-        .map_err(|e| UploadAttachmentError::DssCreateFailed(e.to_string()))
+        .map_err(|e| match e {
+            CreateDocumentInternalError::EmailAttachmentNotFound => {
+                UploadAttachmentError::AttachmentDeleted
+            }
+            e => UploadAttachmentError::DssCreateFailed(e.to_string()),
+        })
 }
 
 /// Uploads the provided data to the presigned URL from the DSS response.
 async fn upload_data_to_presigned_url(
-    dss_response: &CreateDocumentResponse,
+    presigned_url: &str,
+    content_type: &str,
     attachment_data: Vec<u8>,
     base64_hash: &str,
 ) -> Result<(), UploadAttachmentError> {
-    let presigned_url = dss_response
-        .data
-        .document_response
-        .presigned_url
-        .as_ref()
-        .ok_or(UploadAttachmentError::PresignedUrlMissing)?;
-
+    // Without the explicit length an empty file goes out with no
+    // Content-Length at all, which storage refuses with 411.
     let response = reqwest::Client::new()
         .put(presigned_url)
-        .header("content-type", &dss_response.data.content_type)
+        .header("content-type", content_type)
+        .header("content-length", attachment_data.len())
         .header("x-amz-checksum-sha256", base64_hash)
         .body(attachment_data)
         .send()
         .await
-        .map_err(|e| {
-            UploadAttachmentError::PresignedUrlUploadFailed(
-                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-                e.to_string(),
-            )
-        })?;
+        .map_err(|error| UploadAttachmentError::PresignedUrlUnreachable(error.without_url()))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(UploadAttachmentError::PresignedUrlUploadFailed(
-            status, body,
-        ));
+        return Err(UploadAttachmentError::PresignedUrlRefused {
+            status,
+            code: s3_error_code(&body),
+        });
     }
 
     Ok(())
+}
+
+/// The `<Code>` of an S3 error response, such as `SignatureDoesNotMatch` or
+/// `SlowDown`. The rest of the body can echo the signed request, the presigned
+/// URL's credentials and session token included, so nothing else is read.
+pub fn s3_error_code(body: &str) -> Option<String> {
+    let mut code = preceded(
+        (take_until("<Code>"), tag("<Code>")),
+        terminated(alphanumeric1, tag("</Code>")),
+    );
+    let parsed: nom::IResult<&str, &str> = code.parse(body);
+    parsed.ok().map(|(_, code)| code.to_owned())
 }
 
 /// Sets email attachment properties for the uploaded document.
@@ -389,7 +486,11 @@ fn email_attachment_property(p: &AttachmentUploadArgs) -> EmailAttachmentPropert
         }),
         // TODO: companies support
         companies: None,
-        sender: macro_user_id(p, &p.attachment_metadata.sender_email),
+        sender: p
+            .attachment_metadata
+            .sender_email
+            .as_deref()
+            .and_then(|email| macro_user_id(p, email)),
         recipients: Some(
             p.recipient_emails
                 .iter()

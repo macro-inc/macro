@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 mod soup;
+mod telemetry;
 
 use self::soup::RecordingSoupService;
 
@@ -91,6 +92,11 @@ impl SoupEntityEdges for TestSoupEdges {
     type CrmRecordEdges = TestEmailThreadEdges;
     type AgentSessionEdges = TestAgentSessionEdges;
     type InitiativeEdges = TestInitiativeEdges;
+    type DocumentEdges = TestEmailThreadEdges;
+
+    fn document_edges(_document_id: uuid::Uuid, _is_task: bool) -> Self::DocumentEdges {
+        TestEmailThreadEdges { available: true }
+    }
 
     fn initiative_edges(id: Uuid) -> Self::InitiativeEdges {
         TestInitiativeEdges { id }
@@ -191,6 +197,7 @@ fn user() -> MacroUserIdStr<'static> {
 
 fn detail() -> InitiativeDetail {
     InitiativeDetail {
+        appearance: None,
         id: InitiativeId::from_uuid(Uuid::parse_str(PROJECT_ID).unwrap()),
         name: "Launch".into(),
         owner_id: user(),
@@ -207,6 +214,7 @@ fn row() -> InitiativePageRow {
     let detail = detail();
     InitiativePageRow {
         initiative: InitiativeSummary {
+            appearance: None,
             id: detail.id,
             name: detail.name,
             updated_at: detail.updated_at,
@@ -229,6 +237,8 @@ struct RecordingApi {
     viewers: Mutex<Vec<String>>,
     denied_ids: Mutex<Vec<Uuid>>,
     task_count: Mutex<Option<u32>>,
+    /// The span each domain read ran in, by name.
+    read_spans: Mutex<Vec<Option<&'static str>>>,
 }
 
 impl RecordingApi {
@@ -259,6 +269,10 @@ impl RecordingApi {
 impl InitiativeApi for RecordingApi {
     fn read(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeRead> {
         Box::pin(async move {
+            self.read_spans
+                .lock()
+                .unwrap()
+                .push(tracing::Span::current().metadata().map(|span| span.name()));
             self.record(&user, "read")?;
             if self.denied_ids.lock().unwrap().contains(&id) {
                 return Err(InitiativeError::Unauthorized);

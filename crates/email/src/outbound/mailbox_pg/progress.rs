@@ -54,23 +54,29 @@ impl MailboxProgressRepository for PgMailboxSync {
                 l.sync_generation AS "sync_generation!",
                 l.is_sync_active AS "sync_active!",
                 l.needs_reauth AS "needs_reauth!",
+                l.mailbox_unavailable_at IS NOT NULL AS "mailbox_unavailable!",
                 q.queued AS "queued!",
                 q.parked AS "parked!",
+                q.abandoned AS "abandoned!",
                 q.leased AS "leased!",
                 COALESCE(floor(EXTRACT(EPOCH FROM now() - q.oldest_due)), 0)::bigint AS "oldest_waiting_seconds!",
                 COALESCE(ceil(EXTRACT(EPOCH FROM q.parked_until - now())), 0)::bigint AS "parked_until_max_seconds!",
                 s.incomplete AS "streams_incomplete!",
                 COALESCE(recent.imported_5m, 0)::bigint AS "imported_5m!",
-                floor(EXTRACT(EPOCH FROM now() - latest.last_imported_at))::bigint AS seconds_since_last_import
+                floor(EXTRACT(EPOCH FROM now() - latest.last_imported_at))::bigint AS seconds_since_last_import,
+                COALESCE(w.failures, 0) AS "watch_failures!"
             FROM email_links l
+            LEFT JOIN email_mailbox_watch_work w ON w.link_id = l.id
             CROSS JOIN LATERAL (
-                SELECT count(*) AS queued,
-                    count(*) FILTER (WHERE available_at > now()) AS parked,
+                -- Abandoned rows wait at `available_at = 'infinity'`.
+                SELECT count(*) FILTER (WHERE available_at <> 'infinity') AS queued,
+                    count(*) FILTER (WHERE available_at > now() AND available_at <> 'infinity') AS parked,
+                    count(*) FILTER (WHERE available_at = 'infinity') AS abandoned,
                     count(*) FILTER (WHERE lease_until > now()) AS leased,
                     min(available_at) FILTER (
                         WHERE available_at <= now() AND (lease_until IS NULL OR lease_until <= now())
                     ) AS oldest_due,
-                    max(available_at) FILTER (WHERE available_at > now()) AS parked_until
+                    max(available_at) FILTER (WHERE available_at > now() AND available_at <> 'infinity') AS parked_until
                 FROM email_message_reconciliation
                 WHERE link_id = l.id AND generation = l.sync_generation
             ) q
@@ -94,7 +100,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                     WHERE link_id = l.id ORDER BY minute DESC LIMIT 2
                 ) newest
             ) latest
-            WHERE l.provider = 'OUTLOOK' AND (l.is_sync_active OR q.queued > 0)
+            WHERE l.provider = 'OUTLOOK' AND (l.is_sync_active OR q.queued > 0 OR q.abandoned > 0)
         "#
         )
         .fetch_all(&self.db)
@@ -107,6 +113,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                 sync_generation: row.sync_generation,
                 queued: row.queued,
                 parked: row.parked,
+                abandoned: row.abandoned,
                 leased: row.leased,
                 oldest_waiting_seconds: row.oldest_waiting_seconds,
                 parked_until_max_seconds: row.parked_until_max_seconds,
@@ -115,6 +122,8 @@ impl MailboxProgressRepository for PgMailboxSync {
                 seconds_since_last_import: row.seconds_since_last_import,
                 sync_active: row.sync_active,
                 needs_reauth: row.needs_reauth,
+                mailbox_unavailable: row.mailbox_unavailable,
+                watch_failures: row.watch_failures,
             })
             .collect())
     }

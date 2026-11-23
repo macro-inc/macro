@@ -41,17 +41,20 @@ async fn acknowledge_completes_each_notification_once_and_archives_mail() {
                 Acknowledgment {
                     key: doc.clone(),
                     notification_ids: vec![uuid(1), uuid(2)],
+                    unseen_ids: Vec::new(),
                     archive_thread: None,
                 },
                 // A second part of the same entry, overlapping the first.
                 Acknowledgment {
                     key: doc.clone(),
                     notification_ids: vec![uuid(2)],
+                    unseen_ids: Vec::new(),
                     archive_thread: None,
                 },
                 Acknowledgment {
                     key: thread.clone(),
                     notification_ids: vec![uuid(3)],
+                    unseen_ids: Vec::new(),
                     archive_thread: Some(uuid(MAIL)),
                 },
             ],
@@ -87,6 +90,7 @@ async fn acknowledging_nothing_still_reports_the_keys() {
             vec![Acknowledgment {
                 key: gone.clone(),
                 notification_ids: Vec::new(),
+                unseen_ids: Vec::new(),
                 archive_thread: None,
             }],
         )
@@ -112,17 +116,20 @@ async fn undo_reverses_exactly_one_receipt() {
                 Acknowledgment {
                     key: key(EntityType::Document, DOC),
                     notification_ids: vec![uuid(1)],
+                    unseen_ids: Vec::new(),
                     archive_thread: None,
                 },
                 Acknowledgment {
                     key: key(EntityType::EmailThread, MAIL),
                     notification_ids: vec![uuid(2)],
+                    unseen_ids: vec![uuid(2)],
                     archive_thread: Some(uuid(MAIL)),
                 },
             ],
         )
         .await
         .unwrap();
+    assert_eq!(receipt.unseen_ids, vec![uuid(2)]);
 
     let keys = acknowledger
         .undo(&viewer(), &DoneReceipt::decode(&receipt.encode()).unwrap())
@@ -136,9 +143,10 @@ async fn undo_reverses_exactly_one_receipt() {
             key(EntityType::EmailThread, MAIL)
         ]
     );
-    // Undone notifications come back seen.
+    // Each comes back as it was: the email unseen, the comment, not recorded
+    // as unseen, seen.
     assert_eq!(notifications.state_of(uuid(1)), NotificationState::Seen);
-    assert_eq!(notifications.state_of(uuid(2)), NotificationState::Seen);
+    assert_eq!(notifications.state_of(uuid(2)), NotificationState::Unseen);
     assert_eq!(
         *mail.calls.lock().unwrap(),
         vec![(uuid(MAIL), true), (uuid(MAIL), false)]

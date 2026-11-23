@@ -737,7 +737,7 @@ it('shares the block loader schema read with the mounted database view', async (
   expect(mock.get).toHaveBeenCalledOnce();
 });
 
-it('deduplicates a block load with an in-flight schema read and reuses it on reopen', async () => {
+it('deduplicates a block load with an in-flight schema read', async () => {
   let finish!: (value: DatabaseDetail) => void;
   mock.get.mockReturnValue(
     ResultAsync.fromSafePromise(
@@ -752,7 +752,6 @@ it('deduplicates a block load with an in-flight schema read and reuses it on reo
   finish(detail);
   await mounted;
   expect((await loaded).isOk()).toBe(true);
-  expect((await loadDatabase('db')).isOk()).toBe(true);
   expect(mock.get).toHaveBeenCalledOnce();
 });
 

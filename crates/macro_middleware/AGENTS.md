@@ -9,7 +9,8 @@ by several services, each piece gated behind its own Cargo feature.
 
 - `src/lib.rs`: `connection_drop_prevention_handler` — wraps
   POST/PUT/PATCH/DELETE handlers in a spawned task so a dropped client
-  connection doesn't cancel an in-flight mutation.
+  connection doesn't cancel an in-flight mutation; the task `capture`s the
+  request's `agent_correlation` attribution so its events stay stamped.
 - `src/cloud_storage/mod.rs` (feature `cloud_storage`): middleware that needs
   `macro_db_client`/`entity_access_db_utils`/`model_user`.
 - `src/tracking/mod.rs` (feature `tracking`): request tracking via
@@ -25,6 +26,7 @@ by several services, each piece gated behind its own Cargo feature.
 
 ## Boundaries
 
+- Depends on: `agent_correlation` (to keep attribution across the spawned task).
 - Depends on (feature-gated): `macro_db_client`, `entity_access_db_utils`,
   `ip_extractor`, `macro_user_id`, `model_user`.
 - Used by: `document_storage_service`, `notification_service`,

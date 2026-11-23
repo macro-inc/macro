@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+macro_tower_layers = { path = "../macro_tower_layers" }
 anyhow = { workspace = true }
 model = { path = "../model" }
 model_owner = { path = "../model_owner" }

@@ -32,6 +32,7 @@ mod direct_chats;
 mod group_kinds;
 mod message_types;
 mod new_chats;
+mod pictures;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
 /// A test user's id, typed.
@@ -356,6 +357,7 @@ impl World {
                         mentions: vec![],
                     },
                     reply_to: None,
+                    user_confirmation: None,
                 },
                 SendAuthority::Human,
             )
@@ -791,6 +793,7 @@ async fn a_macro_attachment_reaches_the_group_intact(pool: PgPool) {
                     caption: Some("return label".to_owned()),
                 },
                 reply_to: None,
+                user_confirmation: None,
             },
             SendAuthority::Human,
         )

@@ -198,3 +198,34 @@ fn windows_zone_table_is_sorted_and_known_to_chrono_tz() {
         matches!(&parsed[0].start, Some(InvitationDateTime::Zoned { value, time_zone }) if value == "2026-09-24T08:00:00+00:00" && time_zone == "Europe/Berlin")
     );
 }
+
+#[test]
+fn cldr_49_windows_zones_use_the_zones_2026_rules() {
+    for (windows, zone, utc) in [
+        (
+            "British Columbia Standard Time",
+            "America/Vancouver",
+            "2026-11-02T09:16:00+00:00",
+        ),
+        (
+            "Alberta Standard Time",
+            "America/Edmonton",
+            "2026-11-02T08:16:00+00:00",
+        ),
+        (
+            "Manitoba Standard Time",
+            "America/Winnipeg",
+            "2026-11-02T07:16:00+00:00",
+        ),
+    ] {
+        let parsed = parse(
+            &format!("DTSTART;TZID={windows}:20261102T021600"),
+            "REQUEST",
+        );
+        assert!(
+            matches!(&parsed[0].start, Some(InvitationDateTime::Zoned { value, time_zone }) if value == utc && time_zone == zone),
+            "{windows}: {:?}",
+            parsed[0].start
+        );
+    }
+}

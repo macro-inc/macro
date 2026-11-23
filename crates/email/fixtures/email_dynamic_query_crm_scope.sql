@@ -5,36 +5,36 @@
 --   • Carol — a non-member with her own link/threads (must never appear in
 --     team-scoped results).
 --   • Each link has its OWN row in email_contacts for the same external
---     address "outsider@acme.com" — different UUIDs per link. This is what
+--     address "outsider@acme.example.com" — different UUIDs per link. This is what
 --     exercises the new multi-id `from_contact_id = ANY($ids)` predicate.
 --   • Each link has a TRASH label with a different UUID. Some threads are
 --     trashed in each link to exercise the multi-id trash exclusion.
---   • Threads on alice/bob's links from "outsider@acme.com" (acme.com
+--   • Threads on alice/bob's links from "outsider@acme.example.com" (acme.example.com
 --     domain) plus a thread on alice's link from a different sender,
 --     plus a thread on carol's link that must be excluded.
 
 -- == macro_user / User rows ==
 INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
 VALUES
-    ('a1111111-1111-1111-1111-111111111111', 'alice@team.com', 'alice@team.com', 'stripe_alice'),
-    ('b1111111-1111-1111-1111-111111111111', 'bob@team.com',   'bob@team.com',   'stripe_bob'),
-    ('c1111111-1111-1111-1111-111111111111', 'carol@team.com', 'carol@team.com', 'stripe_carol');
+    ('a1111111-1111-1111-1111-111111111111', 'alice@team.example.com', 'alice@team.example.com', 'stripe_alice'),
+    ('b1111111-1111-1111-1111-111111111111', 'bob@team.example.com',   'bob@team.example.com',   'stripe_bob'),
+    ('c1111111-1111-1111-1111-111111111111', 'carol@team.example.com', 'carol@team.example.com', 'stripe_carol');
 
 INSERT INTO "User" (id, email, name, macro_user_id)
 VALUES
-    ('macro|alice@team.com', 'alice@team.com', 'Alice', 'a1111111-1111-1111-1111-111111111111'),
-    ('macro|bob@team.com',   'bob@team.com',   'Bob',   'b1111111-1111-1111-1111-111111111111'),
-    ('macro|carol@team.com', 'carol@team.com', 'Carol', 'c1111111-1111-1111-1111-111111111111');
+    ('macro|alice@team.example.com', 'alice@team.example.com', 'Alice', 'a1111111-1111-1111-1111-111111111111'),
+    ('macro|bob@team.example.com',   'bob@team.example.com',   'Bob',   'b1111111-1111-1111-1111-111111111111'),
+    ('macro|carol@team.example.com', 'carol@team.example.com', 'Carol', 'c1111111-1111-1111-1111-111111111111');
 
 -- == Team Alpha + memberships ==
 INSERT INTO team (id, name, owner_id, seat_count)
 VALUES
-    ('e0000001-0000-0000-0000-000000000001', 'Team Alpha', 'macro|alice@team.com', 2);
+    ('e0000001-0000-0000-0000-000000000001', 'Team Alpha', 'macro|alice@team.example.com', 2);
 
 INSERT INTO team_user (team_id, user_id, team_role)
 VALUES
-    ('e0000001-0000-0000-0000-000000000001', 'macro|alice@team.com', 'owner'),
-    ('e0000001-0000-0000-0000-000000000001', 'macro|bob@team.com',   'member');
+    ('e0000001-0000-0000-0000-000000000001', 'macro|alice@team.example.com', 'owner'),
+    ('e0000001-0000-0000-0000-000000000001', 'macro|bob@team.example.com',   'member');
 -- Carol is intentionally NOT a member.
 
 -- Team-level CRM killswitch ON. The candidate-source SQL joins
@@ -48,19 +48,24 @@ VALUES
 -- == Email links (one per user) ==
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
 VALUES
-    ('a0000001-0000-0000-0000-000000000001', 'macro|alice@team.com', 'fa_alice', 'alice@team.com', 'GMAIL', true, NOW(), NOW()),
-    ('a0000002-0000-0000-0000-000000000002', 'macro|bob@team.com',   'fa_bob',   'bob@team.com',   'GMAIL', true, NOW(), NOW()),
-    ('a0000003-0000-0000-0000-000000000003', 'macro|carol@team.com', 'fa_carol', 'carol@team.com', 'GMAIL', true, NOW(), NOW());
+    ('a0000001-0000-0000-0000-000000000001', 'macro|alice@team.example.com', 'fa_alice', 'alice@team.example.com', 'GMAIL', true, NOW(), NOW()),
+    ('a0000002-0000-0000-0000-000000000002', 'macro|bob@team.example.com',   'fa_bob',   'bob@team.example.com',   'GMAIL', true, NOW(), NOW()),
+    ('a0000003-0000-0000-0000-000000000003', 'macro|carol@team.example.com', 'fa_carol', 'carol@team.example.com', 'GMAIL', true, NOW(), NOW());
+
+-- Each team contributor has explicitly consented to this primary mailbox.
+INSERT INTO crm_email_consent (team_id, user_id, link_id, enabled)
+SELECT tu.team_id, tu.user_id, l.id, TRUE FROM team_user tu
+JOIN email_links l ON l.macro_id = tu.user_id AND l.is_primary;
 
 -- == Contacts ==
 -- Each link has its own row for the SAME external address. This is the
 -- multi-id case the new resolution path is designed to handle.
 INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)
 VALUES
-    -- outsider@acme.com — one contact row per link, different UUIDs
-    ('c0000001-0000-0000-0000-000000000001', 'a0000001-0000-0000-0000-000000000001', 'outsider@acme.com', 'Outsider', NOW(), NOW()),
-    ('c0000002-0000-0000-0000-000000000002', 'a0000002-0000-0000-0000-000000000002', 'outsider@acme.com', 'Outsider', NOW(), NOW()),
-    ('c0000003-0000-0000-0000-000000000003', 'a0000003-0000-0000-0000-000000000003', 'outsider@acme.com', 'Outsider', NOW(), NOW()),
+    -- outsider@acme.example.com — one contact row per link, different UUIDs
+    ('c0000001-0000-0000-0000-000000000001', 'a0000001-0000-0000-0000-000000000001', 'outsider@acme.example.com', 'Outsider', NOW(), NOW()),
+    ('c0000002-0000-0000-0000-000000000002', 'a0000002-0000-0000-0000-000000000002', 'outsider@acme.example.com', 'Outsider', NOW(), NOW()),
+    ('c0000003-0000-0000-0000-000000000003', 'a0000003-0000-0000-0000-000000000003', 'outsider@acme.example.com', 'Outsider', NOW(), NOW()),
     -- a different sender on alice's link, for non-matching-filter assertions
     ('c0000004-0000-0000-0000-000000000004', 'a0000001-0000-0000-0000-000000000001', 'other@elsewhere.com', 'Other', NOW(), NOW()),
     -- TO/CC/BCC recipient contacts — mirrored on both alice and bob's
@@ -91,12 +96,12 @@ VALUES
     ('11110003-0000-0000-0000-000000000002', 'a0000003-0000-0000-0000-000000000003', 'TRASH', 'TRASH', 'Hide', 'LabelHide', 'System', NOW());
 
 -- == Threads ==
--- ta1: alice's inbox thread from outsider@acme.com (will appear in team queries)
--- ta2: alice's TRASHED thread from outsider@acme.com (must NOT appear)
+-- ta1: alice's inbox thread from outsider@acme.example.com (will appear in team queries)
+-- ta2: alice's TRASHED thread from outsider@acme.example.com (must NOT appear)
 -- ta3: alice's inbox thread from other@elsewhere.com (no acme match)
--- tb1: bob's inbox thread from outsider@acme.com (will appear in team queries)
--- tb2: bob's TRASHED thread from outsider@acme.com (must NOT appear)
--- tc1: carol's inbox thread from outsider@acme.com (must NOT appear — not on team)
+-- tb1: bob's inbox thread from outsider@acme.example.com (will appear in team queries)
+-- tb2: bob's TRASHED thread from outsider@acme.example.com (must NOT appear)
+-- tc1: carol's inbox thread from outsider@acme.example.com (must NOT appear — not on team)
 INSERT INTO email_threads (
     id, provider_id, link_id, inbox_visible, is_read,
     latest_inbound_message_ts, latest_outbound_message_ts, latest_non_spam_message_ts,
@@ -127,12 +132,12 @@ INSERT INTO email_messages (
     created_at, updated_at
 )
 VALUES
-    -- ta1 — alice's inbox, from outsider@acme.com (alice's contact row)
+    -- ta1 — alice's inbox, from outsider@acme.example.com (alice's contact row)
     ('33330001-0000-0000-0000-000000000001', '22220001-0000-0000-0000-000000000001',
      'a0000001-0000-0000-0000-000000000001', 'ma1', 'c0000001-0000-0000-0000-000000000001',
      'Alice inbox acme', 'alice from acme', '2026-04-01 10:00:00+00',
      false, false, false, false, NOW(), NOW()),
-    -- ta2 — alice's TRASHED, from outsider@acme.com (alice's contact row)
+    -- ta2 — alice's TRASHED, from outsider@acme.example.com (alice's contact row)
     ('33330001-0000-0000-0000-000000000002', '22220001-0000-0000-0000-000000000002',
      'a0000001-0000-0000-0000-000000000001', 'ma2', 'c0000001-0000-0000-0000-000000000001',
      'Alice trash acme', 'alice trashed acme', '2026-04-02 10:00:00+00',
@@ -142,17 +147,17 @@ VALUES
      'a0000001-0000-0000-0000-000000000001', 'ma3', 'c0000004-0000-0000-0000-000000000004',
      'Alice inbox other', 'alice from elsewhere', '2026-04-03 10:00:00+00',
      false, false, false, false, NOW(), NOW()),
-    -- tb1 — bob's inbox, from outsider@acme.com (bob's contact row)
+    -- tb1 — bob's inbox, from outsider@acme.example.com (bob's contact row)
     ('33330002-0000-0000-0000-000000000001', '22220002-0000-0000-0000-000000000001',
      'a0000002-0000-0000-0000-000000000002', 'mb1', 'c0000002-0000-0000-0000-000000000002',
      'Bob inbox acme', 'bob from acme', '2026-04-04 10:00:00+00',
      false, false, false, false, NOW(), NOW()),
-    -- tb2 — bob's TRASHED, from outsider@acme.com (bob's contact row)
+    -- tb2 — bob's TRASHED, from outsider@acme.example.com (bob's contact row)
     ('33330002-0000-0000-0000-000000000002', '22220002-0000-0000-0000-000000000002',
      'a0000002-0000-0000-0000-000000000002', 'mb2', 'c0000002-0000-0000-0000-000000000002',
      'Bob trash acme', 'bob trashed acme', '2026-04-05 10:00:00+00',
      false, false, false, false, NOW(), NOW()),
-    -- tc1 — carol's inbox, from outsider@acme.com (carol's contact row)
+    -- tc1 — carol's inbox, from outsider@acme.example.com (carol's contact row)
     ('33330003-0000-0000-0000-000000000001', '22220003-0000-0000-0000-000000000001',
      'a0000003-0000-0000-0000-000000000003', 'mc1', 'c0000003-0000-0000-0000-000000000003',
      'Carol inbox acme', 'carol from acme', '2026-04-06 10:00:00+00',
@@ -203,12 +208,12 @@ VALUES
 -- never read it: its threads, contacts, and labels stay out of CRM scope.
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
 VALUES
-    ('a0000004-0000-0000-0000-000000000004', 'macro|alice@team.com', 'fa_alice_personal', 'alice.personal@gmail.com', 'GMAIL', true, NOW(), NOW());
+    ('a0000004-0000-0000-0000-000000000004', 'macro|alice@team.example.com', 'fa_alice_personal', 'alice.personal@example.com', 'GMAIL', true, NOW(), NOW());
 
 INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)
 VALUES
-    -- outsider@acme.com also corresponded with alice's personal mailbox
-    ('c0000012-0000-0000-0000-000000000012', 'a0000004-0000-0000-0000-000000000004', 'outsider@acme.com', 'Outsider', NOW(), NOW()),
+    -- outsider@acme.example.com also corresponded with alice's personal mailbox
+    ('c0000012-0000-0000-0000-000000000012', 'a0000004-0000-0000-0000-000000000004', 'outsider@acme.example.com', 'Outsider', NOW(), NOW()),
     -- an address known ONLY to the personal mailbox
     ('c0000013-0000-0000-0000-000000000013', 'a0000004-0000-0000-0000-000000000004', 'secret@personal.com', 'Secret', NOW(), NOW());
 
@@ -217,7 +222,7 @@ VALUES
     ('11110004-0000-0000-0000-000000000001', 'a0000004-0000-0000-0000-000000000004', 'INBOX', 'INBOX', 'Show', 'LabelShow', 'System', NOW()),
     ('11110004-0000-0000-0000-000000000002', 'a0000004-0000-0000-0000-000000000004', 'TRASH', 'TRASH', 'Hide', 'LabelHide', 'System', NOW());
 
--- tp1: personal inbox thread from outsider@acme.com (matches CRM filters,
+-- tp1: personal inbox thread from outsider@acme.example.com (matches CRM filters,
 --      must NOT appear in team-scoped results)
 -- tp2: personal inbox thread from secret@personal.com (its contact must not
 --      resolve under team scope)

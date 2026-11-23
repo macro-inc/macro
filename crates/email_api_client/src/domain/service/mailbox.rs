@@ -65,8 +65,12 @@ impl<
     L: ProviderRateLimiter,
 > MailboxApiService<R, T, L>
 {
-    /// Resolve the complete physical folder hierarchy.
-    pub async fn folders(&self, mailbox: MailboxAccess) -> Result<Vec<MailFolder>, EmailApiError> {
+    /// Resolve the complete physical folder hierarchy, or report that the
+    /// account has no mailbox the provider will serve.
+    pub async fn folders(
+        &self,
+        mailbox: MailboxAccess,
+    ) -> Result<MailFolderCatalog, EmailApiError> {
         let token = self
             .token(
                 mailbox,
@@ -148,6 +152,42 @@ impl<
         }
     }
 
+    /// The newest inbox messages, newest first, read straight from the
+    /// provider, so a mailbox can be looked at before it synchronizes.
+    pub async fn recent_inbox_messages(
+        &self,
+        mailbox: MailboxAccess,
+        limit: u16,
+        folders: &[MailFolder],
+    ) -> Result<Vec<MailboxMessage>, EmailApiError> {
+        let token = self
+            .token(
+                mailbox,
+                ApiOperationKind::ListMessages,
+                TokenFreshness::Cached,
+            )
+            .await?;
+        let repository = self.repository.for_mailbox(mailbox);
+        match repository
+            .recent_inbox_messages(&token, mailbox.link_id, limit, folders)
+            .await
+        {
+            Err(EmailApiError::AuthRequired) => {
+                let fresh = self
+                    .token(
+                        mailbox,
+                        ApiOperationKind::ListMessages,
+                        TokenFreshness::Fresh,
+                    )
+                    .await?;
+                repository
+                    .recent_inbox_messages(&fresh, mailbox.link_id, limit, folders)
+                    .await
+            }
+            result => result,
+        }
+    }
+
     /// Download an attachment with the same mailbox binding as its parent message.
     pub async fn attachment(
         &self,
@@ -208,11 +248,13 @@ impl<R: FolderChangeReader + ScopedMailboxRepository, T: MailboxTokenSource, L: 
     MailboxApiService<R, T, L>
 {
     /// Fetch one page; persistence and checkpoint decisions remain in the sync domain.
+    /// `start` applies only to a new round's first page (no `position`).
     pub async fn changes(
         &self,
         mailbox: MailboxAccess,
         folder: &ProviderId,
         position: Option<&StreamToken>,
+        start: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         let token = self
             .token(
@@ -222,7 +264,10 @@ impl<R: FolderChangeReader + ScopedMailboxRepository, T: MailboxTokenSource, L: 
             )
             .await?;
         let repository = self.repository.for_mailbox(mailbox);
-        match repository.folder_changes(&token, folder, position).await {
+        match repository
+            .folder_changes(&token, folder, position, start)
+            .await
+        {
             Err(EmailApiError::AuthRequired) => {
                 let fresh = self
                     .token(
@@ -231,7 +276,9 @@ impl<R: FolderChangeReader + ScopedMailboxRepository, T: MailboxTokenSource, L: 
                         TokenFreshness::Fresh,
                     )
                     .await?;
-                repository.folder_changes(&fresh, folder, position).await
+                repository
+                    .folder_changes(&fresh, folder, position, start)
+                    .await
             }
             result => result,
         }

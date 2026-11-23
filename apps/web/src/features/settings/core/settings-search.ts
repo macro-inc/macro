@@ -3,7 +3,10 @@ import type {
   SettingsTabGroup,
   SettingsTabItem,
 } from '@core/constant/settingsTabsConfig';
-import { NOTIFICATION_EVENT_GROUPS } from '../../notifications/notification-event-catalog';
+import {
+  AGENT_PINGS_EVENT_TYPE,
+  NOTIFICATION_EVENT_GROUPS,
+} from '../../notifications/notification-event-catalog';
 import { settingsTarget } from './settings-target';
 
 type Setting = {
@@ -11,6 +14,10 @@ type Setting = {
   title: string;
   target?: string;
   keywords: string;
+  /** Listed only with `enable-macro-computers` on. */
+  macroComputers?: true;
+  /** The notification event this setting toggles. */
+  eventType?: string;
 };
 export type SettingsSearchResult = Setting & {
   id: string;
@@ -59,6 +66,8 @@ const SETTINGS: Setting[] = [
       title: `${event.label} · ${group.label}`,
       target: group.label,
       keywords: `${group.label} ${event.description}`,
+      macroComputers: event.macroComputers,
+      eventType: event.type,
     }))
   ),
   {
@@ -66,6 +75,13 @@ const SETTINGS: Setting[] = [
     title: 'Email accounts',
     target: 'Accounts',
     keywords: 'gmail connect add inbox sync reconnect remove',
+  },
+  {
+    tab: 'Email',
+    title: 'Email row style',
+    target: 'Display options',
+    keywords:
+      'display options minimalist classic list rows unread bold divider checkbox density',
   },
   {
     tab: 'Email',
@@ -100,8 +116,9 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Harness',
-    title: 'Agent runtimes and credentials',
-    keywords: 'cursor harness runtime api key provider pairing daemon',
+    title: 'Agent machines and credentials',
+    keywords:
+      'cursor harness runtime machine computer api key provider pairing daemon',
   },
   {
     tab: 'Harness',
@@ -332,6 +349,11 @@ const SETTINGS: Setting[] = [
     keywords: 'token secret developer authentication',
   },
   {
+    tab: 'Account Managers',
+    title: 'See and revoke the agents managing your account',
+    keywords: 'agent manager token access revoke',
+  },
+  {
     tab: 'Desktop App',
     title: 'Desktop app version and download',
     keywords: 'download mac macos linux version latest release updated',
@@ -390,7 +412,14 @@ function tokenScore(query: string, candidate: string): number {
 export function searchSettings(
   groups: readonly SettingsTabGroup[],
   query: string,
-  options: { emailSignatures?: boolean; outlook?: boolean } = {}
+  options: {
+    /** Phones always show Minimalist rows and leave out the choice. */
+    emailRowStyle?: boolean;
+    outlook?: boolean;
+    macroComputers?: boolean;
+    /** Whether search lists the Agent pings notification setting. */
+    agentNotifications?: boolean;
+  } = {}
 ): SettingsSearchResult[] {
   const tokens = words(query);
   if (!tokens.length) return [];
@@ -409,9 +438,12 @@ export function searchSettings(
     ...SETTINGS.filter(
       (setting) =>
         setting.tab === page.tab &&
-        (options.emailSignatures !== false ||
-          setting.title !== 'Email signatures') &&
-        (options.outlook !== false || setting.title !== 'Outlook')
+        (options.emailRowStyle !== false ||
+          setting.title !== 'Email row style') &&
+        (options.outlook !== false || setting.title !== 'Outlook') &&
+        (options.macroComputers !== false || !setting.macroComputers) &&
+        (options.agentNotifications !== false ||
+          setting.eventType !== AGENT_PINGS_EVENT_TYPE)
     ).map((setting) => ({
       ...setting,
       target: settingsTarget(setting.target),

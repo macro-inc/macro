@@ -74,6 +74,7 @@ fn label(team_id: Uuid, name: &str) -> ChannelLabel {
         rule: None,
         sort_order: 0.0,
         channel_ids: Vec::new(),
+        explicit_channel_ids: None,
         channel_count: 0,
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -651,4 +652,64 @@ async fn scope_transfer_uses_one_atomic_repo_call_and_checks_actor() {
         Err(ChannelLabelsError::Unauthorized)
     ));
     assert_eq!(repo.calls().len(), 1);
+}
+
+#[tokio::test]
+async fn sections_reject_mixed_rule_and_picks_but_allow_replacing_manual_lists() {
+    let repo = FakeRepo::default();
+    let sections = ChannelLabelsServiceImpl::for_sections(repo.clone());
+    let legacy = ChannelLabelsServiceImpl::new(repo.clone());
+    let (_, receipt) = receipt();
+    let picked = Uuid::now_v7();
+    let rule = ChannelLabelRule::Name {
+        contains: " roadmap ".into(),
+    };
+    for service in [&legacy, &sections] {
+        assert!(matches!(
+            service
+                .create_label(
+                    &receipt,
+                    NewChannelLabel {
+                        name: "Planning".into(),
+                        rule: Some(rule.clone()),
+                        channel_ids: vec![picked],
+                    },
+                )
+                .await,
+            Err(ChannelLabelsError::BadRequest(_))
+        ));
+    }
+    assert!(repo.calls().is_empty());
+    sections
+        .create_label(
+            &receipt,
+            NewChannelLabel {
+                name: "Planning".into(),
+                rule: Some(rule.clone()),
+                channel_ids: vec![],
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        &repo.calls()[0],
+        RepoCall::Create { channel_ids, rule: Some(ChannelLabelRule::Name { contains }), .. }
+            if channel_ids.is_empty() && contains == "roadmap"
+    ));
+    assert!(matches!(
+        legacy
+            .rename_label(
+                &receipt,
+                Uuid::now_v7(),
+                "Planning".into(),
+                Some(rule.clone())
+            )
+            .await,
+        Err(ChannelLabelsError::BadRequest(_))
+    ));
+    sections
+        .rename_label(&receipt, Uuid::now_v7(), "Planning".into(), Some(rule))
+        .await
+        .unwrap();
+    assert!(matches!(repo.calls()[1], RepoCall::Rename { .. }));
 }

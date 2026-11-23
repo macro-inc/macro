@@ -73,6 +73,7 @@ pub async fn handler(
         // Carried through: pasting a rotated key does not reset the model,
         // and the store preserves it, so the response reflects that.
         default_model_id: stored.default_model_id,
+        default_effort: stored.default_effort,
         updated_at: Some(stored.updated_at),
     }))
 }

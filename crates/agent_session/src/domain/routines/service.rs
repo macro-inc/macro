@@ -76,6 +76,7 @@ where
             ManagedPersonaError::Forbidden | ManagedPersonaError::OwnerNotUser(_) => {
                 RoutineSessionError::Forbidden
             }
+            ManagedPersonaError::TeamAgentComputer => RoutineSessionError::TeamAgentComputer,
             ManagedPersonaError::Lookup(error) => session_error(error),
             ManagedPersonaError::Unknown
             | ManagedPersonaError::NotAgent
@@ -98,19 +99,20 @@ where
         if matches!(persona, SelectedPersona::External { .. }) {
             return Err(RoutineSessionError::AppsUnsupported);
         }
-        let connected = self
-            .apps
-            .connected_app_slugs(&selection.owner)
-            .await
-            .map_err(|error| {
-                tracing::warn!(error = ?error, "could not list a routine owner's connected apps");
-                RoutineSessionError::OperationFailed
-            })?;
-        if selection
+        let required: Vec<&str> = selection
             .mcp_servers
             .iter()
-            .all(|server| connected.contains(&server.app_slug))
-        {
+            .map(|server| server.app_slug.as_str())
+            .collect();
+        let connected = self
+            .apps
+            .all_connected(&selection.owner, &required)
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = ?error, "could not read a routine owner's connected apps");
+                RoutineSessionError::OperationFailed
+            })?;
+        if connected {
             Ok(())
         } else {
             Err(RoutineSessionError::AppNotConnected)
@@ -181,10 +183,12 @@ where
                         owner: owner.clone(),
                         prompt: None,
                         profile: Some(profile),
-                        instructions: None,
+                        instructions: command.instructions,
                         model: selection.model.clone(),
                         source: command.source,
                         visibility: command.visibility,
+                        origin: command.origin,
+                        billing: command.billing,
                     })
                     .await
             }
@@ -198,6 +202,7 @@ where
                         model: selection.model.clone(),
                         source: command.source,
                         visibility: command.visibility,
+                        origin: command.origin,
                     })
                     .await
             }
@@ -264,6 +269,9 @@ where
                     action_id: Some(action.action_id),
                     actor: Some(action.owner),
                     context: command.context,
+                    client: None,
+                    // A routine's step has no person behind its words.
+                    prompter: crate::domain::model::PrompterKind::Program,
                 },
             )
             .await
@@ -305,11 +313,70 @@ where
                     action_id: Some(AgentActionId::mint()),
                     actor: Some(command.owner),
                     context: None,
+                    client: None,
+                    // A routine's step has no person behind its words.
+                    prompter: crate::domain::model::PrompterKind::Program,
                 },
             )
             .await
             .map_err(session_error)?;
         Ok(())
+    }
+
+    async fn activity(
+        &self,
+        command: RoutineSessionAction,
+    ) -> Result<RoutineActivity, RoutineSessionError> {
+        self.owned_session(&command).await?;
+        let log = self
+            .sessions
+            .session_log(command.session_id)
+            .await
+            .map_err(session_error)?;
+        Ok(activity(log.entries))
+    }
+
+    async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        let session = self.owned_session(&command).await?;
+        // A routine's run, or a draft's session: the two kinds the scheduler
+        // opens. Anything else is the person's own.
+        if session.source != crate::domain::model::SessionSource::Routine
+            && !session.is_background()
+        {
+            return Err(RoutineSessionError::Forbidden);
+        }
+        self.sessions
+            .delete_session(command.session_id)
+            .await
+            .map_err(session_error)
+    }
+}
+
+/// Tool calls and turns in a session's effective history.
+fn activity(entries: Vec<crate::domain::model::StoredAgentSessionLog>) -> RoutineActivity {
+    let mut fold = LifecycleFold::new();
+    for row in entries {
+        let _ = fold.push(row.entry);
+    }
+    let messages = fold.inner().messages();
+    let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    RoutineActivity {
+        tool_calls: count(
+            messages
+                .iter()
+                .filter(|message| matches!(message.author, Author::Agent))
+                .flat_map(|message| message.parts.iter())
+                .filter(|part| {
+                    matches!(part, agent_fold::domain::model::MessagePart::ToolUse { .. })
+                })
+                .count(),
+        ),
+        turns: count(
+            messages
+                .iter()
+                .filter(|message| matches!(message.author, Author::User { .. }))
+                .count(),
+        ),
     }
 }
 
@@ -349,6 +416,7 @@ fn session_error(error: AgentSessionError) -> RoutineSessionError {
         | AgentSessionError::UnknownOwner
         | AgentSessionError::OwnerNotUser(_) => RoutineSessionError::Forbidden,
         AgentSessionError::SessionIdTaken(_) => RoutineSessionError::Conflict,
+        AgentSessionError::TeamAgentComputer => RoutineSessionError::TeamAgentComputer,
         AgentSessionError::RuntimeUnavailable(_) | AgentSessionError::Disconnected(_) => {
             RoutineSessionError::RuntimeUnavailable
         }

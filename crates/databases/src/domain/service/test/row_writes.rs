@@ -148,6 +148,7 @@ async fn grants_scope_writes_per_database() {
             name: "Venue".into(),
             owner_id: user(VIEWER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
@@ -182,6 +183,7 @@ async fn grants_scope_writes_per_database() {
                         column: room_name,
                         value: CellValue::Text("Main Hall".into()),
                     }]],
+                    ids: None,
                 },
             }]),
         )
@@ -203,7 +205,10 @@ async fn grants_scope_writes_per_database() {
             viewer(VIEWER),
             OpBatch::from(vec![DatabaseOp::Rows {
                 table: seeded.table_id,
-                change: RowsChange::Insert { rows: vec![vec![]] },
+                change: RowsChange::Insert {
+                    rows: vec![vec![]],
+                    ids: None,
+                },
             }]),
         )
         .await
@@ -243,12 +248,16 @@ async fn required_columns_reject_missing_and_cleared_values_but_accept_empty_tex
         .unwrap()
         .nullable = false;
     for change in [
-        RowsChange::Insert { rows: vec![vec![]] },
+        RowsChange::Insert {
+            rows: vec![vec![]],
+            ids: None,
+        },
         RowsChange::Insert {
             rows: vec![vec![CellWrite {
                 column: seeded.name_column.id,
                 value: CellValue::Clear,
             }]],
+            ids: None,
         },
         RowsChange::Update {
             changes: RowChanges::Uniform {
@@ -289,6 +298,7 @@ async fn required_columns_reject_missing_and_cleared_values_but_accept_empty_tex
                         column: seeded.name_column.id,
                         value: CellValue::Text(String::new()),
                     }]],
+                    ids: None,
                 },
             }]
             .into(),

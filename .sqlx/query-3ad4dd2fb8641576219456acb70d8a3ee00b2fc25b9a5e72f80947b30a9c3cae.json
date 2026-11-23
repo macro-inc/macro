@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id, part_id)\n                   SELECT $1, $2, (base.next + row_number() OVER (ORDER BY item.ord) - 1)::smallint,\n                          item.entity_type, item.entity_id, item.part_id\n                   FROM (SELECT COALESCE(max(position) + 1, 0) AS next FROM suggestion_target\n                         WHERE suggestion_id = $1 AND role = $2) base,\n                        (SELECT DISTINCT ON (entity_type, entity_id, part_id) entity_type, entity_id, part_id, ord\n                         FROM unnest($3::text[], $4::text[], $5::text[])\n                           WITH ORDINALITY AS given(entity_type, entity_id, part_id, ord)\n                         ORDER BY entity_type, entity_id, part_id, ord) item\n                   WHERE NOT EXISTS (\n                       SELECT 1 FROM suggestion_target t\n                       WHERE t.suggestion_id = $1 AND t.role = $2\n                         AND t.entity_type = item.entity_type AND t.entity_id = item.entity_id\n                         AND t.part_id IS NOT DISTINCT FROM item.part_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ad4dd2fb8641576219456acb70d8a3ee00b2fc25b9a5e72f80947b30a9c3cae"
+}

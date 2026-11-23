@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createUserScopedStorage } from './userScopedStorage';
+import {
+  createUserScopedStorage,
+  userScopedStorageKey,
+} from './userScopedStorage';
 
 describe('createUserScopedStorage', () => {
   afterEach(() => {
@@ -25,6 +28,15 @@ describe('createUserScopedStorage', () => {
     storage.write('user-2', 'two');
     expect(storage.read('user-1')).toBe('one');
     expect(storage.read('user-2')).toBe('two');
+  });
+
+  it("names the key it stores a user's value under", () => {
+    const storage = createUserScopedStorage('macro:test');
+    storage.write('user@1', 'value');
+
+    expect(
+      localStorage.getItem(userScopedStorageKey('macro:test', 'user@1'))
+    ).toBe('value');
   });
 
   it('encodes user ids so delimiter characters cannot collide', () => {

@@ -173,8 +173,10 @@ where
                 .spreadsheet
                 .read(
                     entity_access_receipt.clone(),
-                    &request_context.user_id,
-                    service_context.actor.into_storage_id().as_ref(),
+                    crate::domain::spreadsheet::SpreadsheetCaller::Agent {
+                        user: &request_context.user_id,
+                        actor: service_context.actor.into_storage_id().as_ref(),
+                    },
                     crate::domain::spreadsheet::SpreadsheetRequest::Read {
                         sheet_id: None,
                         ranges: None,
@@ -184,7 +186,7 @@ where
                 .await
                 .map_err(|e| ToolCallError {
                     description: e.to_string(),
-                    internal_error: e,
+                    internal_error: e.into(),
                 })?;
             Content::Text(serde_json::to_string(&result).map_err(|e| ToolCallError {
                 description: "unable to serialize spreadsheet overview".to_string(),

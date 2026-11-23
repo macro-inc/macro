@@ -2,10 +2,13 @@ import { ViewSidebar } from '@app/components/view-shell';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import RssIcon from '@icon/system/regular/rss.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
-import { Checkbox } from '@ui';
+import { Checkbox, Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
-import { groupCalendarSourcesByAccount } from '../utils/calendar-source-groups';
+import {
+  type CalendarAccountGroup,
+  groupCalendarSourcesByAccount,
+} from '../utils/calendar-source-groups';
 
 interface SourceControlsProps {
   ref?: (element: HTMLUListElement) => void;
@@ -63,20 +66,7 @@ export function SourceControls(props: SourceControlsProps) {
                 >
                   <Checkbox.Control />
                   <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2 font-medium">
-                    <span
-                      aria-hidden="true"
-                      class="size-2.5 shrink-0 rounded-sm"
-                      style={{
-                        'background-color': (
-                          group.calendars.find(
-                            (calendar) => calendar.isPrimary
-                          ) ?? group.calendars[0]
-                        )?.color,
-                      }}
-                    />
-                    <span class="min-w-0 flex-1 truncate">
-                      {group.emailAddress}
-                    </span>
+                    <CalendarAccountLabel group={group} />
                   </Checkbox.Label>
                 </Checkbox>
                 <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
@@ -102,44 +92,11 @@ export function SourceControls(props: SourceControlsProps) {
                         onChange={(checked) =>
                           props.onVisibilityChange(source.id, checked)
                         }
-                        class="flex h-(--sidebar-row-height) w-full min-w-0 gap-3 rounded-lg px-(--sidebar-item-inset) text-sm text-ink-muted hover:bg-hover hover:text-ink touch:h-11"
+                        class="flex h-(--sidebar-row-height) w-full min-w-0 gap-3 rounded-lg px-(--sidebar-item-inset) text-sm text-ink-muted hover:bg-hover hover:text-ink touch:h-auto touch:min-h-11 touch:py-1"
                       >
                         <Checkbox.Control />
                         <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
-                          <span
-                            aria-hidden="true"
-                            class="size-2.5 shrink-0 rounded-sm"
-                            style={{ 'background-color': source.color }}
-                          />
-                          <span class="min-w-0 flex-1 truncate">
-                            {source.name}
-                          </span>
-                          <Show when={source.syncError}>
-                            {(error) => (
-                              <span
-                                title={`Calendar needs attention: ${error()}`}
-                                class="flex shrink-0 text-alert-ink"
-                              >
-                                <WarningIcon
-                                  aria-hidden={false}
-                                  class="size-3"
-                                  aria-label={`Calendar needs attention: ${error()}`}
-                                />
-                              </span>
-                            )}
-                          </Show>
-                          <Show when={source.isSubscription}>
-                            <span
-                              title="Subscription calendar"
-                              class="flex shrink-0 text-ink-muted"
-                            >
-                              <RssIcon
-                                aria-hidden={false}
-                                class="size-3"
-                                aria-label="Subscription calendar"
-                              />
-                            </span>
-                          </Show>
+                          <CalendarSourceLabel source={source} />
                         </Checkbox.Label>
                       </Checkbox>
                     )}
@@ -151,5 +108,70 @@ export function SourceControls(props: SourceControlsProps) {
         }}
       </For>
     </ul>
+  );
+}
+
+/** An account's swatch, in its primary calendar's color, and its address. */
+export function CalendarAccountLabel(props: { group: CalendarAccountGroup }) {
+  const primary = () =>
+    props.group.calendars.find((calendar) => calendar.isPrimary) ??
+    props.group.calendars[0];
+
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        class="size-2.5 shrink-0 rounded-sm"
+        style={{ 'background-color': primary()?.color }}
+      />
+      <span class="min-w-0 flex-1 truncate">{props.group.emailAddress}</span>
+    </>
+  );
+}
+
+/**
+ * A calendar's swatch and name, with its sync-failure and subscription marks.
+ * A pointer reads the sync error from the warning mark's tooltip; touch has
+ * no hover, so there it is written out under the name, as a menu item's
+ * disabled reason is.
+ */
+export function CalendarSourceLabel(props: { source: CalendarSource }) {
+  const syncFailure = () =>
+    props.source.syncError ? `Sync failed: ${props.source.syncError}` : '';
+
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        class="size-2.5 shrink-0 rounded-sm"
+        style={{ 'background-color': props.source.color }}
+      />
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate">{props.source.name}</span>
+        <Show when={syncFailure()}>
+          <span class="sr-only text-xs text-alert-ink wrap-anywhere touch:not-sr-only">
+            {syncFailure()}
+          </span>
+        </Show>
+      </span>
+      <Show when={syncFailure()}>
+        <Tooltip as="span" label={syncFailure()} class="flex shrink-0">
+          <WarningIcon class="size-3 text-alert-ink" />
+        </Tooltip>
+      </Show>
+      <Show when={props.source.isSubscription}>
+        <Tooltip
+          as="span"
+          label="Subscription calendar"
+          class="flex shrink-0 text-ink-muted"
+        >
+          <RssIcon
+            aria-hidden={false}
+            class="size-3"
+            aria-label="Subscription calendar"
+          />
+        </Tooltip>
+      </Show>
+    </>
   );
 }

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"User\" SET \"isAgent\" = TRUE WHERE id = 'macro|admin@example.com'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9b23c111f3d3e4b074f1e9ce43f30d4cfcfd4a95a657b428e897cdeb54d4fa47"
+}

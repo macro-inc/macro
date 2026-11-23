@@ -27,7 +27,7 @@ test('Enter moves down immediately before any pending save completes', async ({
   await page.keyboard.press('Enter');
   await expect(editor).toBeFocused();
   await expect(editor).toHaveText('');
-  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.press('ArrowUp');
   await expect(editor).toHaveText('Saved second');
   expect(
     await editor.evaluate((element) => {

@@ -1,8 +1,11 @@
+import { t } from '@app/lib/i18n';
 import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import PlugIcon from '@icon/system/regular/plug.svg';
 import { useReauthenticateGithubMutation } from '@queries/auth';
 import { authServiceClient } from '@service-auth/client';
 import { createSignal, onCleanup, onMount } from 'solid-js';
@@ -71,12 +74,17 @@ export function GithubReauthenticationPrompt() {
     key: (item) => item,
     toast: () => ({
       title: 'Reconnect GitHub',
+      icon: PlugIcon,
+      color: 'var(--color-failure)',
+      titleColor: 'var(--color-failure)',
+      dismissLabel: t('common.maybeLater'),
       content(): string {
         return 'Your GitHub authorization has expired. Reconnect GitHub to restore pull request details.';
       },
       actions: [
         {
           label: 'Reconnect',
+          icon: ArrowCounterClockwise,
           onClick: () => {
             fireAndForget(reconnect(), 'github-reauth');
           },

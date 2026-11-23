@@ -1,9 +1,7 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { enableDatabases } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -24,7 +22,6 @@ const SECTION_ICONS: Record<
   files: getIconConfig('files').icon,
   tasks: getIconConfig('task').icon,
   calls: getIconConfig('call').icon,
-  databases: getIconConfig('database').icon,
 };
 
 /** Desktop section tabs and a touch header island with a section drawer. */
@@ -33,14 +30,10 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
   value: S;
   onChange: (section: S) => void;
   compact?: boolean;
+  tabsRef?: (element: HTMLElement) => void;
 }) {
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const [open, setOpen] = createSignal(false);
   const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
-  const sections = () =>
-    props.sections.filter(
-      (section) => section !== 'databases' || databasesFlag().enabled
-    );
   const label = (section: CrmRecordSection) => t(`tabs.record-${section}`);
   const icon = (section: CrmRecordSection) => SECTION_ICONS[section];
 
@@ -49,9 +42,11 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
       when={isTouchDevice()}
       fallback={
         <Tabs
+          ref={props.tabsRef}
           aria-label={t('tabs.recordSections')}
+          size="sm"
           class="shrink-0"
-          options={sections().map((section) => ({
+          options={props.sections.map((section) => ({
             value: section,
             label: label(section),
             icon: props.compact ? SECTION_ICONS[section] : undefined,
@@ -102,7 +97,7 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
                   aria-label={t('tabs.recordSections')}
                   class="flex flex-col"
                 >
-                  <For each={sections()}>
+                  <For each={props.sections}>
                     {(section) => (
                       <MobileDrawer.Close
                         as={MobileDrawer.Item}

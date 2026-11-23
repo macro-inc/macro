@@ -16,6 +16,20 @@ pub(super) async fn get_document_owner(
         .await
 }
 
+/// A document's owner and the folder it is filed in.
+pub(super) async fn get_document_owner_and_folder(
+    transaction: &mut Transaction<'_, Postgres>,
+    document_id: &str,
+) -> Result<(String, Option<String>), sqlx::Error> {
+    sqlx::query!(
+        r#"SELECT owner, "projectId" AS project_id FROM "Document" WHERE id = $1"#,
+        document_id
+    )
+    .map(|r| (r.owner, r.project_id))
+    .fetch_one(transaction.as_mut())
+    .await
+}
+
 /// Update document metadata (name, projectId, fileType, updatedAt).
 ///
 /// `file_type`: None = no change, Some(None) = set to NULL, Some(Some(ft)) = set to ft.

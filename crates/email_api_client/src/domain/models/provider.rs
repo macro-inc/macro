@@ -100,6 +100,10 @@ pub struct MailFolder {
     pub role: FolderRole,
     /// Whether the folder has children that must also be enumerated.
     pub has_children: bool,
+    /// How many items the provider counted in the folder when it was last
+    /// listed, whether or not they have been imported yet.
+    #[serde(default)]
+    pub total_items: Option<u32>,
 }
 
 impl MailFolder {
@@ -121,6 +125,21 @@ impl MailFolder {
         }
         role
     }
+}
+
+/// What a mailbox's folder discovery found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MailFolderCatalog {
+    /// The mailbox's folders, with their roles resolved.
+    Folders(Vec<MailFolder>),
+    /// The provider answered 404 to the mailbox's Inbox, which every mailbox
+    /// has: the account has no mailbox the provider will serve (for
+    /// Microsoft, no Exchange Online licence, an inactive mailbox, or one
+    /// hosted on premises).
+    NoMailbox {
+        /// The provider's error code for the 404, when it gave one.
+        error_code: Option<String>,
+    },
 }
 
 /// Provider-supplied attention evidence; user policy has higher precedence.
@@ -162,6 +181,9 @@ pub struct MailboxMessage {
     pub draft_correlation: Option<uuid::Uuid>,
     /// Existing content and invitation representation consumed by ingestion.
     pub content: MessageWithCalendarParts,
+    /// The message reads as an invitation, but its MIME source could not be
+    /// read, so `content.calendar_parts` is empty rather than complete.
+    pub calendar_parts_unavailable: bool,
     /// Normalized mailbox facts.
     pub state: MailboxState,
     /// Physical parent folder, if the provider uses folders.
@@ -224,6 +246,21 @@ pub struct MailboxChangePage {
     pub removed: Vec<ProviderId>,
     /// The continuation or committed checkpoint returned by the provider.
     pub position: StreamPosition,
+    /// The `FolderChangeReader::READER_REVISION` that read the page.
+    pub reader_revision: i16,
+}
+
+/// Which messages a folder's delta round lists, and in what order. Only a
+/// round's first request takes it: the provider carries it in the round's
+/// continuation and checkpoint links.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoundStart {
+    /// Every message in the folder, in the provider's order.
+    Unordered,
+    /// Every message in the folder, most recently received first.
+    NewestFirst,
+    /// Only messages received at or after this time.
+    ReceivedSince(DateTime<Utc>),
 }
 
 /// An opaque continuation/checkpoint which must be validated by its adapter.

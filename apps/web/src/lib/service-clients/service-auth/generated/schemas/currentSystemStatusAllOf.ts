@@ -4,9 +4,13 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CurrentSystemStatusAllOfId } from './currentSystemStatusAllOfId';
 import type { CurrentSystemStatusAllOfUpdatedAt } from './currentSystemStatusAllOfUpdatedAt';
 
 export type CurrentSystemStatusAllOf = {
+  /** The id of the update that set it; absent when no status was ever set.
+Clients remember dismissed banners by this id. */
+  id?: CurrentSystemStatusAllOfId;
   /** When it was set; absent when no status was ever set. Clients keep the
 newest status they have seen, whether fetched or pushed. */
   updatedAt?: CurrentSystemStatusAllOfUpdatedAt;

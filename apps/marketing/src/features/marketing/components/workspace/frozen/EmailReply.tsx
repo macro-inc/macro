@@ -1,7 +1,7 @@
-import CaretRight from '@phosphor/caret-right.svg';
-import Clock from '@phosphor/clock.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import Trash from '@phosphor/trash.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, Dropdown, SendButton } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { homepagePeople } from '../../../core/homepage-demo-people';

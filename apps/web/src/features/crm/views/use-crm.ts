@@ -2,6 +2,9 @@ import { type CrmContext, useCrmContext } from '../context/crm-context';
 export const useCompanyQuery = (
   ...args: Parameters<CrmContext['createCompanySource']>
 ) => useCrmContext().createCompanySource(...args);
+export const useCompanyContactsQuery = (
+  ...args: Parameters<CrmContext['createCompanyContactsSource']>
+) => useCrmContext().createCompanyContactsSource(...args);
 export const useContactQuery = (
   ...args: Parameters<CrmContext['createContactSource']>
 ) => useCrmContext().createContactSource(...args);

@@ -3,7 +3,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DemoInteractionBoundary } from '../DemoInteractionBoundary';
 import { EmailAccountsDemo } from './EmailAccountsDemo';
 import { EmailAgenticEditingDemo } from './EmailAgenticEditingDemo';
-import { EmailKeyboardDemo } from './EmailKeyboardDemo';
 
 let visible: IntersectionObserverCallback;
 let reduced = false;
@@ -159,62 +158,6 @@ it('connects one inbox per click, then switches to an individual inbox and back'
   expect(vi.getTimerCount()).toBeGreaterThan(0);
 });
 
-it('navigates with J/K, opens threads and archives the selection through the empty state', () => {
-  const view = render(() => <EmailKeyboardDemo />);
-  const region = view.getByRole('region', {
-    name: 'Try email keyboard shortcuts',
-  });
-  fireEvent.keyDown(region, { key: 'j' });
-  expect(
-    view
-      .getByRole('button', { name: 'Read Quick review' })
-      .getAttribute('aria-current')
-  ).toBe('true');
-  fireEvent.keyDown(region, { key: 'Enter' });
-  expect(view.getByRole('heading', { name: 'Quick review' })).toBeTruthy();
-  fireEvent.keyDown(region, { key: 'k' });
-  expect(view.getByRole('heading', { name: 'Thursday demo' })).toBeTruthy();
-  fireEvent.keyDown(region, { key: 'e' });
-  expect(view.getByRole('heading', { name: 'Quick review' })).toBeTruthy();
-  fireEvent.keyDown(region, { key: 'Escape' });
-  expect(view.queryByRole('button', { name: 'Read Thursday demo' })).toBeNull();
-  for (let count = 0; count < 13; count++)
-    fireEvent.keyDown(region, { key: 'e' });
-  expect(view.getByText('All caught up.')).toBeTruthy();
-  fireEvent.keyDown(region, { key: 'j' });
-  expect(view.getByText('All caught up.')).toBeTruthy();
-});
-
-it('does not capture page-wide, modified or composing keys', () => {
-  const view = render(() => <EmailKeyboardDemo />);
-  const region = view.getByRole('region', {
-    name: 'Try email keyboard shortcuts',
-  });
-  fireEvent.keyDown(document.body, { key: 'e' });
-  fireEvent.keyDown(region, { key: 'e', metaKey: true });
-  fireEvent.keyDown(region, { key: 'e', isComposing: true });
-  expect(view.getAllByRole('button', { name: /^Read / })).toHaveLength(14);
-});
-
-it('finishes keyboard playback and cleans up its timer', () => {
-  const view = render(() => <EmailKeyboardDemo />);
-  setVisible(true);
-  vi.advanceTimersByTime(1400);
-  expect(
-    view
-      .getByRole('button', { name: 'Read Quick review' })
-      .getAttribute('aria-current')
-  ).toBe('true');
-  vi.advanceTimersByTime(7000);
-  expect(view.queryByText('1 archived')).toBeNull();
-  expect(view.getAllByRole('button', { name: /^Read / })).toHaveLength(13);
-  expect(view.queryByRole('button', { name: /Play|Pause|Replay/ })).toBeNull();
-  view.unmount();
-  vi.advanceTimersByTime(20);
-  expect(vi.getTimerCount()).toBe(0);
-  expect(disconnect).toHaveBeenCalled();
-});
-
 it('shows all inboxes without autoplay for reduced motion', () => {
   reduced = true;
   const view = render(() => <EmailAccountsDemo />);
@@ -240,7 +183,7 @@ it('shows the source context before the editable draft and preserves edits', () 
   vi.advanceTimersByTime(2200);
   expect(
     view.getByRole<HTMLInputElement>('textbox', { name: 'To' }).value
-  ).toBe('Valentina <valentina@coparse.com>');
+  ).toBe('Austin Barron <austin@example.com>');
   expect(
     view.getByRole<HTMLInputElement>('textbox', { name: 'Cc' }).value
   ).toBe('Julia <julia@macro.com>');

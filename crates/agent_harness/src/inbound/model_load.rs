@@ -88,6 +88,9 @@ pub struct LoadAgentModelsResponse {
     pub current_model: Option<String>,
     /// Ordered model catalog.
     pub models: Vec<AgentModelDto>,
+    /// When a paired runtime that is off or unreachable last reported this
+    /// catalog; null when it was probed live.
+    pub cached_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Model-selection availability returned over HTTP.
@@ -119,7 +122,37 @@ impl From<AgentModels> for LoadAgentModelsResponse {
                     supports_images: model.supports_images,
                 })
                 .collect(),
+            cached_at: value.cached_at,
         }
+    }
+}
+
+/// Error body for a provider that refused the caller's connected credential.
+///
+/// JSON rather than the plain text other failures answer with, so a client
+/// can tell this 409 from a disconnected runtime and show `message` as is.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CredentialRejectedResponse {
+    /// Always [`Self::CODE`].
+    pub code: &'static str,
+    /// What to tell the caller, e.g. which kind of key to reconnect with.
+    pub message: String,
+}
+
+impl CredentialRejectedResponse {
+    /// The `code` this body always carries.
+    pub const CODE: &'static str = "provider_credential_rejected";
+
+    /// The 409 response carrying `message`.
+    pub fn into_response(message: String) -> Response {
+        (
+            StatusCode::CONFLICT,
+            Json(Self {
+                code: Self::CODE,
+                message,
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -185,7 +218,7 @@ where
         (status = 400, description = "Invalid target"),
         (status = 401, description = "Unauthenticated"),
         (status = 403, description = "Harness is not visible to caller"),
-        (status = 409, description = "Macrod runtime or Cursor account is not connected"),
+        (status = 409, description = "Macrod machine or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)", content((CredentialRejectedResponse = "application/json"), (String = "text/plain"))),
         (status = 504, description = "Macrod probe timed out"),
         (status = 502, description = "Provider probe failed"),
     )
@@ -215,6 +248,9 @@ where
 
 fn model_error_response(error: LoadAgentModelsError) -> Response {
     let status = match error {
+        LoadAgentModelsError::CredentialRejected(message) => {
+            return CredentialRejectedResponse::into_response(message);
+        }
         LoadAgentModelsError::BadRequest(_) => StatusCode::BAD_REQUEST,
         LoadAgentModelsError::Forbidden => StatusCode::FORBIDDEN,
         LoadAgentModelsError::Disconnected => StatusCode::CONFLICT,

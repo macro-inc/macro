@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harness_runtime_connection SET lease_expires_at = now() - interval '1 second'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "78da7ab927e5186259f655943f8c2874667cd93d95cf0335f6baac2bb820b181"
+}

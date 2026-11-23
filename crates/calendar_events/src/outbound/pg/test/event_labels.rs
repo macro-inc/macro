@@ -60,6 +60,7 @@ fn copy(
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn labels_say_whose_calendar_each_stored_event_is_on(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
     let link_id = insert_link(&pool, OWNER).await;
     let inbox = link_email(&pool, link_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
@@ -116,6 +117,10 @@ async fn labels_say_whose_calendar_each_stored_event_is_on(pool: PgPool) {
     ];
     for upsert in [dentist, holiday, organized, invited] {
         repo.upsert_event_fixture(upsert).await.unwrap();
+    }
+    // Every calendar counts until the user turns it off in Settings → Calendar.
+    for calendar_id in [colleagues, holidays] {
+        set_availability(&pool, calendar_id, false).await;
     }
 
     let labels = CalendarService::new(repo)
@@ -178,28 +183,39 @@ async fn the_availability_setting_decides_the_schedule_label(pool: PgPool) {
     let service = CalendarService::new(repo);
 
     let by_default = service.event_labels(OWNER, &[id]).await.unwrap();
-    assert_eq!(by_default[&id].contributes_to_availability, Some(false));
-    assert_eq!(by_default[&id].role, None);
-
-    sqlx::query!(
-        r#"
-        INSERT INTO calendar_availability_preferences (user_id, calendar_id, contributes_to_availability)
-        VALUES ($1, $2, true)
-        "#,
-        OWNER,
-        team,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    let on_schedule = service.event_labels(OWNER, &[id]).await.unwrap();
-    assert_eq!(on_schedule[&id].contributes_to_availability, Some(true));
     assert_eq!(
-        on_schedule[&id].role,
+        by_default[&id].contributes_to_availability,
+        Some(true),
+        "a calendar the user never chose for counts, as booking links count it"
+    );
+    assert_eq!(
+        by_default[&id].role,
         Some(EventRole::Organizer),
         "a calendar of their own schedule that they can write, as the tools read it"
     );
+
+    set_availability(&pool, team, false).await;
+
+    let off_schedule = service.event_labels(OWNER, &[id]).await.unwrap();
+    assert_eq!(off_schedule[&id].contributes_to_availability, Some(false));
+    assert_eq!(off_schedule[&id].role, None);
+}
+
+async fn set_availability(pool: &PgPool, calendar_id: Uuid, counts: bool) {
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_availability_preferences (user_id, calendar_id, contributes_to_availability)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, calendar_id) DO UPDATE
+            SET contributes_to_availability = EXCLUDED.contributes_to_availability
+        "#,
+        OWNER,
+        calendar_id,
+        counts,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 /// A hit the requester reads through a channel is someone else's copy.

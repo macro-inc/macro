@@ -49,3 +49,32 @@ it('labels date pills relative to today while keeping the stored instant', () =>
   expect(readCellText(root)).toBe(`Due ${token}`);
   root.remove();
 });
+it('ends a value with a line break on an empty line the caret can reach', () => {
+  const root = document.createElement('div');
+  root.contentEditable = 'true';
+  document.body.append(root);
+  writeCellText(root, 'First\n');
+  // A trailing newline alone draws no line; the closing break holds it open.
+  expect(root.lastChild).toBeInstanceOf(HTMLBRElement);
+  expect(readCellText(root)).toBe('First\n');
+  setCellTextCursor(root, 'First\n'.length);
+  expect(cellTextSelection(root)).toEqual({ start: 6, end: 6 });
+  const all = document.createRange();
+  all.selectNodeContents(root);
+  getSelection()?.removeAllRanges();
+  getSelection()?.addRange(all);
+  expect(cellTextSelection(root)).toEqual({ start: 0, end: 6 });
+  // The browser leaves its own closing break when a new line is deleted again.
+  root.replaceChildren(
+    document.createTextNode('First'),
+    document.createElement('br')
+  );
+  expect(readCellText(root)).toBe('First');
+  root.replaceChildren(
+    document.createTextNode('a'),
+    document.createElement('br'),
+    document.createTextNode('b')
+  );
+  expect(readCellText(root)).toBe('a\nb');
+  root.remove();
+});

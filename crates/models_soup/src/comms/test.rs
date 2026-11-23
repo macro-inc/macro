@@ -3,6 +3,7 @@ use crate::item::SoupItem;
 
 fn sample_channel(is_participant: bool) -> SoupChannel {
     SoupChannel {
+        agent_dm: None,
         channel: ChannelWithParticipants {
             channel: Channel {
                 id: ChannelId(Uuid::nil()),
@@ -10,11 +11,13 @@ fn sample_channel(is_participant: bool) -> SoupChannel {
                 channel_type: ChannelType::Team,
                 org_id: None,
                 team_id: Some(Uuid::nil()),
+                auto_join_team: false,
                 created_at: chrono::DateTime::<chrono::Utc>::default(),
                 updated_at: chrono::DateTime::<chrono::Utc>::default(),
                 owner_id: MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap(),
             },
             participants: Vec::new(),
+            bot_participants: Box::default(),
             is_participant,
         },
         latest_message: LatestMessage::default(),
@@ -46,4 +49,123 @@ fn channel_payload_without_is_participant_still_deserializes() {
     let channel: SoupChannel = serde_json::from_value(json).unwrap();
 
     assert!(!channel.channel.is_participant);
+}
+
+#[test]
+fn channel_list_conversion_keeps_the_agent_dm_persona_and_auto_join() {
+    let channel_id = Uuid::from_u128(1);
+    let bot_id = BotId::new_from_uuid(Uuid::from_u128(2));
+    let list_item = channels::domain::models::ChannelWithLatest {
+        agent_dm: Some(channels::domain::agent_dm::AgentDmProfile {
+            bot_id,
+            name: "Researcher".to_string(),
+            avatar_url: Some("https://example.com/researcher.png".to_string()),
+        }),
+        channel: channels::domain::models::ChannelWithParticipants {
+            channel: channels::domain::models::ChannelListItem {
+                id: channel_id,
+                name: Some("Researcher".to_string()),
+                channel_type: channels::domain::models::ChannelType::DirectMessage,
+                org_id: None,
+                team_id: Some(Uuid::from_u128(3)),
+                auto_join_team: true,
+                created_at: chrono::DateTime::<chrono::Utc>::default(),
+                updated_at: chrono::DateTime::<chrono::Utc>::default(),
+                owner_id: MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap(),
+            },
+            participants: Vec::new(),
+            is_participant: true,
+        },
+        latest_message: channels::domain::models::LatestMessage::default(),
+        viewed_at: None,
+        interacted_at: None,
+        frecency_score: None,
+    };
+
+    let channel = SoupChannel::new_from_channels(list_item);
+
+    assert_eq!(
+        channel.agent_dm,
+        Some(SoupAgentDmProfile {
+            bot_id,
+            name: "Researcher".to_string(),
+            avatar_url: Some("https://example.com/researcher.png".to_string()),
+        })
+    );
+    assert!(channel.channel.channel.auto_join_team);
+}
+
+#[test]
+fn channel_payload_without_agent_dm_or_auto_join_still_deserializes() {
+    let mut json = serde_json::to_value(sample_channel(true)).unwrap();
+    json["channel"]
+        .as_object_mut()
+        .unwrap()
+        .remove("auto_join_team")
+        .unwrap();
+
+    let channel: SoupChannel = serde_json::from_value(json).unwrap();
+
+    assert!(channel.agent_dm.is_none());
+    assert!(!channel.channel.channel.auto_join_team);
+}
+
+#[test]
+fn channel_conversion_keeps_bot_participants_apart_from_users() {
+    let channel_id = Uuid::from_u128(1);
+    let bot_id = BotId::new_from_uuid(Uuid::from_u128(2));
+    let participant = |user_id: String| channels::domain::models::ChannelParticipant {
+        channel_id,
+        user_id,
+        role: channels::domain::models::ParticipantRole::Member,
+        joined_at: chrono::DateTime::<chrono::Utc>::default(),
+        left_at: None,
+    };
+    let channel = channels::domain::models::ChannelWithParticipants {
+        channel: channels::domain::models::ChannelListItem {
+            id: channel_id,
+            name: Some("general".to_string()),
+            channel_type: channels::domain::models::ChannelType::Private,
+            org_id: None,
+            team_id: None,
+            auto_join_team: false,
+            created_at: chrono::DateTime::<chrono::Utc>::default(),
+            updated_at: chrono::DateTime::<chrono::Utc>::default(),
+            owner_id: MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap(),
+        },
+        participants: vec![
+            participant("macro|owner@example.com".to_string()),
+            participant(format!("bot|{bot_id}")),
+            participant("guest|someone".to_string()),
+        ],
+        is_participant: true,
+    };
+
+    let channel = ChannelWithParticipants::new_from_channels(channel);
+
+    let users: Vec<_> = channel
+        .participants
+        .iter()
+        .map(|participant| participant.user_id.as_ref())
+        .collect();
+    assert_eq!(users, ["macro|owner@example.com"]);
+    let bots: Vec<_> = channel
+        .bot_participants
+        .iter()
+        .map(|participant| (participant.channel_id.0, participant.bot_id))
+        .collect();
+    assert_eq!(bots, [(channel_id, bot_id)]);
+}
+
+#[test]
+fn channel_payload_without_bot_participants_still_deserializes() {
+    let mut json = serde_json::to_value(sample_channel(true)).unwrap();
+    json.as_object_mut()
+        .unwrap()
+        .remove("bot_participants")
+        .unwrap();
+
+    let channel: SoupChannel = serde_json::from_value(json).unwrap();
+
+    assert!(channel.channel.bot_participants.is_empty());
 }

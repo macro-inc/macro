@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Projekt',
     newProject: 'Nyt projekt',
     contentAlreadyOpen: 'Indholdet er allerede åbent',
-    unableToOpenConversation: 'Samtalen kunne ikke åbnes. Prøv igen.',
     mobileSearchPlaceholder: 'Søg…',
     closeSearch: 'Luk søgning',
     searchFullTextFor: 'Fritekstsøg efter »{{query}}«',
@@ -105,7 +104,6 @@ export default {
     close: 'Luk',
     delete: 'Slet',
     rename: 'Omdøb',
-    more: 'Mere',
     search: 'Søg',
     settings: 'Indstillinger',
   },
@@ -520,6 +518,10 @@ export default {
       other: '{{count}} elementer slettet',
     },
     toastDeleteFailed: 'Kunne ikke slette',
+    toastPropertySet: {
+      one: '{{property}} angivet',
+      other: '{{property}} angivet for {{count}} elementer',
+    },
     toastAddedToFavorites: 'Føjet til favoritter',
     toastAddedCountToFavorites: {
       one: '{{count}} element føjet til favoritter',
@@ -591,10 +593,6 @@ export default {
       other: '{{accepted}} af {{count}} elementer markeret som ikke færdige',
     },
     toastMarkNotDoneFailed: 'Kunne ikke markere som ikke færdig',
-    toastThreadStaysDone:
-      'Denne tråd har ingen modtagne beskeder, så den forbliver færdig',
-    toastThreadsStayDone:
-      'Disse tråde har ingen modtagne beskeder, så de forbliver færdige',
     toastCountNotRestored: {
       one: '{{count}} kunne ikke gendannes.',
       other: '{{count}} kunne ikke gendannes.',
@@ -694,8 +692,6 @@ export default {
     create: 'Opret',
     getMobileApp: 'Hent mobilappen',
     signedInAs: 'Logget ind som {{name}}',
-    commandMenu: 'Kommandomenu',
-    searchEverything: 'Søg i alt',
     customizeSidebar: 'Tilpas sidepanelet',
     customizeSidebarDescription:
       'Vælg, hvilke apps der vises i sidepanelet, og træk for at ændre rækkefølgen. Hjem er altid først.',
@@ -762,7 +758,7 @@ export default {
     tabMobileApp: 'Mobilapp',
     tabTags: 'Tags',
     tabIntegrations: 'Integrationer',
-    tabRuntimes: 'Kørselsmiljøer',
+    tabRuntimes: 'Maskiner',
     tabMcpServer: 'MCP-server',
     tabApiKeys: 'API-nøgler',
     tabBots: 'Bots',
@@ -780,7 +776,6 @@ export default {
       'Ingen indstillinger fundet. Prøv »signatur«, »tema« eller »kalender«.',
     backToSettings: 'Tilbage til indstillinger',
     closeSettings: 'Luk indstillinger',
-    goToTab: 'Gå til indstillingsfane {{number}}',
     editProfile: 'Rediger profil',
     logOut: 'Log ud',
     yourAccount: 'Din konto',

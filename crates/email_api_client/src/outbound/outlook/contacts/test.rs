@@ -71,7 +71,7 @@ async fn contact_delta_preserves_all_addresses_and_deletion_and_opaque_cursor() 
     Mock::given(method("GET")).and(path("/v1.0/me/contactFolders/root/contacts/delta"))
         .and(header("authorization","Bearer test-bearer"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[
-            {"id":"one","displayName":"Friend","emailAddresses":[{"address":"A@Example.com"},{"address":"b@example.com"},{"address":"a@example.com"}]},
+            {"id":"one","displayName":"Friend","emailAddresses":[{"address":"A@Example.com"},{"name":"Friend at work"},{"address":"b@example.com"},{"address":"a@example.com"}]},
             {"id":"gone","@removed":{"reason":"deleted"}}
         ],"@odata.deltaLink":next}))).mount(&server).await;
     let page = api

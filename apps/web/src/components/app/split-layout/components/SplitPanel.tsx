@@ -4,7 +4,11 @@ import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { t } from '@app/lib/i18n';
-import { type PaneId, SplitRouter } from '@app/lib/split-router';
+import {
+  type PaneId,
+  SplitRouter,
+  useOptionalSplitRouter,
+} from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
@@ -23,6 +27,7 @@ import { createMutable } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { createPriorityCollapseController } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { splitBackInterceptor } from '../back-interceptor';
+import { resolveComponent } from '../componentRegistry';
 import {
   type SplitBottomPanelRegistration,
   type SplitFileMenuActionGroups,
@@ -31,8 +36,9 @@ import {
 } from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
-import { shouldShowSplitCloseButton } from '../layoutUtils';
+import { shouldShowSplitCloseButton, splitViewId } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
+import { splitContentFromLocation } from '../split-router/legacy-route';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
 import { SplitDrawerGroup } from './SplitDrawerContext';
@@ -53,7 +59,7 @@ export function SplitPanel(props: SplitPanelProps) {
   );
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
-  const navigationCollapsed = createSignal(true);
+  const navigationCollapsed = createSignal(false);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -63,12 +69,16 @@ export function SplitPanel(props: SplitPanelProps) {
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
-  let pointerTarget: Element | undefined;
+  // Weak, so the last element pressed doesn't keep a view this split has
+  // left alive.
+  let pointerTarget: WeakRef<Element> | undefined;
 
   const layoutRefs = createMutable<SplitPanelContextType['layoutRefs']>({});
+  const mobileHeaderOwner = createSignal<symbol>();
+  const headerMdControls = createSignal(0);
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
-  const ownedSlots = createOwnedSlots();
+  const ownedSlots = createOwnedSlots(() => splitViewId(props.handle));
 
   const splitLayoutHelpers = useSplitLayout();
   const isNotUnifiedList = () => {
@@ -152,15 +162,49 @@ export function SplitPanel(props: SplitPanelProps) {
     return manager ? shouldShowSplitCloseButton(manager) : false;
   };
 
+  const router = useOptionalSplitRouter();
+  const ownsCollectionState = () => {
+    const entry = router?.entry(props.handle.id as string as PaneId);
+    if (!entry) {
+      return (
+        props.split.mount.kind === 'component' &&
+        props.split.mount.meta.ownsCollectionState
+      );
+    }
+
+    // The outlet can render a committed route before the layout mirror updates.
+    // Choose its provider from that same entry, so leaving CRM supplies the
+    // collection context before a destination such as Calls mounts.
+    const content = splitContentFromLocation(entry.location);
+    return (
+      content.type === 'component' &&
+      resolveComponent(content.id).initialMeta?.ownsCollectionState
+    );
+  };
+  const hasExternalChat = () =>
+    router
+      ?.entry(props.handle.id as string as PaneId)
+      ?.location.route.matches.some((match) => match.id === 'external-chat');
+
+  const externalAccountPage = () =>
+    props.handle.content().type === 'component' &&
+    props.handle.content().id === 'external' &&
+    !hasExternalChat();
+
   const hasSplitHeader = () => {
     const content = props.handle.content();
+    // Composable views own desktop chrome, but mobile islands still need the
+    // split header's portal targets while their MobileHeader is mounted.
+    const ownsMobileHeader =
+      isTouchDevice() && mobileHeaderOwner[0]() !== undefined;
     return (
-      !usesComposableLayout() &&
+      (!usesComposableLayout() || ownsMobileHeader) &&
       !(
         isTouchDevice() &&
         content.type === 'component' &&
         (content.id === LIST_VIEW_ID.search ||
-          content.id === LIST_VIEW_ID.channels)
+          content.id === LIST_VIEW_ID.channels ||
+          externalAccountPage())
       )
     );
   };
@@ -184,10 +228,7 @@ export function SplitPanel(props: SplitPanelProps) {
     >
       <Suspense>
         <Show
-          when={
-            props.split.mount.kind === 'component' &&
-            props.split.mount.meta.ownsCollectionState
-          }
+          when={ownsCollectionState()}
           fallback={
             <SoupViewContextProvider soup={nextSoup}>
               <SplitRouter.Outlet
@@ -219,6 +260,7 @@ export function SplitPanel(props: SplitPanelProps) {
             contentOffsetTop,
             navigationCollapsed,
             splitHotkeyScope,
+            splitRootHotkeyScope: splitHotkeyScope,
             bottomPanel,
             registerBottomPanel: (panel) => {
               setBottomPanel(panel);
@@ -231,6 +273,8 @@ export function SplitPanel(props: SplitPanelProps) {
             headerCollapser: headerCollapseController.collapser,
             toolbarCollapser: toolbarCollapseController.collapser,
             layoutRefs,
+            mobileHeaderOwner,
+            headerMdControls,
             titleFileMenuRef,
             setTitleFileMenuRef,
             titleFileMenuTrigger,
@@ -240,7 +284,10 @@ export function SplitPanel(props: SplitPanelProps) {
             replaceOwnedSlot: ownedSlots.replace,
             panelSize,
             panelRef,
-            pointerTarget: () => pointerTarget,
+            pointerTarget: () => {
+              const target = pointerTarget?.deref();
+              return target?.isConnected ? target : undefined;
+            },
           }}
         >
           <SplitDrawerGroup panelSize={panelSize}>
@@ -276,7 +323,9 @@ export function SplitPanel(props: SplitPanelProps) {
                 capture: true,
                 handleEvent: (e) => {
                   pointerTarget =
-                    e.target instanceof Element ? e.target : undefined;
+                    e.target instanceof Element
+                      ? new WeakRef(e.target)
+                      : undefined;
                 },
               }}
               // A split opened from the keyboard has no pressed element to keep
@@ -375,7 +424,9 @@ export function SplitPanel(props: SplitPanelProps) {
                       )}
                     </Show>
                   </div>
-                  <Show when={!usesComposableLayout()}>
+                  <Show
+                    when={!usesComposableLayout() && !externalAccountPage()}
+                  >
                     <MobileTopEdgeFade />
                   </Show>
                 </Panel.Body>

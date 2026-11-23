@@ -9,6 +9,7 @@ query EmailFocus($days: Int) {
 				needsReply
 				needsFollowUp
 				importanceTrend
+				dueOn
 			}
 		}
 	}

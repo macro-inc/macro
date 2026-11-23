@@ -4,6 +4,7 @@ import { routeParams, type SplitLocation } from '@app/lib/split-router';
 import { paneRootMatch, paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
@@ -15,6 +16,7 @@ export type SettingsTab =
   | 'Calendar'
   | 'Account'
   | 'API Keys'
+  | 'Account Managers'
   | 'Notifications'
   | 'Usage'
   | 'Billing'
@@ -41,6 +43,9 @@ export type SettingsTab =
   | 'GitHub'
   | 'Admin';
 
+const isSettingsContent = (content: SplitContent) =>
+  content.type === 'component' && content.id === 'settings';
+
 export const useSettingsState = () => {
   const mobileSettings = useMobileSettings();
   const { openWithSplit } = useSplitLayout();
@@ -57,11 +62,9 @@ export const useSettingsState = () => {
 
     if (!splitManager) return undefined;
 
-    return splitManager.splits().find((split) => {
-      const content = split.content;
-
-      return content.type === 'component' && content.id === 'settings';
-    });
+    return splitManager
+      .splits()
+      .find((split) => isSettingsContent(split.content));
   };
 
   const splitOpen = createMemo(() => getSettingsSplit() !== undefined);
@@ -191,7 +194,8 @@ export const useSettingsState = () => {
   };
 
   // A settings split shared with others is dismissed; a sole one steps back to
-  // whatever the user had open before, like any other view.
+  // whatever the user had open before settings. Each settings page visited is
+  // its own history entry, so skip them all rather than going back one page.
   const closeSettings = () => {
     if (isMobile()) {
       mobileSettings.close();
@@ -208,10 +212,7 @@ export const useSettingsState = () => {
     }
 
     const handle = manager.getSplit(settingsSplit.id);
-    if (handle?.canGoBack()) {
-      handle.goBack();
-      return;
-    }
+    if (handle?.goBackTo((content) => !isSettingsContent(content))) return;
 
     navigate(DEFAULT_ROUTE, { replace: true });
   };

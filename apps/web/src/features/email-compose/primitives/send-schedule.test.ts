@@ -12,6 +12,9 @@ import { emailDraftLifecycleSource } from '../queries/draft-lifecycle';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
+import { resetScheduledNoticesForTests } from './email-send-schedule';
+
+afterEach(resetScheduledNoticesForTests);
 
 const fetchLifecycleThread = vi.hoisted(() => vi.fn());
 vi.mock('@queries/email/thread', () => ({
@@ -575,41 +578,47 @@ describe('send and schedule ordering', () => {
     }
   });
 
-  it('keeps a newer reply when undoing an immediate send without schedule wording', async () => {
-    const context = createComposeContext();
-    vi.mocked(context.delivery.sendMessage).mockResolvedValueOnce({
-      draftId: 'draft',
-      threadId: 'thread',
-      inboxId: 'inbox',
-    });
-    vi.mocked(context.delivery.undoSend).mockImplementation(
-      async ({ onUndone }) => {
-        await onUndone();
+  it.each([
+    { draftId: 'draft', draftRestored: false },
+    { draftId: 'server-draft', draftRestored: true },
+  ])(
+    'keeps a newer reply when undoing an immediate send (draftRestored=$draftRestored)',
+    async ({ draftId, draftRestored }) => {
+      const context = createComposeContext();
+      vi.mocked(context.delivery.sendMessage).mockResolvedValueOnce({
+        draftId,
+        threadId: 'thread',
+        inboxId: 'inbox',
+      });
+      vi.mocked(context.delivery.undoSend).mockImplementation(
+        async ({ onUndone }) => {
+          await onUndone({ draftRestored });
+        }
+      );
+      const state = mountReplyComposer(context);
+      try {
+        state.edit('Earlier reply');
+        await state.sendEmail();
+        const sentNotice = undoOffer(context);
+
+        state.edit('Newer reply that must survive');
+        sentNotice?.[1]?.actions?.[0].onClick();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(
+          decodeBase64Utf8(state.collectDraft()?.body_html ?? '')
+        ).toContain('Newer reply that must survive');
+        expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+          'Your newer reply was kept. The earlier message was not reopened.'
+        );
+        expect(context.notices.feedback.alert).not.toHaveBeenCalledWith(
+          expect.stringContaining('Schedule cancelled')
+        );
+      } finally {
+        state.dispose();
       }
-    );
-    const state = mountReplyComposer(context);
-    try {
-      state.edit('Earlier reply');
-      await state.sendEmail();
-      const sentNotice = undoOffer(context);
-
-      state.edit('Newer reply that must survive');
-      sentNotice?.[1]?.actions?.[0].onClick();
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
-        'Newer reply that must survive'
-      );
-      expect(context.notices.feedback.alert).toHaveBeenCalledWith(
-        'Your newer reply was kept. The earlier message was not reopened.'
-      );
-      expect(context.notices.feedback.alert).not.toHaveBeenCalledWith(
-        expect.stringContaining('Schedule cancelled')
-      );
-    } finally {
-      state.dispose();
     }
-  });
+  );
 
   it('undoes mark-done while the post-send refresh is still pending', async () => {
     const composeContext = createComposeContext();
@@ -677,6 +686,53 @@ describe('send and schedule ordering', () => {
     }
   });
 
+  it('keeps a reply open whose schedule another view cancelled while the thread was marked done', async () => {
+    const composeContext = createComposeContext();
+    let markDone: (() => void) | undefined;
+    vi.mocked(composeContext.delivery.archive).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          markDone = resolve;
+        })
+    );
+    const sideEffectOnSend = vi.fn();
+    const state = mountReplyComposer(
+      composeContext,
+      undefined,
+      { sideEffectOnSend },
+      { inboxVisible: true }
+    );
+    state.edit('Schedule a reply and mark done');
+    state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+    const send = state.sendEmail();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(composeContext.delivery.archive).toHaveBeenCalledOnce();
+    // The thread open in another split cancels the schedule meanwhile.
+    const beside = mountEmailComposer(composeContext, undefined, {
+      draft: message('draft', { is_draft: true }),
+    });
+    try {
+      expect(await beside.state.context.schedule.onCancel()).toBe(true);
+      composeContext.setDraftLifecycle({
+        type: 'editing',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      markDone?.();
+      await send;
+      expect(state.scheduleState().type).toBe('editing');
+      expect(sideEffectOnSend).not.toHaveBeenCalled();
+    } finally {
+      markDone?.();
+      beside.dispose();
+      state.dispose();
+    }
+  });
+
   it('leaves a done thread done when a reply is scheduled and undone', async () => {
     const composeContext = createComposeContext();
     const state = mountReplyComposer(composeContext);
@@ -687,7 +743,9 @@ describe('send and schedule ordering', () => {
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
       expect(composeContext.delivery.unschedule).toHaveBeenCalledOnce();
       expect(composeContext.delivery.archive).not.toHaveBeenCalled();
@@ -718,7 +776,9 @@ describe('send and schedule ordering', () => {
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
       expect(composeContext.delivery.unschedule).toHaveBeenCalledWith(
         expect.objectContaining({ draftId: 'draft', draftGeneration: 3 })
@@ -752,7 +812,9 @@ describe('send and schedule ordering', () => {
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(composeContext.delivery.unschedule).toHaveBeenCalledWith({
@@ -802,7 +864,9 @@ describe('send and schedule ordering', () => {
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
 
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(composeContext.notices.reportError).toHaveBeenCalledWith(
@@ -819,8 +883,36 @@ describe('send and schedule ordering', () => {
     }
   });
 
-  it('keeps a newer reply when undoing an older scheduled reply', async () => {
+  it('reopens the scheduled reply without treating its original edits as newer', async () => {
     const composeContext = createComposeContext();
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.edit('Original reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+      expect(state.savedDraftId()).toBe('draft');
+      expect(state.editingDisabled()).toBe(true);
+      const scheduledNotice = undoOffer(composeContext);
+
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(state.savedDraftId()).toBe('draft');
+      expect(state.editingDisabled()).toBe(false);
+      expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps a reply edited while cancellation restores the scheduled draft', async () => {
+    const composeContext = createComposeContext();
+    const restore = Promise.withResolvers<void>();
+    vi.mocked(composeContext.drafts.restoreDraft).mockReturnValueOnce(
+      restore.promise
+    );
     const state = mountReplyComposer(composeContext);
     try {
       state.edit('Older scheduled reply');
@@ -830,8 +922,13 @@ describe('send and schedule ordering', () => {
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
 
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.editingDisabled()).toBe(false);
       state.edit('Newer reply that must survive');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      restore.resolve();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
@@ -868,7 +965,9 @@ describe('send and schedule ordering', () => {
     });
     try {
       expect(newer.savedDraftId()).toBe('newer-draft');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(newer.savedDraftId()).toBe('newer-draft');
@@ -900,7 +999,9 @@ describe('send and schedule ordering', () => {
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(composeContext.notices.feedback.failure).toHaveBeenCalledWith(

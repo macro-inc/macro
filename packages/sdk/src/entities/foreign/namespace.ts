@@ -44,7 +44,7 @@ function withoutNullLogin({
 }
 
 /**
- * @routing Use when resolving a linked external entity, such as an imported item; not Macro's own items.
+ * @routing Use when looking up, favoriting or muting an item linked into Macro from another system, such as a GitHub pull request, by its id in that system; not items created in Macro.
  */
 export class ForeignEntityNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -58,6 +58,8 @@ export class ForeignEntityNamespace {
    *
    * `foreignEntityId` may contain slashes — sources store them inside the
    * identifier, for example `owner/repo/pull/12`.
+   *
+   * @readonly
    */
   async bySource(
     source: string,
@@ -78,6 +80,8 @@ export class ForeignEntityNamespace {
    * requests visible to the authenticated user and their team, each with how
    * many pull requests it covers. A pull request visible to both the user and
    * the team counts once.
+   *
+   * @readonly
    */
   async githubPullRequestFacets(): Promise<GithubPullRequestFacets> {
     const { repositories, authors, assignees, labels } = unwrap(

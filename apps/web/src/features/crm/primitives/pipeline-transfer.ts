@@ -8,7 +8,7 @@ import {
 } from '../../database/core/csv';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import type { PipelineTransfer } from '../context/pipelines';
-import type { Pipeline } from '../core/pipeline';
+import type { Pipeline, TrackedPipeline } from '../core/pipeline';
 import {
   encodePipelineCsv,
   type PipelineCsvRow,
@@ -61,7 +61,10 @@ export function createPipelineExport(
         transfer.readTable(signal)
       );
       span.setAttr('crm.pipeline.rows', table.rows.length);
-      const ids = [...recordIds(pipeline(), table.rows)];
+      // A generic pipeline's rows name no records to describe.
+      const ids = pipeline().recordType
+        ? [...recordIds(pipeline(), table.rows)]
+        : [];
       span.setAttr('crm.pipeline.records', ids.length);
       const records = await span.span('crm.pipeline.describe_records', () =>
         transfer.describeRecords(ids, signal)
@@ -151,7 +154,7 @@ export async function addPipelineRows(input: {
  * failure adds only what is still missing.
  */
 export function createPipelineImport(
-  pipeline: Pipeline,
+  pipeline: TrackedPipeline,
   transfer: PipelineTransfer
 ) {
   const [plan, setPlan] = createSignal<PipelineImportPlan>();

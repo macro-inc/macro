@@ -9,13 +9,18 @@ contacts, watch) behind a single public facade; most modules are
 
 ## Start here
 
-- `src/lib.rs`: `GmailClient`, its constructors (`new` vs. `new_with_urls` for
-  injectable endpoints in tests), and `sanitize_error_body` — every error body
-  is redacted (emails) and length-capped before it can reach logs.
+- `src/lib.rs`: `GmailClient`, its constructors (`new` and `without_watch`
+  read Google's hosts from the typed `GmailApiUrl`, `GooglePeopleApiUrl` and
+  `GoogleOauthCertsUrl`, so `OVERRIDE_*` can point a service at
+  `crates/gmail_emulator`; `new_with_urls` takes them directly, for tests), and
+  `sanitize_error_body` — every error body is redacted (emails) and
+  length-capped before it can reach logs.
 - `src/auth.rs`: Google JWT verification for push notifications.
 - `src/watch.rs`: Gmail push notification (`users.watch`) setup.
 - `src/test.rs` + each module's own `test.rs`: `wiremock`-backed HTTP tests,
-  one server per test via `new_with_urls`.
+  one server per test via `new_with_urls`. Tests of behaviour over time (sync,
+  history, push) belong in `crates/gmail_emulator`, which runs this client
+  against a stateful fake.
 
 ## Scope
 
@@ -25,7 +30,7 @@ contacts, watch) behind a single public facade; most modules are
 
 ## Boundaries
 
-- Depends on: `models_email` (response/request types).
+- Depends on: `models_email` (response/request types), `macro_service_urls`.
 - Used by: `email_service`, `email_api_client`.
 
 ## Recipes
@@ -42,6 +47,12 @@ contacts, watch) behind a single public facade; most modules are
 
 - Any new error path should go through `sanitize_error_body` (or an
   equivalent) before logging — Gmail error bodies can contain email addresses.
+- Decode JSON responses with `decode_json_response` (`src/error.rs`): a
+  failure names the JSON path and a missing field's name, never serde's
+  message, which quotes the value, and a body cut off mid-read is a transport
+  error, so it is retried. Gmail's schema makes most response fields
+  optional, so a wire field that Gmail can omit gets `#[serde(default)]` or an
+  `Option`; one required field Gmail leaves out fails the whole response.
 - Requests time out after 60 s (`REQUEST_TIMEOUT`). The email service's
   Gmail request gate holds a permit for each call and sizes its lease above
   this (`PERMIT_MS` in `gmail_gate.rs`); keep the two in step.

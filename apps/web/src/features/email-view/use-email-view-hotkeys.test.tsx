@@ -23,10 +23,12 @@ function press(key: string, init: KeyboardEventInit = {}) {
   document.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
 }
 
-function setup(initialTab: EmailTab = 'noise') {
+function setup(initialTab: EmailTab = 'noise', initialSearch = '') {
   const goHome = vi.fn(() => true);
+  const goTasks = vi.fn(() => true);
   const openCreateMenu = vi.fn(() => true);
   const [tab, setTab] = createSignal<EmailTab>(initialTab);
+  const [search, setSearch] = createSignal(initialSearch);
   let pushUndo!: ReturnType<typeof useMutationUndoContext>['pushUndo'];
 
   function Harness() {
@@ -52,15 +54,21 @@ function setup(initialTab: EmailTab = 'noise') {
       description: 'Create',
       keyDownHandler: openCreateMenu,
     });
-    const registerHome = () =>
-      registerHotkey({
-        hotkey: ['h', 'i'],
-        scopeId: GO_TO_COMMAND_SCOPE,
-        description: 'Go to Home',
-        keyDownHandler: goHome,
-        registrationType: 'add',
-      });
-    registerHome();
+    // The app-wide go-to letters, registered by the sidebar.
+    registerHotkey({
+      hotkey: ['h', 'i'],
+      scopeId: GO_TO_COMMAND_SCOPE,
+      description: 'Go to Home',
+      keyDownHandler: goHome,
+      registrationType: 'add',
+    });
+    registerHotkey({
+      hotkey: 't',
+      scopeId: GO_TO_COMMAND_SCOPE,
+      description: 'Go to Tasks',
+      keyDownHandler: goTasks,
+      registrationType: 'add',
+    });
     useEmailViewHotkeys({
       scopeId: emailScope,
       enabled: () => true,
@@ -68,15 +76,13 @@ function setup(initialTab: EmailTab = 'noise') {
       setTab,
       listHasKeyboard: () => !isScopeInActiveBranch(readerScope),
       hasSelection: () => false,
+      hasSearch: () => search().length > 0,
     });
-    // Flags loading later re-register the sidebar's letters.
-    registerHome();
     return (
       <div ref={(element) => attachGlobalDOMScope(element)}>
         <div ref={attachEmail} tabIndex={0} data-testid="email">
           <div ref={attachReader} tabIndex={0} data-testid="reader" />
         </div>
-        <button type="button">Elsewhere</button>
       </div>
     );
   }
@@ -86,31 +92,30 @@ function setup(initialTab: EmailTab = 'noise') {
       <Harness />
     </MutationUndoProvider>
   ));
-  return { view, goHome, openCreateMenu, tab, pushUndo: () => pushUndo };
+  return {
+    view,
+    goHome,
+    goTasks,
+    openCreateMenu,
+    tab,
+    setSearch,
+    pushUndo: () => pushUndo,
+  };
 }
 
-it('goes to email tabs with g sequences only while Email is focused', () => {
-  const { view, goHome, tab } = setup();
+it('leaves g and a letter to the app-wide destinations inside Email', () => {
+  const { view, goHome, goTasks, tab } = setup();
   view.getByTestId('email').focus();
 
   press('g');
-  press('i');
-  expect(tab()).toBe('important');
-  expect(goHome).not.toHaveBeenCalled();
+  press('t');
+  expect(goTasks).toHaveBeenCalledOnce();
 
-  view.getByRole('button', { name: 'Elsewhere' }).focus();
   press('g');
   press('i');
-  expect(goHome).toHaveBeenCalledOnce();
-});
-
-it('leaves g h to Home inside Email', () => {
-  const { view, goHome, tab } = setup();
-  view.getByTestId('email').focus();
-
   press('g');
   press('h');
-  expect(goHome).toHaveBeenCalledOnce();
+  expect(goHome).toHaveBeenCalledTimes(2);
   expect(tab()).toBe('noise');
 });
 
@@ -122,6 +127,18 @@ it('returns to Signal on Escape and leaves c to the Create menu', () => {
   expect(tab()).toBe('important');
   press('c');
   expect(openCreateMenu).toHaveBeenCalledOnce();
+});
+
+it('stays on the tab on Escape while a search is on screen', () => {
+  const { view, tab, setSearch } = setup('archived', 'budget');
+  view.getByTestId('email').focus();
+
+  press('Escape');
+  expect(tab()).toBe('archived');
+
+  setSearch('');
+  press('Escape');
+  expect(tab()).toBe('important');
 });
 
 it('undoes the latest action with z', () => {
@@ -151,7 +168,7 @@ it('undoes once while z is held', () => {
 });
 
 it('works from the reading pane, where Escape stays with the reader', () => {
-  const { view, openCreateMenu, tab, pushUndo } = setup('archived');
+  const { view, goTasks, openCreateMenu, tab, pushUndo } = setup('archived');
   const undo = vi.fn();
   pushUndo()({ undo });
   view.getByTestId('reader').focus();
@@ -164,5 +181,6 @@ it('works from the reading pane, where Escape stays with the reader', () => {
   expect(undo).toHaveBeenCalledOnce();
   press('g');
   press('t');
-  expect(tab()).toBe('sent');
+  expect(goTasks).toHaveBeenCalledOnce();
+  expect(tab()).toBe('archived');
 });

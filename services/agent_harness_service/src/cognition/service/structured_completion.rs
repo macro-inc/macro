@@ -1,6 +1,9 @@
 //! Bounded tool-free completions using the shared agent completion path.
 
-use agent::{MeteringContext, structured_output::DynamicSchema};
+use agent::{
+    MeteringContext,
+    structured_output::{CompletionThinking, DynamicSchema},
+};
 use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -21,6 +24,10 @@ pub struct ToolFreeRequest {
     pub system_prompt: String,
     pub prompt: String,
     pub schema: DynamicSchema,
+    pub thinking: CompletionThinking,
+    /// The hidden agent session whose own work this completion is, recorded
+    /// with it as non-billable usage; `None` for the person's own.
+    pub session: Option<uuid::Uuid>,
 }
 
 /// Sanitized capacity and deadline errors, or the shared completion failure.
@@ -49,6 +56,8 @@ pub trait ToolFreeCompletion: Send + Sync + 'static {
 pub struct ToolFreeCompletionService {
     recorder: Arc<dyn UsageRecorder>,
     completions: Arc<Semaphore>,
+    /// What usage is recorded as.
+    feature: AiFeature,
 }
 
 impl ToolFreeCompletionService {
@@ -56,7 +65,14 @@ impl ToolFreeCompletionService {
         Self {
             recorder,
             completions: Arc::new(Semaphore::new(MAX_CONCURRENT_COMPLETIONS)),
+            feature: AiFeature::DynamicCompletionsApi,
         }
+    }
+
+    /// Record usage as `feature` rather than the completions API.
+    pub fn for_feature(mut self, feature: AiFeature) -> Self {
+        self.feature = feature;
+        self
     }
 
     async fn run(
@@ -94,14 +110,22 @@ impl ToolFreeCompletion for ToolFreeCompletionService {
         request: ToolFreeRequest,
     ) -> Result<Value, ToolFreeCompletionError> {
         let recorder = self.recorder.clone();
+        let usage = match request.session {
+            Some(session) => UsageContext {
+                agent_session_id: Some(session),
+                ..UsageContext::new(AiFeature::NonBillableAgentSession, owner)
+            },
+            None => UsageContext::new(self.feature, owner),
+        };
         self.run(async move {
-            agent::structured_output::dynamic_structured_completion(
+            agent::structured_output::dynamic_structured_completion_thinking(
                 request.model,
                 &request.system_prompt,
                 vec![agent::Message::user(request.prompt)],
                 request.schema,
+                request.thinking,
                 recorder.as_ref(),
-                UsageContext::new(AiFeature::DynamicCompletionsApi, owner),
+                usage,
             )
             .await
         })

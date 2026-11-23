@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE agent_session\n                SET turn_state = $2,\n                    turn_interrupted = CASE\n                        WHEN $2 = 'disconnected' THEN COALESCE(\n                            turn_state IN ('starting', 'running', 'stopping', 'blocked'),\n                            false\n                        )\n                        ELSE false\n                    END,\n                    modified_at = CASE WHEN $3 THEN now() ELSE modified_at END\n                WHERE id = $1 AND turn_state IS DISTINCT FROM $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dc1bc098ba81938c7ef4a9cd2146b69df65115072fa49d07c2c6e7b4b7a226a6"
+}

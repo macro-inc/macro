@@ -116,6 +116,111 @@ async fn test_attachments_by_thread_ids_no_attachments(pool: Pool<Postgres>) -> 
     Ok(())
 }
 
+/// Collects every plan node that reads `relation`.
+fn scans_of<'a>(node: &'a serde_json::Value, relation: &str, out: &mut Vec<&'a serde_json::Value>) {
+    if node.get("Relation Name").and_then(|v| v.as_str()) == Some(relation) {
+        out.push(node);
+    }
+    for child in node
+        .get("Plans")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+    {
+        scans_of(child, relation, out);
+    }
+}
+
+/// The index conditions a scan node applies, including those of the bitmap
+/// index scans under a bitmap heap scan.
+fn index_conds(node: &serde_json::Value) -> String {
+    let mut conds: Vec<&str> = ["Index Cond", "Recheck Cond"]
+        .iter()
+        .filter_map(|key| node.get(*key).and_then(|v| v.as_str()))
+        .collect();
+    for child in node
+        .get("Plans")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+    {
+        if let Some(cond) = child.get("Index Cond").and_then(|v| v.as_str()) {
+            conds.push(cond);
+        }
+    }
+    conds.join(" ")
+}
+
+/// A thread the statistics show as huge used to switch the plan to reading
+/// all of `email_attachments` and joining it to the messages. The query must
+/// keep reading attachments by message id however many messages a thread
+/// looks to hold.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn test_attachments_by_thread_ids_reads_attachments_by_message_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let thread3 = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
+    sqlx::query(
+        r#"
+        INSERT INTO email_messages (id, provider_id, thread_id, link_id, internal_date_ts,
+            snippet, subject, is_read, is_sent, is_draft, has_attachments, created_at, updated_at)
+        SELECT gen_random_uuid(), 'bulk-' || n, $1, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            NOW(), '', '', true, false, false, false, NOW(), NOW()
+        FROM generate_series(1, 5000) AS n
+        "#,
+    )
+    .bind(thread3)
+    .execute(&pool)
+    .await?;
+    sqlx::query("ANALYZE email_messages, email_attachments")
+        .execute(&pool)
+        .await?;
+
+    let mut tx = pool.begin().await?;
+    // The test tables fit in a page, where a scan beats any index; the
+    // production tables don't.
+    sqlx::query("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await?;
+    let plan: serde_json::Value = sqlx::query_scalar(&format!(
+        "EXPLAIN (FORMAT JSON) {}",
+        include_str!("../preview/attachments_by_thread_ids.sql")
+    ))
+    .bind(vec![thread1, thread3])
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let root = &plan[0]["Plan"];
+    let mut attachment_scans = Vec::new();
+    scans_of(root, "email_attachments", &mut attachment_scans);
+    assert!(
+        !attachment_scans.is_empty(),
+        "plan reads no attachments: {plan}"
+    );
+    for scan in attachment_scans {
+        let cond = index_conds(scan);
+        assert!(
+            cond.contains("message_id = m.id"),
+            "attachments must be read by message id, got {scan}"
+        );
+    }
+    let mut message_scans = Vec::new();
+    scans_of(root, "email_messages", &mut message_scans);
+    for scan in message_scans {
+        let cond = index_conds(scan);
+        assert!(
+            cond.contains("(thread_id = ") && !cond.contains("ANY"),
+            "messages must be read by thread id, got {scan}"
+        );
+    }
+
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_message"))

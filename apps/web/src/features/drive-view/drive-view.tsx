@@ -5,7 +5,7 @@ import {
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
 import { ViewTour } from '@app/features/tours/ViewTour';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import type { TutorialId } from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
@@ -13,10 +13,14 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ListEntityMetadataQueryProvider } from '@entity';
+import {
+  type KnownFolder,
+  KnownFoldersProvider,
+  ListEntityMetadataQueryProvider,
+} from '@entity';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import {
@@ -43,10 +47,7 @@ import {
   createDriveViewState,
   type DriveRouteState,
 } from './primitives/drive-route-state';
-import {
-  availableDriveState,
-  createDriveState,
-} from './primitives/drive-state';
+import { createDriveState } from './primitives/drive-state';
 import { createDriveDataSource } from './queries/drive-data-source';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
 import { documentsTour } from './tour';
@@ -60,30 +61,43 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const panel = useSplitPanelOrThrow();
   const navigation = useDriveDetailNavigation();
   const userId = useUserId();
-  const databasesFlag = useFeatureFlag(enableDatabases);
-  const formsFlag = useFeatureFlag(enableForms);
+  // Docs, and the Blocks listed in Drive that are rolled out to this person.
+  const tutorials = () => {
+    const ids: TutorialId[] = ['docs', 'spreadsheets', 'databases'];
+
+    return ids;
+  };
   const notificationSource = useGlobalNotificationSource();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const view = createDriveViewState(props.route, () => list.reset());
-  const viewState = createMemo(() =>
-    availableDriveState(
-      view.value(),
-      databasesFlag().enabled,
-      formsFlag().enabled
-    )
-  );
+  const viewState = view.value;
   const searchText = () => view.value().search;
   const selection = () => ({ ...viewState(), search: searchText() });
   const sidebar = createDriveSidebarSource({
-    databasesEnabled: () => databasesFlag().enabled,
-    formsEnabled: () => formsFlag().enabled,
+    databasesEnabled: () => true,
+    formsEnabled: () => true,
   });
+  // Rows show their folder's path from the folders the sidebar already holds.
+  const knownFolders = createMemo(
+    () =>
+      new Map<string, KnownFolder>(
+        sidebar.folders().map((folder) => [
+          folder.id,
+          {
+            id: folder.id,
+            name: folder.name,
+            parentId: folder.parentId,
+            ownerId: folder.userId,
+          },
+        ])
+      )
+  );
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
       selection,
-      databasesEnabled: () => databasesFlag().enabled,
-      formsEnabled: () => formsFlag().enabled,
+      databasesEnabled: () => true,
+      formsEnabled: () => true,
       userId,
       tagSets,
       tagSetsReady,
@@ -118,6 +132,12 @@ function DriveComposition(props: { route: DriveRouteState }) {
     showList: () => {
       navigation.clear();
     },
+  });
+
+  createOpenTracker('project', () => {
+    const location = view.value().location;
+    if (location.kind !== 'folder' || !location.id) return undefined;
+    return knownFolders().has(location.id) ? location.id : undefined;
   });
 
   createEffect(
@@ -192,9 +212,12 @@ function DriveComposition(props: { route: DriveRouteState }) {
         list,
         sidebar,
         actions,
+        tutorials,
       }}
     >
-      <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
+      <KnownFoldersProvider value={knownFolders}>
+        <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
+      </KnownFoldersProvider>
     </DriveProvider>
   );
 }

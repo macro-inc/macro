@@ -1,27 +1,31 @@
+//! Schemas for the Anthropic code-execution tools Macro agents no longer
+//! offer. Saved transcripts still hold their calls, so typegen keeps them.
 use ai_toolset::schema::PhantomTool;
 use anthropic::types::response::code_execution::{
-    BashCodeExecutionResponse, BashCodeExecutionToolCall, TextEditorCodeExecutionResponse,
-    TextEditorCodeExecutionToolCall,
+    BashCodeExecutionResponse, TextEditorCodeExecutionResponse,
 };
-use anthropic::types::response::web_fetch::{WebFetchResponse, WebFetchToolCall};
-use anthropic::types::response::web_search::{WebSearchResponse, WebSearchToolCall};
+use schemars::JsonSchema;
+use serde::Serialize;
 
-/// Schemas for frontend type generation for the builtin claude web search tool
-/// <https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool>
-/// This tool is built into anthropic so is not included in the toolset / sent in the request
-pub fn web_search() -> PhantomTool<WebSearchToolCall, WebSearchResponse> {
-    PhantomTool::new("web_search")
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[schemars(title = "BashCodeExecution")]
+pub struct BashCodeExecution {
+    /// The bash command or instruction to execute.
+    pub input: String,
 }
 
-pub fn web_fetch() -> PhantomTool<WebFetchToolCall, WebFetchResponse> {
-    PhantomTool::new("web_fetch")
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[schemars(title = "TextEditorCodeExecution")]
+pub struct TextEditorCodeExecution {
+    /// The text editing instruction.
+    pub input: String,
 }
 
-pub fn bash_code_execution() -> PhantomTool<BashCodeExecutionToolCall, BashCodeExecutionResponse> {
-    PhantomTool::new("bash_code_execution")
+pub fn bash_code_execution() -> PhantomTool<BashCodeExecution, BashCodeExecutionResponse> {
+    PhantomTool::new("BashCodeExecution")
 }
 
 pub fn text_editor_code_execution()
--> PhantomTool<TextEditorCodeExecutionToolCall, TextEditorCodeExecutionResponse> {
-    PhantomTool::new("text_editor_code_execution")
+-> PhantomTool<TextEditorCodeExecution, TextEditorCodeExecutionResponse> {
+    PhantomTool::new("TextEditorCodeExecution")
 }

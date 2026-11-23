@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EmailComposeContextOptions } from '../email-compose/compose-adapter';
 import { createComposeContext } from '../email-compose/tests/capabilities';
 import {
   type EmailThreadViewContext,
@@ -13,10 +12,8 @@ import { EmailParticipants } from './views/email-participants';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
-  clearDraft: vi.fn(),
   source: vi.fn(),
   rendering: vi.fn<(rendering: EmailThreadViewContext['rendering']) => void>(),
-  composeOptions: vi.fn<(options: EmailComposeContextOptions) => void>(),
   started: [] as Promise<void>[],
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
@@ -25,9 +22,6 @@ vi.mock('@app/features/email-message/components/email-user-tooltip', () => ({
 }));
 vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
 vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
-vi.mock('@queries/email/draft-cache', () => ({
-  clearSavedDraftThreadCache: mocks.clearDraft,
-}));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
@@ -38,7 +32,6 @@ vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'viewer@example.com',
   useUserContext: () => ({ isLoading: () => false }),
 }));
-vi.mock('@core/user', () => ({ useContacts: () => () => [] }));
 const [linksLoaded, setLinksLoaded] = createSignal(true);
 vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => ({
@@ -61,10 +54,7 @@ vi.mock('@queries/email/link', () => ({
   }),
 }));
 vi.mock('../email-compose/compose-adapter', () => ({
-  createEmailComposeContext: (options: EmailComposeContextOptions) => {
-    mocks.composeOptions(options);
-    return createComposeContext();
-  },
+  createEmailComposeContext: () => createComposeContext(),
 }));
 vi.mock('../email-compose/compose-host-adapter', () => ({
   createEmailComposeHost: () => ({}),
@@ -125,9 +115,6 @@ describe('email thread query ownership', () => {
     const [snapshot, setSnapshot] = createSignal(
       thread([message('first', { body_text: 'Cached body' })])
     );
-    const [transport, setTransport] = createSignal<'graphql' | 'rest'>(
-      'graphql'
-    );
     const fetchOlder = vi.fn(async () => {});
     const refresh = vi.fn(async () => {});
     const source = createThreadContext({
@@ -136,12 +123,7 @@ describe('email thread query ownership', () => {
       refresh,
     }).source;
     const view = render(() => (
-      <EmailThread
-        title="Subject"
-        threadId={source.id}
-        source={source}
-        threadTransport={transport}
-      />
+      <EmailThread title="Subject" threadId={source.id} source={source} />
     ));
     expect(screen.getByTestId('body').textContent).toBe('Cached body');
     expect(mocks.source.mock.calls[0][0]).toMatchObject({
@@ -149,11 +131,6 @@ describe('email thread query ownership', () => {
       fetchOlder,
       refresh,
     });
-    expect(mocks.query).not.toHaveBeenCalled();
-    const options = mocks.composeOptions.mock.calls[0][0];
-    expect(options.threadTransport?.()).toBe('graphql');
-    setTransport('rest');
-    expect(options.threadTransport?.()).toBe('rest');
     expect(mocks.query).not.toHaveBeenCalled();
 
     setSnapshot(thread([message('first', { body_text: 'Updated body' })]));
@@ -163,7 +140,6 @@ describe('email thread query ownership', () => {
     expect(fetchOlder).toHaveBeenCalledOnce();
     expect(refresh).toHaveBeenCalledOnce();
     view.unmount();
-    expect(mocks.clearDraft).toHaveBeenCalledWith('thread');
     await Promise.all(mocks.started);
   });
 
@@ -179,12 +155,7 @@ describe('email thread query ownership', () => {
         ]),
     }).source;
     render(() => (
-      <EmailThread
-        title="Subject"
-        threadId={source.id}
-        source={source}
-        threadTransport={() => 'graphql'}
-      />
+      <EmailThread title="Subject" threadId={source.id} source={source} />
     ));
     expect(screen.queryByText('Me')).toBeNull();
     setLinksLoaded(true);
@@ -200,12 +171,7 @@ describe('email thread query ownership', () => {
       thread: () => thread([message('first')]),
     }).source;
     render(() => (
-      <EmailThread
-        title="Subject"
-        threadId={source.id}
-        source={source}
-        threadTransport={() => 'graphql'}
-      />
+      <EmailThread title="Subject" threadId={source.id} source={source} />
     ));
     const show = mocks.rendering.mock.calls[0][0].showReadReceiptPixel;
     expect(show?.(message('received'))).toBe(true);

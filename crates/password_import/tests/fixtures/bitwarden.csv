@@ -1,0 +1,12 @@
+folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp
+Work/Clients,1,login,Ünïcødé 🔑 名前,"Multi-line
+notes","Recovery: recovery-0000
+Pin: 1234
+no separator line",0,"https://login.example.test/,android://com.example.app,https://second.example.test/",ünïcødé-user,pässwörd-🔑,JBSWY3DPEHPK3PXP
+,0,login,Duplicate,,,0,https://dup.example.test/,dup-user,dup-pass,
+,0,login,Duplicate,,,0,,,,
+Work,0,note,Secure note,Note body,,0,,,,
+,0,note,Note at limit,@@NOTES_AT_LIMIT@@,,0,,,,
+,0,note,Note over limit,@@NOTES_OVER_LIMIT@@,,0,,,,
+,0,login,Steam,,,0,https://steam.example.test/,steam-user,steam-pass,steam://JBSWY3DPEHPK3PXP
+,0,card,Card row,,,0,,,,

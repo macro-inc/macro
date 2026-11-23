@@ -1,174 +1,42 @@
-import { DocumentPreviewContent } from '@core/component/DocumentPreview';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import type { GraphicsEditor } from '@macro-inc/graphics';
-import type { GraphicsPresence } from '@macro-inc/graphics/loro';
-import {
-  attachPresencePointer,
-  GraphicsPresenceOverlay,
-} from '@macro-inc/graphics/loro/solid';
-import {
-  ConnectorView,
-  EllipseView,
-  GraphicsSurface,
-  RectangleView,
-  TextView,
-} from '@macro-inc/graphics/solid';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
-import { CanvasArtifactView } from './artifact-view';
 import { CanvasDrawingToolbar, CanvasZoomToolbar } from './canvas-toolbars';
-import { CanvasMediaView } from './embedded-items';
-import { CanvasTextContent } from './text-content';
+import {
+  CanvasReadOnlyParts,
+  type CanvasReadOnlyViewProps,
+  useCanvasReadOnlyView,
+} from './shared/canvas-read-only-parts';
 
-/** Viewers get navigation without mounting editing handlers or embedded editors. */
-export function CanvasReadOnlyView(props: {
-  editor: GraphicsEditor;
-  presence?: GraphicsPresence;
-  fitOnLoad?: boolean;
-}) {
-  const [tool, setTool] = createSignal<'select' | 'pan'>('select');
-  const [activeArtifact, setActiveArtifact] = createSignal<string>();
-  const [scale, setScale] = createSignal(props.editor.getCamera().scale);
-  const [hasSelection, setHasSelection] = createSignal(
-    props.editor.getSession().selectedIds.length > 0
-  );
-  onCleanup(
-    props.editor.subscribeSession((session) =>
-      setHasSelection(session.selectedIds.length > 0)
-    )
-  );
-  onCleanup(props.editor.subscribeCamera((camera) => setScale(camera.scale)));
-  let host!: HTMLDivElement;
-  const zoom = (factor: number) =>
-    props.editor.zoomAt(
-      { x: host.clientWidth / 2, y: host.clientHeight / 2 },
-      props.editor.getCamera().scale * factor
-    );
-  const focus = () =>
-    host
-      .querySelector<HTMLElement>('[aria-label="Graphics canvas"]')
-      ?.focus({ preventScroll: true });
-  const fit = () =>
-    props.editor.fitScene({
-      width: host.clientWidth,
-      height: host.clientHeight,
-    });
-  const fitSelection = () =>
-    props.editor.fitSelection({
-      width: host.clientWidth,
-      height: host.clientHeight,
-    });
-  onMount(() => {
-    if (props.presence)
-      onCleanup(attachPresencePointer(host, props.editor, props.presence));
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry?.contentRect.width || !entry.contentRect.height) return;
-      if (props.fitOnLoad !== false) fit();
-      observer.disconnect();
-    });
-    observer.observe(host);
-    onCleanup(() => observer.disconnect());
-  });
+function CanvasReadOnlyToolbars() {
+  const view = useCanvasReadOnlyView();
   return (
-    <div
-      ref={host}
-      class="relative size-full min-h-0"
-      on:keydown={(event) => {
-        if (
-          !(event.target instanceof HTMLElement) ||
-          event.target.getAttribute('aria-label') !== 'Graphics canvas'
-        )
-          return;
-        event.stopPropagation();
-        if (event.altKey) return;
-        if (event.ctrlKey || event.metaKey) {
-          if (event.key === '=' || event.key === '+') zoom(1.2);
-          else if (event.key === '-') zoom(1 / 1.2);
-          else return;
-          event.preventDefault();
-          return;
-        }
-        if (event.shiftKey) return;
-        if (event.key === '.') {
-          if (hasSelection()) fitSelection();
-          else fit();
-        } else if (event.key.toLowerCase() === 'v') setTool('select');
-        else if (event.key.toLowerCase() === 'h') setTool('pan');
-        else return;
-        event.preventDefault();
-      }}
-    >
-      <GraphicsSurface
-        editor={props.editor}
-        input={{
-          editing: false,
-          tool,
-          ignoreTarget: (target) =>
-            target instanceof Element &&
-            !!target.closest('[data-graphics-item]') &&
-            !!target.closest('button,a,input,select,textarea,[role="button"]'),
-        }}
-        gridColor="transparent"
-        renderers={{
-          artifact: (p) => (
-            <CanvasArtifactView
-              {...p}
-              active={activeArtifact() === p.item.id}
-              onEnter={() => setActiveArtifact(p.item.id)}
-              onExit={() => setActiveArtifact(undefined)}
-            />
-          ),
-          connector: (p) => (
-            <ConnectorView {...p} contentView={CanvasTextContent} />
-          ),
-          rectangle: (p) => (
-            <RectangleView {...p} contentView={CanvasTextContent} />
-          ),
-          ellipse: (p) => (
-            <EllipseView {...p} contentView={CanvasTextContent} />
-          ),
-          text: (p) => <TextView {...p} contentView={CanvasTextContent} />,
-          image: (p) => (
-            <CanvasMediaView {...p} playing={false} onStop={() => {}} />
-          ),
-          video: (p) => (
-            <CanvasMediaView {...p} playing={false} onStop={() => {}} />
-          ),
-          document: (p) => (
-            <DocumentPreviewContent
-              documentInfo={{
-                id: p.item.geometry.documentId,
-                type: fileTypeToBlockName(p.item.geometry.fileType),
-                params: {},
-                isOpenable: true,
-              }}
-            />
-          ),
-        }}
-      />
-      <Show when={props.presence}>
-        {(presence) => (
-          <GraphicsPresenceOverlay
-            editor={props.editor}
-            presence={presence()}
-          />
-        )}
-      </Show>
+    <>
       <CanvasDrawingToolbar
         readOnly
-        tool={tool()}
+        tool={view.tool()}
         onTool={(next) => {
-          if (next !== 'select' && next !== 'pan') return;
-          setTool(next);
-          focus();
+          if (next === 'select' || next === 'pan') view.chooseTool(next);
         }}
       />
       <CanvasZoomToolbar
-        scale={scale()}
-        onZoom={zoom}
-        onFit={fit}
-        hasSelection={hasSelection()}
-        onFitSelection={fitSelection}
+        scale={view.scale()}
+        onZoom={view.zoom}
+        onFit={view.fit}
+        hasSelection={view.hasSelection()}
+        onFitSelection={view.fitSelection}
       />
-    </div>
+    </>
+  );
+}
+
+/**
+ * The read-only canvas on desktop, as its own page or inside a document, where
+ * its controls stay within the embed.
+ */
+export function CanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
+  return (
+    <CanvasReadOnlyParts.Root {...props}>
+      <CanvasReadOnlyParts.Surface />
+      <CanvasReadOnlyParts.Presentation />
+      <CanvasReadOnlyToolbars />
+    </CanvasReadOnlyParts.Root>
   );
 }

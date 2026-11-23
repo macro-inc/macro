@@ -7,7 +7,8 @@ packages it as a signed DMG, and publishes the release.
 
 The macOS desktop app rendered with Chromium (CEF) instead of WKWebView. It is a
 thin binary over `../src-tauri` (`app_lib::run_with`) that selects
-`tauri-runtime-cef`.
+`tauri-runtime-cef`. It runs on Apple silicon Macs with macOS 14 (Sonoma) or
+later, the newest minimum of the binaries it bundles.
 
 ## Scope
 
@@ -28,7 +29,48 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   `RUSTUP_TOOLCHAIN=1.95.0 cargo-tauri build --bundles app -c '{"build":{"beforeBuildCommand":""}}'`.
   The stock `cargo-tauri` does not ship the Chromium framework or helper apps.
 
+## Driving a local build over CDP
+
+To reproduce a frontend bug in Chromium as the app runs it, run a dev build
+against a Vite server and drive it with Playwright `connectOverCDP`:
+
+- Patch `src/main.rs` locally (never commit it) so the runtime listens for CDP
+  and keeps its profile out of the installed app's cache:
+  `.remote_debugging(tauri_runtime_cef::RemoteDebugging::Port { port: 9334, allowed_origins: vec![] })`
+  and `.root_cache_path("<scratch dir>")` on the `Cef` builder.
+- `echo development > ../src-tauri/.macro-tauri-env` (gitignored). Without it
+  `build.rs` needs a built `dist/`.
+- Build the CLI once from the `macro-cef` checkout cargo already fetched
+  (`~/.cargo/git/checkouts/tauri-*/4b8a46f`):
+  `RUSTUP_TOOLCHAIN=1.95.0 cargo build --release -p tauri-cli`. Put `ninja` on
+  `PATH` (`nix shell nixpkgs#ninja`) and point `CEF_PATH` at a disk with room.
+- From here:
+  `RUSTUP_TOOLCHAIN=1.95.0 <cli>/cargo-tauri dev --no-watch -c '{"identifier":"com.macro.app.<name>","productName":"Macro <name>","build":{"beforeDevCommand":"","devUrl":"http://localhost:3009/<page>"}}'`.
+  A separate identifier keeps the build off the installed app's Application
+  Support data and single-instance lock. The webview renders only
+  `localhost:3000`–`3009` (`ALLOWED_DOMAINS` in `../src-tauri/src/lib.rs`) and
+  opens any other origin in the system browser.
+- `chromium.connectOverCDP('http://127.0.0.1:9334')` then drives the page.
+  Backend-free browser-test fixtures (`*.html` under a feature's
+  `browser-test/`) load as the dev URL with no sign-in.
+
+CDP input enters Chromium's input pipeline as a real click does, so it reaches
+the same renderer code, but it skips AppKit's event timing.
+
 ## Gotchas
+
+- `bundle.macOS.minimumSystemVersion` in `tauri.conf.json` is the app's
+  `LSMinimumSystemVersion`; macOS refuses to open the app on anything older.
+  Keep it at the highest `minos` (`otool -l`) of any binary in the bundle,
+  since dyld won't load a library built for a newer macOS. Today that is 14.0,
+  from the Nix-built `libiconv`, `libcharset` and `macrod` (nixpkgs' default
+  Darwin target); Chromium's own is `mac_min_system_version` in its
+  `build/config/mac/mac_sdk.gni` (13.0 on CEF 151). When a CEF or nixpkgs bump
+  raises one, raise this value in the same change and tell whoever owns the
+  download pages and customer docs, which state the requirement. The release's
+  `Validate signed DMG` step fails while it is lower than any binary's `minos`.
+  The update feed carries the value, and installed apps on an older macOS skip
+  that release (`../src-tauri/README.md#desktop-native-updates`).
 
 - Keep this a separate workspace. A `[patch]` applies to every target in its
   workspace, so moving the CEF Tauri patches into `../Cargo.toml` would rebuild
@@ -37,8 +79,10 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   lockfiles: run `cargo metadata --format-version 1 > /dev/null` here as well as
   in `..`. A new git dependency also needs its `outputHashes` entry on both
   vendor dirs in `nix/tauri-desktop.nix`. The `check tauri lockfiles` PR
-  workflow (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`) fails
-  when either lockfile is stale; otherwise only the macOS release build would.
+  workflow fails when either lockfile is stale (`cargo update --workspace
+  --locked`); otherwise only the macOS release build would. When a lockfile or
+  Nix input changes it also builds the vendor dirs
+  (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`).
 - `../src-tauri` must resolve `tauri` through `[patch.crates-io]` (a version
   requirement, not a git dependency) so this workspace can repoint it.
 - The `cef` feature of `../src-tauri` adds no dependencies; it switches the

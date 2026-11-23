@@ -3,6 +3,12 @@
 //! These modules contain implementations of the domain ports that connect
 //! to external services like Redis, PostgreSQL, WebSocket gateways, etc.
 
+/// PostgreSQL reads of a user's active notification ids.
+pub mod active_notification_ids;
+/// PostgreSQL storage for bulk actions and their ledgers.
+pub mod bulk_action;
+/// PostgreSQL storage for users' per-channel notification settings.
+pub mod channel_settings;
 pub mod device_registration;
 pub mod digest_batcher;
 pub mod email;
@@ -32,6 +38,8 @@ pub mod queue;
 pub mod rate_limit;
 pub mod repository;
 pub mod retention;
+/// PostgreSQL storage for users' Chat section notification settings.
+pub mod section_settings;
 pub mod sns_endpoint;
 pub mod user_existence_checker;
 pub mod websocket;

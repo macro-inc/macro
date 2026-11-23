@@ -5,6 +5,7 @@ use axum::extract::FromRef;
 use axum::extract::Request;
 use axum::http::Method;
 use axum::middleware::Next;
+use axum::response::IntoResponse as _;
 use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
@@ -20,6 +21,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 mod saved_views;
 mod sync;
+mod task_templates;
 pub(crate) mod util;
 
 // Middleware
@@ -49,9 +51,17 @@ mod threads;
 // auth based constants
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let sync_sessions = state.sync_sessions.clone();
+    let correlation = agent_correlation::inbound::CorrelationState::new(
+        state.db.clone(),
+        state.jwt_validation_args.clone(),
+    );
     let app = api_router(state.clone())
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
         .layer(
             ServiceBuilder::new()
                 .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
@@ -62,10 +72,17 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     validate_api_version,
                 ))
                 .layer(
-                    macro_cors::cors_layer_with_headers(vec![axum::http::HeaderName::from_static(
-                        complete_graph::MAIL_CACHE_PROFILE_HEADER,
-                    )])
-                    .expose_headers([axum::http::header::RETRY_AFTER]),
+                    macro_cors::cors_layer_with_headers(vec![
+                        axum::http::HeaderName::from_static("x-macro-passwords"),
+                        axum::http::HeaderName::from_static(middleware::crm_access::REQUEST_HEADER),
+                        axum::http::HeaderName::from_static(
+                            complete_graph::MAIL_CACHE_PROFILE_HEADER,
+                        ),
+                    ])
+                    .expose_headers([
+                        axum::http::header::RETRY_AFTER,
+                        axum::http::HeaderName::from_static(middleware::crm_access::HEADER),
+                    ]),
                 )
                 .layer(CompressionLayer::new().gzip(true)),
         )
@@ -96,9 +113,62 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     result
 }
 
+/// Where [`items_router`] is mounted.
+pub(crate) const ITEMS_PATH: &str = "/items";
+
 fn items_router(state: ApiContext) -> Router<ApiContext> {
-    soup::inbound::axum_router::soup_router(state.soup_router_state.clone())
-        .merge(graphql_soup::router())
+    hide_sign_in_emails_from_programs(
+        soup::inbound::axum_router::soup_router(state.soup_router_state.clone()),
+        &state,
+    )
+    .merge(refuse_programs(graphql_soup::router(), &state))
+}
+
+/// GraphQL lets a client pick its fields and aliases, so no response
+/// rewrite can find a sign-in email in it; programs use the SDK's REST item
+/// routes instead, which nothing program-side ever stops doing.
+fn refuse_programs<S: Clone + Send + Sync + 'static>(
+    router: Router<S>,
+    state: &ApiContext,
+) -> Router<S> {
+    let authorization = state.authorization_state.clone();
+    router.layer(axum::middleware::from_fn(
+        move |request: axum::extract::Request, next: axum::middleware::Next| {
+            let authorization = authorization.clone();
+            async move {
+                let (request, program) =
+                    macro_authorization::request_is_program(request, &authorization).await;
+                if program {
+                    tracing::warn!("refused GraphQL to a program");
+                    return (
+                        axum::http::StatusCode::FORBIDDEN,
+                        axum::Json(model::response::ErrorResponse {
+                            message: "GraphQL is not available to programs; use the SDK's workspace and search methods.".into(),
+                        }),
+                    )
+                        .into_response();
+                }
+                next.run(request).await
+            }
+        },
+    ))
+}
+
+/// A program reads Macro's own sign-in emails in workspace items and search
+/// results only redacted: one that read the code could sign in as the user.
+fn hide_sign_in_emails_from_programs<S: Clone + Send + Sync + 'static>(
+    router: Router<S>,
+    state: &ApiContext,
+) -> Router<S> {
+    let authorization = state.authorization_state.clone();
+    router.layer(axum::middleware::from_fn(move |request, next| {
+        macro_authorization::rewrite_program_json(
+            authorization.clone(),
+            request,
+            next,
+            models_email::sign_in_email::hide_sign_in_emails,
+        )
+    }))
 }
 
 fn api_router(state: ApiContext) -> Router {
@@ -166,7 +236,7 @@ fn api_router(state: ApiContext) -> Router {
             ]),
         )
         .nest("/instructions", instructions::router())
-        .nest("/items", items_router(state.clone()))
+        .nest(ITEMS_PATH, items_router(state.clone()))
         .nest(
             "/threads",
             threads::router(state.clone()).layer(axum::middleware::from_fn(
@@ -199,7 +269,11 @@ fn api_router(state: ApiContext) -> Router {
                                 if !uri.contains("/upload") {
                                     return next.run(req).await;
                                 }
-                                tokio::task::spawn(next.run(req)).await.unwrap()
+                                tokio::task::spawn(agent_correlation::context::capture(
+                                    next.run(req),
+                                ))
+                                .await
+                                .unwrap()
                             }
                             _ => next.run(req).await,
                         }
@@ -219,7 +293,10 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/search",
-            search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
+            hide_sign_in_emails_from_programs(
+                search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
+                &state,
+            ),
         )
         .nest(
             "/sync_service",
@@ -288,6 +365,24 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/time",
+            time_tracking::inbound::axum_router::time_tracking_router(
+                state.time_tracking_state.clone(),
+            ),
+        )
+        .nest(
+            "/channel-sections",
+            channel_labels::inbound::axum_router::channel_sections_router(
+                state.channel_sections_state.clone(),
+            ),
+        )
+        .nest(
+            "/account-managers",
+            account_manager::inbound::axum_router::account_manager_router(
+                state.account_manager_state.clone(),
+            ),
+        )
+        .nest(
             "/user-api-keys",
             user_api_key::inbound::axum_router::user_api_key_router(
                 state.user_api_key_state.clone(),
@@ -319,7 +414,12 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/initiatives",
-            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
+            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone())
+                .merge(
+                    initiative::inbound::axum_router::initiative_activity_router(
+                        state.initiative_activity_state.clone(),
+                    ),
+                ),
         )
         .nest(
             "/databases",
@@ -377,10 +477,14 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/crm",
-            crm::inbound::axum_router::crm_router(state.crm_state.clone()).nest(
-                "/pipelines",
-                crm::inbound::pipelines::router(state.pipeline_state.clone()),
-            ),
+            crm::inbound::axum_router::crm_router(state.crm_state.clone())
+                .nest(
+                    "/pipelines",
+                    crm::inbound::pipelines::router(state.pipeline_state.clone()),
+                )
+                .merge(crm::inbound::pipeline_workflows::router(
+                    state.pipeline_workflow_state.clone(),
+                )),
         )
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(
@@ -399,8 +503,11 @@ fn api_router(state: ApiContext) -> Router {
                 )
                 .nest(
                     "/search",
-                    search_service::search_router()
-                        .with_state(SearchHandlerState::from_ref(&state)),
+                    hide_sign_in_emails_from_programs(
+                        search_service::search_router()
+                            .with_state(SearchHandlerState::from_ref(&state)),
+                        &state,
+                    ),
                 )
                 .nest(
                     "/sync_service",
@@ -417,6 +524,26 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest("/recents", recents::router())
         .nest("/saved_views", saved_views::router())
+        .nest("/task_templates", task_templates::router())
+        .nest(
+            "/passwords",
+            passwords::inbound::router::router(state.passwords_state.clone()).merge(
+                passwords::inbound::agent_router::review_router(
+                    state.passwords_agent_state.clone(),
+                ),
+            ),
+        )
+        .nest(
+            "/passwords/agent",
+            passwords::inbound::agent_router::agent_router(state.passwords_agent_state.clone()),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            (
+                state.clone(),
+                middleware::crm_access::SignalCache::default(),
+            ),
+            middleware::crm_access::handler,
+        ))
         .with_state(state);
     let dss_router = Router::new()
         .nest("/{version}", internal_router.clone())

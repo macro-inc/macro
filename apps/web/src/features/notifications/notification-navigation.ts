@@ -1,7 +1,10 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import { crmRecordContent } from '@app/features/crm/crm-hosted-content';
+import { requestComputerSetup } from '@app/features/settings/computers/primitives/setup-request';
+import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
 import { analytics } from '@app/lib/analytics';
+import { paneRoute } from '@app/routes/app-route';
 import {
   getChannelParams,
   navigateToChannelMessage,
@@ -18,8 +21,7 @@ import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
-  enableCalendarUi,
-  enableProjects,
+  enablePasswords,
   enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
@@ -75,7 +77,8 @@ type OpenOptions = {
   onApplied?: VoidFunction;
 };
 
-function openContent(
+/** Opens `content` and returns the layout's result, for callers that act on reuse. */
+function openContentWithResult(
   layoutManager: SplitManager,
   content: SplitContent,
   options: OpenOptions
@@ -95,6 +98,15 @@ function openContent(
   });
   if (result?.status === 'opened' || result?.status === 'reused')
     reportApplied();
+  return result;
+}
+
+function openContent(
+  layoutManager: SplitManager,
+  content: SplitContent,
+  options: OpenOptions
+): void {
+  openContentWithResult(layoutManager, content, options);
 }
 
 /** Chats open in External's main pane; the chat's route claim reuses an open one. */
@@ -126,9 +138,176 @@ function openSplitIfNotOpen(
   }
 }
 
+/**
+ * Open a company or contact, scrolled to `commentId` in its Discussion when
+ * one is given. Desktop shows records in Customers, which takes the comment
+ * from its route.
+ */
+function openCrmRecord(
+  layoutManager: SplitManager,
+  record: { type: 'company' | 'contact'; id: string },
+  commentId: string | undefined,
+  options: OpenOptions
+) {
+  if (isTouchDevice()) {
+    openSplitIfNotOpen(layoutManager, record.type, record.id, {
+      ...options,
+      params: commentId ? { [COMMENT_LINK_PARAM]: commentId } : undefined,
+    });
+    return;
+  }
+  let pending = options.onApplied;
+  const reportApplied = () => {
+    const callback = pending;
+    pending = undefined;
+    callback?.();
+  };
+  const result = layoutManager.openWithSplit(
+    crmRecordContent(record, commentId),
+    {
+      activate: true,
+      referredFrom: null,
+      preferNewSplit: options.newSplit,
+      handle: options.sourceHandle,
+      allowDuplicate: true,
+      ...(options.onApplied ? { onApplied: reportApplied } : {}),
+    }
+  );
+  if (result.status === 'opened' || result.status === 'reused') reportApplied();
+}
+
+/** The channel message a ping is about, when it names one. */
+function pingMessage(notification: UnifiedNotification) {
+  const meta = notification.notification_metadata;
+  if (meta.tag !== 'ping' || notification.entity_type !== 'channel') return;
+  const message = meta.content.message;
+  if (!message) return;
+  return {
+    messageId: message.messageId,
+    threadId: message.threadId ?? undefined,
+  };
+}
+
+/** A ping opens the entity its sender linked. */
+function openPingLink(
+  notification: UnifiedNotification,
+  sourceHandle?: SplitHandle,
+  onApplied?: VoidFunction
+): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
+  const id = notification.entity_id;
+  const message = pingMessage(notification);
+  if (message) {
+    return async (lm: SplitManager, newSplit = false) => {
+      await navigateToChannelMessage(
+        lm.getOrchestrator(),
+        id,
+        message.messageId,
+        message.threadId,
+        {
+          splitManager: lm,
+          preferNewSplit: newSplit,
+          sourceHandle,
+          ...(onApplied ? { onApplied } : {}),
+        }
+      );
+    };
+  }
+
+  const block = match(notification.entity_type)
+    .with('chat', () => 'chat' as const)
+    .with('channel', () => 'channel' as const)
+    .with('project', () => 'project' as const)
+    .with('email_thread', () => 'email' as const)
+    .with('agent_session', () => 'agent' as const)
+    .with(
+      'document',
+      'initiative',
+      'calendar_event',
+      'crm_company',
+      'crm_contact',
+      () => undefined
+    )
+    .otherwise(() => null);
+  if (block === null) return null;
+
+  return async (lm: SplitManager, newSplit = false) => {
+    const options = { newSplit, sourceHandle, onApplied };
+    if (block) {
+      openSplitIfNotOpen(lm, block, id, options);
+      return;
+    }
+
+    if (notification.entity_type === 'initiative') {
+      openSplitIfNotOpen(
+        lm,
+        'component',
+        projectRouteId({ id, section: 'overview' }),
+        options
+      );
+      return;
+    }
+
+    if (notification.entity_type === 'calendar_event') {
+      openCalendarView(
+        { eventId: id },
+        {
+          manager: lm,
+          handle: sourceHandle,
+          openInNewSplit: newSplit,
+          ...(onApplied ? { onApplied } : {}),
+        }
+      );
+      return;
+    }
+
+    if (
+      notification.entity_type === 'crm_company' ||
+      notification.entity_type === 'crm_contact'
+    ) {
+      const type =
+        notification.entity_type === 'crm_contact' ? 'contact' : 'company';
+      openCrmRecord(lm, { type, id }, undefined, options);
+      return;
+    }
+
+    // Tasks, pings and files are all documents; their block comes from the
+    // document itself, or plain document routing when it can't be loaded.
+    const metadata = await catchToResult(async () =>
+      (
+        await import('@queries/storage/document-metadata')
+      ).fetchDocumentMetadata(id)
+    );
+    if (metadata.isErr()) {
+      Telemetry.error(metadata.error, { surface: 'notification-navigation' });
+    }
+    const document = metadata.isOk() ? metadata.value : undefined;
+    openSplitIfNotOpen(
+      lm,
+      itemToBlockName({
+        type: 'document',
+        fileType: document?.fileType ?? undefined,
+        subType:
+          document?.subType && document.subType !== 'initiative_description'
+            ? { type: document.subType }
+            : undefined,
+      }),
+      id,
+      options
+    );
+  };
+}
+
 export function getChannelNotificationParams(
   notification: UnifiedNotification
 ): { messageId?: string; threadId?: string; params?: Record<string, string> } {
+  // A ping about a message points at it as a mention would.
+  const noted = pingMessage(notification);
+  if (noted) {
+    return {
+      ...noted,
+      params: getChannelParams(noted.messageId, noted.threadId),
+    };
+  }
   if (!isChannelNotification(notification)) return {};
 
   const meta = notification.notification_metadata;
@@ -296,6 +475,27 @@ function getSupportedHandler(
             !isFeatureEnabled(enableWhatsappLinked))
         )
           return null;
+        // A runtime has no page of its own: its requests wait in its Share menu.
+        if (target.entityType === 'harness') {
+          const harnessId = target.entityId;
+          return async (lm: SplitManager, newSplit = false) =>
+            Telemetry.span(
+              'access_requests.notification.open',
+              async (span) => {
+                span.setAttr('entity.id', harnessId);
+                span.setAttr('entity.type', 'harness');
+                span.setAttr('notification.id', notification.id);
+                span.setAttr('notification.type', meta.tag);
+                span.setAttr('access_request.id', meta.content.requestId);
+                requestRuntimeShare(
+                  harnessId,
+                  meta.tag === 'entity_access_requested'
+                );
+                openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+              }
+            );
+        }
+        const sharedEntityType = target.entityType;
         return async (lm: SplitManager, newSplit = false) =>
           Telemetry.span('access_requests.notification.open', async (span) => {
             span.setAttr('entity.id', target.entityId);
@@ -355,15 +555,15 @@ function getSupportedHandler(
                     )
                   : undefined;
               const block =
-                target.entityType === 'external_chat'
+                sharedEntityType === 'external_chat'
                   ? 'external_chat'
-                  : target.entityType === 'initiative'
+                  : sharedEntityType === 'initiative'
                     ? 'initiative'
                     : itemToBlockName({
                         type:
-                          target.entityType === 'email_thread'
+                          sharedEntityType === 'email_thread'
                             ? 'email'
-                            : target.entityType,
+                            : sharedEntityType,
                         fileType:
                           document?.fileType ??
                           entity?.fileType ??
@@ -381,9 +581,9 @@ function getSupportedHandler(
                   openShareModal({
                     id: target.entityId,
                     itemType:
-                      target.entityType === 'email_thread'
+                      sharedEntityType === 'email_thread'
                         ? 'email'
-                        : target.entityType,
+                        : sharedEntityType,
                     blockAlias: block,
                     name: meta.content.entityName,
                     owner: state.owner ?? undefined,
@@ -501,7 +701,6 @@ function getSupportedHandler(
         };
       })
       .with('initiative_discussion', () => {
-        if (!isFeatureEnabled(enableProjects)) return null;
         const meta = notification.notification_metadata;
         if (
           meta.tag !== 'initiative_discussion' ||
@@ -555,13 +754,6 @@ function getSupportedHandler(
         if (meta.tag !== 'calendar_event_reminder') return null;
 
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          // A reminder delivered before the flag closed still has a live
-          // notification; opening it must not reach a surface the user is no
-          // longer meant to have.
-          if (!isFeatureEnabled(enableCalendarUi)) {
-            onApplied?.();
-            return;
-          }
           const content = meta.content;
           const time = content.startsAt
             ? {
@@ -594,10 +786,6 @@ function getSupportedHandler(
 
         // The request is answered from the shared event's details.
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          if (!isFeatureEnabled(enableCalendarUi)) {
-            onApplied?.();
-            return;
-          }
           openCalendarView(
             { eventId: meta.content.eventId },
             {
@@ -609,45 +797,53 @@ function getSupportedHandler(
           );
         };
       })
-      .with('crm_discussion', () => {
+      .with('password_access_requested', () => {
         const meta = notification.notification_metadata;
-        if (meta.tag !== 'crm_discussion') return null;
-        const blockName =
-          notification.entity_type === 'crm_contact' ? 'contact' : 'company';
+        if (meta.tag !== 'password_access_requested') return null;
+        // The request is answered in the item's pane in Passwords.
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          // Desktop shows records in Customers, which takes the message from its route.
-          if (!isTouchDevice()) {
-            let pending = onApplied;
-            const reportApplied = () => {
-              const callback = pending;
-              pending = undefined;
-              callback?.();
-            };
-            const result = lm.openWithSplit(
-              crmRecordContent(
-                { type: blockName, id: notification.entity_id },
-                meta.content.messageId
-              ),
-              {
-                activate: true,
-                referredFrom: null,
-                preferNewSplit: newSplit,
-                handle: sourceHandle,
-                allowDuplicate: true,
-                ...(onApplied ? { onApplied: reportApplied } : {}),
-              }
-            );
-            if (result.status === 'opened' || result.status === 'reused')
-              reportApplied();
+          if (!isFeatureEnabled(enablePasswords)) {
+            onApplied?.();
             return;
           }
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
+          const content: SplitContent = {
+            type: 'component',
+            id: 'passwords',
+            params: {
+              teamId: meta.content.teamId,
+              itemId: meta.content.itemId,
+              requestId: meta.content.requestId,
+            },
+            entryMetadata: {
+              route: paneRoute({ id: 'view-passwords', params: {} }),
+            },
+          };
+          const result = openContentWithResult(lm, content, {
             newSplit,
-            params: { [COMMENT_LINK_PARAM]: meta.content.messageId },
             sourceHandle,
             onApplied,
           });
+          // Reuse only activates the open vault; hand it this item's params.
+          if (result?.status === 'reused')
+            result.split?.replace({
+              next: content,
+              mergeHistory: true,
+              referredFrom: null,
+            });
         };
+      })
+      .with('crm_discussion', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'crm_discussion') return null;
+        const type =
+          notification.entity_type === 'crm_contact' ? 'contact' : 'company';
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openCrmRecord(
+            lm,
+            { type, id: notification.entity_id },
+            meta.content.messageId,
+            { newSplit, sourceHandle, onApplied }
+          );
       })
       .with('inbox_reauth_required', () => null)
       .with('routine_run_finished', () => {
@@ -658,20 +854,132 @@ function getSupportedHandler(
             onApplied,
           });
       })
+      // Signing in again happens on the computer's row in Settings → Runtimes.
+      .with(
+        'agent_sign_in_expiry',
+        () =>
+          async (lm: SplitManager, newSplit: boolean = false) =>
+            openContent(
+              lm,
+              {
+                type: 'component',
+                id: 'settings',
+                entryMetadata: {
+                  route: paneRoute({
+                    id: 'settings',
+                    params: { tab: 'runtimes' },
+                  }),
+                },
+              },
+              { newSplit, sourceHandle, onApplied }
+            )
+      )
+      // Back into the computer's guided setup, at Bring your AI: a ready
+      // computer continues there, a failed one offers Retry setup. An agent
+      // teammate's computer has no setup of its own: a ready agent opens its
+      // DM, and a failed one its row in Members, which offers Retry.
+      .with('computer_setup', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'computer_setup') return null;
+        const computerId = meta.content.computerId;
+        const agent = meta.content.agent;
+        if (agent) {
+          const ready = meta.content.outcome.kind === 'ready';
+          return async (lm: SplitManager, newSplit = false) => {
+            if (!ready) {
+              openTeamMembersSettings(lm, {
+                newSplit,
+                sourceHandle,
+                onApplied,
+              });
+              return;
+            }
+            // Loaded on demand, with the channel queries it needs.
+            const { openTeamAgentDirectMessage } = await import(
+              '@core/util/open-team-agent-direct-message'
+            );
+            await openTeamAgentDirectMessage(agent.userId, (content) =>
+              openContent(lm, content, { newSplit, sourceHandle, onApplied })
+            );
+          };
+        }
+        return async (lm: SplitManager, newSplit = false) => {
+          requestComputerSetup(computerId);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
+      .with('ping', () => openPingLink(notification, sourceHandle, onApplied))
+      // Its machine has no page of its own; Settings → Runtimes points it out.
+      .with('runtime_access_removed', () => {
+        const harnessId = notification.entity_id;
+        return async (lm: SplitManager, newSplit = false) => {
+          requestRuntimeShare(harnessId, false);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
       .exhaustive(() => null)
+  );
+}
+
+/** Settings → Runtimes, where a runtime's sharing and access live. */
+export function openRuntimesSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'harness' } }),
+      },
+    },
+    options
+  );
+}
+
+/** Settings → Billing, where a declined card is updated. */
+export function openBillingSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'billing' } }),
+      },
+    },
+    options
+  );
+}
+
+/** Settings → Members, where an agent teammate's row shows its setup. */
+export function openTeamMembersSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'team-members' } }),
+      },
+    },
+    options
   );
 }
 
 /**
  * Where a notification was opened from: the app's own lists, a browser
- * notification, a native (iOS, Android, macOS) notification, or a home
- * recommendation that opens through its notification.
+ * notification, or a native (iOS, Android, macOS) notification.
  */
-export type NotificationOpenSource =
-  | 'in_app'
-  | 'browser_push'
-  | 'native_push'
-  | 'home_recommendation';
+export type NotificationOpenSource = 'in_app' | 'browser_push' | 'native_push';
 
 /**
  * Opens the notification given the layout manager.

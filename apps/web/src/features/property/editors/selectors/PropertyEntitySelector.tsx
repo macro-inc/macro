@@ -1,9 +1,27 @@
+import { useCrmCompanySearchSource } from '@app/features/crm/crm-search';
+import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
+import { disableCrmContactSearch } from '@core/constant/featureFlags';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
+import type { QuickAccessItem } from '@core/context/quickAccess';
+import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts';
+import { keepUnchangedRows } from '@core/context/quickAccess/unchanged-rows';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
+import {
+  capPeople,
+  rankAgentsAfterPeople,
+} from '@core/user/people-before-agents';
+import type { IUser } from '@core/user/types';
+import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
-import { isEditableInput } from '@core/util/isEditableInput';
+import { preserveOrderedWindow } from '@core/util/ordered-window';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
+import { matchesTokenSubsequences } from '@core/util/string';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -15,23 +33,29 @@ import {
 import CheckIcon from '@icon/system/regular/check.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
-import { useSearchSoupQuery } from '@queries/soup/search';
+import { usePinnedContactUsers } from '@queries/contacts/use-directory';
+import {
+  useSearchSoupQuery,
+  validateSearchServiceText,
+} from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn } from '@ui';
+import { Button, cn, InlineCheckbox, inputClasses } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   createEffect,
   createMemo,
   createSignal,
   For,
-  onCleanup,
-  onMount,
+  type JSX,
+  on,
   Show,
 } from 'solid-js';
 import {
+  allowsEntityType,
   type CombinedEntity,
   createEntitySearchConfig,
+  createRosterSearch,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
@@ -52,15 +76,21 @@ type EntityInputProps = {
     options: Set<string>,
     entityInfo?: { id: string; entity_type: EntityType; name: string }[]
   ) => void;
+  /** UI-only selection metadata; never added to persisted entity references. */
+  onUserSelected?: (user: IUser, custom: boolean) => void;
   onClose?: () => void;
   /** Escape in the search; `onClose` when absent, as a popover saves on close. */
   onCancel?: () => void;
+  /** Standalone sheet spacing; leaves the popover presentation unchanged. */
+  presentation?: 'sheet';
+  /** Override empty-result content; null hides the default message. */
+  emptyState?: JSX.Element;
 };
 
 function getEntityTypePluralLabel(
-  entityType: EntityType | null | undefined
+  entityType: EntityType | EntityType[] | null | undefined
 ): string {
-  if (!entityType) return 'entities';
+  if (!entityType || Array.isArray(entityType)) return 'entities';
   switch (entityType) {
     case 'USER':
       return 'users';
@@ -112,11 +142,53 @@ function getEntityName(entity: CombinedEntity): string {
 }
 
 const MAX_LIST_HEIGHT = 192;
+const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
+const MAX_SEARCH_RESULTS = 20;
+const SERVER_SEARCH_DEBOUNCE_MS = 250;
+
+/** Server contact matches join the Quick Access rows, one row per email.
+ * Rows the picker excludes leave first, so they never displace an eligible
+ * record of the same email. */
+function withServerContacts(
+  items: readonly QuickAccessItem[],
+  server: readonly QuickAccessItem[],
+  excluded: (id: string) => boolean
+): readonly QuickAccessItem[] {
+  if (server.length === 0) return items;
+  const listed = new Set(items.map((item) => item.id));
+  return deduplicateContactItems(
+    [...items, ...server.filter((item) => !listed.has(item.id))].filter(
+      (item) => !excluded(item.id)
+    )
+  );
+}
+
+function getMaxLocalResults(
+  hasExplicitUserPool: boolean,
+  hasSearchTerm: boolean,
+  availableResultCount: number
+): number {
+  // Query-backed lists already bound each loaded page. Only explicit user
+  // rosters, which have no pagination, retain the local display caps.
+  if (!hasExplicitUserPool) return availableResultCount;
+  return hasSearchTerm ? MAX_SEARCH_RESULTS : MAX_VISIBLE_ENTITIES_NO_SEARCH;
+}
 
 export function PropertyEntitySelector(props: EntityInputProps) {
-  const [inputValue, setInputValue] = createSignal('');
+  const [inputValue, setRawInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
+  // Personal reads debounce themselves. Their UI must stop offering the old
+  // query immediately, particularly when Enter selects a custom address.
+  const search = () =>
+    props.config.specificEntityType === 'USER'
+      ? inputValue().toLowerCase()
+      : searchTerm();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const openedSelectedIds = [...props.selectedOptions()];
+  const setInputValue = (value: string) => {
+    setSelectedIndex(0);
+    setRawInputValue(value);
+  };
   const keyboardMode = useKeyPressed(100);
 
   let scrollContainerRef: HTMLDivElement | undefined;
@@ -145,25 +217,115 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   // Get items from quickAccess based on entity type
-  const { items: quickAccessItems, isLoading: isQuickAccessLoading } =
-    useQuickAccessEntities(() => props.config.specificEntityType);
+  const quickAccess = useQuickAccessEntities(
+    () => props.config.specificEntityType,
+    search,
+    () =>
+      props.config.specificEntityType !== 'THREAD' &&
+      !(props.config.specificEntityType === 'USER' && props.config.users),
+    () => props.config.excludedIds?.() ?? new Set<string>()
+  );
+  const isQuickAccessLoading = quickAccess.isLoading;
 
-  // Fetch emails for browsing (only when THREAD type or generic ENTITY)
+  // Quick Access holds recent and cached contacts only. A typed search also
+  // reads the server's CRM contact search, as Cmd+K and @ mentions do, so any
+  // contact Customers > People finds is found here too.
+  const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
+  const typedContactSearch = () =>
+    allowsEntityType(props.config.specificEntityType, 'CONTACT') &&
+    !contactSearchDisabled().enabled
+      ? search().trim()
+      : '';
+  const contactSearch = debouncedDependent(
+    typedContactSearch,
+    SERVER_SEARCH_DEBOUNCE_MS
+  );
+  const contactSearchEnabled = () =>
+    typedContactSearch().length > 0 && contactSearch().length > 0;
+  const serverContacts = useCrmContactMentionSource(
+    contactSearch,
+    contactSearchEnabled,
+    () => false
+  );
+  const contactSearchPending = () =>
+    typedContactSearch().length > 0 &&
+    (typedContactSearch() !== contactSearch() || serverContacts.isLoading());
+  const isExcludedContact = (id: string) =>
+    !!props.config.excludedIds?.().has(id) ||
+    (props.config.selfFilter?.entityType === 'CONTACT' &&
+      props.config.selfFilter.blockId === id);
+  const quickAccessItems = createMemo(() =>
+    contactSearchEnabled()
+      ? withServerContacts(
+          quickAccess.items(),
+          serverContacts.entities(),
+          isExcludedContact
+        )
+      : quickAccess.items()
+  );
+
+  // Quick Access holds the 500 most recent companies. A typed search also
+  // reads the search service's company name and domain match, where Cmd+K's
+  // company results come from, so any company Customers lists is found here.
+  const typedCompanySearch = () =>
+    allowsEntityType(props.config.specificEntityType, 'COMPANY')
+      ? search().trim()
+      : '';
+  const companySearch = debouncedDependent(
+    typedCompanySearch,
+    SERVER_SEARCH_DEBOUNCE_MS
+  );
+  const typedCompanySearchValid = () =>
+    typedCompanySearch().length > 0 &&
+    validateSearchServiceText(typedCompanySearch());
+  const companySearchEnabled = () =>
+    typedCompanySearchValid() && validateSearchServiceText(companySearch());
+  const serverCompanies = useCrmCompanySearchSource(
+    companySearch,
+    companySearchEnabled
+  );
+  const companySearchPending = () =>
+    typedCompanySearchValid() &&
+    (typedCompanySearch() !== companySearch() || serverCompanies.isLoading());
+  // Rows answering an earlier search stay only while they still match. A row
+  // keeps its object while its company is unchanged, so a further page does
+  // not remount the rows already listed.
+  const serverCompanyEntities = createMemo((previous: CombinedEntity[]) => {
+    if (!companySearchEnabled()) return [];
+    const term = typedCompanySearch();
+    const settled = companySearch() === term;
+    const rows = serverCompanies
+      .companies()
+      .map(
+        (company): CombinedEntity => ({
+          kind: 'entity',
+          id: company.id,
+          data: company,
+        })
+      )
+      .filter(
+        (entity) =>
+          settled || matchesTokenSubsequences(getEntitySearchText(entity), term)
+      );
+    return keepUnchangedRows(previous, rows);
+  }, []);
+
+  // Fetch emails for browsing whenever threads are allowed: THREAD alone,
+  // among several kinds, or any kind.
   const needsEmailSearch = () =>
-    props.config.specificEntityType === 'THREAD' ||
-    !props.config.specificEntityType;
+    allowsEntityType(props.config.specificEntityType, 'THREAD');
 
   const emailsQuery = createEmailsInfiniteQuery(() => ({ view: 'all' }), {
     disabled: () => !needsEmailSearch(),
   });
   const emails = () => emailsQuery.data ?? [];
 
-  // Server-side email search (query internally disables when < 3 chars)
+  // Server-side email search (query internally disables on blank text)
   const emailSearchQuery = useSearchSoupQuery(
     () => ({
       params: { page_size: 20 },
       body: {
-        query: searchTerm(),
+        query: search(),
         match_type: 'partial' as const,
         include: ['emails' as const],
         search_on: 'name' as const,
@@ -184,27 +346,109 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       .map((entity) => threadMapper(entity as EmailEntity));
   });
 
+  const emailSearchEnabled = () =>
+    needsEmailSearch() && validateSearchServiceText(search().trim());
+  const hasMore = () =>
+    quickAccess.hasMore() ||
+    (contactSearchEnabled() && serverContacts.hasMore()) ||
+    (companySearchEnabled() && serverCompanies.hasMore()) ||
+    (needsEmailSearch() &&
+      (emailsQuery.hasNextPage ||
+        (emailSearchEnabled() && emailSearchQuery.hasNextPage)));
+  const isLoadingMore = () =>
+    quickAccess.isLoadingMore() ||
+    (contactSearchEnabled() && serverContacts.isLoadingMore()) ||
+    (companySearchEnabled() && serverCompanies.isLoadingMore()) ||
+    (needsEmailSearch() &&
+      (emailsQuery.isFetchingNextPage || emailSearchQuery.isFetchingNextPage));
+  const paginationError = () => {
+    const quickAccessError = quickAccess.error();
+    if (quickAccessError) return quickAccessError;
+    const contactError = contactSearchEnabled()
+      ? serverContacts.error()
+      : undefined;
+    if (contactError) return contactError;
+    const companyError = companySearchEnabled()
+      ? serverCompanies.error()
+      : undefined;
+    if (companyError) return companyError;
+    if (!needsEmailSearch()) return undefined;
+    if (emailsQuery.error) return emailsQuery.error;
+    return emailSearchEnabled() ? emailSearchQuery.error : undefined;
+  };
+  const loadNextPages = async () => {
+    const requests: Promise<unknown>[] = [];
+    if (quickAccess.hasMore() && !quickAccess.isLoadingMore()) {
+      requests.push(quickAccess.loadMore());
+    }
+    if (
+      contactSearchEnabled() &&
+      serverContacts.hasMore() &&
+      !serverContacts.isLoadingMore()
+    ) {
+      requests.push(serverContacts.loadMore());
+    }
+    if (
+      companySearchEnabled() &&
+      serverCompanies.hasMore() &&
+      !serverCompanies.isLoadingMore()
+    ) {
+      requests.push(serverCompanies.loadMore());
+    }
+    if (needsEmailSearch()) {
+      if (emailsQuery.hasNextPage && !emailsQuery.isFetchingNextPage) {
+        requests.push(emailsQuery.fetchNextPage());
+      }
+      if (
+        emailSearchEnabled() &&
+        emailSearchQuery.hasNextPage &&
+        !emailSearchQuery.isFetchingNextPage
+      ) {
+        requests.push(emailSearchQuery.fetchNextPage());
+      }
+    }
+    await Promise.all(requests);
+  };
+
   const isLoadingEntities = createMemo(() => {
+    if (props.config.users) return false;
     if (needsEmailSearch()) {
       return (
         emailsQuery.isLoading ||
         emailsQuery.isPending ||
-        emailSearchQuery.isFetching
+        emailSearchQuery.isFetching ||
+        contactSearchPending() ||
+        companySearchPending()
       );
     }
-    return isQuickAccessLoading();
+    return (
+      isQuickAccessLoading() || contactSearchPending() || companySearchPending()
+    );
   });
 
-  // Convert quickAccess items to CombinedEntity format
-  const entities = createMemo((): CombinedEntity[] => {
-    const specificEntityType = props.config.specificEntityType;
-
-    // An explicit user pool replaces the quick-access people list.
-    if (specificEntityType === 'USER' && props.config.users) {
-      return props.config
-        .users()
-        .map((user) => userToEntity(augmentUserWithDmActivity(user)));
+  // An explicit user pool replaces Quick Access options.
+  const scopedUserEntities = createMemo(() => {
+    if (props.config.specificEntityType !== 'USER' || !props.config.users) {
+      return undefined;
     }
+    return [
+      ...props.config.users(),
+      ...(props.config.additionalUsers?.() ?? []),
+    ].map((user) => userToEntity(augmentUserWithDmActivity(user)));
+  });
+
+  const pinnedUsers = usePinnedContactUsers(
+    props.selectedOptions,
+    () =>
+      allowsEntityType(props.config.specificEntityType, 'USER') &&
+      !props.config.users
+  );
+
+  // Convert quickAccess items to CombinedEntity format.
+  const entities = createMemo((): CombinedEntity[] => {
+    const scoped = scopedUserEntities();
+    if (scoped) return scoped;
+    const specificEntityType = props.config.specificEntityType;
 
     // For THREAD type, use email data (not in quickAccess yet)
     if (specificEntityType === 'THREAD') {
@@ -213,10 +457,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
-    const additionalUsers =
-      specificEntityType === 'USER'
-        ? (props.config.additionalUsers?.() ?? [])
-        : [];
+    const additionalUsers = [
+      ...new Map(
+        [
+          ...(specificEntityType === 'USER'
+            ? (props.config.additionalUsers?.() ?? [])
+            : []),
+          ...pinnedUsers(),
+        ].map((user) => [user.id, user])
+      ).values(),
+    ];
     const converted: CombinedEntity[] = additionalUsers.map(userToEntity);
     const additionalIds = new Set(additionalUsers.map((user) => user.id));
 
@@ -229,18 +479,25 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       } else {
         const entity = quickAccessItemToEntity(item);
         const entityType = getEntityType(entity);
-        if (
-          entityType &&
-          (!specificEntityType || entityType === specificEntityType)
-        ) {
+        const matches =
+          !specificEntityType ||
+          (Array.isArray(specificEntityType)
+            ? entityType && specificEntityType.includes(entityType)
+            : entityType === specificEntityType);
+        if (entityType && matches) {
           converted.push(entity);
         }
       }
     }
 
-    // For generic entity type, also include emails
-    if (!specificEntityType) {
-      converted.push(...emails().map(threadMapper));
+    // Where threads are one of the allowed kinds, add the email browse list.
+    if (allowsEntityType(specificEntityType, 'THREAD')) {
+      const listed = new Set(converted.map((entity) => entity.id));
+      converted.push(
+        ...emails()
+          .map(threadMapper)
+          .filter((entity) => !listed.has(entity.id))
+      );
     }
 
     return converted;
@@ -265,6 +522,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return userToEntity({ id: emailToId(email), email, name: email });
   };
 
+  const rosterSearch = createRosterSearch(currentUserDomain, currentUserId);
   const entitySearch = createFreshSearch<CombinedEntity>({
     config: createEntitySearchConfig(currentUserDomain, currentUserId),
     getName: getEntitySearchText,
@@ -273,16 +531,21 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const filteredEntities = createMemo(() => {
-    const term = searchTerm();
+    const term = search();
     const excludedIds = props.config.excludedIds?.();
     const allEntities = entities().filter(
       (entity) => !excludedIds?.has(entity.id)
     );
     const userId = currentUserId();
 
-    // List is unvirtualized — revisit if these caps grow significantly.
-    const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
-    const MAX_SEARCH_RESULTS = 20;
+    // Keep explicit rosters bounded; query-backed pages grow only on request.
+    const maxLocalResults = getMaxLocalResults(
+      props.config.specificEntityType === 'USER' && !!props.config.users,
+      !!term,
+      allEntities.length +
+        serverEmails().length +
+        serverCompanyEntities().length
+    );
 
     // Filter out the current entity when selecting same entity type
     const blockId = selfFilterBlockId();
@@ -292,29 +555,92 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           !(getEntityType(e) === currentEntityType && e.id === blockId)
       : () => true;
 
+    const address = inputValue().trim();
+    if (props.config.allowCustomEmail && EmailValidator.validate(address)) {
+      // A complete address is an identity, not a display-name alias. It must
+      // never redirect a calendar invitation to another person's mailbox.
+      return allEntities
+        .filter(excludeFilter)
+        .filter(
+          (entity) =>
+            entity.kind === 'user' &&
+            entity.data.email.toLowerCase() === address.toLowerCase()
+        );
+    }
+
+    if (props.config.specificEntityType === 'USER' && !props.config.users) {
+      const eligible = allEntities.filter(excludeFilter);
+      const byId = new Map(eligible.map((entity) => [entity.id, entity]));
+      const page = quickAccessItems().flatMap((item) => {
+        const entity = byId.get(item.id);
+        return entity ? [entity] : [];
+      });
+      const pageIds = new Set(page.map((entity) => entity.id));
+      const extras = eligible.filter((entity) => !pageIds.has(entity.id));
+      // Selected/scoped extras remain independent; personal windows retain the
+      // storage order and eligibility rather than being rescored or capped.
+      return [
+        ...page,
+        ...(term ? entitySearch(extras, term).map(({ item }) => item) : extras),
+      ];
+    }
+
+    const eligibleById = new Map(
+      allEntities.filter(excludeFilter).map((entity) => [entity.id, entity])
+    );
+    const personal = quickAccessItems().flatMap((item) => {
+      if (item.kind !== 'user' || item.personOrder === undefined) return [];
+      const entity = eligibleById.get(item.id);
+      return entity ? [entity] : [];
+    });
     // Get visible entities based on search
     // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
-    const localResults = term
-      ? entitySearch(allEntities, term)
-          .slice(0, MAX_SEARCH_RESULTS)
-          .map((result) => result.item)
-          .filter(excludeFilter)
-      : sortEntitiesWithSelfFirst(
-          allEntities.filter(excludeFilter),
-          userId
-        ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+    let localResults: CombinedEntity[];
+    if (term && props.config.users) {
+      localResults = capPeople(
+        rankAgentsAfterPeople(
+          rosterSearch(allEntities.filter(excludeFilter), term),
+          (entity) => entity.id
+        ),
+        (entity) => entity.id,
+        maxLocalResults
+      );
+    } else if (term) {
+      localResults = entitySearch(allEntities, term)
+        .slice(0, maxLocalResults)
+        .map((result) => result.item)
+        .filter(excludeFilter);
+    } else {
+      const ordered = sortEntitiesWithSelfFirst(
+        allEntities.filter(excludeFilter),
+        userId
+      );
+      localResults = props.config.users
+        ? capPeople(ordered, (entity) => entity.id, maxLocalResults)
+        : ordered.slice(0, maxLocalResults);
+    }
 
-    // For THREAD or generic entity: merge local + server results
-    if (needsEmailSearch() && term) {
+    // Server matches (email threads, companies) follow the local results.
+    const serverMatches = term
+      ? [
+          ...(needsEmailSearch() ? serverEmails() : []),
+          ...serverCompanyEntities(),
+        ]
+      : [];
+    if (serverMatches.length > 0 || (needsEmailSearch() && term)) {
       const localIds = new Set(localResults.map((e) => e.id));
-      const serverResults = serverEmails()
+      const serverResults = serverMatches
         .filter((entity) => !excludedIds?.has(entity.id))
         .filter((e) => !localIds.has(e.id))
         .filter(excludeFilter);
-      return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);
+      return preserveOrderedWindow(
+        [...localResults, ...serverResults].slice(0, maxLocalResults),
+        personal,
+        (entity) => entity.id
+      );
     }
 
-    return localResults;
+    return preserveOrderedWindow(localResults, personal, (entity) => entity.id);
   });
 
   // Sort entities with selected items first when not searching. Self is
@@ -323,23 +649,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const sortedEntities = useSelectedFirst({
     items: filteredEntities,
     allItems: entities,
-    selectedIds: props.selectedOptions,
-    searchQuery: searchTerm,
+    selectedIds: () => openedSelectedIds,
+    searchQuery: search,
     getId: (e: CombinedEntity) => e.id,
   });
 
-  const openedSelectedIds = new Set(props.selectedOptions());
-  const selectedEntityCountAtOpen = createMemo(() => {
-    if (!props.config.isMultiSelect || searchTerm()) return 0;
-    return sortedEntities().filter((entity) => openedSelectedIds.has(entity.id))
-      .length;
-  });
-  const shouldShowSelectedDivider = (index: number) =>
-    selectedEntityCountAtOpen() > 0 &&
-    selectedEntityCountAtOpen() < sortedEntities().length &&
-    index === selectedEntityCountAtOpen();
-
-  const toggleEntity = (entity: CombinedEntity) => {
+  const toggleEntity = (entity: CombinedEntity, custom = false) => {
     const entityType = getEntityType(entity);
     if (!entityType) return;
     const newSelected = new Set(props.selectedOptions());
@@ -356,6 +671,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       if (!isCurrentlySelected) newSelected.add(entity.id);
     }
 
+    if (!isCurrentlySelected && entity.kind === 'user') {
+      props.onUserSelected?.(
+        {
+          id: entity.data.id,
+          email: entity.data.email,
+          name: entity.data.name,
+        },
+        custom
+      );
+    }
     props.setSelectedOptions(newSelected, [
       {
         id: entity.id,
@@ -373,13 +698,78 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
   };
 
-  const totalCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
+  const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
 
-  // Reset selected index to top when search term or list changes
-  createEffect(() => {
-    searchTerm(); // track search term changes
-    totalCount(); // track list size changes
-    setSelectedIndex(0);
+  // Hold the row the user moved to by identity while pages are added around
+  // it; a new search releases it.
+  const highlight = createSelectionAnchor({
+    items: sortedEntities,
+    key: (entity) => entity.id,
+    scope: search,
+    selectedIndex,
+    setSelectedIndex,
+  });
+  // A new search moves the highlight and the list to the top; a further page
+  // listed below keeps both where the user put them.
+  createEffect(
+    on(
+      search,
+      () => {
+        setSelectedIndex(0);
+        if (scrollContainerRef) scrollContainerRef.scrollTop = 0;
+      },
+      { defer: true }
+    )
+  );
+  let previousWindow: string | undefined;
+  createEffect(
+    on(quickAccess.windowKey, (key) => {
+      if (!key) return;
+      if (previousWindow && key !== previousWindow) {
+        setSelectedIndex(0);
+        if (scrollContainerRef) scrollContainerRef.scrollTop = 0;
+      }
+      previousWindow = key;
+    })
+  );
+  const loadNext = () => fireAndForget(loadNextPages(), 'property-picker');
+  // Read each failed source again: a failed later email page is the next one
+  // still to fetch, and a failed first page is read from the start.
+  const retryEmailPages = (query: {
+    data?: unknown[];
+    error: unknown;
+    fetchNextPage: () => Promise<unknown>;
+    refetch: () => Promise<unknown>;
+  }) => {
+    if (!query.error) return undefined;
+    return query.data?.length ? query.fetchNextPage() : query.refetch();
+  };
+  const retryPages = () =>
+    fireAndForget(
+      Promise.all([
+        quickAccess.error() ? quickAccess.retry() : undefined,
+        contactSearchEnabled() && serverContacts.error()
+          ? serverContacts.retry()
+          : undefined,
+        companySearchEnabled() && serverCompanies.error()
+          ? serverCompanies.retry()
+          : undefined,
+        needsEmailSearch() ? retryEmailPages(emailsQuery) : undefined,
+        emailSearchEnabled() ? retryEmailPages(emailSearchQuery) : undefined,
+      ]),
+      'property-picker'
+    );
+  // Further pages load as the end of the list scrolls into view. With no rows
+  // listed, the sentinel sits below the empty list and keeps reading pages
+  // until one matches or the sources end. A failed page waits for Retry. The
+  // sentinel opts out of scroll anchoring: as the anchor, it would be held in
+  // view while each page lands above it, and every page would load the next.
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => hasMore() && !paginationError(),
+    isFetchingNextPage: isLoadingMore,
+    fetchNextPage: loadNext,
   });
 
   // Scroll the selected row into view during keyboard navigation
@@ -393,78 +783,105 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    // Another field on the page keeps its own keys.
-    if (
-      e.target !== searchInputRef &&
-      e.target instanceof Element &&
-      isEditableInput(e.target)
-    )
+    if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      (props.onCancel ?? props.onClose)?.();
       return;
-
-    const total = totalCount();
+    }
+    if (e.key === 'PageDown' && hasMore()) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isLoadingMore()) loadNext();
+      return;
+    }
+    const total = resultCount();
     if (total === 0) return;
 
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % total);
+      setSelectedIndex((prev) => (Math.min(prev, total - 1) + 1) % total);
+      highlight.hold();
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + total) % total);
+      setSelectedIndex(
+        (prev) => (Math.min(prev, total - 1) - 1 + total) % total
+      );
+      highlight.hold();
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const idx = selectedIndex();
+      const idx = Math.min(selectedIndex(), total - 1);
       if (idx < sortedEntities().length) {
         const entity = sortedEntities()[idx];
         if (entity) toggleEntity(entity);
       } else {
         const entity = customEmailEntity();
-        if (entity) toggleEntity(entity);
+        if (entity) toggleEntity(entity, true);
       }
     }
+    if (e.defaultPrevented) e.stopPropagation();
   };
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown);
-  });
-
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown);
-  });
 
   useSearchInputFocus(() => searchInputRef);
 
   const fills = () => props.config.fillHeight === true;
+  const inSheet = () => props.presentation === 'sheet';
   const keepSearchFocus = (event: Event) => event.preventDefault();
+
+  const selectedEntityCountAtOpen = createMemo(() => {
+    if (!props.config.isMultiSelect || searchTerm()) return 0;
+
+    return sortedEntities().filter((entity) =>
+      openedSelectedIds.includes(entity.id)
+    ).length;
+  });
+  const shouldShowSelectedDivider = (index: number) => {
+    const selectedCount = selectedEntityCountAtOpen();
+    if (selectedCount === 0) return false;
+    if (selectedCount === sortedEntities().length) return false;
+
+    return index === selectedCount;
+  };
 
   return (
     <div class={cn(fills() && 'flex min-h-0 flex-1 flex-col')}>
       <div class="relative shrink-0">
-        <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
-          <SearchIcon class="size-4 text-ink-muted" />
+        <div
+          class={cn(
+            'flex w-full items-center gap-2',
+            inSheet() ? 'px-4 pb-4' : 'py-2 px-2 border-b border-edge-muted'
+          )}
+        >
+          <Show when={!inSheet()}>
+            <SearchIcon class="size-4 text-ink-muted" />
+          </Show>
           <input
-            class="w-full caret-accent"
+            class={
+              inSheet()
+                ? inputClasses({ class: 'min-h-11' })
+                : 'w-full caret-accent'
+            }
+            aria-label={props.config.placeholder}
             ref={searchInputRef}
             type="text"
             value={inputValue()}
             onInput={(e) => setInputValue(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                (props.onCancel ?? props.onClose)?.();
-              }
-            }}
+            // Handle picker navigation before the enclosing dropdown consumes it.
+            onKeyDown={handleKeyDown}
             placeholder={props.config.placeholder}
           />
         </div>
       </div>
-
-      <Show when={totalCount() > 0}>
+      <Show when={resultCount() > 0}>
         {/* Picking a row keeps focus in the search field: a tap that moved
-            it would drop the phone keyboard until the refocus below. iOS
-            devices still send mousedown after a cancelled pointerdown. */}
+          it would drop the phone keyboard until the refocus below. iOS
+          devices still send mousedown after a cancelled pointerdown. */}
         <div
-          class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}
+          class={cn(
+            inSheet() ? 'px-4' : 'p-1.5',
+            fills() && 'flex min-h-0 flex-1 flex-col'
+          )}
           onPointerDown={keepSearchFocus}
           onMouseDown={keepSearchFocus}
         >
@@ -487,32 +904,54 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
                   return (
                     <>
-                      <Show when={shouldShowSelectedDivider(index())}>
+                      <Show
+                        when={!inSheet() && shouldShowSelectedDivider(index())}
+                      >
                         <div class="my-1 border-t border-edge-muted" />
                       </Show>
                       <div
                         data-entity-index={index()}
+                        role={inSheet() ? 'checkbox' : undefined}
+                        aria-checked={inSheet() ? isSelected() : undefined}
+                        tabIndex={inSheet() ? 0 : undefined}
                         class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
                         classList={{
                           'bg-hover': isKeyboardSelected(),
                         }}
                         onClick={() => toggleEntity(entity)}
-                        onKeyDown={(e) =>
-                          e.key === 'Enter' && toggleEntity(entity)
-                        }
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === 'Enter' ||
+                            (inSheet() && event.key === ' ')
+                          ) {
+                            event.preventDefault();
+                            toggleEntity(entity);
+                          }
+                        }}
                         onMouseEnter={() => {
                           if (!keyboardMode()) {
                             setSelectedIndex(index());
+                            highlight.hold();
                           }
                         }}
                       >
                         <Show when={props.config.isMultiSelect}>
                           <div class="shrink-0 flex">
-                            <OptionCheckBox
-                              checked={isSelected()}
-                              multiselect
-                              visible={props.config.visibleCheckboxes}
-                            />
+                            <Show
+                              when={inSheet()}
+                              fallback={
+                                <OptionCheckBox
+                                  checked={isSelected()}
+                                  multiselect
+                                  visible={props.config.visibleCheckboxes}
+                                />
+                              }
+                            >
+                              <InlineCheckbox
+                                checked={isSelected()}
+                                size="md"
+                              />
+                            </Show>
                           </div>
                         </Show>
                         <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -522,6 +961,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                               fallback={
                                 <UserIcon
                                   id={entity.id}
+                                  name={
+                                    entity.kind === 'user'
+                                      ? entity.data.name
+                                      : undefined
+                                  }
                                   size="sm"
                                   isDeleted={false}
                                   suppressClick={true}
@@ -580,6 +1024,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   );
                 }}
               </For>
+              <Show when={hasMore()}>
+                <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+              </Show>
             </div>
           </Show>
           <Show when={customEmail()}>
@@ -594,7 +1041,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   }}
                   onClick={() => {
                     const next = entity();
-                    if (next) toggleEntity(next);
+                    if (next) toggleEntity(next, true);
                   }}
                   onMouseEnter={() => {
                     if (!keyboardMode()) setSelectedIndex(rowIndex());
@@ -609,6 +1056,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     <div class="size-4 shrink-0 flex items-center">
                       <UserIcon
                         id={emailToId(email())}
+                        name={email()}
                         size="sm"
                         isDeleted={false}
                         suppressClick={true}
@@ -623,12 +1071,44 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </Show>
 
-      <Show when={totalCount() === 0}>
-        <div class="text-center py-4 text-ink-muted text-sm">
-          <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
-            No {getEntityTypePluralLabel(props.config.specificEntityType)} found
-          </Show>
+      <Show when={paginationError()}>
+        <div role="status" class="px-2 py-2 text-xs text-ink-muted">
+          {t('common.optionsUnavailable')}
         </div>
+      </Show>
+      <Show when={resultCount() === 0 && !paginationError()}>
+        {props.emptyState !== undefined ? (
+          props.emptyState
+        ) : (
+          <div class="text-center py-4 text-ink-muted text-sm">
+            <Show
+              when={!isLoadingEntities() && !hasMore()}
+              fallback={<span>Loading...</span>}
+            >
+              {props.config.emptyMessage ??
+                `No ${getEntityTypePluralLabel(props.config.specificEntityType)} found`}
+            </Show>
+          </div>
+        )}
+      </Show>
+      <Show when={sortedEntities().length === 0 && hasMore()}>
+        <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+      </Show>
+      <Show when={isLoadingMore()}>
+        <div role="status" class="px-2 py-2 text-xs text-ink-muted">
+          {t('common.loadingOptions')}
+        </div>
+      </Show>
+      <Show when={paginationError()}>
+        <Button
+          variant="ghost"
+          class="w-full"
+          disabled={isLoadingMore()}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={retryPages}
+        >
+          {t('viewMenus.retryOptions')}
+        </Button>
       </Show>
     </div>
   );

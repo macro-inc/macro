@@ -1,4 +1,3 @@
-import { toast } from '@core/component/Toast/Toast';
 import { createWebsocketEventEffect } from '@macro-inc/collaboration/websocket';
 import type { UploadFolderStatusUpdate } from '@service-connection/generated/schemas/uploadFolderStatusUpdate';
 import type { FromWebsocketMessage } from './websocket';
@@ -7,55 +6,35 @@ import { ws } from './websocket';
 const BULK_UPLOAD_WEBSOCKET_EVENT = 'bulk_upload';
 type BulkUploadEventType = FromWebsocketMessage['type'];
 
-// Store upload results by requestId
-const uploadResults: Map<string, string | undefined> = new Map();
+type BulkUploadListener = (update: UploadFolderStatusUpdate) => void;
 
-// Max wait time for upload status (folders can take a while)
-const MAX_UPLOAD_WAIT_MS = 300000; // 5 minutes
-const POLL_INTERVAL_MS = 100; // Check every 100ms
-const RESULT_CLEANUP_DELAY_MS = 10000; // Keep results for 10 seconds after receiving
+const listeners: Map<string, BulkUploadListener> = new Map();
+
+// A result can arrive before its uploader subscribes; keep it briefly.
+const earlyResults: Map<string, UploadFolderStatusUpdate> = new Map();
+const EARLY_RESULT_LIFETIME_MS = 10000;
 
 /**
- * Wait for a folder upload to complete and return the projectId
- * @param requestId The request ID from the folder upload
- * @returns Promise that resolves to projectId if successful, undefined if failed/timeout
+ * Calls `listener` with the folder upload's result when the server pushes it.
+ * Returns the unsubscribe function.
  */
-export function waitBulkUploadStatus(
-  requestId: string
-): Promise<string | undefined> {
-  // If result already exists, return it immediately
-  if (uploadResults.has(requestId)) {
-    const result = uploadResults.get(requestId);
-    return Promise.resolve(result);
+export function subscribeBulkUploadResult(
+  requestId: string,
+  listener: BulkUploadListener
+): () => void {
+  const early = earlyResults.get(requestId);
+  if (early) {
+    earlyResults.delete(requestId);
+    listener(early);
+    return () => {};
   }
 
-  return new Promise<string | undefined>((resolve) => {
-    let pollInterval: ReturnType<typeof setInterval> | undefined;
-    let nullTimeout: ReturnType<typeof setTimeout> | undefined;
-
-    // Set timeout to resolve with undefined if nothing arrives
-    nullTimeout = setTimeout(() => {
-      if (pollInterval) clearInterval(pollInterval);
-      console.error('timed out waiting for upload result', requestId);
-      toast.alert('Upload is taking a while. Try refreshing the page');
-      resolve(undefined);
-    }, MAX_UPLOAD_WAIT_MS);
-
-    // Poll for results at regular intervals
-    pollInterval = setInterval(() => {
-      if (uploadResults.has(requestId)) {
-        const result = uploadResults.get(requestId);
-
-        if (nullTimeout) clearTimeout(nullTimeout);
-        if (pollInterval) clearInterval(pollInterval);
-
-        resolve(result);
-      }
-    }, POLL_INTERVAL_MS);
-  });
+  listeners.set(requestId, listener);
+  return () => {
+    if (listeners.get(requestId) === listener) listeners.delete(requestId);
+  };
 }
 
-// Handle bulk upload status updates (global handler for toasts and refetching)
 createWebsocketEventEffect<
   BulkUploadEventType,
   FromWebsocketMessage & { type: BulkUploadEventType }
@@ -63,38 +42,22 @@ createWebsocketEventEffect<
   try {
     const update: UploadFolderStatusUpdate = JSON.parse(wsData.data);
 
-    let projectId: string | undefined;
-    switch (update.status) {
-      case 'partially_completed':
-        projectId = update.projectId;
-        toast.alert('Some files in the folder could not be uploaded');
-        break;
-      case 'completed':
-        projectId = update.projectId;
-        break;
-      case 'failed':
-        break;
-      case 'unknown':
-        // it may or may not have completed, so refetch resources anyway
-        break;
-      default:
-        console.warn('unhandled bulk upload status', update);
-        break;
-    }
-
     const requestId = update.requestId;
     if (!requestId) {
       console.error('got upload result without requestId', update);
       return;
     }
 
-    // Store the result for waiters to pick up
-    uploadResults.set(requestId, projectId);
+    const listener = listeners.get(requestId);
+    if (listener) {
+      listener(update);
+      return;
+    }
 
-    // Clean up result after delay to prevent memory leak
+    earlyResults.set(requestId, update);
     setTimeout(() => {
-      uploadResults.delete(requestId);
-    }, RESULT_CLEANUP_DELAY_MS);
+      earlyResults.delete(requestId);
+    }, EARLY_RESULT_LIFETIME_MS);
   } catch (e) {
     console.warn('unable to parse bulk upload status update', e);
   }

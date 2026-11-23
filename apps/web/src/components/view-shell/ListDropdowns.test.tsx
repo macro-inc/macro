@@ -11,10 +11,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SearchableMultiSelect } from '../../features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { Dropdown } from '../ui/components/Dropdown';
 import type { AiFilterOutcome } from './AiFilterInput';
-import { ListFilterCountBadge, ListFilterDropdown } from './ListDropdowns';
+import { ListFilterDropdown } from './ListDropdowns';
 
 // Exercise the actual menus/comboboxes without initializing the app UI barrel.
 vi.mock('@ui', async () => ({
+  ...(await import('../ui/components/Badge')),
   ...(await import('../ui/components/Button')),
   ...(await import('../ui/components/ButtonGroup')),
   ...(await import('../ui/utils/classname')),
@@ -142,13 +143,13 @@ it('toggles checkboxes without closing a multiselect submenu', async () => {
 });
 
 it.each(['Alice', 'Bob'])(
-  'adds a row without removing existing selections and closes (%s)',
+  'toggles a clicked row without touching other selections or closing (%s)',
   async (name) => {
     const { selected, open } = setup(false, false, ['alice']);
     await openSubmenu();
     selectOption(await screen.findByRole('menuitemcheckbox', { name }));
-    expect(selected()).toEqual(name === 'Alice' ? ['alice'] : ['alice', 'bob']);
-    await waitFor(() => expect(open()).toBe(false));
+    expect(selected()).toEqual(name === 'Alice' ? [] : ['alice', 'bob']);
+    expect(open()).toBe(true);
   }
 );
 
@@ -192,7 +193,7 @@ function clickSearchOption(element: HTMLElement, shiftKey: boolean) {
   }
 }
 
-it('searchable checkboxes toggle while Shift-click and Only replace the selection without closing', async () => {
+it('searchable rows and checkboxes toggle while Shift-click and Only replace the selection, all without closing', async () => {
   const { selected, open } = setup(false, true);
   await openSubmenu();
   const alice = await screen.findByRole('option', { name: 'Alice' });
@@ -215,9 +216,11 @@ it('searchable checkboxes toggle while Shift-click and Only replace the selectio
   fireEvent.click(screen.getByRole('button', { name: 'Select only Carol' }));
   expect(selected()).toEqual(['carol']);
   expect(open()).toBe(true);
+  clickSearchOption(screen.getByRole('option', { name: 'Alice' }), false);
+  await waitFor(() => expect(selected()).toEqual(['carol', 'alice']));
   clickSearchOption(screen.getByRole('option', { name: 'Carol' }), false);
-  await waitFor(() => expect(open()).toBe(false));
-  expect(selected()).toEqual(['carol']);
+  await waitFor(() => expect(selected()).toEqual(['alice']));
+  expect(open()).toBe(true);
 });
 
 it.each([false, true])(
@@ -391,7 +394,7 @@ it('Enter closes the entire searchable filter menu after applying the selection'
 });
 
 it.each(['pointer', 'keyboard'])(
-  'standalone searchable filters keep exclusive selection open and add on ordinary selection (%s)',
+  'standalone searchable filters keep exclusive selection open; Enter adds and closes, a click toggles in place (%s)',
   async (method) => {
     const [selected, setSelected] = createSignal<string[]>([]);
     const [open, setOpen] = createSignal(true);
@@ -426,10 +429,15 @@ it.each(['pointer', 'keyboard'])(
       // Choosing an option clears the search; highlight the next choice again.
       fireEvent.keyDown(input, { key: 'ArrowDown' });
       fireEvent.keyDown(input, { key: 'Enter' });
-    } else
+      await waitFor(() => expect(open()).toBe(false));
+      expect(selected()).toEqual(['alice']);
+    } else {
+      clickSearchOption(screen.getByRole('option', { name: 'Bob' }), false);
+      await waitFor(() => expect(selected()).toEqual(['alice', 'bob']));
       clickSearchOption(screen.getByRole('option', { name: 'Alice' }), false);
-    await waitFor(() => expect(open()).toBe(false));
-    expect(selected()).toEqual(['alice']);
+      await waitFor(() => expect(selected()).toEqual(['bob']));
+      expect(open()).toBe(true);
+    }
   }
 );
 
@@ -504,6 +512,12 @@ it('runs a searchable action once and closes without changing the selected optio
       <Combobox.Trigger>People</Combobox.Trigger>
     </SearchableMultiSelect>
   ));
+  fireEvent.input(await screen.findByPlaceholderText('Search...'), {
+    target: { value: 'no-match' },
+  });
+  await waitFor(() =>
+    expect(screen.queryByRole('option', { name: 'Alice' })).toBeNull()
+  );
   clickSearchOption(
     await screen.findByRole('option', { name: 'Connect account' }),
     true
@@ -961,14 +975,65 @@ it('ties each group row to its id rather than its position', async () => {
   expect(screen.getByRole('menuitem', { name: 'Assignee' })).toBe(assigneeRow);
 });
 
-it('shows the applied filter count only while filters are active', () => {
+it('shows the applied filter count inside the trigger only while filters are active', () => {
   const [count, setCount] = createSignal(0);
-  const { container } = render(() => <ListFilterCountBadge count={count()} />);
-  expect(container.textContent).toBe('');
+  render(() => (
+    <ListFilterDropdown
+      label="Filter tasks"
+      activeCount={count()}
+      groups={[]}
+      isSelected={() => false}
+      onSelectionChange={() => {}}
+    />
+  ));
+  const trigger = screen.getByRole('button', { name: 'Filter tasks' });
+  expect(trigger.textContent).toBe('');
 
-  setCount(2);
-  expect(container.textContent).toBe('2');
+  setCount(12);
+  expect(trigger.textContent).toBe('12');
 
   setCount(0);
-  expect(container.textContent).toBe('');
+  expect(trigger.textContent).toBe('');
+});
+
+it('offers typed text no option lists and adds it to the selection', async () => {
+  const [selected, setSelected] = createSignal<string[]>(['alice']);
+  render(() => (
+    <ListFilterDropdown
+      label="Filter email"
+      open
+      groups={[
+        {
+          id: 'people',
+          label: 'Assignee',
+          searchPlaceholder: 'Search people...',
+          options: [{ id: 'alice', label: 'Alice' }],
+          createOption: (query) =>
+            query.includes('@')
+              ? { id: query, label: `Add “${query}”` }
+              : undefined,
+        },
+      ]}
+      isSelected={(_, id) => selected().includes(id)}
+      selectedIds={() => selected()}
+      onSelectionChange={() => {}}
+      onGroupSelectionChange={(_, ids) => setSelected([...ids])}
+    />
+  ));
+  await openSubmenu();
+  const input = await screen.findByPlaceholderText('Search people...');
+  fireEvent.input(input, { target: { value: 'ada' } });
+  expect(screen.queryByRole('option', { name: /Add/ })).toBeNull();
+
+  fireEvent.input(input, { target: { value: 'ada@example.com' } });
+  clickSearchOption(
+    await screen.findByRole('option', { name: 'Add “ada@example.com”' }),
+    false
+  );
+
+  expect(selected()).toEqual(['alice', 'ada@example.com']);
+
+  fireEvent.input(input, { target: { value: 'bo@example.com' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(selected()).toEqual(['alice', 'ada@example.com', 'bo@example.com']);
 });

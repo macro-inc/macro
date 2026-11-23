@@ -7,4 +7,5 @@ publish = false
 [dependencies]
 anyhow = { workspace = true }
 async-openai = { workspace = true }
+genai_telemetry = { path = "../genai_telemetry" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -7,16 +7,14 @@ version = "0.2.0"
 [features]
 default = ["openai"]
 openai = ["dep:async-openai"]
-toolset = ["dep:ai_billing", "dep:ai_toolset", "dep:async-trait", "dep:anyhow", "dep:ai_usage"]
 
 [dev-dependencies]
-macro_user_id = { path = "../macro_user_id" }
 rand = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 
 
 [dependencies]
-ai_billing = { path = "../ai_billing", optional = true }
+genai_telemetry = { path = "../genai_telemetry" }
 tokio = { workspace = true, features = ["sync"]}
 async-stream = { workspace = true }
 futures = { workspace = true }
@@ -32,9 +30,4 @@ tokio-stream = { workspace = true }
 async-openai = { workspace = true, optional = true}
 chrono.workspace = true
 lazy_static = {workspace = true}
-regex = { workspace = true }
-ai_toolset = { path = "../ai_toolset", optional = true }
-ai_usage = { path = "../ai_usage", optional = true }
-async-trait = { workspace = true, optional = true }
-anyhow = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

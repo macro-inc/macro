@@ -1,4 +1,4 @@
-import type { ProjectPreviewData } from '@service-storage/generated/schemas';
+import type { FolderPreview } from '@queries/storage/project-preview';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import {
   QueryClient,
@@ -8,16 +8,22 @@ import {
 import { type Accessor, createComponent, Suspense } from 'solid-js';
 import { insert } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
+import { KnownFoldersProvider } from '../context/known-folders';
+import type { KnownFolder } from '../utils/folder-path';
 import { ProjectBreadCrumb } from './ProjectBreadCrumb';
 
-const request = vi.hoisted(() => vi.fn<() => Promise<ProjectPreviewData>>());
+const request = vi.hoisted(() => vi.fn<() => Promise<FolderPreview>>());
 
 vi.mock('@queries/storage/project-preview', () => ({
-  useProjectPreviewQuery: (projectId: Accessor<string>) =>
+  useProjectPreviewQuery: (
+    projectId: Accessor<string>,
+    enabled: Accessor<boolean> = () => true
+  ) =>
     useQuery(() => ({
       queryKey: ['project-preview', projectId()],
       queryFn: request,
       retry: false,
+      enabled: enabled(),
     })),
 }));
 
@@ -27,7 +33,7 @@ afterEach(() => {
 });
 
 it('keeps the list mounted and scrolled while a folder preview resolves', async () => {
-  const response = Promise.withResolvers<ProjectPreviewData>();
+  const response = Promise.withResolvers<FolderPreview>();
   request.mockReturnValue(response.promise);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -104,7 +110,7 @@ it('keeps the list mounted and scrolled while a folder preview resolves', async 
 });
 
 it('keeps a failed preview non-interactive without suspending the list', async () => {
-  const response = Promise.withResolvers<ProjectPreviewData>();
+  const response = Promise.withResolvers<FolderPreview>();
   request.mockReturnValue(response.promise);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -149,5 +155,52 @@ it('keeps a failed preview non-interactive without suspending the list', async (
   expect(view.container.contains(fallback)).toBe(false);
   view.getByRole('button').click();
   expect(onClick).not.toHaveBeenCalled();
+  client.clear();
+});
+
+it('shows a page of nested folder rows from the known folders without a request per row', () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const folders: KnownFolder[] = [
+    { id: 'root', name: 'Clients', parentId: null, ownerId: 'owner' },
+    { id: 'archive', name: 'Archive 01', parentId: 'root', ownerId: 'owner' },
+    ...Array.from({ length: 20 }, (_, index) => ({
+      id: `quarter-${index}`,
+      name: `Q${index}`,
+      parentId: 'archive',
+      ownerId: 'owner',
+    })),
+  ];
+  const known = new Map(folders.map((folder) => [folder.id, folder]));
+
+  const view = render(() =>
+    createComponent(QueryClientProvider, {
+      client,
+      get children() {
+        return createComponent(KnownFoldersProvider, {
+          value: () => known,
+          get children() {
+            return Array.from({ length: 20 }, (_, index) =>
+              createComponent(ProjectBreadCrumb, {
+                entity: {
+                  type: 'project',
+                  id: `row-${index}`,
+                  name: `Row ${index}`,
+                  ownerId: 'owner',
+                  projectId: `quarter-${index}`,
+                },
+              })
+            );
+          },
+        });
+      },
+    })
+  );
+
+  expect(request).not.toHaveBeenCalled();
+  expect(
+    view.getByRole('button', { name: 'Clients/Archive 01/Q7' })
+  ).toBeTruthy();
   client.clear();
 });

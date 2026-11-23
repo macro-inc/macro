@@ -5,6 +5,10 @@ import type { CacheRequest } from './protocol';
 export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.wasm_download',
   'graphql_cache.wasm_compile',
+  // The page's download and compile ahead of its engine worker, which may
+  // never start: a follower tab's compile is dropped unused.
+  'graphql_cache.wasm_prefetch_download',
+  'graphql_cache.wasm_prefetch_compile',
   'graphql_cache.wasm_instantiate',
   'graphql_cache.schema_init',
   'graphql_cache.db_ready',
@@ -16,6 +20,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.transaction',
   'graphql_cache.read',
   'graphql_cache.slow_query',
+  'graphql_cache.slow_request',
   'graphql_cache.owner',
   'graphql_cache.stale_drop',
   'graphql_cache.lock_wait',
@@ -27,6 +32,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.origin_storage_pressure',
   'graphql_cache.linear_memory',
   'graphql_cache.queue_diagnostics',
+  'graphql_cache.wal_checkpoint',
   'graphql_cache.navigation',
   'graphql_cache.aggregate',
 ] as const;
@@ -104,6 +110,7 @@ export const CACHE_ERROR_CODES = [
   'opfs-quota',
   'opfs-io',
   'lock',
+  'superseded',
   'owner-lost',
   'protocol',
   'transport',
@@ -160,6 +167,89 @@ export const CACHE_ROLLOUT_COHORTS = [
 ] as const;
 export type CacheRolloutCohort = (typeof CACHE_ROLLOUT_COHORTS)[number];
 
+/**
+ * Error types a cache failure is recorded with. Engine, browser and storage
+ * errors name their type; anything else is `other`. Types never carry data.
+ */
+export const CACHE_ERROR_NAMES = [
+  'Error',
+  'RuntimeError',
+  'CompileError',
+  'LinkError',
+  'RangeError',
+  'TypeError',
+  'ReferenceError',
+  'SyntaxError',
+  'AbortError',
+  'TimeoutError',
+  'QuotaExceededError',
+  'NotFoundError',
+  'NotAllowedError',
+  'NotReadableError',
+  'NoModificationAllowedError',
+  'InvalidStateError',
+  'InvalidModificationError',
+  'SecurityError',
+  'DataError',
+  'OperationError',
+  'UnknownError',
+  'other',
+] as const;
+export type CacheErrorName = (typeof CACHE_ERROR_NAMES)[number];
+
+/**
+ * Known engine and browser failures, recognized from fixed phrases in the
+ * message so the message itself is never exported.
+ */
+export const CACHE_ERROR_DETAILS = [
+  'out-of-memory',
+  'unreachable',
+  'memory-out-of-bounds',
+  'stack-overflow',
+  'indirect-call',
+  'worker-terminated',
+  'fetch-failed',
+  'disk-full',
+  'other',
+] as const;
+export type CacheErrorDetail = (typeof CACHE_ERROR_DETAILS)[number];
+
+/** Every engine request kind, so a new kind fails to compile until listed. */
+const CACHE_REQUEST_KINDS: Readonly<Record<CacheRequest['kind'], true>> = {
+  init: true,
+  read: true,
+  'current-revision': true,
+  'read-records-by-keys': true,
+  search: true,
+  'people-search': true,
+  'people-references': true,
+  'people-sql': true,
+  'contact-snapshot': true,
+  'people-context': true,
+  'entity-filter': true,
+  'calendar-range': true,
+  write: true,
+  hydrate: true,
+  'calendar-commit': true,
+  'people-update': true,
+  'contact-reconcile': true,
+  'enqueue-optimistic-mutation': true,
+  'claim-next-mutation': true,
+  'defer-optimistic-write': true,
+  'commit-optimistic-write': true,
+  'rollback-optimistic-write': true,
+  'inspect-query': true,
+  'inspect-query-variants': true,
+  invalidate: true,
+  'delete-records': true,
+  teardown: true,
+  clear: true,
+  'current-storage-generation': true,
+  'current-authority': true,
+  'transition-authority': true,
+  'inspect-mutations': true,
+};
+
 export type CacheTelemetryObservation = {
   name: CacheTelemetryEventName;
   /** Original fixed event name represented by an aggregate envelope. */
@@ -167,6 +257,8 @@ export type CacheTelemetryObservation = {
   operationCategory: CacheOperationCategory;
   outcome?: CacheTelemetryOutcome;
   errorCode?: CacheErrorCode;
+  errorName?: CacheErrorName;
+  errorDetail?: CacheErrorDetail;
   resetReason?: CacheResetReason;
   ownerEvent?: CacheOwnerEvent;
   persistence?: 'granted' | 'denied' | 'unknown';
@@ -186,6 +278,12 @@ export type CacheTelemetryObservation = {
   sampleRate?: number;
   queueDepth?: number;
   oldestAgeMs?: number;
+  /** Frames in the WAL when a checkpoint ran (`graphql_cache.wal_checkpoint`). */
+  walFrames?: number;
+  /** The engine request a `slow_request` timed; a fixed protocol name. */
+  requestKind?: CacheRequest['kind'];
+  /** How long a `slow_request` waited in the engine queue before it ran. */
+  queueWaitMs?: number;
 };
 
 /** The only cohort/browser/backend dimensions permitted on exported events. */
@@ -251,6 +349,14 @@ function sanitizeObservation(
     ...(input.errorCode !== undefined &&
     CACHE_ERROR_CODES.includes(input.errorCode)
       ? { errorCode: input.errorCode }
+      : {}),
+    ...(input.errorName !== undefined &&
+    CACHE_ERROR_NAMES.includes(input.errorName)
+      ? { errorName: input.errorName }
+      : {}),
+    ...(input.errorDetail !== undefined &&
+    CACHE_ERROR_DETAILS.includes(input.errorDetail)
+      ? { errorDetail: input.errorDetail }
       : {}),
     ...(input.resetReason !== undefined &&
     CACHE_RESET_REASONS.includes(input.resetReason)
@@ -318,6 +424,16 @@ function sanitizeObservation(
       : {}),
     ...(boundedNumber(input.oldestAgeMs, 31_536_000_000) !== undefined
       ? { oldestAgeMs: boundedNumber(input.oldestAgeMs, 31_536_000_000) }
+      : {}),
+    ...(boundedNumber(input.walFrames) !== undefined
+      ? { walFrames: boundedNumber(input.walFrames) }
+      : {}),
+    ...(typeof input.requestKind === 'string' &&
+    Object.hasOwn(CACHE_REQUEST_KINDS, input.requestKind)
+      ? { requestKind: input.requestKind }
+      : {}),
+    ...(boundedNumber(input.queueWaitMs, 3_600_000) !== undefined
+      ? { queueWaitMs: boundedNumber(input.queueWaitMs, 3_600_000) }
       : {}),
   };
 }
@@ -514,11 +630,23 @@ export function operationCategoryForRequest(
       'current-revision',
       'read-records-by-keys',
       'search',
+      'people-search',
+      'people-references',
+      'people-sql',
+      'contact-snapshot',
+      'people-context',
       'entity-filter',
       'calendar-range',
       () => 'read' as const
     )
-    .with('write', 'hydrate', 'calendar-commit', () => 'write' as const)
+    .with(
+      'write',
+      'hydrate',
+      'calendar-commit',
+      'people-update',
+      'contact-reconcile',
+      () => 'write' as const
+    )
     .with(
       'enqueue-optimistic-mutation',
       'claim-next-mutation',
@@ -537,6 +665,8 @@ export function operationCategoryForRequest(
       'teardown',
       'clear',
       'current-storage-generation',
+      'current-authority',
+      'transition-authority',
       'inspect-mutations',
       () => 'lifecycle' as const
     )
@@ -549,6 +679,7 @@ export function isStorageTransactionRequest(
   return [
     'write',
     'hydrate',
+    'people-update',
     'calendar-commit',
     'enqueue-optimistic-mutation',
     'claim-next-mutation',
@@ -598,6 +729,62 @@ export function classifyCacheError(error: unknown): CacheErrorCode {
     return 'initialization';
   }
   return 'unknown';
+}
+
+const ERROR_DETAIL_PATTERNS: ReadonlyArray<
+  readonly [RegExp, CacheErrorDetail]
+> = [
+  [/out of memory|could not allocate|allocation failed|oom\b/, 'out-of-memory'],
+  [/unreachable/, 'unreachable'],
+  [/memory access out of bounds|out of bounds memory/, 'memory-out-of-bounds'],
+  [/call stack|too much recursion|stack overflow/, 'stack-overflow'],
+  [/indirect call|null function|function signature mismatch/, 'indirect-call'],
+  [/worker (was )?terminated|worker.*(crash|died)/, 'worker-terminated'],
+  [/failed to fetch|networkerror|load failed/, 'fetch-failed'],
+  [/no space|disk (is )?full/, 'disk-full'],
+];
+
+function errorNameOf(error: unknown): CacheErrorName | undefined {
+  const name =
+    error instanceof Error || error instanceof DOMException
+      ? error.name
+      : typeof error === 'string'
+        ? /^(\w+(?:Error|Exception))\b/.exec(error)?.[1]
+        : undefined;
+  if (name === undefined) return;
+  return (CACHE_ERROR_NAMES as readonly string[]).includes(name)
+    ? (name as CacheErrorName)
+    : 'other';
+}
+
+function errorDetailOf(error: unknown): CacheErrorDetail | undefined {
+  const message =
+    error instanceof Error || error instanceof DOMException
+      ? error.message.toLowerCase()
+      : typeof error === 'string'
+        ? error.toLowerCase()
+        : '';
+  if (!message) return;
+  return (
+    ERROR_DETAIL_PATTERNS.find(([pattern]) => pattern.test(message))?.[1] ??
+    'other'
+  );
+}
+
+/**
+ * Describes a failure for cache telemetry: its class, its type, and the known
+ * engine failure it names, each from a fixed list. The message never leaves.
+ */
+export function describeCacheError(
+  error: unknown
+): Pick<CacheTelemetryObservation, 'errorCode' | 'errorName' | 'errorDetail'> {
+  const errorName = errorNameOf(error);
+  const errorDetail = errorDetailOf(error);
+  return {
+    errorCode: classifyCacheError(error),
+    ...(errorName === undefined ? {} : { errorName }),
+    ...(errorDetail === undefined ? {} : { errorDetail }),
+  };
 }
 
 export function resetReasonForError(error: unknown): CacheResetReason {
@@ -657,6 +844,8 @@ export function isCacheTelemetryObservation(
       'operationCategory',
       'outcome',
       'errorCode',
+      'errorName',
+      'errorDetail',
       'resetReason',
       'ownerEvent',
       'persistence',
@@ -675,6 +864,9 @@ export function isCacheTelemetryObservation(
       'sampleRate',
       'queueDepth',
       'oldestAgeMs',
+      'walFrames',
+      'requestKind',
+      'queueWaitMs',
     ].includes(key)
   );
 }

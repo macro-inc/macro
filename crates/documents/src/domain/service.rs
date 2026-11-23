@@ -1,6 +1,7 @@
 //! Document service implementation.
 
 mod content_events;
+mod lifecycle;
 
 #[cfg(test)]
 mod tests;
@@ -23,8 +24,9 @@ use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use unicode_segmentation::UnicodeSegmentation;
 
-use activity::{Actor, Attribution};
+use activity::{Actor, AppearanceUpdate, Attribution};
 use anyhow::anyhow;
+use chrono::Utc;
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use connection::domain::models::{InvalidationEvent, InvalidationReason};
 use connection::domain::ports::ConnectionService;
@@ -50,6 +52,7 @@ use s3_key::{
     build_docx_to_pdf_converted_document_key, document_key_url_path,
 };
 use tracing;
+use uuid::Uuid;
 
 use crate::domain::models::{
     ASSIGNEES_PROPERTY_ID, InitialLinkShare, NOT_STARTED_STATUS_OPTION_ID, PropertyInput,
@@ -708,6 +711,65 @@ impl<
         });
     }
 
+    async fn import_email_attachment_unlogged(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        validate_spreadsheet_creation(args.document.file_type, &args.document.sha)?;
+        if args.document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
+            return Err(DocumentError::NameTooLong {
+                max: MAX_DOCUMENT_NAME_GRAPHEMES,
+            });
+        }
+
+        // Imports reuse documents by attachment and content, so their ids are
+        // always server-chosen and never meet an existing session.
+        if args.document.id.is_some() {
+            return Err(DocumentError::BadRequest(
+                "email attachment imports cannot choose a document id".to_string(),
+            ));
+        }
+
+        let file_type = args.document.file_type;
+        let project_id = args.document.project_id;
+        let dates = DocumentDates::of(&args.document);
+        let sha = args.document.sha.clone();
+        let attribution = Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
+
+        let owner_team = self
+            .repo
+            .get_owner_team(&Owner::User(args.owner.clone()))
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let share_permission = SharePermissionV2::new_document_share_permission(
+            file_type,
+            owner_team.map(|team| team.default_link_share),
+        );
+
+        match self
+            .repo
+            .import_email_attachment_document(args, share_permission)
+            .await?
+        {
+            EmailImportRepoOutcome::Created(document_metadata) => {
+                self.finish_created_document(
+                    document_metadata,
+                    file_type,
+                    project_id,
+                    dates,
+                    sha,
+                    attribution,
+                    None,
+                )
+                .await
+            }
+            EmailImportRepoOutcome::Reused(document_metadata) => {
+                self.reused_email_import_response(document_metadata, file_type, &sha)
+                    .await
+            }
+        }
+    }
+
     async fn reused_email_import_response(
         &self,
         document_metadata: DocumentMetadata,
@@ -1074,6 +1136,76 @@ impl<
         }
 
         Ok(document_id)
+    }
+
+    #[tracing::instrument(err, skip(self, receipt))]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance.validate().map_err(DocumentError::BadRequest)?;
+        let id = &receipt.entity().entity_id;
+        let document = self
+            .repo
+            .get_basic_document(id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if document.deleted_at.is_some()
+            || document.try_file_type() != Some(FileType::Md)
+            || !matches!(
+                document.sub_type,
+                None | Some(document_sub_type::DocumentSubType::Snippet)
+            )
+        {
+            return Err(DocumentError::BadRequest(
+                "appearance requires an ordinary Markdown document or snippet".into(),
+            ));
+        }
+        let PublishedDocumentActors {
+            actor,
+            on_behalf_of,
+            actor_user_id,
+        } = published_document_actors(receipt.auth());
+        let update = AppearanceUpdate {
+            appearance: appearance.clone(),
+            attribution: match receipt.auth() {
+                EntityAccessAuth::Authenticated(user) => {
+                    Some(Attribution::direct(Actor::new_from_user(user.clone())))
+                }
+                EntityAccessAuth::Bot(bot) => Some(Attribution::new(
+                    Actor::new_from_bot(bot.bot_id()),
+                    bot.scope().acting_user_id().cloned(),
+                )),
+                EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+            },
+            event_id: Uuid::now_v7(),
+            occurred_at: Utc::now(),
+        };
+        if let Some(previous) = self
+            .repo
+            .set_appearance(id, &update)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?
+        {
+            self.publish_document_event(&DocumentMacroEvent::updated(
+                id.clone(),
+                DocumentUpdatedMetadata {
+                    appearance_change: Some([previous, appearance.clone()]),
+                    document_id: id.clone(),
+                    owner: document.owner,
+                    actor,
+                    on_behalf_of,
+                    actor_user_id,
+                    document_name: None,
+                    previous_project_id: None,
+                    project_id: None,
+                    file_type: None,
+                    share_permission_updated: false,
+                },
+            ));
+        }
+        Ok(appearance)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1648,64 +1780,19 @@ impl<
         .await
     }
 
-    #[tracing::instrument(err, skip(self, args))]
+    #[tracing::instrument(skip(self, args))]
     async fn import_email_attachment(
         &self,
         args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        validate_spreadsheet_creation(args.document.file_type, &args.document.sha)?;
-        if args.document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
-            return Err(DocumentError::NameTooLong {
-                max: MAX_DOCUMENT_NAME_GRAPHEMES,
-            });
-        }
-
-        // Imports reuse documents by attachment and content, so their ids are
-        // always server-chosen and never meet an existing session.
-        if args.document.id.is_some() {
-            return Err(DocumentError::BadRequest(
-                "email attachment imports cannot choose a document id".to_string(),
-            ));
-        }
-
-        let file_type = args.document.file_type;
-        let project_id = args.document.project_id;
-        let dates = DocumentDates::of(&args.document);
-        let sha = args.document.sha.clone();
-        let attribution = Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
-
-        let owner_team = self
-            .repo
-            .get_owner_team(&Owner::User(args.owner.clone()))
+        // A deleted attachment is an expected outcome, not a failure.
+        self.import_email_attachment_unlogged(args)
             .await
-            .map_err(|e| DocumentError::Internal(e.into()))?;
-        let share_permission = SharePermissionV2::new_document_share_permission(
-            file_type,
-            owner_team.map(|team| team.default_link_share),
-        );
-
-        match self
-            .repo
-            .import_email_attachment_document(args, share_permission)
-            .await?
-        {
-            EmailImportRepoOutcome::Created(document_metadata) => {
-                self.finish_created_document(
-                    document_metadata,
-                    file_type,
-                    project_id,
-                    dates,
-                    sha,
-                    attribution,
-                    None,
-                )
-                .await
-            }
-            EmailImportRepoOutcome::Reused(document_metadata) => {
-                self.reused_email_import_response(document_metadata, file_type, &sha)
-                    .await
-            }
-        }
+            .inspect_err(|error| {
+                if !matches!(error, DocumentError::EmailAttachmentNotFound) {
+                    tracing::error!(error = ?error, "email attachment import failed");
+                }
+            })
     }
 
     #[tracing::instrument(err, skip(self, document_context, args))]
@@ -1816,32 +1903,38 @@ impl<
 
         // Update project modified timestamps. args.project_id of None means "no change",
         // so only move the document out of its old project when a different project (or
-        // "" for no project) was explicitly requested.
+        // "" for no project) was explicitly requested. A document whose id isn't a UUID
+        // holds no grant rows: it reads its folders' grants, so it has none to move.
+        let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).ok();
         if let Some(new_project_id) = &args.project_id
             && let Some(old_project_id) = &document_context.project_id
             && new_project_id != old_project_id
             && !old_project_id.is_empty()
         {
-            let old_project_id = uuid::Uuid::parse_str(old_project_id).unwrap();
-            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
-            let _ = self
-                .entity_access_management_service
-                .remove_entity_from_project(&document_uuid, EntityType::Document, &old_project_id)
-                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
-            let _ = self.repo.update_project_modified(&old_project_id.to_string()).await.inspect_err(
+            if let (Some(document_uuid), Ok(old_project_id)) =
+                (document_uuid, uuid::Uuid::parse_str(old_project_id))
+            {
+                let _ = self
+                    .entity_access_management_service
+                    .remove_entity_from_project(&document_uuid, EntityType::Document, &old_project_id)
+                    .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
+            }
+            let _ = self.repo.update_project_modified(old_project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),
             );
         }
         if let Some(project_id) = &args.project_id
             && !project_id.is_empty()
         {
-            let project_id = uuid::Uuid::parse_str(project_id).unwrap();
-            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
-            let _ = self
-                .entity_access_management_service
-                .add_entity_to_project(&document_uuid, EntityType::Document, &project_id)
-                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
-            let _ = self.repo.update_project_modified(&project_id.to_string()).await.inspect_err(
+            if let (Some(document_uuid), Ok(project_id)) =
+                (document_uuid, uuid::Uuid::parse_str(project_id))
+            {
+                let _ = self
+                    .entity_access_management_service
+                    .add_entity_to_project(&document_uuid, EntityType::Document, &project_id)
+                    .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
+            }
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }
@@ -1869,6 +1962,7 @@ impl<
         self.publish_document_event(&DocumentMacroEvent::updated(
             entity_access_receipt.entity().entity_id.clone(),
             DocumentUpdatedMetadata {
+                appearance_change: None,
                 document_id: entity_access_receipt.entity().entity_id.clone(),
                 owner: document_context.owner.clone(),
                 actor_user_id,
@@ -2318,7 +2412,7 @@ impl<
     }
 
     /// Assigns the task properties to a document
-    #[tracing::instrument(skip(self, request), err)]
+    #[tracing::instrument(skip_all, fields(document_id = %document_id), err)]
     async fn handle_task_properties(
         &self,
         principal: &CreationPrincipal,
@@ -2351,11 +2445,13 @@ impl<
                 .collect::<Vec<_>>()
         };
 
+        let mut assigned = std::collections::HashSet::new();
         for property_input in properties {
             let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
                 tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
                 continue;
             };
+            assigned.insert(property_uuid);
 
             let _ = self
                 .task_properties_service
@@ -2371,6 +2467,29 @@ impl<
                             error=?e,
                             property_uuid=?property_uuid,
                             "unable to set entity property")
+                });
+        }
+
+        // An empty selected field still belongs to the task. Persist its assignment
+        // so every authorized viewer reads the definition through this entity,
+        // rather than depending on the creator's personal definition list.
+        for definition_id in request.pinned_property_definition_ids.iter().flatten() {
+            let Ok(property_uuid) = uuid::Uuid::parse_str(definition_id) else {
+                continue;
+            };
+            if !assigned.insert(property_uuid) {
+                continue;
+            }
+            let _ = self
+                .task_properties_service
+                .set_entity_property(principal, document_id, property_uuid, None)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        error = ?error,
+                        property_uuid = %property_uuid,
+                        "unable to assign empty task property"
+                    );
                 });
         }
 

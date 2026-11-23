@@ -8,12 +8,16 @@ use rootcause::Report;
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::models::{FocusInbox, FocusMail, FocusRecord, StaleThread, ThreadFocus};
+use super::models::{
+    DueDateInput, FocusInbox, FocusInboxOwner, FocusMail, FocusRecord, StaleThread, ThreadDates,
+    ThreadFocus,
+};
 
 /// Focus storage and the thread reads classification needs.
 pub trait FocusStore: Send + Sync + 'static {
-    /// Where a thread lives and how it stands, or `None` when it no longer
-    /// exists. A single-row read: every email event starts here.
+    /// Where a thread lives, who its inbox is linked to and how it stands, or
+    /// `None` when it no longer exists. A single-row read: every email event
+    /// starts here.
     fn thread_inbox(
         &self,
         thread_id: Uuid,
@@ -29,22 +33,34 @@ pub trait FocusStore: Send + Sync + 'static {
     /// already stored. Returns whether it was stored.
     fn save(&self, record: &FocusRecord) -> impl Future<Output = Result<bool, Report>> + Send;
 
-    /// Inbox threads that may belong in Focus with mail since `since` and no
-    /// classification of their latest message under the current rule, newest
-    /// first, from inboxes whose address is at one of `domains`. `after` is the
-    /// last thread of the previous page.
+    /// Threads of inbox `link_id` that may belong in Focus with mail since
+    /// `since` and no classification of their latest message under the current
+    /// rule, newest first. `after` is the last thread of the previous page.
     fn stale_threads(
         &self,
+        link_id: Uuid,
         since: DateTime<Utc>,
-        domains: &[String],
         after: Option<StaleThread>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<StaleThread>, Report>> + Send;
 
+    /// Inboxes holding a Focus thread, with their owners and the users they are
+    /// linked to: inboxes classified before, which may still be in the rollout.
+    fn inboxes_with_focus(
+        &self,
+    ) -> impl Future<Output = Result<Vec<FocusInboxOwner>, Report>> + Send;
+
+    /// Every inbox whose mail is syncing, with its owner and the users it is
+    /// linked to: where a person who joins the rollout is found before any mail
+    /// of theirs arrives.
+    fn syncing_inboxes(&self) -> impl Future<Output = Result<Vec<FocusInboxOwner>, Report>> + Send;
+
     /// The owner's Focus threads still in the inbox with mail since `since`,
-    /// newest first by latest message time, in either direction. Threads whose
-    /// owner has been awaiting a reply since at or before `waiting_before` count,
-    /// as do threads a calendar change still holds at `now`.
+    /// newest first by latest message time, in either direction. The owner's own
+    /// latest message takes a thread out; one awaiting a reply comes back once
+    /// that message is at or before `waiting_before`, or once its due day has
+    /// begun at `now`. Threads a calendar change still holds at `now` count, and
+    /// none counts once the event its classified mail is about is over at `now`.
     fn focus_thread_ids(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -55,10 +71,11 @@ pub trait FocusStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Classifications of the owner's threads among `thread_ids`, as they stand
-    /// at `now`: who wrote last settles the labels, a thread whose owner has been
-    /// awaiting a reply since at or before `waiting_before` is in Focus, one a
-    /// calendar change still holds is in Focus as Calendar, and importance has moved
-    /// at its stored rate since the classified message, until newer mail stops it.
+    /// at `now`, by the same tests as `focus_thread_ids`: who wrote last settles
+    /// the labels, a thread back after the wait or on its due day needs a follow-up,
+    /// one a calendar change still holds is in Focus as Calendar, one whose event is
+    /// over is out, and importance has moved at its stored rate since the
+    /// classified message, until newer mail stops it.
     fn focus_for_threads(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -68,7 +85,8 @@ pub trait FocusStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<HashMap<Uuid, ThreadFocus>, Report>> + Send;
 }
 
-/// A short description of the owner that Jev reads as context.
+/// What the system holds about the owner: a short description Jev reads as
+/// context, and the time zone their days run in.
 pub trait ProfileSource: Send + Sync + 'static {
     /// The owner's stored profile, or `None` when there isn't one. Never
     /// generates a profile.
@@ -76,6 +94,25 @@ pub trait ProfileSource: Send + Sync + 'static {
         &self,
         owner: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
+
+    /// The IANA name of the owner's time zone, or `None` when none is stored.
+    fn time_zone(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
+}
+
+/// Who is in the Focus rollout. The worker counts someone in only while they
+/// use Macro (`email_focus_worker`'s `ActiveEnrollment`), so nobody away
+/// has mail classified, backfilled or swept.
+pub trait FocusEnrollment: Send + Sync + 'static {
+    /// Whether `user` is in the rollout, which classifies every inbox whose
+    /// Focus tab they see: their own and those linked to them. An error leaves
+    /// the answer unknown, and nothing is classified on it until it is known.
+    fn is_enrolled(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
 }
 
 /// Tells the people reading an inbox that its Focus changed.
@@ -97,6 +134,17 @@ pub enum FocusClassifierError {
     Rejected,
 }
 
+/// Which work a classification is for, so the classifier can pace it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassifierLane {
+    /// Mail that just arrived: answered at once, ahead of everything else.
+    Live,
+    /// A backfill or sweep working through an inbox's older mail: waits its
+    /// turn so it neither crowds out live mail nor overruns the model's rate
+    /// limits.
+    Background,
+}
+
 /// Yes/no answers about a thread, metered against its owner.
 pub trait FocusClassifier: Send + Sync + 'static {
     /// The probability of "yes" for each question, in question order.
@@ -106,8 +154,21 @@ pub trait FocusClassifier: Send + Sync + 'static {
         thread_id: Uuid,
         input: &Value,
         questions: &[&'static str],
+        lane: ClassifierLane,
     ) -> impl Future<Output = Result<Vec<f32>, FocusClassifierError>> + Send;
 
     /// Model identifier stored with each classification.
     fn model(&self) -> &'static str;
+}
+
+/// Reads the days a thread's mail names, metered against its owner.
+pub trait DueDateExtractor: Send + Sync + 'static {
+    /// The day the thread is due, when its mail names an open deadline, and the
+    /// day of the meeting it is about, in one read. Errors carry no mail text.
+    fn dates(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        input: &DueDateInput,
+    ) -> impl Future<Output = Result<ThreadDates, Report>> + Send;
 }

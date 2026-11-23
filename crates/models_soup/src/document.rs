@@ -53,6 +53,9 @@ impl SoupDocumentSubType {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupDocument<T = ()> {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// The document id
     pub id: Uuid,
 

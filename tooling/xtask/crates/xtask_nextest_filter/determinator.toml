@@ -3,13 +3,17 @@ use-default-rules = false
 [[path-rule]]
 globs = ["static_assets/**"]
 mark-changed = [
-  "cache-core",
+  "cache-diff-fuzz",
+  "cache-schema",
+  "cache-wasm",
   "collab_surface",
   "complete_graph",
   "documents",
   "graphql_calendar",
   "seed_cli",
+  "xtask_email_coverage",
   "xtask_graphql_schema_compat",
+  "xtask_local",
   "xtask_workflows",
 ]
 

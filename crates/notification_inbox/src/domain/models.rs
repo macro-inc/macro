@@ -6,6 +6,10 @@ use attention_feed::domain::models::{
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
+use notification::domain::bulk_action::BulkActionLease;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -13,8 +17,10 @@ mod test;
 
 /// The kinds of inbox row, which callers can narrow the inbox to. Kinds are
 /// added as the inbox learns new sources; callers present a kind they do not
-/// know as a generic row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// know as a generic row. A stored clear keeps the kinds it takes by their
+/// serialized names, so a kind's name never changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum InboxRowType {
     /// An agent session's or AI chat's latest response or question.
     Agent,
@@ -42,10 +48,36 @@ pub enum InboxRowType {
     CalendarEvent,
     /// A request to join a calendar event the viewer shared.
     CalendarJoinRequest,
+    /// An agent's request for access to a vault item the viewer manages.
+    PasswordAccessRequested,
     /// A request for access to something the viewer can share.
     AccessRequested,
     /// Access the viewer requested was granted.
     AccessGranted,
+    /// The viewer's access to a runtime was removed, and agents of theirs
+    /// living there stopped.
+    AccessRemoved,
+}
+
+impl InboxRowType {
+    /// Every kind of row.
+    pub const ALL: [Self; 15] = [
+        Self::Agent,
+        Self::Email,
+        Self::ChannelMention,
+        Self::ChannelMessages,
+        Self::ChannelThread,
+        Self::DiscussionMention,
+        Self::DiscussionMessages,
+        Self::DiscussionThread,
+        Self::Task,
+        Self::PullRequest,
+        Self::CalendarEvent,
+        Self::CalendarJoinRequest,
+        Self::AccessRequested,
+        Self::AccessGranted,
+        Self::AccessRemoved,
+    ];
 }
 
 /// A row's identity: the group it belongs to and its slot in the group,
@@ -141,6 +173,12 @@ pub struct InboxRow {
     pub id: InboxRowId,
     /// The row's kind.
     pub row_type: InboxRowType,
+    /// Other kinds a scope lists the row under, because what the row shows
+    /// is that too: a thread whose reply mentions the viewer is also a
+    /// mention, a mention's thread with replies also a thread, comments that
+    /// mention the viewer are still comments, and a pull request or agent
+    /// session that mentions the viewer is also a discussion mention.
+    pub also_listed_as: Vec<InboxRowType>,
     /// For a thread row, the channel root message or discussion root comment.
     pub thread_id: Option<String>,
     /// Who the row is from, per its newest shown notification; `None` when
@@ -174,6 +212,14 @@ impl InboxRow {
     pub fn revision(&self) -> FeedRevision {
         FeedRevision::covering(self.all_notifications())
     }
+
+    /// Whether the row shows the notification and nothing else.
+    pub fn shows_only(&self, notification: Uuid) -> bool {
+        matches!(
+            self.notifications.as_slice(),
+            [only] if only.notification_id == notification
+        )
+    }
 }
 
 /// One group of the inbox: the matching rows of the notifications filed
@@ -195,12 +241,68 @@ pub struct InboxEntry<E> {
 pub struct InboxScope {
     /// The row kinds to include; empty means every kind.
     pub row_types: Vec<InboxRowType>,
+    /// Only unread rows, by each row's own unread rule (mail by its unread
+    /// messages). Pages, cursors and live changes are then over unread rows
+    /// alone, so a row read elsewhere leaves and one with new activity
+    /// returns.
+    pub unread_only: bool,
 }
 
 impl InboxScope {
-    /// Whether the scope lists rows of `row_type`.
-    pub fn admits(&self, row_type: InboxRowType) -> bool {
-        self.row_types.is_empty() || self.row_types.contains(&row_type)
+    /// Whether the scope lists `row`: one of its kinds, its own or another
+    /// it is listed as, is in the scope.
+    pub fn admits(&self, row: &InboxRow) -> bool {
+        let listed = self.row_types.is_empty()
+            || std::iter::once(&row.row_type)
+                .chain(&row.also_listed_as)
+                .any(|row_type| self.row_types.contains(row_type));
+        listed && (!self.unread_only || row.unseen)
+    }
+}
+
+/// Unread rows past which the groups of one entity type stop being counted.
+/// A count this high is shown as "99+", so the rest would be read for
+/// nothing.
+pub const UNREAD_ROWS_COUNTED: usize = 100;
+
+/// The unread rows of a viewer's inbox, by group, kept so that a change to
+/// some groups recounts those groups alone.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UnreadRows {
+    /// The kind of each unread row of every group that has one.
+    pub(crate) groups: HashMap<FeedKey, Vec<InboxRowType>>,
+    /// Entity types with more groups that may hold unread rows than were
+    /// read, because the ones read already hold [`UNREAD_ROWS_COUNTED`].
+    pub(crate) more: HashSet<EntityType>,
+}
+
+impl UnreadRows {
+    /// The unread rows of `groups`, each given the kinds of its unread rows.
+    pub fn of(groups: HashMap<FeedKey, Vec<InboxRowType>>) -> Self {
+        Self {
+            groups,
+            more: HashSet::new(),
+        }
+    }
+
+    /// How many unread rows there are of each kind that has any. A kind
+    /// whose groups were not all read counts the ones that were, which is
+    /// at least [`UNREAD_ROWS_COUNTED`] across that entity type's kinds.
+    pub fn counts(&self) -> HashMap<InboxRowType, u32> {
+        let mut counts = HashMap::new();
+        for row_type in self.groups.values().flatten() {
+            *counts.entry(*row_type).or_default() += 1;
+        }
+        counts
+    }
+
+    /// Unread rows in the groups filed under entities of `entity_type`.
+    pub(crate) fn rows_under(&self, entity_type: EntityType) -> usize {
+        self.groups
+            .iter()
+            .filter(|(group, _)| group.entity().entity_type == entity_type)
+            .map(|(_, rows)| rows.len())
+            .sum()
     }
 }
 
@@ -242,6 +344,107 @@ pub struct InboxRowTarget {
     /// The row's revision the caller observed; `None` acknowledges
     /// everything current.
     pub revision: Option<FeedRevision>,
+}
+
+/// A clear of an inbox: every matching row is marked done, chunk by chunk
+/// on the server.
+#[derive(Debug, Clone)]
+pub struct InboxClearRequest {
+    /// Which rows are cleared; an unread scope clears unread rows only. The
+    /// row kinds are named: a clear has no "every kind".
+    pub scope: InboxScope,
+    /// Clear only rows whose newest notification arrived at or after this
+    /// time; older groups end the clear.
+    pub since: Option<DateTime<Utc>>,
+}
+
+/// Where a clear is in its life.
+pub use notification::domain::bulk_action::BulkActionStatus as ClearStatus;
+
+/// A clear as stored: what it covers, frozen when it started, and how far
+/// it has got.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClearAction {
+    /// The clear's id, chosen by the caller.
+    pub id: Uuid,
+    /// Where it is in its life.
+    pub status: ClearStatus,
+    /// The rows it clears.
+    pub scope: InboxScope,
+    /// It clears only rows whose newest notification arrived at or after
+    /// this time.
+    pub since: Option<DateTime<Utc>>,
+    /// When it started. Notifications that arrived later are not cleared.
+    pub as_of: DateTime<Utc>,
+    /// Rows cleared so far.
+    pub rows: u32,
+    /// Notifications marked done so far.
+    pub notifications: u32,
+    /// Notifications an undo has reopened so far.
+    pub restored: u32,
+    /// Bumps on every change, so a reader can drop a stale copy.
+    pub revision: i64,
+}
+
+/// Which part of the inbox a clear's next chunk reads.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ClearPass {
+    /// The walk through the inbox, newest group first.
+    #[default]
+    Walk,
+    /// A second look at the groups new activity moved ahead of the walk
+    /// while it ran; their older notifications are still the clear's.
+    Recheck,
+}
+
+/// Where a clear's next chunk starts.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ClearCursor {
+    pub(crate) pass: ClearPass,
+    /// The encoded feed position to read after; `None` at a pass's start.
+    pub(crate) after: Option<String>,
+}
+
+/// The right to run a clear's remaining chunks, forward or as an undo.
+/// Whoever holds it runs it with `run_clear`; if they stop, the clear is
+/// claimed again once its lease runs out.
+#[derive(Debug, Clone)]
+pub struct ClearRun {
+    pub(crate) lease: BulkActionLease,
+    pub(crate) action: ClearAction,
+    pub(crate) cursor: ClearCursor,
+}
+
+impl ClearRun {
+    /// Whose inbox the clear belongs to.
+    pub fn user(&self) -> &MacroUserIdStr<'static> {
+        &self.lease.user_id
+    }
+
+    /// The clear.
+    pub fn action(&self) -> &ClearAction {
+        &self.action
+    }
+}
+
+/// A clear or undo that was asked for.
+#[derive(Debug, Clone)]
+pub struct StartedClear {
+    /// The clear as it stands.
+    pub action: ClearAction,
+    /// The work to run, when this request started it. `None` when the
+    /// request repeated one already made.
+    pub run: Option<ClearRun>,
+}
+
+/// The outcome of marking one notification of a row done.
+#[derive(Debug)]
+pub struct InboxNotificationDoneOutcome<E> {
+    /// The row's group in the caller's inbox, now without the notification.
+    pub changes: Vec<InboxChange<E>>,
+    /// What the operation changed, for undo.
+    pub receipt: DoneReceipt,
 }
 
 /// The outcome of marking rows done.

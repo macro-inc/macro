@@ -17,6 +17,9 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::Arc;
 
+#[cfg(test)]
+mod test;
+
 /// Errors from MCP tool dispatch.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -26,6 +29,10 @@ pub enum Error {
     /// A tool invocation failed.
     #[error("tool call failed: {0}")]
     ToolCall(String),
+    /// The turn was cancelled before the server answered; the server may
+    /// still have done the work.
+    #[error("Stopped before the tool replied; the server may still have completed it.")]
+    Cancelled,
 }
 
 /// One live server and the name its tools are exposed under.
@@ -48,11 +55,28 @@ pub struct ListedServer {
     pub client: Arc<McpServer>,
     /// Tools `tools/list` already returned for `client`.
     pub tools: Vec<Tool>,
+    /// Whether calls carry the caller's trace context to this server.
+    pub trace_context: TraceContext,
+}
+
+/// Whether this toolset puts the caller's W3C trace context in each call's
+/// `_meta` (SEP-414), so the server's work joins the caller's trace.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraceContext {
+    /// A server we run in this process's trace: the harness's internal MCP.
+    Propagate,
+    /// Any other server: this toolset adds nothing to its requests. (Calls
+    /// that go through the egress proxy get context from the proxy's own
+    /// upstream exchange.)
+    Withhold,
 }
 
 struct RegisteredTool {
     peer: Peer<RoleClient>,
     tool: Tool,
+    /// The name the server was registered under, before mangling.
+    server: Arc<str>,
+    trace_context: TraceContext,
 }
 
 /// Dispatches tool calls to connected MCP servers using name-mangled routing.
@@ -115,6 +139,7 @@ impl RemoteMcpToolSet {
                 &server_name,
                 Arc::new(client),
                 server_tools,
+                TraceContext::Withhold,
                 &subject,
             );
         }
@@ -141,6 +166,7 @@ impl RemoteMcpToolSet {
                 &server.name,
                 server.client,
                 server.tools,
+                server.trace_context,
                 &subject,
             );
         }
@@ -150,6 +176,16 @@ impl RemoteMcpToolSet {
             _connections: connections,
             subject,
         }))
+    }
+
+    /// The name of the server a mangled tool name reaches, as it was
+    /// registered. Unlike the name's server segment, which another server's
+    /// name can sanitize or truncate to, this says which server it is.
+    pub fn server_of(&self, mangled: &str) -> Option<&str> {
+        self.0
+            .tools
+            .get(&MangledName(mangled.to_owned()))
+            .map(|entry| &*entry.server)
     }
 
     /// Returns `true` when no tools were discovered.
@@ -210,7 +246,14 @@ impl RemoteMcpToolSet {
             .get(&key)
             .ok_or_else(|| Error::UnknownTool(name.to_owned()))?;
 
-        let params = CallToolRequestParams::new(entry.tool.name.clone()).with_arguments(arguments);
+        let mut params =
+            CallToolRequestParams::new(entry.tool.name.clone()).with_arguments(arguments);
+        if entry.trace_context == TraceContext::Propagate {
+            genai_telemetry::propagation::inject_mcp(
+                &tracing::Span::current(),
+                params.meta.get_or_insert_with(Default::default),
+            );
+        }
 
         entry
             .peer
@@ -226,8 +269,10 @@ fn register_server(
     server_name: &str,
     client: Arc<McpServer>,
     server_tools: Vec<Tool>,
+    trace_context: TraceContext,
     subject: &Option<String>,
 ) {
+    let server: Arc<str> = server_name.into();
     for tool in server_tools {
         let Mangled {
             name: mangled,
@@ -260,6 +305,8 @@ fn register_server(
             RegisteredTool {
                 peer: client.peer().clone(),
                 tool,
+                server: Arc::clone(&server),
+                trace_context,
             },
         );
     }
@@ -270,7 +317,7 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
     fn dispatch_tool_call<'a>(
         &'a self,
         _context: Context,
-        _request_context: RequestContext,
+        request_context: RequestContext,
         tool_name: &'a str,
         json: &'a serde_json::Value,
     ) -> Pin<
@@ -282,7 +329,15 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
                 _ => serde_json::Map::new(),
             };
 
-            let result = match self.call_tool(tool_name, arguments).await {
+            // The agent loop waits for running tools on cancel, and a server
+            // may hold a call indefinitely (owner approval). Dropping the call
+            // sends `notifications/cancelled`, so the server stops too.
+            let call = tokio::select! {
+                biased;
+                () = request_context.cancel.cancelled() => Err(Error::Cancelled),
+                result = self.call_tool(tool_name, arguments) => result,
+            };
+            let result = match call {
                 Ok(result) => result,
                 Err(Error::UnknownTool(name)) => {
                     return Err(ToolSetError::NotFound(name));

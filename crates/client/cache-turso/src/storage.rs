@@ -1,4 +1,4 @@
-use crate::driver;
+use crate::driver::{self, Db, WalCheckpoint, WalPosition};
 use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
@@ -21,7 +21,8 @@ use cache_core::queue::{
 };
 use cache_core::search::{
     QUICK_ACCESS_PROJECTION_VERSION, QUICK_ACCESS_TYPENAMES, SearchCursor, SearchDocument,
-    SearchProfile, project_search_documents,
+    SearchDocumentRef, SearchProfile, SearchQuery, project_encoded_search_documents,
+    project_search_documents,
 };
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
@@ -30,10 +31,11 @@ use predicate_index::{
     Profile, RangeBound, RecordKey as PredicateRecordKey, SortDirection, Token,
     ValidatedIndexQuery,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
-use turso_core::{Connection, Numeric, Value};
+use turso_core::{Numeric, Value};
 
 #[cfg(test)]
 use predicate_index::PendingOptimisticProjection;
@@ -47,7 +49,7 @@ use std::sync::Mutex;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::AtomicU64;
 #[cfg(not(target_arch = "wasm32"))]
-use turso_core::{Database, IO, MemoryIO, OpenOptions, PlatformIO, SqliteDialect};
+use turso_core::{Database, IO, MemoryIO, OpenOptions, PlatformIO, SqliteDialect, TempStore};
 #[cfg(target_arch = "wasm32")]
 use turso_opfs::{
     CloseFailure, ClosedSession, ConnectedOpfsSession, OpenDisposition, OpfsError, OpfsOwner,
@@ -55,7 +57,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 11;
+pub const STORAGE_SCHEMA_VERSION: u32 = 12;
 
 const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
 const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
@@ -73,11 +75,11 @@ pub enum TursoStorageOpenOutcome {
     OpenedNew,
 }
 
-const CREATE_SCHEMA: [&str; 28] = [
+const CREATE_SCHEMA: [&str; 29] = [
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE records (__typename TEXT NOT NULL, id TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (__typename, id))",
     "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
-    "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",
+    "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id, search_text, source_hash)",
     "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT NOT NULL, superseded INTEGER NOT NULL DEFAULT 0, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
     "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
     "CREATE UNIQUE INDEX mutation_queue_current_uuid_idx ON mutation_queue(uuid) WHERE superseded = 0",
@@ -102,9 +104,13 @@ const CREATE_SCHEMA: [&str; 28] = [
     "CREATE INDEX optimistic_exact_facts_lookup_idx ON optimistic_exact_facts(attribute, value, document_id)",
     "CREATE INDEX optimistic_integer_facts_lookup_idx ON optimistic_integer_facts(attribute, value, document_id)",
     "CREATE INDEX optimistic_sort_facts_lookup_idx ON optimistic_sort_facts(attribute, value, document_id)",
+    contact_search::CREATE_INDEX,
 ];
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
+const RECORD_UPSERT_PREFIX: &str = "INSERT INTO records (__typename, id, value) VALUES ";
+const RECORD_UPSERT_SUFFIX: &str =
+    " ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
 const RECORD_DELETE: &str = "DELETE FROM records WHERE __typename = ?1 AND id = ?2";
 // Turso otherwise chooses the browse index's profile prefix for a direct composite-key delete.
 // Force a point lookup through the existing primary-key index, then delete by its rowid.
@@ -118,6 +124,11 @@ const SEARCH_WRITE_BATCH_SIZE: usize = 100;
 const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2";
 const SEARCH_BROWSE: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3";
 const SEARCH_BROWSE_AFTER: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 AND (timestamp_ms < ?3 OR (timestamp_ms = ?3 AND (__typename > ?4 OR (__typename = ?4 AND id > ?5)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?6";
+/// An incomplete document of one partition that no optimistic layer shadows:
+/// any state but 0. Each side of the union seeks the scope index past the
+/// complete documents (`state <> 0` walks every one of them). Writers store
+/// 1 to 3, so the `state < 0` side only guards a malformed file.
+const INCOMPLETE_SCOPE_DOCUMENT: &str = "SELECT 1 FROM (SELECT d.record_key FROM index_documents AS d WHERE d.profile = ?1 AND d.partition = ?2 AND d.state > 0 UNION ALL SELECT d.record_key FROM index_documents AS d WHERE d.profile = ?1 AND d.partition = ?2 AND d.state < 0) AS d WHERE NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) LIMIT 1";
 const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state RETURNING id";
 const INDEX_DOCUMENT_ID: &str = "SELECT id FROM index_documents WHERE record_key = ?1";
 const INDEX_DOCUMENT_DELETE: &str = "DELETE FROM index_documents WHERE record_key = ?1";
@@ -126,6 +137,12 @@ const INDEX_FACTS_DELETE: [&str; 3] = [
     "DELETE FROM integer_facts WHERE document_id = ?1",
     "DELETE FROM sort_facts WHERE document_id = ?1",
 ];
+const EXACT_FACT_DELETE: &str =
+    "DELETE FROM exact_facts WHERE document_id = ?1 AND attribute = ?2 AND value = ?3";
+const INTEGER_FACT_DELETE: &str =
+    "DELETE FROM integer_facts WHERE document_id = ?1 AND attribute = ?2 AND value = ?3";
+const SORT_FACT_DELETE: &str =
+    "DELETE FROM sort_facts WHERE document_id = ?1 AND attribute = ?2 AND value = ?3";
 const EXACT_FACT_INSERT: &str =
     "INSERT INTO exact_facts (document_id, attribute, value) VALUES (?1, ?2, ?3)";
 const INTEGER_FACT_INSERT: &str =
@@ -144,6 +161,7 @@ const QUEUE_DIAGNOSTICS_SELECT: &str = "SELECT COUNT(*), MIN(created_at_ms) FROM
 const OPTIMISTIC_INDEX_DOCUMENT_INSERT: &str = "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state, incomplete_kind) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id";
 const OPTIMISTIC_INDEX_DOCUMENT_DELETE: &str =
     "DELETE FROM optimistic_index_documents WHERE record_key = ?1";
+const OPTIMISTIC_INDEX_DOCUMENT_ANY: &str = "SELECT 1 FROM optimistic_index_documents LIMIT 1";
 const OPTIMISTIC_EXACT_FACT_INSERT: &str =
     "INSERT INTO optimistic_exact_facts (document_id, attribute, value) VALUES (?1, ?2, ?3)";
 const OPTIMISTIC_INTEGER_FACT_INSERT: &str =
@@ -189,8 +207,9 @@ pub struct TursoStorage {
     session: ConnectedOpfsSession,
     #[cfg(not(target_arch = "wasm32"))]
     database: Arc<Database>,
-    #[cfg(not(target_arch = "wasm32"))]
-    connection: Arc<Connection>,
+    /// The session's connection with its prepared statements. Its statements
+    /// hold connection references, so closing releases them first.
+    connection: Db,
     #[cfg(all(test, not(target_arch = "wasm32")))]
     fault: Mutex<Option<TestFault>>,
 }
@@ -223,13 +242,14 @@ impl TursoStorage {
         scope: &str,
     ) -> Result<(Self, TursoStorageOpenOutcome), TursoStorageOpenFailure> {
         let fresh = session.disposition() == OpenDisposition::Fresh;
-        let connection = session.connection();
+        let connection = Db::uncached(session.connection());
         let result = initialize(&connection, scope, fresh);
         drop(connection);
         match result {
             Ok(_) => Ok((
                 Self {
                     health: AtomicU8::new(0),
+                    connection: Db::cached(session.connection()),
                     session,
                 },
                 if fresh {
@@ -240,6 +260,18 @@ impl TursoStorage {
             )),
             Err(error) => Err(TursoStorageOpenFailure { error, session }),
         }
+    }
+
+    /// Browser-test-only: whether the open-time checks could be skipped, after
+    /// running all of them anyway.
+    #[cfg(feature = "browser-test-hooks")]
+    #[doc(hidden)]
+    pub fn browser_test_run_skippable_open_checks(&self) -> Result<bool, TursoStorageError> {
+        let connection = self.connection();
+        let fresh_schema = has_fresh_schema(&connection)?;
+        validate_frozen_schema(&connection)?;
+        validate_statements(&connection)?;
+        Ok(fresh_schema)
     }
 
     /// Browser-test-artifact-only helper used by the storage-control worker.
@@ -312,10 +344,14 @@ impl TursoStorage {
     /// worker before a recovery wipe.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageCloseFailure> {
         let reason = self.latched_reason();
-        let closed = self
-            .session
-            .try_close()
-            .map_err(TursoStorageCloseFailure::new)?;
+        let Self {
+            session,
+            connection,
+            ..
+        } = self;
+        connection.release_statements();
+        drop(connection);
+        let closed = session.try_close().map_err(TursoStorageCloseFailure::new)?;
         Ok(match reason {
             Some(reason) => {
                 TursoStorageCloseOutcome::ResetRequired(ResetRequiredTursoStorageClosed {
@@ -327,8 +363,8 @@ impl TursoStorage {
         })
     }
 
-    fn connection(&self) -> Arc<Connection> {
-        self.session.connection()
+    fn connection(&self) -> Db {
+        self.connection.clone()
     }
 }
 
@@ -350,7 +386,7 @@ pub enum QueuedMutationCount {
 pub fn count_queued_mutations(
     session: &ConnectedOpfsSession,
 ) -> Result<QueuedMutationCount, TursoStorageError> {
-    let connection = session.connection();
+    let connection = Db::uncached(session.connection());
     let count = |sql: &str| -> Result<u64, TursoStorageError> {
         let rows = driver::query(&connection, sql, Vec::new())?;
         let [row] = rows.as_slice() else {
@@ -756,6 +792,17 @@ fn remove_native_file(path: &Path) -> Result<(), TursoStorageError> {
     }
 }
 
+/// Pages the native connection keeps in Turso's page cache, about 31 MiB at the
+/// default 4 KiB page size.
+///
+/// Turso's native default is 2,000 pages. On a large database a typed search
+/// reads a browse index of nearly that many pages, and a Home refresh touches more, so
+/// each evicted the other's pages and read them back from the file on the next
+/// call. Clean pages past the cap are read again; dirty ones spill to the WAL,
+/// which native Turso does by default.
+#[cfg(not(target_arch = "wasm32"))]
+const NATIVE_PAGE_CACHE_PAGES: i64 = 8_000;
+
 #[cfg(not(target_arch = "wasm32"))]
 fn open_native_database(
     io: Arc<dyn IO>,
@@ -770,7 +817,22 @@ fn open_native_database(
         .connect()
         .map_err(TursoStorageError::turso)
         .map_err(|error| if fresh { error } else { error.initialization() })?;
-    let migrated = match initialize(&connection, scope, fresh) {
+    // Natively, Turso's default puts every ephemeral table and spilled sort in
+    // a new temporary directory and file, several syscalls and a page write
+    // each, and one filtered read can open several. The browser build always
+    // keeps them in memory; the native build now does the same.
+    connection.set_temp_store(TempStore::Memory);
+    if let Err(error) = connection.execute(format!("PRAGMA cache_size = {NATIVE_PAGE_CACHE_PAGES}"))
+    {
+        if connection.close().is_err() {
+            return Err(TursoStorageError::reset(
+                PhysicalResetReason::TransactionOutcomeUncertain,
+            ));
+        }
+        let error = TursoStorageError::turso(error);
+        return Err(if fresh { error } else { error.initialization() });
+    }
+    let migrated = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
         Ok(migrated) => migrated,
         Err(error) => {
             if connection.close().is_err() {
@@ -785,7 +847,7 @@ fn open_native_database(
         TursoStorage {
             health: AtomicU8::new(0),
             database,
-            connection,
+            connection: Db::cached(connection),
             #[cfg(all(test, not(target_arch = "wasm32")))]
             fault: Mutex::new(None),
         },
@@ -869,6 +931,7 @@ impl TursoStorage {
     /// Consumes and explicitly closes the native Turso connection.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageError> {
         let reason = self.latched_reason();
+        self.connection.release_statements();
         self.connection.close().map_err(|_| {
             TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
         })?;
@@ -880,12 +943,34 @@ impl TursoStorage {
         })
     }
 
-    fn connection(&self) -> Arc<Connection> {
+    fn connection(&self) -> Db {
         self.connection.clone()
     }
 }
 
 impl TursoStorage {
+    /// Copies the WAL into the database file once it holds 500 frames or more,
+    /// the checkpoint Turso otherwise runs inside the COMMIT that takes it past
+    /// 1,000. Run it between requests, never inside one; it reports whether it
+    /// ran and how many frames it copied. A host that never calls it keeps
+    /// Turso's own checkpoint.
+    ///
+    /// A failure is never a reset: like Turso's own checkpoint, it leaves the
+    /// WAL whole, and the next call tries again.
+    pub fn checkpoint_if_due(&self) -> Result<WalCheckpoint, TursoStorageError> {
+        self.require_healthy()?;
+        self.connection
+            .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
+    }
+
+    /// The end of the WAL. A caller that computed something from storage
+    /// compares two positions to learn whether anything was committed to the
+    /// file in between, through this connection or another.
+    pub fn wal_position(&self) -> Result<WalPosition, TursoStorageError> {
+        self.require_healthy()?;
+        self.connection.wal_position()
+    }
+
     fn latched_reason(&self) -> Option<PhysicalResetReason> {
         let code = self.health.load(Ordering::Acquire);
         PhysicalResetReason::from_latch_code(code)
@@ -919,6 +1004,131 @@ impl TursoStorage {
 impl Storage for TursoStorage {
     type Error = TursoStorageError;
 
+    /// The end of the WAL, which every commit to the file moves.
+    fn write_position(&self) -> Option<cache_core::store::WritePosition> {
+        self.wal_position().ok().map(Into::into)
+    }
+
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.require_healthy()?;
+        let mut keys = Vec::new();
+        driver::query_each(
+            &self.connection(),
+            if after_id.is_some() {
+                "SELECT record_key FROM index_documents WHERE record_key > ?1 AND record_key < ?2 ORDER BY record_key LIMIT ?3"
+            } else {
+                "SELECT record_key FROM index_documents WHERE record_key >= ?1 AND record_key < ?2 ORDER BY record_key LIMIT ?3"
+            },
+            vec![
+                text(&format!("{typename}:{}", after_id.unwrap_or_default())),
+                text(&format!("{typename};")),
+                Value::from_i64(limit.min(500) as i64),
+            ],
+            |row| {
+                let Some(Value::Text(key)) = row.get_values().next() else {
+                    return Err(invariant());
+                };
+                keys.push(EntityKey(key.to_string().into()));
+                Ok(())
+            },
+        )?;
+        Ok(keys)
+    }
+
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.require_healthy()?;
+        let mut keys = Vec::new();
+        driver::query_each(
+            &self.connection(),
+            if after_id.is_some() {
+                "SELECT id FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3"
+            } else {
+                "SELECT id FROM records WHERE __typename = ?1 AND id >= ?2 ORDER BY id LIMIT ?3"
+            },
+            vec![
+                text(typename),
+                text(after_id.unwrap_or_default()),
+                Value::from_i64(limit.min(500) as i64),
+            ],
+            |row| {
+                let Some(Value::Text(id)) = row.get_values().next() else {
+                    return Err(invariant());
+                };
+                keys.push(EntityKey(format!("{typename}:{id}").into()));
+                Ok(())
+            },
+        )?;
+        Ok(keys)
+    }
+
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        self.require_healthy()?;
+        if limit == 0 || limit > cache_core::people::MAX_PEOPLE_BATCH {
+            return Err(TursoStorageError::InvalidInput);
+        }
+        let mut last = None;
+        let mut count = 0;
+        let mut more = false;
+        let mut key_buffer = String::new();
+        let sql = if after.is_some() {
+            "SELECT id, value FROM records WHERE __typename = 'GraphqlContact' AND id > ? ORDER BY id LIMIT ?"
+        } else {
+            "SELECT id, value FROM records WHERE __typename = 'GraphqlContact' AND id >= ? ORDER BY id LIMIT ?"
+        };
+        let result = driver::query_each(
+            &self.connection(),
+            sql,
+            vec![
+                text(after.unwrap_or("")),
+                Value::from_i64(i64::try_from(limit + 1).map_err(|_| invariant())?),
+            ],
+            |row| {
+                if count == limit {
+                    more = true;
+                    return Ok(());
+                }
+                let mut values = row.get_values();
+                let (Some(Value::Text(id)), Some(Value::Blob(value)), None) =
+                    (values.next(), values.next(), values.next())
+                else {
+                    return Err(invariant());
+                };
+                let key = RecordKey::borrow_entity("GraphqlContact", id.as_str(), &mut key_buffer)?;
+                let record = decode_record(value).map_err(|_| invariant())?;
+                visit(&key, &record);
+                last = Some(id.as_str().to_owned());
+                count += 1;
+                Ok(())
+            },
+        );
+        self.latch_result(result)?;
+        Ok(if more { last } else { None })
+    }
+
+    async fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &cache_core::people::sql::PeopleSqlPlan,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
+        self.require_healthy()?;
+        self.latch_result(people_sql::read(&self.connection(), viewer, plan))
+    }
+
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         self.require_healthy()?;
         let result = (|| {
@@ -941,20 +1151,20 @@ impl Storage for TursoStorage {
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
-            let entries = prepare_records(entries)?;
+            let mut entries = prepare_records(entries)?;
             if entries.is_empty() {
                 return Ok(());
             }
             let connection = self.connection();
             driver::write_transaction(&connection, || {
                 let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
+                for (index, entry) in entries.iter_mut().enumerate() {
                     let changed = driver::execute_prepared(
                         &mut statement,
                         vec![
                             text(&entry.key.typename),
                             text(&entry.key.id),
-                            Value::from_blob(entry.value.clone()),
+                            Value::from_blob(std::mem::take(&mut entry.value)),
                         ],
                     )?;
                     require_changed(changed, 1)?;
@@ -971,31 +1181,18 @@ impl Storage for TursoStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<(), Self::Error> {
-        self.require_healthy()?;
-        let result = (|| {
-            let entries = prepare_records(entries)?;
-            let connection = self.connection();
-            driver::write_transaction(&connection, || {
-                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
-                    require_changed(
-                        driver::execute_prepared(
-                            &mut statement,
-                            vec![
-                                text(&entry.key.typename),
-                                text(&entry.key.id),
-                                Value::from_blob(entry.value.clone()),
-                            ],
-                        )?,
-                        1,
-                    )?;
-                    self.fault_after(TestFaultSite::Put, index)?;
-                }
-                write_derived_rows(&connection, &entries)?;
-                write_projection_mutations(&connection, projections)
-            })
-        })();
-        self.latch_result(result)
+        self.put_encoded_with_projections(|| prepare_records(entries), projections)
+    }
+
+    async fn put_records_with_projections(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.put_encoded_with_projections(
+            || prepare_records(entries.iter().map(|(key, record)| (key, record))),
+            projections,
+        )
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
@@ -1029,31 +1226,63 @@ impl Storage for TursoStorage {
                     )?;
                     self.fault_after(TestFaultSite::Delete, index)?;
                 }
-                calendar::delete_ranges(&connection, &keys)
+                calendar::delete_ranges(&connection, &keys)?;
+                people_sql::delete(&connection, &keys)
             })
         })();
         self.latch_result(result)
     }
 
-    async fn load_search_documents(
+    async fn visit_search_documents(
         &self,
         profile: SearchProfile,
         bucket: &str,
-    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        query: &SearchQuery,
+        mut visit: impl FnMut(SearchDocumentRef<'_>) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
         self.require_healthy()?;
-        let result = {
-            let connection = self.connection();
-            driver::query(
-                &connection,
-                SEARCH_LOAD,
-                vec![text(profile.as_str()), text(bucket)],
-            )
-            .and_then(|rows| {
-                rows.into_iter()
-                    .map(|row| parse_search_document(&row, profile))
-                    .collect()
-            })
-        };
+        let (sql, values) = search::statement(profile, bucket);
+        let mut key = String::new();
+        let result = driver::query_each(&self.connection(), &sql, values, |row| {
+            search::visit_row(row, profile, query, &mut key, &mut visit)
+        });
+        self.latch_result(result)
+    }
+
+    async fn visit_name_search(
+        &self,
+        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        self.latch_result(name_search::read(&self.connection(), read))
+    }
+
+    async fn visit_contact_records(
+        &self,
+        query: &SearchQuery,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let (sql, values) = search::statement_with_base(
+            contact_search::LOAD,
+            SearchProfile::QuickAccessV1,
+            "person",
+            query,
+        );
+        let mut key_buffer = String::new();
+        let result = driver::query_each(&self.connection(), &sql, values, |row| {
+            let mut values = row.get_values();
+            let (Some(Value::Text(typename)), Some(Value::Text(id)), Some(Value::Blob(blob)), None) =
+                (values.next(), values.next(), values.next(), values.next())
+            else {
+                return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
+            };
+            let key = RecordKey::borrow_entity(typename.as_str(), id.as_str(), &mut key_buffer)?;
+            let record = decode_record(blob)
+                .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+            visit(&key, &record);
+            Ok(())
+        });
         self.latch_result(result)
     }
 
@@ -1216,6 +1445,43 @@ impl Storage for TursoStorage {
         let connection = self.connection();
         let result = driver::read_transaction(&connection, || {
             load_optimistic_projections(&connection, keys)
+        });
+        self.latch_result(result)
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(MutationId, PersistedOptimisticLayer)],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result = driver::write_transaction(&connection, || {
+            for (id, layer) in layers {
+                let id = mutation_id_to_sql(*id)?;
+                driver::execute(
+                    &connection,
+                    "UPDATE optimistic_layers SET optimistic_data_json = ?2, normalized_updates = ?3 WHERE mutation_id = ?1",
+                    vec![
+                        Value::from_i64(id),
+                        text(&layer.optimistic_data_json),
+                        Value::from_blob(encode_record_updates(&layer.normalized_updates)),
+                    ],
+                )?;
+            }
+            for key in affected_projection_keys {
+                delete_optimistic_projection(&connection, key)?;
+            }
+            for projection in projections {
+                insert_optimistic_projection(
+                    &connection,
+                    mutation_id_to_sql(projection.owner)?,
+                    projection.state.clone(),
+                    projection.uncertainty.clone(),
+                )?;
+            }
+            Ok(())
         });
         self.latch_result(result)
     }
@@ -1718,6 +1984,7 @@ impl PredicateIndexStorage for TursoStorage {
                     )?;
                 }
                 calendar::delete_ranges(&connection, &keys)?;
+                people_sql::delete(&connection, &keys)?;
                 write_projection_mutations(&connection, projections)
             })
         })();
@@ -1768,7 +2035,7 @@ fn validate_shadow_reconciliation(
 }
 
 fn queue_snapshot_matches(
-    connection: &Arc<Connection>,
+    connection: &Db,
     expected: &[MutationQueueSnapshot],
 ) -> Result<bool, TursoStorageError> {
     let rows = driver::query(
@@ -1797,7 +2064,7 @@ fn queue_snapshot_matches(
 }
 
 fn queue_identity_matches(
-    connection: &Arc<Connection>,
+    connection: &Db,
     expected: &[MutationId],
 ) -> Result<bool, TursoStorageError> {
     let rows = driver::query(
@@ -1817,7 +2084,7 @@ fn queue_identity_matches(
 }
 
 fn write_shadow_reconciliation(
-    connection: &Arc<Connection>,
+    connection: &Db,
     reconciliation: OptimisticShadowReconciliation,
     mut after_write: impl FnMut(usize) -> Result<(), TursoStorageError>,
 ) -> Result<(), TursoStorageError> {
@@ -1837,7 +2104,7 @@ fn write_shadow_reconciliation(
 }
 
 fn write_upsert_shadow_reconciliation(
-    connection: &Arc<Connection>,
+    connection: &Db,
     enqueued: MutationId,
     reconciliation: OptimisticUpsertReconciliation,
     mut after_write: impl FnMut(usize) -> Result<(), TursoStorageError>,
@@ -1862,7 +2129,7 @@ fn write_upsert_shadow_reconciliation(
 }
 
 fn delete_optimistic_projection(
-    connection: &Arc<Connection>,
+    connection: &Db,
     record_key: &PredicateRecordKey,
 ) -> Result<(), TursoStorageError> {
     let changed = driver::execute(
@@ -1878,7 +2145,7 @@ fn delete_optimistic_projection(
 }
 
 fn insert_optimistic_projection(
-    connection: &Arc<Connection>,
+    connection: &Db,
     owner: i64,
     state: OptimisticProjectionState,
     uncertainty: OptimisticUncertainty,
@@ -1948,7 +2215,7 @@ fn insert_optimistic_projection(
 }
 
 fn write_optimistic_uncertainty(
-    connection: &Arc<Connection>,
+    connection: &Db,
     document_id: i64,
     uncertainty: OptimisticUncertainty,
 ) -> Result<(), TursoStorageError> {
@@ -1994,9 +2261,21 @@ fn optimistic_projection_state_code(state: &OptimisticProjectionState) -> (i64, 
 }
 
 fn write_projection_mutations(
-    connection: &Arc<Connection>,
+    connection: &Db,
     mutations: Vec<ProjectionMutation>,
 ) -> Result<(), TursoStorageError> {
+    // Contact facts are cache-owned derivatives of normalized authority. A
+    // caller's generic projection cannot add membership, replace private names,
+    // or erase facts without removing the underlying contact record.
+    let mutations = mutations
+        .into_iter()
+        .filter(|mutation| {
+            !mutation
+                .record_key()
+                .as_str()
+                .starts_with("GraphqlContact:")
+        })
+        .collect::<Vec<_>>();
     let keys = mutations
         .iter()
         .map(ProjectionMutation::record_key)
@@ -2004,24 +2283,49 @@ fn write_projection_mutations(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let previous = load_projection_states(connection, &keys)?;
-    let mut states = keys
-        .iter()
-        .cloned()
-        .zip(previous.iter().cloned())
-        .filter_map(|(key, state)| state.map(|state| (key, state)))
-        .collect::<HashMap<_, _>>();
-
-    apply_authoritative_projection_mutations(&mut states, &mutations);
-    // Fold child contributions in order, then persist only changed final states.
-    // Refreshing unchanged authority must not delete/reinsert every index fact
-    // while the native engine lock blocks foreground reads and mutations.
-    for (key, previous) in keys.iter().zip(previous) {
-        let next = states.get(key);
-        if next != previous.as_ref() {
-            write_projection_state(connection, key, next)?;
-        }
+    if keys.is_empty() {
+        return Ok(());
     }
+    let states = if mutations
+        .iter()
+        .all(|mutation| matches!(mutation, ProjectionMutation::Delete(_)))
+    {
+        // Retirement deletes whole projection families. Their final state is
+        // known without reconstructing every old document and fact first.
+        let mut delete = driver::prepare(connection, INDEX_DOCUMENT_DELETE)?;
+        for key in &keys {
+            let changed = driver::execute_prepared(&mut delete, vec![text(key.as_str())])?;
+            if !(0..=1).contains(&changed) {
+                return Err(invariant());
+            }
+        }
+        HashMap::new()
+    } else {
+        let previous = load_projection_states(connection, &keys)?;
+        let mut states = keys
+            .iter()
+            .cloned()
+            .zip(previous.iter().cloned())
+            .filter_map(|(key, state)| state.map(|state| (key, state)))
+            .collect::<HashMap<_, _>>();
+        apply_authoritative_projection_mutations(&mut states, &mutations);
+        // Unchanged refreshes must not rewrite all facts while holding the lock.
+        let mut facts = PendingFacts::default();
+        for (key, previous) in keys.iter().zip(previous) {
+            let next = states.get(key);
+            if next != previous.as_ref() {
+                write_stored_projection_state(
+                    connection,
+                    key,
+                    Stored::Loaded(previous.as_ref()),
+                    next,
+                    &mut facts,
+                )?;
+            }
+        }
+        facts.insert(connection)?;
+        states
+    };
     if !keys.is_empty() {
         // Network snapshots and realtime writes must rebase pending member edits
         // in the same transaction, not leave a shadow based on older authority.
@@ -2036,17 +2340,45 @@ fn write_projection_mutations(
                 Ok((row.id, source))
             })
             .collect::<Result<Vec<_>, TursoStorageError>>()?;
-        let layers = sources
-            .iter()
-            .map(
-                |(owner, source)| cache_core::predicate::ProjectionMutationLayer {
-                    owner: *owner,
-                    mutations: &source.projection_mutations,
-                },
-            )
-            .collect::<Vec<_>>();
+        // With no queued mutation there is no layer to compose and, unless an
+        // older file kept one, no shadow to delete.
+        if sources.is_empty()
+            && driver::query(connection, OPTIMISTIC_INDEX_DOCUMENT_ANY, Vec::new())?.is_empty()
+        {
+            return Ok(());
+        }
+        // Index each pending contribution once per batch. A large retirement
+        // page must not scan the whole queue again for each deleted key.
+        let mut by_key: HashMap<_, BTreeMap<_, Vec<_>>> = HashMap::new();
+        for (owner, source) in sources {
+            for mutation in source.projection_mutations {
+                if keys.binary_search(mutation.record_key()).is_ok() {
+                    by_key
+                        .entry(mutation.record_key().clone())
+                        .or_default()
+                        .entry(owner)
+                        .or_default()
+                        .push(mutation);
+                }
+            }
+        }
+        let mut delete = driver::prepare(connection, OPTIMISTIC_INDEX_DOCUMENT_DELETE)?;
         for key in keys {
-            delete_optimistic_projection(connection, &key)?;
+            let changed = driver::execute_prepared(&mut delete, vec![text(key.as_str())])?;
+            if !(0..=1).contains(&changed) {
+                return Err(invariant());
+            }
+            let layers = by_key
+                .get(&key)
+                .into_iter()
+                .flat_map(|owners| owners.iter())
+                .map(
+                    |(owner, mutations)| cache_core::predicate::ProjectionMutationLayer {
+                        owner: *owner,
+                        mutations,
+                    },
+                )
+                .collect::<Vec<_>>();
             if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(
                 &key,
                 states.get(&key),
@@ -2066,14 +2398,54 @@ fn write_projection_mutations(
     Ok(())
 }
 
+/// Write `state` over `previous`, the state this transaction loaded for the
+/// key (`None` when unknown or absent).
 fn write_projection_state(
-    connection: &Arc<Connection>,
+    connection: &Db,
     record_key: &PredicateRecordKey,
+    previous: Option<&ProjectionState>,
     state: Option<&ProjectionState>,
 ) -> Result<(), TursoStorageError> {
+    let mut facts = PendingFacts::default();
+    let stored = previous.map_or(Stored::Unknown, |previous| Stored::Loaded(Some(previous)));
+    write_stored_projection_state(connection, record_key, stored, state, &mut facts)?;
+    facts.insert(connection)
+}
+
+/// What a transaction knows of a key's stored projection before writing it.
+#[derive(Clone, Copy)]
+enum Stored<'a> {
+    /// Not loaded: the key may have a row and facts.
+    Unknown,
+    /// Loaded in this transaction. `None`: the key has no row, so no facts.
+    Loaded(Option<&'a ProjectionState>),
+}
+
+/// Write `state` over what is stored for the key. The facts of a rewritten
+/// document go to `facts`, which the caller inserts before the transaction
+/// ends.
+fn write_stored_projection_state(
+    connection: &Db,
+    record_key: &PredicateRecordKey,
+    stored: Stored<'_>,
+    state: Option<&ProjectionState>,
+    facts: &mut PendingFacts,
+) -> Result<(), TursoStorageError> {
+    let (previous, absent) = match stored {
+        Stored::Unknown => (None, false),
+        Stored::Loaded(previous) => (previous, previous.is_none()),
+    };
     match state {
         Some(ProjectionState::Complete(document)) => {
             document.validate().map_err(|_| invariant())?;
+            if let Some(ProjectionState::Complete(old)) = previous
+                && old.record_key == document.record_key
+                && old.profile == document.profile
+                && old.partition == document.partition
+                && facts_are_distinct(document)
+            {
+                return write_fact_delta(connection, record_key, old, document);
+            }
             let document_id = upsert_index_document(
                 connection,
                 &document.record_key,
@@ -2081,49 +2453,12 @@ fn write_projection_state(
                 &document.partition,
                 0,
             )?;
-            delete_index_facts(connection, document_id)?;
-            for fact in &document.exact_facts {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        EXACT_FACT_INSERT,
-                        vec![
-                            Value::from_i64(document_id),
-                            text(fact.attribute.as_str()),
-                            Value::from_blob(fact.value.as_bytes().to_vec()),
-                        ],
-                    )?,
-                    1,
-                )?;
+            // A key with no row has no facts: deleting them dirtied nothing
+            // but cost three statements per document of a cold write.
+            if !absent {
+                delete_index_facts(connection, document_id)?;
             }
-            for fact in &document.integer_facts {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        INTEGER_FACT_INSERT,
-                        vec![
-                            Value::from_i64(document_id),
-                            text(fact.attribute.as_str()),
-                            Value::from_i64(fact.value),
-                        ],
-                    )?,
-                    1,
-                )?;
-            }
-            for fact in &document.sort_facts {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        SORT_FACT_INSERT,
-                        vec![
-                            Value::from_i64(document_id),
-                            text(fact.attribute.as_str()),
-                            Value::from_i64(fact.value),
-                        ],
-                    )?,
-                    1,
-                )?;
-            }
+            facts.push(document_id, document);
         }
         Some(ProjectionState::Incomplete {
             profile,
@@ -2138,7 +2473,9 @@ fn write_projection_state(
                 partition,
                 projection_state_code(*kind),
             )?;
-            delete_index_facts(connection, document_id)?;
+            if !absent {
+                delete_index_facts(connection, document_id)?;
+            }
         }
         None => {
             let changed = driver::execute(
@@ -2154,8 +2491,189 @@ fn write_projection_state(
     Ok(())
 }
 
+/// Fact rows of fully written documents, inserted together once a write has
+/// given every document its row: a few multi-row statements in place of one
+/// statement per fact.
+#[derive(Default)]
+struct PendingFacts {
+    exact: Vec<Value>,
+    integer: Vec<Value>,
+    sort: Vec<Value>,
+}
+
+impl PendingFacts {
+    fn push(&mut self, document_id: i64, document: &predicate_index::IndexDocument) {
+        for fact in &document.exact_facts {
+            self.exact.extend([
+                Value::from_i64(document_id),
+                text(fact.attribute.as_str()),
+                Value::from_blob(fact.value.as_bytes().to_vec()),
+            ]);
+        }
+        for fact in &document.integer_facts {
+            self.integer.extend([
+                Value::from_i64(document_id),
+                text(fact.attribute.as_str()),
+                Value::from_i64(fact.value),
+            ]);
+        }
+        for fact in &document.sort_facts {
+            self.sort.extend([
+                Value::from_i64(document_id),
+                text(fact.attribute.as_str()),
+                Value::from_i64(fact.value),
+            ]);
+        }
+    }
+
+    fn insert(self, connection: &Db) -> Result<(), TursoStorageError> {
+        for (table, values) in [
+            ("exact_facts", self.exact),
+            ("integer_facts", self.integer),
+            ("sort_facts", self.sort),
+        ] {
+            insert_rows(
+                connection,
+                &format!("INSERT INTO {table} (document_id, attribute, value) VALUES "),
+                "",
+                3,
+                values,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// Rows per multi-row INSERT, largest first. A batch is cut greedily into
+/// these sizes, so each table needs at most four statement texts and a batch
+/// of n rows at most n / 64 + 9 statements.
+const INSERT_BATCH_SIZES: [usize; 4] = [64, 16, 4, 1];
+
+/// The row counts `rows` rows are inserted in, largest first.
+fn insert_batches(mut rows: usize) -> impl Iterator<Item = usize> {
+    INSERT_BATCH_SIZES.into_iter().flat_map(move |size| {
+        let count = rows / size;
+        rows %= size;
+        std::iter::repeat_n(size, count)
+    })
+}
+
+/// Inserts `values`, `width` per row, with `prefix` + placeholder rows +
+/// `suffix` statements, and requires each statement to change every row it
+/// inserts.
+fn insert_rows(
+    connection: &Db,
+    prefix: &str,
+    suffix: &str,
+    width: usize,
+    values: Vec<Value>,
+) -> Result<(), TursoStorageError> {
+    if !values.len().is_multiple_of(width) {
+        return Err(invariant());
+    }
+    let row = format!("({})", vec!["?"; width].join(", "));
+    let mut values = values.into_iter();
+    for size in insert_batches(values.len() / width) {
+        let sql = format!("{prefix}{}{suffix}", vec![row.as_str(); size].join(", "));
+        let changed = driver::execute(
+            connection,
+            &sql,
+            values.by_ref().take(size * width).collect(),
+        )?;
+        require_changed(changed, i64::try_from(size).map_err(|_| invariant())?)?;
+    }
+    Ok(())
+}
+
+/// Whether a full write of `document` would insert no fact twice. A document
+/// that would is left to the full write, which refuses it.
+fn facts_are_distinct(document: &predicate_index::IndexDocument) -> bool {
+    let exact = document.exact_facts.iter().collect::<BTreeSet<_>>();
+    let integer = document.integer_facts.iter().collect::<BTreeSet<_>>();
+    exact.len() == document.exact_facts.len() && integer.len() == document.integer_facts.len()
+}
+
+/// Change only the facts that differ between two complete documents of one
+/// key. A refresh usually changes a few facts of a document; deleting and
+/// reinserting all of them dirtied every index page they live on.
+fn write_fact_delta(
+    connection: &Db,
+    record_key: &PredicateRecordKey,
+    old: &predicate_index::IndexDocument,
+    next: &predicate_index::IndexDocument,
+) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        INDEX_DOCUMENT_ID,
+        vec![text(record_key.as_str())],
+    )?;
+    let document_id = match rows.as_slice() {
+        [row] if row.len() == 1 => required_i64(row, 0)?,
+        _ => return Err(invariant()),
+    };
+    let exact = |fact: &predicate_index::ExactFact| {
+        vec![
+            Value::from_i64(document_id),
+            text(fact.attribute.as_str()),
+            Value::from_blob(fact.value.as_bytes().to_vec()),
+        ]
+    };
+    let integer = |fact: &predicate_index::IntegerFact| {
+        vec![
+            Value::from_i64(document_id),
+            text(fact.attribute.as_str()),
+            Value::from_i64(fact.value),
+        ]
+    };
+    write_changed_facts(
+        connection,
+        &old.exact_facts,
+        &next.exact_facts,
+        EXACT_FACT_DELETE,
+        EXACT_FACT_INSERT,
+        exact,
+    )?;
+    write_changed_facts(
+        connection,
+        &old.integer_facts,
+        &next.integer_facts,
+        INTEGER_FACT_DELETE,
+        INTEGER_FACT_INSERT,
+        integer,
+    )?;
+    write_changed_facts(
+        connection,
+        &old.sort_facts,
+        &next.sort_facts,
+        SORT_FACT_DELETE,
+        SORT_FACT_INSERT,
+        integer,
+    )
+}
+
+/// Delete the facts only `old` has, then insert the ones only `next` has.
+/// Deleting first frees a sort attribute whose value changed.
+fn write_changed_facts<F: Ord>(
+    connection: &Db,
+    old: &[F],
+    next: &[F],
+    delete: &str,
+    insert: &str,
+    parameters: impl Fn(&F) -> Vec<Value>,
+) -> Result<(), TursoStorageError> {
+    let old_set = old.iter().collect::<BTreeSet<_>>();
+    let next_set = next.iter().collect::<BTreeSet<_>>();
+    for fact in old_set.difference(&next_set) {
+        require_changed(driver::execute(connection, delete, parameters(fact))?, 1)?;
+    }
+    for fact in next.iter().filter(|fact| !old_set.contains(fact)) {
+        require_changed(driver::execute(connection, insert, parameters(fact))?, 1)?;
+    }
+    Ok(())
+}
+
 fn upsert_index_document(
-    connection: &Arc<Connection>,
+    connection: &Db,
     record_key: &PredicateRecordKey,
     profile: &Profile,
     partition: &Token,
@@ -2177,10 +2695,7 @@ fn upsert_index_document(
     }
 }
 
-fn delete_index_facts(
-    connection: &Arc<Connection>,
-    document_id: i64,
-) -> Result<(), TursoStorageError> {
+fn delete_index_facts(connection: &Db, document_id: i64) -> Result<(), TursoStorageError> {
     for sql in INDEX_FACTS_DELETE {
         let changed = driver::execute(connection, sql, vec![Value::from_i64(document_id)])?;
         if changed < 0 {
@@ -2199,55 +2714,67 @@ fn projection_state_code(kind: ProjectionIncompleteKind) -> i64 {
 }
 
 fn load_projection_states(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[PredicateRecordKey],
 ) -> Result<Vec<Option<ProjectionState>>, TursoStorageError> {
-    let documents = load_index_documents(connection, keys)?;
     if keys.is_empty() {
         return Ok(Vec::new());
     }
+    // One read of every requested document, complete or not; facts are then
+    // loaded for the complete ones only.
     let placeholders = sql_placeholders(keys.len());
     let rows = driver::query(
         connection,
         &format!(
-            "SELECT record_key, profile, partition, state FROM index_documents WHERE record_key IN ({placeholders})"
+            "SELECT id, record_key, profile, partition, state FROM index_documents WHERE record_key IN ({placeholders})"
         ),
         keys.iter().map(|key| text(key.as_str())).collect(),
     )?;
-    let mut states = keys
-        .iter()
-        .cloned()
-        .zip(documents)
-        .map(|(key, document)| (key, document.map(ProjectionState::Complete)))
-        .collect::<HashMap<_, _>>();
+    let mut by_id = HashMap::with_capacity(rows.len());
+    let mut documents = HashMap::with_capacity(rows.len());
+    let mut incomplete = HashMap::new();
     for row in rows {
-        if row.len() != 4 {
+        if row.len() != 5 {
             return Err(invariant());
         }
+        let id = required_i64(&row, 0)?;
         let record_key =
-            PredicateRecordKey::new(required_text(&row, 0)?).map_err(|_| invariant())?;
-        let state = required_i64(&row, 3)?;
-        if state == 0 {
-            if states.get(&record_key).is_none_or(Option::is_none) {
-                return Err(invariant());
-            }
+            PredicateRecordKey::new(required_text(&row, 1)?).map_err(|_| invariant())?;
+        let profile = Profile::new(Token::new(required_text(&row, 2)?).map_err(|_| invariant())?);
+        let partition = Token::new(required_text(&row, 3)?).map_err(|_| invariant())?;
+        let state = required_i64(&row, 4)?;
+        if state != 0 {
+            incomplete.insert(
+                record_key.clone(),
+                ProjectionState::Incomplete {
+                    record_key,
+                    profile,
+                    partition,
+                    kind: projection_incomplete_kind(state)?,
+                },
+            );
             continue;
         }
-        let profile = Profile::new(Token::new(required_text(&row, 1)?).map_err(|_| invariant())?);
-        let partition = Token::new(required_text(&row, 2)?).map_err(|_| invariant())?;
-        states.insert(
+        by_id.insert(id, record_key.clone());
+        documents.insert(
             record_key.clone(),
-            Some(ProjectionState::Incomplete {
+            predicate_index::IndexDocument {
                 record_key,
                 profile,
                 partition,
-                kind: projection_incomplete_kind(state)?,
-            }),
+                exact_facts: Vec::new(),
+                integer_facts: Vec::new(),
+                sort_facts: Vec::new(),
+            },
         );
     }
+    load_index_facts(connection, &by_id, &mut documents)?;
     Ok(keys
         .iter()
-        .map(|key| states.get(key).cloned().flatten())
+        .map(|key| match incomplete.get(key) {
+            Some(state) => Some(state.clone()),
+            None => documents.get(key).cloned().map(ProjectionState::Complete),
+        })
         .collect())
 }
 
@@ -2261,7 +2788,7 @@ fn projection_incomplete_kind(state: i64) -> Result<ProjectionIncompleteKind, Tu
 }
 
 fn load_optimistic_projections(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[PredicateRecordKey],
 ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, TursoStorageError> {
     if keys.is_empty() {
@@ -2467,56 +2994,16 @@ fn sql_placeholders(count: usize) -> String {
         .join(", ")
 }
 
-fn load_index_documents(
-    connection: &Arc<Connection>,
-    keys: &[PredicateRecordKey],
-) -> Result<Vec<Option<predicate_index::IndexDocument>>, TursoStorageError> {
-    if keys.is_empty() {
-        return Ok(Vec::new());
-    }
-    let placeholders = (1..=keys.len())
-        .map(|index| format!("?{index}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let rows = driver::query(
-        connection,
-        &format!(
-            "SELECT id, record_key, profile, partition FROM index_documents WHERE state = 0 AND record_key IN ({placeholders})"
-        ),
-        keys.iter().map(|key| text(key.as_str())).collect(),
-    )?;
-    let mut by_id = HashMap::with_capacity(rows.len());
-    let mut documents = HashMap::with_capacity(rows.len());
-    for row in rows {
-        if row.len() != 4 {
-            return Err(invariant());
-        }
-        let id = required_i64(&row, 0)?;
-        let record_key =
-            PredicateRecordKey::new(required_text(&row, 1)?).map_err(|_| invariant())?;
-        let profile = Profile::new(Token::new(required_text(&row, 2)?).map_err(|_| invariant())?);
-        let partition = Token::new(required_text(&row, 3)?).map_err(|_| invariant())?;
-        by_id.insert(id, record_key.clone());
-        documents.insert(
-            record_key.clone(),
-            predicate_index::IndexDocument {
-                record_key,
-                profile,
-                partition,
-                exact_facts: Vec::new(),
-                integer_facts: Vec::new(),
-                sort_facts: Vec::new(),
-            },
-        );
-    }
+/// Fills the facts of complete index documents, keyed by their row ids.
+fn load_index_facts(
+    connection: &Db,
+    by_id: &HashMap<i64, PredicateRecordKey>,
+    documents: &mut HashMap<PredicateRecordKey, predicate_index::IndexDocument>,
+) -> Result<(), TursoStorageError> {
     if by_id.is_empty() {
-        return Ok(vec![None; keys.len()]);
+        return Ok(());
     }
-
-    let id_placeholders = (1..=by_id.len())
-        .map(|index| format!("?{index}"))
-        .collect::<Vec<_>>()
-        .join(", ");
+    let id_placeholders = sql_placeholders(by_id.len());
     let ids = by_id.keys().copied().collect::<Vec<_>>();
     let id_parameters = || ids.iter().copied().map(Value::from_i64).collect::<Vec<_>>();
     for row in driver::query(
@@ -2576,11 +3063,11 @@ fn load_index_documents(
         document.canonicalize();
         document.validate().map_err(|_| invariant())?;
     }
-    Ok(keys.iter().map(|key| documents.get(key).cloned()).collect())
+    Ok(())
 }
 
 fn present_predicate_records(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[PredicateRecordKey],
 ) -> Result<BTreeSet<PredicateRecordKey>, TursoStorageError> {
     let mut present = BTreeSet::new();
@@ -2614,25 +3101,20 @@ fn present_predicate_records(
 }
 
 fn predicate_scope_is_incomplete(
-    connection: &Arc<Connection>,
+    connection: &Db,
     query: &ValidatedIndexQuery,
 ) -> Result<bool, TursoStorageError> {
     let descriptor = query.as_query();
-    let clauses = descriptor
-        .partitions
-        .iter()
-        .map(|_| "(profile = ? AND partition = ?)")
-        .collect::<Vec<_>>()
-        .join(" OR ");
-    let sql = format!(
-        "SELECT 1 FROM index_documents AS d WHERE d.state <> 0 AND ({clauses}) AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) LIMIT 1"
-    );
-    let mut parameters = Vec::with_capacity(descriptor.partitions.len() * 2);
     for partition in &descriptor.partitions {
-        parameters.push(text(descriptor.profile.token().as_str()));
-        parameters.push(text(partition.partition.as_str()));
+        let parameters = vec![
+            text(descriptor.profile.token().as_str()),
+            text(partition.partition.as_str()),
+        ];
+        if !driver::query(connection, INCOMPLETE_SCOPE_DOCUMENT, parameters)?.is_empty() {
+            return Ok(true);
+        }
     }
-    Ok(!driver::query(connection, &sql, parameters)?.is_empty())
+    Ok(false)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -2643,7 +3125,7 @@ struct OptimisticQueryStatus {
 }
 
 fn optimistic_query_status(
-    connection: &Arc<Connection>,
+    connection: &Db,
     query: &ValidatedIndexQuery,
 ) -> Result<OptimisticQueryStatus, TursoStorageError> {
     let descriptor = query.as_query();
@@ -3040,7 +3522,7 @@ fn sql_bound(bound: RangeBound, lower: bool) -> (&'static str, i64) {
 /// same transaction, so an interrupted migration leaves the previous state intact
 /// and is retried on the next open.
 fn migrate_previous_format(
-    connection: &Arc<Connection>,
+    connection: &Db,
     scope: &str,
     previous_namespace: &str,
 ) -> Result<(), TursoStorageError> {
@@ -3068,11 +3550,7 @@ fn migrate_previous_format(
 
 /// Validates or initializes a database. Returns whether a previous format was
 /// carried forward, which native owners compact after opening.
-fn initialize(
-    connection: &Arc<Connection>,
-    scope: &str,
-    fresh: bool,
-) -> Result<bool, TursoStorageError> {
+fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoStorageError> {
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
@@ -3097,17 +3575,26 @@ fn initialize(
             save_search_projection_version(connection)?;
             calendar::save_projection_version(connection)?;
             page_retention::save_version(connection)?;
+            derived_sorts::save_version(connection)?;
             Ok(())
         })
         .map_err(TursoStorageError::initialization)?;
         enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
-        validate_frozen_schema(connection)?;
+        if !has_fresh_schema(connection)? {
+            validate_frozen_schema(connection)?;
+        }
         return Ok(false);
     }
 
     // Ordinary reopen only validates compatibility and pending writes. A changed
     // derived projection performs one bounded rebuild before serving queries.
-    validate_frozen_schema(connection)?;
+    // A schema identical to the one this build creates passed the structural
+    // and statement checks in this build's tests, so only a different schema
+    // pays for them again.
+    let fresh_schema = has_fresh_schema(connection)?;
+    if !fresh_schema {
+        validate_frozen_schema(connection)?;
+    }
     let metadata = driver::query(
         connection,
         "SELECT key, value FROM meta WHERE key IN ('scope', 'namespace', 'storage_schema_version') ORDER BY key ASC",
@@ -3146,6 +3633,73 @@ fn initialize(
         }
         None => false,
     };
+    if !fresh_schema {
+        validate_statements(connection)?;
+    }
+    validate_queue_consistency(connection)?;
+    validate_optimistic_shadow_consistency(connection)?;
+    page_retention::compact_legacy_pages(connection)?;
+    derived_sorts::ensure_version(connection)?;
+    ensure_search_projection_version(connection)?;
+    calendar::ensure_projection_version(connection)?;
+    people_sql::open(connection)?;
+    Ok(migrated)
+}
+
+/// The digest of `sqlite_schema` in a database this build creates; see
+/// [`schema_digest`]. `fresh_database_has_the_pinned_schema_digest` fails with
+/// the new value whenever the schema or how turso records it changes.
+const FRESH_SCHEMA_DIGEST: u128 = 0xc05ad605542917515f7a3408e414ed25;
+
+/// Whether the database holds exactly the schema this build creates.
+fn has_fresh_schema(connection: &Db) -> Result<bool, TursoStorageError> {
+    Ok(schema_digest(connection)? == Some(FRESH_SCHEMA_DIGEST))
+}
+
+/// FNV-1a over every `sqlite_schema` row's type, name, table and SQL, in a
+/// fixed order. Root pages are left out: they differ between databases with
+/// the same schema. `None` when a column holds something other than text or
+/// null, which no schema this build accepts has.
+fn schema_digest(connection: &Db) -> Result<Option<u128>, TursoStorageError> {
+    const OFFSET: u128 = 0x6c62272e07bb014262b821756295c58d;
+    const PRIME: u128 = 0x0000000001000000000000000000013b;
+    fn feed(hash: &mut u128, bytes: &[u8]) {
+        for byte in bytes {
+            *hash ^= u128::from(*byte);
+            *hash = hash.wrapping_mul(PRIME);
+        }
+    }
+    let rows = driver::query(
+        connection,
+        "SELECT type, name, tbl_name, sql FROM sqlite_schema ORDER BY type ASC, name ASC",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let mut hash = OFFSET;
+    feed(&mut hash, &(rows.len() as u64).to_le_bytes());
+    for row in &rows {
+        if row.len() != 4 {
+            return Ok(None);
+        }
+        for value in row {
+            match value {
+                Value::Null => feed(&mut hash, &[0]),
+                Value::Text(text) => {
+                    let text = text.as_str().as_bytes();
+                    feed(&mut hash, &[1]);
+                    feed(&mut hash, &(text.len() as u64).to_le_bytes());
+                    feed(&mut hash, text);
+                }
+                _ => return Ok(None),
+            }
+        }
+    }
+    Ok(Some(hash))
+}
+
+/// Prepares every statement the storage runs, so a schema that cannot run
+/// them requests a reset at open instead of failing a later read or write.
+fn validate_statements(connection: &Db) -> Result<(), TursoStorageError> {
     for sql in [
         RECORD_GET,
         RECORD_UPSERT,
@@ -3172,6 +3726,7 @@ fn initialize(
         QUEUE_DIAGNOSTICS_SELECT,
         OPTIMISTIC_INDEX_DOCUMENT_INSERT,
         OPTIMISTIC_INDEX_DOCUMENT_DELETE,
+        OPTIMISTIC_INDEX_DOCUMENT_ANY,
         OPTIMISTIC_EXACT_FACT_INSERT,
         OPTIMISTIC_INTEGER_FACT_INSERT,
         OPTIMISTIC_SORT_FACT_INSERT,
@@ -3185,15 +3740,10 @@ fn initialize(
     {
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
-    validate_queue_consistency(connection)?;
-    validate_optimistic_shadow_consistency(connection)?;
-    page_retention::compact_legacy_pages(connection)?;
-    ensure_search_projection_version(connection)?;
-    calendar::ensure_projection_version(connection)?;
-    Ok(migrated)
+    Ok(())
 }
 
-fn save_search_projection_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn save_search_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
     driver::execute(
         connection,
         "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
@@ -3205,7 +3755,7 @@ fn save_search_projection_version(connection: &Arc<Connection>) -> Result<(), Tu
     Ok(())
 }
 
-fn ensure_search_projection_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn ensure_search_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
     let versions = driver::query(
         connection,
         "SELECT value FROM meta WHERE key = ?1",
@@ -3270,7 +3820,7 @@ fn ensure_search_projection_version(connection: &Arc<Connection>) -> Result<(), 
     })
 }
 
-fn enable_foreign_keys(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn enable_foreign_keys(connection: &Db) -> Result<(), TursoStorageError> {
     driver::execute(connection, "PRAGMA foreign_keys = ON", Vec::new())?;
     let rows = driver::query(connection, "PRAGMA foreign_keys", Vec::new())?;
     if rows.len() == 1 && required_i64(&rows[0], 0)? == 1 {
@@ -3686,7 +4236,7 @@ const OPTIMISTIC_UNCERTAIN_ATTRIBUTE_COLUMNS: &[ColumnSpec] = &[
     },
 ];
 
-fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_frozen_schema(connection: &Db) -> Result<(), TursoStorageError> {
     validate_allowed_schema_objects(connection)?;
     validate_table_columns(connection, "meta", META_COLUMNS)?;
     validate_table_columns(connection, "records", RECORD_COLUMNS)?;
@@ -3711,7 +4261,7 @@ fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStora
         OPTIMISTIC_UNCERTAIN_ATTRIBUTE_COLUMNS,
     )?;
     validate_table_indexes(connection, "meta", &[(0, "key")])?;
-    validate_table_indexes(connection, "records", &[(0, "__typename"), (1, "id")])?;
+    contact_search::validate_indexes(connection)?;
     validate_search_indexes(connection)?;
     validate_mutation_queue_indexes(connection)?;
     validate_table_indexes(connection, "optimistic_layers", &[])?;
@@ -3773,7 +4323,7 @@ const SQLITE_SEQUENCE_TABLE: &str = "sqlite_sequence";
 const TURSO_AUTOINCREMENT_TABLE: &str =
     "__turso_internal_seq___turso_internal_autoincrement_mutation_queue";
 
-fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_allowed_schema_objects(connection: &Db) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
         "SELECT type, name, sql FROM sqlite_schema ORDER BY type ASC, name ASC",
@@ -3810,6 +4360,7 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
         "optimistic_integer_facts_lookup_idx",
         "optimistic_sort_facts_lookup_idx",
         "search_documents_browse_idx",
+        contact_search::INDEX,
         "sort_facts_lookup_idx",
     ];
     let expected = expected
@@ -3877,7 +4428,7 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
 }
 
 fn validate_support_table(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     support_position: usize,
 ) -> Result<(), TursoStorageError> {
@@ -3942,7 +4493,7 @@ fn validate_support_table(
 }
 
 fn validate_table_columns(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     expected: &[ColumnSpec],
 ) -> Result<(), TursoStorageError> {
@@ -3986,7 +4537,7 @@ fn default_matches(value: Option<&Value>, expected_zero: bool) -> bool {
     }
 }
 
-fn validate_search_indexes(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_search_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
         "PRAGMA index_list('search_documents')",
@@ -4030,6 +4581,8 @@ fn validate_search_indexes(connection: &Arc<Connection>) -> Result<(), TursoStor
         (5, "timestamp_ms", 1, 1),
         (1, "__typename", 0, 1),
         (2, "id", 0, 1),
+        (4, "search_text", 0, 1),
+        (6, "source_hash", 0, 1),
     ];
     if index_rows.len() != expected.len() + 1 {
         return Err(compatibility());
@@ -4061,7 +4614,7 @@ fn validate_search_indexes(connection: &Arc<Connection>) -> Result<(), TursoStor
     Ok(())
 }
 
-fn validate_mutation_queue_indexes(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_mutation_queue_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
         "PRAGMA index_list('mutation_queue')",
@@ -4125,7 +4678,7 @@ fn validate_mutation_queue_indexes(connection: &Arc<Connection>) -> Result<(), T
 }
 
 fn validate_mutation_index_columns(
-    connection: &Arc<Connection>,
+    connection: &Db,
     index: &str,
     column: i64,
     name: &str,
@@ -4159,7 +4712,7 @@ fn validate_mutation_index_columns(
 }
 
 fn validate_table_indexes(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     expected_key_columns: &[(i64, &str)],
 ) -> Result<(), TursoStorageError> {
@@ -4176,8 +4729,18 @@ fn validate_table_indexes(
     let Some(row) = rows.first() else {
         return Ok(());
     };
+    if required_i64(row, 0).ok() != Some(0) {
+        return Err(compatibility());
+    }
+    validate_primary_index(connection, row, expected_key_columns)
+}
+
+fn validate_primary_index(
+    connection: &Db,
+    row: &[Value],
+    expected_key_columns: &[(i64, &str)],
+) -> Result<(), TursoStorageError> {
     if row.len() != 5
-        || required_i64(row, 0).ok() != Some(0)
         || required_i64(row, 2).ok() != Some(1)
         || required_text(row, 3).ok().as_deref() != Some("pk")
         || required_i64(row, 4).ok() != Some(0)
@@ -4242,7 +4805,7 @@ impl SchemaToken {
 }
 
 fn validate_table_constraints(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     expects_autoincrement: bool,
 ) -> Result<(), TursoStorageError> {
@@ -4389,7 +4952,7 @@ fn scan_quoted(
     Err(compatibility())
 }
 
-fn validate_predicate_indexes(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_predicate_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     for (table, index, expected_columns) in [
         (
             "index_documents",
@@ -4461,9 +5024,7 @@ fn validate_predicate_indexes(connection: &Arc<Connection>) -> Result<(), TursoS
     Ok(())
 }
 
-fn validate_optimistic_predicate_indexes(
-    connection: &Arc<Connection>,
-) -> Result<(), TursoStorageError> {
+fn validate_optimistic_predicate_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     let indexes = driver::query(
         connection,
         "PRAGMA index_list('optimistic_index_documents')",
@@ -4524,10 +5085,7 @@ fn validate_optimistic_predicate_indexes(
     Ok(())
 }
 
-fn validate_no_foreign_keys(
-    connection: &Arc<Connection>,
-    table: &str,
-) -> Result<(), TursoStorageError> {
+fn validate_no_foreign_keys(connection: &Db, table: &str) -> Result<(), TursoStorageError> {
     let escaped = table.replace('\'', "''");
     if driver::query(
         connection,
@@ -4543,7 +5101,7 @@ fn validate_no_foreign_keys(
     }
 }
 
-fn validate_optimistic_foreign_key(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_optimistic_foreign_key(connection: &Db) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
         "PRAGMA foreign_key_list('optimistic_layers')",
@@ -4568,9 +5126,7 @@ fn validate_optimistic_foreign_key(connection: &Arc<Connection>) -> Result<(), T
     Ok(())
 }
 
-fn validate_shadow_document_foreign_key(
-    connection: &Arc<Connection>,
-) -> Result<(), TursoStorageError> {
+fn validate_shadow_document_foreign_key(connection: &Db) -> Result<(), TursoStorageError> {
     validate_cascade_foreign_key(
         connection,
         "optimistic_index_documents",
@@ -4581,7 +5137,7 @@ fn validate_shadow_document_foreign_key(
 }
 
 fn validate_fact_foreign_key(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     parent: &str,
 ) -> Result<(), TursoStorageError> {
@@ -4589,7 +5145,7 @@ fn validate_fact_foreign_key(
 }
 
 fn validate_cascade_foreign_key(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     parent: &str,
     from: &str,
@@ -4623,7 +5179,7 @@ fn compatibility() -> TursoStorageError {
     TursoStorageError::reset(PhysicalResetReason::Compatibility)
 }
 
-fn validate_queue_consistency(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_queue_consistency(connection: &Db) -> Result<(), TursoStorageError> {
     let queue = driver::query(connection, QUEUE_SELECT, Vec::new())
         .map_err(TursoStorageError::initialization)?;
     for row in queue {
@@ -4641,9 +5197,7 @@ fn validate_queue_consistency(connection: &Arc<Connection>) -> Result<(), TursoS
     }
 }
 
-fn validate_optimistic_shadow_consistency(
-    connection: &Arc<Connection>,
-) -> Result<(), TursoStorageError> {
+fn validate_optimistic_shadow_consistency(connection: &Db) -> Result<(), TursoStorageError> {
     if !driver::query(connection, "PRAGMA foreign_key_check", Vec::new())
         .map_err(TursoStorageError::initialization)?
         .is_empty()
@@ -4706,27 +5260,93 @@ struct EncodedRecord {
     value: Vec<u8>,
     search_documents: Vec<SearchDocument>,
     calendar_range: Option<cache_core::calendar::CalendarRangeRow>,
+    contact: Option<Record>,
 }
 
-fn prepare_records(
-    entries: Vec<(EntityKey<'static>, Record)>,
-) -> Result<Vec<EncodedRecord>, TursoStorageError> {
+impl TursoStorage {
+    /// Writes the records `prepare` encodes, with projection changes, in one
+    /// transaction. Encoding runs once storage is known healthy.
+    fn put_encoded_with_projections(
+        &mut self,
+        prepare: impl FnOnce() -> Result<Vec<EncodedRecord>, TursoStorageError>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        let result = (|| {
+            let mut entries = prepare()?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                // Several records per statement: on a cold write, running one
+                // statement per record cost more than the rows it wrote.
+                let mut written = 0;
+                for size in insert_batches(entries.len()) {
+                    let mut values = Vec::with_capacity(size * 3);
+                    for entry in &mut entries[written..written + size] {
+                        values.extend([
+                            text(&entry.key.typename),
+                            text(&entry.key.id),
+                            Value::from_blob(std::mem::take(&mut entry.value)),
+                        ]);
+                    }
+                    insert_rows(
+                        &connection,
+                        RECORD_UPSERT_PREFIX,
+                        RECORD_UPSERT_SUFFIX,
+                        3,
+                        values,
+                    )?;
+                    for index in written..written + size {
+                        self.fault_after(TestFaultSite::Put, index)?;
+                    }
+                    written += size;
+                }
+                write_derived_rows(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)
+            })
+        })();
+        self.latch_result(result)
+    }
+}
+
+/// Encodes records for storage. An owned batch drops each decoded record once
+/// it is encoded.
+fn prepare_records<K, R>(
+    entries: impl IntoIterator<Item = (K, R)>,
+) -> Result<Vec<EncodedRecord>, TursoStorageError>
+where
+    K: std::borrow::Borrow<EntityKey<'static>>,
+    R: std::borrow::Borrow<Record>,
+{
     entries
         .into_iter()
         .map(|(key, record)| {
+            let (key, record) = (key.borrow(), record.borrow());
+
+            let value = encode_record(record);
             Ok(EncodedRecord {
-                key: RecordKey::from_entity(&key)?,
-                value: encode_record(&record),
-                search_documents: project_search_documents(&key, &record),
-                calendar_range: cache_core::calendar::project_calendar_range(&key, &record),
+                key: RecordKey::from_entity(key)?,
+                search_documents: project_encoded_search_documents(key, record, &value),
+                value,
+                calendar_range: cache_core::calendar::project_calendar_range(key, record),
+                contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
+                    fields: record
+                        .fields
+                        .iter()
+                        .filter(|(field, _)| {
+                            cache_core::people::sql::projection::INPUT_FIELDS
+                                .contains(&field.as_str())
+                        })
+                        .map(|(field, value)| (field.clone(), value.clone()))
+                        .collect(),
+                }),
             })
         })
         .collect()
 }
 
 fn delete_search_document(
-    rowid_statement: &mut turso_core::Statement,
-    delete_statement: &mut turso_core::Statement,
+    rowid_statement: &mut driver::Prepared,
+    delete_statement: &mut driver::Prepared,
     profile: SearchProfile,
     key: &RecordKey,
 ) -> Result<(), TursoStorageError> {
@@ -4748,7 +5368,7 @@ fn delete_search_document(
 }
 
 fn delete_search_documents_batch(
-    connection: &Arc<Connection>,
+    connection: &Db,
     profile: SearchProfile,
     keys: &[&RecordKey],
 ) -> Result<(), TursoStorageError> {
@@ -4786,7 +5406,7 @@ fn delete_search_documents_batch(
 }
 
 fn upsert_search_documents_batch(
-    connection: &Arc<Connection>,
+    connection: &Db,
     documents: &[(&RecordKey, &SearchDocument)],
 ) -> Result<(), TursoStorageError> {
     for documents in documents.chunks(SEARCH_WRITE_BATCH_SIZE) {
@@ -4816,16 +5436,14 @@ fn upsert_search_documents_batch(
 }
 
 /// Writes every derived row of upserted records in the records' transaction.
-fn write_derived_rows(
-    connection: &Arc<Connection>,
-    entries: &[EncodedRecord],
-) -> Result<(), TursoStorageError> {
+fn write_derived_rows(connection: &Db, entries: &[EncodedRecord]) -> Result<(), TursoStorageError> {
     write_search_documents(connection, entries)?;
-    calendar::write_ranges(connection, entries)
+    calendar::write_ranges(connection, entries)?;
+    people_sql::write(connection, entries)
 }
 
 fn write_search_documents(
-    connection: &Arc<Connection>,
+    connection: &Db,
     entries: &[EncodedRecord],
 ) -> Result<(), TursoStorageError> {
     let mut last_entry_by_key = HashMap::with_capacity(entries.len());
@@ -4963,7 +5581,7 @@ fn parse_boolean(row: &[Value], index: usize) -> Result<bool, TursoStorageError>
 }
 
 fn claim_is_current(
-    connection: &Arc<Connection>,
+    connection: &Db,
     id: i64,
     claim: &MutationClaimToken,
 ) -> Result<bool, TursoStorageError> {
@@ -4979,7 +5597,7 @@ fn claim_is_current(
     }
 }
 
-fn require_layer(connection: &Arc<Connection>, id: i64) -> Result<(), TursoStorageError> {
+fn require_layer(connection: &Db, id: i64) -> Result<(), TursoStorageError> {
     let rows = driver::query(connection, REQUIRE_LAYER_SELECT, vec![Value::from_i64(id)])?;
     if rows.len() == 1 && required_i64(&rows[0], 0)? == 1 {
         Ok(())
@@ -5197,10 +5815,15 @@ mod alternatives;
 mod bounded_selection;
 mod calendar;
 mod conjunction;
+mod contact_search;
+mod derived_sorts;
 mod integrity;
 mod mutation_retry;
+mod name_search;
 mod page_retention;
+mod people_sql;
 mod record_batch;
+mod search;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

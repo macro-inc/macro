@@ -17,7 +17,7 @@ use uuid::Uuid;
 /// without trusting the user's default team. Returns `None` when the user is
 /// not on that team, or when the company is hidden and the user is a plain
 /// member.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn get_crm_company_access(
     pool: &PgPool,
     company_id: &Uuid,
@@ -33,6 +33,7 @@ pub async fn get_crm_company_access(
         JOIN team_user tu
             ON tu.team_id = c.team_id
            AND tu.user_id = $1
+           AND (tu.crm_access OR tu.team_role <> 'member')
         WHERE c.id = $2
         "#,
         user_id.as_ref(),
@@ -57,6 +58,7 @@ pub async fn get_team_crm_company_access(
     company_id: &Uuid,
     team_id: &Uuid,
 ) -> Result<Option<CrmEntityAccess>, sqlx::Error> {
+    // Keep the PK lookup before the team filter even when statistics are stale.
     sqlx::query_as!(
         CrmEntityAccess,
         r#"
@@ -64,9 +66,10 @@ pub async fn get_team_crm_company_access(
             'view'::"AccessLevel" AS "access_level!: AccessLevel",
             team_id AS "team_id!",
             'member'::team_role AS "team_role!: TeamRole"
-        FROM crm_companies
-        WHERE id = $1
-          AND team_id = $2
+        FROM (
+            SELECT team_id, hidden FROM crm_companies WHERE id = $1 OFFSET 0
+        ) company
+        WHERE team_id = $2
           AND hidden = false
         "#,
         company_id,

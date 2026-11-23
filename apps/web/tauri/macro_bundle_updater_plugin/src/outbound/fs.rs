@@ -8,6 +8,30 @@ use sha2::Sha256;
 use std::path::PathBuf;
 use zip::{read::root_dir_common_filter, result::ZipError};
 
+#[cfg(target_os = "ios")]
+use objc2_foundation::{NSNumber, NSString, NSURL, NSURLIsExcludedFromBackupKey};
+
+/// Keep the re-downloadable OTA store out of iCloud backups.
+#[cfg(target_os = "ios")]
+pub(crate) fn exclude_from_backup(path: &std::path::Path) -> std::io::Result<()> {
+    let ns_path = NSString::from_str(&path.to_string_lossy());
+    objc2::rc::autoreleasepool(|_| {
+        // SAFETY: `ns_path` is alive for the call and produces a retained file URL.
+        let url = unsafe { NSURL::fileURLWithPath_isDirectory(&ns_path, true) };
+        let excluded = NSNumber::numberWithBool(true);
+        // SAFETY: both Objective-C objects remain alive for the resource write.
+        unsafe {
+            url.setResourceValue_forKey_error(Some(excluded.as_ref()), NSURLIsExcludedFromBackupKey)
+        }
+    })
+    .map_err(|error| {
+        std::io::Error::other(format!(
+            "failed to exclude {} from backup: {error}",
+            path.display()
+        ))
+    })
+}
+
 #[cfg(test)]
 mod test;
 

@@ -1,7 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
 import { adAttributionForCapture } from '@app/lib/analytics/signupAttribution';
-import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
+import { GOOGLE_GMAIL_IDP, MICROSOFT_IDP } from '@core/auth/email';
 import { toast } from '@core/component/Toast/Toast';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
@@ -76,7 +76,12 @@ export function createAppAuthContext(): AuthContext {
         .with('signup', () => signupSso)
         .with('agent-signup', () => agentSignupSso)
         .exhaustive();
-      return startSsoFor(provider === 'google' ? GOOGLE_GMAIL_IDP : 'Apple');
+      const idpName = match(provider)
+        .with('google', () => GOOGLE_GMAIL_IDP)
+        .with('microsoft', () => MICROSOFT_IDP)
+        .with('apple', () => 'Apple')
+        .exhaustive();
+      return startSsoFor(idpName);
     },
     sendEmailCode,
     verifyEmailCode,

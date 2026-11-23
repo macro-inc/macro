@@ -6,7 +6,10 @@ import type { Accessor } from 'solid-js';
 import { createUniqueId, Show } from 'solid-js';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { RecipientDropRow } from '../components/recipient-drop-row';
-import type { EmailInbox } from '../context/compose-capabilities';
+import type {
+  EmailInbox,
+  EmailRecipientSourceFactory,
+} from '../context/compose-capabilities';
 import type { EmailRecipient, RecipientFieldId } from '../core/email-recipient';
 import { getRecipientDisplayName } from '../core/email-recipient';
 import { fromInboxOptions } from '../core/email-sender';
@@ -19,6 +22,7 @@ type ReplyEnvelopeProps = {
   fields: ReturnType<typeof createReplyRecipientFields>;
   values: Accessor<EmailFormRecipients>;
   options: Accessor<EmailRecipient[]>;
+  createRecipientSource: EmailRecipientSourceFactory | undefined;
   inboxes: Accessor<EmailInbox[]>;
   activeInboxId: Accessor<string | undefined>;
   senderEmail: Accessor<string | undefined>;
@@ -101,6 +105,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
             : setBccRef
       }
       options={props.options}
+      createSource={props.createRecipientSource}
       selfEmail={props.senderEmail()}
       selectedOptions={props.values()[field.field]}
       setSelectedOptions={(values) =>

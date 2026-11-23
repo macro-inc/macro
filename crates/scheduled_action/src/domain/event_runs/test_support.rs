@@ -20,6 +20,7 @@ pub fn incoming() -> IncomingEvent {
     IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Document(
             serde_json::from_value(json!({
                 "event_type":"document.updated", "metadata": {
@@ -149,6 +150,34 @@ impl CurrentOwnerAccess for Access {
                 .clone()
                 .unwrap_or_else(|| capability(owner.clone(), event)),
         ))
+    }
+}
+
+/// Inbox delegations as (owner, inbox, delegate) edges.
+#[derive(Default)]
+pub struct Delegates {
+    pub edges: Mutex<Vec<(MacroUserIdStr<'static>, Uuid, MacroUserIdStr<'static>)>>,
+    pub unavailable: Mutex<bool>,
+    pub calls: Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>,
+}
+impl InboxDelegates for Delegates {
+    async fn delegates(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        link_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.calls.lock().unwrap().push((owner.clone(), link_id));
+        if *self.unavailable.lock().unwrap() {
+            return Err(rootcause::report!("delegations unavailable"));
+        }
+        Ok(self
+            .edges
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(edge_owner, edge_link, _)| edge_owner == owner && *edge_link == link_id)
+            .map(|(_, _, delegate)| delegate.clone())
+            .collect())
     }
 }
 
@@ -325,6 +354,10 @@ impl EventRunRepository for Repo {
                 claimed: Some(started_at),
                 run_visibility: RunVisibility::Unlisted,
                 template_id: None,
+                appearance: model_entity::EntityAppearance::default(),
+                suggestion_id: None,
+                description: String::new(),
+                sub_routine: None,
             },
         }))
     }
@@ -462,4 +495,17 @@ pub fn setup() -> (Arc<Repo>, Arc<Access>, Arc<Executor>, PendingEventRun) {
     repo.0.lock().unwrap().configurations.push(config);
     repo.0.lock().unwrap().pending.push(pending.clone());
     (repo, Arc::default(), Arc::default(), pending)
+}
+
+/// A rollout answering the same for every owner, or failing to load.
+#[derive(Clone, Copy)]
+pub struct Rollout(pub Option<bool>);
+
+pub const ROLLED_OUT: Rollout = Rollout(Some(true));
+
+impl crate::domain::event_rollout::EventRoutineRollout for Rollout {
+    async fn enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        self.0
+            .ok_or_else(|| rootcause::report!("flags unavailable"))
+    }
 }

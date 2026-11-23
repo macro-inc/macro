@@ -2,14 +2,12 @@ import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-h
 import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
 import { usePending } from '@app/observability/flow';
-import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ListEntity,
   ListEntityMetadataQueryProvider,
   ListLayoutProvider,
   type NarrowLayoutVariant,
 } from '@entity';
-import { Button } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -23,6 +21,7 @@ import { useInfiniteScrollSentinel } from '../../../lib/primitives/infinite-scro
 import {
   CrmListEmpty,
   CrmListError,
+  CrmListRetry,
   CrmListSearchEmpty,
   CrmListSkeleton,
 } from '../components/list-state';
@@ -114,7 +113,7 @@ export function RecordItemList(props: {
           <Show
             when={props.narrowLayout !== 'condensed'}
             fallback={
-              <RetryNotice
+              <CrmListRetry
                 message="Couldn't load this list."
                 onRetry={() => props.source.refetch()}
               />
@@ -164,7 +163,7 @@ export function RecordItemList(props: {
                 <CrmListSkeleton label="Searching more items" count={2} />
               }
             >
-              <RetryNotice
+              <CrmListRetry
                 message="Couldn't load more."
                 onRetry={() => props.source.fetchNextPage()}
               />
@@ -234,7 +233,7 @@ export function RecordItemList(props: {
           <Show
             when={!props.source.isFetchNextPageError}
             fallback={
-              <RetryNotice
+              <CrmListRetry
                 message="Couldn't load more."
                 onRetry={() => props.source.fetchNextPage()}
               />
@@ -249,25 +248,6 @@ export function RecordItemList(props: {
           </Show>
         </Match>
       </Switch>
-    </div>
-  );
-}
-
-/** A failed request, kept distinct from an empty list, with a retry. */
-function RetryNotice(props: {
-  message: string;
-  onRetry: () => Promise<unknown>;
-}) {
-  return (
-    <div class="flex items-center justify-center gap-2 p-3 text-center text-xs text-ink-muted">
-      <span>{props.message}</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => fireAndForget(props.onRetry(), 'crm')}
-      >
-        Retry
-      </Button>
     </div>
   );
 }

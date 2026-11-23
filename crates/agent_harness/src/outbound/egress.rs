@@ -1,8 +1,8 @@
 //! Handing a sandbox its one secret, and telling opencode where to spend it.
 //!
-//! Three adapter concerns the domain has no business with: minting a token,
-//! listing the owner's Pipedream-connected apps, and listing the owner's own
-//! custom MCP servers - the last two need their rows.
+//! Two adapter concerns the domain has no business with: minting a token,
+//! and listing what the session's agent may reach, which the connectors
+//! service decides.
 //!
 //! Both the minting and the hashing are `agent_egress`'s, not a second
 //! implementation of either. The two ends of this token are written in
@@ -11,11 +11,10 @@
 //! unauthenticated".
 
 use agent_egress::domain::model::{
-    CustomMcpServerKey, CustomMcpServerListing, McpServerSlug, SessionToken,
+    CustomMcpServerKey, CustomMcpServerListing, McpServerSlug, SessionToken, agent_selection,
 };
+use connectors::{ConnectorKey, McpConnectionsService};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::ports::McpServerStore;
-use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays};
 use std::sync::Arc;
 
 use crate::domain::error::{HarnessError, Result};
@@ -26,29 +25,22 @@ use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 #[cfg(test)]
 mod test;
 
-/// Mints session tokens and gathers the MCP servers a sandbox may dial.
-pub struct EgressProvisioner<Connections, Servers> {
+/// Mints session tokens and lists the MCP servers a sandbox may dial.
+pub struct EgressProvisioner<Connections> {
     connections: Arc<Connections>,
-    custom_servers: Arc<Servers>,
     base_url: String,
     external_base_url: Option<String>,
 }
 
-impl<Connections, Servers> EgressProvisioner<Connections, Servers>
+impl<Connections> EgressProvisioner<Connections>
 where
-    Connections: ConnectionStore + ConnectorOverlays,
-    Servers: McpServerStore,
+    Connections: McpConnectionsService,
 {
-    /// Build the provisioner over the Pipedream connection store, the custom
-    /// MCP server store, and the egress proxy's public address.
-    pub fn new(
-        connections: Arc<Connections>,
-        custom_servers: Arc<Servers>,
-        base_url: impl Into<String>,
-    ) -> Self {
+    /// Build the provisioner over the connectors service and the egress
+    /// proxy's public address.
+    pub fn new(connections: Arc<Connections>, base_url: impl Into<String>) -> Self {
         Self {
             connections,
-            custom_servers,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
             external_base_url: None,
         }
@@ -60,69 +52,50 @@ where
         self
     }
 
-    // Both runtime hosts use mcp_select's provider policy. This adapter only
-    // loads owner-scoped rows and converts the result to proxy addresses.
-    async fn advertised_all(
+    /// The apps and custom servers a session with `selection` is given: the
+    /// agent author's apps, connected or not, so a call to one the owner has
+    /// not connected asks them to connect it; or, for an agent given
+    /// everything, every connection the owner can use. Code executions read
+    /// this too, so a program reaches exactly the apps its agent was given.
+    /// The egress proxy enforces the same selection on every request.
+    pub async fn advertised_all(
         &self,
         owner: &MacroUserIdStr<'static>,
         selection: &AgentMcpServers,
     ) -> Result<(Vec<McpServerSlug>, Vec<CustomMcpServerListing>)> {
-        let native = self.custom_servers.list(owner).await.map_err(|error| {
-            HarnessError::Egress(rootcause::report!(
-                "could not list custom MCP servers: {error:?}"
-            ))
-        })?;
-        // Selected-agent permissions are unchanged: advertise the author's
-        // explicit list and never add the owner's other private servers to
-        // it. An overlaid app the owner connected natively is advertised as
-        // that server; unconnected, its slug stays so a call asks to connect.
-        if let AgentMcpServers::Selected { servers } = selection {
-            let overlays = self.connections.overlays().await.map_err(|error| {
-                HarnessError::Egress(rootcause::report!("could not list MCP overlays: {error:?}"))
-            })?;
-            let mut slugs = Vec::new();
-            let mut custom = Vec::new();
-            for server in servers {
-                let connected = overlays
-                    .iter()
-                    .find(|overlay| overlay.app_slug == server.app_slug)
-                    .and_then(|overlay| mcp_select::overlay_connection(&native, overlay));
-                match connected {
-                    Some(record) => custom.push(CustomMcpServerListing {
-                        key: CustomMcpServerKey::for_url(&record.url),
-                        name: record.server_name.clone(),
-                    }),
-                    None => slugs.extend(McpServerSlug::parse(&server.app_slug)),
-                }
+        let connections = self
+            .connections
+            .connections(owner)
+            .await
+            .map_err(|error| {
+                HarnessError::Egress(rootcause::report!(
+                    "could not list the owner's MCP connections: {error}"
+                ))
+            })?
+            .scoped(&agent_selection(selection));
+
+        let mut slugs = Vec::new();
+        let mut custom = Vec::new();
+        for key in connections.destinations() {
+            match &key {
+                ConnectorKey::App(app) => slugs.extend(McpServerSlug::parse(app.as_str())),
+                ConnectorKey::Server(url) => custom.push(CustomMcpServerListing {
+                    key: CustomMcpServerKey::for_url(url.as_str()),
+                    name: connections
+                        .handles()
+                        .find(|handle| *handle.key() == key)
+                        .map_or_else(|| url.to_string(), |handle| handle.name().to_owned()),
+                }),
             }
-            return Ok((slugs, custom));
         }
-        let pipedream = self.connections.list(owner).await.map_err(|error| {
-            HarnessError::Egress(rootcause::report!(
-                "could not list Pipedream connections: {error:?}"
-            ))
-        })?;
-        let (native, pipedream) = mcp_select::select_connections(native, pipedream);
-        Ok((
-            pipedream
-                .into_iter()
-                .filter_map(|r| McpServerSlug::parse(&r.app_slug))
-                .collect(),
-            native
-                .into_iter()
-                .map(|r| CustomMcpServerListing {
-                    key: CustomMcpServerKey::for_url(&r.url),
-                    name: r.server_name,
-                })
-                .collect(),
-        ))
+
+        Ok((slugs, custom))
     }
 }
 
-impl<Connections, Servers> SandboxEgressProvisioner for EgressProvisioner<Connections, Servers>
+impl<Connections> SandboxEgressProvisioner for EgressProvisioner<Connections>
 where
-    Connections: ConnectionStore + ConnectorOverlays,
-    Servers: McpServerStore,
+    Connections: McpConnectionsService,
 {
     fn external_mcp_servers(
         &self,

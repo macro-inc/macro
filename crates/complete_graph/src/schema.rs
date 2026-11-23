@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod test;
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use crate::edges::GraphqlAgentSessionLogEntry;
-use crate::realtime::AgentSessionLogSubscriptions;
+use crate::realtime::{AgentSessionActivitySubscriptions, AgentSessionLogSubscriptions};
 use crate::saved_view::{GraphqlSavedView, GraphqlSavedViewPage, SavedViewMutationRoot};
 use agent_session::domain::model::AgentSessionId;
 use async_graphql::{Context, ID, MergedObject, MergedSubscription, Object, Schema, Subscription};
@@ -41,15 +41,17 @@ use graphql_favorite::{
 };
 use graphql_initiative::{
     GraphqlInitiativeTasksPage, InitiativeMutationRoot, InitiativeTasksInput, resolve_initiative,
-    resolve_initiative_tasks,
+    resolve_initiative_tasks, resolve_visible_initiative,
 };
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
+    resolve_active_notification_ids,
 };
 use graphql_notification_inbox::{
-    GraphqlNotificationInboxPage, NotificationInboxInput, NotificationInboxMutationRoot,
-    NotificationInboxSubscriptionRoot, resolve_notification_inbox,
+    GraphqlNotificationInboxClear, GraphqlNotificationInboxPage, NotificationInboxInput,
+    NotificationInboxMutationRoot, NotificationInboxSubscriptionRoot, resolve_notification_inbox,
+    resolve_notification_inbox_clears,
 };
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
@@ -57,6 +59,9 @@ use graphql_properties::{
     GraphqlPropertyDefinitionScope, GraphqlPropertyOption, NoOpEntityPropertyReader,
     NoOpEntityPropertyWriter, PropertiesMutationRoot, load_property_definitions,
     load_property_options,
+};
+use graphql_registered_work::{
+    GraphqlRegisteredWork, RegisteredWorkSubscriptionRoot, resolve_registered_work,
 };
 use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
 use graphql_soup::{
@@ -66,6 +71,7 @@ use graphql_soup::{
     resolve_soup, resolve_soup_agent_session, resolve_soup_email_thread,
     resolve_soup_email_threads, resolve_soup_entity, resolve_soup_updates,
 };
+use graphql_time_tracking::{GraphqlTimeTracking, TimeTrackingMutationRoot};
 use graphql_work_feed::{
     GraphqlWorkFeedPage, WorkFeedInput, WorkFeedMutationRoot, WorkFeedSubscriptionRoot,
     resolve_work_feed,
@@ -109,6 +115,7 @@ pub struct CompleteMutationRoot<
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
     graphql_email::GraphqlEmailSendMutation<ES, SoupEmailThreadMutationOutput<E>>,
     InitiativeMutationRoot<E>,
+    TimeTrackingMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
     NotificationInboxMutationRoot<E>,
@@ -137,6 +144,7 @@ impl<
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
             graphql_email::GraphqlEmailSendMutation::<ES, SoupEmailThreadMutationOutput<E>>::default(),
             InitiativeMutationRoot::<E>::default(),
+            TimeTrackingMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
             NotificationInboxMutationRoot::<E>::default(),
@@ -148,17 +156,20 @@ impl<
 /// Root subscription object combining realtime Soup, notification,
 /// activity, work feed and notification inbox adapters.
 #[derive(MergedSubscription)]
-pub struct CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>(
-    SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>,
+pub struct CompleteSubscriptionRoot<R, NS, AS, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>(
+    SoupSubscriptionRoot<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
     NotificationSubscriptionRoot<NS>,
-    ActivitySubscriptionRoot<AS>,
+    ActivitySubscriptionRoot<AS, EAS, St>,
     WorkFeedSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
     NotificationInboxSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    RegisteredWorkSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
 )
 where
     R: SoupRealtimeSubscriptionService,
     NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
     AS: ActivitySubscriptionService,
+    EAS: EntityAccessService,
+    Arc<EAS>: FromRef<St>,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
     MacroAuthorizationState<Auth>: FromRef<St>,
@@ -184,7 +195,7 @@ pub type SoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, 
     Schema<
         SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
         CompleteMutationRoot<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
-        CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>,
+        CompleteSubscriptionRoot<R, NS, AS, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
     >;
 
 /// GraphQL Soup schema type backed by shared query and realtime services.
@@ -210,6 +221,21 @@ pub type SharedSoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR
         AR,
         AcR,
     >;
+
+/// The Soup service a schema's query root runs on. Request data the
+/// resolvers look up by that service's type, such as
+/// [`graphql_soup::PrimaryChannelSoup`], is typed through it so it cannot
+/// drift from the schema: `PrimaryChannelSoup<<Schema as SoupSchemaService>::Service>`.
+pub trait SoupSchemaService {
+    /// The query root's Soup service: `Arc<S>` in a [`SharedSoupSchema`].
+    type Service;
+}
+
+impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR, M, Sub> SoupSchemaService
+    for Schema<SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>, M, Sub>
+{
+    type Service = S;
+}
 
 /// GraphQL Soup schema type backed by the no-op services, used only for
 /// SDL export or introspection.
@@ -295,16 +321,16 @@ impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
 }
 
 /// Root GraphQL subscription object for realtime Soup updates.
-pub struct SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR> {
+pub struct SoupSubscriptionRoot<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR> {
     /// Realtime Soup service used by user-scoped subscriptions.
     service: R,
     /// Associates the root with authorization, state, and edge reader types.
     #[allow(clippy::type_complexity)]
-    _marker: PhantomData<fn() -> (Auth, St, NR, PR, ER, FR, AR, AcR)>,
+    _marker: PhantomData<fn() -> (EAS, Auth, St, NR, PR, ER, FR, AR, AcR)>,
 }
 
-impl<R, Auth, St, NR, PR, ER, FR, AR, AcR>
-    SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>
+impl<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
+    SoupSubscriptionRoot<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
 {
     /// Creates a root GraphQL subscription object.
     pub fn new(service: R) -> Self {
@@ -469,6 +495,7 @@ where
             ActivitySubscriptionRoot::new(activity_subscription_service),
             WorkFeedSubscriptionRoot::default(),
             NotificationInboxSubscriptionRoot::default(),
+            RegisteredWorkSubscriptionRoot::default(),
         ),
     )
     .finish()
@@ -620,10 +647,12 @@ where
 
 /// Root entry point for realtime Soup subscriptions.
 #[Subscription]
-impl<R, Auth, St, NR, PR, ER, FR, AR, AcR>
-    SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>
+impl<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
+    SoupSubscriptionRoot<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
 where
     R: SoupRealtimeSubscriptionService,
+    EAS: EntityAccessService,
+    Arc<EAS>: FromRef<St>,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
     MacroAuthorizationState<Auth>: FromRef<St>,
@@ -683,9 +712,88 @@ where
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|error| async_graphql::Error::new(error.to_string()));
             }
+            // The viewer reopens and refetches; this is how often it has to.
+            tracing::warn!(
+                agent.session.id = %session_id,
+                "closing an agent session log subscription that fell behind"
+            );
             yield Err(async_graphql::Error::new(
                 "agent session log subscription closed after falling behind",
             ));
+        })
+    }
+
+    /// Recorded activity from any invocation associated with this accessible session.
+    /// The stream errors when rows were missed; clients must refetch its REST page.
+    async fn agent_session_activity_appended(
+        &self,
+        ctx: &Context<'_>,
+        session_id: ID,
+    ) -> async_graphql::Result<
+        impl async_graphql::futures_util::Stream<
+            Item = async_graphql::Result<Vec<GraphqlActivityEvent>>,
+        > + 'static,
+    > {
+        let user_id = require_authorized_user::<Auth, St>(ctx).await?;
+        let session_id = parse_id(session_id, "sessionId")?;
+        let accessible = resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            user_id.clone(),
+            session_id,
+        )
+        .await?
+        .is_some();
+        if !accessible {
+            return Err(async_graphql::Error::new("agent session not found"));
+        }
+        let subscriptions = ctx.data::<AgentSessionActivitySubscriptions>()?.clone();
+        let record_access = Arc::<EAS>::from_ref(ctx.data::<St>()?);
+        let activity_viewer = user_id.clone();
+        let mut receiver = subscriptions.subscribe();
+        Ok(async_stream::stream! {
+            let mut ownership = HashMap::new();
+            // The empty first frame acknowledges that delivery is listening.
+            // The client rereads after this point to close the REST-to-stream gap.
+            yield Ok(Vec::new());
+            loop {
+                match receiver.recv().await {
+                    Ok(record) => {
+                        let Some(correlation_id) = record.agent_correlation_id else { continue };
+                        let belongs = if let Some(belongs) = ownership.get(&correlation_id) {
+                            *belongs
+                        } else {
+                            match subscriptions.session_for_correlation(correlation_id).await {
+                                Ok(owner) => {
+                                    let belongs = owner == Some(session_id);
+                                    if ownership.len() >= 4096 {
+                                        ownership.clear();
+                                    }
+                                    ownership.insert(correlation_id, belongs);
+                                    belongs
+                                }
+                                Err(error) => {
+                                    yield Err(async_graphql::Error::new(error.to_string()));
+                                    break;
+                                }
+                            }
+                        };
+                        if belongs {
+                            match graphql_activity::record_visible(record_access.as_ref(), &activity_viewer, &record).await {
+                                Ok(true) => {},
+                                Ok(false) => continue,
+                                Err(error) => { yield Err(error); break; }
+                            }
+                            yield Ok(vec![GraphqlActivityEvent::from(record.as_ref().clone())]);
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        tracing::warn!(agent.session.id = %session_id, skipped, "closing an agent session activity subscription that fell behind");
+                        yield Err(async_graphql::Error::new("agent session activity subscription closed after falling behind"));
+                        break;
+                    }
+                }
+            }
         })
     }
 }
@@ -748,12 +856,26 @@ where
     }
 
     /// One initiative accessible to the authenticated viewer.
+    #[graphql(
+        deprecation = "Use visibleInitiative, which answers a missing or hidden project with null instead of NOT_FOUND. Remove after 2026-12-31."
+    )]
     async fn initiative(
         &self,
         ctx: &Context<'_>,
         initiative_id: ID,
     ) -> async_graphql::Result<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
         resolve_initiative(ctx, initiative_id).await
+    }
+
+    /// One initiative accessible to the authenticated viewer, or null when it
+    /// is missing or not visible to them.
+    async fn visible_initiative(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        resolve_visible_initiative(ctx, initiative_id).await
     }
 
     /// A permission-filtered page of task identifiers within an initiative.
@@ -770,6 +892,14 @@ where
             input.unwrap_or_default(),
         )
         .await
+    }
+
+    /// The authenticated user's running timer and the server's clock.
+    async fn time_tracking(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<GraphqlTimeTracking<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
+        graphql_time_tracking::resolve_time_tracking(ctx, &self.user_id).await
     }
 
     /// AI routines the authenticated user can access.
@@ -868,6 +998,18 @@ where
         resolve_activity_overview::<AcR>(ctx, &self.user_id, input).await
     }
 
+    /// Authenticated personal directory fields supplied by `graphql_contacts`.
+    #[graphql(flatten)]
+    async fn contact_directory(&self) -> graphql_contacts::GraphqlContactsQuery {
+        graphql_contacts::GraphqlContactsQuery::new(self.user_id.clone())
+    }
+
+    /// Authenticated user channel fields supplied by `graphql_channel`.
+    #[graphql(flatten)]
+    async fn channels(&self) -> graphql_channel::GraphqlChannelUserQuery {
+        graphql_channel::GraphqlChannelUserQuery::new(self.user_id.clone())
+    }
+
     /// Authenticated user calendar fields supplied by `graphql_calendar`.
     #[graphql(flatten)]
     async fn calendar(&self) -> GraphqlCalendarQuery {
@@ -891,6 +1033,22 @@ where
         .await
     }
 
+    /// The agent sessions `accountIds` registered as their work that the
+    /// authenticated user can view, newest first, at most 50 accounts.
+    /// Registrations of sessions the user cannot view are completely hidden.
+    async fn registered_work(
+        &self,
+        ctx: &Context<'_>,
+        account_ids: Vec<ID>,
+    ) -> async_graphql::Result<Vec<GraphqlRegisteredWork<SoupEdges<NR, PR, ER, FR, AR, AcR>>>> {
+        resolve_registered_work::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            account_ids,
+        )
+        .await
+    }
+
     /// A page of the authenticated user's notifications inbox, newest group
     /// first: their pending notifications grouped by the entity they are
     /// filed under and cut into rows, one per conversation thread, channel
@@ -907,6 +1065,32 @@ where
             input.unwrap_or_default(),
         )
         .await
+    }
+
+    /// Ids of the authenticated user's active (unseen or seen) notifications
+    /// whose event type is one of `eventTypes`, newest first: at most `limit`,
+    /// 100 by default and 500 at most. For acting on every notification of a
+    /// type without reading a notification list.
+    async fn active_notification_ids(
+        &self,
+        ctx: &Context<'_>,
+        event_types: Vec<String>,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<ID>> {
+        resolve_active_notification_ids(ctx, self.user_id.clone(), event_types, limit).await
+    }
+
+    /// The authenticated user's clears of their notifications inbox: the
+    /// one named by `clearId` when given (none once it is forgotten, a day
+    /// after it finished), otherwise every clear and undo still running.
+    /// While a clear is applying, hide the rows it covers; read this again
+    /// after reconnecting, since updates about clears are not replayed.
+    async fn notification_inbox_clears(
+        &self,
+        ctx: &Context<'_>,
+        clear_id: Option<ID>,
+    ) -> async_graphql::Result<Vec<GraphqlNotificationInboxClear>> {
+        resolve_notification_inbox_clears(ctx, self.user_id.clone(), clear_id).await
     }
 
     /// Authenticated user email catalog fields supplied by `graphql_email`.
@@ -1011,7 +1195,7 @@ where
         let entity_id = parse_id(input.entity_id, "entityId")?;
         let entity = input
             .entity_type
-            .into_model()
+            .into_model()?
             .with_entity_string(entity_id.to_string());
         resolve_soup_entity::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(ctx, self.user_id.clone(), entity)
             .await

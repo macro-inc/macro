@@ -4,6 +4,12 @@
  */
 export const AGENT_SESSION_LOG_EVENT = 'agent_session_log';
 
+/**
+ * The Connection Gateway event type carrying a running session's live
+ * one-line activity summary, or its clearing when the turn ends.
+ */
+export const AGENT_SESSION_ACTIVITY_EVENT = 'agent_session_activity';
+
 /** The Connection Gateway event type for a persisted session-name change. */
 export const AGENT_SESSION_RENAMED_EVENT = 'agent_session_renamed';
 
@@ -20,8 +26,9 @@ import type {
 
 /**
  * A run of persisted log entries, in log order, addressed by session for
- * realtime delivery. Each entry is the exact row `GET /agent-sessions/{id}/log`
- * serves, so the socket and the fetched log fold through one code path.
+ * realtime delivery. The web app reads only the session id, to mark a session
+ * nobody has open as moving; an open session folds its rows from the GraphQL
+ * log subscription.
  *
  * This mirrors `AgentSessionLogEvent` in
  * `crates/agent_session/src/outbound/connection_gateway_realtime.rs`.
@@ -29,6 +36,12 @@ import type {
 export type AgentSessionLogEvent = {
   agentSessionId: string;
   entries: AgentSessionLogEntryDto[];
+};
+
+/** Mirrors `AgentSessionActivityEvent` in the backend realtime adapter. */
+export type AgentSessionActivityEvent = {
+  agentSessionId: string;
+  text: string | null;
 };
 
 /** Mirrors `AgentSessionRenamedEvent` in the backend realtime adapter. */

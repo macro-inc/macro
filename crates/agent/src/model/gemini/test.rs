@@ -160,9 +160,16 @@ async fn assert_native_wire_body(streaming: bool) {
     );
     let request = request();
     let tools = request.tools.clone();
-    // Guard the fixture: nested nullable enums and recursive references must
-    // survive generation, otherwise these tests would miss the regressions.
-    assert!(tools[0].parameters["properties"]["display"]["anyOf"][0]["anyOf"].is_array());
+    // Guard the fixture: nullable documented enums and recursive references
+    // must survive generation, otherwise these tests would miss the regressions.
+    assert_eq!(
+        tools[0].parameters["properties"]["display"]["anyOf"],
+        json!([
+            {"description": "Show rows in a table.", "type": "string", "const": "table"},
+            {"description": "Show one scalar value.", "type": "string", "const": "scalar"},
+            {"type": "null"}
+        ])
+    );
     assert!(tools[1].parameters.to_string().contains("$ref"));
     if streaming {
         let mut response = model.completion().stream(request).await.unwrap();

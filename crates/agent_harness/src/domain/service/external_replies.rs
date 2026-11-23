@@ -172,7 +172,7 @@ where
         }
     }
 
-    #[tracing::instrument(skip(self), fields(%session_id, %action_id, external_reply.claimed = false), err)]
+    #[tracing::instrument(skip(self), fields(%session_id, %action_id, external_reply.claimed = tracing::field::Empty), err)]
     async fn reconcile_external_reply(
         &self,
         session_id: AgentSessionId,
@@ -181,10 +181,11 @@ where
         let Some(store) = &self.external_replies else {
             return Ok(());
         };
-        let Some(_lease) = store.claim(session_id, action_id).await? else {
+        let claim = store.claim(session_id, action_id).await?;
+        tracing::Span::current().record("external_reply.claimed", claim.is_some());
+        let Some(_lease) = claim else {
             return Ok(());
         };
-        tracing::Span::current().record("external_reply.claimed", true);
         let Some(mut reply) = store.get(session_id, action_id).await? else {
             return Ok(());
         };

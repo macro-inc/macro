@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_generation_session AS s SET cleanup_at = $2\n               WHERE s.session_id IN (\n                   SELECT session_id FROM suggestion_generation_session\n                   WHERE cleanup = 'stopping' AND cleanup_at < $1\n                   ORDER BY cleanup_at\n                   LIMIT $3\n                   FOR UPDATE SKIP LOCKED)\n                 AND s.cleanup = 'stopping'\n               RETURNING s.session_id, s.user_id, s.agent_id, s.ending, s.cleanup_attempts",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "agent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "ending",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "cleanup_attempts",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "a25430b1def7970ec4ff859aa2036b14d0f3e3c241472ace2ef368cf5d7978c8"
+}

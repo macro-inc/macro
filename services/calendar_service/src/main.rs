@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh;
 use calendar_events::{
     domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
@@ -13,7 +14,6 @@ use calendar_service::calendar_backfill::CalendarBackfillContext;
 use calendar_service::calendar_backfill_adapters::RedisCalendarRequestGate;
 use calendar_service::calendar_ratelimit::CalendarRateLimiter;
 use calendar_service::calendar_reauth::LinkManagerReauthNotifier;
-use calendar_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use calendar_service::calendar_tokens::CalendarTokenProviderAdapter;
 use calendar_service::config::{Config, calendar_watch_config};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -31,6 +31,12 @@ use sqlx::postgres::PgPoolOptions;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+/// Concurrent Outlook claim loops per task. Each claim takes at most one item
+/// per account, as Google's backfill workers take one job per account, and
+/// eight cover the measured demand with headroom.
+const OUTLOOK_SYNC_LOOPS: usize = 8;
+/// How often the Outlook sync logs its queue depth.
+const OUTLOOK_QUEUE_DEPTH_INTERVAL: Duration = Duration::from_secs(60);
 
 mod scheduling_recovery;
 
@@ -103,6 +109,16 @@ async fn main() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
 
+    // Refreshes follow a committed write, so they share the broker's
+    // shutdown drain.
+    let calendar_refresh = GatewayCalendarRefresh::new(
+        connection_gateway_client,
+        db.clone(),
+        event_broker_tracker.clone(),
+    )
+    .with_team_refresh(config.calendar_team_sharing_enabled)
+    .with_sends(cfg!(feature = "connection_gateway"));
+
     let worker_cancellation_token = CancellationToken::new();
     let worker_tracker = TaskTracker::new();
 
@@ -151,12 +167,11 @@ async fn main() -> anyhow::Result<()> {
             rate_limiter.clone(),
             redis_conn.clone(),
             auth_service_client.clone(),
-            connection_gateway_client.clone(),
+            calendar_refresh.clone(),
             macro_event_broker.clone(),
             reauth_notifier.clone(),
             calendar_watch_config(),
             config.calendar_sync_enabled,
-            config.calendar_team_sharing_enabled,
         );
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -172,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
-        MacroAuthJwtValidator::new(jwt_args),
+        MacroAuthJwtValidator::new(jwt_args.clone()),
         InternalAuthConfig {
             api_key: config.internal_api_key.to_string(),
             default_user_id: None,
@@ -188,22 +203,27 @@ async fn main() -> anyhow::Result<()> {
     let calendar_team_service = Arc::new(
         calendar_events::domain::team::CalendarTeamServiceImpl::with_notifier(
             calendar_events::outbound::pg_team::PgCalendarTeamRepository::new(db.clone()),
-            ConnectionGatewayCalendarRefresh::new(
-                connection_gateway_client.clone(),
-                db.clone(),
-                config.calendar_team_sharing_enabled,
-            ),
+            calendar_refresh.clone(),
             config.calendar_team_sharing_enabled,
         ),
     );
     let outlook_provider = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(redis_conn.clone()),
+        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate::new(
+            redis_conn.clone(),
+            email_api_client::outbound::microsoft_gate::RequestBudget::Live,
+        ),
     ))?
     .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
         redis_conn.clone(),
         Arc::new(auth_service_client.clone()),
     )));
-    if config.calendar_sync_enabled && config.outlook_sync_enabled {
+    let outlook_loops = config.outlook_loops();
+    tracing::info!(
+        outlook_sync = outlook_loops.sync,
+        outlook_projection_relay = outlook_loops.relay,
+        "starting the Outlook calendar loops this task runs"
+    );
+    if outlook_loops.sync {
         let sync = calendar_events::domain::outlook::OutlookCalendarSync::new(
             PgCalendarRepository::new(db.clone()),
             outlook_provider.clone(),
@@ -211,29 +231,36 @@ async fn main() -> anyhow::Result<()> {
                 redis_conn.clone(),
                 Arc::new(auth_service_client.clone()),
             ),
-            ConnectionGatewayCalendarRefresh::new(
-                connection_gateway_client.clone(),
-                db.clone(),
-                config.calendar_team_sharing_enabled,
-            ),
+            calendar_refresh.clone(),
         )
         .with_writes_enabled(config.outlook_writes_enabled);
+        let sync = Arc::new(sync);
+        for _ in 0..OUTLOOK_SYNC_LOOPS {
+            let sync = Arc::clone(&sync);
+            let cancellation = worker_cancellation_token.clone();
+            worker_tracker.spawn(async move {
+                loop {
+                    let result = tokio::select! { _ = cancellation.cancelled() => break, result = sync.run_once() => result };
+                    match result { Ok(true) => continue, Ok(false) => {}, Err(error) => tracing::warn!(error=?error, "Outlook calendar synchronization will retry") }
+                    tokio::select! { _ = cancellation.cancelled() => break, _ = tokio::time::sleep(Duration::from_secs(2)) => {} }
+                }
+            });
+        }
         let cancellation = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
+            let mut tick = tokio::time::interval(OUTLOOK_QUEUE_DEPTH_INTERVAL);
             loop {
-                let result = tokio::select! { _ = cancellation.cancelled() => break, result = sync.run_once() => result };
-                match result { Ok(true) => continue, Ok(false) => {}, Err(error) => tracing::warn!(error=?error, "Outlook calendar synchronization will retry") }
-                tokio::select! { _ = cancellation.cancelled() => break, _ = tokio::time::sleep(Duration::from_secs(2)) => {} }
+                tokio::select! { _ = cancellation.cancelled() => break, _ = tick.tick() => {} }
+                // The report logs its own failure on its span.
+                let _ = sync.report_queue_depth().await;
             }
         });
+    }
+    if outlook_loops.relay {
         let relay = calendar_events::domain::outlook::CalendarProjectionRelay::new(
             PgCalendarRepository::new(db.clone()),
             macro_event_broker.clone(),
-            ConnectionGatewayCalendarRefresh::new(
-                connection_gateway_client.clone(),
-                db.clone(),
-                config.calendar_team_sharing_enabled,
-            ),
+            calendar_refresh.clone(),
         );
         let cancellation = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -259,11 +286,7 @@ async fn main() -> anyhow::Result<()> {
             },
             CalendarTokenProviderAdapter::new(redis_conn, Arc::new(auth_service_client)),
             macro_event_broker.clone(),
-            ConnectionGatewayCalendarRefresh::new(
-                connection_gateway_client,
-                db.clone(),
-                config.calendar_team_sharing_enabled,
-            ),
+            calendar_refresh.clone(),
         )
         .with_outlook_writes_enabled(config.outlook_writes_enabled),
     );
@@ -318,6 +341,7 @@ async fn main() -> anyhow::Result<()> {
         ));
     }
     let api_result = calendar_service::api::setup_and_serve(ApiContext {
+        correlation: agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args),
         config: Arc::new(config),
         authorization_state,
         calendar_service,

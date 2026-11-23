@@ -80,3 +80,72 @@ fn cancellation_with_missing_or_invalid_stamp_survives_a_timestamped_request() {
         assert!(identity(&request, vec![cancel]).revision.cancelled);
     }
 }
+
+#[tokio::test]
+async fn composed_service_resolves_the_authorized_threads_saved_invitations() {
+    use entity_access::domain::models::ViewAccessLevel;
+    use macro_user_id::user_id::MacroUserIdStr;
+    use model_entity::EntityType;
+    use std::sync::{Arc, Mutex};
+
+    struct Snapshots(Uuid, Uuid);
+    impl InvitationSnapshotRepository for Snapshots {
+        async fn thread_invitations(
+            &self,
+            thread_id: Uuid,
+            limit: i64,
+        ) -> Result<Vec<ThreadInvitation>, Report> {
+            assert_eq!(thread_id, self.0);
+            assert_eq!(limit, MAX_INVITATION_BATCH as i64);
+            Ok(vec![ThreadInvitation {
+                message_id: self.1,
+                link_id: LINK,
+                invitation: invite("REQUEST", ":20260924T170000Z", 8),
+            }])
+        }
+    }
+    struct Calendar(Arc<Mutex<Vec<(String, usize)>>>);
+    impl CalendarInvitationService for Calendar {
+        async fn resolve(
+            &self,
+            viewer: &str,
+            items: &[InvitationIdentity],
+        ) -> Result<Vec<InvitationResolution>, Report> {
+            self.0.lock().unwrap().push((viewer.into(), items.len()));
+            assert_eq!(items[0].preferred_link_id, LINK);
+            Ok(vec![InvitationResolution::Disconnected])
+        }
+    }
+
+    let thread_id = Uuid::now_v7();
+    let message_id = Uuid::now_v7();
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let service = crate::domain::invitations::InvitationService::new(
+        Snapshots(thread_id, message_id),
+        Calendar(calls.clone()),
+        Arc::new(()),
+    );
+    let receipt = EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+        MacroUserIdStr::try_from_email("reader@example.com").unwrap(),
+        &thread_id.to_string(),
+        EntityType::EmailThread,
+    );
+    let result = service.resolve(receipt).await.unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        [("macro|reader@example.com".into(), 1)]
+    );
+    assert_eq!(result.len(), 1);
+    assert!(matches!(
+        result.values().next(),
+        Some(InvitationResolution::Disconnected)
+    ));
+    assert!(
+        result
+            .keys()
+            .next()
+            .unwrap()
+            .starts_with(&format!("{message_id}:"))
+    );
+}

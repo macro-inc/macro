@@ -17,6 +17,15 @@ the socket themselves.
   relay (Redis pub/sub) so a send reaches a connection on another instance.
 - `src/service/entity_grants.rs`: which entities a connection may subscribe
   to (`track_entity`, `stream_events`), checked through `entity_access`.
+- `src/service/seen.rs`: seen times for the activity check
+  (`activity::UserActivity`). A connection made with a person's own session
+  marks them on open and hourly; marks are written in a batch every 30 s, at
+  most hourly per user per instance, to `user_last_seen` through
+  `activity::SeenLog`. The open mark is made once the connection is
+  registered, before its loop runs, so a socket that closes at once still
+  counts; one that fails to register is not marked. A stopped instance
+  exits without writing its last round (`axum::serve` has no graceful
+  shutdown); its clients reconnect elsewhere and are marked again.
 - `scripts/stale_connections.rs` (`stale_connections` bin): scans DynamoDB for
   connections past the 60s timeout; `README.md` has usage.
 
@@ -31,7 +40,7 @@ the socket themselves.
 ## Boundaries
 
 - Depends on: `connection_gateway_models`, `macro_authorization`,
-  `entity_access`.
+  `entity_access`, `activity` (seen times).
 - Used by: nearly every other service, through `connection_gateway_client`
   (document_storage_service, document_cognition_service, email_service,
   calendar_service, agent_harness_service, mcp_service, scheduled_action,
@@ -63,6 +72,17 @@ the socket themselves.
   after its last `open` or `ping`, compared across instances' clocks. A `ping`
   for a row that is gone re-creates it, so a lost `open` heals on the next
   heartbeat.
+- Reads skip rows that do not parse as a connection entry, so one bad row
+  never fails delivery to the rest of an entity or a batch. A row missing
+  entry attributes (left by pings before they checked their row exists) is
+  deleted on read, conditioned on those attributes still being absent; a
+  whole row this instance cannot read (e.g. an entity type from a newer
+  deploy) is kept. Keep every write of a new attribute conditional on the
+  row existing.
+- Seen times are not presence: Redis `last_online` is written on every ping
+  and expires, for showing who is online; `user_last_seen` lasts and is what
+  background jobs ask through the activity check. API tokens, agents and
+  internal callers that open a socket for a user never mark them seen.
 - Broadcasts use their own Redis channel (`BROADCAST_CHANNEL`): each instance
   forwards them to every connection it holds, with no DynamoDB lookup and no
   receipts. Keep them rare (e.g. the platform status banner); a broadcast is
@@ -71,3 +91,5 @@ the socket themselves.
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md`
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

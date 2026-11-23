@@ -5,6 +5,7 @@ import {
   type ExternalChatApi,
   invalidateExternalChat,
   invalidateExternalChatList,
+  invalidateExternalChatMessages,
   refreshExternalChatTimeline,
   useExternalChatDeliveryQuery,
   useExternalChatQueries,
@@ -126,7 +127,10 @@ export function createExternalChatCapabilities(
         return queries.messages.isError;
       },
       refetch: () =>
-        fireAndForget(queries.messages.refetch(), 'external-chat.refresh'),
+        fireAndForget(
+          invalidateExternalChatMessages(userId(), chatId()),
+          'external-chat.refresh'
+        ),
     },
     hasOlder: () => queries.messages.hasNextPage,
     loadingOlder: () => queries.messages.isFetchingNextPage,

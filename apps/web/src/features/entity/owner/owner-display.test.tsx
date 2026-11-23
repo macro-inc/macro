@@ -1,5 +1,4 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import { ok } from 'neverthrow';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -44,11 +43,8 @@ vi.mock('@queries/bots/profiles', () => ({
 vi.mock('@queries/team/teams', () => ({
   useUserTeamsQuery: () => mocks.teams,
 }));
-vi.mock('@queries/channel/get-or-create-dm', () => ({
-  getOrCreateDirectMessage: mocks.openDm,
-}));
-vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({ openWithSplit: vi.fn() }),
+vi.mock('@core/util/open-direct-message', () => ({
+  useOpenDirectMessage: () => mocks.openDm,
 }));
 vi.mock('@core/signal/profilePicture', () => ({
   useProfilePictureUrl: () => [() => undefined],
@@ -78,7 +74,7 @@ beforeEach(() => {
   mocks.requestedBotIds = [];
   mocks.teams = settled([{ id: ENGINEERING, name: 'Engineering' }]);
   mocks.openDm.mockReset();
-  mocks.openDm.mockResolvedValue(ok({ channel_id: 'dm' }));
+  mocks.openDm.mockResolvedValue(undefined);
 });
 
 afterEach(cleanup);
@@ -209,6 +205,8 @@ describe('OwnerLabel', () => {
     fireEvent.mouseDown(getByText('Engineering'));
 
     expect(container.querySelectorAll('[data-slot="avatar"]').length).toBe(3);
-    expect(mocks.openDm.mock.calls).toEqual([[PETER]]);
+    expect(mocks.openDm.mock.calls).toEqual([
+      [PETER, { activate: true, preferNewSplit: false }],
+    ]);
   });
 });

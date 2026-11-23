@@ -20,6 +20,12 @@ import type { ToggleNonAdminInvitesResponse } from '@service-auth/generated/sche
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { authKeys } from '../auth';
+import {
+  assertQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+} from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
 import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -142,14 +148,46 @@ type PatchTeamArgs = { teamId: string; request: PatchTeamRequest };
 type PatchTeamCallbacks = MutationCallbacks<void, Error, PatchTeamArgs>;
 
 export function usePatchTeamMutation(callbacks?: PatchTeamCallbacks) {
+  const account = useQueryAccount();
   return useMutation(() => ({
-    mutationFn: async ({ request }: PatchTeamArgs) => {
+    meta: { queryAccount: account() },
+    mutationFn: async ({ request }: PatchTeamArgs, context) => {
+      assertQueryAccount(mutationQueryAccount(context));
       await throwOnErr(() => authServiceClient.patchTeam(request));
     },
 
     ...withCallbacks<void, Error, PatchTeamArgs>(
       {
-        onSuccess: (_data, { teamId }) => {
+        onSuccess: (_data, { teamId, request }, _result, context) => {
+          if (!isCurrentQueryAccount(mutationQueryAccount(context))) return;
+          const access = request.member_crm_access;
+          if (access) {
+            // The PATCH committed even if the following GET fails. Keep the
+            // confirmed preference so the next switch action reverses it.
+            const applyAccess = (old: TeamWithMembers | null | undefined) => {
+              if (
+                old?.team.id !== teamId ||
+                old.members.find((member) => member.user_id === access.user_id)
+                  ?.role !== TeamRole.member
+              )
+                return old;
+              return {
+                ...old,
+                crm_member_access: {
+                  ...old.crm_member_access,
+                  [access.user_id]: access.enabled,
+                },
+              };
+            };
+            queryClient.setQueryData<TeamWithMembers | null>(
+              teamKeys.detail(teamId).queryKey,
+              applyAccess
+            );
+            queryClient.setQueryData<TeamWithMembers | null>(
+              teamKeys.currentTeam.queryKey,
+              applyAccess
+            );
+          }
           fireAndForget(invalidateTeam(teamId), 'team-settings');
           invalidateUserTeams();
           toast.success('Team updated');
@@ -362,12 +400,30 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
 type CreateTeamWithInvitesArgs = {
   name: string;
   invites?: { email: string }[];
-  /** Whether people on the owner's work domain join automatically. When
-   * explicitly `true`, the owner's same-domain contacts are also told the
-   * team exists. Omitted keeps the server default without the notice. */
+  /** Whether people on the owner's work domain join automatically. Omitted
+   * keeps the server default. */
   allowDomainJoin?: boolean;
+  /** Whether to email the owner's same-domain contacts that the team exists.
+   * Sent only when `allowDomainJoin` is also `true` and the team got an
+   * auto-join domain; the server sends nothing to a team without one. */
+  notifyDomain?: boolean;
 };
 type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
+
+/** The domain notice goes out only when both domain join and the notice were
+ * explicitly chosen and the server gave the team an auto-join domain (a
+ * personal email domain gets none). The server also sends nothing without
+ * one; checking here skips a request that can't send anything. */
+export function shouldSendDomainNotice(
+  args: Pick<CreateTeamWithInvitesArgs, 'allowDomainJoin' | 'notifyDomain'>,
+  team: Pick<Team, 'auto_join_domain'>
+): boolean {
+  return (
+    args.allowDomainJoin === true &&
+    args.notifyDomain === true &&
+    !!team.auto_join_domain
+  );
+}
 type CreateTeamWithInvitesCallbacks = MutationCallbacks<
   Team,
   Error,
@@ -383,6 +439,7 @@ export function useCreateTeamWithInvitesMutation(
       name,
       invites,
       allowDomainJoin,
+      notifyDomain,
     }: CreateTeamWithInvitesArgs) => {
       const team = await throwOnErr(() =>
         authServiceClient.createTeam({
@@ -397,7 +454,7 @@ export function useCreateTeamWithInvitesMutation(
 
       // After the invites, so invitees aren't also sent the notice. The
       // team already exists, so a failed notice doesn't fail creation.
-      if (allowDomainJoin === true && team.auto_join_domain) {
+      if (shouldSendDomainNotice({ allowDomainJoin, notifyDomain }, team)) {
         const notice = await catchToResult(() =>
           throwOnErr(() => authServiceClient.sendTeamDomainNotice())
         );

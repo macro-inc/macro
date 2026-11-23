@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 
-use super::is_private_ip;
+use super::is_non_public_ip;
 
 pub(super) struct PrivateIpFilteringResolver;
 
@@ -18,7 +18,7 @@ impl Resolve for PrivateIpFilteringResolver {
 
             let filtered: Vec<SocketAddr> = lookup
                 .filter(|address| {
-                    let allowed = !is_private_ip(&address.ip());
+                    let allowed = !is_non_public_ip(&address.ip());
                     if !allowed {
                         tracing::warn!(
                             host = %hostname,

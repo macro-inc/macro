@@ -1,3 +1,5 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import {
   type CacheHost,
   readRecordsByKeys,
@@ -5,6 +7,7 @@ import {
 } from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
@@ -165,6 +168,7 @@ export function graphqlRecordToPreview(
       return {
         id: record.id,
         type: 'document',
+        appearance: readEntityAppearance(record.appearance),
         access: 'access',
         loading: false,
         rawName: record.displayName ?? record.documentName,
@@ -231,6 +235,7 @@ export function graphqlRecordToPreview(
       return {
         id: record.id,
         type: 'initiative',
+        appearance: readEntityAppearance(record.appearance),
         access: 'access',
         loading: false,
         rawName: record.displayName ?? '',
@@ -345,6 +350,7 @@ function createdPreviewRecord({
         ...base,
         __typename: 'GraphqlSoupDocument',
         documentName: name,
+        appearance: null,
         fileType: fileType ?? null,
         subType:
           subType?.type === 'task'
@@ -393,6 +399,7 @@ export async function setGraphqlPreviewName(
   name: string,
   userId: string
 ): Promise<void> {
+  const generation = cacheSessionGeneration.capture();
   const input = itemPreviewInput(item);
   if (!input) return;
   const type = normalizedItemType(item) as GraphqlPreviewType;
@@ -442,6 +449,7 @@ export async function setGraphqlPreviewName(
     .exhaustive(() => null);
   if (!record) return;
   await writeGraphqlPreviewCache({
+    generation,
     query: stringifyDocument(ItemPreviewNameCacheWriteDocument),
     operationName: 'ItemPreviewNameCacheWrite',
     variables: { input },
@@ -462,10 +470,12 @@ export async function setGraphqlPreviewFileType(
   fileType: string,
   userId: string
 ): Promise<void> {
+  const generation = cacheSessionGeneration.capture();
   const item = { id: itemId, type: 'document' } satisfies ItemEntity;
   const input = itemPreviewInput(item);
   if (!input) return;
   await writeGraphqlPreviewCache({
+    generation,
     query: stringifyDocument(ItemPreviewFileTypeCacheWriteDocument),
     operationName: 'ItemPreviewFileTypeCacheWrite',
     variables: { input },
@@ -489,7 +499,8 @@ export async function setGraphqlPreviewFileType(
 /** Seeds a newly created entity into the normalized GraphQL preview query. */
 export async function setGraphqlPreviewOnCreate(
   preview: CreatedGraphqlPreview,
-  userId: string
+  userId: string,
+  generation: string
 ): Promise<void> {
   const item = {
     id: preview.itemId,
@@ -499,6 +510,7 @@ export async function setGraphqlPreviewOnCreate(
   if (!input) return;
   markRecentlyCreated(item);
   await writeGraphqlPreviewCache({
+    generation,
     query: stringifyDocument(ItemPreviewDocument),
     operationName: 'ItemPreview',
     variables: { input },
@@ -551,6 +563,7 @@ function startPreviewBatch(
   includeProperties: boolean
 ) {
   return createRoot((dispose) => {
+    const generation = cacheSessionGeneration.capture();
     const input = buildGraphqlEntitiesSoupInput(
       items.map((item) => ({
         entityId: item.id,
@@ -584,7 +597,7 @@ function startPreviewBatch(
         items.map((item) => normalizedRecordKey(item)!)
       )
         .then(({ records }) => {
-          if (disposed) return;
+          if (disposed || !cacheSessionGeneration.isCurrent(generation)) return;
           const previews = new Map<string, PreviewItem>();
           for (const { recordKey, record } of records) {
             const preview = graphqlRecordToPreview(record);
@@ -609,7 +622,7 @@ function startPreviewBatch(
         });
       return refreshing;
     };
-    return { value: { result, cached, refresh }, dispose };
+    return { value: { result, cached, refresh, generation }, dispose };
   });
 }
 
@@ -641,9 +654,10 @@ function previewBatcher(client: Client, includeProperties: boolean) {
 /** Joins a shared live preview batch; rich document edges load in the first request. */
 export function createGraphqlItemPreviewQuery(
   getItem: Accessor<ItemEntity>,
-  enabled: Accessor<boolean>,
-  includeProperties = true
+  includeProperties = true,
+  enabled: Accessor<boolean> = () => true
 ): GraphqlItemPreviewQuery {
+  const pendingAppearance = usePendingEntityAppearance();
   // Hover popup props derive from another live preview. Snapshot only the
   // entity identity so cache/fetch updates cannot release and reacquire the
   // same batch, clear its data, or feed another update back upstream.
@@ -665,16 +679,20 @@ export function createGraphqlItemPreviewQuery(
   );
   const [group, setGroup] = createSignal<PreviewBatch>();
   let ready: Promise<PreviewBatch | undefined> = Promise.resolve(undefined);
-  const isEnabled = () => enabled() && isGraphqlPreviewItem(item());
+  const isEnabled = () =>
+    enabled() &&
+    !cacheSessionGeneration.state().paused &&
+    isGraphqlPreviewItem(item());
   createComputed(() => {
     const current = item();
+    const { epoch } = cacheSessionGeneration.state();
     setGroup(undefined);
     ready = Promise.resolve(undefined);
     if (!isEnabled()) return;
     const subscription = previewBatcher(
       getGraphqlSoupClient(),
       includeProperties
-    ).acquire(normalizedRecordKey(current)!, current, setGroup);
+    ).acquire(`${epoch}:${normalizedRecordKey(current)!}`, current, setGroup);
     ready = subscription.ready;
     onCleanup(subscription.dispose);
   });
@@ -685,7 +703,19 @@ export function createGraphqlItemPreviewQuery(
   });
   const cachedPreview = () =>
     group()?.cached().get(normalizedRecordKey(item())!);
-  const data = () => livePreview() ?? cachedPreview();
+  const data = () => {
+    const generation = group()?.generation;
+    if (!generation || !cacheSessionGeneration.isCurrent(generation)) return;
+    const preview = livePreview() ?? cachedPreview();
+    if (!preview || preview.loading || preview.access !== 'access')
+      return preview;
+    const appearance = pendingAppearance(
+      preview.type,
+      preview.id,
+      Boolean(result()?.isError)
+    );
+    return appearance ? { ...preview, appearance } : preview;
+  };
   const refetch = async () => {
     await (await ready)?.refresh();
   };

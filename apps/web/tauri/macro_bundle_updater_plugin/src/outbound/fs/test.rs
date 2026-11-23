@@ -17,7 +17,7 @@ async fn embedded_selection_persists_when_the_cache_directory_does_not_exist() {
     assert!(!cache_dir.exists());
 
     let result = BundleRoot::Embedded.persist(&cache_dir, &FileSystem).await;
-    let restored = BundleRoot::load(&cache_dir, &FileSystem).await;
+    let (restored, _) = BundleRoot::load(&cache_dir, &FileSystem).await;
     if test_dir.exists() {
         std::fs::remove_dir_all(&test_dir).unwrap();
     }

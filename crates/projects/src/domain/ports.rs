@@ -23,7 +23,7 @@ use model_entity::Entity;
 use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
-    UploadExtractFolderResponseData,
+    UploadExtractFolderResponseData, UploadExtractStatusResponseData,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareFacts;
@@ -100,12 +100,26 @@ pub trait ProjectRepo: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<SharePermissionV2, Self::Err>> + Send;
 
+    /// Whether a folder or an ancestor has an explicit grant beyond `owner`.
+    fn folder_has_explicit_grant(
+        &self,
+        project_id: Uuid,
+        owner: &model_owner::Owner,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Load the canonical team-share facts (persisted owner, owner's team,
     /// current explicit grant, revision) the owner policy authorizes against.
     fn get_team_share_facts(
         &self,
         project_id: &str,
     ) -> impl Future<Output = Result<TeamShareFacts, ProjectError>> + Send;
+
+    /// Whether this team's explicit direct folder grant is already Edit.
+    fn folder_has_team_edit_grant(
+        &self,
+        project_id: uuid::Uuid,
+        team_id: uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Get previews for the supplied project identifiers.
     fn batch_get_project_preview(
@@ -201,6 +215,12 @@ pub trait BulkUploadRequestPort: Send + Sync + 'static {
         &self,
         upload_request_id: &str,
     ) -> impl Future<Output = anyhow::Result<BulkUploadRequestDocuments>> + Send;
+
+    /// Find a bulk-upload request, or `None` when none has this id.
+    fn find_bulk_upload_request(
+        &self,
+        upload_request_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<BulkUploadRequest>>> + Send;
 }
 
 /// Port for generating project-upload destinations.
@@ -257,6 +277,18 @@ pub trait ProjectSearchIndexer: Send + Sync + 'static {
     fn enqueue_document_deletes(
         &self,
         documents: Vec<(String, String)>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Port for the items other domains file in folders but do not trash with
+/// them (databases and forms). The composition root implements it over the
+/// owning domains, so the projects domain never depends on their crates.
+pub trait FiledItemsUnfiler: Send + Sync + 'static {
+    /// Return the items filed directly in any of `project_ids` to the root,
+    /// without the grants those folders passed down.
+    fn unfile_from_projects(
+        &self,
+        project_ids: Vec<String>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
@@ -357,6 +389,13 @@ impl BulkUploadRequestPort for UnavailableBulkUploadRequestPort {
     ) -> anyhow::Result<BulkUploadRequestDocuments> {
         anyhow::bail!("bulk-upload requests are not available in this host")
     }
+
+    async fn find_bulk_upload_request(
+        &self,
+        _upload_request_id: &str,
+    ) -> anyhow::Result<Option<BulkUploadRequest>> {
+        anyhow::bail!("bulk-upload requests are not available in this host")
+    }
 }
 
 /// Unwired content-hash counter for hosts that expose project operations
@@ -385,6 +424,15 @@ impl ProjectSearchIndexer for UnavailableProjectSearchIndexer {
         _documents: Vec<(String, String)>,
     ) -> anyhow::Result<()> {
         anyhow::bail!("project search indexing is not available in this host")
+    }
+}
+
+/// Unfiler for hosts that never trash folders; it fails if one tries.
+pub struct UnavailableFiledItemsUnfiler;
+
+impl FiledItemsUnfiler for UnavailableFiledItemsUnfiler {
+    async fn unfile_from_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
+        anyhow::bail!("unfiling folder contents is not available in this host")
     }
 }
 
@@ -437,6 +485,18 @@ pub trait ProjectService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<SharePermissionV2, ProjectError>> + Send;
 
+    /// Check the explicit grants a new child would inherit, excluding owner grants.
+    fn folder_has_explicit_grant(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<bool, ProjectError>> + Send;
+
+    /// Whether the actual owner's current team already has a direct Edit grant.
+    fn folder_has_team_edit_grant(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<bool, ProjectError>> + Send;
+
     /// Get the caller's access level from a validated receipt.
     fn get_project_access_level(
         &self,
@@ -455,10 +515,12 @@ pub trait ProjectService: Send + Sync + 'static {
     /// it: it starts never edited and does not mark its parent updated, and
     /// documents created in it with their own dates date it and the projects
     /// above it. For importers, so a copied tree keeps its source's dates.
+    /// `initial_link_share` overrides entity/team defaults when supplied.
     fn create_project_dated_by_contents(
         &self,
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> impl Future<Output = Result<Project, ProjectError>> + Send;
 
     /// Edit project metadata and sharing settings.
@@ -506,6 +568,13 @@ pub trait ProjectService: Send + Sync + 'static {
         args: UploadExtractFolderRequest,
     ) -> impl Future<Output = Result<UploadExtractFolderResponseData, ProjectError>> + Send;
 
+    /// Where the caller's own archive extraction request stands.
+    fn get_upload_extract_status(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        upload_request_id: &str,
+    ) -> impl Future<Output = Result<UploadExtractStatusResponseData, ProjectError>> + Send;
+
     /// Finalize the uploaded state of a project tree.
     fn mark_projects_uploaded(
         &self,
@@ -524,4 +593,10 @@ pub trait ProjectService: Send + Sync + 'static {
         &self,
         project_id: &str,
     ) -> impl Future<Output = Result<BasicProject, ProjectError>> + Send;
+}
+
+/// Physical folder lifecycle facts for trusted backend hosts; grants no access.
+pub trait ProjectLifecycleReads: Send + Sync + 'static {
+    /// True only for an existing folder outside trash, independent of a viewer.
+    fn project_is_live(&self, id: uuid::Uuid) -> impl Future<Output = anyhow::Result<bool>> + Send;
 }

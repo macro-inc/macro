@@ -207,7 +207,7 @@ fn cell_value(converted: Converted) -> Option<CellValue> {
         Converted::Value(PropertyValue::Str(text)) => CellValue::Text(text),
         Converted::Value(PropertyValue::Num(number)) => CellValue::Number(number),
         Converted::Value(PropertyValue::Bool(checked)) => CellValue::Boolean(checked),
-        Converted::Value(PropertyValue::Date(date)) => CellValue::Date(date),
+        Converted::Value(PropertyValue::Date(date)) => CellValue::Date(date.at()),
         Converted::Value(PropertyValue::DateRange(range)) => CellValue::DateRange(DateRange {
             start: range.start(),
             end: range.end(),
@@ -234,6 +234,7 @@ fn cast_of(target: PropertyType, cast: CastVerdict) -> ColumnCast {
         is_multi_select: target.is_multi_select,
         specific_entity_type: target.specific_entity_type,
         relation: target.relation,
+        percentage: target.percentage,
         cast,
         reason: None,
         failures: 0,

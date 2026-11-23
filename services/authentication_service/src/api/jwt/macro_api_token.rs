@@ -2,13 +2,19 @@ use crate::api::context::{AuthorizationService, MacroApiTokenContext};
 use axum::{
     Json,
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use macro_auth::macro_api_token::EncodeMacroApiTokenArgs;
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor, is_program_run};
 use sqlx::PgPool;
 use utoipa::ToSchema;
+
+#[cfg(test)]
+mod test;
+
+/// Why a program may not mint a Macro API token.
+const PROGRAM_TOKEN_REFUSAL: &str = "An agent's program cannot mint a Macro API token: it would reach you and outlive the run. Use the credential the run already has; for a lasting key, tell the user to create one in Macro's settings.";
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]
 pub struct MacroApiTokenResponse {
@@ -40,13 +46,22 @@ pub struct MacroApiTokenQuery {
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(db, macro_api_token_context, authorization))]
+#[tracing::instrument(skip_all)]
 pub async fn handler(
     State(db): State<PgPool>,
     State(macro_api_token_context): State<MacroApiTokenContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Query(query): Query<MacroApiTokenQuery>,
 ) -> Result<Response, Response> {
+    // A program's run credential lives about a minute; a token minted here
+    // lives an hour and would reach the model, so programs keep the one they
+    // were given.
+    let attribution = authorization.authorization.user.attribution();
+    if is_program_run(attribution, &headers) {
+        tracing::warn!(?attribution, "refused a Macro API token to a program");
+        return Err((StatusCode::FORBIDDEN, PROGRAM_TOKEN_REFUSAL).into_response());
+    }
     let user_context = &authorization.authorization.user.user_context;
     let email = if let Some(email) = query.email.clone() {
         // TODO: figure out if email is url_encoded by default
@@ -89,6 +104,14 @@ pub async fn handler(
 
     let macro_api_token =
         macro_auth::macro_api_token::encode_macro_api_token(EncodeMacroApiTokenArgs {
+            agent_correlation_id: None,
+            agent_session_id: None,
+            // Programs are refused above, so these claims are empty here; they
+            // are still copied so a relaxed refusal could never shed them.
+            routine_id: agent_correlation::context::current_routine(),
+            // No scope to keep: `AccountHolderOrInternal` refuses this route
+            // to every credential that signs one (`ScopedMacroApiJwt`).
+            agent_scope: None,
             agent_id: authorization
                 .authorization
                 .user

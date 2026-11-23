@@ -7,7 +7,7 @@
 import type { ColumnKindOneOfOnefiveType } from './columnKindOneOfOnefiveType';
 
 /**
- * Numeric options.
+ * Text options.
  */
 export type ColumnKindOneOfOnefive = {
   /** Whether a cell holds several options. */

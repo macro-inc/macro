@@ -18,6 +18,7 @@ export default {
   scheduling: 'Scheduling',
   external: 'External',
   activity: 'Activity',
+  forYou: 'For you',
   recent: 'Recent',
   settings: 'Settings',
 
@@ -28,6 +29,7 @@ export default {
 
   // Open-in-split menu
   openInNewSplit: 'Open in new split',
+  openInNewTab: 'Open in new tab',
   openFullscreen: 'Open fullscreen',
   openInCurrentSplit: 'Open in current split',
   contentAlreadyOpen: 'Content already open',
@@ -35,6 +37,13 @@ export default {
   // Rail buttons
   hideFromSidebar: 'Hide from sidebar',
   unreadItems: 'Unread items',
+  unreadNotifications: {
+    one: '{{count}} unread notification',
+    other: '{{count}} unread notifications',
+  },
+  manyUnreadNotifications: {
+    other: 'More than {{count}} unread notifications',
+  },
   activeCall: 'Active call',
   returnToCall: 'Return to call',
   nextMeeting: 'Next meeting: {{time}}',
@@ -42,9 +51,11 @@ export default {
   moreOptions: 'More options',
   create: 'Create',
   getMobileApp: 'Get the mobile app',
+  help: 'Help',
+  helpMessage: 'Message support',
+  helpCall: 'Book a call',
+  helpEmail: 'Email {{email}}',
   signedInAs: 'Signed in as {{name}}',
-  commandMenu: 'Command Menu',
-  searchEverything: 'Search everything',
 
   // Customize sidebar
   customizeSidebar: 'Customize sidebar',

@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { CallDiscussion } from './callDiscussion';
 import type { CallRecordChannelId } from './callRecordChannelId';
 import type { CallRecordChannelName } from './callRecordChannelName';
 import type { CallRecordCustomName } from './callRecordCustomName';
@@ -39,6 +41,8 @@ export interface CallRecord {
   /** User-supplied or AI-generated display name for the call. Only set on
 archived `call_records`; active calls always return `None`. */
   customName?: CallRecordCustomName;
+  /** Where this call's discussion lives. */
+  discussion: CallDiscussion;
   /** Call duration in milliseconds (None if still active). */
   durationMs?: CallRecordDurationMs;
   /** Recording egress ID, if any. */

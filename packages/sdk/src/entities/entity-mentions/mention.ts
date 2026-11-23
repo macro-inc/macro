@@ -14,7 +14,12 @@ export class EntityMention {
     return new EntityMention(client, id);
   }
 
-  /** Remove this mention. */
+  /**
+   * Remove this mention.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     unwrap(
       await this.client.storage.deleteEntityMention({

@@ -6,6 +6,7 @@ import {
   type TextFitResult,
   worldBounds,
 } from '@macro-inc/graphics';
+import type { ArtifactLibrary } from '@macro-inc/graphics/loro';
 import { Telemetry } from '@macro-inc/observability';
 import PQueue from 'p-queue';
 import { z } from 'zod';
@@ -20,6 +21,8 @@ declare global {
     prepareCanvasRender: () => Promise<void>;
     renderCanvasSnapshot: (snapshot: {
       document: GraphicsDocument;
+      artifacts?: boolean;
+      artifactLibrary?: ArtifactLibrary;
       crop: Bounds;
       scale: number;
       revision: string;
@@ -56,6 +59,9 @@ export type CanvasSnapshot = {
   documentId?: string;
   document: GraphicsDocument;
   clock: Record<string, number>;
+  /** Whether the requesting user has artifacts; off renders only their titles. */
+  artifacts?: boolean;
+  artifactLibrary?: ArtifactLibrary;
 };
 export type CanvasRender = {
   revision: string;
@@ -108,12 +114,13 @@ export function createCanvasRenderer(
             snapshot.documentId,
             revision,
             options,
+            !!snapshot.artifacts,
           ])
         : undefined;
       const cached = key ? renderCache.get(key) : undefined;
       span.setAttr('canvas.cache.hit', !!cached);
       if (cached) return cached;
-      const { document } = snapshot;
+      const { document, artifacts, artifactLibrary } = snapshot;
       const shapes = Object.values(document.items).filter(
         (item) => item.type !== 'surface' && item.type !== 'group'
       );
@@ -174,7 +181,7 @@ export function createCanvasRenderer(
                 await window.renderCanvasSnapshot(payload);
                 await window.document.fonts.ready;
               },
-              { document, crop, scale, revision }
+              { document, crop, scale, revision, artifacts, artifactLibrary }
             );
             signal?.throwIfAborted();
             const data = await page.screenshot({

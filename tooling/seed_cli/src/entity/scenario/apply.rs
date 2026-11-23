@@ -15,6 +15,7 @@ use comms_db_client::channels::seed_channel::SeedChannelOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
 use comms_db_client::model::SimpleMention;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
+use lexical_client::parse_markdown::MarkdownSnapshotOptions;
 use macro_db_client::document::v2::create::CreateDocumentArgs;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
@@ -196,9 +197,9 @@ pub async fn apply(
 
 /// Print one login link per persona.
 pub(super) fn print_login_links(spec: &ScenarioSpec) {
-    let frontend_port = crate::config::FrontendPort::new()
+    let proxy_port = crate::config::ProxyPort::new()
         .map(|port| port.to_string())
-        .unwrap_or_else(|| "3000".to_string());
+        .unwrap_or_else(|| "8090".to_string());
     for (key, user) in &spec.users {
         // Per-persona hostnames get separate cookie jars, so each of these
         // can hold its own live session in ordinary tabs of one browser.
@@ -207,7 +208,7 @@ pub(super) fn print_login_links(spec: &ScenarioSpec) {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         {
             println!(
-                "  {key}: http://{key}.localhost:{frontend_port}/app/login?email={}",
+                "  {key}: https://{key}.localhost:{proxy_port}/app/login?email={}",
                 user.email
             );
         } else {
@@ -544,7 +545,7 @@ async fn initialize_markdown_content(
             } else {
                 clients
                     .lexical
-                    .markdown_to_loro_snapshot(markdown)
+                    .markdown_to_loro_snapshot(markdown, MarkdownSnapshotOptions::default())
                     .await
                     .context("converting markdown via lexical-service")?
             };
@@ -653,13 +654,11 @@ async fn seed_documents(
         if let Some(markdown) = markdown {
             initialize_markdown_content(ctx, key, &document_id, &markdown).await?;
         } else if let Some(file) = document.file.as_deref() {
-            let file_type = file_type.expect("file implies file type");
+            // The key the document services read: `s3_key`'s
+            // `build_cloud_storage_bucket_document_key`, with no extension.
             let s3_key = format!(
-                "{}/{}/{}.{}",
-                created.owner,
-                created.document_id,
-                created.document_version_id,
-                file_type.as_str()
+                "{}/{}/{}",
+                created.owner, created.document_id, created.document_version_id
             );
             let path = files_dir.join(file);
             ctx.s3

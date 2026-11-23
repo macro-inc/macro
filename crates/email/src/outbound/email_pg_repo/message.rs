@@ -335,6 +335,7 @@ pub(crate) async fn get_simple_message(
             m.link_id,
             m.thread_id,
             m.provider_thread_id,
+            m.replying_to_id,
             m.headers_jsonb,
             m.is_sent,
             m.is_draft
@@ -367,6 +368,7 @@ pub(crate) async fn get_draft_replying_to(
             m.link_id,
             m.thread_id,
             m.provider_thread_id,
+            m.replying_to_id,
             m.headers_jsonb,
             m.is_sent,
             m.is_draft
@@ -400,7 +402,7 @@ pub(crate) async fn get_draft_replying_to(
 /// mail, a mismatched thread, or someone else's row is never touched even
 /// when the caller's validation read was raced. No matching row is `None`,
 /// not an error — deletes are idempotent.
-#[tracing::instrument(skip(pool, link_ids), err)]
+#[tracing::instrument(skip(pool, link_ids, actor), err)]
 pub(crate) async fn delete_draft_message(
     pool: &PgPool,
     message_id: Uuid,
@@ -410,13 +412,13 @@ pub(crate) async fn delete_draft_message(
 
     expected_generation: i32,
 ) -> Result<Option<DraftDeletion>, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx = super::begin(pool).await?;
 
     let outlook = sqlx::query!(r#"
         SELECT l.id,l.sync_generation FROM email_links l JOIN email_messages m ON m.link_id = l.id
         WHERE m.id = $1 AND m.thread_id = $2 AND l.id = ANY($3) AND l.provider = 'OUTLOOK'
             AND ($4::text = l.macro_id OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $4))
-        FOR UPDATE OF l
+        FOR SHARE OF l
     "#,message_id,thread_db_id,link_ids,actor).fetch_optional(&mut *tx).await?;
 
     // Sender migration must not delete a draft whose delivery was committed
@@ -561,13 +563,14 @@ pub(super) async fn process_scheduled_message(
         sqlx::query!(
             r#"
             INSERT INTO email_scheduled_messages (
-                link_id, message_id, send_time, sent, actor_id,
+                link_id, message_id, send_time, sent, actor_id, agent_correlation_id,
                 created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
             ON CONFLICT (link_id, message_id) DO UPDATE SET
                 send_time = EXCLUDED.send_time,
                 actor_id = EXCLUDED.actor_id,
+                agent_correlation_id = EXCLUDED.agent_correlation_id,
                 updated_at = NOW()
             WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing
             "#,
@@ -576,6 +579,7 @@ pub(super) async fn process_scheduled_message(
             send_time,
             false,
             actor_id,
+            agent_correlation::context::current(),
         )
         .execute(&mut *tx)
         .await?;
@@ -668,6 +672,8 @@ pub(super) async fn insert_draft_attachment(
     attachment: &AttachmentDraft,
 ) -> Result<(), sqlx::Error> {
     // Match send admission's lock order, then read scheduling in a fresh statement.
+    // Locks the draft's message row, not the link.
+    // ast-grep-ignore: email-link-lock-transactions-time-out
     let mut tx = pool.begin().await?;
     let state = sqlx::query!(
         "SELECT is_draft, is_sent FROM email_messages WHERE id = $1 AND link_id = $2 FOR UPDATE",

@@ -104,3 +104,48 @@ async fn committed_deletion_purges_activity_even_when_description_cleanup_fails(
         [InitiativeTopicEvent::Purged { .. }]
     ));
 }
+
+#[tokio::test]
+async fn appearance_validates_and_records_only_changes() {
+    let invalid = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "unknown-icon".into(),
+        }),
+        color: None,
+    };
+    assert!(matches!(
+        service(MockInitiativeRepo::new())
+            .set_appearance(edit_receipt(), invalid)
+            .await,
+        Err(InitiativeError::BadRequest(_))
+    ));
+    for changed in [false, true] {
+        let mut repo = MockInitiativeRepo::new();
+        repo.expect_set_appearance()
+            .times(1)
+            .withf(|_, update| update.attribution.is_some())
+            .return_once(move |_, _| {
+                Box::pin(async move { Ok(changed.then(model_entity::EntityAppearance::default)) })
+            });
+        let events = Arc::new(Events::default());
+        let appearance = model_entity::EntityAppearance {
+            icon: None,
+            color: Some(model_entity::AppearanceColor::Blue),
+        };
+        assert_eq!(
+            service(repo)
+                .with_event_publisher(events.clone())
+                .set_appearance(edit_receipt(), appearance.clone())
+                .await
+                .unwrap(),
+            appearance
+        );
+        let recorded = events.0.lock().unwrap();
+        assert_eq!(recorded.len(), usize::from(changed));
+        if changed {
+            assert!(
+                matches!(&recorded[0], InitiativeTopicEvent::AppearanceChanged { appearance: saved, .. } if saved.to == Some(appearance))
+            );
+        }
+    }
+}

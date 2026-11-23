@@ -22,10 +22,12 @@ and the traps. To add a whole service, follow the
 | `infra/packages/service` | `EcrImage`, least-privilege DynamoDB, cluster stack reference. |
 | `infra/packages/lambda` | `Lambda` component and `WorkerTrigger`. |
 | `infra/packages/vpc` | IDs of the one VPC everything runs in (`get_coparse_api_vpc()`). |
+| `infra/k8s/observability/aws/` | Not Pulumi: the observability EKS cluster's AWS layer, OpenTofu written in Nix (terranix), applied by hand. See its README. |
+| `infra/k8s/observability/cluster/` | Not Pulumi: the observability EKS cluster's contents as nixidy modules, rendered to committed YAML that Argo CD applies from `main`. See its README. |
 
 Stacks are `macro-inc/dev` and `macro-inc/prod`; a few are prod-only
 (`monitoring`, `doppler-projects`) or dev-only (`github-runners`,
-`web-app-preview`). The project name is usually the directory name. It matters:
+`web-app-preview`, `openbao`). The project name is usually the directory name. It matters:
 Doppler, `services-config.json`, and the nix `serviceName` all key on it.
 
 ### Stack references
@@ -125,7 +127,8 @@ an entire checkout. Include any new `include_str!` or `include_bytes!` assets in
 its source filter. Assets generated from JavaScript are built in their own
 derivation instead: the `code-mode-assets` package bundles the SDK from the Nix
 `node_modules`, and every crane build of `crates/code_mode_assets` reads it
-through `CODE_MODE_ASSETS_DIR`; Rust CI exports the same variable before cargo.
+through `CODE_MODE_ASSETS_DIR`; Rust CI exports the same variable before cargo,
+restoring the output from Namespace's remote cache when another job already built it. On a miss, node_modules comes from the same cache, keyed by its own store path.
 Run it locally with `nix build --no-link .#code-mode-assets`.
 
 ## Other resources
@@ -165,9 +168,31 @@ local resources.
 | Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app; once the web app is deployed, `ios-app-store-publish.yml` releases the held iOS App Store version |
 | Pull request touching a mapped stack | `pulumi_preview_pr.yml` previews against dev and comments; `code_check_infra.yml` runs Biome and `tsc` |
 | Manual | `deploy-pulumi-stack.yml`, `deploy-service-generic.yml`, `migrate-macro-db.yml` |
+| Manual, observability host only | `deploy-observability.yml`: builds the NixOS image, publishes and smoke-boots the AMI, then replaces the prod observability host (a few minutes of GoAlert downtime). `dry_run`, the default, stops before `pulumi up`. See `infra/stacks/observability/README.md`, "Deploying" |
+| Merge to `main` changing `infra/k8s/observability/cluster/manifests/prod` | Argo CD on the observability EKS cluster syncs it (automatically: `macro.cluster.autoSync` is on; cluster README "Bootstrap"); PRs run `observability_cluster.yml`, which fails on a stale render or invalid manifests |
+
+Build handoffs use Namespace artifact storage at
+`handoff/<run_id>-<run_attempt>/<service>/<file>`, with a 24-hour expiry.
+The shared upload wrapper retries only the explicit finalization
+`DeadlineExceeded` diagnostic, at most three invocations with 5/10-second
+backoff and a five-minute bound per CLI process (20-minute step bound).
+Other errors, cancellation, local timeouts and exhausted retries fail the job.
+It verifies the completed tarball's SHA-256 and size before each invocation and
+after completion; retries never rebuild, repack or read from another attempt.
+Success requires an actual zero CLI exit, not object existence or a receipt.
+Namespace [versions repeated uploads](https://namespace.so/docs/architecture/storage/artifact-storage),
+so a lost finalization response can leave duplicate, identical expiring versions;
+this is content-safe repetition, not exactly-once publication. Each path has one
+build-job producer and the archive must remain immutable while it uploads.
+Both deploy-all and single-service workflows use this helper. Download paths and
+build/deployment failure gates remain attempt-scoped.
 
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
-  `macrodb`, `doppler-projects`, `monitoring`, and a few others are manual.
+  `macrodb`, `doppler-projects`, `monitoring`, `observability`, `openbao` and a
+  few others are manual.
+- `openbao` (dev only) is a deliberate exception to the gateway pattern: the
+  vault API must never be gateway-reachable, so it has its own internal ALB.
+  Don't copy it for ordinary services.
 - Dev MacroDB's primary and replica are both configured as `db.t4g.large`
   (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
   `applyImmediately` setting makes that resize interrupt replica connections.
@@ -179,6 +204,12 @@ local resources.
 - Services marked `bootstrap_pending` or `deploy_enabled: false` are skipped.
 - **Migrations deploy before services** and must work with the code already
   running ([database guide](database.md)).
+- **Manual deploys apply no migrations.** `deploy-service-generic.yml` and
+  `deploy-pulumi-stack.yml` refuse to deploy a service with binaries or
+  Lambdas while the deployed commit has a migration that is unapplied to the
+  target environment or differs from what was applied there
+  (`.github/actions/check-macro-db-migrations`). Run `migrate-macro-db.yml`
+  for that environment first, or deploy a commit without the migration.
 - `continueBeforeSteadyState` means a green deploy job does not prove old tasks
   stopped. The circuit breaker rolls back failed deployments; otherwise roll
   forward or redeploy an older ref.
@@ -205,9 +236,9 @@ and receives `APP_SECRETS_JSON` now), `fusion-auth/README.md`.
 
 `agent-harness-service` is the only ECS agent service. Its process also owns
 chat/completions, workspace MCP/OAuth, preview SSH/HTTP/control, routine cron
-and event workers, and projection refresh sweeps. `preview-gateway` retains
-only networking, and `document-cognition` retains the projection queue and
-public DNS record. `mcp-server` retains its public DNS record. Both hostnames
+and event workers. `preview-gateway` retains
+only networking, and `document-cognition` retains the retired projection queue
+and public DNS record. `mcp-server` retains its public DNS record. Both hostnames
 point at the shared gateway, preserving public URLs and OAuth callbacks. The
 retired MCP and schedule stack programs contain no compute resources. Follow
 [the cutover guide](../guides/consolidate-agent-services.md) before deployment;

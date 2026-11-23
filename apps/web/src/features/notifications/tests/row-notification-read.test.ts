@@ -7,7 +7,6 @@ import type { EntityData, GithubPullRequestEntity } from '@entity/types/entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { Telemetry } from '@macro-inc/observability';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
-import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNotificationSource } from '../notification-source';
@@ -18,24 +17,18 @@ const mocks = vi.hoisted(() => ({
   emailSeen: vi.fn(async () => {}),
   entitySeen: vi.fn(),
   feed: vi.fn<() => UnifiedNotification[]>(() => []),
-  transport: 'graphql' as 'graphql' | 'rest',
+  started: false,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: true,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => true,
-}));
-vi.mock('@macro-inc/collaboration/websocket', () => ({
-  createSocketEffect: vi.fn(),
 }));
 vi.mock('@queries/notification/user-notifications', () => ({
-  optimisticInsertNotification: vi.fn(),
   useMarkNotificationsAsSeenMutation: () => ({ mutateAsync: mocks.seen }),
   useMarkNotificationsAsDoneMutation: () => ({ mutateAsync: vi.fn() }),
   useUserNotificationsQuery: () => ({
-    get transport() {
-      return mocks.transport;
+    get isStarted() {
+      return mocks.started;
     },
     isLoading: false,
     get data() {
@@ -56,6 +49,11 @@ vi.mock('@queries/notification/entity-mutations', () => ({
     id: 'pull-request',
   })),
   updateNotificationsForEntities: mocks.entitySeen,
+}));
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => undefined,
+  isCurrentQueryAccount: () => false,
+  queryAccountSessionPending: () => false,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   mapGraphqlNotification: (value: unknown) => value,
@@ -92,7 +90,7 @@ const pr: GithubPullRequestEntity = {
 };
 function createSource() {
   return createRoot((dispose) => ({
-    source: createNotificationSource({} as ConnectionGatewayWebsocket),
+    source: createNotificationSource(),
     dispose,
   }));
 }
@@ -102,7 +100,7 @@ afterEach(() => {
   mocks.seen.mockReset();
   mocks.emailSeen.mockReset();
   mocks.entitySeen.mockClear();
-  mocks.transport = 'graphql';
+  mocks.started = false;
   mocks.feed.mockReturnValue([]);
 });
 
@@ -168,7 +166,7 @@ describe.each(rows)('opening $type ($id) notifications', (entity) => {
     }
   });
 
-  it.each(['array', 'accessor', 'rest-feed'] as const)(
+  it.each(['array', 'accessor', 'started-feed'] as const)(
     'clears %s notifications before the write finishes',
     async (shape) => {
       mocks.feed.mockClear();
@@ -187,14 +185,14 @@ describe.each(rows)('opening $type ($id) notifications', (entity) => {
           state: 'seen' as const,
         },
       ];
-      const fromRestFeed = shape === 'rest-feed';
-      if (fromRestFeed) {
-        mocks.transport = 'rest';
+      const fromFeed = shape === 'started-feed';
+      if (fromFeed) {
+        mocks.started = true;
         mocks.feed.mockReturnValue(attached);
       }
       const { source, dispose } = createSource();
-      // REST Soup rows have no raw notification edge; Home reads the source.
-      const row = fromRestFeed
+      // A row without notification edges reads the started feed.
+      const row = fromFeed
         ? entity
         : {
             ...entity,
@@ -208,7 +206,7 @@ describe.each(rows)('opening $type ($id) notifications', (entity) => {
         expect(mocks.seen).toHaveBeenLastCalledWith({
           notificationIds: [`${entity.id}-pending-${shape}`],
         });
-        if (!fromRestFeed) expect(mocks.feed).not.toHaveBeenCalled();
+        if (!fromFeed) expect(mocks.feed).not.toHaveBeenCalled();
         pending.resolve();
         await pending.promise;
         expect(unreadFilterFn(withEntityNotifications(row, source))).toBe(
@@ -221,25 +219,23 @@ describe.each(rows)('opening $type ($id) notifications', (entity) => {
     }
   );
 
-  it.each(['graphql', 'rest'] as const)(
+  it.each(['attached', 'started-feed'] as const)(
     'restores the %s dot after a failed write and clears it on a retry',
-    async (transport) => {
+    async (origin) => {
       const pending = Promise.withResolvers<void>();
       const reported = Promise.withResolvers<void>();
       const telemetry = vi
         .spyOn(Telemetry, 'error')
         .mockImplementation(() => reported.resolve());
       mocks.seen.mockReturnValueOnce(pending.promise);
-      mocks.transport = transport;
+      mocks.started = origin === 'started-feed';
       const attached = [
-        { ...notification, id: `${entity.id}-failed-read-${transport}` },
+        { ...notification, id: `${entity.id}-failed-read-${origin}` },
       ];
       mocks.feed.mockReturnValue(attached);
       const { source, dispose } = createSource();
       const row = withEntityNotifications(
-        transport === 'graphql'
-          ? { ...entity, notifications: attached }
-          : entity,
+        origin === 'attached' ? { ...entity, notifications: attached } : entity,
         source
       );
       try {
@@ -282,7 +278,6 @@ it('marks an unread email with a draft reply in its owning inbox without waiting
     );
     expect(mocks.emailSeen).toHaveBeenCalledExactlyOnceWith({
       threadId: 'unread-thread',
-      linkId: 'secondary-inbox',
     });
     expect(mocks.seen).not.toHaveBeenCalled();
   } finally {

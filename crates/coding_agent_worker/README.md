@@ -8,7 +8,7 @@ repository is cloned using the operator's Git credentials. New worktrees start
 from a fresh fetch of `origin/main`; macrod never pulls into the operator's
 working branch. A repository without `main` produces an error.
 
-Herdr creates and registers the worktree. The session ID determines its path
+macrod adds the worktree with `git worktree add`. The session ID determines its path
 and branch, so redelivery reuses existing work without resetting edits. Cached
 repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Each
 paired macrod instance has one configuration and its own storage directory.
@@ -24,9 +24,13 @@ sessions into sessions for the other provider.
 
 After macrod restarts or its runtime connection reconnects, the harness service
 initializes the new connection and calls ACP `session/list`. herdr-acp lists
-the sessions whose Herdr agent still runs, and the service loads each one. That
-replays local history Macro missed and resumes forwarding without a Macro
-prompt. Agents closed in Herdr are not reopened.
+the sessions whose Herdr agent still runs, each with `updatedAt` set to its
+transcript's last write. The service loads the ones with recent activity (in
+Herdr or in Macro), an unfinished turn, or queued prompts; that replays local
+history Macro missed and resumes forwarding without a Macro prompt. A session
+idle for longer loads on its next Macro prompt, so local work started in it
+after the reconnect reaches Macro only from then. Agents closed in Herdr are not
+reopened.
 
 Closing a session's agent in Herdr (its tab or pane, by you or the agent) is
 reported to Macro once with the ACP extension notification `_session/closed`.
@@ -75,7 +79,8 @@ A prompt from Macro while the native agent is working or showing a dialog
 waits, like input typed into the TUI mid-turn. The running turn keeps streaming
 and its permission dialogs still reach Macro; the prompt is typed once the turn
 ends. Stopping from Macro while it waits interrupts the native turn and drops
-the prompt. Claude Code's exit confirmation, left by a second Ctrl-C while
+the prompt, which fails with a `prompt_not_delivered` notice so Macro shows the
+message was never typed in rather than a stopped turn. Claude Code's exit confirmation, left by a second Ctrl-C while
 background work runs, is dismissed with Escape ("Stay") before the prompt is
 typed.
 
@@ -142,9 +147,17 @@ describe `env_http_headers` and per-server configuration.
 Start macrod inside Herdr and choose **Claude Code in herdr** or **Codex in
 herdr** in Quickstart. Select a workspace directory containing your existing
 clones and pair with Macro. Native CLI authentication and Git credentials are
-reused. Each instance has one configuration, with no profiles to choose per run.
+reused. Each instance has one configuration. The TUI and `macrod service`
+share `~/.macrod/macrod.toml` (`%USERPROFILE%\.macrod\macrod.toml` on Windows;
+`--config` overrides it), and only one macrod can serve a config at a time.
+Another machine on the same computer is a named profile, `macrod --profile
+<name>` (`~/.macrod/profiles/<name>.toml`); `macrod profiles` lists them. The
+machine's name, access, and permission bypass are set on the web at
+Settings → Machines. `allow_permission_bypass = false` in an old local config
+no longer vetoes bypass: the machine's managers decide it on the web.
 
-The Config tab adds **Model** (empty uses the native default), **Extra args**
+The Config tab adds **Model** (empty uses the native default, and is only the
+launch fallback: Macro picks each agent's model), **Extra args**
 (shell-style quoting), **Storage** (empty uses automatic instance storage), and
 **Open sessions** (foreground or background). Switching agents clears the
 previous agent's model and extra arguments. Storage and focus preferences remain.
@@ -155,15 +168,31 @@ Choose a repository in Macro's composer; local sessions always start from `main`
 
 macrod drives both herdrs and picks by where it runs (`src/herdr/cli.rs`):
 
-- **herdr 0.9** (`HERDR_ENV=1`): the `herdr` CLI. Herdr creates worktrees, opens
-  tabs, starts agents, and reports their status and session IDs.
-- **herdr-core and the herdr app** (`HC_TERMINAL_ID`): the `hc` CLI, which must
-  be on `PATH`. Each session is a core terminal labelled with the app's
-  `herdr.space` and `herdr.tab`, so the app shows it as a tab in macrod's space.
-  A managed worktree gets its own space. macrod starts the shell and then types
-  `exec <agent> …` into it, so the agent gets the operator's login environment.
-  git creates the worktrees. Tab names and focus go through `herdr-app do`, and
-  macrod skips them when the app is not running.
+Every native session opens in its own herdr workspace (a space in the herdr
+app), never as a tab in macrod's or the operator's own. Its worktree is a plain
+`git worktree add` from a fresh `origin/main`, under either herdr. Sessions open
+in the background unless **Open sessions** is set to foreground. A workspace and
+tab are named after the first line of the prompt that opened the session, past
+macrod's hidden `<macrod-runtime>` header and other leading Macro tags.
+
+- **herdr 0.9** (`HERDR_ENV=1`): the `herdr` CLI. `herdr workspace create`
+  opens each session's workspace; herdr starts agents and reports their status
+  and session IDs. macrod does not use `herdr worktree`, which groups a
+  worktree under the operator's repository workspace.
+- **herdr-core and the herdr app** (`HC_TERMINAL_ID`): the `hc` at `HC_BIN`,
+  which herdr-core sets when it starts a terminal (a terminal already running
+  before herdr-core was updated has none until it is restarted). macrod never
+  looks `hc` up on `PATH`: a process `hc run` starts inherits the herdr-core
+  server's `PATH`, not the shell's. Without `HC_BIN`, sessions open no herdr
+  tabs and the daemon log says why, the herdr agents are not offered, and
+  `macrod herdr-acp` exits with the same error. Each session is a core terminal labelled with a new
+  `herdr.space` and `herdr.tab`, so the app shows it in a space of its own.
+  macrod starts the shell and then types `exec <agent> …` into it, so the agent
+  gets the operator's login environment. herdr-core refuses to type into a
+  terminal whose output has not settled in its first seconds ("still
+  starting"); nothing was typed, so macrod retries such a send for up to 30
+  seconds. Space and tab names and focus go through `herdr-app do`, and macrod
+  skips them when the app is not running.
 
 herdr-core does not guess status; it shows what a program reports through
 OSC 7501. Claude Code reports it. Codex does not, so under herdr-core a Codex
@@ -172,6 +201,14 @@ answers (approve in Herdr), and cancelling a turn Macro did not start.
 Transcripts still end its turns. Without a reported session ID, macrod finds
 Codex's transcript by working directory and start time. Viewer windows
 (`macrod herdr-pane`) report their own state through OSC 7501.
+
+## What opened a session
+
+Each `New` trigger event says what opened its session
+(`NewAgentSessionEvent::origin`). `src/trigger.rs` keeps it on `TriggerWork`, and
+`src/dispatch.rs` copies it onto the create request, where the service stores it
+with the session. macrod reports only what the event said. The service treats it
+as a description, so it never decides a session's visibility or notifications.
 
 ## Replies to chat-agent mentions
 

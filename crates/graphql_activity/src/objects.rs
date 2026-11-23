@@ -1,5 +1,5 @@
-use activity::{Action, ActivityRecord, RecordedAction};
-use async_graphql::{ID, Json, SimpleObject, Union};
+use activity::{Action, ActivityRecord, RecordedAction, TimeLog, TimeLogSource};
+use async_graphql::{Enum, ID, Json, SimpleObject, Union};
 use graphql_common::GraphqlEntityType;
 use serde_json::Value;
 
@@ -20,25 +20,38 @@ pub struct GraphqlActivityEvent {
     /// Whose activity this is: the delegating user when the actor acted on
     /// someone's behalf, otherwise the actor itself.
     pub subject_id: String,
+    /// Originating code-mode invocation, when present.
+    pub agent_correlation_id: Option<ID>,
+    /// Display verb supplied by a validated code-mode invocation.
+    pub agent_verb: Option<String>,
     /// The kind of entity acted on.
     pub entity_type: GraphqlEntityType,
     /// The entity acted on.
     pub entity_id: ID,
     /// What the principal did.
     pub action: GraphqlActivityAction,
+    /// The stored action tag, for clients that do not need its typed payload.
+    pub action_tag: String,
     /// When it happened, in RFC 3339 format.
     pub occurred_at: String,
 }
 
 impl From<ActivityRecord> for GraphqlActivityEvent {
     fn from(record: ActivityRecord) -> Self {
+        let action_tag = match &record.action {
+            RecordedAction::Known(action) => action.to_columns().0.to_owned(),
+            RecordedAction::Unknown { tag, .. } => tag.clone(),
+        };
         Self {
             id: ID(record.id.to_string()),
             actor_id: record.actor.as_ref().to_owned(),
             subject_id: record.subject_id,
+            agent_correlation_id: record.agent_correlation_id.map(|id| ID(id.to_string())),
+            agent_verb: record.agent_verb.map(|verb| verb.to_string()),
             entity_type: GraphqlEntityType::new(record.entity_type),
             entity_id: ID(record.entity_id),
             action: record.action.into(),
+            action_tag,
             occurred_at: record.occurred_at.to_rfc3339(),
         }
     }
@@ -76,6 +89,8 @@ pub enum GraphqlActivityAction {
     TaskAdded(GraphqlActivityTaskAdded),
     /// A task was removed; references are resolved through authorized project history.
     TaskRemoved(GraphqlActivityTaskRemoved),
+    /// Time was logged on the entity (a task).
+    TimeLogged(GraphqlActivityTimeLogged),
     /// An action outside this deployment's vocabulary, carried through raw.
     Unknown(GraphqlActivityUnknownAction),
 }
@@ -147,6 +162,40 @@ pub struct GraphqlActivityCallStarted {
     pub call_id: ID,
 }
 
+/// Time was logged on the entity (a task). The entry's note is never part of
+/// activity.
+#[derive(SimpleObject)]
+pub struct GraphqlActivityTimeLogged {
+    /// Whole minutes logged.
+    pub minutes: i32,
+    /// The day the time counts for, in `YYYY-MM-DD` form, as the person chose it.
+    pub entry_date: String,
+    /// How the time was logged.
+    pub source: GraphqlActivityTimeLogSource,
+}
+
+/// How time was logged.
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphqlActivityTimeLogSource {
+    /// Typed as a length.
+    Manual,
+    /// Saved by stopping a timer.
+    Timer,
+}
+
+impl From<TimeLog> for GraphqlActivityTimeLogged {
+    fn from(log: TimeLog) -> Self {
+        Self {
+            minutes: i32::try_from(log.minutes).unwrap_or(i32::MAX),
+            entry_date: log.entry_date.to_string(),
+            source: match log.source {
+                TimeLogSource::Manual => GraphqlActivityTimeLogSource::Manual,
+                TimeLogSource::Timer => GraphqlActivityTimeLogSource::Timer,
+            },
+        }
+    }
+}
+
 /// An action this deployment's vocabulary doesn't know.
 #[derive(SimpleObject)]
 pub struct GraphqlActivityUnknownAction {
@@ -190,8 +239,10 @@ impl From<RecordedAction> for GraphqlActivityAction {
             }
             RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded(Default::default()),
             RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved(Default::default()),
+            RecordedAction::Known(Action::TimeLogged(log)) => Self::TimeLogged(log.into()),
             RecordedAction::Known(
                 action @ (Action::Renamed(_)
+                | Action::AppearanceChanged(_)
                 | Action::PictureChanged
                 | Action::CallEnded(_)
                 | Action::AccessRequested(_)),

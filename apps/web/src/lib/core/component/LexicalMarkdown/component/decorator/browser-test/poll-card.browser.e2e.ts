@@ -7,12 +7,8 @@ for (const viewport of [
   { name: 'desktop', width: 1280, height: 800 },
   { name: 'phone', width: 390, height: 844 },
 ]) {
-  for (const { poll, wraps } of [
-    { poll: 'Two options', wraps: false },
-    { poll: 'Long question', wraps: true },
-    { poll: 'Many options', wraps: false },
-  ]) {
-    test(`${poll} poll card fits its content without moving on load on ${viewport.name}`, async ({
+  for (const poll of ['Two options', 'Long question', 'Many options']) {
+    test(`${poll} poll card keeps its reserved height through loading on ${viewport.name}`, async ({
       page,
     }) => {
       await page.route('https://**', (route) => route.abort());
@@ -21,14 +17,20 @@ for (const viewport of [
       const section = page.getByRole('region', { name: poll, exact: true });
       const card = section.locator('[data-slot="card"]').first();
       await expect(card).toBeVisible({ timeout: 30_000 });
-      const reserved = (await card.boundingBox())!.height;
+      const height = async () => (await card.boundingBox())!.height;
+      // Before the preview loads, the reservation already holds the
+      // question at its wrapped height.
+      const reserved = await height();
 
-      await section.getByRole('button', { name: `Load ${poll}` }).click();
+      await section
+        .getByRole('button', { name: `Load ${poll} preview` })
+        .click();
+      await expect(section.getByText('owner@example.com')).toBeVisible();
+      expect(await height()).toBe(reserved);
+
+      await section.getByRole('button', { name: `Load ${poll} form` }).click();
       await expect(section.getByText('Responses')).toBeVisible();
-      const loaded = (await card.boundingBox())!.height;
-      // One-line polls get exactly their space up front; wrapped text grows them.
-      if (wraps) expect(loaded).toBeGreaterThan(reserved);
-      else expect(loaded).toBe(reserved);
+      expect(await height()).toBe(reserved);
 
       // Nothing inside the card scrolls or is clipped: the "Poll" row and the
       // votes footer both sit within the card.
@@ -55,4 +57,48 @@ for (const viewport of [
       }
     });
   }
+}
+
+for (const viewport of [
+  { name: 'desktop', width: 1280, height: 800 },
+  { name: 'phone', width: 390, height: 844 },
+]) {
+  test(`a poll card shows its form block loading instead of an empty body on ${viewport.name}`, async ({
+    page,
+  }) => {
+    await page.route('https://**', (route) => route.abort());
+    // Hold the form block's code: the block stays suspended in its loading
+    // state, as a card does while the form's code or detail is in flight.
+    await page.route('**/src/features/block-form/form-block.tsx*', () => {});
+    await page.clock.install();
+    await page.setViewportSize(viewport);
+    await page.goto(fixture);
+    const section = page.getByRole('region', { name: 'Suspended' });
+    await expect(section.getByText('owner@example.com')).toBeVisible({
+      timeout: 30_000,
+    });
+    const loading = section.getByRole('status', { name: 'Loading form' });
+    await expect(loading).toBeVisible();
+    await loading.scrollIntoViewIfNeeded();
+    // Painted, not clipped away: the loading state is what a person sees at
+    // its center, and it has height.
+    const box = (await loading.boundingBox())!;
+    expect(box.height).toBeGreaterThan(40);
+    const hit = await loading.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const top = document.elementFromPoint(
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2
+      );
+      return !!top && element.contains(top);
+    });
+    expect(hit).toBe(true);
+
+    // Code that never arrives says so and offers a reload, instead of a
+    // skeleton that never ends.
+    await page.clock.fastForward(10_000);
+    await expect(section.getByText('Couldn’t load this form.')).toBeVisible();
+    await expect(section.getByRole('button', { name: 'Reload' })).toBeVisible();
+    await expect(loading).toHaveCount(0);
+  });
 }

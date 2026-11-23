@@ -2,9 +2,12 @@ use super::SearchPaginationParams;
 use crate::api::{
     context::{SearchAuthorizationService, SearchHandlerState},
     search::{
-        crm_company::{enrich_crm_companies, resolve_crm_team_receipt},
+        crm_company::enrich_crm_companies,
         enrich::enrich_search_response,
-        simple::{SearchError, simple_unified::perform_unified_search},
+        simple::{
+            SearchError,
+            simple_unified::{UnifiedSearchPage, perform_unified_search},
+        },
     },
 };
 use axum::{
@@ -34,6 +37,7 @@ use std::cmp::Ordering;
             (status = 200, body=UnifiedSearchResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
+            (status = 429, body=ErrorResponse, description = "The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds."),
             (status = 500, body=ErrorResponse),
     )
 )]
@@ -43,20 +47,15 @@ pub async fn handler(
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<UnifiedSearchResponse>, SearchError> {
-    let user_context = &authorization.authorization.user.user_context;
+    let user = &authorization.authorization.user;
+    let user_context = &user.user_context;
 
     tracing::info!(
         user_id = user_context.user_id,
-        query = ?req.query,
         search_on = ?req.search_on,
         include_crm = req.include_crm,
         "unified_search"
     );
-
-    // CRM is opt-in: only when the caller asks for it does this resolve a
-    // team membership and mint a capability receipt. No membership → empty
-    // CRM slice, not a failed search. See `resolve_crm_team_receipt`.
-    let crm_access = resolve_crm_team_receipt(&ctx, user_context, req.include_crm).await?;
 
     let document_name_term = match req.search_on {
         models_search::SearchOn::Name | models_search::SearchOn::NameContent => {
@@ -66,8 +65,12 @@ pub async fn handler(
         models_search::SearchOn::Content => None,
     };
 
-    let (results, next_cursor) =
-        perform_unified_search(&ctx, user_context, crm_access.as_ref(), query_params, req).await?;
+    let include_crm = req.include_crm;
+    let UnifiedSearchPage {
+        hits: results,
+        next_cursor,
+        crm_access,
+    } = perform_unified_search(&ctx, user, include_crm, query_params, req).await?;
 
     // Split the results by entity type
     let SplitUnifiedSearchResponseValues {

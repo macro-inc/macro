@@ -43,3 +43,13 @@ impl CrmRecordAssociation {
         }
     }
 }
+
+/// An item whose Companies or Contacts property names a record of the activity
+/// scope: a visible company, or a visible contact, of the viewer's teams.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmActivityEdge {
+    /// The kind of item holding the property.
+    pub entity_type: models_properties::EntityType,
+    /// The item's id, as stored on the property row.
+    pub entity_id: String,
+}

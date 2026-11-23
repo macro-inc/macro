@@ -41,6 +41,23 @@ impl DomainActivity for CallStartedActivity {
     }
 }
 
+/// Completion of a call whose channel row already shows the ending, so it is
+/// recorded against the call and stays out of the channel's timeline.
+struct CallThreadEndedActivity {
+    call_id: String,
+    end: ::activity::domain::models::CallEnd,
+}
+
+impl DomainActivity for CallThreadEndedActivity {
+    const ENTITY_TYPE: EntityType = EntityType::Call;
+    fn entity_id(&self) -> &str {
+        &self.call_id
+    }
+    fn into_action(self) -> Action {
+        Action::CallEnded(self.end)
+    }
+}
+
 /// Channel-targeted completion of a call.
 struct CallEndedActivity {
     channel_id: String,
@@ -65,6 +82,25 @@ impl ActivitySource for CallTopicEvent {
     fn ingest(&self, event_id: Uuid) -> Ingest {
         match self {
             // Only channel calls have a timeline to record the ending in.
+            CallTopicEvent::RecordArchived(m) if m.channel_thread => {
+                Ingest::Insert(vec![Activity::from_domain(
+                    event_id,
+                    0,
+                    Actor::new_from_user(m.created_by.clone()),
+                    None,
+                    CallThreadEndedActivity {
+                        call_id: m.call_id.to_string(),
+                        end: ::activity::domain::models::CallEnd {
+                            call_id: m.call_id.to_string(),
+                            duration_ms: m
+                                .duration_ms
+                                .unwrap_or_else(|| (m.ended_at - m.started_at).num_milliseconds())
+                                .max(0),
+                        },
+                    },
+                    m.ended_at,
+                )])
+            }
             CallTopicEvent::RecordArchived(m) => match m.channel_id {
                 None => Ingest::Ignore,
                 Some(channel_id) => Ingest::Insert(vec![Activity::from_domain(

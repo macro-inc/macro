@@ -153,13 +153,14 @@ impl<
                         name: name.0,
                         owner_id: viewer.user_id.clone(),
                         acting_bot: viewer.acting_bot,
+                        first_table: None,
                     })
                     .await
                     .map_err(schema_error)?;
                 return Ok(outcome(
                     created.id,
                     format!(
-                        "Created database \"{}\". Call DescribeDatabase for its starter table and column IDs.",
+                        "Created database \"{}\" with one empty starter table, \"Table 1\". Rename it to the first table you need instead of creating another beside it; call DescribeDatabase for its table and column IDs.",
                         created.name
                     ),
                     HashMap::new(),

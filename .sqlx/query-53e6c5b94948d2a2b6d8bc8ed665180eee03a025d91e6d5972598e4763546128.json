@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT member.team_role IN ('admin','owner') AS \"admin!\" FROM team_user member\n           WHERE member.team_id=$1 AND member.user_id=$2\n             AND EXISTS(SELECT 1 FROM email_links WHERE id=$3 AND macro_id=$2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "admin!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "53e6c5b94948d2a2b6d8bc8ed665180eee03a025d91e6d5972598e4763546128"
+}

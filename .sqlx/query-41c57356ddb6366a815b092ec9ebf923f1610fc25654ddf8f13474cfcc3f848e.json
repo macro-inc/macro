@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.user_id, p.display_name,\n                COALESCE(array_agg(a.jid) FILTER (WHERE a.jid IS NOT NULL), '{}') AS \"jids!\"\n            FROM external_chat_person p\n            LEFT JOIN whatsapp_identity_alias a ON a.chat_id = p.chat_id AND a.person_id = p.id\n            WHERE p.chat_id = $1 AND (p.id = ANY($2) OR p.id IN (\n                SELECT person_id FROM whatsapp_identity_alias WHERE chat_id = $1 AND jid = ANY($3)))\n            GROUP BY p.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "jids!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "41c57356ddb6366a815b092ec9ebf923f1610fc25654ddf8f13474cfcc3f848e"
+}

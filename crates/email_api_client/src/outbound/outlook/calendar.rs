@@ -11,7 +11,7 @@ mod zones;
 
 use super::OutlookApiClientRepository;
 use crate::domain::{
-    models::{AccessToken, EmailApiError, MailboxAccess, StreamToken},
+    models::{AccessToken, EmailApiError, MailboxAccess, RateLimitOrigin, StreamToken},
     ports::ScopedMailboxRepository,
 };
 use calendar_events::domain::{ics::EventSnapshot, models::*, outlook::*, ports::*};
@@ -28,6 +28,55 @@ const CREATION_ID: &str =
 const APPOINTMENT_SEQUENCE_ID: &str = "Integer {00062002-0000-0000-C000-000000000046} Id 0x8201";
 const PREFERENCES_ID: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroCalendarPreferences";
+/// What `instances` selects: every property of Graph's v1.0 `event` that it
+/// returns by default, plus `originalStart`, which it leaves out of the
+/// default set although its documentation says otherwise. Without it an
+/// exception cannot be paired with the occurrence it replaces, nor an
+/// occurrence addressed by its original start. A `$select` returns only what
+/// it names, so a new read of an instance property must be listed here.
+const INSTANCE_PROPERTIES: &[&str] = &[
+    "allowNewTimeProposals",
+    "attendees",
+    "body",
+    "bodyPreview",
+    "categories",
+    "changeKey",
+    "createdDateTime",
+    "end",
+    "hasAttachments",
+    "hideAttendees",
+    "iCalUId",
+    "id",
+    "importance",
+    "isAllDay",
+    "isCancelled",
+    "isDraft",
+    "isOnlineMeeting",
+    "isOrganizer",
+    "isReminderOn",
+    "lastModifiedDateTime",
+    "location",
+    "locations",
+    "onlineMeeting",
+    "onlineMeetingProvider",
+    "onlineMeetingUrl",
+    "organizer",
+    "originalEndTimeZone",
+    "originalStart",
+    "originalStartTimeZone",
+    "recurrence",
+    "reminderMinutesBeforeStart",
+    "responseRequested",
+    "responseStatus",
+    "sensitivity",
+    "seriesMasterId",
+    "showAs",
+    "start",
+    "subject",
+    "transactionId",
+    "type",
+    "webLink",
+];
 
 fn invalid() -> CalendarProviderError {
     CalendarProviderError::new(
@@ -57,6 +106,18 @@ fn unsupported(message: &str) -> CalendarProviderError {
     CalendarProviderError::new(CalendarProviderErrorKind::Permanent, message)
 }
 fn error(error: EmailApiError) -> CalendarProviderError {
+    // Macro's own admission sent nothing, so a sync retries it shortly
+    // instead of counting a failure.
+    if let EmailApiError::RateLimited {
+        retry_after,
+        origin: RateLimitOrigin::Gate(_) | RateLimitOrigin::Local,
+    } = &error
+    {
+        return CalendarProviderError::deferred(
+            *retry_after,
+            "Microsoft request admission deferred the call",
+        );
+    }
     let kind = match &error {
         EmailApiError::AuthRequired => CalendarProviderErrorKind::ReauthRequired,
         EmailApiError::OutdatedCursor => CalendarProviderErrorKind::SyncTokenExpired,
@@ -230,6 +291,7 @@ impl OutlookApiClientRepository {
             .append_pair("startDateTime", &target.range.starts_at.to_rfc3339())
             .append_pair("endDateTime", &target.range.ends_at.to_rfc3339())
             .append_pair("$top", "1000")
+            .append_pair("$select", &INSTANCE_PROPERTIES.join(","))
             .append_pair(
                 "$expand",
                 &format!(
@@ -258,7 +320,16 @@ impl OutlookApiClientRepository {
         master: Value,
     ) -> Result<CalendarEventUpsert, CalendarProviderError> {
         let instances = self.calendar_occurrences(token, target, &master).await?;
-        Ok(normalize::projection(target, master, instances)?)
+        let normalize::Projection {
+            mut upsert,
+            skipped,
+        } = normalize::projection(target, master, instances)?;
+        // An edit's echo of a series missing an occurrence Macro could not
+        // read is stored under no role, as the sync stores that series.
+        if !skipped.is_empty() {
+            upsert.source.details_mut().observed_access_role = None;
+        }
+        Ok(upsert)
     }
     async fn calendar_refresh(
         &self,
@@ -332,24 +403,26 @@ impl OutlookApiClientRepository {
 }
 
 impl OutlookCalendarReader for OutlookApiClientRepository {
+    // 1: instances select `originalStart`, so exceptions pair with their
+    // occurrences instead of hiding their series.
+    const READER_REVISION: i16 = 1;
     async fn calendars(
         &self,
         token: &str,
         binding: CalendarGrantBinding,
-    ) -> Result<Vec<OutlookCalendar>, CalendarProviderError> {
+    ) -> Result<OutlookDiscovery, CalendarProviderError> {
         let api = self.for_mailbox(access(binding));
         let token = AccessToken::new(token.to_owned());
         let settings = api
             .calendar_get(&token, api.calendar_endpoint(&["me", "mailboxSettings"])?)
             .await?;
-        let zone = zones::zone(settings["timeZone"].as_str().unwrap_or("UTC"))
-            .ok_or_else(invalid)?
-            .name()
-            .to_owned();
+        let named = settings["timeZone"].as_str().unwrap_or("UTC");
+        let zone = zones::zone(named).map(|zone| zone.name().to_owned());
+        let unmapped_time_zone = zone.is_none().then(|| named.to_owned());
         let (calendars, _) = api
             .calendar_pages(&token, api.calendar_endpoint(&["me", "calendars"])?)
             .await?;
-        calendars
+        let calendars = calendars
             .into_iter()
             .map(|c| {
                 Ok(OutlookCalendar {
@@ -357,7 +430,7 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
                         provider_calendar_id: string(&c, "id")?.into(),
                         name: c["name"].as_str().unwrap_or("Calendar").into(),
                         description: None,
-                        time_zone: Some(zone.clone()),
+                        time_zone: zone.clone(),
                         color: c["hexColor"]
                             .as_str()
                             .filter(|c| !c.is_empty())
@@ -383,15 +456,24 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
                         .flatten()
                         .filter_map(|v| v.as_str().map(str::to_owned))
                         .collect(),
+                    owner_address: c["owner"]["address"]
+                        .as_str()
+                        .filter(|address| !address.is_empty())
+                        .map(str::to_owned),
+                    shared_with_me: c["isSharedWithMe"].as_bool() == Some(true),
                 })
             })
-            .collect()
+            .collect::<Result<_, CalendarProviderError>>()?;
+        Ok(OutlookDiscovery {
+            calendars,
+            unmapped_time_zone,
+        })
     }
     async fn calendar_page(
         &self,
         token: &str,
         target: &ProviderCalendarTarget,
-        primary: bool,
+        delta: bool,
         cursor: Option<&str>,
     ) -> Result<OutlookCalendarPage, CalendarProviderError> {
         let api = self.calendar_scope(target)?;
@@ -400,9 +482,10 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
             api.continuation(&StreamToken::new(cursor.to_owned()))
                 .map_err(error)?
         } else {
-            // Only the primary calendar has v1.0 delta; other calendars use
-            // complete bounded calendarView snapshots, without beta APIs.
-            let mut url = if primary {
+            // Only the primary calendar has v1.0 delta; other calendars, and a
+            // first import's near window on any calendar, use complete bounded
+            // calendarView snapshots, without beta APIs.
+            let mut url = if delta {
                 api.calendar_endpoint(&["me", "calendarView", "delta"])?
             } else {
                 api.calendar_endpoint(&[
@@ -415,19 +498,19 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
             url.query_pairs_mut()
                 .append_pair("startDateTime", &target.range.starts_at.to_rfc3339())
                 .append_pair("endDateTime", &target.range.ends_at.to_rfc3339());
-            if !primary {
+            if !delta {
                 url.query_pairs_mut().append_pair("$top", "1000");
             }
             url
         };
         let page = api.calendar_get(&token, url).await?;
         let next = page["@odata.nextLink"].as_str().map(str::to_owned);
-        let delta = page["@odata.deltaLink"].as_str().map(str::to_owned);
-        for cursor in next.iter().chain(delta.iter()) {
+        let delta_link = page["@odata.deltaLink"].as_str().map(str::to_owned);
+        for cursor in next.iter().chain(delta_link.iter()) {
             api.continuation(&StreamToken::new(cursor.clone()))
                 .map_err(error)?;
         }
-        if next.is_none() && primary && delta.is_none() {
+        if next.is_none() && delta && delta_link.is_none() {
             return Err(invalid());
         }
         let mut members = vec![];
@@ -437,17 +520,22 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
             if !event["@removed"].is_null() {
                 removed.push(id.to_owned());
             } else {
-                members.push((
-                    id.to_owned(),
-                    event["seriesMasterId"].as_str().unwrap_or(id).to_owned(),
-                ));
+                members.push(OutlookPageMember {
+                    provider_id: id.to_owned(),
+                    master_id: event["seriesMasterId"].as_str().unwrap_or(id).to_owned(),
+                    // Only orders a first import's reads, so a time Macro
+                    // cannot read is left out rather than failing the page.
+                    occurs: normalize::instant(&event["start"])
+                        .ok()
+                        .zip(normalize::instant(&event["end"]).ok()),
+                });
             }
         }
         Ok(OutlookCalendarPage {
             members,
             removed,
             next,
-            delta,
+            delta: delta_link,
         })
     }
     async fn refresh_calendar_event(
@@ -463,7 +551,10 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
         };
         let instances = api.calendar_occurrences(&token, target, &master).await?;
         Ok(match normalize::projection(target, master, instances) {
-            Ok(upsert) => OutlookEventRefresh::Refreshed(Box::new(upsert)),
+            Ok(normalize::Projection { upsert, skipped }) => OutlookEventRefresh::Refreshed {
+                upsert: Box::new(upsert),
+                skipped,
+            },
             Err(Rejected(field)) => OutlookEventRefresh::Unreadable { field },
         })
     }
@@ -491,11 +582,27 @@ fn preserve_meeting_details(
             "Outlook has not finished preparing this online meeting. Try the description edit again shortly.",
         ));
     };
-    if description.contains(join) {
-        return Ok(description.into());
+    if !html_escape::decode_html_entities(description).contains(join) {
+        let (_, meeting) = conference_body::split(existing, join)?;
+        return Ok(format!("{description}{meeting}"));
     }
-    let (_, meeting) = conference_body::split(existing, join)?;
-    Ok(format!("{description}{meeting}"))
+    // Macro's editor shows the block and hands it back as plain paragraphs,
+    // without the markers that let a later edit or a replacement separate it:
+    // Outlook's own block from the current body takes their place. A
+    // description the block cannot be separated from (one an earlier save
+    // already rewrote, or one quoting the link in the person's own text) is
+    // written as given, as before; a body too large to parse whole is refused.
+    match conference_body::with_saved_meeting(description, existing, join) {
+        Ok(body) => Ok(body),
+        Err(error) if error.is_refused() => Err(error),
+        Err(_) => {
+            tracing::warn!(
+                body_bytes = description.len(),
+                "kept an edited Outlook meeting description whose meeting block Macro cannot separate"
+            );
+            Ok(description.into())
+        }
+    }
 }
 
 fn patch_body(
@@ -926,7 +1033,7 @@ impl CalendarMutationProvider for OutlookApiClientRepository {
         }
         // Outlook may remove a declined event from the attendee's calendar.
         // The successful response must not be reported as a failed RSVP.
-        let mut echo = normalize::projection(target, master, vec![])?;
+        let mut echo = normalize::projection(target, master, vec![])?.upsert;
         for attendee in &mut echo.event.attendees {
             if attendee.email.eq_ignore_ascii_case(address) {
                 attendee.response_status = response;

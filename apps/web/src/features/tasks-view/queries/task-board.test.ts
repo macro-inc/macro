@@ -111,6 +111,23 @@ describe('board query projection', () => {
     expect(taskDueDateUrgency(undefined, false, calendar)).toBeUndefined();
   });
 
+  it('marks a due date with a time overdue once that moment passes', () => {
+    const calendar = createDateBucketBoundaries(
+      new Date('2025-03-09T18:00:00Z'),
+      'America/New_York'
+    );
+    const timed = { now: Date.parse('2025-03-09T18:00:00Z') };
+    expect(
+      taskDueDateUrgency('2025-03-09T17:00:00Z', false, calendar, timed)
+    ).toBe('danger');
+    expect(
+      taskDueDateUrgency('2025-03-09T19:00:00Z', false, calendar, timed)
+    ).toBe('warning');
+    expect(taskDueDateUrgency('2025-03-09T17:00:00Z', false, calendar)).toBe(
+      'warning'
+    );
+  });
+
   it('keeps completed and canceled board tasks neutral', () => {
     for (const status of [
       PROPERTY_OPTION_IDS.STATUS.COMPLETED,
@@ -400,6 +417,30 @@ describe('property sorting', () => {
         (row) => row.id
       )
     ).toEqual(['a', 'b', 'missing']);
+  });
+
+  it('orders titles case-insensitively, reverses on demand, and breaks ties by update then descending id', () => {
+    const titled = (id: string, name: string, updatedAt: string) => ({
+      ...boardEntity(id),
+      name,
+      updatedAt,
+    });
+    const rows = [
+      titled('zeta', 'zeta plan', '2026-10-01T00:00:00Z'),
+      titled('alpha', 'Alpha plan', '2026-10-02T00:00:00Z'),
+      titled('older-tie', 'Beta plan', '2026-10-01T00:00:00Z'),
+      titled('newer-tie', 'beta plan', '2026-10-03T00:00:00Z'),
+    ];
+
+    expect(sortTasks(rows, [{ id: 'title' }]).map((row) => row.id)).toEqual([
+      'alpha',
+      'newer-tie',
+      'older-tie',
+      'zeta',
+    ]);
+    expect(
+      sortTasks(rows, [{ id: 'title', reversed: true }]).map((row) => row.id)
+    ).toEqual(['zeta', 'newer-tie', 'older-tie', 'alpha']);
   });
 
   it('uses server option display order for groups and leaves missing values last', () => {

@@ -3,7 +3,7 @@ import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel, RadioGroup } from '@ui';
-import { type ComponentProps, createSignal, Show } from 'solid-js';
+import { type ComponentProps, createMemo, createSignal, Show } from 'solid-js';
 import { createChannelInvites } from '../primitives/create-channel-invites';
 
 export type ChannelInviteTeam = {
@@ -22,7 +22,8 @@ export function ChannelInviteModal(props: {
   teamError: boolean;
   participantsReady: boolean;
   participantIds: string[];
-  options: PeoplePickerProps['options'];
+  options?: PeoplePickerProps['options'];
+  createSource: PeoplePickerProps['createSource'];
   onAdd: (participantIds: string[]) => Promise<unknown>;
   onClose: () => void;
 }) {
@@ -48,10 +49,9 @@ export function ChannelInviteModal(props: {
     add: props.onAdd,
     onClose: props.onClose,
   });
-  const options = () => {
-    const existing = new Set(props.participantIds);
-    return props.options().filter((option) => !existing.has(option.id));
-  };
+  const existing = createMemo(() => new Set(props.participantIds));
+  const options = () =>
+    (props.options?.() ?? []).filter((option) => !existing().has(option.id));
 
   return (
     <Dialog open onOpenChange={(open) => !open && close()} class="w-140">
@@ -117,11 +117,14 @@ export function ChannelInviteModal(props: {
               <div class="flex flex-col gap-3">
                 <RecipientSelector<'user' | 'contact'>
                   options={options}
+                  createSource={props.createSource}
+                  excludedIds={existing}
                   selectedOptions={selected()}
                   setSelectedOptions={setSelected}
                   placeholder="Search people or email addresses"
-                  disabled={pending()}
+                  disabled={pending() || !props.participantsReady}
                   inviteExternalEmails
+                  portalScope="local"
                   class="min-h-12 rounded-full border-edge-frame bg-control px-3 py-2 focus-within:ring-2 focus-within:ring-edge-muted"
                 />
                 <p class="text-sm text-ink-muted">

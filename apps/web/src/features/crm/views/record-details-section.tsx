@@ -1,36 +1,10 @@
+import { t } from '@app/lib/i18n';
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadataRow } from '@components/app/side-panel/EntityMetadata';
-import { Button } from '@ui';
 import { For, Show } from 'solid-js';
-import { useCrmContext } from '../context/crm-context';
 import type { CrmCompany } from '../core/company';
 import type { CrmContact } from '../core/contact';
-import { useCompanyQuery } from './use-crm';
-
-function ContactCompany(props: {
-  id: string;
-  onOpen?: (id: string) => boolean;
-}) {
-  const { company } = useCompanyQuery(() => props.id);
-  const navigation = useCrmContext().createNavigation();
-  return (
-    <EntityMetadataRow label="Company">
-      <Button
-        variant="link"
-        size="sm"
-        onClick={() => {
-          if (!props.onOpen?.(props.id))
-            navigation.openWithSplit(
-              { type: 'company', id: props.id },
-              { activate: true }
-            );
-        }}
-      >
-        {company()?.name ?? 'Open company'}
-      </Button>
-    </EntityMetadataRow>
-  );
-}
+import { ContactCompanyField, ContactEmailField } from './contact-properties';
 
 /** Both records begin with factual details and References in the same order. */
 export function RecordDetailsSection(props: {
@@ -61,16 +35,15 @@ export function RecordDetailsSection(props: {
         <Show when={props.contact}>
           {(contact) => (
             <>
-              <Show when={contact().email}>
-                {(email) => (
-                  <EntityMetadataRow label="Email">{email()}</EntityMetadataRow>
-                )}
-              </Show>
-              <Show when={contact().companyId}>
-                {(id) => (
-                  <ContactCompany id={id()} onOpen={props.onOpenCompany} />
-                )}
-              </Show>
+              <EntityMetadataRow label={t('crm.email')}>
+                <ContactEmailField contact={contact()} />
+              </EntityMetadataRow>
+              <EntityMetadataRow label={t('crm.company')}>
+                <ContactCompanyField
+                  contact={contact()}
+                  onOpenCompany={props.onOpenCompany}
+                />
+              </EntityMetadataRow>
             </>
           )}
         </Show>

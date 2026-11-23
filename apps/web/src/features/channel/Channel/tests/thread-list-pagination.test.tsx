@@ -5,6 +5,8 @@ import { ThreadList, type ThreadListNavigation } from '../ThreadList';
 
 const rowHeights = new Map<string, number>();
 let viewportHeight = 400;
+let viewportWidth = 400;
+const resizeCallbacks = new Map<Element, ResizeObserverCallback>();
 
 const platform = vi.hoisted(() => ({ safari: true }));
 vi.mock('@solid-primitives/platform', () => ({
@@ -21,6 +23,8 @@ beforeEach(() => {
   platform.safari = true;
   rowHeights.clear();
   viewportHeight = 400;
+  viewportWidth = 400;
+  resizeCallbacks.clear();
   // Supply layout for the real virtualizer; jsdom does not measure DOM nodes.
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
     function (this: HTMLElement) {
@@ -29,7 +33,12 @@ beforeEach(() => {
         : viewportHeight;
     }
   );
-  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(400);
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(
+    () => viewportWidth
+  );
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(
+    () => viewportWidth
+  );
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(
     () => viewportHeight
   );
@@ -43,8 +52,13 @@ beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      observe() {}
-      unobserve() {}
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        resizeCallbacks.set(target, this.callback);
+      }
+      unobserve(target: Element) {
+        resizeCallbacks.delete(target);
+      }
       disconnect() {}
     }
   );
@@ -69,7 +83,7 @@ afterEach(() => {
   Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
 });
 
-function setup(followOnAppend = true) {
+function setup(followOnAppend = true, preserveReflowGap = false) {
   const [keys, setKeys] = createSignal(
     Array.from({ length: 20 }, (_, index) => String(index))
   );
@@ -78,6 +92,7 @@ function setup(followOnAppend = true) {
   let navigation: ThreadListNavigation | undefined;
   const { container } = render(() => (
     <ThreadList
+      preserveReflowGap={preserveReflowGap}
       keys={keys}
       followOnAppend={followOnAppend}
       onReady={(value) => {
@@ -341,4 +356,37 @@ it('coalesces explicit destination changes into a post-render layout notificatio
   f.navigation()?.requestLayoutUpdate();
   await new Promise((resolve) => queueMicrotask(() => resolve(undefined)));
   expect(f.onScroll).not.toHaveBeenCalled();
+});
+
+it('explicit navigation cancels a pending call-thread resize restoration', async () => {
+  platform.safari = false;
+  const f = setup(true, true);
+  await waitFor(() => expect(f.navigation()).toBeDefined());
+  let frameId = 0;
+  const frames = new Map<number, FrameRequestCallback>();
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frames.set(++frameId, callback);
+    return frameId;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+  const resize = resizeCallbacks.get(f.element);
+  expect(resize).toBeDefined();
+  viewportWidth = 600;
+  resize?.(
+    [
+      {
+        target: f.element,
+        contentRect: new DOMRect(0, 0, 600, 400),
+        borderBoxSize: [{ inlineSize: 600, blockSize: 400 }],
+        contentBoxSize: [{ inlineSize: 600, blockSize: 400 }],
+        devicePixelContentBoxSize: [],
+      },
+    ],
+    {} as ResizeObserver
+  );
+  expect(frames.size).toBeGreaterThan(0);
+  const target = f.element.querySelector<HTMLElement>('[data-index]');
+  if (!target) throw new Error('Missing virtual row');
+  expect(f.navigation()?.scrollToElement(target)).toBe(true);
+  expect(frames.size).toBe(0);
 });

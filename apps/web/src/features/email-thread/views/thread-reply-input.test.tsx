@@ -32,6 +32,7 @@ vi.mock('@queries/email/local-drafts', async (importOriginal) => ({
 }));
 vi.mock('@queries/client', () => ({
   queryClient: {
+    getQueryState: () => undefined,
     getQueryCache: () => ({ subscribe: () => () => {} }),
   },
 }));
@@ -86,7 +87,6 @@ it('waits for local reply discovery before mounting an editor and preserves it d
   let source!: ReturnType<typeof createEmailThreadSource>;
   const view = render(() => {
     source = createEmailThreadSource(() => 'thread', {
-      transport: 'graphql',
       isSuccess: true,
       isLoading: false,
       isError: false,

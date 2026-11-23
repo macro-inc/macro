@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT registration.id, registration.account_id, registration.agent_session_id,\n                   registration.registered_at\n            FROM work_registration registration\n            JOIN agent_session session ON session.id = registration.agent_session_id\n            WHERE registration.account_id = ANY($1)\n              AND registration.ended_at IS NULL\n              AND session.archived_by IS NULL\n            ORDER BY registration.registered_at DESC, registration.id DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "registered_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c458535c7a78c1b18f5decc7b6d9c3ae74b144dab628fa58b929b67e07506c1e"
+}

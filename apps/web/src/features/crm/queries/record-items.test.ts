@@ -8,33 +8,30 @@ import {
 } from './record-items';
 
 describe('CRM record item queries', () => {
-  it.each([undefined, null, ''])(
-    'keeps files scoped to the contact when its email is %s',
-    (email) => {
-      const body = JSON.parse(
-        JSON.stringify(
-          recordFilesBody({
-            type: 'contact',
-            id: '00000000-0000-4000-8000-000000000001',
-            email,
-          })
-        )
-      );
+  it('keeps files scoped to the contact when it has no email', () => {
+    const body = JSON.parse(
+      JSON.stringify(
+        recordFilesBody({
+          type: 'contact',
+          id: '00000000-0000-4000-8000-000000000001',
+          emails: [],
+        })
+      )
+    );
 
-      expect(body.df).toEqual({
-        '&': [
-          { '!': { l: { dst: 'task' } } },
-          {
-            l: {
-              crm: { contact: '00000000-0000-4000-8000-000000000001' },
-            },
+    expect(body.df).toEqual({
+      '&': [
+        { '!': { l: { dst: 'task' } } },
+        {
+          l: {
+            crm: { contact: '00000000-0000-4000-8000-000000000001' },
           },
-        ],
-      });
-      expect(body.ef).toEqual({ l: { ThreadId: NIL_UUID } });
-      expect(body.ccf).toEqual({ l: { id: NIL_UUID } });
-    }
-  );
+        },
+      ],
+    });
+    expect(body.ef).toEqual({ l: { ThreadId: NIL_UUID } });
+    expect(body.ccf).toEqual({ l: { id: NIL_UUID } });
+  });
 
   it('keeps a company without domains scoped to its associations', () => {
     const body = recordFilesBody({
@@ -81,18 +78,23 @@ describe('CRM record item queries', () => {
     expect(body.ef).toEqual({ l: { ThreadId: NIL_UUID } });
   });
 
-  it('matches a contact through its association or its exact address', () => {
+  it('matches a contact through its association or any of its exact addresses', () => {
     const body = recordFilesBody({
       type: 'contact',
       id: 'contact-1',
-      email: 'ada@acme.com',
+      emails: ['ada@example.com', 'ada@example.org'],
       companyId: 'company-1',
     });
 
     expect(body.df['&'][1]).toEqual({
       '|': [
-        { l: { crm: { contact: 'contact-1' } } },
-        { l: { eap: { Complete: 'ada@acme.com' } } },
+        {
+          '|': [
+            { l: { crm: { contact: 'contact-1' } } },
+            { l: { eap: { Complete: 'ada@example.com' } } },
+          ],
+        },
+        { l: { eap: { Complete: 'ada@example.org' } } },
       ],
     });
   });
@@ -116,7 +118,7 @@ describe('CRM record item queries', () => {
       recordReferencesBody({
         type: 'contact',
         id: 'contact-1',
-        email: 'ada@acme.com',
+        emails: ['ada@example.com'],
         companyId: 'company-1',
       })
     ).toEqual({

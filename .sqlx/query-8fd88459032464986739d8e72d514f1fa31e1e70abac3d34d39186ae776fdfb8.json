@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT grant_row.entity_id AS \"entity_id!\",\n                  grant_row.access_level AS \"access_level!: AccessLevel\"\n           FROM UNNEST($1::uuid[]) AS pipeline(id)\n           CROSS JOIN LATERAL (\n               SELECT ea.entity_id, ea.access_level, ea.source_id\n               FROM entity_access ea\n               WHERE ea.entity_id = pipeline.id AND ea.entity_type = 'crm_pipeline'\n               OFFSET 0\n           ) AS grant_row\n           WHERE grant_row.source_id = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "8fd88459032464986739d8e72d514f1fa31e1e70abac3d34d39186ae776fdfb8"
+}

@@ -29,6 +29,8 @@ path = "src/openapi.rs"
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
+activity = { path = "../../crates/activity", default-features = false, features = ["outbound"] }
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
@@ -61,7 +63,6 @@ macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
-mockall.workspace = true
 postcard = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
@@ -78,14 +79,13 @@ serde_dynamo = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
-strum_macros = { workspace = true }
 stream = { path = "../../crates/stream" }
 tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }
 tracing-opentelemetry = { workspace = true }
-url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
@@ -93,5 +93,6 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 doppler-config = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 cool_asserts = "2"
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }

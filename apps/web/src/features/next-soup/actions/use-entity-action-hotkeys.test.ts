@@ -52,6 +52,9 @@ vi.mock('@app/features/property/editor/state/propertyEditor', () => ({
 vi.mock('@app/features/sharing/global-share-modal/shareable-entity', () => ({
   isShareableEntityType: () => false,
 }));
+vi.mock('./make-block-sender-action', () => ({
+  makeBlockSenderAction: action,
+}));
 vi.mock('./index', () => ({
   makeAddTagAction: action,
   makeCopyAction: action,

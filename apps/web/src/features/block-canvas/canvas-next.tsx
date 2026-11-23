@@ -7,6 +7,7 @@ import {
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { GraphicsEditor, TextMeasurer } from '@macro-inc/graphics';
 import {
@@ -40,6 +41,10 @@ import { canvasAssetSource } from './queries/assets';
 import type { CanvasSession } from './queries/canvas-session';
 import { CanvasReadOnlyView } from './views/canvas-read-only-view';
 import { CanvasView } from './views/canvas-view';
+import { MobileCanvasEmbeddedView } from './views/mobile/canvas-embedded-view';
+import { MobileCanvasReadOnlyView } from './views/mobile/canvas-read-only-view';
+import { MobileCanvasView } from './views/mobile/canvas-view';
+import type { CanvasViewProps } from './views/shared/canvas-view-parts';
 import { createCanvasTextMeasurer } from './views/text-content';
 
 export function CanvasNextEditor(props: {
@@ -111,11 +116,36 @@ export function CanvasNextEditor(props: {
         <Show
           when={props.canEdit && !props.isEmbedded}
           fallback={
-            <CanvasReadOnlyView
-              editor={editor}
-              fitOnLoad={props.fitOnLoad}
-              presence={presence}
-            />
+            <Show
+              when={isTouchDevice()}
+              fallback={
+                <CanvasReadOnlyView
+                  editor={editor}
+                  fitOnLoad={props.fitOnLoad}
+                  presence={presence}
+                />
+              }
+            >
+              {/* Inside a document the canvas keeps its controls within the
+                  embed and lets the document scroll; only a canvas open as
+                  its own page takes the app's bottom chrome. */}
+              <Show
+                when={props.isEmbedded}
+                fallback={
+                  <MobileCanvasReadOnlyView
+                    editor={editor}
+                    fitOnLoad={props.fitOnLoad}
+                    presence={presence}
+                  />
+                }
+              >
+                <MobileCanvasEmbeddedView
+                  editor={editor}
+                  fitOnLoad={props.fitOnLoad}
+                  presence={presence}
+                />
+              </Show>
+            </Show>
           }
         >
           <EditableCanvasNext
@@ -198,37 +228,46 @@ function EditableCanvasNext(props: {
     editor.cancelTransform();
     props.onFinishReady(() => {});
   });
+  // Both compositions take the same inputs; only the layout around the scene
+  // differs by device.
+  const view: CanvasViewProps = {
+    get fitOnLoad() {
+      return props.fitOnLoad;
+    },
+    state,
+    get presence() {
+      return props.presence;
+    },
+    scopeId,
+    embedView: CanvasBlockEmbed,
+    assets,
+    insert,
+    onViewport: (element) => {
+      viewport = element;
+    },
+    onOpenDocument: async (item) => {
+      try {
+        const fileType =
+          item.fileType === 'unknown'
+            ? (await fetchDocumentMetadata(item.documentId)).fileType
+            : item.fileType;
+        openWithSplit(
+          {
+            id: item.documentId,
+            type: resolveBlockAlias(fileTypeToBlockName(fileType)),
+          },
+          { activate: true }
+        );
+      } catch {
+        state.setNotice('Could not open this document');
+      }
+    },
+    clipboard,
+    attachScope,
+  };
   return (
-    <CanvasView
-      fitOnLoad={props.fitOnLoad}
-      state={state}
-      presence={props.presence}
-      scopeId={scopeId}
-      embedView={CanvasBlockEmbed}
-      assets={assets}
-      insert={insert}
-      onViewport={(element) => {
-        viewport = element;
-      }}
-      onOpenDocument={async (item) => {
-        try {
-          const fileType =
-            item.fileType === 'unknown'
-              ? (await fetchDocumentMetadata(item.documentId)).fileType
-              : item.fileType;
-          openWithSplit(
-            {
-              id: item.documentId,
-              type: resolveBlockAlias(fileTypeToBlockName(fileType)),
-            },
-            { activate: true }
-          );
-        } catch {
-          state.setNotice('Could not open this document');
-        }
-      }}
-      clipboard={clipboard}
-      attachScope={attachScope}
-    />
+    <Show when={isTouchDevice()} fallback={<CanvasView {...view} />}>
+      <MobileCanvasView {...view} />
+    </Show>
   );
 }

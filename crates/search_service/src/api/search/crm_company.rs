@@ -74,17 +74,18 @@ pub(in crate::api::search) async fn resolve_crm_team_receipt(
         .map_err(|e| SearchError::InternalError(e.into()))
 }
 
-/// Builds the CRM search service over the read-only pool. Search and
-/// enrich are both read-only, so the read replica is fine.
+/// Recheck access on primary; existing search and enrichment reads stay on the replica.
 fn search_service(ctx: &SearchHandlerState) -> CrmSearchServiceImpl<CrmSearchRepositoryImpl> {
-    CrmSearchServiceImpl::new(CrmSearchRepositoryImpl::new(ctx.db.0.clone()))
+    CrmSearchServiceImpl::new(
+        CrmSearchRepositoryImpl::new(ctx.db.0.clone()).with_access_pool(ctx.crm_db.clone()),
+    )
 }
 
 /// Name/domain search over the caller's team CRM companies, returning
 /// `SearchHit`s tagged [`SearchEntityType::CrmCompanies`] plus the next
 /// CRM cursor. The hidden gate is enforced inside the CRM service from
 /// the receipt's role — the caller can't widen it.
-#[tracing::instrument(skip(ctx, access, filters), err)]
+#[tracing::instrument(skip(ctx, access, filters, term), fields(term_len = term.len()), err)]
 pub(in crate::api::search) async fn search_company_names(
     ctx: &SearchHandlerState,
     access: &CrmTeamReceipt<MemberTeamRole>,

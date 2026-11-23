@@ -4,6 +4,7 @@
   "platforms": ["macOS", "windows", "linux"],
   "windows": ["main"],
   "permissions": [
-    "core:webview:allow-set-webview-zoom"
+    "core:webview:allow-set-webview-zoom",
+    "core:window:allow-close"
   ]
 }

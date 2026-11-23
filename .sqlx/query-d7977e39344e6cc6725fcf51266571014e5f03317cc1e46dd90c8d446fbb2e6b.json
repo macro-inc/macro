@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH pending AS MATERIALIZED (\n            SELECT team_id,key_id,retry_after FROM password_totp_cleanup_candidates WHERE retry_after<=now() ORDER BY retry_after,team_id,key_id LIMIT 100\n        ), unstarted AS MATERIALIZED (\n            SELECT team_id,item_id,key_id,erased_at,cleanup_retry_after AS schedule FROM password_totp_enrollments\n            WHERE state<>'active' AND cleanup_started_at IS NULL AND erased_at IS NULL AND cleanup_retry_after<=now()\n            ORDER BY cleanup_retry_after,team_id,key_id LIMIT 100\n        ), first_due AS MATERIALIZED (\n            SELECT team_id,item_id,key_id,erased_at,GREATEST(cleanup_after,cleanup_retry_after) AS schedule FROM password_totp_enrollments\n            WHERE state<>'active' AND cleanup_started_at IS NOT NULL AND erased_at IS NULL AND GREATEST(cleanup_after,cleanup_retry_after)<=now()\n            ORDER BY GREATEST(cleanup_after,cleanup_retry_after),team_id,key_id LIMIT 100\n        ), repeats AS MATERIALIZED (\n            SELECT team_id,item_id,key_id,erased_at,GREATEST(cleanup_after,cleanup_retry_after) AS schedule FROM password_totp_enrollments\n            WHERE state<>'active' AND erased_at IS NOT NULL AND GREATEST(cleanup_after,cleanup_retry_after)<=now()\n            ORDER BY GREATEST(cleanup_after,cleanup_retry_after),team_id,key_id LIMIT 100\n        ), candidate_rows AS MATERIALIZED (\n            SELECT enrollment.team_id,enrollment.item_id,enrollment.key_id,enrollment.erased_at,pending.retry_after AS schedule\n            FROM pending CROSS JOIN LATERAL (\n                SELECT team_id,item_id,key_id,cleanup_after,erased_at FROM password_totp_enrollments\n                WHERE team_id=pending.team_id AND key_id=pending.key_id OFFSET 0\n            ) enrollment\n            UNION ALL SELECT * FROM unstarted UNION ALL SELECT * FROM first_due UNION ALL SELECT * FROM repeats\n        ), candidates AS MATERIALIZED (\n            SELECT team_id,item_id,key_id,MIN(schedule) AS schedule,BOOL_AND(erased_at IS NOT NULL) AS repeated\n            FROM candidate_rows GROUP BY team_id,item_id,key_id\n        ), batch AS MATERIALIZED (\n        SELECT candidates.team_id,candidates.item_id,candidates.key_id FROM candidates CROSS JOIN LATERAL (\n            SELECT totp_key_id,deleting FROM password_item_entities\n            WHERE team_id=candidates.team_id AND id=candidates.item_id OFFSET 0\n        ) item WHERE item.totp_key_id IS DISTINCT FROM candidates.key_id OR item.deleting\n            OR EXISTS(SELECT 1 FROM pending WHERE pending.team_id=candidates.team_id AND pending.key_id=candidates.key_id)\n        ORDER BY candidates.repeated,candidates.schedule,candidates.team_id,candidates.key_id LIMIT 100\n        ), locked AS MATERIALIZED (\n            SELECT enrollment.team_id,enrollment.item_id,enrollment.key_id FROM batch JOIN password_totp_enrollments enrollment\n            ON enrollment.team_id=batch.team_id AND enrollment.key_id=batch.key_id\n            WHERE enrollment.cleanup_retry_after<=now() FOR UPDATE OF enrollment SKIP LOCKED\n        ), claimed AS (\n            UPDATE password_totp_enrollments enrollment SET cleanup_retry_after=now()+interval '2 minutes'\n            FROM locked WHERE enrollment.team_id=locked.team_id AND enrollment.key_id=locked.key_id\n            RETURNING enrollment.team_id,enrollment.item_id,enrollment.key_id\n        ), deferred AS (\n            UPDATE password_totp_cleanup_candidates pending SET retry_after=now()+interval '2 minutes'\n            FROM claimed WHERE pending.team_id=claimed.team_id AND pending.key_id=claimed.key_id\n            RETURNING pending.team_id\n        ) SELECT team_id AS \"team_id!\",item_id AS \"item_id!\",key_id AS \"key_id!\" FROM claimed",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "key_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d7977e39344e6cc6725fcf51266571014e5f03317cc1e46dd90c8d446fbb2e6b"
+}

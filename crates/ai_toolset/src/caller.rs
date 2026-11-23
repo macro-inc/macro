@@ -12,8 +12,9 @@ pub enum ToolCaller {
     Agent(BotId),
     /// An OAuth MCP client acting for the user. `name` is the name the client
     /// registered under: self-reported, so a display label only, never an
-    /// identity or a permission. Absent for a token the broker issued before
-    /// it recorded which client it went to.
+    /// identity or a permission. The broker bounds its length and characters
+    /// and refuses reserved names. Absent for a token the broker issued before
+    /// it recorded which client it went to, or whose stored name is reserved.
     McpClient {
         /// The client's registered name, such as "Claude Code".
         name: Option<String>,

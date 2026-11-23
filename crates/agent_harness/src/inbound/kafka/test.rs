@@ -330,6 +330,7 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
 fn assigned_to_task() -> AgentTriggerTopicEvent {
     AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
         AgentAssignedToTaskEvent {
+            origin: trigger_context::TriggerOrigin::Unknown,
             bot_id: BotId::TEST_A,
             parent: document(),
             discussion_id: Uuid::from_u128(2),
@@ -371,6 +372,7 @@ fn an_assignment_with_context_prompts_with_instructions_and_carries_the_task() {
             markdown: "The popover scrolls the page.".to_owned(),
             status: None,
             priority: None,
+            start: None,
             due: None,
             assignees: Vec::new(),
             project: None,
@@ -412,6 +414,7 @@ fn an_assignment_with_context_prompts_with_instructions_and_carries_the_task() {
 fn a_managed_follow_up_carries_its_context_to_delivery() {
     let context = TriggerContext::FollowUp(FollowUpContext {
         addressed_by: AddressedBy::Inferred,
+        confidence: Some(72),
         discussion: DiscussionContext {
             agent_request: None,
             surface: DiscussionSurface::DocumentComment {

@@ -8,6 +8,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -25,6 +26,7 @@ import {
   notifyElementOnMount,
 } from './message-element-lifecycle';
 import { buildThreadReplyListMeta } from './reply-list-meta';
+import { ThreadGutterSlot } from './ThreadGutterSlot';
 import { ThreadReplyMonorail } from './ThreadReplyMonorail';
 import { ThreadReplyRail } from './ThreadReplyRail';
 
@@ -57,8 +59,12 @@ export function ThreadReplyList(props: {
   /** Keep replies on the root's rail instead of branching each one off it. */
   monorail?: boolean;
   hideRail?: boolean;
+  /** Show each reply's avatar and header as a root message. */
+  asRoots?: boolean;
   /** An inline composer or footer continues the rail after the replies. */
   railContinues?: boolean;
+  /** Controls in the channel gutter beside a reply. */
+  gutter?: (replyId: string) => JSX.Element;
 }) {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
@@ -86,6 +92,11 @@ export function ThreadReplyList(props: {
 
   onCleanup(targetReplyScroller.dispose);
 
+  const displayMeta = (id: string) => {
+    const meta = listMetaByReplyId()[id];
+    if (!props.asRoots) return meta;
+    return { ...meta, isGroupedWithPrevious: false };
+  };
   return (
     <For each={[...repliesById().keys()]}>
       {(id) => {
@@ -131,6 +142,15 @@ export function ThreadReplyList(props: {
                 </Show>
               </Show>
             </Show>
+            <Show when={props.gutter}>
+              {(gutter) => (
+                <ThreadGutterSlot
+                  grouped={displayMeta(id)?.isGroupedWithPrevious}
+                >
+                  {gutter()(id)}
+                </ThreadGutterSlot>
+              )}
+            </Show>
             <MarkMessageNotifications
               messageId={id}
               parent={props.parent}
@@ -141,7 +161,7 @@ export function ThreadReplyList(props: {
                 inputMode={props.inputMode}
                 message={replyMessage()}
                 actions={props.getMessageActions?.(replyMessage())}
-                listMeta={listMetaByReplyId()[id]}
+                listMeta={displayMeta(id)}
                 messageEditor={props.messageEditor}
                 onClick={() => props.onSelectReply?.(id)}
                 selected={isReplySelected()}

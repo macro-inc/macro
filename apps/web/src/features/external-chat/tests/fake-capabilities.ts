@@ -42,7 +42,16 @@ export const messages: ChatMessage[] = [
     sentAt: '2026-10-21T10:00:00Z',
     edited: false,
     deleted: false,
-    reactions: [{ emoji: '👍', count: 2, mine: true }],
+    reactions: [
+      {
+        emoji: '👍',
+        reactors: [
+          { name: 'Me', userId: 'macro|me@example.test' },
+          { name: 'Ben' },
+        ],
+        mine: true,
+      },
+    ],
     attachments: [],
   },
   {

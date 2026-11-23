@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
@@ -56,18 +57,23 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, CustomerError, DueInviteReminder, JoinTeamDirectlyError,
-        PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError, RemoveUserFromAllTeamsError,
-        RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamInviteSnapshot, TeamMember,
-        TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        AcceptedTeamInvite, CustomerError, DueInviteReminder, ItemQuantityChange,
+        JoinTeamDirectlyError, PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError,
+        RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError,
+        Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
+        TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError,
     },
     owned_entity_cleanup::ClearedTeam,
+    subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
     team_repo::TeamRepository,
 };
 
+mod crm_member_access;
 mod delete_team;
+mod directory_changes;
 mod invite_link;
+mod team_agent;
 
 use delete_team::{Journal, RecordingOwnedEntityCleanup, Step};
 
@@ -98,6 +104,9 @@ struct MockTeamRepository {
     team_members: Vec<TeamMember<'static>>,
     accepted_invite: Option<AcceptedTeamInvite<'static>>,
     removed_member: Option<TeamMember<'static>>,
+    removed_member_crm_access: bool,
+    crm_access_changes: Arc<Mutex<Vec<(uuid::Uuid, String, String, bool)>>>,
+    rolled_back_crm_access: Arc<Mutex<Vec<bool>>>,
     rollback_accept_calls: Arc<Mutex<usize>>,
     rollback_remove_calls: Arc<Mutex<usize>>,
     fail_rollback_accept: bool,
@@ -127,6 +136,12 @@ struct MockTeamRepository {
     seat_count: i32,
     add_user_to_team_result: Option<TeamMember<'static>>,
     add_user_to_team_calls: Arc<Mutex<usize>>,
+    /// The `seat_included` flag of each `add_user_to_team` call.
+    added_seat_included: Arc<Mutex<Vec<bool>>>,
+    /// What `is_seat_included` answers for every member.
+    seat_included: bool,
+    /// The `seat_included` flag of each `rollback_remove_user_from_team` call.
+    rolled_back_seat_included: Arc<Mutex<Vec<bool>>>,
     remove_user_calls: Arc<Mutex<usize>>,
     auto_join_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
     created_auto_join_domains: Arc<Mutex<Vec<Option<String>>>>,
@@ -150,6 +165,9 @@ struct MockTeamRepository {
     invite_link_team: Option<TeamInviteLinkTeam>,
     /// What `claim_due_invite_reminders` hands out, once.
     due_invite_reminders: Arc<Mutex<Vec<DueInviteReminder>>>,
+    /// What `get_user_display_name` returns for every user.
+    user_display_name: Option<String>,
+    fail_user_display_name: bool,
 }
 
 impl MockTeamRepository {
@@ -178,6 +196,9 @@ impl MockTeamRepository {
             team_members: Vec::new(),
             accepted_invite: None,
             removed_member: None,
+            removed_member_crm_access: true,
+            crm_access_changes: Arc::new(Mutex::new(Vec::new())),
+            rolled_back_crm_access: Arc::new(Mutex::new(Vec::new())),
             rollback_accept_calls: Arc::new(Mutex::new(0)),
             rollback_remove_calls: Arc::new(Mutex::new(0)),
             fail_rollback_accept: false,
@@ -216,6 +237,9 @@ impl MockTeamRepository {
             seat_count: 0,
             add_user_to_team_result: None,
             add_user_to_team_calls: Arc::new(Mutex::new(0)),
+            added_seat_included: Arc::new(Mutex::new(Vec::new())),
+            seat_included: false,
+            rolled_back_seat_included: Arc::new(Mutex::new(Vec::new())),
             remove_user_calls: Arc::new(Mutex::new(0)),
             auto_join_toggle_calls: Arc::new(Mutex::new(Vec::new())),
             created_auto_join_domains: Arc::new(Mutex::new(Vec::new())),
@@ -236,6 +260,8 @@ impl MockTeamRepository {
             invite_link_creator: Arc::new(Mutex::new(None)),
             invite_link_team: None,
             due_invite_reminders: Arc::new(Mutex::new(Vec::new())),
+            user_display_name: Some("Olivia Owner".to_string()),
+            fail_user_display_name: false,
         }
     }
 
@@ -266,6 +292,31 @@ impl MockTeamRepository {
 }
 
 impl TeamRepository for MockTeamRepository {
+    async fn set_member_crm_access(
+        &self,
+        team_id: uuid::Uuid,
+        actor: &MacroUserIdStr<'_>,
+        target: &MacroUserIdStr<'_>,
+        enabled: bool,
+    ) -> Result<(), TeamError> {
+        self.crm_access_changes.lock().unwrap().push((
+            team_id,
+            actor.to_string(),
+            target.to_string(),
+            enabled,
+        ));
+        Ok(())
+    }
+
+    fn is_seat_included(
+        &self,
+        _: &uuid::Uuid,
+        _: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        let seat_included = self.seat_included;
+        async move { Ok(seat_included) }
+    }
+
     fn get_stripe_customer_id(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -479,10 +530,12 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<TeamMember<'static>, RemoveUserFromTeamError>> + Send {
+    ) -> impl Future<Output = Result<RemovedTeamMember<'static>, RemoveUserFromTeamError>> + Send
+    {
         *self.remove_user_calls.lock().unwrap() += 1;
         let reject_owner = self.reject_owner;
         let mut removed_member = self.removed_member.clone();
+        let crm_access = self.removed_member_crm_access;
         if let Some(member) = removed_member.as_mut()
             && let Some((_, _, plan)) = self
                 .patch_team_member_plan_calls
@@ -498,7 +551,9 @@ impl TeamRepository for MockTeamRepository {
             if reject_owner {
                 Err(RemoveUserFromTeamError::CannotRemoveOwner)
             } else {
-                removed_member.ok_or(RemoveUserFromTeamError::UserNotInTeam)
+                removed_member
+                    .map(|member| RemovedTeamMember { member, crm_access })
+                    .ok_or(RemoveUserFromTeamError::UserNotInTeam)
             }
         }
     }
@@ -626,9 +681,18 @@ impl TeamRepository for MockTeamRepository {
 
     fn rollback_remove_user_from_team(
         &self,
-        _: &TeamMember<'_>,
+        removed_member: &RemovedTeamMember<'_>,
+        seat_included: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
         *self.rollback_remove_calls.lock().unwrap() += 1;
+        self.rolled_back_crm_access
+            .lock()
+            .unwrap()
+            .push(removed_member.crm_access);
+        self.rolled_back_seat_included
+            .lock()
+            .unwrap()
+            .push(seat_included);
         let fail = self.fail_rollback_remove;
         async move {
             if fail {
@@ -686,6 +750,7 @@ impl TeamRepository for MockTeamRepository {
         async move {
             let team = team.ok_or(TeamError::TeamDoesNotExist)?;
             Ok(TeamWithMembers {
+                crm_member_access: HashMap::new(),
                 team,
                 members,
                 scheduled_seat_plans: None,
@@ -725,6 +790,20 @@ impl TeamRepository for MockTeamRepository {
     ) -> impl Future<Output = Result<String, TeamError>> + Send {
         let name = self.team_name.clone();
         async move { Ok(name) }
+    }
+
+    fn get_user_display_name(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<String>, TeamError>> + Send {
+        let result = if self.fail_user_display_name {
+            Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                "name lookup failed"
+            )))
+        } else {
+            Ok(self.user_display_name.clone())
+        };
+        async move { result }
     }
 
     fn patch_team(
@@ -902,8 +981,10 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
+        seat_included: bool,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send {
         *self.add_user_to_team_calls.lock().unwrap() += 1;
+        self.added_seat_included.lock().unwrap().push(seat_included);
         let member = self.add_user_to_team_result.clone();
         async move { Ok(member) }
     }
@@ -1015,6 +1096,7 @@ struct MockCustomerRepository {
     fail_decrement: bool,
     no_active_subscription: bool,
     fail_subscription_lookup: bool,
+    item_change_calls: Arc<Mutex<Vec<(String, Vec<ItemQuantityChange>, String)>>>,
     journal: Journal,
 }
 
@@ -1043,6 +1125,7 @@ impl Default for MockCustomerRepository {
             fail_decrement: false,
             no_active_subscription: false,
             fail_subscription_lookup: false,
+            item_change_calls: Arc::new(Mutex::new(Vec::new())),
             journal: Journal::default(),
         }
     }
@@ -1252,6 +1335,115 @@ impl CustomerRepository for MockCustomerRepository {
                 Ok(())
             }
         }
+    }
+
+    async fn replay_item_change(&self, _idempotency_key: &str) -> Result<bool, CustomerError> {
+        Ok(false)
+    }
+
+    async fn change_item_quantities(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        changes: Vec<ItemQuantityChange>,
+        _proration: crate::domain::model::ItemProration,
+        idempotency_key: &str,
+    ) -> Result<(), CustomerError> {
+        self.item_change_calls.lock().unwrap().push((
+            subscription_id.to_string(),
+            changes,
+            idempotency_key.to_string(),
+        ));
+        Ok(())
+    }
+
+    async fn create_computer_price(
+        &self,
+        _: &stripe::PriceId,
+        _: &str,
+        _: &str,
+    ) -> Result<stripe::PriceId, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn add_computer_item(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: &stripe::PriceId,
+        _: &str,
+        _: Vec<ItemQuantityChange>,
+        _: crate::domain::model::ItemProration,
+        _: &str,
+    ) -> Result<(), CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn remove_subscription_item(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: &stripe::SubscriptionItemId,
+        _: &str,
+    ) -> Result<crate::domain::model::ItemRemoval, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn refund_computer_purchase(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: computer_id::ComputerId,
+        _: &str,
+    ) -> Result<Option<crate::domain::model::ComputerPurchaseCredit>, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn subscription_items(
+        &self,
+        _: &stripe::SubscriptionId,
+    ) -> Result<Vec<crate::domain::model::SubscriptionItemView>, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn settle_item_change(
+        &self,
+        _: &str,
+        _: Option<&stripe::SubscriptionId>,
+    ) -> Result<crate::domain::model::ItemChangeSettlement, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn item_change_status(
+        &self,
+        _: &str,
+    ) -> Result<Option<crate::domain::model::ItemChangeStatus>, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn subscription_terms(
+        &self,
+        _: &stripe::SubscriptionId,
+    ) -> Result<crate::domain::model::SubscriptionTerms, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn payment_terms(
+        &self,
+        _: &stripe::SubscriptionId,
+    ) -> Result<crate::domain::model::PaymentTerms, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn preview_prorations(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: &[stripe::PriceId],
+    ) -> Result<Vec<crate::domain::model::ProratedCharge>, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn price(
+        &self,
+        _: &stripe::PriceId,
+    ) -> Result<crate::domain::model::PriceInfo, CustomerError> {
+        unimplemented!("not exercised by team service tests")
     }
 
     fn cancel_subscription(
@@ -1485,7 +1677,7 @@ impl UserRolesAndPermissionsService for MockUserRolesAndPermissionsService {
 
     fn update_user_roles_and_permissions_for_subscription(
         &self,
-        _: Email<Lowercase<'_>>,
+        _: &MacroUserIdStr<'_>,
         _: roles_and_permissions::domain::model::SubscriptionStatus,
         _: roles_and_permissions::domain::model::ProductTier,
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send {
@@ -1685,10 +1877,13 @@ impl MacroEventBroker for RecordingEventBroker {
 
 type ContactPair = (MacroUserIdStr<'static>, MacroUserIdStr<'static>);
 type ContactBatches = Arc<Mutex<Vec<Vec<ContactPair>>>>;
+/// One `directory_changed` call: (users, changed).
+type DirectoryChange = (Vec<String>, Vec<String>);
 
 #[derive(Clone, Default)]
 struct RecordingContactsEnqueuer {
     batches: ContactBatches,
+    directory_changes: Arc<Mutex<Vec<DirectoryChange>>>,
     fail: bool,
 }
 
@@ -1709,6 +1904,23 @@ impl ContactsEnqueuer for RecordingContactsEnqueuer {
         connections: Vec<ContactPair>,
     ) -> Result<(), Self::Err> {
         self.batches.lock().unwrap().push(connections);
+        if self.fail {
+            Err("contacts enqueue failed")
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn directory_changed(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        changed: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Self::Err> {
+        let ids = |ids: Vec<MacroUserIdStr<'static>>| ids.iter().map(|id| id.to_string()).collect();
+        self.directory_changes
+            .lock()
+            .unwrap()
+            .push((ids(users), ids(changed)));
         if self.fail {
             Err("contacts enqueue failed")
         } else {
@@ -1978,12 +2190,18 @@ fn assert_no_enterprise_join_team_billing_calls(
     );
 }
 
+/// `roster_reads` counts `get_team_by_id`: billing never reads the team, but a
+/// completed removal reads the remaining roster once for the directory change.
 fn assert_no_enterprise_remove_user_billing_calls(
     team_repository: &MockTeamRepository,
     customer_repository: &MockCustomerRepository,
+    roster_reads: usize,
 ) {
     assert_no_enterprise_join_team_billing_calls(team_repository, customer_repository);
-    assert_eq!(*team_repository.get_team_by_id_calls.lock().unwrap(), 0);
+    assert_eq!(
+        *team_repository.get_team_by_id_calls.lock().unwrap(),
+        roster_reads
+    );
 }
 
 fn build_service(
@@ -2400,7 +2618,123 @@ async fn team_payment_revoke_removes_exact_premium_roles_from_members() {
                 expected_roles.clone(),
             ),
             ("macro|member-two@example.com".to_string(), expected_roles),
+            (
+                "macro|owner@example.com".to_string(),
+                vec![RoleId::ProfessionalSubscriber],
+            ),
         ]
+    );
+}
+
+/// A team that took over its owner's personal subscription, as team creation does.
+fn team_on_owner_subscription(team_id: uuid::Uuid) -> MockTeamRepository {
+    let mut team = MockTeamRepository::new(Vec::new(), "Lapsed Team", Default::default())
+        .with_team_members(vec![
+            make_team_member(team_id, "macro|owner@example.com", TeamRole::Owner),
+            make_team_member(team_id, "macro|member@example.com", TeamRole::Member),
+        ]);
+    team.team_subscription_id = Some("sub_team".parse().unwrap());
+    team.stripe_customer_id = Some("cus_owner".parse().unwrap());
+    team
+}
+
+#[tokio::test]
+async fn team_payment_revoke_removes_owner_personal_pro_role_without_live_subscription() {
+    let team_id = uuid::Uuid::from_u128(5002);
+    let no_customer = MockTeamRepository {
+        stripe_customer_id: None,
+        ..team_on_owner_subscription(team_id)
+    };
+    let cases = [
+        // The team's subscription has lapsed and nothing else is live.
+        (
+            team_on_owner_subscription(team_id),
+            MockCustomerRepository {
+                no_active_subscription: true,
+                ..Default::default()
+            },
+        ),
+        (no_customer, MockCustomerRepository::default()),
+    ];
+    for (team, customer) in cases {
+        let roles = MockUserRolesAndPermissionsService::default();
+        let removals = roles.remove_calls.clone();
+        let service = build_member_plan_service(team, customer, roles);
+
+        service
+            .revoke_permissions_for_team_members(&team_id)
+            .await
+            .unwrap();
+
+        let member_roles = team_member_roles_to_remove();
+        assert_eq!(
+            *removals.lock().unwrap(),
+            vec![
+                ("macro|owner@example.com".to_string(), member_roles.clone()),
+                ("macro|member@example.com".to_string(), member_roles),
+                (
+                    "macro|owner@example.com".to_string(),
+                    vec![RoleId::ProfessionalSubscriber],
+                ),
+            ]
+        );
+    }
+}
+
+#[tokio::test]
+async fn team_payment_revoke_keeps_owner_personal_pro_role_while_a_subscription_is_live() {
+    let team_id = uuid::Uuid::from_u128(5003);
+    // Another subscription pays for Pro, or the team's own is live again and
+    // this lapse event arrived late.
+    for live in ["sub_personal", "sub_team"] {
+        let customer = MockCustomerRepository {
+            subscription_id: live.parse().unwrap(),
+            ..Default::default()
+        };
+        let roles = MockUserRolesAndPermissionsService::default();
+        let removals = roles.remove_calls.clone();
+        let service =
+            build_member_plan_service(team_on_owner_subscription(team_id), customer, roles);
+
+        service
+            .revoke_permissions_for_team_members(&team_id)
+            .await
+            .unwrap();
+
+        let removals = removals.lock().unwrap();
+        assert_eq!(removals.len(), 2);
+        assert!(
+            removals
+                .iter()
+                .all(|(_, roles)| !roles.contains(&RoleId::ProfessionalSubscriber))
+        );
+    }
+}
+
+#[tokio::test]
+async fn team_payment_revoke_fails_for_retry_when_owner_subscription_lookup_fails() {
+    let team_id = uuid::Uuid::from_u128(5004);
+    let customer = MockCustomerRepository {
+        fail_subscription_lookup: true,
+        ..Default::default()
+    };
+    let roles = MockUserRolesAndPermissionsService::default();
+    let removals = roles.remove_calls.clone();
+    let service = build_member_plan_service(team_on_owner_subscription(team_id), customer, roles);
+
+    let result = service.revoke_permissions_for_team_members(&team_id).await;
+
+    assert!(matches!(
+        result,
+        Err(RevokePermissionsForTeamMembersError::TeamError(_))
+    ));
+    // Member roles are already gone; the webhook retry removes them again harmlessly.
+    let removals = removals.lock().unwrap();
+    assert_eq!(removals.len(), 2);
+    assert!(
+        removals
+            .iter()
+            .all(|(_, roles)| !roles.contains(&RoleId::ProfessionalSubscriber))
     );
 }
 
@@ -3367,6 +3701,84 @@ async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_eff
     }
 }
 
+/// The inviter name each sent invite email carried, in send order.
+fn inviter_names_sent(notification_ingress: &MockNotificationIngress) -> Vec<serde_json::Value> {
+    notification_ingress
+        .recorded_requests
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|request| request["req"]["notification"]["content"]["inviterName"].clone())
+        .collect()
+}
+
+/// Invites one member and returns the inviter names the invite emails carried.
+async fn inviter_names_for_invite(team_repo: MockTeamRepository) -> Vec<serde_json::Value> {
+    let team_id = uuid::Uuid::from_u128(7200);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress.clone(),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let invites = vec![
+        Email::parse_from_str("member@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
+    service
+        .invite_users_to_team(
+            test_team_receipt::<MemberTeamRole>(team_id, &owner_id),
+            invites,
+            false,
+        )
+        .await
+        .unwrap();
+
+    inviter_names_sent(&notification_ingress)
+}
+
+fn invite_name_team_repo() -> MockTeamRepository {
+    let team_id = uuid::Uuid::from_u128(7200);
+    MockTeamRepository::new(
+        vec![make_invite(
+            "member@example.com",
+            uuid::Uuid::from_u128(7201),
+            team_id,
+        )],
+        "Acme",
+        Arc::new(Mutex::new(Vec::new())),
+    )
+}
+
+#[tokio::test]
+async fn invite_email_names_the_inviter() {
+    let names = inviter_names_for_invite(invite_name_team_repo()).await;
+    assert_eq!(names, ["Olivia Owner"]);
+}
+
+/// The email falls back to the inviter's address, so neither a missing name
+/// nor a failed lookup stops the invite.
+#[tokio::test]
+async fn invite_email_is_sent_without_the_inviters_name() {
+    let mut unnamed = invite_name_team_repo();
+    unnamed.user_display_name = None;
+    let mut failed = invite_name_team_repo();
+    failed.fail_user_display_name = true;
+
+    for team_repo in [unnamed, failed] {
+        let names = inviter_names_for_invite(team_repo).await;
+        assert_eq!(names, [serde_json::Value::Null]);
+    }
+}
+
 /// The plan each sent invite email promised, in send order.
 fn invitee_plans_sent(notification_ingress: &MockNotificationIngress) -> Vec<serde_json::Value> {
     notification_ingress
@@ -4178,55 +4590,40 @@ fn build_crm_enable_service(
     (service, populated)
 }
 
-/// Enabling with backfill enqueues a populate per team member.
+/// A legacy team toggle can no longer authorize other members' mailboxes.
 #[tokio::test]
-async fn test_enable_crm_with_backfill_enqueues_members() {
+async fn legacy_enable_never_enqueues_mailbox_backfill() {
     let team_id = uuid::Uuid::from_u128(7);
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let (service, populated) = build_crm_enable_service(
         team_id,
         &["macro|owner@example.com", "macro|member@example.com"],
     );
-
-    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
-    let response = service
-        .set_team_crm_enabled(receipt, true, true)
-        .await
-        .unwrap();
-
-    assert!(response.enabled);
-    assert!(response.changed);
-    assert_eq!(response.backfill_enqueued, 2);
-    assert_eq!(response.backfill_failed, 0);
-    assert_eq!(
-        *populated.lock().unwrap(),
-        vec![
-            "macro|owner@example.com".to_string(),
-            "macro|member@example.com".to_string()
-        ]
-    );
+    for backfill in [true, false] {
+        let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
+        let response = service
+            .set_team_crm_enabled(receipt, true, backfill)
+            .await
+            .unwrap();
+        assert!(response.enabled);
+        assert!(!response.changed);
+        assert_eq!(response.backfill_enqueued, 0);
+        assert_eq!(response.backfill_failed, 0);
+    }
+    assert!(populated.lock().unwrap().is_empty());
 }
 
-/// Enabling without backfill flips the flag but enqueues nothing.
+/// Old clients cannot invoke the destructive team-wide disable/purge flow.
 #[tokio::test]
-async fn test_enable_crm_without_backfill_skips_enqueue() {
+async fn legacy_disable_is_rejected_without_purging_crm() {
     let team_id = uuid::Uuid::from_u128(7);
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
-    let (service, populated) = build_crm_enable_service(
-        team_id,
-        &["macro|owner@example.com", "macro|member@example.com"],
-    );
-
+    let (service, populated) = build_crm_enable_service(team_id, &["macro|owner@example.com"]);
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
-    let response = service
-        .set_team_crm_enabled(receipt, true, false)
-        .await
-        .unwrap();
-
-    assert!(response.enabled);
-    assert!(response.changed);
-    assert_eq!(response.backfill_enqueued, 0);
-    assert_eq!(response.backfill_failed, 0);
+    assert!(matches!(
+        service.set_team_crm_enabled(receipt, false, false).await,
+        Err(TeamError::BadRequest(_))
+    ));
     assert!(populated.lock().unwrap().is_empty());
 }
 
@@ -4291,6 +4688,7 @@ async fn test_patch_team_rejects_owner_role_assignment() {
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("New Name".to_string()),
         slug: Some("new-team".to_string()),
         user_role_updates: Some(vec![PatchTeamUserRole {
@@ -4332,6 +4730,7 @@ async fn test_patch_team_rejects_owner_downgrade() {
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: Some(vec![PatchTeamUserRole {
@@ -4374,6 +4773,7 @@ async fn test_patch_team_applies_role_updates_and_name() {
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("New Name".to_string()),
         slug: Some("new-team slug".to_string()),
         user_role_updates: Some(vec![
@@ -4435,6 +4835,7 @@ async fn test_patch_team_empty_role_updates() {
     let (service, role_calls, name_calls) = build_service_with_team(team);
 
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("New Name".to_string()),
         slug: None,
         user_role_updates: Some(Vec::new()),
@@ -4461,6 +4862,7 @@ async fn test_patch_team_metadata_publishes_updated_with_omitted_fields() {
         broker.clone(),
     );
     let request = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("Renamed".to_string()),
         slug: None,
         user_role_updates: None,
@@ -4503,6 +4905,7 @@ async fn test_patch_team_role_only_publishes_previous_role_without_updated_event
     let broker = RecordingEventBroker::default();
     let service = build_service_with_repo_and_broker(repo, broker.clone());
     let request = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: Some(vec![PatchTeamUserRole {
@@ -4553,6 +4956,7 @@ async fn test_patch_team_partial_role_failure_keeps_ordered_success_events() {
     let broker = RecordingEventBroker::default();
     let service = build_service_with_repo_and_broker(repo, broker.clone());
     let request = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: Some(vec![
@@ -4593,6 +4997,7 @@ async fn test_patch_team_repository_failure_does_not_publish_updated() {
     let broker = RecordingEventBroker::default();
     let service = build_service_with_repo_and_broker(repo, broker.clone());
     let request = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("Renamed".to_string()),
         slug: None,
         user_role_updates: None,
@@ -5866,6 +6271,8 @@ async fn remove_user_from_team_restores_snapshotted_roles_when_release_fails() {
     });
     team_repo.team_subscription_id = Some(subscription_id.clone());
     let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
+    team_repo.removed_member_crm_access = false;
+    let rolled_back_crm_access = team_repo.rolled_back_crm_access.clone();
 
     let customer_repo = MockCustomerRepository {
         subscription_id: subscription_id.clone(),
@@ -5943,6 +6350,7 @@ async fn remove_user_from_team_restores_snapshotted_roles_when_release_fails() {
         vec![(subscription_id.to_string(), 1)]
     );
     assert_eq!(*rollback_remove_calls.lock().unwrap(), 1);
+    assert_eq!(*rolled_back_crm_access.lock().unwrap(), vec![false]);
     assert!(event_broker.events().is_empty());
 }
 
@@ -5964,6 +6372,8 @@ async fn remove_user_from_team_does_not_release_seat_when_role_removal_fails() {
     });
     team_repo.team_subscription_id = Some(subscription_id.clone());
     let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
+    team_repo.removed_member_crm_access = false;
+    let rolled_back_crm_access = team_repo.rolled_back_crm_access.clone();
 
     let customer_repo = MockCustomerRepository {
         subscription_id: subscription_id.clone(),
@@ -6027,6 +6437,7 @@ async fn remove_user_from_team_does_not_release_seat_when_role_removal_fails() {
         vec![(subscription_id.to_string(), 1)]
     );
     assert_eq!(*rollback_remove_calls.lock().unwrap(), 1);
+    assert_eq!(*rolled_back_crm_access.lock().unwrap(), vec![false]);
     assert!(event_broker.events().is_empty());
 }
 
@@ -6308,6 +6719,8 @@ async fn test_remove_user_from_team_rolls_back_remove_when_customer_decrement_fa
     });
     team_repo.team_subscription_id = Some(subscription_id.clone());
     let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
+    team_repo.removed_member_crm_access = false;
+    let rolled_back_crm_access = team_repo.rolled_back_crm_access.clone();
 
     let customer_repo = MockCustomerRepository {
         subscription_id: subscription_id.clone(),
@@ -6345,6 +6758,7 @@ async fn test_remove_user_from_team_rolls_back_remove_when_customer_decrement_fa
         vec![(subscription_id.to_string(), 1)]
     );
     assert_eq!(*rollback_remove_calls.lock().unwrap(), 1);
+    assert_eq!(*rolled_back_crm_access.lock().unwrap(), vec![false]);
     assert!(remove_channel_calls.lock().unwrap().is_empty());
     assert!(remove_role_calls.lock().unwrap().is_empty());
 }
@@ -6453,6 +6867,8 @@ async fn test_remove_user_from_team_rolls_back_customer_and_remove_when_channel_
     });
     team_repo.team_subscription_id = Some(subscription_id.clone());
     let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
+    team_repo.removed_member_crm_access = false;
+    let rolled_back_crm_access = team_repo.rolled_back_crm_access.clone();
 
     let customer_repo = MockCustomerRepository {
         subscription_id: subscription_id.clone(),
@@ -6496,6 +6912,7 @@ async fn test_remove_user_from_team_rolls_back_customer_and_remove_when_channel_
         vec![(subscription_id.to_string(), 1)]
     );
     assert_eq!(*rollback_remove_calls.lock().unwrap(), 1);
+    assert_eq!(*rolled_back_crm_access.lock().unwrap(), vec![false]);
     assert!(remove_role_calls.lock().unwrap().is_empty());
 }
 
@@ -7083,7 +7500,7 @@ async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_ef
     );
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 0);
-    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository, 1);
     assert_eq!(
         *channels_repository.leave_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
@@ -7168,7 +7585,7 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_when_channel_rem
     assert!(event_broker.events().is_empty());
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 1);
-    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository, 0);
     assert_eq!(
         *channels_repository.leave_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
@@ -7232,7 +7649,7 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_and_channels_whe
     ));
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 1);
-    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository, 0);
     assert_eq!(
         *channels_repository.leave_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
@@ -7299,7 +7716,7 @@ async fn remove_user_from_team_enterprise_status_read_precedes_membership_remova
     );
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 0);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 0);
-    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository, 0);
     assert!(channels_repository.leave_calls.lock().unwrap().is_empty());
     assert!(
         channels_repository
@@ -8623,8 +9040,10 @@ async fn failed_renewal_revocation_waits_for_member_removal_reconciliation() {
         vec![(retained.user_id.to_string(), vec![RoleId::SubOpus])]
     );
     let removals = removals.lock().unwrap();
-    let (user, roles) = removals.last().unwrap();
-    assert_eq!(user, retained.user_id.as_ref());
+    let (_, roles) = removals
+        .iter()
+        .rfind(|(user, _)| user == retained.user_id.as_ref())
+        .unwrap();
     assert!(roles.contains(&RoleId::TeamSubscriber));
     assert!(roles.contains(&RoleId::SubOpus));
 }
@@ -8725,6 +9144,8 @@ async fn failed_renewal_marks_nonpaying_before_releasing_plan_change_guard() {
     );
     assert!(moves.lock().unwrap().is_empty());
     assert!(upserts.lock().unwrap().is_empty());
+    // Release the member's removal, then the owner's personal role removal.
+    resume.notify_one();
     resume.notify_one();
     revoke.await.unwrap().unwrap();
     let result = tokio::time::timeout(std::time::Duration::from_secs(2), upgrade)
@@ -8871,6 +9292,7 @@ async fn invite_reminders_email_each_claimed_invite() {
         let content = &request["req"]["notification"]["content"];
         assert_eq!(content["reminder"], true);
         assert_eq!(content["teamName"], "Acme");
+        assert_eq!(content["inviterName"], "Olivia Owner");
         assert_eq!(
             content["teamInviteId"],
             uuid::Uuid::from_u128(invite).to_string()
@@ -8976,4 +9398,76 @@ async fn invite_reminders_promise_what_joining_grants() {
 
     let expected: Vec<_> = cases.iter().map(|case| serde_json::json!(case.3)).collect();
     assert_eq!(invitee_plans_sent(&notification_ingress), expected);
+}
+
+#[tokio::test]
+async fn subscription_item_changes_go_to_the_team_subscription() {
+    let mut team_repo = MockTeamRepository::new(vec![], "Team", Arc::new(Mutex::new(Vec::new())));
+    team_repo.team_subscription_id = Some("sub_team".parse().unwrap());
+    let customer_repo = MockCustomerRepository::default();
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo.clone(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+    let change = ItemQuantityChange {
+        price_id: stripe::PriceId::from_str("price_computer").unwrap(),
+        delta: 1,
+    };
+
+    service
+        .change_team_subscription_items(
+            &uuid::Uuid::nil(),
+            vec![change.clone()],
+            crate::domain::model::ItemProration::InvoiceNow,
+            "purchase-1",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *customer_repo.item_change_calls.lock().unwrap(),
+        vec![(
+            "sub_team".to_string(),
+            vec![change],
+            "purchase-1".to_string()
+        )]
+    );
+}
+
+#[tokio::test]
+async fn subscription_item_changes_need_a_team_subscription() {
+    let team_repo = MockTeamRepository::new(vec![], "Team", Arc::new(Mutex::new(Vec::new())));
+    let customer_repo = MockCustomerRepository::default();
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo.clone(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let result = service
+        .change_team_subscription_items(
+            &uuid::Uuid::nil(),
+            vec![ItemQuantityChange {
+                price_id: stripe::PriceId::from_str("price_computer").unwrap(),
+                delta: 1,
+            }],
+            crate::domain::model::ItemProration::InvoiceNow,
+            "purchase-1",
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(TeamSubscriptionItemsError::NoSubscription)
+    ));
+    assert!(customer_repo.item_change_calls.lock().unwrap().is_empty());
 }

@@ -6,6 +6,7 @@ import { useActiveCallQuery } from '@queries/call/call';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { cn, type TabOption } from '@ui';
 import type { Accessor } from 'solid-js';
+import { CallWaveform } from '../Call/components/CallWaveform';
 import { useChannelTab } from './ChannelTabContext';
 import {
   CHANNEL_TABS,
@@ -23,20 +24,10 @@ export const normalizeChannelTab = (tab: ChannelTabId) => {
   return tab === 'call' && !canUseInlineCallTab() ? DEFAULT_CHANNEL_TAB : tab;
 };
 
-function LiveCallDot(props: { class?: string }) {
+function LiveCallDot(props: { class?: string; channelId?: string }) {
   return (
     <span class={cn('flex items-center justify-center', props.class)}>
-      <span class="size-1.5 rounded-full bg-success animate-pulse" />
-    </span>
-  );
-}
-
-/** The live Call tab's label in menus that draw their own icon. */
-export function CallTabLabel() {
-  return (
-    <span class="flex items-center gap-1.5">
-      <LiveCallDot />
-      Call
+      <CallWaveform class="size-3.5" channelId={props.channelId} />
     </span>
   );
 }
@@ -59,7 +50,7 @@ export function useChannelTabItems(
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
     ENABLE_CALLS &&
-    !channel()?.agent_dm &&
+    !channel()?.agentDm &&
     canUseInlineCallTab() &&
     (call.isInThisChannel() ||
       call.isJoining() ||
@@ -69,15 +60,18 @@ export function useChannelTabItems(
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelType.direct_message)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
-    if (!ENABLE_CALLS || channel()?.agent_dm)
+    if (!ENABLE_CALLS || channel()?.agentDm)
       filtered = filtered.filter((tab) => tab.value !== 'calls');
     if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');
     return filtered;
   };
 
+  const LiveIcon = (props: { class?: string }) => (
+    <LiveCallDot class={props.class} channelId={channelId} />
+  );
   return () =>
     availableTabs().map((tab) =>
-      tab.value === 'call' ? { ...tab, icon: LiveCallDot } : { ...tab }
+      tab.value === 'call' ? { ...tab, icon: LiveIcon } : { ...tab }
     );
 }

@@ -1,0 +1,268 @@
+import {
+  createSdkMcpServer,
+  type McpStdioServerConfig,
+  type Options,
+  type SDKMessage,
+  type SpawnedProcess,
+  type SpawnOptions,
+  tool,
+} from '@anthropic-ai/claude-agent-sdk';
+import type {
+  Agent,
+  EventContext,
+  WakeContext,
+  Woke,
+} from '@macro-inc/muppet/core/agent';
+import { z } from 'zod';
+import { type Guard, refusal } from './guard.ts';
+
+/** The name of the agent's own MCP server, which no server it is given may take. */
+export const capabilityServer = 'agent';
+
+const wakeSpan = 'agent.wake';
+
+/** What code inside a span may record on it: ids, counts and outcomes. */
+export type TraceSpan = {
+  readonly set: (name: string, value: string | number | boolean) => void;
+  /** This span's W3C trace context, for a child process. */
+  readonly traceparent: () => string | undefined;
+};
+
+/** Runs `run` inside a span named `name` (the Telemetry facade, injected). */
+export type Trace = <Value>(
+  name: string,
+  run: (span: TraceSpan) => Promise<Value>
+) => Promise<Value>;
+
+/** A trace that records nothing. */
+export const passthrough: Trace = (_name, run) =>
+  run({ set: () => undefined, traceparent: () => undefined });
+const server = capabilityServer;
+
+/** The SDK's `query`, as much of it as a wake uses. */
+export type Query = (params: {
+  readonly prompt: string;
+  readonly options?: Options;
+}) => AsyncIterable<SDKMessage>;
+
+/** How one wake is run: what it may spend, how long it may take, and where it works. */
+export type Profile = {
+  readonly budgetUsd: number;
+  readonly timeoutMs: number;
+  readonly cwd: string;
+  /** Other directories the run may work in. */
+  readonly directories: readonly string[];
+};
+
+/**
+ * The agent as Claude Code, through the Claude Agent SDK. Like lib's
+ * `claudeCode`, each wake is one session with the code-mode tools, and on top
+ * of that it pins the model, runs as the agent and nobody else, holds every
+ * tool call to the guards, and ends a wake at its budget or its time limit.
+ */
+export const agentClaude = ({
+  query: run,
+  claude,
+  mcpServers,
+  model,
+  profile,
+  environment,
+  after,
+  guards,
+  record,
+  sandbox,
+  wakeId,
+  trace = passthrough,
+}: {
+  /** The SDK's `query`, injected. */
+  readonly query: Query;
+  /** The `claude` program to run, from PATH: the image's wrapper, which signs in on its own when no Anthropic gateway is given. */
+  readonly claude: () => string;
+  /** Stdio MCP servers every wake has beside its capabilities, e.g. computer use. */
+  readonly mcpServers: Readonly<Record<string, McpStdioServerConfig>>;
+  readonly model: string;
+  /** Chooses how a wake is run from the event that led to it. */
+  readonly profile: (event: EventContext) => Profile;
+  /** The whole environment a run gets: nothing it isn't given here. An undefined value is a variable the run must not have. */
+  readonly environment: () => Promise<
+    Readonly<Record<string, string | undefined>>
+  >;
+  /** Calls `run` after this long, unless the returned function is called first. */
+  readonly after: (milliseconds: number, run: () => void) => () => void;
+  readonly guards: readonly Guard[];
+  /** Receives a line when a wake starts and one when it ends, for the log. */
+  readonly record: (entry: object) => Promise<void>;
+  /** On a computer: the argv prefix Claude Code is started under (`Startup.sandbox`), and how to start a process. */
+  readonly sandbox?: {
+    readonly argv: readonly string[];
+    readonly spawn: (
+      argv: readonly string[],
+      options: Omit<SpawnOptions, 'command' | 'args'>
+    ) => SpawnedProcess;
+  };
+  /** A fresh UUIDv7 for each wake: its scripts' calls carry it, and its span records it. */
+  readonly wakeId: () => string;
+  /** Runs `run` inside a span named `name`; spans record ids, counts and outcomes, never content. */
+  readonly trace?: Trace;
+}): Agent => {
+  const wakeOnce = async (
+    { request, systemPrompt, event, state }: WakeContext,
+    id: string,
+    span: TraceSpan
+  ): Promise<Woke> => {
+    const capabilities = createSdkMcpServer({
+      name: server,
+      tools: [
+        tool(
+          'RunCapabilityScript',
+          'Type-check a TypeScript module that exports `async function main({ context, log })`, then run it with your context, and get back what main returned and everything it passed to log, or the type errors that kept it from running. Use it to use your capabilities.',
+          { source: z.string() },
+          async ({ source }) => {
+            const executed = await state.code.execute(source, { wakeId: id });
+            return {
+              content: [{ type: 'text', text: JSON.stringify(executed) }],
+              isError: executed.kind === 'failed',
+            };
+          }
+        ),
+        tool(
+          'DescribeCapabilities',
+          'Read the full docs of capabilities in your catalog, or of single functions by name, several at once.',
+          { names: z.array(z.string()) },
+          async ({ names }) => ({
+            content: [{ type: 'text', text: await state.code.describe(names) }],
+          })
+        ),
+      ],
+    });
+
+    const { budgetUsd, timeoutMs, cwd, directories } = profile(event);
+    const env = Object.fromEntries(
+      Object.entries(await environment()).flatMap(([name, value]) =>
+        value === undefined ? [] : [[name, value]]
+      )
+    );
+    const abort = new AbortController();
+    let late = false;
+    let session: string | undefined;
+    const cancel = after(timeoutMs, () => {
+      late = true;
+      abort.abort();
+    });
+
+    const prompt = [
+      request,
+      `This was prompted by a "${event.name}" event:`,
+      JSON.stringify(event.payload, null, 2),
+    ].join('\n\n');
+
+    try {
+      for await (const message of run({
+        prompt,
+        options: {
+          model,
+          cwd,
+          additionalDirectories: [...directories],
+          maxBudgetUsd: budgetUsd,
+          abortController: abort,
+          env,
+          pathToClaudeCodeExecutable: claude(),
+          // On a computer the enrollment's credentials are hidden from Claude
+          // Code: it runs inside the sandbox, and only this process sees them.
+          ...(sandbox === undefined || sandbox.argv.length === 0
+            ? {}
+            : {
+                spawnClaudeCodeProcess: ({ command, args, ...options }) =>
+                  sandbox.spawn([...sandbox.argv, command, ...args], options),
+              }),
+          mcpServers: { ...mcpServers, [server]: capabilities },
+          systemPrompt: {
+            type: 'preset',
+            preset: 'claude_code',
+            append: systemPrompt,
+          },
+          // Only what is passed here: the machine's own Claude settings belong to its user's sessions.
+          settingSources: [],
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [
+                  async (input) => {
+                    if (input.hook_event_name !== 'PreToolUse') return {};
+                    const reason = refusal(guards, {
+                      tool: input.tool_name,
+                      input: input.tool_input,
+                      cwd: input.cwd,
+                      environment: env,
+                      event,
+                    });
+                    return reason === undefined
+                      ? {}
+                      : {
+                          hookSpecificOutput: {
+                            hookEventName: 'PreToolUse',
+                            permissionDecision: 'deny',
+                            permissionDecisionReason: reason,
+                          },
+                        };
+                  },
+                ],
+              },
+            ],
+          },
+          // The agent runs unattended, so nothing waits on approval; the guards are the limit.
+          permissionMode: 'bypassPermissions',
+          allowDangerouslySkipPermissions: true,
+        },
+      })) {
+        // The session id ties this wake to its transcript, so it can be traced while it runs.
+        if (message.type === 'system' && message.subtype === 'init') {
+          session = message.session_id;
+          await record({
+            event: event.name,
+            phase: 'start',
+            session_id: session,
+          });
+        }
+        if (message.type === 'result') {
+          span.set('agent.cost_usd', message.total_cost_usd);
+          span.set('agent.turns', message.num_turns);
+          await record({
+            event: event.name,
+            session_id: message.session_id,
+            result: message.subtype,
+            cost_usd: message.total_cost_usd,
+            turns: message.num_turns,
+            ms: message.duration_ms,
+          });
+          return message.subtype === 'success'
+            ? { kind: 'done', reply: message.result }
+            : { kind: 'failed', error: message.subtype };
+        }
+      }
+      return { kind: 'failed', error: 'session ended without a result' };
+    } catch (error) {
+      if (!late) throw error;
+      await record({
+        event: event.name,
+        session_id: session,
+        result: 'timeout',
+        ms: timeoutMs,
+      });
+      return { kind: 'failed', error: `timed out after ${timeoutMs}ms` };
+    } finally {
+      cancel();
+    }
+  };
+  return {
+    wake: (wake) =>
+      trace(wakeSpan, async (span) => {
+        const id = wakeId();
+        span.set('agent.event', wake.event.name);
+        span.set('agent.wake_id', id);
+        const woke = await wakeOnce(wake, id, span);
+        span.set('agent.outcome', woke.kind);
+        return woke;
+      }),
+  };
+};

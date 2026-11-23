@@ -47,12 +47,14 @@ async fn transient_create_retries_keep_identity_and_trigger_controls_keep_source
     });
     let sender = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
     let request = CreateAgentSessionRequest {
+        origin: trigger_context::TriggerOrigin::Unknown,
         id: Some(session.as_uuid()),
         bot_id: Some(bot_id::BotId::TEST_A.as_uuid()),
         workspace: Some("/workspace".into()),
         prompt: None,
         prompt_action_id: None,
         prompt_attachments: Vec::new(),
+        prompt_client_id: None,
         repo_url: None,
         repo_branch: None,
         owner: Some(sender.to_string()),
@@ -80,4 +82,40 @@ async fn transient_create_retries_keep_identity_and_trigger_controls_keep_source
     assert_eq!(received[0], received[1]);
     let control: ControlRequest = serde_json::from_value(received[2].clone()).unwrap();
     assert_eq!(control.action_id, Some(AgentActionId::from_uuid(source)));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_call_the_service_never_answers_gives_up() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api = HarnessApi {
+        http: reqwest::Client::new(),
+        base: format!("http://{}", listener.local_addr().unwrap()),
+        token: "test".into(),
+    };
+    // Accept every connection and never answer.
+    tokio::spawn(async move {
+        let mut held = Vec::new();
+        while let Ok((socket, _)) = listener.accept().await {
+            held.push(socket);
+        }
+    });
+    let sender = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+
+    let started = tokio::time::Instant::now();
+    let error = api
+        .prompt(
+            AgentSessionId::new(),
+            &sender,
+            "hello",
+            macro_uuid::generate_uuid_v7(),
+            None,
+        )
+        .await
+        .expect_err("an unanswered control call fails");
+
+    assert!(
+        matches!(&error, ApiError::Http(http) if http.is_timeout()),
+        "{error:?}"
+    );
+    assert_eq!(started.elapsed(), CALL_TIMEOUT);
 }

@@ -1,4 +1,5 @@
 import type { OpenCreatedItem } from '@app/features/command/types';
+import type { TutorialId } from '@app/features/video-tutorials';
 import type { EntityData, ProjectEntity, SearchLocation } from '@entity';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createContext, useContext } from 'solid-js';
@@ -15,6 +16,8 @@ export type DriveHostActions = {
     location?: SearchLocation,
     newSplit?: boolean
   ) => void;
+  /** Opens a sidebar shortcut at My Files, naming no location. */
+  openShortcut: (entity: EntityData, event: MouseEvent) => void;
   openFavorite: (favorite: Favorite, name: string, event: MouseEvent) => void;
   openCreated: OpenCreatedItem;
   openFolderInNewSplit: (folder: ProjectEntity) => void;
@@ -33,6 +36,8 @@ export type DriveContext = {
   list: DriveListState;
   sidebar: DriveSidebarSource;
   actions: DriveHostActions;
+  /** The Block tutorials Drive's sidebar offers: Docs, plus rolled-out Blocks listed in Drive. */
+  tutorials: Accessor<readonly TutorialId[]>;
 };
 
 const Context = createContext<DriveContext>();

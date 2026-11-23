@@ -1,3 +1,5 @@
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
+import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import '@entity/composed/ListEntity.css';
@@ -30,7 +32,7 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -54,6 +56,7 @@ import {
   type Setter,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import {
@@ -99,14 +102,37 @@ type HomeListProps = {
   onPreviewActivate?: () => void;
 };
 
+/**
+ * Home's tutorial entry, a sidebar item like the rail's rows under it. Touch
+ * devices show no tutorials.
+ */
+function HomeTutorial() {
+  return (
+    <div class="mx-(--sidebar-gutter) my-(--sidebar-row-gap) empty:hidden">
+      <TutorialSidebarItem tutorial="home" />
+    </div>
+  );
+}
+
 /** Compact notification list used by the Notifications workspace. */
 export function HomeList(props: HomeListProps) {
-  const channels = useChannelsContext();
-  const channelName = (entity: WithNotification<EntityData>) =>
-    entity.type === 'channel_thread'
-      ? getChannelThreadName(entity, channels.channelsById())
-      : undefined;
-  const { state } = useHomeView();
+  const inlinePreviewLayout = useInlinePreviewLayout();
+  const directory = useChannelDirectory();
+  const channelName = (entity: WithNotification<EntityData>) => {
+    if (entity.type !== 'channel_thread') return undefined;
+    const current = loadedChannel(directory.lookup(entity.channelId));
+    return getChannelThreadName(
+      entity,
+      current ? { [current.id]: current } : {}
+    );
+  };
+  const {
+    state,
+    composerFocusRequest,
+    registerListFocus,
+    startedSessionToHighlight,
+    clearStartedSessionToHighlight,
+  } = useHomeView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
 
@@ -173,7 +199,7 @@ export function HomeList(props: HomeListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    if (!isTouchDevice() && !newSplit) {
+    if (inlinePreviewLayout() && !newSplit) {
       if (!isNonMemberChannelEntity(sourceRow.entity)) {
         markChannelNotificationsSeenOnOpen(
           sourceRow.entity,
@@ -182,8 +208,10 @@ export function HomeList(props: HomeListProps) {
       }
       showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();
-      // Home keeps the keyboard only when the item opened in Home itself.
-      if (panel.isPanelActive()) listRoot()?.focus({ preventScroll: true });
+      // Home keeps the keyboard only when the item opened in Home itself,
+      // and gives it to a conversation's composer.
+      if (panel.isPanelActive() && !composerFocusRequest())
+        listRoot()?.focus({ preventScroll: true });
       return;
     }
 
@@ -208,7 +236,13 @@ export function HomeList(props: HomeListProps) {
     options?: { activate?: boolean }
   ) {
     if (entity) markRowNotificationsSeenOnOpen(entity, notificationSource);
-    props.onPreviewEntityChange(entity, options);
+    // A runtime opens in Settings → Machines; it has no preview.
+    props.onPreviewEntityChange(
+      entity?.type === 'harness' || entity?.type === 'team'
+        ? undefined
+        : entity,
+      options
+    );
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);
@@ -249,6 +283,9 @@ export function HomeList(props: HomeListProps) {
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
+
+  // The tutorial introduces Home; search results are not Home's list.
+  const showsTutorial = () => state.tab !== 'noise' && !state.search.trim();
 
   let scrollOffset = DEFAULT_HOME_LIST_STATE.scrollOffset;
   const readListState = (): HomeListStateSnapshot => ({
@@ -313,8 +350,22 @@ export function HomeList(props: HomeListProps) {
   };
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
+  // Esc from a previewed conversation returns to its row, which stays the
+  // list's focused row while the preview shows it.
+  registerListFocus(() => {
+    const root = listRoot();
+    if (!root?.isConnected) return false;
+    root.focus({ preventScroll: true });
+    return true;
+  });
   const [collapseRow, setCollapseRow] =
     createSignal<(rowId: string) => Promise<void>>();
+  const [expandRow, setExpandRow] = createSignal<(rowId: string) => void>();
+  /** The swipe rows showing an entity; rows are keyed by occurrence. */
+  const rowIdsOf = (entityId: string) =>
+    rows().flatMap((row) =>
+      row.kind === 'entity' && row.entity.id === entityId ? [row.id] : []
+    );
 
   const actionState = toEntityActionListState({
     controller: list,
@@ -326,14 +377,14 @@ export function HomeList(props: HomeListProps) {
         if (!collapse) return;
 
         // Actions target entities; swipe rows are keyed by notification occurrence.
-        await Promise.all(
-          rows().flatMap((row) =>
-            row.kind === 'entity' && row.entity.id === entityId
-              ? [collapse(row.id)]
-              : []
-          )
-        );
+        await Promise.all(rowIdsOf(entityId).map((rowId) => collapse(rowId)));
       },
+    },
+    // Own work stays in the feed after a done; its folded row comes back.
+    expand: (entityId) => {
+      const expand = expandRow();
+      if (!expand) return;
+      for (const rowId of rowIdsOf(entityId)) expand(rowId);
     },
     onFocus: (target) => {
       if (target) {
@@ -354,7 +405,7 @@ export function HomeList(props: HomeListProps) {
         previewAfterNavigation.clear();
 
         const row = event.result?.item;
-        if (!isTouchDevice() && row?.kind === 'entity') {
+        if (inlinePreviewLayout() && row?.kind === 'entity') {
           previewAfterNavigation(row.entity);
         }
 
@@ -475,6 +526,24 @@ export function HomeList(props: HomeListProps) {
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
+  // The composer's new session is shown like a clicked row once it is
+  // listed, without taking the keyboard from the conversation it opened.
+  createEffect(() => {
+    const id = startedSessionToHighlight();
+    if (!id) return;
+    const row = rows().find(
+      (row) =>
+        row.kind === 'entity' &&
+        row.entity.type === 'agent_session' &&
+        row.entity.id === id
+    );
+    if (!row) return;
+    clearStartedSessionToHighlight();
+    untrack(() =>
+      list.focus.set(row.id, { reason: 'programmatic', force: true })
+    );
+  });
+
   createEffect(() => {
     rows();
     if (source.isLoading()) return;
@@ -555,6 +624,7 @@ export function HomeList(props: HomeListProps) {
           <SwipableRowProvider
             container={viewport}
             setCollapseEntity={setCollapseRow}
+            setExpandEntity={setExpandRow}
             canSwipeLeft={(rowId) => {
               const row = swipeRowsById().get(rowId);
               return row ? markDoneActionFor(row) !== undefined : false;
@@ -606,6 +676,12 @@ export function HomeList(props: HomeListProps) {
                   ref={setEmptyViewport}
                   class="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
                 >
+                  {/* A new account's Home starts empty, when the tutorial
+                      matters most. Touch devices show no tutorial, so there
+                      the empty state keeps its own top inset. */}
+                  <Show when={showsTutorial()}>
+                    <HomeTutorial />
+                  </Show>
                   <HomeEmptyState />
                 </div>
               </Match>
@@ -619,19 +695,22 @@ export function HomeList(props: HomeListProps) {
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
                   onScroll={checkNearEnd}
                 >
-                  {/* The spacer scrolls away; the viewport stays behind the filters. */}
-                  <div
-                    ref={setTopSpacer}
-                    aria-hidden="true"
-                    class="h-0 touch:h-(--mobile-content-inset-top)"
-                  />
+                  {/* The spacer scrolls away; the viewport stays behind the filters.
+                      It holds the touch inset and the pinned tutorial row. */}
+                  <div ref={setTopSpacer}>
+                    <div
+                      aria-hidden="true"
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
+                    />
+                    <Show when={showsTutorial()}>
+                      <HomeTutorial />
+                    </Show>
+                  </div>
                   <Virtualizer
                     ref={registerVirtualizer}
                     data={rows()}
                     scrollRef={viewport()}
-                    startMargin={
-                      isTouchDevice() ? (topSpacerSize.height ?? 0) : 0
-                    }
+                    startMargin={topSpacerSize.height ?? 0}
                     bufferSize={500}
                     itemSize={isTouchDevice() ? 44 : 36}
                     keepMounted={
@@ -681,14 +760,15 @@ export function HomeList(props: HomeListProps) {
                                     when={isTouchDevice()}
                                     fallback={
                                       <HomeListEntity
+                                        itemTitle={state.tab === 'recent'}
                                         channelName={channelName(
                                           entityRow().entity
                                         )}
                                         timestamp={
-                                          state.tab === 'signal'
-                                            ? entityRow().entity.sortTs
-                                            : (entityRow().entity.notifiedAt ??
+                                          state.tab === 'noise'
+                                            ? (entityRow().entity.notifiedAt ??
                                               entityRow().entity.sortTs)
+                                            : entityRow().entity.sortTs
                                         }
                                         entity={entityRow().entity}
                                         occurrenceKey={entityRow().id}

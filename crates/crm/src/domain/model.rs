@@ -191,6 +191,119 @@ pub struct CrmContact {
     pub created_at: DateTime<Utc>,
     /// When the contact record was last updated
     pub updated_at: DateTime<Utc>,
+    /// Every address the contact is known by, lowercased: the primary
+    /// (`email`) first, then the rest oldest first
+    pub emails: Vec<String>,
+    /// The addresses on a domain of the contact's company. A contact with
+    /// any is a company-domain contact: it cannot be unlinked or moved, and
+    /// the last of these addresses cannot be removed
+    pub company_domain_emails: Vec<String>,
+}
+
+/// Which of a company's contacts one page of its Team list holds.
+#[derive(Debug, Clone)]
+pub struct CrmCompanyContactsQuery {
+    /// The archived contacts instead of the visible ones. Under an archived
+    /// company every contact is archived.
+    pub archived: bool,
+    /// Text the contact's name or primary email must contain,
+    /// case-insensitively. Empty matches every contact.
+    pub search: String,
+    /// Where the previous page stopped; `None` for the first page.
+    pub cursor: Option<CrmCompanyContactsCursor>,
+    /// The most contacts the page holds.
+    pub limit: i64,
+}
+
+/// The last contact of a Team list page, in the list's order: by
+/// lowercased name (the email when unnamed), then by id descending. It is
+/// bound to the list it came from: a cursor replayed on another company,
+/// archive state or search is refused instead of starting mid-list.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CrmCompanyContactsCursor {
+    /// The contact's lowercased name, or email when it has no name.
+    pub sort_name: Option<String>,
+    /// The contact's id.
+    pub id: uuid::Uuid,
+    /// The company whose list the cursor continues.
+    pub company_id: uuid::Uuid,
+    /// The archive state of that list.
+    pub archived: bool,
+    /// [`CrmCompanyContactsCursor::search_fingerprint`] of that list's
+    /// trimmed search.
+    pub search: String,
+}
+
+impl CrmCompanyContactsCursor {
+    /// A cursor after the contact `(sort_name, id)` of `company_id`'s list
+    /// for `query`, whose search is already trimmed.
+    pub fn after(
+        company_id: uuid::Uuid,
+        query: &CrmCompanyContactsQuery,
+        sort_name: Option<String>,
+        id: uuid::Uuid,
+    ) -> Self {
+        Self {
+            sort_name,
+            id,
+            company_id,
+            archived: query.archived,
+            search: Self::search_fingerprint(&query.search),
+        }
+    }
+
+    /// Whether the cursor continues `company_id`'s list for `query`, whose
+    /// search is already trimmed.
+    pub fn continues(&self, company_id: uuid::Uuid, query: &CrmCompanyContactsQuery) -> bool {
+        self.company_id == company_id
+            && self.archived == query.archived
+            && self.search == Self::search_fingerprint(&query.search)
+    }
+
+    /// A stable digest of the search text (the first 16 bytes of its
+    /// SHA-256, in hex), so the cursor doesn't carry the search itself.
+    fn search_fingerprint(search: &str) -> String {
+        use sha2::{Digest, Sha256};
+        Sha256::digest(search.as_bytes())
+            .iter()
+            .take(16)
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+}
+
+/// One page of a company's Team list.
+#[derive(Debug, Clone)]
+pub struct CrmCompanyContactsPage {
+    /// The page's contacts, in the list's order.
+    pub contacts: Vec<CrmContact>,
+    /// Where the next page starts; `None` on the last page.
+    pub next_cursor: Option<CrmCompanyContactsCursor>,
+}
+
+/// The name and visibility of a contact's company, which the contact's page
+/// shows without reading the whole company.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct CrmCompanySummary {
+    /// The id of the company
+    pub id: uuid::Uuid,
+    /// The team's name for the company, else its primary domain's
+    /// directory name, as the company read resolves it
+    pub name: Option<String>,
+    /// The company's oldest domain, which stands in for a missing name
+    pub domain: Option<String>,
+    /// Whether the company is hidden for the owning team
+    pub hidden: bool,
+}
+
+/// A contact with a summary of its company.
+#[derive(Debug, Clone)]
+pub struct CrmContactDetail {
+    /// The contact
+    pub contact: CrmContact,
+    /// Its company; `None` for a contact without one, or one the caller
+    /// may not see
+    pub company: Option<CrmCompanySummary>,
 }
 
 /// What a depopulate teardown actually removed. Every field is `false` on
@@ -223,19 +336,13 @@ impl DepopulateContactOutcome {
 /// needs to either accept or reject a CRM-scoped query before it runs.
 #[derive(Debug, Clone)]
 pub struct CrmScopePrecheck {
-    /// `team_crm_settings.crm_enabled` for the requesting team. `false`
-    /// when the team's row exists with `crm_enabled = false`, *or* when no
-    /// row exists at all (older teams predating `team_crm_settings`).
+    /// Compatibility field, always true for current CRM record scopes.
+    /// Email eligibility is checked separately for every candidate thread.
     pub crm_enabled: bool,
     /// One row per requested domain, in the same order as the input list.
-    /// **Exception:** when `crm_enabled = false`, this vec is empty —
-    /// the email service short-circuits on the killswitch before
-    /// consulting per-input rows, so the per-domain probes are skipped
-    /// and callers must not assume length parity with the input list
-    /// without first checking `crm_enabled`.
     pub domains: Vec<CrmDomainStatus>,
     /// One row per requested address, in the same order as the input
-    /// list. Same `crm_enabled = false` exception as [`Self::domains`].
+    /// list.
     pub addresses: Vec<CrmAddressStatus>,
 }
 
@@ -304,8 +411,7 @@ impl CrmPermissionRole {
 }
 
 /// Team-level CRM configuration stored on `team_crm_settings`
-/// (everything except the `crm_enabled` killswitch, which stays owned
-/// by the teams crate).
+/// (excluding the retired `crm_enabled` flag owned by the teams crate).
 #[derive(Debug, Clone)]
 pub struct CrmTeamSettings {
     /// Who can change the deal stage set in CRM settings.
@@ -377,9 +483,27 @@ pub struct CrmTeamSettingsPatch {
     pub exclude_personal_emails: Option<bool>,
 }
 
+/// Why a domain exclusion would hide an affected mailbox's entire history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, thiserror::Error)]
+#[cfg_attr(feature = "ports", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum MailboxDomainConflict {
+    /// A company mailbox already excludes colleagues on its own domain.
+    #[error(
+        "Colleagues on a mailbox's own company domain are already kept out of the CRM. Blocking this domain would hide all of that mailbox's email."
+    )]
+    Company,
+    /// A shared personal provider is not a company domain.
+    #[error("Blocking this domain would hide all of a connected mailbox's email from the CRM.")]
+    PersonalProvider,
+}
+
 /// Errors that can occur in the CRM domain.
 #[derive(Debug, thiserror::Error)]
 pub enum CrmError {
+    /// The caller's team membership does not permit CRM access.
+    #[error("CRM access is not enabled for this team member")]
+    AccessDenied,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),
@@ -392,21 +516,46 @@ pub enum CrmError {
     /// Request rejected for a client-side reason (e.g. blank comment text).
     #[error("{0}")]
     InvalidRequest(String),
+    /// A domain exclusion would veto every thread in an affected mailbox.
+    #[error("{0}")]
+    BlocksConnectedMailbox(MailboxDomainConflict),
     /// The request asks for hidden CRM rows but the caller's team role is
     /// below admin/owner.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     AdminRoleRequired,
     /// The request changes governance fields of the team CRM settings
-    /// (permission thresholds, closed stages) but the caller's team role
+    /// (permission thresholds, closed stages, or team email exclusions), but the caller's team role
     /// is below admin/owner.
-    #[error("changing crm permission or stage settings requires admin/owner team role")]
+    #[error("changing CRM admin settings requires admin/owner team role")]
     SettingsAdminRequired,
+    /// The thread-exclusion rollout is disabled or its flag could not be loaded.
+    #[error("thread exclusions are not available")]
+    ThreadExclusionsUnavailable,
+    /// New policy authoring is disabled or the flag failed to load.
+    #[error("selective email contribution is not available")]
+    SelectiveEmailUnavailable,
+    /// The observed consent lifetime/version or retry command no longer matches.
+    #[error("email contribution changed; inspect the current policy before retrying")]
+    EmailPolicyConflict,
+    /// A scoped credential is not permitted to change sharing.
+    #[error("this credential cannot enable email contribution")]
+    EmailPolicySharingRefused,
+    /// Preview work is limited to one new request per member per thirty seconds.
+    #[error("wait before starting another email contribution preview")]
+    EmailPreviewRateLimited,
+    /// Complete live rule discovery exceeded an authoring/read resource limit.
+    #[cfg(feature = "ports")]
+    #[error(transparent)]
+    EmailRuleLimitExceeded(#[from] super::email_rule_discovery::EmailRuleLimitExceeded),
+    /// A count page reached its bounded statement/work budget.
+    #[error("email contribution preview reached its work budget")]
+    EmailPreviewBudgetExhausted,
     /// Caller's team role is below the team's `edit_stages_role`.
     #[error("editing deal stages requires the {} team role", .0.as_db_str())]
     StageEditRoleRequired(CrmPermissionRole),
     /// Tried to mutate a CRM company in a way that contradicts its
-    /// `hidden = true` state — currently raised when attempting to
-    /// re-enable `email_sync` on a hidden company.
+    /// `hidden = true` state, including enabling sync or changing a
+    /// contact relation in a way that would reveal an archived record.
     #[error("crm company is hidden")]
     CompanyHidden,
     /// The team already tracks a company for the requested domain.
@@ -415,12 +564,19 @@ pub enum CrmError {
     /// The company already has a contact with the requested email.
     #[error("a crm contact with this email already exists for the company")]
     ContactAlreadyExistsForCompany,
-    /// The team-level `team_crm_settings.crm_enabled` killswitch is off.
-    #[error("crm is not enabled for this team")]
+    /// Another visible contact in the owning team already uses this address.
+    #[error("a crm contact with this email already exists for the team")]
+    ContactAlreadyExistsForTeam,
+    /// The team no longer exists.
+    #[error("crm is unavailable for this team")]
     CrmDisabledForTeam,
     /// Entity access receipt did not contain a valid team UUID.
     #[error("invalid team id in entity access receipt")]
     InvalidTeamId,
+    /// A concurrent write invalidated this population's history evidence or
+    /// held needed records for too long. Nothing was written; retry later.
+    #[error("crm records are busy; retry later")]
+    Contended,
 }
 
 /// Contact fields plus the owning team/company and the viewer's history.

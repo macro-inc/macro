@@ -29,6 +29,9 @@ pub enum ShareEntityType {
     /// External chats added to Macro.
     #[serde(rename = "external_chat")]
     ExternalChat,
+    /// Runtimes, with Read and User roles: shared only with teammates, and only
+    /// by the owner in person.
+    Harness,
 }
 impl From<ShareEntityType> for EntityType {
     fn from(value: ShareEntityType) -> Self {
@@ -42,6 +45,7 @@ impl From<ShareEntityType> for EntityType {
             ShareEntityType::EmailThread => Self::EmailThread,
             ShareEntityType::AgentSession => Self::AgentSession,
             ShareEntityType::ExternalChat => Self::ExternalChat,
+            ShareEntityType::Harness => Self::Harness,
         }
     }
 }
@@ -93,6 +97,9 @@ pub struct AccessRequest {
     /// Earliest next submission or level change; cancellation preserves this deadline.
     /// Submissions wait one minute, denials wait 24 hours, and approval clears it.
     pub retry_after: Option<DateTime<Utc>>,
+    /// The agent that asked on the requester's behalf, when one did.
+    #[serde(default)]
+    pub requested_by_agent: Option<Uuid>,
 }
 /// A direct user grant; inherited grants are deliberately not editable here.
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
@@ -173,6 +180,29 @@ pub struct RequestEvent {
     pub trace_context: std::collections::HashMap<String, String>,
     /// Previous requested notifications and their recipients to complete.
     pub superseded: Vec<(Uuid, Vec<MacroUserIdStr<'static>>)>,
+    /// Residents this change stopped, when it removed or lowered someone's
+    /// access to a runtime their agents live on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stopped: Option<StoppedResidents>,
+}
+
+/// A person's agents that stopped because a change ended their User access to
+/// the runtime the agents live on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoppedResidents {
+    /// The agents' owner, whose access changed.
+    pub owner: MacroUserIdStr<'static>,
+    /// The agents that were running and no longer may.
+    pub agents: Vec<Resident>,
+}
+
+/// An agent living on a runtime.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Resident {
+    /// The agent's bot id.
+    pub bot_id: Uuid,
+    /// The agent's display name.
+    pub name: String,
 }
 /// Domain failures translated to HTTP only at the inbound boundary.
 #[derive(Debug, thiserror::Error)]

@@ -49,6 +49,10 @@ decides whether to trigger, authorizes, and delivers a reply.
 - Attributed bot messages trigger like human ones (mention or inferred), never
   Macro AI's own; `messages::domain::agent_hops::MAX_AGENT_HOPS` is checked
   first, before any classifier call. Unattributed bot posts trigger nothing.
+- A post a user made through a client (an MCP client) is sent as Macro AI's
+  bot with `triggered_via` set. It is the client's, not Macro AI's: a thread
+  whose only Macro AI messages are such posts is not a Macro AI thread, so a
+  reply to one infers nothing; only an explicit `@macro` mention invokes Macro.
 
 ## Related
 

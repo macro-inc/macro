@@ -1,38 +1,42 @@
 //! Authorization adapter for registered harness model discovery.
 
-use agent_harness::domain::model_load::HarnessModelAccess;
+use agent_harness::domain::model_load::{HarnessModelAccess, HarnessModelReach};
 use harness_id::HarnessId;
-use harnesses::domain::ports::{HarnessRepo, HarnessService};
-use harnesses::domain::service::HarnessServiceImpl;
+use harnesses::domain::ports::HarnessService;
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// Visibility adapter backed by the harness domain's existing list policy.
-pub struct VisibleHarnessAccess<Repo> {
-    harnesses: HarnessServiceImpl<Repo>,
+pub struct VisibleHarnessAccess<Harnesses> {
+    harnesses: Harnesses,
 }
 
-impl<Repo> VisibleHarnessAccess<Repo> {
-    /// Build an access adapter over the harness repository.
-    pub fn new(repo: Repo) -> Self {
-        Self {
-            harnesses: HarnessServiceImpl::new(repo),
-        }
+impl<Harnesses> VisibleHarnessAccess<Harnesses> {
+    /// Build an access adapter over the harness service.
+    pub fn new(harnesses: Harnesses) -> Self {
+        Self { harnesses }
     }
 }
 
-impl<Repo> HarnessModelAccess for VisibleHarnessAccess<Repo>
+impl<Harnesses> HarnessModelAccess for VisibleHarnessAccess<Harnesses>
 where
-    Repo: HarnessRepo,
+    Harnesses: HarnessService,
 {
-    async fn can_use(
+    async fn reach(
         &self,
         caller: &MacroUserIdStr<'static>,
         harness: HarnessId,
-    ) -> Result<bool, String> {
-        self.harnesses
+    ) -> Result<HarnessModelReach, String> {
+        let visible = self
+            .harnesses
             .list_harnesses(caller.clone())
             .await
-            .map(|visible| visible.iter().any(|candidate| candidate.id == harness))
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+        Ok(
+            match visible.iter().find(|candidate| candidate.id == harness) {
+                None => HarnessModelReach::Forbidden,
+                Some(found) if found.connected => HarnessModelReach::Connected,
+                Some(_) => HarnessModelReach::Disconnected,
+            },
+        )
     }
 }

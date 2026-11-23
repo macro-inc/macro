@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM computer_move\n                WHERE computer_id = $1 AND stage IN ('cutting_over', 'rolling_back')\n            ) AS \"held!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "held!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "23003ab5e38171a9c4d5675d2836dba0b36a822820a5580b8aa87ca8e3122a46"
+}

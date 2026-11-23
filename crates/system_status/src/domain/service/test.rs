@@ -27,6 +27,7 @@ async fn current_status_is_operational_before_any_update() {
         current,
         CurrentSystemStatus {
             status: SystemStatus::Operational,
+            id: None,
             updated_at: None,
         }
     );
@@ -43,6 +44,7 @@ async fn set_status_stores_it_as_current_and_broadcasts_it() {
 
     let expected = CurrentSystemStatus {
         status: degraded("Search is slow"),
+        id: Some(update.id),
         updated_at: Some(update.created_at),
     };
     assert_eq!(service.current_status().await.unwrap(), expected);
@@ -133,22 +135,24 @@ fn messages_are_trimmed_and_bounded() {
 fn wire_shape_is_flat_and_omits_message_when_operational() {
     let degraded = serde_json::to_value(CurrentSystemStatus {
         status: degraded("Search is slow"),
+        id: None,
         updated_at: None,
     })
     .unwrap();
     let operational = serde_json::to_value(CurrentSystemStatus {
         status: SystemStatus::Operational,
+        id: None,
         updated_at: None,
     })
     .unwrap();
 
     assert_eq!(
         degraded,
-        serde_json::json!({ "status": "degraded", "message": "Search is slow", "updatedAt": null })
+        serde_json::json!({ "status": "degraded", "message": "Search is slow", "id": null, "updatedAt": null })
     );
     assert_eq!(
         operational,
-        serde_json::json!({ "status": "operational", "updatedAt": null })
+        serde_json::json!({ "status": "operational", "id": null, "updatedAt": null })
     );
     assert!(
         serde_json::from_value::<SystemStatus>(

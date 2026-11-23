@@ -1,11 +1,32 @@
 # Agent session browser checks
 
-Run the existing notification, mention and transcript checks with:
+Run the existing notification, mention, transcript, queued-message, activity,
+subagent, channel reply and session composer checks with:
 
 ```sh
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome \
 bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts
 ```
+
+`queued.html` renders the queued-message rows over the real composer
+(`?count=N` entries, `?light` for the light theme) with an in-page log of
+edits, removals and steers; `queued.browser.e2e.ts` checks that an open row
+shows its text once, that Up / Enter / Escape edit, save and restore, and
+that a long prompt's closed preview ends in an ellipsis before the row's
+controls on desktop and phone.
+
+`activity.html` replays one long agent turn through the transcript's message
+view: a run of 74 steps across programs, direct calls and thoughts, with one
+program timing out and one operation failing. The page answers the harness's
+code-execution requests from the replay. `?speed=` divides every delay, and
+`?summary=1` also publishes the session summarizer's line for each stretch.
+`activity.browser.e2e.ts` checks that the run shows one live line and never
+opens on its own, never says a step failed, then settles to **Used 74 tools**
+with its failed rows marked only in `data-tool-status`.
+
+`channel-reply.html` renders a channel agent reply's sealed run with a failed
+and an interrupted step; `channel-reply.browser.e2e.ts` checks that its summary
+and rows name neither, while `data-status` keeps both.
 
 For session-open performance, use a regular owned Vite frontend, an authorized
 local session and histories created through the local session API. Keep login

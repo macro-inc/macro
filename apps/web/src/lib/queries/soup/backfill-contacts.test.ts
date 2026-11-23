@@ -7,16 +7,18 @@ import {
   runSoupBackfill,
 } from './backfill';
 
+vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
+vi.mock('../contacts/use-context-publisher', () => ({
+  useContactContextPublisher: () => {},
+}));
+
 const graphqlMocks = vi.hoisted(() => ({
   hydrateGraphqlSoup: vi.fn(),
 }));
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: vi.fn(),
-}));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_BACKFILL: true,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
 }));
 vi.mock('@core/cross-tab/tab-leader', () => ({
   createTabLeaderSignal: vi.fn(),

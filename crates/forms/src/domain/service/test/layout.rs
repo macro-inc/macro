@@ -11,6 +11,7 @@ use crate::domain::ports::FormsService;
 #[test]
 fn respondent_details_withhold_the_booking_destination() {
     let form = Form {
+        appearance: None,
         id: FormId::from_uuid(Uuid::from_u128(1)),
         name: "Interview".into(),
         description: "".into(),

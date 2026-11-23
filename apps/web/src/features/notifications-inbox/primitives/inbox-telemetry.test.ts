@@ -31,6 +31,7 @@ vi.mock('@macro-inc/observability', () => ({
 const row = (id: string): NotificationInboxRow => ({
   id,
   type: 'access_requested',
+  alsoListedAs: [],
   revision: 'rev',
   latestAt: 1,
   actions: [],
@@ -39,7 +40,6 @@ const row = (id: string): NotificationInboxRow => ({
   content: {
     entity: {} as never,
     notifications: [],
-    entityAt: () => ({}) as never,
   },
 });
 

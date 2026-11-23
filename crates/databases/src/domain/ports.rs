@@ -30,6 +30,13 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Error: std::error::Error + Send + Sync + 'static;
 
+    /// Replace presentation and its history atomically, returning the previous value when changed.
+    fn set_appearance(
+        &self,
+        id: DatabaseId,
+        update: activity::AppearanceUpdate,
+    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Error>> + Send;
+
     /// Create a database with its first table and that table's title
     /// column, granting the creator owner access, all or nothing.
     fn create_database(
@@ -94,6 +101,14 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         &self,
         table_id: TableId,
     ) -> impl Future<Output = Result<Vec<RowRef>, Self::Error>> + Send;
+
+    /// Those of `row_ids` that are rows of one of `table_ids`, by table id,
+    /// then in each table's position order. Reads only the named rows.
+    fn rows_in_tables(
+        &self,
+        table_ids: &[TableId],
+        row_ids: &[RowId],
+    ) -> impl Future<Output = Result<Vec<(TableId, RowRef)>, Self::Error>> + Send;
 
     /// Current versions for a set of tables.
     fn table_versions(
@@ -275,6 +290,20 @@ pub trait AccessDirectory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AccessLevel>, Self::Error>> + Send;
 }
 
+/// Whether the user who set up something that writes a database on their
+/// behalf (a webhook, a sync) can still edit it, asked on every write.
+pub trait CreatorAccess: Send + Sync + 'static {
+    /// The creator's edit receipt for the database; `None` when they can no
+    /// longer edit it.
+    fn edit_receipt(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        database_id: DatabaseId,
+    ) -> impl Future<
+        Output = Result<Option<EntityAccessReceipt<EditAccessLevel>>, rootcause::Report>,
+    > + Send;
+}
+
 /// The definitions behind columns: creating database-owned ones, binding
 /// existing ones, and reading them back with their options.
 pub trait ColumnDefinitionStore: Send + Sync + 'static {
@@ -388,6 +417,13 @@ pub trait DatabasesService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<EditAccessLevel>,
         name: String,
     ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
+
+    /// Replace icon and color overrides under an edit receipt.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> impl Future<Output = Result<model_entity::EntityAppearance, DatabaseError>> + Send;
 
     /// Move a database to the trash.
     fn trash_database(
@@ -570,4 +606,15 @@ pub trait DatabaseMetadataReads: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
+}
+
+/// Lifecycle facts for trusted backend hosts that already know an entity id.
+/// This returns no content or ownership information and grants no access.
+pub trait DatabaseLifecycleReads: Send + Sync + 'static {
+    /// Whether the database app entity exists outside trash, independently
+    /// of any viewer's current permissions.
+    fn database_is_live(
+        &self,
+        id: DatabaseId,
+    ) -> impl Future<Output = Result<bool, DatabaseError>> + Send;
 }

@@ -4,6 +4,8 @@ use rig_core::message::Message;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::model::router::{ModelRouter, RoutedModel};
+
 #[cfg(test)]
 mod test;
 
@@ -40,6 +42,44 @@ pub fn validate_schema(schema: &DynamicSchema) -> anyhow::Result<jsonschema::Val
         })
 }
 
+/// How much a model may think before it gives a structured answer.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CompletionThinking {
+    /// The model's own default.
+    #[default]
+    Default,
+    /// Briefly, for a faster answer: Gemini 3 models think at their low
+    /// level, which can take a structured answer from minutes to seconds.
+    /// Other providers keep their defaults.
+    Low,
+}
+
+impl CompletionThinking {
+    /// The provider parameters that ask `model` to think this way, if any.
+    fn params(self, model: &str) -> Option<serde_json::Value> {
+        match self {
+            Self::Default => None,
+            Self::Low => self.params_for(&ModelRouter::shared().ok()?.route_or_default(model)),
+        }
+    }
+
+    pub(crate) fn params_for<H>(self, routed: &RoutedModel<'_, H>) -> Option<serde_json::Value> {
+        match (self, routed) {
+            (Self::Low, RoutedModel::Gemini(_)) => Some(serde_json::json!({
+                "generationConfig": { "thinkingConfig": { "thinkingLevel": "low" } }
+            })),
+            (Self::Default, _)
+            | (
+                Self::Low,
+                RoutedModel::Anthropic(_)
+                | RoutedModel::OpenAiChatCompletions(_)
+                | RoutedModel::OpenAiResponses(_),
+            ) => None,
+        }
+    }
+}
+
 /// Run a completion with conversation history and return a JSON value
 /// conforming to `schema`.
 #[tracing::instrument(skip(model, system_prompt, messages, schema, recorder, ctx), err)]
@@ -51,6 +91,34 @@ pub async fn dynamic_structured_completion<M: ToString>(
     recorder: &dyn ai_usage::UsageRecorder,
     ctx: ai_usage::UsageContext,
 ) -> anyhow::Result<serde_json::Value> {
+    dynamic_structured_completion_thinking(
+        model,
+        system_prompt,
+        messages,
+        schema,
+        CompletionThinking::Default,
+        recorder,
+        ctx,
+    )
+    .await
+}
+
+/// [`dynamic_structured_completion`], letting the model think as `thinking` says.
+#[tracing::instrument(
+    skip(model, system_prompt, messages, schema, recorder, ctx),
+    fields(gen_ai.request.thinking = ?thinking),
+    err
+)]
+pub async fn dynamic_structured_completion_thinking<M: ToString>(
+    model: M,
+    system_prompt: &str,
+    messages: Vec<Message>,
+    schema: DynamicSchema,
+    thinking: CompletionThinking,
+    recorder: &dyn ai_usage::UsageRecorder,
+    ctx: ai_usage::UsageContext,
+) -> anyhow::Result<serde_json::Value> {
+    let model = model.to_string();
     let validator = validate_schema(&schema)?;
     let structured_prompt = format!(
         "{system_prompt}\n\n\
@@ -68,10 +136,12 @@ pub async fn dynamic_structured_completion<M: ToString>(
         schema_json = serde_json::to_string_pretty(&schema.schema)?,
     );
 
-    let response = crate::completion::complete_with_history(
+    let params = thinking.params(&model);
+    let response = crate::completion::complete_with_history_and_params(
         model,
         &structured_prompt,
         messages,
+        params,
         recorder,
         ctx,
     )

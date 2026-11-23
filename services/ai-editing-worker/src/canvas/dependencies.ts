@@ -49,6 +49,8 @@ export function dependencies(
       writes.add(id);
   }
   for (const op of ops) {
+    if (!('ids' in op) && !('id' in op)) continue;
+
     const ids = 'ids' in op ? op.ids : [op.id];
     for (const id of ids) {
       reads.add(id);
@@ -119,7 +121,18 @@ export function dependencies(
   if (
     boundsChanged ||
     ops.some(
-      (op) => !['text', 'mentionUser', 'style', 'order'].includes(op.kind)
+      (op) =>
+        ![
+          'text',
+          'mentionUser',
+          'style',
+          'order',
+          'artifactSource',
+          'artifactEdit',
+          'defineStyle',
+          'defineComponent',
+          'presentOrder',
+        ].includes(op.kind)
     )
   ) {
     for (const id of writes) {

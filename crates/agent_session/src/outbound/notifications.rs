@@ -125,7 +125,7 @@ impl NotificationStore for PgNotificationStore {
                 row.action_id == row.id && row.dedupe_key == format!("review.legacy:{}", row.id)
             }) {
                 sqlx::query!(
-                    "UPDATE agent_session SET turn_prompter_kind = 'system', turn_prompter = NULL WHERE id = $1 AND turn_action_id = $2",
+                    "UPDATE agent_session SET turn_prompter_kind = 'system', turn_prompter = NULL, turn_prompter_client = NULL WHERE id = $1 AND turn_action_id = $2",
                     session.as_uuid(), action_id.as_uuid(),
                 ).execute(&mut *transaction).await.map_err(storage)?;
             }

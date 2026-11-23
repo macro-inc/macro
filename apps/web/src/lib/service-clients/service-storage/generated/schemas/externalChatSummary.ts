@@ -10,6 +10,7 @@ import type { ExternalChatProvider } from './externalChatProvider';
 import type { ExternalChatSummaryBackfill } from './externalChatSummaryBackfill';
 import type { ExternalChatSummaryCommunity } from './externalChatSummaryCommunity';
 import type { ExternalChatSummaryLastMessageAt } from './externalChatSummaryLastMessageAt';
+import type { ExternalChatSummaryPictureFileId } from './externalChatSummaryPictureFileId';
 import type { ExternalChatSummarySendReason } from './externalChatSummarySendReason';
 
 /**
@@ -28,6 +29,10 @@ export interface ExternalChatSummary {
   lastMessageAt?: ExternalChatSummaryLastMessageAt;
   /** Display name: the group's, or a direct chat's other person. */
   name: string;
+  /** The group's picture, or a direct chat's person's, as the owner's
+account sees it: a static file id; `null` when hidden, unset or not
+fetched yet. */
+  pictureFileId?: ExternalChatSummaryPictureFileId;
   /** The service the chat lives in. */
   provider: ExternalChatProvider;
   sendReason?: ExternalChatSummarySendReason;

@@ -182,26 +182,25 @@ describe('SourceControls', () => {
     const { expandAccount, container } = renderControls();
     expandAccount('gab@macro.com');
     const indicators = container.querySelectorAll(
-      '[title="Subscription calendar"]'
+      '[aria-label="Subscription calendar"]'
     );
     expect(indicators).toHaveLength(1);
   });
 
-  it('badges a calendar with a persistent sync failure', () => {
-    const { expandAccount, container } = renderControls();
+  it('names a calendar with a persistent sync failure by its error', () => {
+    const { expandAccount, getByRole } = renderControls();
     expandAccount('gabtest1@macro.com');
-    const badge = container.querySelector(
-      '[title="Calendar needs attention: Precondition check failed."]'
-    );
-    expect(badge).toBeTruthy();
+    expect(
+      getByRole('checkbox', {
+        name: /Sync failed: Precondition check failed\./,
+      })
+    ).toBeTruthy();
   });
 
-  it('leaves a healthy calendar unbadged', () => {
-    const { expandAccount, container } = renderControls();
+  it('leaves a healthy calendar without a sync failure', () => {
+    const { expandAccount, queryByText } = renderControls();
     expandAccount('gab@macro.com');
-    expect(
-      container.querySelector('[title^="Calendar needs attention:"]')
-    ).toBeNull();
+    expect(queryByText(/^Sync failed:/)).toBeNull();
   });
 
   it('collapses an account again to hide its calendars', () => {

@@ -159,6 +159,7 @@ fn repo() -> MockChannelRepo {
             Ok(ChannelMetadata {
                 channel_type: ChannelType::Private,
                 channel_name: "Test".into(),
+                named: true,
             })
         })
     });
@@ -178,6 +179,7 @@ fn repo() -> MockChannelRepo {
 
 fn message() -> Message {
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::from_u128(1),
         parent: MessageParent::Channel(CHANNEL),
         thread_id: None,

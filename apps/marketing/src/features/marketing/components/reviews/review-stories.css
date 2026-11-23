@@ -28,7 +28,7 @@
 
 /* PrDetail: centered max-w-3xl column. */
 .review-pr { max-width: 768px; min-width: 0; margin-inline: auto; padding: 48px 24px; text-align: left; }
-.review-pr h1 { font: 600 24px/32px 'Inter Variable', Inter, sans-serif; }
+.review-pr h1 { font: 500 24px/32px 'Inter Variable', Inter, sans-serif; }
 .review-pr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 24px; font-size: 14px; }
 .review-pr-pill { display: inline-flex; min-width: 0; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--color-edge-muted); border-radius: 999px; background: var(--color-surface); line-height: 1.25; }
 .review-pr-description { font-size: 14px; overflow-wrap: break-word; }
@@ -61,8 +61,154 @@
 .review-pr-mention-label { text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 20%, transparent); text-decoration-thickness: max(1px, 0.1em); text-underline-offset: 2px; }
 .review-message-body { margin-top: 2px; font-size: 15px; line-height: 24px; overflow-wrap: break-word; }
 
+.github-paste-demo,
+.github-chat-demo {
+  position: relative;
+  width: var(--product-feature-intro-width);
+  margin-inline: auto;
+  padding-block: 12px 20px;
+  color: var(--color-ink);
+  font: 400 16px/1.5 'Inter Variable', sans-serif;
+}
+.github-paste-result {
+  position: relative;
+  min-height: 246px;
+  margin: 0 6px 10px;
+  /* Reserve room for a two-line preview title even before hover. */
+  padding-block: 80px 124px;
+  transition: padding-top calc(480ms / var(--github-paste-speed)) cubic-bezier(.22, 1, .36, 1);
+}
+.github-paste-history {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 224px;
+  overflow: clip;
+  mask-image: linear-gradient(to bottom, transparent, #000 28px);
+}
+.github-paste-history .homepage-conversation {
+  position: absolute;
+  inset: auto 0 80px;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  font-size: 14px;
+  transition: transform calc(480ms / var(--github-paste-speed)) cubic-bezier(.22, 1, .36, 1);
+}
+.github-paste-result[data-sent='true'] .github-paste-history .homepage-conversation {
+  transform: translateY(-68px);
+}
+.github-paste-result[data-replaced='true'] { padding-top: 12px; }
+.github-paste-result[data-replaced='true'] .github-paste-history .homepage-conversation {
+  transform: translateY(-136px);
+}
+.github-paste-message,
+.github-chat-message {
+  animation: github-chat-message-in calc(260ms / var(--github-paste-speed, 1)) cubic-bezier(.2, .8, .25, 1) both;
+}
+.github-paste-replacement .homepage-conversation {
+  width: 100%;
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+.github-paste-preview {
+  position: absolute;
+  inset: auto 0 0 auto;
+  z-index: 1;
+  max-width: 100%;
+  transform-origin: top right;
+  animation: github-paste-preview-in calc(210ms / var(--github-paste-speed)) cubic-bezier(.2, .8, .25, 1) both;
+}
+.github-paste-result[data-replaced='true'] .github-paste-preview {
+  inset-inline: 0 auto;
+  transform-origin: top left;
+}
+:is(.github-paste-composer, .github-chat-composer) [data-surface] {
+  background-color: color-mix(in srgb, var(--color-composer) 80%, transparent);
+  backdrop-filter: blur(12px) saturate(115%);
+}
+:is(.github-paste-composer, .github-chat-composer) .mail-channel-input { font-size: 14px; }
+.github-paste-composer[data-pasting='true'] .mail-channel-input {
+  animation: github-paste-highlight calc(350ms / var(--github-paste-speed)) ease-out both;
+}
+.github-paste-demo .demo-cursor {
+  transition-duration: calc(520ms / var(--github-paste-speed));
+}
+.github-paste-demo .demo-cursor[data-clicking='true'] > svg {
+  animation-duration: calc(180ms / var(--github-paste-speed));
+}
+@keyframes github-paste-highlight {
+  from { background-color: var(--color-active); }
+  to { background-color: transparent; }
+}
+@keyframes github-chat-message-in {
+  from { opacity: 0; transform: translateY(14px) scale(.98); }
+}
+@keyframes github-paste-preview-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+}
+.github-cursor-thread {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 240px;
+  margin: 0 6px 10px;
+  padding-block: 140px 12px;
+  transition: padding-top 550ms cubic-bezier(.22, 1, .36, 1);
+}
+.github-cursor-thread[data-running='true'] { padding-top: 32px; }
+.github-cursor-history {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 140px;
+  overflow: clip;
+  mask-image: linear-gradient(to bottom, transparent, #000 28px);
+}
+.github-cursor-history .homepage-conversation {
+  position: absolute;
+  inset: auto 0 10px;
+  width: 100%;
+  margin: 0;
+  font-size: 14px;
+  transition: transform 550ms cubic-bezier(.22, 1, .36, 1);
+}
+.github-cursor-thread[data-sent='true'] .github-cursor-history .homepage-conversation {
+  transform: translateY(-45px);
+}
+.github-cursor-thread[data-running='true'] .github-cursor-history .homepage-conversation {
+  transform: translateY(-132px);
+}
+.github-cursor-reply {
+  display: flex;
+  margin-top: auto;
+  padding-top: 12px;
+  align-items: flex-end;
+  gap: 10px;
+  width: min(440px, 100%);
+}
+.github-cursor-reply .homepage-agent-avatar { flex: none; margin-bottom: 10px; }
+.github-cursor-reply .demo-cursor-card {
+  background: var(--color-panel);
+  box-shadow: 0 12px 28px -16px rgb(0 0 0 / 60%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .github-paste-result,
+  .github-cursor-thread,
+  .github-cursor-history .homepage-conversation,
+  .github-paste-history .homepage-conversation { transition: none; }
+  .github-paste-demo :is(.github-paste-message, .github-paste-preview, .mail-channel-input),
+  .github-chat-message {
+    animation: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :is(.github-paste-composer, .github-chat-composer) [data-surface] {
+    background-color: var(--color-composer);
+    backdrop-filter: none;
+  }
+}
+
 /* PullRequestPreviewCard: w-80 Surface depth 3, rounded-xl, shadow-lg. */
-.review-pr-card { width: 320px; overflow: hidden; border: 0.5px solid var(--color-edge); border-radius: 12px; background: var(--color-surface-2); color: var(--color-ink); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.45), 0 4px 6px -4px rgb(0 0 0 / 0.45); font: 400 14px/1.5 -apple-system, BlinkMacSystemFont, 'Inter Variable', Roboto, sans-serif; text-align: left; user-select: none; }
+.review-pr-card { width: 320px; overflow: hidden; border: 0.5px solid var(--color-edge); border-radius: 12px; background: var(--color-surface-2); color: var(--color-ink); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.45), 0 4px 6px -4px rgb(0 0 0 / 0.45); font: 370 14px/1.5 -apple-system, BlinkMacSystemFont, 'Inter Variable', Roboto, sans-serif; text-align: left; user-select: none; }
 
 /* Walkthrough overlays sit over the window, measured from their targets. */
 .review-flow-frame { position: relative; }
@@ -124,7 +270,7 @@
 .github-file-heading span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .github-diff-render { color-scheme: dark; min-width: 0; }
 .github-merge-dialog { width: min(420px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--color-edge); border-radius: 16px; background: var(--color-panel); color: var(--color-ink); font-family: 'Inter Variable', Inter, sans-serif; }
-.github-merge-dialog h2 { font-size: 18px; font-weight: 600; }
+.github-merge-dialog h2 { font-size: 18px; font-weight: 500; }
 .github-merge-dialog p { margin-top: 12px; font-size: 14px; color: var(--color-ink-muted); }
 @container pr-layout (max-width: 600px) {
   .review-pr-layout[data-changes='true'] > .review-pr-document { display: none; }

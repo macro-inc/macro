@@ -29,6 +29,10 @@
         };
       };
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
+      # The embedded bundle's commit, so the updater can tell the server it
+      # already runs the bundle deployed from it. `desktop-release.mjs prepare`
+      # records it, because the file it rewrites leaves the flake without a rev.
+      bundleGitSha = desktopRelease.gitSha or "";
 
       # Vite inlines `import.meta.env.VITE_*` at build time, so the desktop
       # bundle only reaches PostHog — and therefore only resolves feature
@@ -204,6 +208,11 @@
           dir = "database-sql";
         }
         {
+          name = "natural_time";
+          crate = "crates/natural_time";
+          dir = "natural-time";
+        }
+        {
           name = "pptx_engine";
           crate = "crates/pptx_engine";
           dir = "pptx-engine";
@@ -236,49 +245,81 @@
           simd = true;
           profile = "ai-engine-wasm";
         }
+        {
+          name = "password_import_wasm";
+          crate = "crates/password_import_wasm";
+          dir = "password-import";
+        }
       ];
+
+      # A binary of the root workspace (not the nested Tauri one), built
+      # natively for this platform.
+      workspaceBinary =
+        {
+          pname,
+          package,
+        }:
+        craneLib.mkCargoDerivation {
+          inherit pname;
+          version = appVersion;
+          src = jsSrc;
+          cargoArtifacts = null;
+          cargoVendorDir = rootCargoVendorDir;
+          nativeBuildInputs = [
+            # aws-lc-sys (rustls' crypto provider) and bundled librdkafka build
+            # their C sources with cmake; see the matching notes on `libraries`
+            # in cloud-storage.nix.
+            pkgs.cmake
+            pkgs.git
+            pkgs.perl
+            pkgs.pkg-config
+          ];
+          buildInputs = [
+            pkgs.openssl
+            pkgs.openssl.dev
+            # librdkafka 2.12's bundled cmake-build needs curl headers even with
+            # WITH_CURL=0 (headers only; nothing links against libcurl).
+            pkgs.curl.dev
+            pkgs.libclang
+            pkgs.xz.out
+          ]
+          ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+          OPENSSL_NO_VENDOR = "1";
+          doCheck = false;
+          SQLX_OFFLINE = "true";
+          buildPhaseCargoCommand = ''
+            cargo build --release --package ${package} --bin ${pname}
+          '';
+          installPhaseCommand = ''
+            install -Dm0755 target/release/${pname} "$out/bin/${pname}"
+          '';
+          doInstallCargoArtifacts = false;
+        };
 
       # The macrod agent daemon, bundled with the desktop app as a Tauri
       # sidecar so "run agents on this computer" needs no separate download.
-      # Built from the root workspace (not the nested Tauri one), natively for
-      # the bundle's platform; the standalone release tarballs keep their own
-      # musl/darwin pipeline in build_agent_daemon_on_tag.yml.
-      macrodBinary = craneLib.mkCargoDerivation {
+      # The standalone release tarballs keep their own musl/darwin pipeline in
+      # build_agent_daemon_on_tag.yml.
+      macrodBinary = workspaceBinary {
         pname = "macrod";
-        version = appVersion;
-        src = jsSrc;
-        cargoArtifacts = null;
-        cargoVendorDir = rootCargoVendorDir;
-        nativeBuildInputs = [
-          # aws-lc-sys (rustls' crypto provider) and bundled librdkafka build
-          # their C sources with cmake; see the matching notes on `libraries`
-          # in cloud-storage.nix.
-          pkgs.cmake
-          pkgs.git
-          pkgs.perl
-          pkgs.pkg-config
-        ];
-        buildInputs = [
-          pkgs.openssl
-          pkgs.openssl.dev
-          # librdkafka 2.12's bundled cmake-build needs curl headers even with
-          # WITH_CURL=0 (headers only; nothing links against libcurl).
-          pkgs.curl.dev
-          pkgs.libclang
-          pkgs.xz.out
-        ]
-        ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
-        LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-        OPENSSL_NO_VENDOR = "1";
-        doCheck = false;
-        SQLX_OFFLINE = "true";
-        buildPhaseCargoCommand = ''
-          cargo build --release --package coding_agent_worker --bin macrod
-        '';
-        installPhaseCommand = ''
-          install -Dm0755 target/release/macrod "$out/bin/macrod"
-        '';
-        doInstallCargoArtifacts = false;
+        package = "coding_agent_worker";
+      };
+
+      # The agent of Firecracker hosts (nix/hosts/_nixos/firecracker-host.nix).
+      # GET /v1/host reports the commit it was built from (`agentVersion`).
+      firecrackerHostBinary =
+        (workspaceBinary {
+          pname = "firecracker-host";
+          package = "firecracker_host";
+        }).overrideAttrs
+          { FIRECRACKER_HOST_COMMIT = gitRev; };
+
+      # The vsock agent the Firecracker host runs programs through, baked into
+      # the Firecracker computer image (nix/macro-box/_firecracker.nix).
+      firecrackerGuestAgentBinary = workspaceBinary {
+        pname = "firecracker-guest-agent";
+        package = "firecracker_guest_agent";
       };
 
       # Tauri sidecar sources carry the target triple in the file name; the
@@ -333,7 +374,7 @@
             cd apps/web
             MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
             printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-            BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+            GIT_SHA='${bundleGitSha}' BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
           )
 
           # A supplied key that never reaches the bundle means PostHog — and
@@ -362,9 +403,12 @@
           runHook postCheck
         '';
 
+        # The app streams web-hosted/ (videos) from the web deploy, like the
+        # mobile apps (`build-tauri`), so the desktop bundle leaves it out.
         installPhase = ''
           runHook preInstall
           cp -r apps/web/dist "$out"
+          rm -rf "$out/web-hosted"
           runHook postInstall
         '';
       };
@@ -393,8 +437,8 @@
         outputHashes = webauthnOutputHashes // {
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
-          "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
-            "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92" =
+            "sha256-9b4wI8CEnqoaFQJX686x723z0fGYXJ7jLXx3a7NtBF8=";
           "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
             "sha256-7Noz7RMN+4nhlU5BBLzxZZ53nNFGewrr8BFMO1adkCo=";
           "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
@@ -414,10 +458,12 @@
         # filtered Cargo source used by crane.
         cargoRoot = ../.;
         cargoLock = ../apps/web/tauri/Cargo.lock;
-        # cache-core's build script generates metadata from the GraphQL schema.
+        # cache-schema embeds and fingerprints the GraphQL schema at build time.
         # Non-Cargo inputs must be added explicitly to crane's app fileset.
         extraFileset = lib.fileset.unions [
           ../static_assets/schema.graphql
+          # cache-turso embeds its SQL with `include_str!`.
+          (lib.fileset.fileFilter (file: file.hasExt "sql") ../crates/client/cache-turso/src)
           ../apps/web/tauri/src-tauri/tauri.macos.conf.json
         ];
         inherit frontend;
@@ -954,8 +1000,8 @@
         cargoLock = ../apps/web/tauri/desktop-cef/Cargo.lock;
         overrideVendorGitCheckout = vendorWebauthnGitCheckout;
         outputHashes = webauthnOutputHashes // {
-          "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
-            "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92" =
+            "sha256-9b4wI8CEnqoaFQJX686x723z0fGYXJ7jLXx3a7NtBF8=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
           "git+https://github.com/macro-inc/tauri?rev=4b8a46f1#4b8a46f15c0a54a5c06a1486cd5432d444c17bd8" =
@@ -1003,6 +1049,12 @@
         root = ../.;
         fileset = lib.fileset.unions [
           cefCargoSources
+          # Crates `include_str!` their SQL, JSON and Markdown (cache-turso's
+          # contact_search.sql); commonCargoSources keeps only Rust and Cargo
+          # files, so the build died on the first one it could not read. A
+          # flake source holds tracked files only, so these are not build output.
+          ../crates
+          ../apps/web/tauri
           ../static_assets/schema.graphql
           ../apps/web/tauri/desktop-cef/tauri.conf.json
           ../apps/web/tauri/desktop-cef/entitlements.plist
@@ -1465,6 +1517,8 @@
       packages = {
         js-node-modules = nodeModules;
         macrod = macrodBinary;
+        firecracker-host = firecrackerHostBinary;
+        firecracker-guest-agent = firecrackerGuestAgentBinary;
       }
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;

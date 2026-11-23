@@ -59,7 +59,7 @@ use scheduled_action::{
     },
     outbound::{
         inprocess_executor::InProcessExecutor, pg_event_run_repo::PgEventRunRepo,
-        pg_scheduled_action_repo::PgScheduledActionRepo,
+        pg_inbox_delegates::PgInboxDelegates, pg_scheduled_action_repo::PgScheduledActionRepo,
     },
 };
 use serde_json::{Value, json};
@@ -201,7 +201,7 @@ impl ScheduledAgentRunner for FakeRunner {
     async fn run(
         &self,
         action: &ScheduledAction,
-        _: &ExecutionHandle,
+        _: &mut ExecutionHandle,
         firing: RoutineRun<'_>,
     ) -> anyhow::Result<()> {
         let event = firing.event();
@@ -231,8 +231,17 @@ impl ScheduledActionLiveUpdate for NoLiveUpdates {
 
 type ActionRepo = PgScheduledActionRepo<PgBotsRepo>;
 type Executor = InProcessExecutor<ActionRepo, NoLiveUpdates, FakeRunner>;
-type Admission = EventAdmissionService<PgEventRunRepo, FakeAccess>;
-type Dispatch = EventDispatchService<PgEventRunRepo, FakeAccess, Executor>;
+type Admission = EventAdmissionService<PgEventRunRepo, FakeAccess, PgInboxDelegates>;
+type Dispatch = EventDispatchService<PgEventRunRepo, FakeAccess, Executor, Everyone>;
+
+/// Every owner is in the event routines rollout.
+#[derive(Clone, Copy)]
+struct Everyone;
+impl scheduled_action::domain::event_rollout::EventRoutineRollout for Everyone {
+    async fn enabled_for(&self, _: &MacroUserIdStr<'_>) -> Result<bool, rootcause::Report> {
+        Ok(true)
+    }
+}
 
 struct Harness {
     pool: PgPool,
@@ -280,7 +289,7 @@ impl Harness {
         )));
         let service =
             ScheduledActionServiceImpl::new(actions.clone(), executor.clone(), tx, access.clone())
-                .with_event_management_enabled(true);
+                .with_event_routines(Everyone);
         let app = scheduled_action_router(ScheduledActionRouterState {
             service: Arc::new(service),
             access_service: access,
@@ -302,6 +311,7 @@ impl Harness {
         EventAdmissionService::new(
             Arc::new(PgEventRunRepo::new(self.pool.clone())),
             Arc::new(FakeAccess),
+            Arc::new(PgInboxDelegates::new(self.pool.clone())),
             PageSize::try_from(1).unwrap(),
         )
     }
@@ -310,6 +320,7 @@ impl Harness {
             Arc::new(PgEventRunRepo::new(self.pool.clone())),
             Arc::new(FakeAccess),
             self.executor.clone(),
+            Everyone,
         )
     }
     async fn create(&self, body: Value) -> Value {
@@ -459,6 +470,7 @@ fn incoming(name: &str, actor: &str) -> IncomingEvent {
     IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: if name.starts_with("document.") {
             EventPayload::Document(serde_json::from_value(envelope).unwrap())
         } else if name == "channel.message_posted" {
@@ -790,4 +802,105 @@ async fn simulated_bot_document_and_channel_outputs_cannot_start_a_routine_loop(
     assert_eq!(h.count().await, 1);
     assert_eq!(h.event_calls().len(), 1);
     assert!(h.dispatch().pending(page()).await.unwrap().is_empty());
+}
+
+const TEAM_INBOX: &str = "macro|team-inbox@macro.com";
+
+/// A mailbox that is its own account, delegated to `USER` (multi-inbox) as
+/// one of its inboxes; its other inbox is not.
+async fn delegated_team_inbox(pool: &PgPool) -> (Uuid, Uuid) {
+    let user_id = generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
+        user_id,
+        TEAM_INBOX,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
+        TEAM_INBOX,
+        user_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let (shared, private) = (generate_uuid_v7(), generate_uuid_v7());
+    for (link, address) in [
+        (shared, "team-inbox@macro.com"),
+        (private, "team-inbox-private@macro.com"),
+    ] {
+        sqlx::query!(
+            "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+             VALUES ($1, $2, $2, $3, 'GMAIL')",
+            link,
+            TEAM_INBOX,
+            address,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id) VALUES ($1, $2, $3)",
+        USER,
+        TEAM_INBOX,
+        shared,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    (shared, private)
+}
+
+fn received(owner: &str, link_id: Uuid) -> IncomingEvent {
+    let id = generate_uuid_v7();
+    IncomingEvent {
+        event_id: generate_uuid_v7(),
+        schema_version: 1,
+        routine_id: None,
+        payload: EventPayload::Email(
+            serde_json::from_value(json!({
+                "event_type":"email.message_received", "metadata": {
+                    "link_id": link_id, "owner": owner, "message_id": id, "thread_id": id,
+                    "provider_message_id": "message", "provider_thread_id": "thread",
+                    "is_new_thread": true, "to_emails": [], "attachment_count": 0,
+                    "is_spam_or_trash": false
+                }
+            }))
+            .unwrap(),
+        ),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mail_into_an_inbox_delegated_to_the_owner_runs_their_email_routine(pool: PgPool) {
+    let h = Harness::new(pool, FakeRunner::default()).await;
+    let (shared, private) = delegated_team_inbox(&h.pool).await;
+    let routine = h
+        .create(json!({"name":"team inbox", "kind":"Agent",
+            "trigger":{"type":"events", "filters":[{"events":["email.message_received"]}]},
+            "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true}))
+        .await;
+
+    // Mail into the team inbox the owner reads is theirs too.
+    let mail = received(TEAM_INBOX, shared);
+    h.ingest(&mail, 1).await;
+    h.dispatch_head().await;
+    h.assert_terminal(
+        key(action_id(&routine), &mail),
+        EventRunOutcome::Succeeded,
+        true,
+    )
+    .await;
+    // The team inbox account's other inbox isn't delegated, so its mail stays that account's.
+    h.ingest(&received(TEAM_INBOX, private), 0).await;
+    assert_eq!(h.count().await, 1);
+    let calls = h.runner.calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(
+        calls[0].1.as_ref().map(EventReference::event_id),
+        Some(EventId::try_from(mail.event_id).unwrap())
+    );
 }

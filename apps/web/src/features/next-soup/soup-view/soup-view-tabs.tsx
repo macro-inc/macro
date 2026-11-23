@@ -1,3 +1,4 @@
+import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import type { FilterID } from '@app/features/next-soup/filters';
 import type { FilterContext } from '@app/features/next-soup/filters/configs';
@@ -26,7 +27,15 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { Dropdown, type TabOption, Tabs } from '@ui';
-import { batch, createMemo, For, Match, Show, Switch } from 'solid-js';
+import {
+  batch,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 
 const useCurrentListView = () => {
   const panel = useSplitPanelOrThrow();
@@ -43,9 +52,9 @@ const useCurrentListView = () => {
  * Tabs actually shown for a view. `VIEW_TAB_LISTS` is the full superset (the
  * tab/preset consistency tests key off it); flag-gated entries are dropped
  * here so every tab surface — segmented control, collapsed dropdown, mobile
- * pills, and the number/cycle hotkeys — agrees on which tabs exist.
+ * pills, and the Tab and number keys — agrees on which tabs exist.
  */
-export const useVisibleViewTabs = () => {
+const useVisibleViewTabs = () => {
   return (view: TabbedListView): TabOption<string>[] => VIEW_TAB_LISTS[view];
 };
 
@@ -223,13 +232,50 @@ export const SoupViewTabs = () => {
   );
 };
 
+/**
+ * Tab, Shift+Tab and 1–9 for a view's header tabs, registered with them so
+ * a view whose tabs live elsewhere (Calls' sidebar) gets none.
+ */
+const useSoupViewTabKeys = (
+  view: () => TabbedListView | undefined,
+  tabs: () => HTMLElement | undefined
+) => {
+  const panel = useSplitPanelOrThrow();
+  const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
+  const visibleViewTabs = useVisibleViewTabs();
+  const options = () => {
+    const v = view();
+    return v ? visibleViewTabs(v) : [];
+  };
+
+  useViewTabHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    tabs,
+    ids: () => options().map((option) => option.value),
+    activeId: () => {
+      const v = view();
+      return activeTab() ?? (v ? VIEW_TAB_PRESETS[v].default : undefined);
+    },
+    setActiveId: (id) => {
+      const v = view();
+      if (v) applyTabPreset(v, id);
+    },
+    label: (id) => options().find((option) => option.value === id)?.label ?? id,
+  });
+};
+
 const ViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
   const visibleViewTabs = useVisibleViewTabs();
+  const [tabs, setTabs] = createSignal<HTMLElement>();
+  useSoupViewTabKeys(() => props.view, tabs);
 
   return (
     <Tabs
+      ref={setTabs}
       aria-label="View tabs"
       class="shrink-0"
       options={visibleViewTabs(props.view)}
@@ -261,10 +307,12 @@ export const CollapsedSoupViewTabs = () => {
     const value = activeTab() ?? (v ? VIEW_TAB_PRESETS[v].default : undefined);
     return options().find((option) => option.value === value) ?? options()[0];
   };
+  const [trigger, setTrigger] = createSignal<HTMLElement>();
+  useSoupViewTabKeys(view, trigger);
 
   return (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger variant="secondary" size="md">
+      <Dropdown.Trigger ref={setTrigger} variant="secondary" size="md">
         {selected()?.label}
         <CaretDownIcon class="size-3 text-ink-extra-muted" />
       </Dropdown.Trigger>
@@ -292,11 +340,8 @@ export const CollapsedSoupViewTabs = () => {
 };
 
 /**
- * Filter-drawer button + per-view filter pills, rendered in the mobile split
- * header. The strip is full-bleed: negative margins cancel the header row's
- * gutter so pills scroll to the device edges, and the gutter travels inside
- * the scroll content. The drawer button leads the strip and scrolls along
- * with the pills.
+ * Navigation, filter drawer, and view pills within the touch list pane.
+ * The scroll content owns its gutters so the strip stays clear of the sidebar.
  */
 export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
@@ -307,7 +352,9 @@ export const MobileSoupViewTabs = () => {
         {/* The search view has no tab pills — its header hosts only the
             facet-filter drawer button (the desktop SearchFiltersRow's
             mobile counterpart). */}
-        <MobileSearchFilterDrawer />
+        <div class="flex w-full justify-end px-(--mobile-chrome-gutter)">
+          <MobileSearchFilterDrawer />
+        </div>
       </Match>
       <For
         each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
@@ -322,17 +369,6 @@ export const MobileSoupViewTabs = () => {
   );
 };
 
-// Full-bleed breakout for header strips: the strip sits in the header row's
-// left flex slot, whose right edge stops short of the panel edge (row gap +
-// right-side column), so sizing it there leaves a sliver the pills can't
-// scroll over (right where the list's scrollbar sits). Instead, opt out of
-// flex sizing and span the header container itself (100cqw resolves against
-// @container/split-header = the panel width): -ml cancels the row gutter so
-// the strip runs device edge to device edge, over the scrollbar.
-const MOBILE_TAB_STRIP_CLASS =
-  '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
-const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
-
 const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
@@ -340,16 +376,19 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   const activeValue = () => activeTab() ?? VIEW_TAB_PRESETS[props.view].default;
 
   return (
-    <PillTabs
-      scrollable
-      class={MOBILE_TAB_STRIP_CLASS}
-      contentClass={MOBILE_TAB_CONTENT_CLASS}
-      leading={<MobileFilterDrawer />}
-      items={visibleViewTabs(props.view)}
-      value={activeValue()}
-      onChange={(value) => applyTabPreset(props.view, value)}
-    />
+    <div class="flex w-full min-w-0 items-center gap-2">
+      <PillTabs
+        scrollable
+        class="min-w-0 flex-1"
+        contentClass="px-(--mobile-chrome-gutter)"
+        leading={<ViewSidebar.Toggle action="expand" presentation="pill" />}
+        items={visibleViewTabs(props.view)}
+        value={activeValue()}
+        onChange={(value) => applyTabPreset(props.view, value)}
+      />
+      <div class="pointer-events-auto shrink-0 pr-(--mobile-chrome-gutter)">
+        <MobileFilterDrawer />
+      </div>
+    </div>
   );
 };
-
-export { type TabbedListView, VIEW_TAB_LISTS };

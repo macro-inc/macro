@@ -1,19 +1,10 @@
 import { throwOnErr } from '@core/util/result';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { type CrmListConfig, isCrmListConfig } from '../core/navigation';
-import type {
-  CrmQueryDependencies,
-  CrmRecordDependencies,
-} from './dependencies';
+import type { CrmQueryDependencies } from './dependencies';
 import { crmKeys } from './keys';
-
-function crmListsQueryOptions(deps: CrmRecordDependencies) {
-  return queryOptions({
-    queryKey: crmKeys.lists.queryKey,
-    queryFn: () => throwOnErr(() => deps.storage.views.getSavedViews()),
-  });
-}
+import { crmSavedViewsQueryOptions } from './saved-views';
 
 /** Personal collections use saved-view storage, with explicit membership and team scope. */
 export function useCrmLists(
@@ -22,7 +13,7 @@ export function useCrmLists(
 ) {
   const client = deps.client;
   const query = useQuery(
-    () => ({ ...crmListsQueryOptions(deps), enabled: !!teamId() }),
+    () => ({ ...crmSavedViewsQueryOptions(deps), enabled: !!teamId() }),
     () => deps.client
   );
   const lists = () =>
@@ -63,7 +54,7 @@ export function useCrmLists(
         return created.id;
       },
       onSuccess: () =>
-        client.invalidateQueries({ queryKey: crmKeys.lists.queryKey }),
+        client.invalidateQueries({ queryKey: crmKeys.savedViews.queryKey }),
     }),
     () => deps.client
   );
@@ -72,7 +63,7 @@ export function useCrmLists(
       mutationFn: (id: string) =>
         throwOnErr(() => deps.storage.views.deleteView({ savedViewId: id })),
       onSuccess: () =>
-        client.invalidateQueries({ queryKey: crmKeys.lists.queryKey }),
+        client.invalidateQueries({ queryKey: crmKeys.savedViews.queryKey }),
     }),
     () => deps.client
   );
@@ -109,7 +100,7 @@ export function useCrmLists(
         );
       },
       onSuccess: () =>
-        client.invalidateQueries({ queryKey: crmKeys.lists.queryKey }),
+        client.invalidateQueries({ queryKey: crmKeys.savedViews.queryKey }),
     }),
     () => deps.client
   );

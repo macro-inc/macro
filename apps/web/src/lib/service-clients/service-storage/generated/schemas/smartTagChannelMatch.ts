@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SmartTagChannelMatchIsParticipant } from './smartTagChannelMatchIsParticipant';
 
 /**
  * A channel visible to the caller that matches a smart tag rule.
@@ -11,6 +12,8 @@
 export interface SmartTagChannelMatch {
   /** Channel id. */
   id: string;
+  /** Whether the viewer actively participates in this channel (section previews only). */
+  isParticipant?: SmartTagChannelMatchIsParticipant;
   /** Channel display name. */
   name: string;
 }

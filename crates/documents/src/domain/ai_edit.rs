@@ -3,11 +3,11 @@
 
 use super::ai_editing::{AiEditError, AiEditRequest, AiEditingService};
 use super::models::DocumentError;
-use super::permission_token::encode_permission_token;
+use super::permission_token::encode_receipt_permission_token;
 use super::ports::editing::{EditMode, EditingWorkerService, EditorName};
 use ai_billing::domain::admission::AiAdmissionError;
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType, RequiredPermission,
 };
 use macro_sync_service_jwt::DocumentPermissionToken;
 use model::document::{DocumentBasic, FileType};
@@ -45,8 +45,9 @@ pub enum DocumentAiEditError {
     Failed(anyhow::Error),
 }
 
-fn ensure_markdown(
-    access: &EntityAccessReceipt<EditAccessLevel>,
+/// Refuse a receipt for another entity, or a document that is not markdown.
+pub(super) fn ensure_markdown<Level: RequiredPermission>(
+    access: &EntityAccessReceipt<Level>,
     document: &DocumentBasic,
 ) -> Result<(), DocumentError> {
     if access.entity().entity_type != EntityType::Document
@@ -62,32 +63,22 @@ fn ensure_markdown(
     Ok(())
 }
 
-/// Mint the worker token and cursor name for an edit receipt: the caller's
-/// user and bot, as `EditDocument` attributes its edits.
-fn edit_token(
-    access: &EntityAccessReceipt<EditAccessLevel>,
-    document: &DocumentBasic,
+/// Mint the worker token at `access_level` and the cursor name for a receipt:
+/// the caller's user and bot, as `EditDocument` attributes its edits.
+pub(super) fn worker_token<Level: RequiredPermission>(
+    access: &EntityAccessReceipt<Level>,
+    access_level: AccessLevel,
     jwt_secret: &str,
 ) -> Result<(DocumentPermissionToken, Option<EditorName>), DocumentError> {
-    let bot = match access.auth() {
-        EntityAccessAuth::Bot(bot) => Some(bot.bot_id()),
+    let document_token = encode_receipt_permission_token(access, access_level, jwt_secret)?;
+    let editor = match access.auth() {
+        EntityAccessAuth::Bot(bot) => {
+            bot_id::system_bot(bot.bot_id()).and_then(|bot| EditorName::new(bot.name))
+        }
         EntityAccessAuth::Authenticated(_)
         | EntityAccessAuth::Unauthenticated
         | EntityAccessAuth::Internal => None,
     };
-    let user = access.acting_user_id();
-    if user.is_none() && bot.is_none() {
-        return Err(DocumentError::Unauthorized);
-    }
-    let document_token = encode_permission_token(
-        user.map(ToString::to_string),
-        document.document_id.clone(),
-        AccessLevel::Edit,
-        jwt_secret,
-        bot.map(|bot| bot.into_storage_id().to_string()),
-    )?;
-    let editor =
-        bot.and_then(|bot| bot_id::system_bot(bot).and_then(|bot| EditorName::new(bot.name)));
     Ok((document_token, editor))
 }
 
@@ -117,7 +108,7 @@ pub async fn edit_with_instructions<Worker: EditingWorkerService>(
         .acting_user_id()
         .cloned()
         .ok_or(DocumentError::Unauthorized)?;
-    let (document_token, editor) = edit_token(&access, document, jwt_secret)?;
+    let (document_token, editor) = worker_token(&access, AccessLevel::Edit, jwt_secret)?;
     let mode = if fast {
         EditMode::Fast
     } else {

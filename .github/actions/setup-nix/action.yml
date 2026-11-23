@@ -1,21 +1,10 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/composite/setup_nix.rs
 name: Setup Nix
-description: >-
-  Ensure a working Nix (flakes enabled, daemon running) is available on a
-  runner that does not ship Nix preinstalled. Idempotent: when /nix is already
-  populated from a cache volume it only re-initialises the daemon and config
-  rather than reinstalling the store. Init-agnostic: uses systemd units when
-  systemd is active (full VMs), otherwise starts nix-daemon directly as a
-  background process (e.g. Namespace runners, where systemd is not active).
-  Optionally configures a private S3 binary cache as a substituter: the daemon
-  performs substitution, so it is started with the AWS credentials in its
-  environment. All four cache inputs must be set for the substituter to be
-  configured; otherwise the action behaves exactly as before.
-
+description: 'Ensure a working Nix (flakes enabled, daemon running) is available on a runner that does not ship Nix preinstalled. Idempotent: when /nix is already populated from a cache volume it only re-initialises the daemon and config rather than reinstalling the store. Init-agnostic: uses systemd units when systemd is active (full VMs), otherwise starts nix-daemon directly as a background process (e.g. Namespace runners, where systemd is not active). Optionally configures a private S3 binary cache as a substituter: the daemon performs substitution, so it is started with the AWS credentials in its environment. All four cache inputs must be set for the substituter to be configured; otherwise the action behaves exactly as before.'
 inputs:
   nix-cache-url:
-    description: >-
-      S3 store URL of the private nix binary cache
-      (e.g. s3://macro-nix-cache?region=us-east-1). Empty disables.
+    description: S3 store URL of the private nix binary cache (e.g. s3://macro-nix-cache?region=us-east-1). Empty disables.
     required: false
     default: ''
   nix-cache-public-key:
@@ -30,17 +19,14 @@ inputs:
     description: AWS secret access key for reading the private cache bucket.
     required: false
     default: ''
-
+  seed-cache:
+    description: Namespace cache name holding a copy of /nix with the dev shell, restored when the volume is empty. Its writers are PR jobs, so only PR check jobs pass this, never jobs that deploy or hold deploy secrets. Empty disables.
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
     - name: Install or re-initialise Nix
-      shell: bash
-      env:
-        NIX_CACHE_URL: ${{ inputs.nix-cache-url }}
-        NIX_CACHE_PUBLIC_KEY: ${{ inputs.nix-cache-public-key }}
-        NIX_CACHE_AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
-        NIX_CACHE_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
       run: |
         set -euo pipefail
 
@@ -120,6 +106,10 @@ runs:
           fi
         }
 
+        if [[ ! -x "$nix_bin" && -n "$NIX_SEED_CACHE" ]]; then
+          "$GITHUB_ACTION_PATH/nix_seed.sh" restore || echo "No Nix seed restored."
+        fi
+
         if [[ -x "$nix_bin" ]]; then
           # Store + profiles persist on the cache volume, but config, build
           # users, and the daemon live outside /nix and are gone on a fresh
@@ -157,3 +147,11 @@ runs:
         echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
 
         "$nix_bin" --version || nix --version
+      shell: bash
+      env:
+        NIX_CACHE_URL: ${{ inputs.nix-cache-url }}
+        NIX_CACHE_PUBLIC_KEY: ${{ inputs.nix-cache-public-key }}
+        NIX_CACHE_AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
+        NIX_CACHE_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
+        NIX_SEED_CACHE: ${{ inputs.seed-cache }}
+        NIX_SEED_KEY: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'rust-toolchain.toml') }}

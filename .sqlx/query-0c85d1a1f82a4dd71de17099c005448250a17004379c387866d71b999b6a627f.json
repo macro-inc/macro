@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                (NOT $8 AND NOT EXISTS (\n                    SELECT 1\n                    FROM crm_companies c\n                    JOIN crm_domains d ON d.company_id = c.id\n                    WHERE c.team_id = $1\n                      AND d.team_id = $1\n                      AND LOWER(d.domain) = $3\n                ) AND NOT EXISTS (\n                    -- A contact elsewhere in the team that took this\n                    -- address as a further one is refreshed by it.\n                    SELECT 1\n                    FROM crm_contact_emails ce\n                    JOIN crm_contacts ct ON ct.id = ce.contact_id\n                    WHERE ce.email = $4\n                      AND ct.team_id = $1\n                      AND LOWER(BTRIM(ct.email)) IS DISTINCT FROM ce.email\n                ))\n                OR EXISTS (\n                    SELECT 1\n                    FROM crm_contact_emails ce\n                    JOIN crm_contacts ct ON ct.id = ce.contact_id\n                    JOIN crm_companies c ON c.id = ct.company_id\n                    JOIN crm_domains d ON d.company_id = c.id\n                    JOIN crm_contact_sources s ON s.contact_id = ct.id\n                    WHERE c.team_id = $1\n                      AND d.team_id = $1\n                      AND LOWER(d.domain) = $3\n                      AND ce.email = $4\n                      AND s.link_id = $2\n                      AND (ct.name IS NOT NULL OR $5::text IS NULL)\n                      AND c.last_interaction >= $7\n                      AND ct.last_interaction >= $7\n                      AND (NOT $8 OR (c.first_interaction <= $6 AND ct.first_interaction <= $6))\n                    FOR KEY SHARE OF s\n                ) AS \"changes_nothing!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "changes_nothing!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0c85d1a1f82a4dd71de17099c005448250a17004379c387866d71b999b6a627f"
+}

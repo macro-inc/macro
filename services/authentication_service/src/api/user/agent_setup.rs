@@ -1,5 +1,5 @@
 use axum::{Json, extract::State, http::StatusCode};
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use teams::domain::team_repo::TeamService;
@@ -40,7 +40,7 @@ fn error(status: StatusCode, message: &str) -> (StatusCode, Json<ErrorResponse<'
     responses(
         (status = 200, body = AgentSetupResponse),
         (status = 401, body = String),
-        (status = 403, body = ErrorResponse, description = "The account is not an agent"),
+        (status = 403, body = ErrorResponse, description = "The account is not an agent, or the caller is an agent's program"),
         (status = 409, body = ErrorResponse, description = "Setup is already confirmed"),
         (status = 500, body = ErrorResponse),
     ),
@@ -52,7 +52,7 @@ fn error(status: StatusCode, message: &str) -> (StatusCode, Json<ErrorResponse<'
 )]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<AgentSetupResponse>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let macro_user_id = &authorization.authorization.user.macro_user_id;
     let user = macro_db_client::user::get::get_legacy_user_info(&ctx.db, macro_user_id)

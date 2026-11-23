@@ -4,12 +4,13 @@ import {
   type ListFilterGroup,
   ListGroupDropdown,
 } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
-import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { cn, Dropdown } from '@ui';
+import { batch } from 'solid-js';
 import {
   activeFilterCount,
   type ConversationFilterCategory,
@@ -89,7 +90,6 @@ const FILTER_GROUPS: ListFilterGroup<
 const GROUPING_OPTIONS: ListControlOption<ConversationGrouping>[] = [
   { id: 'none', label: 'None' },
   { id: 'status', label: 'Status' },
-  { id: 'type', label: 'Type' },
 ];
 
 export type ConversationListControlsProps = {
@@ -102,6 +102,9 @@ export type ConversationListControlsProps = {
   ) => void;
   onClearFilters: () => void;
   onGroupingChange: (grouping: ConversationGrouping) => void;
+  /** Whether the list includes unlisted sessions: routine runs it hides by default. */
+  showUnlistedRuns: boolean;
+  onShowUnlistedRunsChange: (show: boolean) => void;
 };
 
 /** The Tasks-style Group and Filter menus for the conversation list. */
@@ -110,7 +113,14 @@ export function ConversationListControls(props: ConversationListControlsProps) {
     category: ConversationFilterCategory,
     value: FilterValue
   ) => (props.filters[category] as readonly FilterValue[]).includes(value);
-  const activeCount = () => activeFilterCount(props.filters);
+  const activeCount = () =>
+    activeFilterCount(props.filters) + (props.showUnlistedRuns ? 1 : 0);
+  const clearAll = () => {
+    batch(() => {
+      props.onClearFilters();
+      props.onShowUnlistedRunsChange(false);
+    });
+  };
 
   return (
     <div class="flex shrink-0 items-center">
@@ -121,22 +131,36 @@ export function ConversationListControls(props: ConversationListControlsProps) {
         options={GROUPING_OPTIONS}
         onChange={props.onGroupingChange}
       />
-      <div class="relative shrink-0">
-        <ListFilterDropdown
-          label="Filter conversations"
-          class="size-(--sidebar-control-size)"
-          groups={FILTER_GROUPS}
-          isSelected={isSelected}
-          selectedIds={(group) => props.filters[group]}
-          onSelectionChange={props.onFilterChange}
-          onClear={props.onClearFilters}
-        />
-        <Show when={activeCount() > 0}>
-          <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-            {activeCount()}
-          </span>
-        </Show>
-      </div>
+      <ListFilterDropdown
+        label="Filter conversations"
+        size={activeCount() ? 'xs' : undefined}
+        class={activeCount() ? undefined : 'size-(--sidebar-control-size)'}
+        activeCount={activeCount()}
+        groups={FILTER_GROUPS}
+        isSelected={isSelected}
+        selectedIds={(group) => props.filters[group]}
+        onSelectionChange={props.onFilterChange}
+        footer={
+          <>
+            <Dropdown.Group>
+              <Dropdown.CheckboxItem
+                closeOnSelect
+                checked={props.showUnlistedRuns}
+                onChange={props.onShowUnlistedRunsChange}
+              >
+                <span class="flex-1">
+                  {t('viewMenus.showHiddenRoutineRuns')}
+                </span>
+              </Dropdown.CheckboxItem>
+            </Dropdown.Group>
+            <Dropdown.Group>
+              <Dropdown.Item class="text-failure-ink" onSelect={clearAll}>
+                {t('viewMenus.clearFilters')}
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </>
+        }
+      />
     </div>
   );
 }

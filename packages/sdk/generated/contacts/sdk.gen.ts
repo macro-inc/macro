@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddContactData, AddContactErrors, AddContactResponses, GetContactsData, GetContactsErrors, GetContactsResponses } from './types.gen';
+import type { AddContactData, AddContactErrors, AddContactResponses, GetContactsData, GetContactsErrors, GetContactsResponses, ListContactListMembersData, ListContactListMembersErrors, ListContactListMembersResponses, SearchPeopleData, SearchPeopleErrors, SearchPeopleResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -76,5 +76,23 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * GET /contacts/lists/{list}/members handler: one page of the members of one
+     * of the viewer's contact lists. Read from the list-aware directory for every
+     * viewer, whatever store the `contacts-list-reads` flag picks for their
+     * other reads; stored lists may be incomplete until the list backfill has
+     * run. `teammates` is the viewer's current team.
+     */
+    public listContactListMembers<ThrowOnError extends boolean = false>(options: Options<ListContactListMembersData, ThrowOnError>): RequestResult<ListContactListMembersResponses, ListContactListMembersErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListContactListMembersResponses, ListContactListMembersErrors, ThrowOnError>({ url: '/contacts/lists/{list}/members', ...options });
+    }
+
+    /**
+     * GET /contacts/search handler: ranked search of the viewer's contacts and team.
+     */
+    public searchPeople<ThrowOnError extends boolean = false>(options: Options<SearchPeopleData, ThrowOnError>): RequestResult<SearchPeopleResponses, SearchPeopleErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<SearchPeopleResponses, SearchPeopleErrors, ThrowOnError>({ url: '/contacts/search', ...options });
     }
 }

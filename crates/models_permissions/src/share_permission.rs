@@ -54,8 +54,26 @@ pub enum LinkShareState {
     },
 }
 
+/// How a new entity's link share is initialized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InitialLinkShare {
+    /// The entity-type default, overridden by the owner's team default.
+    #[default]
+    EntityDefault,
+    /// Exactly this state, already resolved by the caller. The entity never carries the
+    /// entity-type default, not even between creation and a later update.
+    Exact(LinkShareState),
+}
+
 impl SharePermissionV2 {
+    /// Every new item's permission starts here. An agent session held to a
+    /// scope that may not share creates items with link sharing off.
     fn new(link_share: Option<LinkShare>, link_share_access_level: Option<AccessLevel>) -> Self {
+        let (link_share, link_share_access_level) = if agent_correlation::context::may_share() {
+            (link_share, link_share_access_level)
+        } else {
+            (None, None)
+        };
         SharePermissionV2 {
             id: String::new(),
             link_share,

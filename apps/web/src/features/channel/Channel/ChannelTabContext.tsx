@@ -42,6 +42,10 @@ export function ChannelTabProvider(
   );
 }
 
+export function useChannelTabOptional() {
+  return useContext(ChannelTabContext);
+}
+
 export function useChannelTab(): ChannelTabContextValue {
   const ctx = useContext(ChannelTabContext);
   if (!ctx) {

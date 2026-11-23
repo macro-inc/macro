@@ -1,0 +1,2 @@
+-- Irreversible: which rows were abandoned is not recorded. Reverting this
+-- migration is a no-op; a message that fails again is abandoned again.

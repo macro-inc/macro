@@ -10,6 +10,7 @@ use crate::domain::models::{
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
+use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use rate_limit::RateLimitExceeded;
@@ -47,12 +48,38 @@ pub struct APNSTargets<T> {
 }
 
 /// Email notification payload.
+///
+/// The optional fields are queued as JSON, so each carries `#[serde(default)]` for messages
+/// queued before it existed.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EmailContent {
     /// The email subject line.
     pub subject: String,
-    /// The email body content.
+    /// The HTML email body. Unsubscribe placeholders are signed in this part only.
     pub body: String,
+    /// A plain-text alternative to `body`.
+    #[serde(default)]
+    pub text: Option<String>,
+    /// The person the email is sent on behalf of. The sender shows it as the From display
+    /// name, marked as sent via Macro, while the address stays Macro's.
+    #[serde(default)]
+    pub from_name: Option<String>,
+    /// The address replies go to instead of Macro's no-reply sender.
+    #[serde(default)]
+    pub reply_to: Option<EmailStr<'static>>,
+}
+
+impl EmailContent {
+    /// An HTML-only email from Macro itself.
+    pub fn new(subject: String, body: String) -> Self {
+        Self {
+            subject,
+            body,
+            text: None,
+            from_name: None,
+            reply_to: None,
+        }
+    }
 }
 
 /// Email notification payload.
@@ -488,6 +515,10 @@ pub enum DeliveryFailure {
 pub struct IngressQueueMessage {
     /// The type-erased notification request.
     pub request: SendNotificationRequest<'static, serde_json::Value, serde_json::Value>,
+    /// W3C trace context of the request that sent it; empty in messages from
+    /// senders that predate it.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub trace_context: HashMap<String, String>,
 }
 
 impl IngressQueueMessage {
@@ -497,7 +528,20 @@ impl IngressQueueMessage {
     ) -> Result<Self, serde_json::Error> {
         let value = serde_json::to_value(req)?;
         let request = serde_json::from_value(value)?;
-        Ok(Self { request })
+        Ok(Self {
+            request,
+            trace_context: crate::trace_context::current(),
+        })
+    }
+
+    /// The notification id this message writes.
+    pub fn notification_id(&self) -> Uuid {
+        self.request.uuid_to_write
+    }
+
+    /// The notification type this message sends, e.g. `ping`.
+    pub fn event_type(&self) -> &str {
+        self.request.req.notification.tag.as_ref()
     }
 }
 

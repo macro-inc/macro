@@ -1,10 +1,10 @@
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
+import SquareSplit from '@icon/system/regular/square-split-horizontal.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
-import SquareSplit from '@phosphor/square-split-horizontal.svg';
 import { Button, cn, Dialog } from '@ui';
 import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -180,7 +180,7 @@ export function PullRequestView(props: {
             )}
           </Show>
           <PrIcon status={status()} class="shrink-0" />
-          <span class="min-w-0 truncate text-sm font-semibold">
+          <span class="min-w-0 truncate text-sm font-medium">
             {props.pr.title}
           </span>
           <div class="ml-auto flex shrink-0 items-center gap-2 pr-1">

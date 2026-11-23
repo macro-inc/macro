@@ -86,7 +86,8 @@ async function uploadProfilePicture(
   file: File
 ): Promise<{ id: string; url: string } | void> {
   if (file.size > MAX_PROFILE_PICTURE_SIZE) {
-    return toast.failure('Image size too large');
+    toast.failure('Image size too large');
+    return;
   }
 
   try {
@@ -94,11 +95,13 @@ async function uploadProfilePicture(
     const url = staticFileIdEndpoint(id);
     const response = await authServiceClient.putProfilePicture({ url });
     if (response.isErr()) {
-      return toast.failure('Failed to upload profile picture');
+      toast.failure('Failed to upload profile picture');
+      return;
     }
     return { id, url };
   } catch (_error) {
-    return toast.failure('Failed to upload profile picture');
+    toast.failure('Failed to upload profile picture');
+    return;
   }
 }
 

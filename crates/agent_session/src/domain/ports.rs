@@ -46,6 +46,9 @@ pub struct BotFacts {
     pub owner_team_id: Option<Uuid>,
     /// The registered harness this bot's agent is bound to, when it is one.
     pub harness_id: Option<harness_id::HarnessId>,
+    /// Whether that harness is an agent teammate's computer. People message
+    /// the agent; no session is started there.
+    pub on_team_agent_computer: bool,
     /// Runtime profile for a persisted agent. Fixed system bots have no
     /// persisted profile and use deployment defaults instead.
     pub managed_profile: Option<ManagedAgentProfile>,
@@ -133,6 +136,8 @@ pub struct RequestedExternalSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+    /// What opened the session, told to the runtime on the event.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Validate the base branch supported by external repository provisioning.
@@ -173,6 +178,8 @@ pub enum ManagedPersonaError {
     UnmanagedSystemBot,
     /// The owner does not own or belong to the persona's owner.
     Forbidden,
+    /// The persona's harness is an agent teammate's computer.
+    TeamAgentComputer,
     /// The owner is not a user, so no persona rule applies.
     OwnerNotUser(OwnerType),
     /// Looking up the persona or its owner failed.
@@ -242,6 +249,11 @@ pub async fn persona_for_owner<Bots: BotDirectory>(
     if !authorized {
         return Err(ManagedPersonaError::Forbidden);
     }
+    // An agent teammate is a member people message: its computer runs no
+    // session but its own, whoever owns the persona bound there.
+    if facts.on_team_agent_computer {
+        return Err(ManagedPersonaError::TeamAgentComputer);
+    }
     if !facts.is_managed {
         return Ok(SelectedPersona::External { bot_id });
     }
@@ -297,6 +309,9 @@ pub struct OpenExternalAgentSession {
     pub thread: Option<SessionThread>,
     /// Instructions the session's runtime works under, when any were stated.
     pub instructions: Option<String>,
+    /// What opened the session, as the runtime was told on the trigger event.
+    /// A description only: it never decides visibility or notifications.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Everything needed to open a session the server hosts itself.
@@ -333,6 +348,12 @@ pub struct OpenManagedSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+    /// What opened the session.
+    pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner.
+    /// Only an in-process session reads it; a non-billable session never
+    /// claims a warm session, whose row is billable.
+    pub billing: crate::domain::model::SessionBilling,
 }
 
 /// The prompt a managed session opens with, delivered as soon as it can run.
@@ -345,15 +366,24 @@ pub struct FirstPrompt {
     pub prompt: String,
     /// Files the prompt refers to, in the order the user attached them.
     pub attachments: Vec<PromptAttachment>,
+    /// The app tab the person typed the prompt in, already admitted by
+    /// [`super::control::ControlPrincipal::admit_client`]. Recorded on the
+    /// first turn like a control prompt's, so the turn can show them things
+    /// in that tab.
+    pub client: Option<super::model::UiClientId>,
+    /// Whether a person or a program for them sent it.
+    pub prompter: super::model::PrompterKind,
 }
 
 impl FirstPrompt {
-    /// A plain text prompt under a minted id.
+    /// A plain text prompt under a minted id, typed in no tab.
     pub fn text(prompt: impl Into<String>) -> Self {
         Self {
             action_id: None,
             prompt: prompt.into(),
             attachments: Vec::new(),
+            client: None,
+            prompter: super::model::PrompterKind::User,
         }
     }
 
@@ -434,6 +464,18 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Whether the session's persisted turn projection shows a turn that has
+    /// not finished: one starting, running, stopping, or blocked on an
+    /// answer, or one that was when the session disconnected. Durable, so it
+    /// holds for a turn any replica, or a process since restarted, started.
+    fn has_unfinished_turn(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Whether the session's in-process turns are billed to its owner.
+    fn billing(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
 
     /// The agent session with this id, or `None` when there is none.
     fn find(&self, id: AgentSessionId)
@@ -1022,6 +1064,14 @@ pub trait AgentSessionRealtime {
         async { Ok(()) }
     }
 
+    /// Publish a running session's newest activity summary to its viewers.
+    fn publish_activity_summarized(
+        &self,
+        _event: AgentSessionActivitySummarized,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+
     /// Publish a session's changed queue - the whole queue, every time - to
     /// its viewers.
     fn publish_queue_changed(
@@ -1275,6 +1325,11 @@ pub struct ControlEvent {
     /// Why the agent is being asked, when a runtime forwards a triggered
     /// prompt. Users driving a session directly supply none.
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab a person typed the prompt in; see
+    /// [`UiClientId`](super::model::UiClientId).
+    pub client: Option<super::model::UiClientId>,
+    /// Whether a person or a program for them sent it.
+    pub prompter: super::model::PrompterKind,
 }
 
 /// What accepting a control operation did with it.
@@ -1380,13 +1435,15 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     ///
     /// `actor` is the user responsible, judged by the same gates as sending:
     /// whoever may not prompt a session may not rewrite what it is about to
-    /// be prompted with.
+    /// be prompted with. `prompter` says whether a program rewrote it, which
+    /// makes the entry a program's for good.
     fn edit_queued_control(
         &self,
         id: AgentSessionId,
         action_id: AgentActionId,
         prompt: String,
         actor: Option<MacroUserIdStr<'static>>,
+        prompter: super::model::PrompterKind,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Remove a queued action before it dispatches.
@@ -1460,4 +1517,25 @@ impl SessionViewAccess for NoInheritedSessionAccess {
     ) -> Pin<Box<dyn Future<Output = Result<bool>> + Send + 'a>> {
         Box::pin(async { Ok(false) })
     }
+}
+
+/// Trusted runtime reconciliation reads, separate from user-authorized session reads.
+pub trait RuntimeSessionLookup: Send + Sync {
+    /// Resolve reported ACP sessions restricted to the supplied agents,
+    /// skipping archived ones and marking those with no activity since
+    /// `dormant_before` and nothing waiting on them as dormant.
+    fn sessions_for_bots(
+        &self,
+        bots: &[BotId],
+        sessions: &[SessionId],
+        dormant_before: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = std::result::Result<Vec<RuntimeSession>, Self::Err>> + Send;
+    /// Which of `bots` have a session with work under way: a turn not yet
+    /// ended or prompts queued. A Macro computer running one is in use.
+    fn bots_with_live_work(
+        &self,
+        bots: &[BotId],
+    ) -> impl Future<Output = std::result::Result<std::collections::HashSet<BotId>, Self::Err>> + Send;
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
 }

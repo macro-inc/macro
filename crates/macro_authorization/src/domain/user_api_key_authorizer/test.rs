@@ -1,8 +1,12 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
-use crate::domain::{models::ResolvedApiKeyUser, ports::UserApiKeyAuthorizationRepo};
+use crate::domain::{
+    models::{AccountManagerCredential, ResolvedApiKeyUser},
+    ports::UserApiKeyAuthorizationRepo,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use uuid::Uuid;
 
 const API_KEY: &str = "mak_test_secret";
 const USER_ID: &str = "macro|api-key@example.com";
@@ -19,6 +23,7 @@ struct FakeRepo {
     owner: Option<ResolvedApiKeyUser>,
     failure: Option<Failure>,
     keys: Arc<Mutex<Vec<String>>>,
+    used_grants: Arc<Mutex<Vec<Uuid>>>,
 }
 
 impl FakeRepo {
@@ -27,6 +32,7 @@ impl FakeRepo {
             owner: Some(resolved_user()),
             failure: None,
             keys: Arc::new(Mutex::new(Vec::new())),
+            used_grants: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -35,6 +41,7 @@ impl FakeRepo {
             owner: None,
             failure: None,
             keys: Arc::new(Mutex::new(Vec::new())),
+            used_grants: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -43,6 +50,7 @@ impl FakeRepo {
             owner: None,
             failure: Some(Failure::FindKeyOwner),
             keys: Arc::new(Mutex::new(Vec::new())),
+            used_grants: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -64,6 +72,14 @@ impl UserApiKeyAuthorizationRepo for FakeRepo {
         }
         Ok(self.owner.clone())
     }
+
+    async fn mark_account_manager_grant_used(&self, grant_id: Uuid) -> Result<(), Self::Err> {
+        self.used_grants
+            .lock()
+            .expect("used grants lock poisoned")
+            .push(grant_id);
+        Ok(())
+    }
 }
 
 fn resolved_user() -> ResolvedApiKeyUser {
@@ -71,6 +87,7 @@ fn resolved_user() -> ResolvedApiKeyUser {
         macro_user_id: MacroUserIdStr::try_from(USER_ID.to_string()).expect("valid Macro user id"),
         fusion_user_id: FUSION_USER_ID.to_string(),
         organization_id: Some(ORGANIZATION_ID),
+        account_manager: None,
     }
 }
 
@@ -79,13 +96,42 @@ async fn found_key_constructs_user_context() {
     let repo = FakeRepo::found();
     let authorizer = UserApiKeyAuthorizerService::new(repo.clone());
 
-    let context = authorizer.authorize_user_api_key(API_KEY).await.unwrap();
+    let authorized = authorizer.authorize_user_api_key(API_KEY).await.unwrap();
+    assert_eq!(authorized.account_manager, None);
+    let context = authorized.user_context;
 
     assert_eq!(context.user_id, USER_ID);
     assert_eq!(context.fusion_user_id, FUSION_USER_ID);
     assert_eq!(context.organization_id, Some(ORGANIZATION_ID));
     assert_eq!(context.permissions, None);
     assert_eq!(repo.keys(), vec![API_KEY.to_string()]);
+}
+
+#[tokio::test]
+async fn a_manager_key_acts_as_the_managed_account_and_names_its_holder() {
+    let grant_id = Uuid::now_v7();
+    let credential = AccountManagerCredential {
+        grant_id,
+        manager_user_id: MacroUserIdStr::try_from("macro|agent@example.com".to_string())
+            .expect("valid Macro user id"),
+    };
+    let mut repo = FakeRepo::found();
+    repo.owner = Some(ResolvedApiKeyUser {
+        account_manager: Some(credential.clone()),
+        ..resolved_user()
+    });
+
+    let authorized = UserApiKeyAuthorizerService::new(repo.clone())
+        .authorize_user_api_key(API_KEY)
+        .await
+        .unwrap();
+
+    assert_eq!(authorized.user_context.user_id, USER_ID);
+    assert_eq!(authorized.account_manager, Some(credential));
+    assert_eq!(
+        *repo.used_grants.lock().expect("used grants lock poisoned"),
+        vec![grant_id]
+    );
 }
 
 #[tokio::test]

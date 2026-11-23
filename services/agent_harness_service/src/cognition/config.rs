@@ -116,8 +116,8 @@ pub struct Config {
     /// document storage service auth key
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
     pub sync_service_auth_key: LocalOrRemoteSecret<SyncServiceAuthKey>,
-    /// authentication service secret key (for soup service)
-    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
+    /// Authentication service key or deployed Secrets Manager name.
+    pub authentication_service_secret_key: LocalOrRemoteSecret<AuthenticationServiceSecretKey>,
     /// Redis host for stream service
     pub redis_host: RedisHost,
     /// The S3 bucket for DOCX document uploads
@@ -156,7 +156,7 @@ pub struct Config {
     /// PostHog ingestion origin for integration analytics.
     pub posthog_host: PosthogHost,
     /// Customer key for Macro Connect, which serves the apps it has in its
-    /// catalog to users in the `macro-connect` rollout.
+    /// catalog to users in the Connect rollout.
     pub connect_customer_key: ConnectCustomerKey,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
@@ -198,6 +198,88 @@ impl Config {
         Ok(config)
     }
 
+    /// What this process's one connectors composition is built from. Call
+    /// it on a configuration whose secrets are resolved.
+    pub fn connectors_config(&self) -> anyhow::Result<connectors::composition::ConnectorsConfig> {
+        let mcp_credentials_key = connectors::composition::AesKey::try_from(
+            self.mcp_credentials_key_secret_name.as_ref(),
+        )
+        .context("invalid MCP credentials encryption key")?;
+        let value = |value: Option<&str>| {
+            value
+                .filter(|value| !value.trim().is_empty())
+                .map(str::to_owned)
+        };
+        let pipedream = ai_tools::connectors_config::pipedream_settings(
+            self.environment,
+            ai_tools::connectors_config::PipedreamEnvValues {
+                client_id: value(self.pipedream_client_id.value()),
+                client_secret: value(self.pipedream_client_secret.value()),
+                project_id: value(self.pipedream_project_id.value()),
+                environment: value(self.pipedream_environment.value()),
+                api_url: value(self.pipedream_api_url.value()),
+                mcp_url: value(self.pipedream_mcp_url.value()),
+            },
+            self.pipedream_allowed_origins(),
+            self.pipedream_webhook_uri(),
+        );
+
+        Ok(connectors::composition::ConnectorsConfig {
+            environment: self.environment,
+            app_origin: ai_tools::connectors_config::app_origin()?,
+            mcp_credentials_key,
+            mcp_oauth_client: ai_tools::connectors_config::mcp_oauth_client()?,
+            mcp_pre_registered: connectors::composition::PreRegisteredProviders::from_env()?,
+            pipedream,
+            connect: ai_tools::connectors_config::connect_config(
+                self.connect_customer_key.value(),
+            )?,
+            feature_flags: ai_tools::connectors_config::feature_flags_config(
+                self.posthog_api_key.value(),
+                self.posthog_host.value(),
+            ),
+        })
+    }
+
+    /// Browser origins allowed to embed Pipedream's hosted Connect UI:
+    /// `PIPEDREAM_ALLOWED_ORIGINS`, or the app's origins for this environment.
+    pub fn pipedream_allowed_origins(&self) -> Vec<String> {
+        match self.pipedream_allowed_origins.value() {
+            Some(origins) => origins
+                .split(',')
+                .map(|origin| origin.trim().to_owned())
+                .filter(|origin| !origin.is_empty())
+                .collect(),
+            None => match self.environment {
+                Environment::Production => vec!["https://macro.com".to_owned()],
+                Environment::Develop => vec![
+                    "https://dev.macro.com".to_owned(),
+                    "http://localhost:3000".to_owned(),
+                ],
+                Environment::Local => vec!["http://localhost:3000".to_owned()],
+            },
+        }
+    }
+
+    /// Where Pipedream posts connect-flow outcomes. Needs both the URI and
+    /// the secret guarding the route: a half-set pair is ignored, so no
+    /// callback is minted that this process cannot serve.
+    pub fn pipedream_webhook_uri(&self) -> Option<String> {
+        match (
+            self.pipedream_webhook_uri.value(),
+            self.pipedream_webhook_secret.value(),
+        ) {
+            (Some(uri), Some(_)) => Some(uri.to_owned()),
+            (None, None) => None,
+            _ => {
+                tracing::warn!(
+                    "ignoring incomplete Pipedream webhook config; set both PIPEDREAM_WEBHOOK_URI and PIPEDREAM_WEBHOOK_SECRET"
+                );
+                None
+            }
+        }
+    }
+
     pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
         NonUserOwners::from_config_value(self.enable_non_user_owners.value())
             .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
@@ -227,8 +309,8 @@ impl Config {
             sync_service_auth_key: LocalOrRemoteSecret::Local(SyncServiceAuthKey::Comptime(
                 "SYNC_SERVICE_AUTH_KEY",
             )),
-            authentication_service_secret_key: AuthenticationServiceSecretKey::Comptime(
-                "AUTHENTICATION_SERVICE_SECRET_KEY",
+            authentication_service_secret_key: LocalOrRemoteSecret::Local(
+                AuthenticationServiceSecretKey::Comptime("AUTHENTICATION_SERVICE_SECRET_KEY"),
             ),
             redis_host: RedisHost::Comptime("REDIS_HOST"),
             docx_document_upload_bucket: DocxDocumentUploadBucket::Comptime(

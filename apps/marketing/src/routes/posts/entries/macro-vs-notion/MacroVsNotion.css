@@ -1,3 +1,5 @@
+/* Article typography must not leak into the shared product UI. */
+@scope (:root) to (.post-product-ui) {
 .mvn-post {
   color: var(--c4);
   font-family: 'Inter', system-ui, sans-serif;
@@ -260,7 +262,7 @@
 .mvn-table thead th {
   background: color-mix(in srgb, var(--c1) 5%, transparent);
   color: var(--c1);
-  font-weight: 400;
+  font-weight: 370;
 }
 
 .mvn-th-brand {
@@ -284,7 +286,7 @@
 
 .mvn-table tbody th {
   color: var(--c0);
-  font-weight: 400;
+  font-weight: 370;
   width: 30%;
 }
 
@@ -369,4 +371,6 @@
   .mvn-collapse-inner.is-collapsed {
     max-height: 320px;
   }
+}
+
 }

@@ -1,14 +1,19 @@
 import { z } from 'zod';
+import { APPEARANCE_COLORS } from '../entity-appearance/core/appearance';
 import type { ScheduleDraft } from './core/draft';
+import { stepDraftSchema } from './core/routine-steps';
 import { routineModelSchema, routineTargetSchema } from './core/routine-target';
 import { routineTriggerSchema } from './core/routine-triggers';
 
 const STORAGE_KEY = 'routine-composer-draft';
-const EXPIRY_TIME_MS = 3 * 60 * 1000;
+// A new routine is built on its own page, which someone may leave and come
+// back to; its draft lasts a day, and logging out clears it.
+const EXPIRY_TIME_MS = 24 * 60 * 60 * 1000;
 
 const draftFields = {
   id: z.string().optional(),
   triggers: z.array(routineTriggerSchema).max(16).optional(),
+  steps: z.array(stepDraftSchema).optional(),
   name: z.string(),
   prompt: z.string(),
   frequency: z.enum(['week', 'month', 'once']),
@@ -21,6 +26,32 @@ const draftFields = {
   // Older clients saved routine activation with the draft.
   enabled: z.boolean().optional(),
   runVisibility: z.enum(['listed', 'unlisted']).optional(),
+  description: z.string().optional(),
+  suggestionId: z.string().optional(),
+  dangerouslyOperateAsUser: z.boolean().optional(),
+  // What AI created while drafting; drafts from before have none.
+  created: z
+    .array(
+      z.strictObject({
+        entityType: z.string(),
+        entityId: z.string(),
+        used: z.boolean(),
+      })
+    )
+    .max(64)
+    .optional(),
+  // The look AI picked for a drafted routine; drafts from before have none.
+  appearance: z
+    .strictObject({
+      icon: z
+        .discriminatedUnion('kind', [
+          z.strictObject({ kind: z.literal('macro'), name: z.string() }),
+          z.strictObject({ kind: z.literal('emoji'), value: z.string() }),
+        ])
+        .nullish(),
+      color: z.enum(APPEARANCE_COLORS).nullish(),
+    })
+    .optional(),
   // Drafts saved before routines took apps have none.
   apps: z
     .array(z.strictObject({ app_slug: z.string(), server_name: z.string() }))

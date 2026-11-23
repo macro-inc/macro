@@ -61,7 +61,12 @@ export class EmailFilter extends MacroEntity<ApiEmailFilter> {
   /** Importance assigned by this filter. */
   readonly isImportant = this.field('is_important');
 
-  /** Change the importance for the same sender selector. */
+  /**
+   * Change the importance for the same sender selector.
+   *
+   * @write
+   * @idempotent
+   */
   async setImportant(isImportant: boolean): Promise<void> {
     const record = await this.detail.get();
     await this.mutate((c) =>
@@ -76,7 +81,12 @@ export class EmailFilter extends MacroEntity<ApiEmailFilter> {
     );
   }
 
-  /** Delete this filter. */
+  /**
+   * Delete this filter.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.email.deleteEmailFilter({

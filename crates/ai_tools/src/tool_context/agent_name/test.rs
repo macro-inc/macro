@@ -25,7 +25,11 @@ async fn agents_are_named_by_their_own_bot_rows(pool: PgPool) -> anyhow::Result<
     .await?;
     let owner = MacroUserIdStr::try_from("macro|owner@example.com".to_owned())?;
 
-    let bots = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bots = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        harnesses::domain::ports::MockHarnessTeamAgents::new(),
+    );
     let grunk = bots
         .create_bot(
             owner.clone(),

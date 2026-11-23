@@ -81,7 +81,7 @@ describe('installed Solid Query resource behavior', () => {
       owner: 'macro|owner@example.com',
       kind: 'Agent',
       trigger: { type: 'cron', schedule: '0 0 9 * * 2', timezone: 'UTC' },
-      task: {},
+      task: { steps: [] },
       enabled: true,
       run_visibility: 'unlisted',
       configuration_revision: 1,

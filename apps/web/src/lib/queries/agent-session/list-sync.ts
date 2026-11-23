@@ -1,12 +1,7 @@
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   getSoupEntityById,
-  hasSoupEntity,
   hydrateSoupEntity,
 } from '@queries/soup/normalized-cache';
 import { refreshSoupEntities } from '@queries/soup/refresh';
@@ -67,12 +62,10 @@ async function readSessionRows(
   parent: Span,
   sessions: string[]
 ): Promise<void> {
-  const graphqlLists = isFeatureEnabled(enableGraphqlSoup);
-  const held = sessions.filter((id) => graphqlLists || hasSoupEntity(id));
-  if (held.length === 0) return;
+  if (sessions.length === 0) return;
   const client = getGraphqlSoupClient();
   const reads = await Promise.allSettled(
-    held.map((sessionId) => readSessionRow(parent, client, sessionId))
+    sessions.map((sessionId) => readSessionRow(parent, client, sessionId))
   );
   const failed = reads.find((read) => read.status === 'rejected');
   if (failed?.status === 'rejected') throw failed.reason;

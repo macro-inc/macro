@@ -11,6 +11,7 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   addUnique,
@@ -25,6 +26,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
+import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import {
   type EntityData,
   EntitySelectionToolbar,
@@ -39,7 +41,7 @@ import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button } from '@ui';
+import { Button, EmptyStatePanel } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -91,6 +93,12 @@ export type TaskListProps = {
   loadingContent?: JSX.Element;
   errorContent?: JSX.Element;
   referencePropertyIds?: readonly string[];
+  /** Pinned above the rows, such as the main Tasks list's tutorial row. */
+  listStart?: JSX.Element;
+  /** Compose rows in a host page without introducing a nested scroller. */
+  scrollContainer?: HTMLDivElement;
+  scrollStart?: number;
+  stickyInset?: number;
 };
 
 export function TaskList(props: TaskListProps) {
@@ -99,7 +107,6 @@ export function TaskList(props: TaskListProps) {
   const {
     state,
     calendar,
-    projectsEnabled,
     showTaskProject,
     setState,
     source,
@@ -108,6 +115,7 @@ export function TaskList(props: TaskListProps) {
     openTask,
     scopeKey,
     filterByTag,
+    filterByAssignee,
   } = useTasksView();
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
@@ -347,11 +355,10 @@ export function TaskList(props: TaskListProps) {
     scopeId: panel.splitHotkeyScope,
     description: 'Add to project…',
     tags: [HotkeyTags.SelectionModification],
-    condition: () =>
-      panel.isPanelActive() && projectsEnabled() && selectedTasks().length > 0,
+    condition: () => panel.isPanelActive() && selectedTasks().length > 0,
     keyDownHandler: () => {
       const ids = selectedTasks().map((task) => task.id);
-      if (!projectsEnabled() || !ids.length) return false;
+      if (!ids.length) return false;
       setAssigningProjectTasks(ids);
       return true;
     },
@@ -365,6 +372,11 @@ export function TaskList(props: TaskListProps) {
     handle.scrollTo(scrollOffset);
     restoredScroll = true;
   }
+
+  createEffect(() => {
+    const scroller = props.scrollContainer;
+    if (scroller) setViewport(scroller);
+  });
 
   let activeTab = state.tab;
   createEffect(() => {
@@ -440,12 +452,6 @@ export function TaskList(props: TaskListProps) {
     fireAndForget(source.loadMore(), 'tasks-view');
   }
 
-  const emptyMessage = () => {
-    if (state.search.trim()) return 'No tasks match this search.';
-
-    return 'No tasks in this view.';
-  };
-
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
@@ -458,7 +464,11 @@ export function TaskList(props: TaskListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden pb-2 pt-1 outline-none"
+        class="soup-list @container/u-list relative flex min-h-0 min-w-0 flex-col pb-2 pt-1 touch:pb-0 touch:pt-0 outline-none"
+        classList={{
+          'size-full': !props.scrollContainer,
+          'overflow-hidden': !props.scrollContainer,
+        }}
         style={{
           '--task-updated-header-width':
             timestampHeaderWidth() === undefined
@@ -466,9 +476,12 @@ export function TaskList(props: TaskListProps) {
               : `${timestampHeaderWidth()}px`,
         }}
       >
-        <div class="flex size-full min-h-0 min-w-0 flex-col px-2 @min-[640px]/u-list:px-3 mobile:px-1">
+        <div
+          class="flex min-h-0 min-w-0 flex-col px-2 @min-[640px]/u-list:px-3 mobile:px-1"
+          classList={{ 'size-full': !props.scrollContainer }}
+        >
           <ListLayoutProvider ref={grid}>
-            <Show when={!isMobile()}>
+            <Show when={!isMobile() && !isTouchDevice()}>
               <TaskListHeader
                 columns={columns()}
                 onTimestampWidthChange={setTimestampHeaderWidth}
@@ -521,7 +534,31 @@ export function TaskList(props: TaskListProps) {
                   <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                     <Show
                       when={props.emptyContent !== undefined}
-                      fallback={<span>{emptyMessage()}</span>}
+                      fallback={
+                        <EmptyStatePanel
+                          centered
+                          graphic={EmptyStateTasksGraphic}
+                          graphicClass="size-32"
+                          title={
+                            state.search.trim()
+                              ? t('viewMenus.noTaskSearchResults')
+                              : t('viewMenus.noTasksToShow')
+                          }
+                          description={
+                            state.search.trim()
+                              ? t('viewMenus.emptyTaskSearch')
+                              : t('viewMenus.emptyTaskView')
+                          }
+                          class={
+                            props.scrollContainer
+                              ? 'h-auto min-h-72 overflow-visible px-4 py-8 touch:pt-8'
+                              : undefined
+                          }
+                          topSpacerClass={
+                            props.scrollContainer ? 'basis-0' : undefined
+                          }
+                        />
+                      }
                     >
                       {props.emptyContent}
                     </Show>
@@ -553,6 +590,21 @@ export function TaskList(props: TaskListProps) {
                     items={visibleRows()}
                     isSticky={(row) => row.kind === 'group-header'}
                     focusedIndex={list.focus.index()}
+                    scrollContainer={props.scrollContainer}
+                    scrollStart={props.scrollStart}
+                    stickyInset={props.stickyInset}
+                    touchInset={!props.scrollContainer}
+                    start={
+                      <>
+                        <Show when={isTouchDevice() && !isMobile()}>
+                          <TaskListHeader
+                            columns={columns()}
+                            onTimestampWidthChange={setTimestampHeaderWidth}
+                          />
+                        </Show>
+                        {props.listStart}
+                      </>
+                    }
                     onScroll={() => {
                       recordScrollAnchor();
                       checkNearEnd();
@@ -614,6 +666,7 @@ export function TaskList(props: TaskListProps) {
                                   entityRow().id
                                 )}
                                 onFilterByTag={filterByTag}
+                                onFilterByAssignee={filterByAssignee}
                                 onMouseMove={() =>
                                   list.focus.set(entityRow().id, {
                                     reason: 'hover',
@@ -715,7 +768,7 @@ export function TaskList(props: TaskListProps) {
                 analyticsSource="tasks_view_selection_toolbar"
               />
             </Show>
-            <Show when={projectsEnabled() && assigningProjectTasks()}>
+            <Show when={assigningProjectTasks()}>
               {(assigning) => (
                 <ProjectAssignmentDialog
                   taskIds={assigning()}

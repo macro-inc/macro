@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use tower_cookies::Cookies;
 
 use crate::api::{
@@ -29,7 +29,7 @@ use model::response::{ErrorResponse, GenericSuccessResponse};
 #[tracing::instrument(skip(ctx, authorization, jwt_session, cookies), fields(user_id=%authorization.authorization.user.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
     JwtSessionContext(jwt_session): JwtSessionContext,
     cookies: Cookies,
 ) -> Result<Response, Response> {

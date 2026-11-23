@@ -2,22 +2,28 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { recipientEntityMapper, type WithCustomUserInput } from '@core/user';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HashIcon from '@icon/system/regular/hash.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+} from '@queries/auth/account-scope';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
 import {
   useCreateChannelMutation,
   usePatchChannelMutation,
 } from '@queries/channel/channels';
 import { useAddParticipantsMutation } from '@queries/channel/participants';
+import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import {
   Button,
@@ -27,7 +33,12 @@ import {
   RadioGroup,
   ToggleSwitch,
 } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import {
+  chooseChannelPicture,
+  useChannelPictureEditor,
+} from './channel-picture';
+import { ChannelPicture } from './components/ChannelPicture';
 
 const [newChannelModalOpen, setNewChannelModalOpen] = createSignal(false);
 const newChannelModalFocusLock = useFocusLock('create-channel');
@@ -44,7 +55,6 @@ export function CreateChannelModal() {
   const { replaceOrInsertSplit } = useSplitLayout();
   const userId = useUserId();
   const [step, setStep] = createSignal<ChannelCreationStep>('name');
-  const { users: recipientOptions } = useCombinedRecipients();
   const agentsQuery = useAgentsQuery(
     () => newChannelModalOpen() && step() === 'invite'
   );
@@ -63,9 +73,18 @@ export function CreateChannelModal() {
   const [createdChannelId, setCreatedChannelId] = createSignal<string>();
   const [sentRecipientIds, setSentRecipientIds] = createSignal<string[]>([]);
   const [addedAgentIds, setAddedAgentIds] = createSignal<string[]>([]);
+  const pictureEditor = useChannelPictureEditor();
+  // The channel exists only after step 2, so the chosen file waits here.
+  const [picture, setPicture] = createSignal<File>();
+  const pictureUrl = createMemo(() => {
+    const file = picture();
+    if (!file) return undefined;
+    const url = URL.createObjectURL(file);
+    onCleanup(() => URL.revokeObjectURL(url));
+    return url;
+  });
   const channelName = createMemo(() => name().trim());
   const inviteOptions = createMemo(() => [
-    ...recipientOptions(),
     ...(agentsQuery.isSuccess ? agentsQuery.data : []).map((agent) =>
       recipientEntityMapper('agent')(agent.bot)
     ),
@@ -85,6 +104,7 @@ export function CreateChannelModal() {
     setCreatedChannelId(undefined);
     setSentRecipientIds([]);
     setAddedAgentIds([]);
+    setPicture(undefined);
   }
 
   function resetAndClose() {
@@ -135,6 +155,9 @@ export function CreateChannelModal() {
     const participants =
       selectedVisibility === 'team' && userId() ? [userId()!] : [];
 
+    // The picture write has no account fence of its own: skip it if another
+    // account signed in while the channel was being created.
+    const account = currentQueryAccount();
     try {
       const { id } = await createChannelMutation.mutateAsync({
         channel_type: selectedVisibility,
@@ -146,6 +169,12 @@ export function CreateChannelModal() {
         auto_join_team: false,
       });
       setCreatedChannelId(id);
+      const chosenPicture = picture();
+      if (chosenPicture && isCurrentQueryAccount(account))
+        fireAndForget(
+          pictureEditor.upload(id, chosenPicture),
+          'create-channel'
+        );
       setStep('invite');
       replaceOrInsertSplit({ type: 'channel', id });
     } catch (cause) {
@@ -241,28 +270,19 @@ export function CreateChannelModal() {
     >
       <Panel depth={2} class="rounded-xl *:max-h-[85vh]">
         <Panel.Body scroll>
-          <form
-            class="flex min-h-80 flex-col gap-7 p-6 sm:p-8"
-            onSubmit={handleSubmit}
-          >
+          <form class="flex flex-col gap-7 p-6 sm:p-8" onSubmit={handleSubmit}>
             <div class="flex items-start justify-between gap-4">
               <div class="min-w-0">
                 <Dialog.Title class="text-xl font-semibold text-ink">
                   {step() === 'invite' ? (
                     <>
                       Add people or agents to{' '}
-                      <span class="inline-flex items-baseline gap-1">
-                        <Show
-                          when={visibility() === 'private'}
-                          fallback={
-                            <HashIcon
-                              aria-hidden="true"
-                              class="inline size-4"
-                            />
-                          }
-                        >
-                          <LockIcon aria-hidden="true" class="inline size-4" />
-                        </Show>
+                      <span class="inline-flex items-center gap-1.5 align-bottom">
+                        <ChannelMark
+                          pictureUrl={pictureUrl()}
+                          private={visibility() === 'private'}
+                          class="size-5"
+                        />
                         {channelName()}
                       </span>
                     </>
@@ -271,15 +291,12 @@ export function CreateChannelModal() {
                   )}
                 </Dialog.Title>
                 <Show when={step() === 'visibility'}>
-                  <p class="mt-1 flex items-center gap-1 text-sm text-ink-muted">
-                    <Show
-                      when={visibility() === 'private'}
-                      fallback={
-                        <HashIcon aria-hidden="true" class="size-3.5" />
-                      }
-                    >
-                      <LockIcon aria-hidden="true" class="size-3.5" />
-                    </Show>
+                  <p class="mt-1 flex items-center gap-1.5 text-sm text-ink-muted">
+                    <ChannelMark
+                      pictureUrl={pictureUrl()}
+                      private={visibility() === 'private'}
+                      class="size-4"
+                    />
                     {channelName()}
                   </p>
                 </Show>
@@ -303,49 +320,56 @@ export function CreateChannelModal() {
             </div>
 
             <Show when={step() === 'name'}>
-              <div class="flex flex-col gap-2">
-                <label
-                  for="new-channel-name"
-                  class="text-sm font-medium text-ink"
-                >
-                  Name
-                </label>
-                <InputGroup
-                  size="xl"
-                  class="focus-within:ring-2 focus-within:ring-edge-muted"
-                >
-                  <InputGroup.Addon>
-                    <HashIcon aria-hidden="true" class="size-4" />
-                  </InputGroup.Addon>
-                  <InputGroup.Input
-                    ref={nameInput}
-                    id="new-channel-name"
-                    type="text"
-                    value={name()}
-                    onInput={(event) => {
-                      setName(event.currentTarget.value);
-                      setError(undefined);
-                    }}
-                    placeholder="e.g. Feature Requests"
-                    maxLength={80}
-                    autocomplete="off"
-                    data-1p-ignore
-                    aria-invalid={error() === 'Enter a channel name'}
-                    aria-describedby="new-channel-name-description"
-                  />
-                  <InputGroup.Addon align="inline-end">
-                    <span class="text-xs tabular-nums text-ink-extra-muted">
-                      {80 - name().length}
-                    </span>
-                  </InputGroup.Addon>
-                </InputGroup>
-                <p
-                  id="new-channel-name-description"
-                  class="text-sm text-ink-muted"
-                >
-                  Channels are where conversations happen around a topic. Use a
-                  name that is easy to find and understand.
-                </p>
+              <div class="flex flex-col gap-6">
+                <div class="flex flex-col gap-2">
+                  <label
+                    for="new-channel-name"
+                    class="text-sm font-medium text-ink"
+                  >
+                    Name
+                  </label>
+                  <InputGroup
+                    size="xl"
+                    class="focus-within:ring-2 focus-within:ring-edge-muted"
+                  >
+                    <InputGroup.Addon>
+                      <HashIcon aria-hidden="true" class="size-4" />
+                    </InputGroup.Addon>
+                    <InputGroup.Input
+                      ref={nameInput}
+                      id="new-channel-name"
+                      type="text"
+                      value={name()}
+                      onInput={(event) => {
+                        setName(event.currentTarget.value);
+                        setError(undefined);
+                      }}
+                      placeholder="e.g. Feature Requests"
+                      maxLength={80}
+                      autocomplete="off"
+                      data-1p-ignore
+                      aria-invalid={error() === 'Enter a channel name'}
+                      aria-describedby="new-channel-name-description"
+                    />
+                    <InputGroup.Addon align="inline-end">
+                      <span class="text-xs tabular-nums text-ink-extra-muted">
+                        {80 - name().length}
+                      </span>
+                    </InputGroup.Addon>
+                  </InputGroup>
+                  <p
+                    id="new-channel-name-description"
+                    class="text-sm text-ink-muted"
+                  >
+                    Channels are where conversations happen around a topic. Use
+                    a name that is easy to find and understand.
+                  </p>
+                </div>
+                <ChannelPictureField
+                  pictureUrl={pictureUrl()}
+                  onChoose={() => chooseChannelPicture(setPicture)}
+                  onRemove={() => setPicture(undefined)}
+                />
               </div>
             </Show>
 
@@ -353,6 +377,7 @@ export function CreateChannelModal() {
               <div ref={visibilityOptions} class="flex flex-col gap-3">
                 <span class="text-sm font-medium text-ink">Visibility</span>
                 <RadioGroup
+                  variant="cards"
                   value={visibility()}
                   onChange={(value) => {
                     if (value !== 'team' && value !== 'private') return;
@@ -360,29 +385,37 @@ export function CreateChannelModal() {
                     setError(undefined);
                   }}
                   aria-label="Visibility"
-                  class="gap-4"
+                  class="grid-cols-1 sm:grid-cols-2"
                 >
-                  <RadioGroup.Item value="team" class="items-start">
-                    <RadioGroup.ItemControl class="mt-0.5" />
-                    <div class="flex flex-col gap-1">
-                      <RadioGroup.ItemLabel class="text-base text-ink">
-                        Team — anyone on your team
+                  <RadioGroup.Item value="team">
+                    <HashIcon
+                      aria-hidden="true"
+                      class="mt-0.5 size-4 shrink-0"
+                    />
+                    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <RadioGroup.ItemLabel class="text-sm font-medium text-ink">
+                        Team
                       </RadioGroup.ItemLabel>
-                      <RadioGroup.ItemDescription class="text-sm text-ink-muted">
-                        Always discoverable to teammates
+                      <RadioGroup.ItemDescription class="text-xs text-ink-muted">
+                        Anyone on your team can find and join it
                       </RadioGroup.ItemDescription>
                     </div>
+                    <RadioGroup.ItemControl class="mt-0.5" />
                   </RadioGroup.Item>
-                  <RadioGroup.Item value="private" class="items-start">
-                    <RadioGroup.ItemControl class="mt-0.5" />
-                    <div class="flex flex-col gap-1">
-                      <RadioGroup.ItemLabel class="text-base text-ink">
-                        Private — only specific people
+                  <RadioGroup.Item value="private">
+                    <LockIcon
+                      aria-hidden="true"
+                      class="mt-0.5 size-4 shrink-0"
+                    />
+                    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <RadioGroup.ItemLabel class="text-sm font-medium text-ink">
+                        Private
                       </RadioGroup.ItemLabel>
-                      <RadioGroup.ItemDescription class="text-sm text-ink-muted">
-                        Can only be viewed or joined by invitation
+                      <RadioGroup.ItemDescription class="text-xs text-ink-muted">
+                        Only people you invite can view or join it
                       </RadioGroup.ItemDescription>
                     </div>
+                    <RadioGroup.ItemControl class="mt-0.5" />
                   </RadioGroup.Item>
                 </RadioGroup>
               </div>
@@ -392,6 +425,7 @@ export function CreateChannelModal() {
               <div class="flex flex-col gap-3">
                 <RecipientSelector<'user' | 'contact' | 'agent'>
                   options={inviteOptions}
+                  createSource={useContactRecipientSource}
                   selectedOptions={selectedRecipients()}
                   setSelectedOptions={setSelectedRecipients}
                   placeholder="Search people, agents, or email addresses"
@@ -434,7 +468,7 @@ export function CreateChannelModal() {
               )}
             </Show>
 
-            <div class="mt-auto flex items-center justify-between gap-3 pt-4">
+            <div class="flex items-center justify-between gap-3">
               <span class="text-sm text-ink-muted">
                 Step{' '}
                 {step() === 'name' ? '1' : step() === 'visibility' ? '2' : '3'}{' '}
@@ -517,5 +551,94 @@ export function CreateChannelModal() {
         </Show>
       </Panel>
     </Dialog>
+  );
+}
+
+/** The new channel's picture, or its visibility icon until one is chosen. */
+function ChannelMark(props: {
+  pictureUrl?: string;
+  private: boolean;
+  class: string;
+}) {
+  return (
+    <ChannelPicture
+      url={props.pictureUrl}
+      class={props.class}
+      fallback={
+        <Show
+          when={props.private}
+          fallback={<HashIcon aria-hidden="true" class="m-auto size-[80%]" />}
+        >
+          <LockIcon aria-hidden="true" class="m-auto size-[80%]" />
+        </Show>
+      }
+    />
+  );
+}
+
+function ChannelPictureField(props: {
+  pictureUrl?: string;
+  onChoose: () => void;
+  onRemove: () => void;
+}) {
+  let chooseButton: HTMLButtonElement | undefined;
+  return (
+    <div class="flex items-center gap-3">
+      {/* A second, pointer-only target; the labelled buttons stay the tab stops. */}
+      <Button
+        type="button"
+        appearance="bare"
+        size="icon-xl"
+        tabIndex={-1}
+        aria-label={
+          props.pictureUrl ? 'Change channel picture' : 'Add a channel picture'
+        }
+        onClick={() => props.onChoose()}
+      >
+        <ChannelPicture
+          url={props.pictureUrl}
+          class="size-12"
+          fallback={
+            <span class="flex size-full items-center justify-center rounded-lg border border-dashed border-edge text-ink-muted">
+              <ImageIcon aria-hidden="true" class="size-5" />
+            </span>
+          }
+        />
+      </Button>
+      <div class="min-w-0 flex-1">
+        <div class="text-sm font-medium text-ink">Channel picture</div>
+        <div class="mt-0.5 text-xs text-ink-muted">
+          Helps people spot the channel at a glance. Square images work best.
+        </div>
+      </div>
+      {/* The choose button stays mounted as its label changes, so it keeps focus. */}
+      <div class="flex shrink-0 items-center gap-1">
+        <Show when={props.pictureUrl}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              chooseButton?.focus();
+              props.onRemove();
+            }}
+          >
+            Remove
+          </Button>
+        </Show>
+        <Button
+          ref={chooseButton}
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => props.onChoose()}
+        >
+          <Show when={!props.pictureUrl}>
+            <UploadIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+          </Show>
+          {props.pictureUrl ? 'Change' : 'Upload'}
+        </Button>
+      </div>
+    </div>
   );
 }

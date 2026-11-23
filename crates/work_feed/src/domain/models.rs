@@ -52,11 +52,13 @@ pub enum WorkFeedItemType {
     PullRequest,
     /// Agent sessions.
     AgentSession,
+    /// Paired runtimes, through their access notifications.
+    Runtime,
 }
 
 impl WorkFeedItemType {
     /// Every item type, the default selection.
-    pub const ALL: [WorkFeedItemType; 11] = [
+    pub const ALL: [WorkFeedItemType; 12] = [
         Self::Document,
         Self::Task,
         Self::Chat,
@@ -68,6 +70,7 @@ impl WorkFeedItemType {
         Self::CalendarEvent,
         Self::PullRequest,
         Self::AgentSession,
+        Self::Runtime,
     ];
 
     /// The candidate entity type items of this kind are keyed on.
@@ -83,6 +86,7 @@ impl WorkFeedItemType {
             Self::CalendarEvent => EntityType::CalendarEvent,
             Self::PullRequest => EntityType::ForeignEntity,
             Self::AgentSession => EntityType::AgentSession,
+            Self::Runtime => EntityType::Harness,
         }
     }
 }

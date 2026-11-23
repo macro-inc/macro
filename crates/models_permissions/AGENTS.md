@@ -11,6 +11,11 @@ levels, and the computed `UserItemAccess` a caller has to an entity.
 - `src/share_permission.rs` + `src/share_permission/`: `SharePermissionV2`,
   `access_level.rs` (`AccessLevel`), `channel_share_permission.rs`,
   `team_share.rs`, `link_share.rs` (`LinkShare`).
+  `SharePermissionV2::new` gives a new item no link share under an agent
+  session scope that may not share (`agent_correlation::context::may_share`).
+- `InitialLinkShare` in `share_permission.rs` is the single creation policy
+  type for documents, folders and initiatives: `EntityDefault` or `Exact(state)`.
+  Creators apply it before inserting permissions.
 - `src/user_item_access.rs`: the resolved access an actor has to an item.
 
 ## Scope
@@ -21,7 +26,8 @@ levels, and the computed `UserItemAccess` a caller has to an entity.
 
 ## Boundaries
 
-- Depends on: `macro_user_id`, `model-entity`, `model_file_type`, `model_owner`.
+- Depends on: `agent_correlation`, `macro_user_id`, `model-entity`,
+  `model_file_type`, `model_owner`.
 - Used by: `agent_session`, `ai_tools`, `authentication_service`, `call`,
   `channels`, `chat`, `collab_surface`, `databases`, `document_cognition_service`,
   `documents`, `document_storage_service(_client)`, `email_service`,

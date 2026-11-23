@@ -30,8 +30,8 @@ function mount(
   const notices = { ...createComposeContext().notices, reportError: report };
   const root = createRoot((dispose) => {
     const session = createDraftSession(seed);
-    observeDraftIdentity(
-      {
+    observeDraftIdentity({
+      storage: {
         ...createComposeContext().drafts,
         readDraft,
         retryDraft: durableRecovery ? vi.fn() : undefined,
@@ -43,8 +43,8 @@ function mount(
       session,
       notices,
       recover,
-      alreadySent
-    );
+      onAlreadySent: alreadySent,
+    });
     return { dispose, session };
   });
   return {
@@ -80,8 +80,8 @@ describe('durable draft identity', () => {
         threadId: 'thread',
         persistence: 'queued',
       });
-      observeDraftIdentity(
-        {
+      observeDraftIdentity({
+        storage: {
           ...createComposeContext().drafts,
           get readDraft() {
             return enabled() ? read : undefined;
@@ -91,10 +91,10 @@ describe('durable draft identity', () => {
           },
         },
         session,
-        createComposeContext().notices,
-        vi.fn(),
-        vi.fn()
-      );
+        notices: createComposeContext().notices,
+        recover: vi.fn(),
+        onAlreadySent: vi.fn(),
+      });
       return { dispose, session };
     });
     try {
@@ -319,7 +319,7 @@ it.each(['reset', 'dispose'] as const)(
   }
 );
 
-it('clears an already-sent draft without offering recovery, even after another rejection', async () => {
+it('hands an already-sent draft to the composer once, without offering recovery, even after another rejection', async () => {
   const root = mount(async () => ({
     draft: message('server', { is_draft: true }),
     persistence: 'queued',
@@ -338,8 +338,10 @@ it('clears an already-sent draft without offering recovery, even after another r
       code: 'DRAFT_ALREADY_SENT',
     });
     await vi.waitFor(() => expect(root.alreadySent).toHaveBeenCalledOnce());
-    expect(root.session.draftId()).toBeUndefined();
-    expect(root.session.autosaveAllowed()).toBe(true);
+    // Latched with its identity until the composer settles it.
+    expect(root.session.draftId()).toBe('server');
+    expect(root.session.alreadySent()).toBe(true);
+    expect(root.session.autosaveAllowed()).toBe(false);
     expect(root.notices.feedback.dismiss).toHaveBeenCalledWith(42);
     recovery?.onClick();
     expect(root.recover).not.toHaveBeenCalled();
@@ -348,7 +350,7 @@ it('clears an already-sent draft without offering recovery, even after another r
       failed: true,
       code: 'DRAFT_ALREADY_SENT',
     });
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(root.alreadySent).toHaveBeenCalledOnce();
   } finally {
     root.dispose();
@@ -402,7 +404,9 @@ it.each(['draft', 'sent'] as const)(
         mutationUuid: 'local',
       });
       await vi.waitFor(() => expect(root.alreadySent).toHaveBeenCalledOnce());
-      expect(root.session.draftId()).toBeUndefined();
+      // The composer settles the latched draft; the session keeps it until then.
+      expect(root.session.draftId()).toBe('server');
+      expect(root.session.alreadySent()).toBe(true);
       expect(root.notices.feedback.failure).not.toHaveBeenCalled();
     } finally {
       root.dispose();
@@ -467,7 +471,8 @@ it('waits for a replacement identity read before correlating an already-sent fai
     expect(root.alreadySent).not.toHaveBeenCalled();
     second.resolve(sent);
     await vi.waitFor(() => expect(root.alreadySent).toHaveBeenCalledOnce());
-    expect(root.session.draftId()).toBeUndefined();
+    expect(root.session.draftId()).toBe('server');
+    expect(root.session.alreadySent()).toBe(true);
     expect(root.notices.feedback.failure).not.toHaveBeenCalled();
   } finally {
     root.dispose();
@@ -486,8 +491,8 @@ it('retries a failed confirmed attachment handoff once on reconnect', async () =
       threadId: 'server-thread',
       persistence: 'committed',
     });
-    observeDraftIdentity(
-      {
+    observeDraftIdentity({
+      storage: {
         ...createComposeContext().drafts,
         readDraft: async () => ({
           draft: message('server', {
@@ -502,11 +507,11 @@ it('retries a failed confirmed attachment handoff once on reconnect', async () =
         },
       },
       session,
-      createComposeContext().notices,
-      vi.fn(),
-      vi.fn(),
-      upload
-    );
+      notices: createComposeContext().notices,
+      recover: vi.fn(),
+      onAlreadySent: vi.fn(),
+      onConfirmed: upload,
+    });
     return { dispose };
   });
   try {

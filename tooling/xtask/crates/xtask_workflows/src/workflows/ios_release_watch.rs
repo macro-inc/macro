@@ -6,7 +6,8 @@
 //! that started the [`super::ios_app_store_release`] run), asks App Store
 //! Connect whether Apple approved the version + build committed at the PR
 //! head (built from the native tree of the PR's merge result, like the gate
-//! checks), and when it did, re-runs the PR's failed `iOS Native Check` job so
+//! checks), and when it did, re-runs failed `iOS Native Check` jobs from PR CI
+//! and the earlier standalone web workflow on that head so
 //! the gate turns green on its own. Re-running an existing job is how this
 //! stays within GitHub's rule that events created with the workflow token
 //! never start workflows.
@@ -19,15 +20,16 @@
 //! Credentials come from Doppler like the other two iOS workflows; the
 //! common case (no labeled PRs) exits before fetching anything.
 
+use gh_workflow::expr::typed::{Bool, Expr, StepHandle, StepOutput, Str, github};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow,
-    WorkflowDispatch,
+    Event, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
 
+use crate::workflows::actions::OvenShSetupBun;
 use crate::workflows::{runners, steps, vars};
 
-/// `true` when the first step found at least one PR to look at.
-const HAS_PRS: &str = "steps.prs.outputs.count != '0'";
+#[cfg(test)]
+mod test;
 
 /// Build the workflow.
 pub fn ios_release_watch() -> Workflow {
@@ -49,8 +51,8 @@ fn watch_job() -> Job {
         .name("Re-run the iOS Native Check once Apple approves the App Store release")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(15u32)
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
         .add_step(find_prs())
         .add_step(steps::checkout(false, false).if_condition(gated()))
         .add_step(setup_bun())
@@ -58,9 +60,26 @@ fn watch_job() -> Job {
         .add_step(rerun_approved_checks())
 }
 
-fn gated() -> Expression {
-    Expression::new(HAS_PRS)
+/// `true` when the first step found at least one PR to look at.
+fn gated() -> Expr<Bool> {
+    FIND_PRS.outputs.count.read().ne("0")
 }
+
+struct FindPrsOutputs {
+    /// The open PRs found, as a JSON array of `{number, sha, merge}`.
+    prs: StepOutput<Str>,
+    /// How many PRs `prs` holds.
+    count: StepOutput<Str>,
+}
+
+/// The [`find_prs`] step.
+const FIND_PRS: StepHandle<FindPrsOutputs> = StepHandle::new(
+    "prs",
+    FindPrsOutputs {
+        prs: StepOutput::new("prs", "prs"),
+        count: StepOutput::new("prs", "count"),
+    },
+);
 
 fn find_prs() -> Step<Run> {
     Step::new("Find PRs waiting on an App Store release")
@@ -74,19 +93,15 @@ fn find_prs() -> Step<Run> {
             echo "prs=${prs}" >> "$GITHUB_OUTPUT"
             echo "count=${count}" >> "$GITHUB_OUTPUT"
         "#})
-        .id("prs")
+        .id(FIND_PRS.id())
         .shell("bash")
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses(
-            "oven-sh",
-            "setup-bun",
-            "0c5077e51419868618aeaa5fe8019c62421857d6",
-        ) // v2.2.0
+    OvenShSetupBun::new("Setup Bun")
+        .bun_version("1.3.13")
+        .step()
         .if_condition(gated())
-        .add_with(("bun-version", "1.3.13"))
 }
 
 fn fetch_credentials() -> Step<Run> {
@@ -101,9 +116,10 @@ fn rerun_approved_checks() -> Step<Run> {
     Step::new("Re-run the check on PRs whose release Apple approved")
         .run(concat!(
             include_str!("scripts/ios_native_tree.sh"),
+            include_str!("scripts/pr_ci_run.sh"),
             include_str!("scripts/ios_release_watch.sh")
         ))
         .shell("bash")
         .if_condition(gated())
-        .add_env(("PRS", "${{ steps.prs.outputs.prs }}"))
+        .add_env(("PRS", FIND_PRS.outputs.prs.read()))
 }

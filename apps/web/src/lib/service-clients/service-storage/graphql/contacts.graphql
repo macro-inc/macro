@@ -1,0 +1,107 @@
+query ContactDirectoryIdentity {
+  user {
+    id
+  }
+}
+
+fragment ContactDirectoryFields on GraphqlContact {
+  id
+  userId
+  email
+  name
+}
+
+# Behind `enable-contact-lists`: only the cache-writing reads select `lists`, so
+# a server without the field still answers every query while the flag is off.
+fragment ContactDirectoryListFields on GraphqlContact {
+  ...ContactDirectoryFields
+  lists
+}
+
+# Hydration persists normalized contacts but returns only the cursor projection.
+query ContactDirectoryBackfill($limit: Int, $after: String) {
+  user {
+    id
+    contacts(limit: $limit, after: $after) {
+      nodes @cacheOnly {
+        ...ContactDirectoryFields
+      }
+      nextCursor
+    }
+  }
+}
+
+query ContactDirectoryBackfillWithLists($limit: Int, $after: String) {
+  user {
+    id
+    contacts(limit: $limit, after: $after) {
+      nodes @cacheOnly {
+        ...ContactDirectoryListFields
+      }
+      nextCursor
+    }
+  }
+}
+
+query ContactDirectoryByUserIds($userIds: [ID!]!) {
+  user {
+    id
+    contactsByUserIds(userIds: $userIds) {
+      ...ContactDirectoryFields
+    }
+  }
+}
+
+query ContactDirectoryByUserIdsWithLists($userIds: [ID!]!) {
+  user {
+    id
+    contactsByUserIds(userIds: $userIds) {
+      ...ContactDirectoryListFields
+    }
+  }
+}
+
+query ContactDirectoryByEmails($emails: [String!]!) {
+  user {
+    id
+    contactsByEmails(emails: $emails) {
+      ...ContactDirectoryFields
+    }
+  }
+}
+
+# Reference lookup keeps matching server-side, before the bounded page limit.
+# Behind `enable-named-contact-search`: the people the text names across the
+# whole directory, ranked by the server. A server without the field refuses it.
+query ContactNamedPeople($search: String!, $limit: Int) {
+  user {
+    id
+    contactsNamedBy(search: $search, limit: $limit) {
+      ...ContactDirectoryFields
+    }
+  }
+}
+
+query ContactReferencePage($limit: Int, $after: String, $search: String!, $matching: GraphqlContactMatching!) {
+  user {
+    id
+    contacts(limit: $limit, after: $after, search: $search, matching: $matching) {
+      nodes {
+        ...ContactDirectoryFields
+      }
+      nextCursor
+    }
+  }
+}
+
+query ContactDirectoryPage($limit: Int, $after: String, $search: String) {
+  user {
+    id
+    contacts(limit: $limit, after: $after, search: $search) {
+      nodes {
+        ...ContactDirectoryFields
+      }
+      nextCursor
+    }
+  }
+}

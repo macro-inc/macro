@@ -26,6 +26,28 @@ horizontally and removal remains available without hover. Composer fixture
 screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
+If account or CRM access changes while a document or file is still loading,
+its load retries once with fresh permissions and content in both Drive and
+standalone file views. Check a cold file open
+with local storage delayed: the file should finish opening after recovery. A
+revoked file stays unavailable, and a second interruption leaves the existing
+retry control. An already-open editor does not reload merely because the cache
+finishes starting.
+
+Opening a document or file in a Drive, Home, CRM or Tasks detail view (tasks,
+snippets and skills included) records the open once in the user's history,
+which orders Recents and Cmd+K. On dev, expect one `POST /history/document/<id>`
+per open, none when access changes or a retry reloads the same document. Agent
+sessions opened from the Agents view, Tasks projects, CRM companies and contacts,
+and Drive folders record their opens the same way, as `agent_session`,
+`initiative`, `crm_company`, `crm_contact` and `project` history. An opened
+document, chat or folder is then first in empty Cmd+K, including one opened for
+the first time or last viewed long ago: the open stamps its viewed time on its
+record in the GraphQL cache, which orders cached history. An item the cache does
+not hold yet is loaded by id (one `HistoryViewItem` request) after the history
+POST succeeds. To check that case, open a document that empty Cmd+K does not
+list.
+
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
 `/app/md/<id>` redirects) must show the document without private Drive lists or
@@ -66,9 +88,11 @@ to request again.
 This workflow also applies to the existing chat, folder, project, database, call,
 and agent-session Share menus, using the access levels that each supports.
 
-Reviewers see a pending count on **Share**. Entering an item with pending requests
+Reviewers see a pending count on **Share**, after its label (after the icon
+where the header hides the label), and its tooltip and accessible name read
+"N pending permission requests". Entering an item with pending requests
 opens Share once for that visit; requests arriving during the visit update the
-badge. On mobile, review requests in the **People** tab. **Permission requests**
+count. On mobile, review requests in the **People** tab. **Permission requests**
 lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials
@@ -128,7 +152,7 @@ and Project when enabled. Defaults apply only without a saved pin list; customiz
 pins stay unchanged. Changing pins keeps the other defaults unless explicitly unpinned.
 
 Markdown code blocks have a **Copy Code** button in both editable and read-only
-views. Successful copies briefly animate the icon to a solid green check-circle;
+views. Successful copies briefly blur and fade the icon to a plain green check;
 they do not show a success toast.
 
 Embedded code files, canvases, and PDFs in Markdown documents show their content
@@ -138,6 +162,11 @@ embeds and check that their preview bodies load; also check that a code or canva
 mention offers **Convert to Embed** in its preview menu.
 Drag an embed's bottom-right resize grip, then release and select the card. Its
 height should stay at the dragged size and persist after reopening the document.
+On a phone or tablet a canvas embed does not trap scrolling: swipe over it with
+one finger and the document scrolls; pinch or drag it with two fingers and the
+canvas zooms and pans. Tap **Interact** in its corner to move it with one finger
+(the document then stays put), and **Done**, or a tap elsewhere in the document,
+to hand scrolling back.
 Zoom to fit and menu/keyboard zoom use the full canvas viewport center; floating
 inspectors and details overlays do not reserve centering space. Verify with content
 on both sides of the canvas and the inspector visible. Press **.** to fit the
@@ -309,12 +338,46 @@ Click a tick or press Enter to jump immediately to its heading without closing i
 or collapsing the expanded ticks. Scrolling, resizing, and
 editor updates refresh the visible-section highlights.
 
+## Markdown wide mode
+
+The document's title menu has **Turn on wide mode** (desktop and tablet only;
+phones already use the whole screen). It lifts the 768px reading column so the
+text, tables and code blocks fill the pane. The side margins grow with the pane
+up to 64px, keeping the outline rail visible, so the column never narrows as a
+pane widens and matches the standard column below 896px. It is the viewer's own
+setting, saved in this browser, and applies to every Markdown document they
+open, including documents open side by side; it changes nothing for
+collaborators. Images keep their own size. With margin comments showing, the
+comments stay in their own column beside the text. The Discussion under the
+document keeps the standard column, centered under the text, so it looks the
+same with wide mode on or off. Toggling keeps the reader's place in the
+document. Version history keeps the standard column. The menu item then reads
+**Turn off wide mode**. The backend-free desktop/phone regression mounts the
+real document view, including a signed-in Discussion with a thread:
+`bunx playwright test --config src/features/block-md/browser-test/playwright.config.ts`.
+
 On a local HTTPS stack, document and image downloads use `/local-storage/`
 on the app's HTTPS origin. A request to HTTP localhost indicates a stale
 storage URL or stack configuration; hard-refresh after updating the stack.
 Markdown also needs a successful `/sync/document/.../connect` WebSocket upgrade.
 A 403 there indicates the sync origin check, which the local proxy handles for
 HTTPS machine hostnames; verify the proxy configuration before retrying.
+
+## Collapsible sections
+
+Any top-level heading with content under it folds that content away, up to the
+next heading of the same or a higher level. Hover the heading to show a chevron
+in the left gutter (the drag handle steps one column further left, or, in a
+gutter too narrow for both, is not shown on that heading); the chevron
+stays while the section is folded and is always shown on touch. Mod+Enter in a
+heading toggles it. Folding is per person and per device (localStorage, keyed by
+the headings' node ids): it changes no document content, collaborators never see
+it, and it survives a reload. Hidden blocks carry the `md-folded` class, which
+applies only on screen, so copy, export, and print include them. Find, outline
+clicks, node and location links, and a caret moving into a folded section unfold
+it; folding the section holding the caret moves the caret to the heading. Code:
+`LexicalMarkdown/plugins/heading-folds`, controls in
+`component/misc/HeadingFoldControls.tsx`.
 
 ## Databases in documents
 
@@ -334,7 +397,9 @@ The **Filter** and **Sort** icons open their panels. The pickers support keyboar
 navigation and mark the selected table. Rows added or edited elsewhere, including
 by AI, appear through the database's gateway subscription. The editor catches up after
 reconnecting or returning to the tab after a long absence.
-Edits write to the original database. **Open** opens the full database.
+Edits write to the original database. **Open** opens the full database; opening
+a row (its row-number button, a board card or a timeline bar) opens the full
+database at that row.
 **Collapse** converts the editor to a small mention; **Expand** brings it back.
 Removing either reference leaves the database and its rows intact.
 
@@ -356,9 +421,8 @@ picker, displays, and editing.
 
 ## Spreadsheets
 
-Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
-flag in every environment. Team targeting is configured in PostHog; ordinary
-document permissions continue to control access to each workbook.
+Spreadsheets are available to everyone. Ordinary document permissions control
+access to each workbook.
 
 Choose **Create → Spreadsheet**, or **New → Spreadsheet** in Files or a folder.
 From Files the new workbook opens inline in the open folder or tab
@@ -840,9 +904,10 @@ Right-click inside the cell text editor retains the native text-editing menu.
 Opening a saved spreadsheet from Files/Drive (including a favorite) keeps the
 Drive navigation sidebar in place. Collapse it with the sidebar control; the
 spreadsheet header then shows the navigation toggle to reopen it. Opening a
-spreadsheet does not change the saved sidebar preference. The header keeps the
-Files location breadcrumbs before the sheet title; click a location breadcrumb
-to return to that file listing.
+spreadsheet does not change the saved sidebar preference. Opened from a Drive
+list, the header keeps that list's location breadcrumbs before the sheet title;
+click a location breadcrumb to return to that file listing. Opened from anywhere
+else, the title stands alone.
 
 ## Spreadsheet comments
 
@@ -882,6 +947,9 @@ with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
 A viewer can ask questions; editing still requires edit permission.
+On phones and tablets the header has neither Ask Macro nor Comments: Ask Macro
+is the first row of the title menu, and it attaches the active sheet and
+selection as the button does.
 
 In the local spreadsheet demo, Ask Macro first saves the entire workbook and
 waits for acknowledgement. A failed save leaves the draft editable and supports
@@ -898,6 +966,14 @@ creation/rename/duplication/deletion.
 `{ "format": "date", "numberFormat": "mmm yyyy" }`.
 Edits require a revision from a fresh read; a concurrent change rejects the entire
 batch so the AI can reread. Tool rows expand to show the actual results and warnings.
+In code mode these tools are hidden: programs use the SDK's
+`macro.documents.spreadsheet(document)` handle (`read`, `calculate`, and
+`applyEdits(operations, { expectedRevision })`, over DSS
+`POST /documents/{id}/spreadsheet/read|calculate|edits`), which runs the same
+engine, and `macro.documents.createSpreadsheet()` creates a blank workbook.
+`sheet.edit(instructions)` (`POST /documents/{id}/spreadsheet/ai-edit`) hands a
+described change to the editing worker's writer model, which saves one batch;
+it is billed as an AI edit, and the result lists the changes and warnings.
 
 Verify with a saved workbook: select B4:E9, click Ask Macro, check the adjacent
 chat's mention and trailing space, and ask for a total or a what-if calculation.
@@ -2390,8 +2466,9 @@ and agent chat links also convert to their respective entity mentions.
 Pasting a bare GitHub pull request URL (`github.com/<owner>/<repo>/pull/<n>`,
 including subpages such as `/files`) inserts a link that becomes a PR mention
 once Macro finds the synced PR, usually within a moment. Hovering the mention
-shows its status, diff size, comments, and checks; clicking opens the PR in a
-split. A PR mention always stays on one line: a long title truncates with an
+shows its status, diff size, comments, and checks; clicking opens the PR on
+GitHub (a new tab, or the system browser in the desktop app). A PR mention
+always stays on one line: a long title truncates with an
 ellipsis before the `#N`, so read the full title from the hover card. In a sent
 message, a mention an agent wrote by URL alone shows `owner/repo#N` until its
 title loads and keeps the same width either way. A PR Macro has not synced
@@ -2406,10 +2483,9 @@ stay text instead of becoming mentions, long pastes do not collapse into a
    focused**.
 2. `type_text` the title, then `submitKey: "Enter"` to drop into the body. Tab
    from the title also moves to the start of the body, without inserting a
-   paragraph. While a document is open, Tab and Shift+Tab never switch the
-   hosting view's tabs (e.g. Drive's My Files / Recent): opened from Drive,
-   focus a non-editable control in the document, press Tab, and the
-   document must stay open.
+   paragraph. While a document is open, Tab, Shift+Tab and the number keys
+   never leave it: opened from Drive, focus a non-editable control in the
+   document, press Tab and `2`, and the document must stay open.
 3. Type paragraphs with plain `type_text`; use Enter between paragraphs. Do NOT use `fill` —
    the editor is contenteditable and `fill` does not work on it.
 4. The document auto-saves continuously (collaborative CRDT; no save button). The tab title
@@ -2431,7 +2507,8 @@ Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote,
 Pasting multiple paragraphs inside a quote keeps those paragraphs quoted;
 see [block formatting](channels.md#block-formatting) for verification.
 Imported Markdown recognizes bare URLs with the same shared matcher as messages;
-code and escaped URLs remain literal. Remove link persists through Markdown and
+code and escaped URLs remain literal, except that escaped `*`, `_`, `` ` `` or `~`
+alone still link. Remove link persists through Markdown and
 editor-state saves. See [message links](channels.md#message-links) for verification.
 
 Every top-level checklist shows a completed count and progress meter on a thin
@@ -2440,6 +2517,10 @@ an actual task mention additionally get a filter menu (status, priority,
 assignee, due date) that reveals on hover and stays while filters are active;
 filters dim unmatched items in place and persist with the document. Plain
 checkbox lists have no filter, and removing the last task mention removes it.
+Assignee labels resolve only identities referenced by the document's loaded tasks,
+in bounded lookup batches. They do not load the personal directory. Missing names
+stay Unknown; changing references releases old label data without erasing persisted
+filter identities.
 On Android, use the software keyboard to check `:` emoji, `/` commands, `;`
 snippets, and `#` tags where enabled. Each should open once and filter as you
 type. Tapping an emoji or command applies it; a second `#` closes the tags menu
@@ -2488,8 +2569,10 @@ composer. Companies and contacts appear together under **Contacts & Companies**;
 **People** holds Macro users and groups only. Selecting a CRM contact inserts
 its record link, including when its email matches a Macro user. User-only pickers
 exclude CRM records. On mobile, the single list includes both CRM record types, while only
-Macro people and groups are pinned. With
-`ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
+Macro people and groups are pinned. The PostHog `disable-crm-contact-search`
+kill switch removes contact results and disables their search while leaving
+companies and Macro users available; existing contact mentions still work.
+Override locally with `VITE_DISABLE_CRM_CONTACT_SEARCH=true`. Results include cached companies even if they are
 absent from the first 500 companies in the REST Quick Access feed; the REST feed
 remains a fallback. Cache search covers synchronized companies, not the entire CRM.
 
@@ -2559,6 +2642,19 @@ under **Contacts & Companies** in `@` mentions and under **People** in the
 command menu. Values show the record's name and open the company or contact.
 An entity can carry the property without listing it (set at creation or through
 the API); adding that property pins the existing value rather than clearing it.
+A custom entity property can point at a company or contact too. A task set that
+way is listed on the record's Tasks tab and in its References; no other record
+list and no Sales view reads a custom property.
+**Create property** therefore points at them: a property named `Contact`,
+`Contacts`, `Company`, `Companies`, `Customer` or `Customers` shows a note under
+the name that the built-in property exists and what it links, with **Use
+Contacts** (or **Use Companies**), which leaves creation and opens that
+property's value instead. For every type but **Any Entity** the note adds that
+the type can't link to CRM records. **Create** still creates the property.
+A name that is exactly a built-in property's (`Contacts`, `Status`, `Owner`, in
+any case) cannot be used: the note says the name belongs to a built-in
+property, **Create** is disabled, and **Use <name>** appears when that property
+applies to the item being edited.
 Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.
@@ -2643,7 +2739,7 @@ detail reads answer non-owners 401/403 for a missing item too, so a deleted
 database or form reads `No Access` to anyone but its owner. A reference made in
 the last minute whose item hasn't reached the preview yet still opens it.
 
-With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
+The popup reuses the reference's live `ItemPreviews`
 batch, including task properties and viewer permission, without another fetch.
 Explicit refreshes may revalidate that batch, but requests must settle while the
 pointer stays over the same reference; cache updates must not cause a continuous
@@ -2708,40 +2804,43 @@ access to the title and property controls.
 4. Completion signal: the `Stop` button disappears. Poll for that with `evaluate_script`;
    do not rely on `wait_for` text.
 
-## Comments (Discussion)
+## Discussion and anchored comments
 
-Below the editor: `Discussion` section with a `Leave a comment...` contenteditable.
+Below the editor, the unanchored `Discussion` uses an `Add to the discussion…`
+composer. Reserve comment wording for annotations anchored to document content.
 Desktop uses the same compact 15px composer as channels and AI chat, with an
 `Attach images` paperclip that opens the image picker directly. Wrapping text or
 Shift+Enter expands the editor above the controls. Lists, blockquotes, and other
 non-paragraph blocks always expand while editing. A single paragraph returns to
-the compact layout once it fits on one line.
-Touch keeps separate `Attach images` and
-`Format` buttons. `Send comment` is disabled until text exists. Click the
-composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
-above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
-user. Editing a discussion comment keeps the attachment and send controls, with no
-trash button. Deleting a comment's first message deletes the whole discussion —
-the confirmation reads `Delete comment`, the replies under it go too, and an
-anchored comment's highlight clears from the document. Deleting a reply removes
-only that reply. On mobile, the new-comment composer is docked above the navigation bar,
-replacing New when commenting is available in documents and tasks.
-When the comment composer is unavailable, New remains available; these views
-have no floating Ask AI input.
-Tap `Leave a comment...`
-to expand the channel-style input; use Send comment to submit (Enter inserts a
-newline on mobile). Submitting clears and unfocuses the mobile input, returning
-it to its compact state and dismissing the keyboard. The compact input's paperclip
+the compact layout once it fits on one line. Touch keeps separate `Attach images`
+and `Format` buttons. Send a message after text exists; the new message appears
+above the composer with author and timestamp. Mentions notify the mentioned user.
+Editing a message keeps the attachment and send controls. Deleting a root message
+removes its thread; deleting a reply removes only that reply.
+
+On phones, tasks show the shared newest-message card below their full description.
+View discussion opens Discussion at half height; drag its handle or heading to
+full height, half height, or down to dismiss. Empty tasks show Start a discussion,
+opening the sheet with keyboard focus. Typing expands it to full height, retained
+after keyboard dismissal; the thread shrinks and only its pinned input rises. Send appears only with text.
+Closing/reopening retains an unsent draft. Desktop tasks keep inline discussion;
+ordinary documents and tablet tasks retain the docked composer described below.
+On those touch surfaces, the message composer sits above the navigation bar,
+replacing New when discussion posting is available. When the composer is
+unavailable, New remains available; these views have no floating Ask AI input.
+Tap `Add to the discussion…` to expand the channel-style input. Enter inserts a
+newline on mobile. Submitting clears and unfocuses the mobile input, returning it
+to its compact state and dismissing the keyboard. The compact input's paperclip
 opens the native photo library in the iOS app, with a file-picker fallback when
 unavailable; browsers use the file picker. Cancelling adds no images.
-While the main document editor is focused with the virtual keyboard
-open, the floating comment input is hidden; dismissing the keyboard or leaving
-the document editor restores it with any unsent draft intact. Comments remain in the
-Discussion section, and collapsing that section does not hide the docked composer.
-On touch devices, the Discussion section is hidden until it contains a comment;
-the floating **Leave a comment...** input remains available. If the discussion
-becomes empty again, the section disappears. Desktop keeps the empty section
-and inline input.
+While the main document editor is focused with the virtual keyboard open, the
+floating message input is hidden; dismissing the keyboard or leaving the editor
+restores it with any unsent draft intact. Messages remain in the Discussion
+section, and collapsing that section does not hide the docked composer.
+On touch surfaces with a docked composer, Discussion is hidden until it contains a
+message; the floating Add to the discussion… input remains available. If the
+discussion becomes empty again, the section disappears. Desktop keeps the empty
+section and inline input.
 
 Select plain text or text already covered by a comment, then press **Comment**.
 The press keeps the editor selection until the draft opens. Cancel with Escape
@@ -2828,17 +2927,16 @@ copy links should retain the document/task route and the selected comment.
 
 ### Document discussions
 
-Document comments are messages read and written through
-`/dss/messages/document/<id>`, and both comment surfaces reuse the channel
-message components, as channels do.
+Document messages and anchored comments are read and written through
+`/dss/messages/document/<id>`, and both surfaces reuse the channel message components.
 
-Below the editor, expand `Discussion` to see comments without a text anchor.
-Its `Leave a comment...` composer is the channel composer: the `+` (`Add`) menu,
+Below the editor, expand `Discussion` to see messages without a text anchor.
+Its `Add to the discussion…` composer is the channel composer: the `+` (`Add`) menu,
 formatting, mentions, and `Send message` (Enter also submits). Confirm
 completion by the new message appearing above the composer; a failed send
 retains the draft. The timeline initially loads a bounded page with up to three
 preview replies per thread. Expand a thread to load its replies;
-`Load earlier comments` pages backward. Live updates preserve unsent replies
+`Load earlier messages` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
 
 Discussion and comment headers include the date for older messages (for example,
@@ -2874,10 +2972,14 @@ the card opened leave the body expanded. In that card, Open session is the
 icon-only button from a narrow agent card, so the label does not take a line
 of its own. Channels keep the labeled chip. Short comments, the phone drawer,
 the bottom Discussion, and channels always show the full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
-pushes the cards below it down (past the end of a short document if needed),
-and no card starts above the top of the document. Check this with a long
+pushes the cards below it down (past the end of a short document if needed).
+In Markdown the selected card stays beside its highlighted text, as in Google
+Docs: the cards above it move up, past the top of the document when they do
+not fit, and with nothing selected the stack starts at the first comment. A
+Word card never starts above the top of the document. Check this with a long
 thread active near the bottom of a short document that has another thread
-above and below it.
+above and below it, and by selecting the last of a dozen comments on
+consecutive lines.
 Removing the last marked text moves its retained conversation to Discussion,
 where it remains after reload. Removing only part of a marked range keeps the
 conversation anchored to the remaining text. On phones, the active Markdown
@@ -3077,9 +3179,16 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   Files-view title menu (three dots beside the breadcrumb) also lists `Copy as
   prompt` directly above `Download` for plain documents.
 - `Details` → Owner, Created, Last updated.
-- `Tags` → `Add tags` (dialog). Click a tag's label to toggle and save; Shift-click
-  keeps the picker open for multiple selections. Reopen it to remove a tag.
-  With GraphQL Soup enabled, applying the first tag refetches only that entity's
+- `Tags` → `Add tags` opens the picker. On desktop, clicking a checkbox or pressing
+  Enter/Space while it is focused toggles that tag and keeps the picker open;
+  clicking its label toggles and saves all staged selections, then closes.
+  Shift-click and Shift+Enter also keep it open. Mobile retains Done.
+  In a More-menu submenu, a row pick or Escape closes only the tag picker and
+  leaves the parent menu available for another action.
+  During tag creation, the compact Back/title row shows the draft color beside
+  the heading. Back and Escape return from sharing to color, then to the name
+  search, preserving the name and chosen color.
+  Applying the first tag refetches only that entity's
   properties; later edits update the existing assignment optimistically. Verify
   both the side panel and list-row chip, then reload to confirm persistence.
   This must also work after background backfills populate more than 128 cached
@@ -3113,6 +3222,7 @@ AI can create a native workbook without an open editor using `CreateDocument`
 with `fileExtension: "spreadsheet"`, empty `fileContent`, and `isTask: false`.
 Read the returned document with `ReadSpreadsheet`, then populate it with
 `EditSpreadsheet`; do not create a CSV as a substitute for a native workbook.
+In code mode, `macro.documents.createSpreadsheet({ name })` does the same.
 Spreadsheet reads and edits run against server state even when no tab is open.
 An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:

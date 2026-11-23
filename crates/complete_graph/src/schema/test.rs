@@ -22,6 +22,7 @@ use macro_authorization::{
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{
     email::EmailStr,
     lowercased::Lowercase,
@@ -30,7 +31,7 @@ use macro_user_id::{
 use model_entity::EntityType as ModelEntityType;
 use model_owner::Owner;
 use model_user::UserContext;
-use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
+use models_pagination::{PaginateOn, Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{
     chat::SoupChat,
     document::SoupDocument,
@@ -45,7 +46,11 @@ use uuid::Uuid;
 
 use super::*;
 
+mod active_notification_ids;
 mod calendar;
+mod channel;
+mod contacts;
+mod crm_member_access;
 mod crm_record;
 mod database_activity;
 mod database_row;
@@ -54,10 +59,12 @@ mod email_archive;
 mod form_activity;
 mod initiative;
 mod notification_inbox;
+mod registered_work;
 mod scheduled_actions;
 mod soup_patches;
 mod stale_client;
 mod team_activity;
+mod time_entries;
 mod work_feed;
 
 const VALID_USER_ID: &str = "macro|user@example.com";
@@ -90,6 +97,9 @@ struct CountingSoupService {
     raw_team_receipts: Arc<AtomicUsize>,
     return_empty_raw: bool,
     raw_response: Arc<Mutex<Option<Vec<SoupItem<()>>>>>,
+    /// Page the raw response through the paginator Soup uses, so a full
+    /// page carries the cursor Soup would emit for the request.
+    paginate_raw: Arc<std::sync::atomic::AtomicBool>,
     frecency_calls: Arc<AtomicUsize>,
     frecency_team_receipts: Arc<AtomicUsize>,
     grouped_calls: Arc<AtomicUsize>,
@@ -128,6 +138,7 @@ fn soup_agent_session(id: Uuid) -> SoupItem<()> {
 
 fn soup_initiative(id: Uuid) -> SoupItem<()> {
     SoupItem::Initiative(SoupInitiative {
+        appearance: None,
         id,
         name: "Launch project".to_string(),
         owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
@@ -170,6 +181,7 @@ fn soup_chat(id: Uuid) -> SoupItem<()> {
 
 fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesField> {
     SoupItem::Document(SoupDocument {
+        appearance: None,
         id,
         document_version_id: 1,
         owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
@@ -189,6 +201,27 @@ fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesFi
     })
 }
 
+/// A Soup item identified by a string id, as Soup's own page candidates are.
+struct StringIdItem(SoupItem<()>);
+
+impl models_pagination::Identify for StringIdItem {
+    type Id = String;
+
+    fn id(&self) -> String {
+        models_pagination::Identify::id(&self.0).to_string()
+    }
+}
+
+impl models_pagination::SortOn<SimpleSortMethod> for StringIdItem {
+    fn sort_on(
+        sort: SimpleSortMethod,
+    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
+        let mut inner =
+            <SoupItem<()> as models_pagination::SortOn<SimpleSortMethod>>::sort_on(sort);
+        move |item| inner(&item.0)
+    }
+}
+
 fn test_soup_err() -> soup::domain::models::SoupErr {
     soup::domain::models::SoupErr::SoupDbErr(anyhow::anyhow!("counting Soup service"))
 }
@@ -197,12 +230,20 @@ impl CountingSoupService {
     fn set_raw_response(&self, items: Vec<SoupItem<()>>) {
         *self.raw_response.lock().expect("raw response lock") = Some(items);
     }
+
+    /// Like [`Self::set_raw_response`], but each page is paginated as Soup
+    /// paginates a `CREATED_AT` page: newest first, with a next cursor over
+    /// the request's own filter when the page is full.
+    fn set_paged_raw_response(&self, items: Vec<SoupItem<()>>) {
+        self.paginate_raw.store(true, Ordering::SeqCst);
+        self.set_raw_response(items);
+    }
 }
 
 impl SoupService for CountingSoupService {
     async fn get_user_soup<T>(
         &self,
-        _req: soup::domain::models::SoupRequest<T>,
+        req: soup::domain::models::SoupRequest<T>,
         team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
     ) -> Result<soup::domain::ports::SoupOutput<T>, soup::domain::models::SoupErr>
     where
@@ -215,6 +256,18 @@ impl SoupService for CountingSoupService {
         }
         let raw_response = self.raw_response.lock().expect("raw response lock").clone();
         if self.return_empty_raw || raw_response.is_some() {
+            if self.paginate_raw.load(Ordering::SeqCst) {
+                let page = raw_response
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(StringIdItem)
+                    .paginate_on(usize::from(req.limit), SimpleSortMethod::CreatedAt)
+                    .filter_on(req.cursor.filter().clone())
+                    .sort_desc()
+                    .into_page()
+                    .map(|item| item.0);
+                return Ok(soup::domain::ports::SoupOutput::Simple(page));
+            }
             let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
                 Paginated::from_parts(raw_response.unwrap_or_default(), None);
             return Ok(soup::domain::ports::SoupOutput::Simple(page));
@@ -282,6 +335,20 @@ impl SoupService for CountingSoupService {
         self.frecency_calls.fetch_add(1, Ordering::SeqCst);
         if team_receipt.is_some() {
             self.frecency_team_receipts.fetch_add(1, Ordering::SeqCst);
+        }
+        if self
+            .raw_response
+            .lock()
+            .expect("raw response lock")
+            .is_some()
+        {
+            let page: PaginatedCursor<
+                soup::domain::models::EnrichedSoupItem,
+                String,
+                SimpleSortMethod,
+                T,
+            > = Paginated::from_parts(Vec::new(), None);
+            return Ok(soup::domain::ports::SoupOutput::Simple(page));
         }
         Err(test_soup_err())
     }
@@ -398,6 +465,15 @@ impl email::domain::ports::EmailThreadPreviewService for CountingEmailService {
         // Only the email crate constructs previews; this fake observes which
         // receipts reached the read.
         Ok(Vec::new())
+    }
+
+    async fn get_owned_email_thread_preview(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> Result<Option<EnrichedEmailThreadPreview>, EmailErr> {
+        // Mutation replies read through `EmailMutationThreadReader` here.
+        Ok(None)
     }
 }
 
@@ -1152,6 +1228,7 @@ struct CountingEntityAccessService {
     team_calls: Arc<AtomicUsize>,
     viewable_email_threads: Arc<Mutex<std::collections::HashSet<Uuid>>>,
     email_thread_checks: Arc<Mutex<Vec<Uuid>>>,
+    viewable_crm_records: Arc<Mutex<std::collections::HashSet<(EntityType, String)>>>,
 }
 
 impl EntityAccessService for CountingEntityAccessService {
@@ -1191,6 +1268,12 @@ impl EntityAccessService for CountingEntityAccessService {
                     .contains(&thread_id)
                     .then_some(AccessLevel::View)
             }
+            (EntityType::CrmCompany | EntityType::CrmContact | EntityType::CrmPipeline, _) => self
+                .viewable_crm_records
+                .lock()
+                .unwrap()
+                .contains(&(entity_type, entity_id.to_owned()))
+                .then_some(AccessLevel::View),
             _ => return Err(AccessError::internal("test access failure")),
         };
         if let Some(access_level) = grant {
@@ -1205,7 +1288,12 @@ impl EntityAccessService for CountingEntityAccessService {
         }
         if matches!(
             entity_type,
-            EntityType::Database | EntityType::Form | EntityType::EmailThread
+            EntityType::Database
+                | EntityType::Form
+                | EntityType::EmailThread
+                | EntityType::CrmCompany
+                | EntityType::CrmContact
+                | EntityType::CrmPipeline
         ) {
             return Err(AccessError::Unauthorized);
         }
@@ -1423,28 +1511,31 @@ impl graphql_soup::SoupEmailThreadReader for RecordingThreadReader {
     }
 }
 
+/// The schema the harness runs, over the counting Soup service.
+type TestSchema = SoupSchema<
+    CountingSoupService,
+    NoOpSoupRealtimeSubscriptionService,
+    NoopWebSocketNotificationSubscriptionService,
+    graphql_activity::NoOpActivitySubscriptionService,
+    CountingEmailService,
+    CountingEntityAccessService,
+    FakeAuthorizationService,
+    TestState,
+    NoOpEntityPropertyWriter,
+    UnavailableEntityMutationService,
+    graphql_favorite::NoOpFavoriteMutationService,
+    NoOpChannelActivityMutationService,
+    NoOpNotificationMutationService,
+    NoOpSoupNotificationEdgeReader,
+    NoOpEntityPropertyReader,
+    RecordingEmailContentReader,
+    graphql_favorite::NoOpEntityFavoriteEdgeReader,
+    graphql_permission::NoOpEntityPermissionEdgeReader,
+    RecordingActivityReader,
+>;
+
 struct TestHarness {
-    schema: SoupSchema<
-        CountingSoupService,
-        NoOpSoupRealtimeSubscriptionService,
-        NoopWebSocketNotificationSubscriptionService,
-        graphql_activity::NoOpActivitySubscriptionService,
-        CountingEmailService,
-        CountingEntityAccessService,
-        FakeAuthorizationService,
-        TestState,
-        NoOpEntityPropertyWriter,
-        UnavailableEntityMutationService,
-        graphql_favorite::NoOpFavoriteMutationService,
-        NoOpChannelActivityMutationService,
-        NoOpNotificationMutationService,
-        NoOpSoupNotificationEdgeReader,
-        NoOpEntityPropertyReader,
-        RecordingEmailContentReader,
-        graphql_favorite::NoOpEntityFavoriteEdgeReader,
-        graphql_permission::NoOpEntityPermissionEdgeReader,
-        RecordingActivityReader,
-    >,
+    schema: TestSchema,
     state: TestState,
     soup_service: CountingSoupService,
     /// Answers single agent-session lookups, as the primary does in DSS.
@@ -1779,6 +1870,33 @@ async fn soup_entity_is_read_from_the_primary_not_the_list_replica() {
 }
 
 #[tokio::test]
+async fn soup_entity_rejects_outside_soup_without_reading_soup() {
+    let harness = harness();
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_document(Uuid::from_u128(10))]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ soupEntity(input: {{entityType: OUTSIDE_SOUP, entityId: "{}"}}) {{ id }} }} }}"#,
+            Uuid::from_u128(10)
+        ))
+        .await;
+
+    assert_eq!(
+        response.errors[0].message,
+        "OUTSIDE_SOUP is not a Soup entity type"
+    );
+    assert_eq!(
+        harness
+            .primary_soup_service
+            .raw_calls
+            .load(Ordering::SeqCst),
+        0
+    );
+}
+
+#[tokio::test]
 async fn soup_entity_is_null_when_the_viewer_cannot_see_it() {
     let harness = harness();
     harness.primary_soup_service.set_raw_response(Vec::new());
@@ -1922,6 +2040,183 @@ async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
 }
 
 #[tokio::test]
+async fn agent_session_activity_appended_refuses_a_session_outside_the_viewers_scope() {
+    use async_graphql::futures_util::StreamExt as _;
+
+    let user_id = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
+    let hidden_session_id = Uuid::from_u128(8);
+    let soup_service = CountingSoupService::default();
+    soup_service.set_raw_response(vec![]);
+    let loader = graphql_soup::AgentSessionEntityLoader::new(
+        soup_service.clone(),
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    );
+    let schema = build_schema_with_service::<
+        CountingSoupService,
+        NoOpEmailService,
+        NoOpEntityAccessService,
+        SchemaOnlyAuthorizationService,
+        SchemaOnlyState,
+        NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
+        NoOpFavoriteMutationService,
+        NoOpChannelActivityMutationService,
+        NoOpNotificationMutationService,
+        NoOpSoupNotificationEdgeReader,
+        NoOpEntityPropertyReader,
+        NoOpSoupEmailContentEdgeReader,
+        NoOpEntityFavoriteEdgeReader,
+        NoOpEntityPermissionEdgeReader,
+        NoOpActivityReader,
+    >(soup_service);
+
+    let refused = schema
+        .execute_stream(
+            async_graphql::Request::new(format!(
+                "subscription {{ agentSessionActivityAppended(sessionId: \"{hidden_session_id}\") {{ id }} }}"
+            ))
+            .data(user_id)
+            .data(loader),
+        )
+        .next()
+        .await
+        .expect("one response");
+    assert!(!refused.errors.is_empty());
+    assert_eq!(refused.errors[0].message, "agent session not found");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn agent_session_activity_appended_routes_only_the_requested_session(pool: sqlx::PgPool) {
+    use activity::{ActivityTopicEvent, ActivityTopicEventConsumer, ActivityWireRow};
+    use async_graphql::futures_util::{StreamExt as _, pin_mut};
+
+    struct TestConsumer(tokio::sync::Mutex<tokio::sync::mpsc::Receiver<ActivityTopicEvent>>);
+    impl ActivityTopicEventConsumer for TestConsumer {
+        async fn recv(&self) -> Result<ActivityTopicEvent, Report> {
+            self.0
+                .lock()
+                .await
+                .recv()
+                .await
+                .ok_or_else(|| rootcause::report!("test consumer closed"))
+        }
+    }
+
+    let session_id = Uuid::new_v4();
+    let other_session_id = Uuid::new_v4();
+    let bot_id = Uuid::new_v4();
+    let correlation_id = Uuid::now_v7();
+    let other_correlation_id = Uuid::now_v7();
+    for id in [session_id, other_session_id] {
+        sqlx::query!(
+            "INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace, status) VALUES ($1, $2, $3, 'test', 'test', '/workspace', 'disconnected')",
+            id,
+            VALID_USER_ID,
+            bot_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    for (correlation, session) in [
+        (correlation_id, session_id),
+        (other_correlation_id, other_session_id),
+    ] {
+        sqlx::query!(
+            "INSERT INTO agent_correlations (id, agent_session_id) VALUES ($1, $2)",
+            correlation,
+            session,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let (sender, receiver) = tokio::sync::mpsc::channel(4);
+    let consumer = Arc::new(activity::ActivityRealtimeConsumerService::new(
+        TestConsumer(tokio::sync::Mutex::new(receiver)),
+    ));
+    let subscriptions = crate::agent_session_activity_subscriptions(Arc::clone(&consumer), pool);
+    let soup_service = CountingSoupService::default();
+    soup_service.set_raw_response(vec![soup_agent_session(session_id)]);
+    let loader = graphql_soup::AgentSessionEntityLoader::new(
+        soup_service.clone(),
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    );
+    let schema = build_schema_with_service::<
+        CountingSoupService,
+        NoOpEmailService,
+        NoOpEntityAccessService,
+        SchemaOnlyAuthorizationService,
+        SchemaOnlyState,
+        NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
+        NoOpFavoriteMutationService,
+        NoOpChannelActivityMutationService,
+        NoOpNotificationMutationService,
+        NoOpSoupNotificationEdgeReader,
+        NoOpEntityPropertyReader,
+        NoOpSoupEmailContentEdgeReader,
+        NoOpEntityFavoriteEdgeReader,
+        NoOpEntityPermissionEdgeReader,
+        NoOpActivityReader,
+    >(soup_service);
+    let responses = schema.execute_stream(
+        async_graphql::Request::new(format!(
+            "subscription {{ agentSessionActivityAppended(sessionId: \"{session_id}\") {{ id agentCorrelationId }} }}"
+        ))
+        .data(MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap())
+        .data(loader)
+        .data(SchemaOnlyState)
+        .data(subscriptions),
+    );
+    pin_mut!(responses);
+    let ready = responses.next().await.expect("listening acknowledgement");
+    assert!(ready.errors.is_empty(), "{:?}", ready.errors);
+    assert_eq!(
+        ready.data.into_json().unwrap()["agentSessionActivityAppended"],
+        serde_json::json!([])
+    );
+
+    let worker = tokio::spawn(async move { consumer.run().await });
+    let wire_row = |correlation_id, id| ActivityWireRow {
+        agent_verb: None,
+        agent_correlation_id: Some(correlation_id),
+        id,
+        actor_id: format!("bot|{bot_id}"),
+        subject_id: format!("bot|{bot_id}"),
+        entity_type: ModelEntityType::Document,
+        entity_id: "doc-1".to_owned(),
+        action: "edited".to_owned(),
+        action_payload: None,
+        occurred_at: chrono::Utc::now(),
+    };
+    let expected_id = Uuid::new_v4();
+    sender
+        .send(ActivityTopicEvent::SessionRecorded {
+            activities: vec![
+                wire_row(other_correlation_id, Uuid::new_v4()),
+                wire_row(correlation_id, expected_id),
+            ],
+        })
+        .await
+        .unwrap();
+    let delivered = tokio::time::timeout(std::time::Duration::from_secs(3), responses.next())
+        .await
+        .expect("session row arrives")
+        .expect("stream response");
+    assert!(delivered.errors.is_empty(), "{:?}", delivered.errors);
+    let data = delivered.data.into_json().unwrap();
+    let rows = data["agentSessionActivityAppended"].as_array().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["id"], expected_id.to_string());
+    assert_eq!(rows[0]["agentCorrelationId"], correlation_id.to_string());
+    worker.abort();
+}
+
+#[tokio::test]
 async fn activity_updates_subscribes_as_the_authenticated_user() {
     use activity::{
         ActivitySubscription, ActivitySubscriptionExit, ActivitySubscriptionService,
@@ -1991,7 +2286,8 @@ async fn activity_updates_subscribes_as_the_authenticated_user() {
     let request = async_graphql::Request::new(
         "subscription { activityUpdates { __typename ... on GraphqlActivityEvent { id entityType entityId } } }",
     )
-    .data(user_id.clone());
+    .data(user_id.clone())
+    .data(SchemaOnlyState);
     let responses = schema.execute_stream(request);
     pin_mut!(responses);
 
@@ -2007,6 +2303,8 @@ async fn activity_updates_subscribes_as_the_authenticated_user() {
             chrono::Utc::now(),
         );
         activity::ActivityRecord {
+            agent_correlation_id: activity.agent_correlation_id,
+            agent_verb: activity.agent_verb,
             id: activity.id,
             actor: activity.actor.clone(),
             subject_id: activity.subject_id.clone(),
@@ -2169,6 +2467,526 @@ async fn soup_passes_team_receipt_to_raw_path() {
         harness.frecency_soup_team_receipts.load(Ordering::SeqCst),
         0
     );
+}
+
+/// The filters of a channel directory page: channel threads left out.
+const DIRECTORY_FILTERS: &str =
+    r#"channelThreadFilter: {literal: {threadId: "00000000-0000-0000-0000-000000000000"}}"#;
+
+/// A channel directory page, each input field given once: `fields` holds
+/// the initial input's fields after `filters`, `channel_filter` an extra
+/// `channelFilter` beside the directory's own filters.
+fn directory_page(fields: &str, channel_filter: &str, selection: &str) -> String {
+    let channel_filter = if channel_filter.is_empty() {
+        String::new()
+    } else {
+        format!(", channelFilter: {channel_filter}")
+    };
+    format!(
+        "{{ user {{ soup(input: {{initial: {{filters: {{{DIRECTORY_FILTERS}{channel_filter}}}{fields}}}}}) {{ {selection} }} }} }}"
+    )
+}
+
+/// A directory page on the primary with `scope` among its filters.
+fn scoped_directory_page(scope: &str) -> String {
+    format!(
+        "{{ user {{ soup(input: {{initial: {{filters: {{{scope}, {DIRECTORY_FILTERS}}}, limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY}}}}) {{ nextCursor }} }} }}"
+    )
+}
+
+/// The ordinary directory page: 100 items by creation time.
+fn directory_page_query(extra: &str, selection: &str) -> String {
+    directory_page(
+        &format!(", limit: 100, sortMethod: CREATED_AT{extra}"),
+        "",
+        selection,
+    )
+}
+
+/// A continuation of `cursor` with the given extra input fields.
+fn continuation_query(cursor: &str, extra: &str) -> String {
+    format!(
+        r#"{{ user {{ soup(input: {{continuation: {{cursor: "{cursor}"{extra}}}}}) {{ nextCursor }} }} }}"#
+    )
+}
+
+/// A continuation cursor of a timestamp-sorted page over `filter`.
+fn simple_cursor(limit: usize, filter: item_filters::ast::EntityFilterAst) -> String {
+    models_pagination::Base64Str::encode_json(models_pagination::CursorWithValAndFilter {
+        id: Uuid::from_u128(1),
+        limit,
+        val: models_pagination::CursorVal {
+            sort_type: SimpleSortMethod::CreatedAt,
+            last_val: chrono::DateTime::default(),
+        },
+        filter,
+    })
+    .to_string()
+}
+
+/// The cursor a `NOTIFIED_AT` page emits.
+fn notified_cursor(filter: item_filters::ast::EntityFilterAst) -> String {
+    models_pagination::Base64Str::encode_json(models_pagination::CursorWithValAndFilter {
+        id: Uuid::from_u128(1).to_string(),
+        limit: 100,
+        val: models_pagination::CursorVal {
+            sort_type: models_pagination::NotifiedAt,
+            last_val: chrono::DateTime::<chrono::Utc>::default(),
+        },
+        filter,
+    })
+    .to_string()
+}
+
+/// The cursor a `PROPERTY` page emits.
+fn property_cursor(filter: item_filters::ast::EntityFilterAst) -> String {
+    use soup::domain::models::{DynamicSort, DynamicSortValue, SoupSortDirection};
+    models_pagination::Base64Str::encode_json(models_pagination::CursorWithValAndFilter {
+        id: Uuid::from_u128(1),
+        limit: 100,
+        val: models_pagination::CursorVal {
+            sort_type: DynamicSort::Property {
+                property_definition_id: Uuid::from_u128(7),
+                direction: SoupSortDirection::Desc,
+            },
+            last_val: DynamicSortValue::Property {
+                key: None,
+                timestamp: chrono::DateTime::default(),
+                direction: SoupSortDirection::Desc,
+            },
+        },
+        filter,
+    })
+    .to_string()
+}
+
+/// The directory's filter as the Soup domain holds it.
+fn directory_filter_ast() -> item_filters::ast::EntityFilterAst {
+    item_filters::ast::EntityFilterAst {
+        channel_thread_filter: Some(Arc::new(filter_ast::Expr::val(
+            item_filters::ast::channel::ChannelThreadLiteral::ThreadId(Uuid::nil()),
+        ))),
+        ..Default::default()
+    }
+}
+
+/// A balanced OR of channel ids `from..=to`, as the web builds it.
+fn balanced_channel_ids(from: u128, to: u128) -> String {
+    if from == to {
+        return format!(r#"{{literal: {{channelId: "{}"}}}}"#, Uuid::from_u128(from));
+    }
+    let middle = from + (to - from) / 2;
+    format!(
+        "{{or: {{left: {}, right: {}}}}}",
+        balanced_channel_ids(from, middle),
+        balanced_channel_ids(middle + 1, to)
+    )
+}
+
+/// A channel filter naming `count` channel ids, joined or not, as the web's
+/// by-id read sends it.
+fn named_channels_filter(count: u128) -> String {
+    let named = balanced_channel_ids(1, count);
+    format!(
+        "{{and: {{left: {named}, right: {{or: {{left: {{literal: {{isParticipant: true}}}}, right: {{literal: {{isParticipant: false}}}}}}}}}}}}"
+    )
+}
+
+/// The primary channel Soup's call counts after one page.
+#[derive(Debug, PartialEq, Eq)]
+struct PrimaryCalls {
+    raw: usize,
+    frecency: usize,
+}
+
+/// Runs one Soup page with `primary` as `PrimaryChannelSoup` in the request
+/// data, typed as DSS types it: by the schema's own Soup service.
+async fn soup_page_on(
+    harness: &TestHarness,
+    primary: &CountingSoupService,
+    query: &str,
+) -> async_graphql::Response {
+    harness
+        .schema
+        .execute(harness.request(query, authenticated_parts()).data(
+            graphql_soup::PrimaryChannelSoup::<<TestSchema as crate::SoupSchemaService>::Service>(
+                primary.clone(),
+            ),
+        ))
+        .await
+}
+
+/// Runs one Soup page with an empty primary channel Soup.
+async fn soup_page_with_primary_channel_soup(
+    harness: &TestHarness,
+    query: &str,
+) -> (async_graphql::Response, PrimaryCalls) {
+    let primary = CountingSoupService::default();
+    primary.set_raw_response(Vec::new());
+    let response = soup_page_on(harness, &primary, query).await;
+    let calls = PrimaryCalls {
+        raw: primary.raw_calls.load(Ordering::SeqCst),
+        frecency: primary.frecency_calls.load(Ordering::SeqCst),
+    };
+    (response, calls)
+}
+
+#[tokio::test]
+async fn soup_channel_reads_primary_runs_directory_pages_on_the_primary_channel_soup() {
+    for (name, query) in [
+        (
+            "lane",
+            directory_page_query(", channelReads: PRIMARY", "nextCursor"),
+        ),
+        (
+            "by id",
+            directory_page(
+                ", limit: 3, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                &named_channels_filter(3),
+                "nextCursor",
+            ),
+        ),
+        (
+            "100 ids",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                &named_channels_filter(100),
+                "nextCursor",
+            ),
+        ),
+    ] {
+        let harness = harness();
+
+        let (response, primary_calls) = soup_page_with_primary_channel_soup(&harness, &query).await;
+
+        assert!(response.errors.is_empty(), "{name}: {:?}", response.errors);
+        assert_eq!(
+            primary_calls,
+            PrimaryCalls {
+                raw: 1,
+                frecency: 0
+            },
+            "{name}"
+        );
+        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0, "{name}");
+        assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1, "{name}");
+    }
+}
+
+#[tokio::test]
+async fn soup_channel_reads_primary_runs_the_frecency_path_on_the_primary_channel_soup() {
+    let harness = harness();
+
+    let (response, primary_calls) = soup_page_with_primary_channel_soup(
+        &harness,
+        &directory_page_query(", channelReads: PRIMARY", "items { frecencyScore }"),
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        primary_calls,
+        PrimaryCalls {
+            raw: 0,
+            frecency: 1
+        }
+    );
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn soup_channel_reads_default_and_replica_run_on_the_list_soup() {
+    for extra in ["", ", channelReads: REPLICA"] {
+        let harness = harness();
+        harness.soup_service.set_raw_response(Vec::new());
+
+        let (response, primary_calls) = soup_page_with_primary_channel_soup(
+            &harness,
+            &directory_page_query(extra, "nextCursor"),
+        )
+        .await;
+
+        assert!(response.errors.is_empty(), "{extra}: {:?}", response.errors);
+        assert_eq!(
+            primary_calls,
+            PrimaryCalls {
+                raw: 0,
+                frecency: 0
+            },
+            "{extra}"
+        );
+        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1, "{extra}");
+    }
+}
+
+#[tokio::test]
+async fn soup_channel_reads_primary_continues_from_the_cursor_its_page_emits() {
+    let harness = harness();
+    let primary = CountingSoupService::default();
+    primary.set_paged_raw_response(
+        (1..=101)
+            .map(|n| soup_document(Uuid::from_u128(n)))
+            .collect(),
+    );
+
+    let first = soup_page_on(
+        &harness,
+        &primary,
+        &directory_page_query(", channelReads: PRIMARY", "nextCursor"),
+    )
+    .await;
+    assert!(first.errors.is_empty(), "{:?}", first.errors);
+    let data = first.data.into_json().expect("json data");
+    let cursor = data["user"]["soup"]["nextCursor"]
+        .as_str()
+        .expect("a full page emits a cursor");
+
+    for (channel_reads, expected_primary, expected_replica) in [
+        (", channelReads: PRIMARY", 2, 0),
+        (", channelReads: REPLICA", 2, 1),
+        ("", 2, 2),
+    ] {
+        harness.soup_service.set_raw_response(Vec::new());
+
+        let next = soup_page_on(
+            &harness,
+            &primary,
+            &continuation_query(cursor, channel_reads),
+        )
+        .await;
+
+        assert!(next.errors.is_empty(), "{channel_reads}: {:?}", next.errors);
+        assert_eq!(
+            primary.raw_calls.load(Ordering::SeqCst),
+            expected_primary,
+            "{channel_reads}"
+        );
+        assert_eq!(
+            harness.raw_soup_calls.load(Ordering::SeqCst),
+            expected_replica,
+            "{channel_reads}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn soup_channel_reads_primary_refuses_pages_that_are_not_directory_pages() {
+    let directory = directory_filter_ast();
+    let mut team_wide = directory_filter_ast();
+    team_wide.channel_filter = Some(Arc::new(filter_ast::Expr::val(
+        item_filters::ast::channel::ChannelLiteral::IsParticipant(false),
+    )));
+    let primary = ", channelReads: PRIMARY";
+    let pages = [
+        (
+            "channel threads included",
+            "{ user { soup(input: {initial: {limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY}}) { nextCursor } } }".to_string(),
+        ),
+        (
+            "larger than a page",
+            directory_page(", limit: 101, sortMethod: CREATED_AT, channelReads: PRIMARY", "", "nextCursor"),
+        ),
+        (
+            "notified at",
+            directory_page(", limit: 100, sortMethod: NOTIFIED_AT, channelReads: PRIMARY", "", "nextCursor"),
+        ),
+        (
+            "name",
+            directory_page(", limit: 100, sortMethod: NAME, channelReads: PRIMARY", "", "nextCursor"),
+        ),
+        (
+            "oldest first",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, sortDirection: ASC, channelReads: PRIMARY",
+                "",
+                "nextCursor",
+            ),
+        ),
+        (
+            "every team channel",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                "{or: {left: {literal: {isParticipant: true}}, right: {literal: {isParticipant: false}}}}",
+                "nextCursor",
+            ),
+        ),
+        (
+            "a notification state",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                "{literal: {notificationState: UNSEEN}}",
+                "nextCursor",
+            ),
+        ),
+        (
+            "ids and a notification state",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                r#"{and: {left: {literal: {channelId: "00000000-0000-0000-0000-000000000001"}}, right: {literal: {notificationState: UNSEEN}}}}"#,
+                "nextCursor",
+            ),
+        ),
+        (
+            "more ids than a page",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                &named_channels_filter(101),
+                "nextCursor",
+            ),
+        ),
+        (
+            "favorites only",
+            scoped_directory_page("favoritesOnly: true"),
+        ),
+        (
+            "a CRM company",
+            scoped_directory_page(r#"crmAssociation: {company: "00000000-0000-0000-0000-000000000007"}"#),
+        ),
+        (
+            "CRM activity",
+            scoped_directory_page("crmAssociation: {activity: true}"),
+        ),
+        (
+            "a CRM company in the document filter",
+            scoped_directory_page(
+                r#"documentFilter: {literal: {crmAssociated: {company: "00000000-0000-0000-0000-000000000007"}}}"#,
+            ),
+        ),
+        (
+            "a CRM contact under NOT in the document filter",
+            scoped_directory_page(
+                r#"documentFilter: {not: {literal: {crmAssociated: {contact: "00000000-0000-0000-0000-000000000007"}}}}"#,
+            ),
+        ),
+        (
+            "more participation states than a page needs",
+            directory_page(
+                ", limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY",
+                r#"{and: {left: {literal: {channelId: "00000000-0000-0000-0000-000000000001"}}, right: {and: {left: {literal: {isParticipant: true}}, right: {or: {left: {literal: {isParticipant: true}}, right: {literal: {isParticipant: false}}}}}}}}"#,
+                "nextCursor",
+            ),
+        ),
+        (
+            "continuation without the thread exclusion",
+            continuation_query(
+                &simple_cursor(100, item_filters::ast::EntityFilterAst::default()),
+                primary,
+            ),
+        ),
+        (
+            "continuation larger than a page",
+            continuation_query(&simple_cursor(101, directory.clone()), primary),
+        ),
+        (
+            "continuation oldest first",
+            continuation_query(
+                &simple_cursor(100, directory.clone()),
+                ", sortDirection: ASC, channelReads: PRIMARY",
+            ),
+        ),
+        (
+            "continuation over every team channel",
+            continuation_query(&simple_cursor(100, team_wide), primary),
+        ),
+        (
+            "notified at continuation",
+            continuation_query(&notified_cursor(directory.clone()), primary),
+        ),
+        (
+            "property continuation",
+            continuation_query(&property_cursor(directory), primary),
+        ),
+    ];
+    for (name, page) in pages {
+        let harness = harness();
+
+        let (response, primary_calls) = soup_page_with_primary_channel_soup(&harness, &page).await;
+
+        let messages: Vec<_> = response.errors.iter().map(|e| e.message.as_str()).collect();
+        assert_eq!(
+            messages,
+            [graphql_soup::PRIMARY_CHANNEL_READS_REFUSED],
+            "{name}"
+        );
+        assert_eq!(
+            primary_calls,
+            PrimaryCalls {
+                raw: 0,
+                frecency: 0
+            },
+            "{name}"
+        );
+        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0, "{name}");
+        assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0, "{name}");
+    }
+}
+
+#[tokio::test]
+async fn soup_channel_reads_primary_errors_where_the_primary_channel_soup_is_missing() {
+    let harness = harness();
+
+    let response = harness
+        .execute(&directory_page_query(
+            ", channelReads: PRIMARY",
+            "nextCursor",
+        ))
+        .await;
+
+    let messages: Vec<_> = response.errors.iter().map(|e| e.message.as_str()).collect();
+    assert_eq!(messages, [graphql_soup::PRIMARY_CHANNEL_SOUP_MISSING]);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+}
+
+/// A schema over an `Arc`-shared Soup service, as DSS builds it.
+type SharedTestSchema = SoupSchema<
+    Arc<CountingSoupService>,
+    NoOpSoupRealtimeSubscriptionService,
+    NoopWebSocketNotificationSubscriptionService,
+    graphql_activity::NoOpActivitySubscriptionService,
+    CountingEmailService,
+    CountingEntityAccessService,
+    FakeAuthorizationService,
+    TestState,
+    NoOpEntityPropertyWriter,
+    UnavailableEntityMutationService,
+    graphql_favorite::NoOpFavoriteMutationService,
+    NoOpChannelActivityMutationService,
+    NoOpNotificationMutationService,
+    NoOpSoupNotificationEdgeReader,
+    NoOpEntityPropertyReader,
+    RecordingEmailContentReader,
+    graphql_favorite::NoOpEntityFavoriteEdgeReader,
+    graphql_permission::NoOpEntityPermissionEdgeReader,
+    RecordingActivityReader,
+>;
+
+#[tokio::test]
+async fn soup_channel_reads_primary_finds_the_primary_channel_soup_in_a_shared_schema() {
+    let harness = harness();
+    let replica = CountingSoupService::default();
+    replica.set_raw_response(Vec::new());
+    let primary = CountingSoupService::default();
+    primary.set_raw_response(Vec::new());
+    let schema: SharedTestSchema = build_schema_from_arc(Arc::new(replica.clone()));
+
+    let response = schema
+        .execute(
+            harness
+                .request(
+                    &directory_page_query(", channelReads: PRIMARY", "nextCursor"),
+                    authenticated_parts(),
+                )
+                .data(graphql_soup::PrimaryChannelSoup::<
+                    <SharedTestSchema as crate::SoupSchemaService>::Service,
+                >(Arc::new(primary.clone()))),
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(primary.raw_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(replica.raw_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -2608,6 +3426,8 @@ fn activity_record(
     occurred_at_secs: i64,
 ) -> activity::ActivityRecord {
     activity::ActivityRecord {
+        agent_correlation_id: None,
+        agent_verb: None,
         id: Uuid::from_u128(id),
         actor: activity::Actor::new_from_user(
             MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),

@@ -4,26 +4,6 @@ use crate::domain::model::Permission;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use macro_user_id::email::ReadEmailParts;
-
-#[derive(Debug, Clone, Default)]
-struct MockUserRepository {}
-
-impl UserRepository for MockUserRepository {
-    async fn get_user_id_by_email(
-        &self,
-        email: &Email<Lowercase<'_>>,
-    ) -> Result<MacroUserIdStr<'_>, UserRolesAndPermissionsError> {
-        match email.email_str() {
-            "doesnotexist@doesnotexist.com" => Err(UserRolesAndPermissionsError::UserDoesNotExist),
-            "user@user.com" => Ok(MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap()),
-            _ => Err(UserRolesAndPermissionsError::StorageLayerError(
-                anyhow::anyhow!("unexpected email"),
-            )),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 struct MockUserRolesAndPermissionsRepository {
     add_roles_to_user_calls: Arc<Mutex<usize>>,
@@ -87,18 +67,15 @@ impl UserRolesAndPermissionsRepository for MockUserRolesAndPermissionsRepository
 async fn assert_payment_failure_status_removes_subscription_roles(
     subscription_status: SubscriptionStatus,
 ) -> anyhow::Result<()> {
-    let mock_user_repository = MockUserRepository::default();
     let mock_user_roles_and_permissions_repository =
         MockUserRolesAndPermissionsRepository::default();
 
-    let user_service = UserRolesAndPermissionsServiceImpl::new(
-        mock_user_roles_and_permissions_repository.clone(),
-        mock_user_repository,
-    );
+    let user_service =
+        UserRolesAndPermissionsServiceImpl::new(mock_user_roles_and_permissions_repository.clone());
 
     user_service
         .update_user_roles_and_permissions_for_subscription(
-            Email::parse_from_str("UsEr@uSeR.com")?.lowercase(),
+            &MacroUserIdStr::parse_from_str("macro|user@example.com")?,
             subscription_status,
             ProductTier::Opus,
         )
@@ -124,19 +101,16 @@ async fn test_payment_failure_statuses_incomplete_expired_removes_roles() -> any
 }
 
 #[tokio::test]
-async fn test_user_respository_get_user_id_by_email() -> anyhow::Result<()> {
-    let mock_user_repository = MockUserRepository::default();
+async fn active_then_paused_adds_then_removes_roles() -> anyhow::Result<()> {
     let mock_user_roles_and_permissions_repository =
         MockUserRolesAndPermissionsRepository::default();
 
-    let user_service = UserRolesAndPermissionsServiceImpl::new(
-        mock_user_roles_and_permissions_repository.clone(),
-        mock_user_repository,
-    );
+    let user_service =
+        UserRolesAndPermissionsServiceImpl::new(mock_user_roles_and_permissions_repository.clone());
 
     user_service
         .update_user_roles_and_permissions_for_subscription(
-            Email::parse_from_str("UsEr@uSeR.com")?.lowercase(),
+            &MacroUserIdStr::parse_from_str("macro|user@example.com")?,
             SubscriptionStatus::Active,
             ProductTier::Haiku,
         )
@@ -149,7 +123,7 @@ async fn test_user_respository_get_user_id_by_email() -> anyhow::Result<()> {
 
     user_service
         .update_user_roles_and_permissions_for_subscription(
-            Email::parse_from_str("UsEr@uSeR.com")?.lowercase(),
+            &MacroUserIdStr::parse_from_str("macro|user@example.com")?,
             SubscriptionStatus::Paused,
             ProductTier::Haiku,
         )
@@ -165,18 +139,15 @@ async fn test_user_respository_get_user_id_by_email() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn activating_a_tier_removes_the_other_tier_roles() -> anyhow::Result<()> {
-    let mock_user_repository = MockUserRepository::default();
     let mock_user_roles_and_permissions_repository =
         MockUserRolesAndPermissionsRepository::default();
 
-    let user_service = UserRolesAndPermissionsServiceImpl::new(
-        mock_user_roles_and_permissions_repository.clone(),
-        mock_user_repository,
-    );
+    let user_service =
+        UserRolesAndPermissionsServiceImpl::new(mock_user_roles_and_permissions_repository.clone());
 
     user_service
         .update_user_roles_and_permissions_for_subscription(
-            Email::parse_from_str("user@user.com")?.lowercase(),
+            &MacroUserIdStr::parse_from_str("macro|user@example.com")?,
             SubscriptionStatus::Active,
             ProductTier::Max,
         )
@@ -198,17 +169,14 @@ async fn activating_a_tier_removes_the_other_tier_roles() -> anyhow::Result<()> 
 
 #[tokio::test]
 async fn test_get_user_roles() -> anyhow::Result<()> {
-    let mock_user_repository = MockUserRepository::default();
     let mock_user_roles_and_permissions_repository =
         MockUserRolesAndPermissionsRepository::default();
 
-    let user_service = UserRolesAndPermissionsServiceImpl::new(
-        mock_user_roles_and_permissions_repository,
-        mock_user_repository,
-    );
+    let user_service =
+        UserRolesAndPermissionsServiceImpl::new(mock_user_roles_and_permissions_repository);
 
     let roles = user_service
-        .get_user_roles(&MacroUserIdStr::parse_from_str("macro|user@user.com")?)
+        .get_user_roles(&MacroUserIdStr::parse_from_str("macro|user@example.com")?)
         .await?;
 
     assert_eq!(roles.len(), 2);
@@ -220,14 +188,11 @@ async fn test_get_user_roles() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_get_user_roles_delegates_to_repository() -> anyhow::Result<()> {
-    let mock_user_repository = MockUserRepository::default();
     let mock_user_roles_and_permissions_repository =
         MockUserRolesAndPermissionsRepository::default();
 
-    let user_service = UserRolesAndPermissionsServiceImpl::new(
-        mock_user_roles_and_permissions_repository,
-        mock_user_repository,
-    );
+    let user_service =
+        UserRolesAndPermissionsServiceImpl::new(mock_user_roles_and_permissions_repository);
 
     let roles = user_service
         .get_user_roles(&MacroUserIdStr::parse_from_str("macro|other@user.com")?)

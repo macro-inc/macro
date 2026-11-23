@@ -24,7 +24,11 @@ export type { ChannelLabel, ChannelLabelRule, SmartTagPreview };
 export class ChannelLabelsNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** Every label in the authenticated user's shared or private scope. */
+  /**
+   * Every label in the authenticated user's shared or private scope.
+   *
+   * @readonly
+   */
   async list(): Promise<ChannelLabel[]> {
     const { labels } = unwrap(await this.client.storage.listChannelLabels());
     return labels;
@@ -33,6 +37,8 @@ export class ChannelLabelsNamespace {
   /**
    * Create a label and atomically move `channels` into it. Names are unique
    * within the team or account, case-insensitively.
+   *
+   * @write
    */
   async create(name: string, channels: Channel[] = []): Promise<ChannelLabel> {
     return unwrap(
@@ -42,7 +48,11 @@ export class ChannelLabelsNamespace {
     );
   }
 
-  /** Create a smart tag whose membership follows an attribute rule automatically. */
+  /**
+   * Create a smart tag whose membership follows an attribute rule automatically.
+   *
+   * @write
+   */
   async createSmartTag(
     name: string,
     rule: ChannelLabelRule,
@@ -52,12 +62,21 @@ export class ChannelLabelsNamespace {
     );
   }
 
-  /** Preview the first matches and total visible count without creating a tag. */
+  /**
+   * Preview the first matches and total visible count without creating a tag.
+   *
+   * @readonly
+   */
   async previewSmartTag(rule: ChannelLabelRule): Promise<SmartTagPreview> {
     return unwrap(await this.client.storage.previewSmartTag({ body: rule }));
   }
 
-  /** Update the name and matching rule of an existing smart tag. */
+  /**
+   * Update the name and matching rule of an existing smart tag.
+   *
+   * @write
+   * @idempotent
+   */
   async updateSmartTag(
     label: ChannelLabel,
     name: string,
@@ -71,7 +90,12 @@ export class ChannelLabelsNamespace {
     );
   }
 
-  /** Rename a label for the whole team. */
+  /**
+   * Rename a label for the whole team.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(label: ChannelLabel, name: string): Promise<ChannelLabel> {
     return unwrap(
       await this.client.storage.renameChannelLabel({
@@ -81,7 +105,12 @@ export class ChannelLabelsNamespace {
     );
   }
 
-  /** Delete a label for the whole team; its channels return to the plain list. */
+  /**
+   * Delete a label for the whole team; its channels return to the plain list.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(label: ChannelLabel): Promise<void> {
     unwrap(
       await this.client.storage.deleteChannelLabel({
@@ -90,7 +119,12 @@ export class ChannelLabelsNamespace {
     );
   }
 
-  /** Move a channel into `label`, or out of any label when `label` is `undefined`. */
+  /**
+   * Move a channel into `label`, or out of any label when `label` is `undefined`.
+   *
+   * @write
+   * @idempotent
+   */
   async setLabel(
     channel: Channel,
     label: ChannelLabel | undefined,

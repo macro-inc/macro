@@ -40,6 +40,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         axum::middleware::from_fn_with_state(state.clone(), ensure_document_exists::handler);
 
     Router::new()
+        .nest("/passwords", passwords::inbound::router::internal_router(state.passwords_state.clone()))
+        .nest(
+            "/crm",
+            crm::inbound::axum_router::crm_internal_router(state.crm_state.clone()),
+        )
         // User routes
         .route(
             "/users/{user_id}",
@@ -191,24 +196,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             post(populate_items::populate_items_handler),
         )
         // Project routes
-        .route(
-            "/projects/upload",
-            post(
-                projects_hex::inbound::axum_router::upload_folder::upload_folder_handler::<
-                    ProjectService,
-                    EntityAccessService,
-                    AuthorizationService,
-                >,
-            ),
-        )
-        .route(
-            "/projects/mark_uploaded",
-            post(
-                projects_hex::inbound::axum_router::upload_folder::mark_uploaded_handler::<
-                    ProjectService,
-                    EntityAccessService,
-                    AuthorizationService,
-                >,
+        .nest(
+            "/projects",
+            projects_hex::inbound::axum_router::internal_upload_router(
+                state.projects_state.clone(),
             ),
         )
         .route("/item_ids", get(get_item_ids::get_item_ids_handler))

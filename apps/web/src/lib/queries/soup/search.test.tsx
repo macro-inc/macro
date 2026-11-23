@@ -19,7 +19,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_SEARCH_SERVICE: true,
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({ channels: () => [] }),
+  useChannelDirectory: () => ({ channels: () => [] }),
 }));
 vi.mock('@service-search/client', () => ({
   searchClient: { search: server.search },
@@ -29,6 +29,7 @@ vi.mock('@queries/soup/transform-utils', () => ({
     () =>
     ({ id }: { id: string }) => [{ type: 'calendar_event', id, search: {} }],
   mapChannelSearchResultItem: vi.fn(),
+  channelSearchMetadata: () => [],
 }));
 
 afterEach(() => {
@@ -88,4 +89,48 @@ it('replays a fresh answer when shown again under the default stale time', async
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(menu.seen.at(-1)).toEqual(['shared-event']);
   expect(server.search).toHaveBeenCalledTimes(1);
+});
+
+function searchFor(query: string) {
+  const seen: boolean[] = [];
+  function Menu() {
+    const search = useSearchSoupQuery(() => ({
+      ...args(),
+      body: { ...args().body, query },
+    }));
+    createRenderEffect(() => seen.push(search.isEnabled));
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <Menu />
+    </QueryClientProvider>
+  ));
+  return seen;
+}
+
+it('sends a one- or two-character query to the search service', async () => {
+  server.search.mockReturnValue(answer('pull-request'));
+
+  expect(searchFor('pr').at(-1)).toBe(true);
+  await waitFor(() =>
+    expect(server.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({ query: 'pr' }),
+      }),
+      expect.anything()
+    )
+  );
+  expect(searchFor('a').at(-1)).toBe(true);
+});
+
+it('does not send a blank query to the search service', () => {
+  expect(searchFor('   ').at(-1)).toBe(false);
+  expect(server.search).not.toHaveBeenCalled();
+});
+
+it('does not send quote marks around nothing to the search service', () => {
+  expect(searchFor('"').at(-1)).toBe(false);
+  expect(searchFor('" "').at(-1)).toBe(false);
+  expect(server.search).not.toHaveBeenCalled();
 });

@@ -1,9 +1,11 @@
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+  CACHE_SUPERSEDED_ERROR_CODE,
   type CachePush,
   type CacheRequest,
   type CacheResponse,
   type CacheResponseErrorCode,
+  isTypedSearch,
   OWNER_EPOCH_LOST_ERROR_CODE,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
 } from '../protocol';
@@ -102,7 +104,13 @@ export type CoordinatorAction =
   | { kind: 'schedule-reset-activation' }
   | { kind: 'broadcast-cache-unavailable'; reason: string }
   | { kind: 'broadcast-cache-superseded'; reason: string }
-  | { kind: 'notify-cache-unavailable'; tabId: string; reason: string }
+  | {
+      kind: 'notify-cache-unavailable';
+      tabId: string;
+      reason: string;
+      /** A newer build took the database over: this build never gets it back. */
+      superseded?: true;
+    }
   | {
       kind: 'broadcast-engine-replaced';
       ownerEpoch: OwnerEpoch;
@@ -150,6 +158,24 @@ function isMutationSettlement(request: CacheRequest): boolean {
     request.kind === 'rollback-optimistic-write' ||
     request.kind === 'defer-optimistic-write'
   );
+}
+
+/**
+ * The order held requests reach a new engine. The engine starts on the first
+ * one before it has seen the rest, so a typed search someone is waiting on
+ * goes ahead of the reads and hydration replayed around a restart. It never
+ * passes a `clear`, whose result it would otherwise predate.
+ */
+function inEngineArrivalOrder(held: QueuedRequest[]): QueuedRequest[] {
+  let clearIndex = held.findIndex((queued) => queued.request.kind === 'clear');
+  if (clearIndex === -1) clearIndex = held.length;
+
+  const beforeClear = held.slice(0, clearIndex);
+  return [
+    ...beforeClear.filter((queued) => isTypedSearch(queued.request)),
+    ...beforeClear.filter((queued) => !isTypedSearch(queued.request)),
+    ...held.slice(clearIndex),
+  ];
 }
 
 /** Pure election, epoch, routing, drain, and abrupt-loss state machine. */
@@ -228,6 +254,7 @@ export class CoordinatorCore {
           kind: 'notify-cache-unavailable',
           tabId,
           reason: this.supersededReason,
+          superseded: true,
         },
       ];
     }
@@ -256,6 +283,19 @@ export class CoordinatorCore {
     )
       return this.handoffIfNeeded();
     return this.activateNext(this.stateValue.nextDatabaseAction);
+  }
+
+  /**
+   * Another visible tab's engine is starting or running, so `tabId` joining
+   * now would not take it over: only a hidden owner hands off to a new tab.
+   */
+  ownedByAnotherVisibleTab(tabId: string): boolean {
+    const state = this.stateValue;
+    return (
+      (state.kind === 'activating' || state.kind === 'active') &&
+      state.tabId !== tabId &&
+      this.visibleTabs.has(state.tabId)
+    );
   }
 
   setTabVisibility(tabId: string, visible: boolean): CoordinatorAction[] {
@@ -428,12 +468,11 @@ export class CoordinatorCore {
     // Notify hosts of that outcome, but leave queued work for its successor.
     const handoff = this.handoffIfNeeded();
     if (handoff.length > 0) return [...actions, ...handoff];
-    while (this.queuedRequests.length > 0) {
-      const queued = this.queuedRequests.shift();
+    const held = this.queuedRequests.splice(0);
+    for (const queued of inEngineArrivalOrder(held)) {
       if (
-        queued &&
-        (this.tabs.includes(queued.tabId) ||
-          isMutationSettlement(queued.request))
+        this.tabs.includes(queued.tabId) ||
+        isMutationSettlement(queued.request)
       ) {
         actions.push(this.route(queued, this.stateValue));
       }
@@ -968,7 +1007,9 @@ export class CoordinatorCore {
       tabId,
       requestId,
       reason,
-      OWNER_LOCK_UNAVAILABLE_ERROR_CODE
+      reason === SUPERSEDED_REASON
+        ? CACHE_SUPERSEDED_ERROR_CODE
+        : OWNER_LOCK_UNAVAILABLE_ERROR_CODE
     );
   }
 

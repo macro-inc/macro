@@ -297,6 +297,56 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('maps email subject and domain literals', () => {
+    expect(
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: {
+          ef: {
+            '&': [
+              { l: { Subject: 'FYI' } },
+              { l: { Cc: { Domain: 'acme.com' } } },
+            ],
+          },
+        },
+      })
+    ).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: {
+            tree: {
+              and: {
+                left: { literal: { subject: 'FYI' } },
+                right: { literal: { cc: { domain: 'acme.com' } } },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('maps email attachment kinds and rejects unknown ones', () => {
+    expect(
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { ef: { l: { Attachment: 'image' } } },
+      })
+    ).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: { tree: { literal: { attachment: 'IMAGE' } } },
+        },
+      },
+    });
+    expect(() =>
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { ef: { l: { Attachment: 'zip' } } },
+      })
+    ).toThrow();
+  });
+
   it('translates CRM association and email attachment literals', () => {
     const companyId = '0198a1b2-c3d4-7e5f-8061-728394a5b700';
     expect(

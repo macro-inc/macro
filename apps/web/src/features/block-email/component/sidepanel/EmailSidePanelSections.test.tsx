@@ -16,7 +16,7 @@ vi.mock(
   '@app/features/email-thread/context/email-thread-state-context',
   () => ({
     useEmailThreadState: () => ({
-      permissions: () => ({ isOwner: true }),
+      permissions: () => ({ isOwner: true, canReply: true }),
       thread: () => undefined,
     }),
   })

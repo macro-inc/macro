@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, BrowsePipedreamMcpCatalogData, BrowsePipedreamMcpCatalogErrors, BrowsePipedreamMcpCatalogResponses, CallToolData, CallToolErrors, CallToolResponses, CancelNotionHandlerData, CancelNotionHandlerErrors, CancelNotionHandlerResponses, CancelWorkspaceHandlerData, CancelWorkspaceHandlerResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CompletePipedreamMcpConnectData, CompletePipedreamMcpConnectErrors, CompletePipedreamMcpConnectionData, CompletePipedreamMcpConnectionErrors, CompletePipedreamMcpConnectionResponses, CompletePipedreamMcpConnectResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, CreatePipedreamMcpTokenData, CreatePipedreamMcpTokenErrors, CreatePipedreamMcpTokenResponses, DecisionsData, DecisionsErrors, DecisionsResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DeletePipedreamMcpConnectionData, DeletePipedreamMcpConnectionErrors, DeletePipedreamMcpConnectionResponses, DiscoverHandlerData, DiscoverHandlerErrors, DiscoverHandlerResponses, DismissedPromptsHandlerData, DismissedPromptsHandlerErrors, DismissedPromptsHandlerResponses, DismissPromptHandlerData, DismissPromptHandlerErrors, DismissPromptHandlerResponses, GenerateDatabaseQueryData, GenerateDatabaseQueryErrors, GenerateDatabaseQueryResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, HealthHandlerData, HealthHandlerResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, ListPipedreamMcpConnectionsData, ListPipedreamMcpConnectionsErrors, ListPipedreamMcpConnectionsResponses, ListPipedreamMcpOverlaysData, ListPipedreamMcpOverlaysErrors, ListPipedreamMcpOverlaysResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, McpOauthClientMetadataData, McpOauthClientMetadataResponses, NotionReportHandlerData, NotionReportHandlerErrors, NotionReportHandlerResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, RecoverPipedreamMcpConnectionData, RecoverPipedreamMcpConnectionErrors, RecoverPipedreamMcpConnectionResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdatePipedreamMcpConnectionData, UpdatePipedreamMcpConnectionErrors, UpdatePipedreamMcpConnectionResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses, WorkspaceReportHandlerData, WorkspaceReportHandlerResponses } from './types.gen';
+import type { AddConnectorServerData, AddConnectorServerErrors, AddConnectorServerResponses, BrowseConnectorCatalogData, BrowseConnectorCatalogErrors, BrowseConnectorCatalogResponses, CallToolData, CallToolErrors, CallToolResponses, CancelNotionHandlerData, CancelNotionHandlerErrors, CancelNotionHandlerResponses, CancelWorkspaceHandlerData, CancelWorkspaceHandlerResponses, CompleteConnectorConnectData, CompleteConnectorConnectErrors, CompleteConnectorConnectResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, ConnectorOauthCallbackData, ConnectorOauthCallbackErrors, ConnectorOauthCallbackResponses, ConnectorOauthClientMetadataData, ConnectorOauthClientMetadataResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, CreateConfirmedCalendarEventData, CreateConfirmedCalendarEventErrors, CreateConfirmedCalendarEventResponses, DecisionsData, DecisionsErrors, DecisionsResponses, DeclineImportEntityData, DeclineImportEntityErrors, DeclineImportEntityResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DiscoverHandlerData, DiscoverHandlerErrors, DiscoverHandlerResponses, DismissedPromptsHandlerData, DismissedPromptsHandlerErrors, DismissedPromptsHandlerResponses, DismissPromptHandlerData, DismissPromptHandlerErrors, DismissPromptHandlerResponses, EditExplicitMemoryData, EditExplicitMemoryErrors, EditExplicitMemoryResponses, FetchWebPageData, FetchWebPageErrors, FetchWebPageResponses, GenerateDatabaseQueryData, GenerateDatabaseQueryErrors, GenerateDatabaseQueryResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, GetUserActivityData, GetUserActivityErrors, GetUserActivityResponses, HealthHandlerData, HealthHandlerResponses, ImportNotionPageData, ImportNotionPageErrors, ImportNotionPageResponses, ListConnectorsData, ListConnectorsErrors, ListConnectorsResponses, ListImportEntitiesData, ListImportEntitiesErrors, ListImportEntitiesResponses, ListSkillsData, ListSkillsErrors, ListSkillsResponses, NotionReportHandlerData, NotionReportHandlerErrors, NotionReportHandlerResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, ReadExplicitMemoryData, ReadExplicitMemoryErrors, ReadExplicitMemoryResponses, ReadMyActivityData, ReadMyActivityErrors, ReadMyActivityResponses, ReadSkillData, ReadSkillErrors, ReadSkillResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RemoveConnectorData, RemoveConnectorErrors, RemoveConnectorResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SearchWebData, SearchWebErrors, SearchWebResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SendConfirmedEmailData, SendConfirmedEmailErrors, SendConfirmedEmailResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartConnectorConnectData, StartConnectorConnectErrors, StartConnectorConnectResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, TrackImportEntityData, TrackImportEntityErrors, TrackImportEntityResponses, UpdateConnectorData, UpdateConnectorErrors, UpdateConnectorResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, WorkspaceReportHandlerData, WorkspaceReportHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -58,6 +58,16 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Read the acting user's own activity in a time range, newest first.
+     *
+     * Includes actions agents performed on the user's behalf. Returns at most
+     * 100 events; `truncated` reports that more matched, so narrow the range.
+     */
+    public readMyActivity<ThrowOnError extends boolean = false>(options: Options<ReadMyActivityData, ThrowOnError>): RequestResult<ReadMyActivityResponses, ReadMyActivityErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ReadMyActivityResponses, ReadMyActivityErrors, ThrowOnError>({ url: '/activity', ...options });
+    }
+
+    /**
      * Set the pricing for a model and recompute its recorded rows. Admin only.
      */
     public setPricingHandler<ThrowOnError extends boolean = false>(options: Options<SetPricingHandlerData, ThrowOnError>): RequestResult<SetPricingHandlerResponses, SetPricingHandlerErrors, ThrowOnError> {
@@ -85,23 +95,22 @@ export class Sdk extends HeyApiClient {
         });
     }
 
+    public getChatsForAttachmentHandler<ThrowOnError extends boolean = false>(options: Options<GetChatsForAttachmentHandlerData, ThrowOnError>): RequestResult<GetChatsForAttachmentHandlerResponses, GetChatsForAttachmentHandlerErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetChatsForAttachmentHandlerResponses, GetChatsForAttachmentHandlerErrors, ThrowOnError>({ url: '/attachments/{attachment_id}/chats', ...options });
+    }
+
     /**
-     * Gets or creates an ai projection and the requesting user's instance,
-     * triggering (or awaiting) materialization when needed.
+     * Create a calendar event the user approved in conversation, quoting their approval.
      */
-    public upsertAiProjection<ThrowOnError extends boolean = false>(options: Options<UpsertAiProjectionData, ThrowOnError>): RequestResult<UpsertAiProjectionResponses, UpsertAiProjectionErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<UpsertAiProjectionResponses, UpsertAiProjectionErrors, ThrowOnError>({
-            url: '/ai-projections',
+    public createConfirmedCalendarEvent<ThrowOnError extends boolean = false>(options: Options<CreateConfirmedCalendarEventData, ThrowOnError>): RequestResult<CreateConfirmedCalendarEventResponses, CreateConfirmedCalendarEventErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateConfirmedCalendarEventResponses, CreateConfirmedCalendarEventErrors, ThrowOnError>({
+            url: '/calendar/events/create-confirmed',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
                 ...options.headers
             }
         });
-    }
-
-    public getChatsForAttachmentHandler<ThrowOnError extends boolean = false>(options: Options<GetChatsForAttachmentHandlerData, ThrowOnError>): RequestResult<GetChatsForAttachmentHandlerResponses, GetChatsForAttachmentHandlerErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetChatsForAttachmentHandlerResponses, GetChatsForAttachmentHandlerErrors, ThrowOnError>({ url: '/attachments/{attachment_id}/chats', ...options });
     }
 
     /**
@@ -255,6 +264,77 @@ export class Sdk extends HeyApiClient {
         return (options.client ?? this.client).get<GetCitationHandlerResponses, GetCitationHandlerErrors, ThrowOnError>({ url: '/citations/{id}', ...options });
     }
 
+    /**
+     * Every app and server the user holds, with where they stand with it. A
+     * connection that no longer counts shows as `notConnected`.
+     */
+    public listConnectors<ThrowOnError extends boolean = false>(options?: Options<ListConnectorsData, ThrowOnError>): RequestResult<ListConnectorsResponses, ListConnectorsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListConnectorsResponses, ListConnectorsErrors, ThrowOnError>({ url: '/connectors', ...options });
+    }
+
+    /**
+     * Add a server by URL, enabled and not yet signed in to. A URL the user
+     * already has is answered as it stands. A server at an app's address is
+     * that app.
+     */
+    public addConnectorServer<ThrowOnError extends boolean = false>(options: Options<AddConnectorServerData, ThrowOnError>): RequestResult<AddConnectorServerResponses, AddConnectorServerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AddConnectorServerResponses, AddConnectorServerErrors, ThrowOnError>({
+            url: '/connectors',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Browse or search the apps the user can connect, most popular first.
+     */
+    public browseConnectorCatalog<ThrowOnError extends boolean = false>(options?: Options<BrowseConnectorCatalogData, ThrowOnError>): RequestResult<BrowseConnectorCatalogResponses, BrowseConnectorCatalogErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<BrowseConnectorCatalogResponses, BrowseConnectorCatalogErrors, ThrowOnError>({ url: '/connectors/catalog', ...options });
+    }
+
+    /**
+     * Remove a connection, revoking it where its provider can. Removing GitHub
+     * unlinks the account.
+     */
+    public removeConnector<ThrowOnError extends boolean = false>(options: Options<RemoveConnectorData, ThrowOnError>): RequestResult<RemoveConnectorResponses, RemoveConnectorErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<RemoveConnectorResponses, RemoveConnectorErrors, ThrowOnError>({ url: '/connectors/{kind}/{id}', ...options });
+    }
+
+    /**
+     * Turn a connection on or off, or rename it.
+     */
+    public updateConnector<ThrowOnError extends boolean = false>(options: Options<UpdateConnectorData, ThrowOnError>): RequestResult<UpdateConnectorResponses, UpdateConnectorErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateConnectorResponses, UpdateConnectorErrors, ThrowOnError>({
+            url: '/connectors/{kind}/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Record the connection the user just finished making, once the connect
+     * page or dialog is done. Answers 404 until it exists, so it can be polled.
+     * A server added by URL finishes on its OAuth callback; this answers it as
+     * it stands.
+     */
+    public completeConnectorConnect<ThrowOnError extends boolean = false>(options: Options<CompleteConnectorConnectData, ThrowOnError>): RequestResult<CompleteConnectorConnectResponses, CompleteConnectorConnectErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CompleteConnectorConnectResponses, CompleteConnectorConnectErrors, ThrowOnError>({ url: '/connectors/{kind}/{id}/complete', ...options });
+    }
+
+    /**
+     * Begin connecting an app, or signing in to a server added by URL. Answers
+     * the step the user takes next.
+     */
+    public startConnectorConnect<ThrowOnError extends boolean = false>(options: Options<StartConnectorConnectData, ThrowOnError>): RequestResult<StartConnectorConnectResponses, StartConnectorConnectErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<StartConnectorConnectResponses, StartConnectorConnectErrors, ThrowOnError>({ url: '/connectors/{kind}/{id}/connect', ...options });
+    }
+
     public generateDatabaseQuery<ThrowOnError extends boolean = false>(options: Options<GenerateDatabaseQueryData, ThrowOnError>): RequestResult<GenerateDatabaseQueryResponses, GenerateDatabaseQueryErrors, ThrowOnError> {
         return (options.client ?? this.client).post<GenerateDatabaseQueryResponses, GenerateDatabaseQueryErrors, ThrowOnError>({
             url: '/database-query',
@@ -269,6 +349,20 @@ export class Sdk extends HeyApiClient {
     public decisions<ThrowOnError extends boolean = false>(options: Options<DecisionsData, ThrowOnError>): RequestResult<DecisionsResponses, DecisionsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<DecisionsResponses, DecisionsErrors, ThrowOnError>({
             url: '/decisions',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Send an email the user approved in conversation, quoting their approval.
+     */
+    public sendConfirmedEmail<ThrowOnError extends boolean = false>(options: Options<SendConfirmedEmailData, ThrowOnError>): RequestResult<SendConfirmedEmailResponses, SendConfirmedEmailErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SendConfirmedEmailResponses, SendConfirmedEmailErrors, ThrowOnError>({
+            url: '/email/send-confirmed',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -300,6 +394,38 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * List the caller's import ledger: staged candidates, running and finished
+     * imports (with the team's imports), and declined items.
+     */
+    public listImportEntities<ThrowOnError extends boolean = false>(options?: Options<ListImportEntitiesData, ThrowOnError>): RequestResult<ListImportEntitiesResponses, ListImportEntitiesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListImportEntitiesResponses, ListImportEntitiesErrors, ThrowOnError>({ url: '/import/entities', ...options });
+    }
+
+    /**
+     * Track an external item in the ledger: stage it as a candidate, or record a
+     * Macro entity already created from it. Says when the item was already
+     * imported, so callers do not create a duplicate.
+     */
+    public trackImportEntity<ThrowOnError extends boolean = false>(options: Options<TrackImportEntityData, ThrowOnError>): RequestResult<TrackImportEntityResponses, TrackImportEntityErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<TrackImportEntityResponses, TrackImportEntityErrors, ThrowOnError>({
+            url: '/import/entities',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Decline one of the caller's staged candidates; it is remembered as declined
+     * and not proposed again.
+     */
+    public declineImportEntity<ThrowOnError extends boolean = false>(options: Options<DeclineImportEntityData, ThrowOnError>): RequestResult<DeclineImportEntityResponses, DeclineImportEntityErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeclineImportEntityResponses, DeclineImportEntityErrors, ThrowOnError>({ url: '/import/entities/{id}', ...options });
+    }
+
+    /**
      * Where the user's Notion workspace import stands.
      */
     public notionReportHandler<ThrowOnError extends boolean = false>(options?: Options<NotionReportHandlerData, ThrowOnError>): RequestResult<NotionReportHandlerResponses, NotionReportHandlerErrors, ThrowOnError> {
@@ -312,6 +438,22 @@ export class Sdk extends HeyApiClient {
      */
     public cancelNotionHandler<ThrowOnError extends boolean = false>(options?: Options<CancelNotionHandlerData, ThrowOnError>): RequestResult<CancelNotionHandlerResponses, CancelNotionHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<CancelNotionHandlerResponses, CancelNotionHandlerErrors, ThrowOnError>({ url: '/import/notion/cancel', ...options });
+    }
+
+    /**
+     * Import one Notion page as a Macro document through the caller's Notion
+     * connection, deduplicated against the ledger. Notion databases are not
+     * imported; a whole workspace goes through a reviewed import instead.
+     */
+    public importNotionPage<ThrowOnError extends boolean = false>(options: Options<ImportNotionPageData, ThrowOnError>): RequestResult<ImportNotionPageResponses, ImportNotionPageErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ImportNotionPageResponses, ImportNotionPageErrors, ThrowOnError>({
+            url: '/import/notion/pages',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**
@@ -358,75 +500,18 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Delete an MCP server by URL.
+     * Finish signing in to a server by URL: the authorization server redirects
+     * the browser here with a code or an error.
      */
-    public deleteMcpServer<ThrowOnError extends boolean = false>(options: Options<DeleteMcpServerData, ThrowOnError>): RequestResult<DeleteMcpServerResponses, DeleteMcpServerErrors, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteMcpServerResponses, DeleteMcpServerErrors, ThrowOnError>({ url: '/mcp/servers', ...options });
+    public connectorOauthCallback<ThrowOnError extends boolean = false>(options?: Options<ConnectorOauthCallbackData, ThrowOnError>): RequestResult<ConnectorOauthCallbackResponses, ConnectorOauthCallbackErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ConnectorOauthCallbackResponses, ConnectorOauthCallbackErrors, ThrowOnError>({ url: '/mcp/servers/auth/callback', ...options });
     }
 
     /**
-     * List all MCP servers configured for the authenticated user.
+     * Macro's public OAuth Client ID Metadata Document.
      */
-    public listMcpServers<ThrowOnError extends boolean = false>(options?: Options<ListMcpServersData, ThrowOnError>): RequestResult<ListMcpServersResponses, ListMcpServersErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<ListMcpServersResponses, ListMcpServersErrors, ThrowOnError>({ url: '/mcp/servers', ...options });
-    }
-
-    /**
-     * Add a new MCP server for the authenticated user. A URL the user already
-     * has is returned as stored, keeping its credentials.
-     */
-    public addMcpServer<ThrowOnError extends boolean = false>(options: Options<AddMcpServerData, ThrowOnError>): RequestResult<AddMcpServerResponses, AddMcpServerErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<AddMcpServerResponses, AddMcpServerErrors, ThrowOnError>({
-            url: '/mcp/servers',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Update an existing MCP server's name or enabled status.
-     */
-    public updateMcpServer<ThrowOnError extends boolean = false>(options: Options<UpdateMcpServerData, ThrowOnError>): RequestResult<UpdateMcpServerResponses, UpdateMcpServerErrors, ThrowOnError> {
-        return (options.client ?? this.client).put<UpdateMcpServerResponses, UpdateMcpServerErrors, ThrowOnError>({
-            url: '/mcp/servers',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * OAuth callback endpoint — receives code and state, or an error, from the
-     * authorization server.
-     */
-    public mcpAuthCallback<ThrowOnError extends boolean = false>(options?: Options<McpAuthCallbackData, ThrowOnError>): RequestResult<McpAuthCallbackResponses, McpAuthCallbackErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<McpAuthCallbackResponses, McpAuthCallbackErrors, ThrowOnError>({ url: '/mcp/servers/auth/callback', ...options });
-    }
-
-    /**
-     * Return Macro's public OAuth Client ID Metadata Document.
-     */
-    public mcpOauthClientMetadata<ThrowOnError extends boolean = false>(options?: Options<McpOauthClientMetadataData, ThrowOnError>): RequestResult<McpOauthClientMetadataResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<McpOauthClientMetadataResponses, unknown, ThrowOnError>({ url: '/mcp/servers/auth/client-metadata', ...options });
-    }
-
-    /**
-     * Start the OAuth authorization flow for an MCP server.
-     */
-    public startMcpAuth<ThrowOnError extends boolean = false>(options: Options<StartMcpAuthData, ThrowOnError>): RequestResult<StartMcpAuthResponses, StartMcpAuthErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<StartMcpAuthResponses, StartMcpAuthErrors, ThrowOnError>({
-            url: '/mcp/servers/auth/start',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
+    public connectorOauthClientMetadata<ThrowOnError extends boolean = false>(options?: Options<ConnectorOauthClientMetadataData, ThrowOnError>): RequestResult<ConnectorOauthClientMetadataResponses, unknown, ThrowOnError> {
+        return (options?.client ?? this.client).get<ConnectorOauthClientMetadataResponses, unknown, ThrowOnError>({ url: '/mcp/servers/auth/client-metadata', ...options });
     }
 
     /**
@@ -437,6 +522,42 @@ export class Sdk extends HeyApiClient {
      */
     public getMemoryHandler<ThrowOnError extends boolean = false>(options?: Options<GetMemoryHandlerData, ThrowOnError>): RequestResult<GetMemoryHandlerResponses, GetMemoryHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetMemoryHandlerResponses, GetMemoryHandlerErrors, ThrowOnError>({ url: '/memory', ...options });
+    }
+
+    /**
+     * Read privacy-reviewed professional activity of the caller or a current teammate.
+     *
+     * Reports use UTC calendar days, Monday-start weeks and calendar months.
+     * An empty list means no stored activity, not no work.
+     */
+    public getUserActivity<ThrowOnError extends boolean = false>(options: Options<GetUserActivityData, ThrowOnError>): RequestResult<GetUserActivityResponses, GetUserActivityErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetUserActivityResponses, GetUserActivityErrors, ThrowOnError>({ url: '/memory/activity', ...options });
+    }
+
+    /**
+     * Read the caller's private explicit memory and its revision.
+     *
+     * Content is newline-separated; edits address one-based lines.
+     */
+    public readExplicitMemory<ThrowOnError extends boolean = false>(options?: Options<ReadExplicitMemoryData, ThrowOnError>): RequestResult<ReadExplicitMemoryResponses, ReadExplicitMemoryErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ReadExplicitMemoryResponses, ReadExplicitMemoryErrors, ThrowOnError>({ url: '/memory/explicit', ...options });
+    }
+
+    /**
+     * Apply one edit to the caller's private explicit memory.
+     *
+     * A stale revision changes nothing and answers 409; reread before retrying.
+     * Additions that fail privacy review answer 422.
+     */
+    public editExplicitMemory<ThrowOnError extends boolean = false>(options: Options<EditExplicitMemoryData, ThrowOnError>): RequestResult<EditExplicitMemoryResponses, EditExplicitMemoryErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<EditExplicitMemoryResponses, EditExplicitMemoryErrors, ThrowOnError>({
+            url: '/memory/explicit',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**
@@ -476,127 +597,6 @@ export class Sdk extends HeyApiClient {
         return (options.client ?? this.client).post<DismissPromptHandlerResponses, DismissPromptHandlerErrors, ThrowOnError>({ url: '/onboarding/prompts/{prompt_id}/dismiss', ...options });
     }
 
-    /**
-     * Browse or search the catalog of connectable apps.
-     *
-     * Results come from Pipedream's app directory, most popular first.
-     */
-    public browsePipedreamMcpCatalog<ThrowOnError extends boolean = false>(options?: Options<BrowsePipedreamMcpCatalogData, ThrowOnError>): RequestResult<BrowsePipedreamMcpCatalogResponses, BrowsePipedreamMcpCatalogErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<BrowsePipedreamMcpCatalogResponses, BrowsePipedreamMcpCatalogErrors, ThrowOnError>({ url: '/pipedream/mcp/catalog', ...options });
-    }
-
-    /**
-     * Register a connected account reported by the Pipedream Connect UI.
-     *
-     * Verifies with Pipedream that the account exists and was connected for
-     * the authenticated user before persisting anything. An overlaid app is
-     * refused with 409: it connects through its own MCP server instead.
-     */
-    public completePipedreamMcpConnection<ThrowOnError extends boolean = false>(options: Options<CompletePipedreamMcpConnectionData, ThrowOnError>): RequestResult<CompletePipedreamMcpConnectionResponses, CompletePipedreamMcpConnectionErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<CompletePipedreamMcpConnectionResponses, CompletePipedreamMcpConnectionErrors, ThrowOnError>({
-            url: '/pipedream/mcp/complete',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Record an app the user connected through Macro Connect.
-     *
-     * Answers 404 until Connect lists an active connection for this user and
-     * app, so the frontend can poll it while the consent window is open.
-     */
-    public completePipedreamMcpConnect<ThrowOnError extends boolean = false>(options: Options<CompletePipedreamMcpConnectData, ThrowOnError>): RequestResult<CompletePipedreamMcpConnectResponses, CompletePipedreamMcpConnectErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<CompletePipedreamMcpConnectResponses, CompletePipedreamMcpConnectErrors, ThrowOnError>({
-            url: '/pipedream/mcp/connect/complete',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Disconnect an app, revoking its Pipedream account.
-     */
-    public deletePipedreamMcpConnection<ThrowOnError extends boolean = false>(options: Options<DeletePipedreamMcpConnectionData, ThrowOnError>): RequestResult<DeletePipedreamMcpConnectionResponses, DeletePipedreamMcpConnectionErrors, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeletePipedreamMcpConnectionResponses, DeletePipedreamMcpConnectionErrors, ThrowOnError>({ url: '/pipedream/mcp/connections', ...options });
-    }
-
-    /**
-     * List the MCP apps connected by the authenticated user.
-     */
-    public listPipedreamMcpConnections<ThrowOnError extends boolean = false>(options?: Options<ListPipedreamMcpConnectionsData, ThrowOnError>): RequestResult<ListPipedreamMcpConnectionsResponses, ListPipedreamMcpConnectionsErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<ListPipedreamMcpConnectionsResponses, ListPipedreamMcpConnectionsErrors, ThrowOnError>({ url: '/pipedream/mcp/connections', ...options });
-    }
-
-    /**
-     * Rename or enable/disable a connected app.
-     */
-    public updatePipedreamMcpConnection<ThrowOnError extends boolean = false>(options: Options<UpdatePipedreamMcpConnectionData, ThrowOnError>): RequestResult<UpdatePipedreamMcpConnectionResponses, UpdatePipedreamMcpConnectionErrors, ThrowOnError> {
-        return (options.client ?? this.client).put<UpdatePipedreamMcpConnectionResponses, UpdatePipedreamMcpConnectionErrors, ThrowOnError>({
-            url: '/pipedream/mcp/connections',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * List the catalog apps that connect through their own MCP server.
-     *
-     * Clients connect these with the native MCP OAuth flow against
-     * `server_url`; Pipedream refuses to complete a connection for them.
-     */
-    public listPipedreamMcpOverlays<ThrowOnError extends boolean = false>(options?: Options<ListPipedreamMcpOverlaysData, ThrowOnError>): RequestResult<ListPipedreamMcpOverlaysResponses, ListPipedreamMcpOverlaysErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<ListPipedreamMcpOverlaysResponses, ListPipedreamMcpOverlaysErrors, ThrowOnError>({ url: '/pipedream/mcp/overlays', ...options });
-    }
-
-    /**
-     * Register an account a Connect flow created but the Connect UI never
-     * reported.
-     *
-     * Called after the Connect UI closes without a success event. Answers 404
-     * when Pipedream has no new account for this user and app.
-     * An overlaid app is refused with 409, as in [`complete_connection`].
-     */
-    public recoverPipedreamMcpConnection<ThrowOnError extends boolean = false>(options: Options<RecoverPipedreamMcpConnectionData, ThrowOnError>): RequestResult<RecoverPipedreamMcpConnectionResponses, RecoverPipedreamMcpConnectionErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<RecoverPipedreamMcpConnectionResponses, RecoverPipedreamMcpConnectionErrors, ThrowOnError>({
-            url: '/pipedream/mcp/recover',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Start a connect flow for the authenticated user.
-     *
-     * By default, a short-lived Pipedream Connect token: the frontend opens
-     * Pipedream's hosted Connect UI with it, and the user picks (or is
-     * deep-linked into) an app and authorizes it there. When the body names an
-     * app Macro Connect serves and the `macro-connect` rollout is on for the
-     * user, a Connect URL instead.
-     */
-    public createPipedreamMcpToken<ThrowOnError extends boolean = false>(options?: Options<CreatePipedreamMcpTokenData, ThrowOnError>): RequestResult<CreatePipedreamMcpTokenResponses, CreatePipedreamMcpTokenErrors, ThrowOnError> {
-        return (options?.client ?? this.client).post<CreatePipedreamMcpTokenResponses, CreatePipedreamMcpTokenErrors, ThrowOnError>({
-            url: '/pipedream/mcp/token',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options?.headers
-            }
-        });
-    }
-
     public getBatchPreview<ThrowOnError extends boolean = false>(options: Options<GetBatchPreviewData, ThrowOnError>): RequestResult<GetBatchPreviewResponses, GetBatchPreviewErrors, ThrowOnError> {
         return (options.client ?? this.client).post<GetBatchPreviewResponses, GetBatchPreviewErrors, ThrowOnError>({
             url: '/preview',
@@ -606,6 +606,22 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * List the caller's skills, or search them by name when `query` is given.
+     * Built-in skills are included.
+     */
+    public listSkills<ThrowOnError extends boolean = false>(options?: Options<ListSkillsData, ThrowOnError>): RequestResult<ListSkillsResponses, ListSkillsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListSkillsResponses, ListSkillsErrors, ThrowOnError>({ url: '/skills', ...options });
+    }
+
+    /**
+     * Read one skill's complete instructions: a skill document the caller can
+     * view, or a built-in skill.
+     */
+    public readSkill<ThrowOnError extends boolean = false>(options: Options<ReadSkillData, ThrowOnError>): RequestResult<ReadSkillResponses, ReadSkillErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ReadSkillResponses, ReadSkillErrors, ThrowOnError>({ url: '/skills/{id}', ...options });
     }
 
     /**
@@ -646,6 +662,34 @@ export class Sdk extends HeyApiClient {
     public structuredCompletion<ThrowOnError extends boolean = false>(options: Options<StructuredCompletionData, ThrowOnError>): RequestResult<StructuredCompletionResponses, StructuredCompletionErrors, ThrowOnError> {
         return (options.client ?? this.client).post<StructuredCompletionResponses, StructuredCompletionErrors, ThrowOnError>({
             url: '/structured-completion',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Read one public web page as Markdown. Charged to the acting user's AI allowance.
+     */
+    public fetchWebPage<ThrowOnError extends boolean = false>(options: Options<FetchWebPageData, ThrowOnError>): RequestResult<FetchWebPageResponses, FetchWebPageErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<FetchWebPageResponses, FetchWebPageErrors, ThrowOnError>({
+            url: '/web/fetch',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Search the public web. Charged to the acting user's AI allowance.
+     */
+    public searchWeb<ThrowOnError extends boolean = false>(options: Options<SearchWebData, ThrowOnError>): RequestResult<SearchWebResponses, SearchWebErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SearchWebResponses, SearchWebErrors, ThrowOnError>({
+            url: '/web/search',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

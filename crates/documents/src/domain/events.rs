@@ -54,6 +54,9 @@ pub struct DocumentCreatedMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentUpdatedMetadata {
+    /// Previous and new presentation overrides, in that order; no content edit occurred.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance_change: Option<[model_entity::EntityAppearance; 2]>,
     /// The id of the updated document.
     pub document_id: String,
     /// The owner of the document.
@@ -132,6 +135,9 @@ pub struct DocumentContentUploadedMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentSyncEditor {
+    /// Invocation from the editor's signed document grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_correlation_id: Option<uuid::Uuid>,
     /// User or bot that performed the edit.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub actor: Actor<'static>,
@@ -189,6 +195,18 @@ impl DocumentSyncContentUpdatedMetadata {
 pub struct DocumentPurgedMetadata {
     /// The id of the hard-deleted document.
     pub document_id: String,
+}
+
+/// Metadata for [`DocumentTopicEvent::EmailAttachmentsReleased`]: the
+/// documents of one queue batch that lost their last email link.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct EmailAttachmentsReleasedMetadata {
+    /// Documents the batch moved to the Trash.
+    pub trashed_document_ids: Vec<String>,
+    /// Documents left as they were: kept by their owner, or already in the
+    /// Trash. They are no longer email attachments either.
+    pub kept_document_ids: Vec<String>,
 }
 
 /// Why a document interaction was reported.
@@ -273,6 +291,12 @@ pub enum DocumentTopicEvent {
     /// A peer joined, left, or a periodic save occurred.
     #[serde(rename = "document.interaction")]
     Interaction(DocumentInteractionMetadata),
+    /// Documents whose mail is gone stopped being email attachments, in one
+    /// batch: the system moved some to the Trash and left the rest. Like the
+    /// documents in a trashed folder, the trashed ones are removed from open
+    /// lists and trigger nothing per document.
+    #[serde(rename = "document.email_attachments_released")]
+    EmailAttachmentsReleased(EmailAttachmentsReleasedMetadata),
 }
 
 impl TopicEvent for DocumentTopicEvent {
@@ -322,6 +346,14 @@ impl DocumentMacroEvent {
     /// Build a purged event keyed by the document id.
     pub fn purged(key: impl Into<String>, metadata: DocumentPurgedMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Purged(metadata))
+    }
+
+    /// Build an email-attachments-released event, keyed by one of its documents.
+    pub fn email_attachments_released(
+        key: impl Into<String>,
+        metadata: EmailAttachmentsReleasedMetadata,
+    ) -> Self {
+        Self::new(key, DocumentTopicEvent::EmailAttachmentsReleased(metadata))
     }
 
     /// Build a copied event keyed by the new document id.

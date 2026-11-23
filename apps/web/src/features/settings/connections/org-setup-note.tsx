@@ -1,8 +1,8 @@
-import type { ConnectorOrgSetupResponse } from '@service-cognition/client';
+import type { CatalogOrgSetup } from '@queries/connectors';
 import { createSignal, For, Show } from 'solid-js';
 
 /** What the user's admin must do at the vendor, opened from a catalog row. */
-export function OrgSetupNote(props: { setup: ConnectorOrgSetupResponse }) {
+export function OrgSetupNote(props: { setup: CatalogOrgSetup }) {
   const [open, setOpen] = createSignal(false);
   return (
     <div class="flex flex-col gap-1 text-xs text-ink-muted">
@@ -21,12 +21,12 @@ export function OrgSetupNote(props: { setup: ConnectorOrgSetupResponse }) {
         <ol class="list-decimal pl-4">
           <For each={props.setup.steps}>{(step) => <li>{step}</li>}</For>
         </ol>
-        <Show when={props.setup.allowlist_url}>
+        <Show when={props.setup.allowlistUrl}>
           {(url) => <code class="break-all">{url()}</code>}
         </Show>
         <a
           class="w-fit underline"
-          href={props.setup.settings_url}
+          href={props.setup.settingsUrl}
           target="_blank"
           rel="noopener noreferrer"
         >

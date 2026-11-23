@@ -1,11 +1,13 @@
+use anyhow::Result;
+
 use super::*;
 
 #[test]
 fn web_publication_waits_for_sync_protocol_support() -> Result<()> {
-    let dev = crate::workflows::render_patched(deploy_on_push, patch)?;
-    let prod = std::fs::read_to_string(
-        xtask_paths::repo_root().join(".github/workflows/release-production.yml"),
-    )?;
+    let dev = crate::workflows::render_gh_workflow(deploy_on_push)()?;
+    let prod = crate::workflows::render_gh_workflow(
+        crate::workflows::release_production::release_production,
+    )()?;
 
     for (environment, yaml, web_job, build_job) in [
         ("dev", dev, "deploy-web-app", "build-web-app"),
@@ -33,10 +35,9 @@ fn web_publication_waits_for_sync_protocol_support() -> Result<()> {
 
 #[test]
 fn sync_deployment_waits_for_active_objects_before_unblocking_clients() -> Result<()> {
-    let yaml = crate::workflows::render_patched(
+    let yaml = crate::workflows::render_gh_workflow(
         crate::workflows::deploy_sync_service::deploy_sync_service,
-        crate::workflows::deploy_sync_service::patch,
-    )?;
+    )()?;
     let workflow: serde_yaml::Value = serde_yaml::from_str(&yaml)?;
     let steps = workflow["jobs"]["deploy"]["steps"]
         .as_sequence()
@@ -51,7 +52,7 @@ fn sync_deployment_waits_for_active_objects_before_unblocking_clients() -> Resul
         .expect("worker deployment");
     let wait = steps
         .iter()
-        .position(|step| step["run"].as_str() == Some("sleep 300"))
+        .position(|step| step["run"].as_str() == Some("sleep \"$WAIT_SECONDS\""))
         .expect("the worker job must wait out the default code-update deferral");
     assert!(deploy < wait);
     assert!(steps[wait]["if"].is_null());

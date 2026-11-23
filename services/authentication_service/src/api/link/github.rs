@@ -9,7 +9,7 @@ use github::domain::{
     models::{GithubError, GithubLinkStatus},
     ports::GithubLinkService,
 };
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
 use model::response::{EmptyResponse, ErrorResponse};
 use serde_utils::urlencode::UrlEncoded;
@@ -140,7 +140,7 @@ impl IntoResponse for GithubLinkStatusError {
 pub async fn check_github_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Response, GithubLinkStatusError> {
     let user_id = &authorization.authorization.user.macro_user_id;
     let status = ctx
@@ -198,7 +198,7 @@ pub async fn init_github_link_handler(
     State(ctx): State<ApiContext>,
     query: Query<InitGithubLinkQueryParams>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<InitGithubLinkResponse>, InitGithubLinkError> {
     let Query(InitGithubLinkQueryParams { original_url }) = query;
     let fusion_user_id = &authorization.authorization.user.user_context.fusion_user_id;
@@ -314,7 +314,7 @@ impl IntoResponse for DeleteGithubLinkError {
 pub async fn delete_github_link_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<EmptyResponse>, DeleteGithubLinkError> {
     ctx.github_link_service
         .delete_user_link(&authorization.authorization.user.macro_user_id)

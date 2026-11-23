@@ -19,6 +19,7 @@ import {
   getTaskReferencedEntityIds,
   isTaskEntity,
   type TaskEntityWithProperties,
+  taskCustomPropertyReferences,
 } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
@@ -88,6 +89,8 @@ export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
 
 export type TasksDataSource = ListDataSource<TasksDataSourceItem> & {
   loadMoreGroup: (groupId: string) => Promise<void>;
+  /** Whether text search reruns the list's sorted query; service search keeps its own order. */
+  sortsSearchResults: boolean;
   /** Uncollapsed rows for alternative layouts; the query owner is shared. */
   boardRows?: Accessor<TasksDataSourceItem[]>;
   boardSearching?: Accessor<boolean>;
@@ -114,17 +117,25 @@ function referencesEntity(
 
 /**
  * Whether a task known only locally (an optimistic insert) is associated with
- * the record through its own property. Mention and contact-company matches
- * are known only to the server and arrive with the next fetch.
+ * the record through its own property: the built-in Companies or Contacts
+ * property, or a custom entity property that references the record, as the
+ * server matches them. Mention and contact-company matches are known only to
+ * the server and arrive with the next fetch.
  */
 function namesCrmRecord(task: TaskEntityWithProperties, crm: TaskCrmScope) {
   if (crm.type === 'activity') return false;
-  return getTaskReferencedEntityIds(
+
+  const company = crm.type === 'company';
+  const builtIn = company
+    ? SYSTEM_PROPERTY_IDS.COMPANIES
+    : SYSTEM_PROPERTY_IDS.CONTACTS;
+  if (getTaskReferencedEntityIds(task, builtIn).includes(crm.id)) return true;
+
+  return taskCustomPropertyReferences(
     task,
-    crm.type === 'company'
-      ? SYSTEM_PROPERTY_IDS.COMPANIES
-      : SYSTEM_PROPERTY_IDS.CONTACTS
-  ).includes(crm.id);
+    company ? 'COMPANY' : 'CONTACT',
+    crm.id
+  );
 }
 
 /** A plain copy of the view's facet store, safe to keep in cached options. */
@@ -264,7 +275,9 @@ export function useTasksDataSource(
     );
   }, []);
 
-  const { entityPool } = useSearchContext();
+  const entityPool = useSearchContext().entityPool(
+    () => !options.crm && Boolean(state.search.trim())
+  );
   const localPool = createMemo(() => {
     if (!state.search.trim()) return [];
     const pool = entityPool();
@@ -516,5 +529,6 @@ export function useTasksDataSource(
     loadMoreGroup: continuations.loadMore,
     loadMore,
     refresh,
+    sortsSearchResults: Boolean(options.crm),
   } satisfies TasksDataSource;
 }

@@ -9,21 +9,23 @@ const MAIL_MUTATION: &str = r#"mutation MailSeen($input: MarkEmailThreadSeenInpu
     markEmailThreadSeen(input: $input) { __typename id isRead }
 }"#;
 const THREAD_ID: &str = "00000000-0000-0000-0000-000000000001";
+/// Never stored, so a write naming it must read storage.
+const COLD_THREAD_ID: &str = "00000000-0000-0000-0000-000000000002";
 
-fn mutation_data() -> serde_json::Value {
+fn mutation_data(thread_id: &str) -> serde_json::Value {
     serde_json::json!({"markEmailThreadSeen": {
-        "__typename": "GraphqlSoupEmailThread", "id": THREAD_ID, "isRead": true
+        "__typename": "GraphqlSoupEmailThread", "id": thread_id, "isRead": true
     }})
 }
 
-fn enqueue(engine: &CacheEngine) -> js_sys::Promise {
+fn enqueue(engine: &CacheEngine, generation: Option<String>) -> js_sys::Promise {
     engine.enqueue_optimistic_mutation(
         None,
         "00000000-0000-4000-8000-000000000007".into(),
         MAIL_MUTATION.into(),
         None,
         js(serde_json::json!({"input":{"threadId":THREAD_ID}})),
-        js(mutation_data()),
+        js(mutation_data(THREAD_ID)),
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
@@ -33,6 +35,7 @@ fn enqueue(engine: &CacheEngine) -> js_sys::Promise {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        generation,
     )
 }
 
@@ -67,11 +70,20 @@ async fn mail_projection_reads_latch_reset_required_for_all_write_paths() {
             Some("mail-viewer".into()),
         ))
         .await;
+        let generation = test_generation(&engine).await;
         let claim: Option<serde_json::Value> = if matches!(path, WritePath::Commit) {
-            Some(from_js(resolved(enqueue(&engine)).await))
+            Some(from_js(
+                resolved(enqueue(&engine, generation.clone())).await,
+            ))
         } else {
             None
         };
+        // The warm-up left THREAD_ID hot, so the write also names a cold thread
+        // that the Mail projection must read from storage.
+        let data = serde_json::json!({"user":{"id":"mail-viewer","soup":{"items":[
+            {"__typename":"GraphqlSoupEmailThread", "id":THREAD_ID, "isRead":false},
+            {"__typename":"GraphqlSoupEmailThread", "id":COLD_THREAD_ID, "isRead":false}
+        ]}}});
         engine.arm_storage_fault(TestStorageFault::GetBatch).await;
         let promise = match path {
             WritePath::Query => engine.write_query(
@@ -88,8 +100,9 @@ async fn mail_projection_reads_latch_reset_required_for_all_write_paths() {
                 js(serde_json::json!({})),
                 js(data.clone()),
                 Some("mail-viewer".into()),
+                JsValue::UNDEFINED,
             ),
-            WritePath::Enqueue => enqueue(&engine),
+            WritePath::Enqueue => enqueue(&engine, generation.clone()),
             WritePath::Commit => {
                 let claim = claim.unwrap();
                 engine.commit_optimistic_write(
@@ -102,7 +115,10 @@ async fn mail_projection_reads_latch_reset_required_for_all_write_paths() {
                     MAIL_MUTATION.into(),
                     None,
                     js(serde_json::json!({"input":{"threadId":THREAD_ID}})),
-                    js(mutation_data()),
+                    // The enqueue left THREAD_ID hot; a cold thread makes the
+                    // Mail projection read storage.
+                    js(mutation_data(COLD_THREAD_ID)),
+                    generation,
                 )
             }
         };

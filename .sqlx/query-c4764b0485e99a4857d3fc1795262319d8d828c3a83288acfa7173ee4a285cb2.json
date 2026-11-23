@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO scheduled_action_draft\n                (session_id, owner_id, bot_id, state, request, progress, created_at,\n                 traceparent, client_id)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n            ON CONFLICT (owner_id, client_id) WHERE state IN ('drafting', 'ready', 'failed')\n                DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Timestamptz",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c4764b0485e99a4857d3fc1795262319d8d828c3a83288acfa7173ee4a285cb2"
+}

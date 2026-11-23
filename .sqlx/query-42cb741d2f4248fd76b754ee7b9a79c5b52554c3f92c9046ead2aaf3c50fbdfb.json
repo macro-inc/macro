@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                login.id AS login_id,\n                h.id AS harness_id,\n                h.name,\n                h.computer_id AS \"computer_id!\",\n                login.signed_in_by,\n                login.signed_in_at,\n                login.expires_at,\n                login.notice_stage AS \"notice_stage: AccountNoticeStage\",\n                login.notice_expires_at\n            FROM harness_account_logins login\n            JOIN harnesses h ON h.id = login.harness_id\n            WHERE h.deleted_at IS NULL\n              AND h.computer_id IS NOT NULL\n              AND login.provider = $1\n              AND login.signed_out_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "login_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "computer_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "signed_in_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "signed_in_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "notice_stage: AccountNoticeStage",
+        "type_info": {
+          "Custom": {
+            "name": "account_notice_stage",
+            "kind": {
+              "Enum": [
+                "expires_soon",
+                "expires_today",
+                "expired"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "notice_expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "agent_provider",
+            "kind": {
+              "Enum": [
+                "claude"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "42cb741d2f4248fd76b754ee7b9a79c5b52554c3f92c9046ead2aaf3c50fbdfb"
+}

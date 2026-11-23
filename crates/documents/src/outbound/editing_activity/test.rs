@@ -169,3 +169,27 @@ async fn an_empty_batch_does_not_connect_to_redis() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn distinct_invocations_are_not_debounced_together() {
+    let store = store();
+    let document = Uuid::now_v7().to_string();
+    let first = edit(&document, "macro|actor@example.com", None)
+        .with_agent_correlation(Some(Uuid::now_v7()));
+    let second = edit(&document, "macro|actor@example.com", None)
+        .with_agent_correlation(Some(Uuid::now_v7()));
+    assert_eq!(
+        store
+            .refresh_editing_sessions(std::slice::from_ref(&first), Uuid::now_v7(), TEST_IDLE)
+            .await
+            .unwrap(),
+        vec![true]
+    );
+    assert_eq!(
+        store
+            .refresh_editing_sessions(&[first, second], Uuid::now_v7(), TEST_IDLE)
+            .await
+            .unwrap(),
+        vec![false, true]
+    );
+}

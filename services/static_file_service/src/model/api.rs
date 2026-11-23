@@ -13,6 +13,10 @@ pub struct PutFileRequest {
     /// extra metadata to store with file
     /// don't put anything private in here it is public
     pub extension_data: Option<Value>,
+    /// Exact size of the upload in bytes. When set, it is signed into the upload
+    /// URL, so storage rejects a body of any other size.
+    #[serde(default)]
+    pub content_length: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

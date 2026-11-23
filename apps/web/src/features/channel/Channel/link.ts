@@ -3,6 +3,8 @@
 // replace `block-channel`, and we don't want `channel` to import from
 // `block-channel` to keep the import tree clean during the transition.
 
+import { validate as validateUuid } from 'uuid';
+import type { CallJoinIntent } from '../Call/call-lifecycle';
 import type { ChannelTargetRequest } from './ChannelSurface';
 
 export const URL_PARAMS = {
@@ -48,9 +50,16 @@ export function toChannelTargetRequest(
   };
 }
 
-/** True when a `join_call` param value means "please join the call". */
-export function isJoinCallRequested(value: unknown): boolean {
-  return value === 'true' || value === true;
+/** Decode a join target; only `start` authorizes creating a session. */
+export function parseCallJoinIntent(
+  value: unknown
+): CallJoinIntent | undefined {
+  if (value === 'start') return { kind: 'start' };
+  if (value === 'true' || value === true) return { kind: 'join' };
+  if (typeof value === 'string' && validateUuid(value)) {
+    return { kind: 'join', callId: value };
+  }
+  return undefined;
 }
 
 /** True when we should only show the Call tab (already in / joining call). */

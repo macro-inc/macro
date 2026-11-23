@@ -11,17 +11,17 @@
 import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
 import { EventForm } from '@app/features/calendar/components/composer/EventForm';
 import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
+import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
 import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarConsentScopes } from '@core/email-link/consent';
-import { recipientEntityMapper, useContacts } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -127,13 +127,11 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const requestedNeedsAccess = () =>
     requestedInbox()?.needs_reauth ||
     requestedInbox()?.needs_calendar_permission;
-  const contacts = useContacts();
   // The tool mints the Macro call when it executes, so the composer offers the
   // choice under the same flag as the calendar's own event composer.
-  const quickCalls = useQuickCallsFlag();
-  const macroCallsEnabled = () => quickCalls().enabled && !quickCalls().loading;
   // Guest permissions roll out with guest invites.
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
+  const [preferences] = useCalendarPreferences();
   const [operation, setOperation] = createSignal<'create' | 'reject'>();
   let finalized = false;
 
@@ -141,7 +139,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     finalized || !props.sink.canAct() || operation() !== undefined;
 
   const guestOptions = createMemo(() =>
-    contacts().map(recipientEntityMapper('user'))
+    eventGuestOptions(props.initialData.attendees ?? [])
   );
   const writableCalendars = createMemo(() =>
     calendars().filter((calendar) => {
@@ -324,8 +322,9 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
           </Show>
           <EventForm
             controller={controller}
-            macroCallsEnabled={macroCallsEnabled()}
+            macroCallsEnabled
             guestPolicyEditable={guestInvitesEnabled()}
+            timeFormat={preferences.timeFormat}
             class="min-w-0"
             disabled={
               finalized || !props.sink.canAct() || operation() === 'reject'

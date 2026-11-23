@@ -2,7 +2,7 @@ import type {
   GetTypedNotificationByIdResponses,
   NotificationState,
 } from '../../../generated/notification/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import { User } from '../users/user';
@@ -31,28 +31,38 @@ export class Notification extends MacroEntity<NotificationDetail> {
     return new Notification(client, data.id, data);
   }
 
-  /** The viewer's notification feed, most recent first, auto-paginated. */
+  /** The viewer's notification feed, most recent first, auto-paginated; `maxItems` caps the total. */
   static list(
     client: MacroClient,
-    opts?: { pageSize?: number; states?: NotificationState[] },
+    opts?: {
+      pageSize?: number;
+      states?: NotificationState[];
+      maxItems?: number;
+    },
   ): AsyncGenerator<Notification> {
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await client.notification.listTypedNotifications({
-          query: {
-            ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
-            ...(opts?.states !== undefined
-              ? { states: opts.states.join(',') }
-              : {}),
-            ...(cursor ? { cursor } : {}),
-          },
+    return iterate(
+      'notifications.list',
+      opts,
+      { pageSize: true, states: true },
+      () =>
+        paginate(async (cursor) => {
+          const page = unwrap(
+            await client.notification.listTypedNotifications({
+              query: {
+                ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
+                ...(opts?.states !== undefined
+                  ? { states: opts.states.join(',') }
+                  : {}),
+                ...(cursor ? { cursor } : {}),
+              },
+            }),
+          );
+          return {
+            items: page.items.map((n) => Notification.from(client, n)),
+            nextCursor: page.next_cursor,
+          };
         }),
-      );
-      return {
-        items: page.items.map((n) => Notification.from(client, n)),
-        nextCursor: page.next_cursor,
-      };
-    });
+    );
   }
 
   /** The notification event type (e.g. `channel_mention`). */
@@ -92,12 +102,21 @@ export class Notification extends MacroEntity<NotificationDetail> {
   /** The typed notification payload (tagged by event type). */
   readonly metadata = this.field('notification_metadata');
 
-  /** Whether the notification is acknowledged (seen or done). */
+  /**
+   * Whether the notification is acknowledged (seen or done).
+   *
+   * @readonly
+   */
   async seen(): Promise<boolean> {
     return (await this.state()) !== 'unseen';
   }
 
-  /** Mark the notification as seen. */
+  /**
+   * Mark the notification as seen.
+   *
+   * @write
+   * @idempotent
+   */
   async markSeen(): Promise<void> {
     await this.mutate((c) =>
       c.notification.bulkMarkNotificationsSeen({
@@ -106,7 +125,12 @@ export class Notification extends MacroEntity<NotificationDetail> {
     );
   }
 
-  /** Mark the notification as done. */
+  /**
+   * Mark the notification as done.
+   *
+   * @write
+   * @idempotent
+   */
   async markDone(): Promise<void> {
     await this.mutate((c) =>
       c.notification.bulkMarkNotificationsDone({
@@ -115,7 +139,12 @@ export class Notification extends MacroEntity<NotificationDetail> {
     );
   }
 
-  /** Move the notification back to not-done. */
+  /**
+   * Move the notification back to not-done.
+   *
+   * @write
+   * @idempotent
+   */
   async markUndone(): Promise<void> {
     await this.mutate((c) =>
       c.notification.bulkMarkNotificationsUndone({
@@ -124,7 +153,12 @@ export class Notification extends MacroEntity<NotificationDetail> {
     );
   }
 
-  /** Delete the notification. */
+  /**
+   * Delete the notification.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.notification.deleteUserNotificationV2({

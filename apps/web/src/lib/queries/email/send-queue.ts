@@ -9,6 +9,7 @@ import {
   persistLocalEmailSend,
   readLocalDraft,
   readLocalEmailSends,
+  readRemovedEmailSendCopy,
   removeLocalEmailSend,
   watchLocalEmailSends,
 } from './local-drafts';
@@ -25,15 +26,14 @@ import {
 } from './send-telemetry';
 
 export type { EmailSendIntent } from './send-intent';
+export { emailSendMatchesDraft, settledSendAttempt } from './send-intent';
 
-import { type EmailSendIntent, usableEmailSendIntents } from './send-intent';
-
-export function settledSendAttempt(intent: EmailSendIntent) {
-  return (
-    intent.response?.cancelEmailSend?.attempt ??
-    intent.response?.sendEmailMessage?.attempt
-  );
-}
+import {
+  type EmailSendIntent,
+  emailSendMatchesDraft,
+  settledSendAttempt,
+  usableEmailSendIntents,
+} from './send-intent';
 
 /** A pending cancellation never unlocks an attempted send without confirmation. */
 export function emailSendLocked(intent: EmailSendIntent): boolean {
@@ -42,20 +42,25 @@ export function emailSendLocked(intent: EmailSendIntent): boolean {
   return settledSendAttempt(intent)?.status !== 'CANCELLED';
 }
 
-export function emailSendMatchesDraft(
-  intent: EmailSendIntent,
-  draftId: string
-): boolean {
-  return (
-    intent.resolvedDraftId === draftId ||
-    intent.metadata.payload.input.message.draftId === draftId ||
-    settledSendAttempt(intent)?.message?.id === draftId
-  );
-}
-
 export async function readEmailSendIntents(): Promise<EmailSendIntent[]> {
   const rows = await readLocalEmailSends();
   return usableEmailSendIntents(rows);
+}
+
+/**
+ * The working-copy version a send from this browser carried for a draft, or
+ * undefined when no send here took it (it was sent from another device). The
+ * live intent is read first: removal records its copy before deleting it.
+ */
+export async function readSentWorkingCopy(
+  draftId: string
+): Promise<Pick<SendWorkingCopy, 'generation' | 'revision'> | undefined> {
+  const intent = (await readEmailSendIntents()).find(
+    (row) => emailSendMatchesDraft(row, draftId) && emailSendLocked(row)
+  );
+  const copy = intent?.metadata.payload.workingCopy;
+  if (copy) return { generation: copy.generation, revision: copy.revision };
+  return await readRemovedEmailSendCopy(draftId);
 }
 
 export const watchEmailSends = watchLocalEmailSends;
@@ -209,8 +214,19 @@ export async function cancelEmailSendAndConfirm(
     );
     if (latest) current = latest;
     else {
-      // Another tab may have restored or retired it. Absence alone is not Undo.
-      const attempt = await fetchEmailSendStatus(current);
+      // Recovery may finish before this poll. Its receipt confirms the same
+      // attempt without another request to the service.
+      try {
+        const session = await emailStorageSession();
+        if (await localDraftStore.takeCancellationReceipt(session, intent.uuid))
+          return;
+      } catch {
+        // The service can still confirm when local storage is unavailable.
+      }
+      // The row can also disappear after delivery or in an older tab.
+      const attempt = await fetchEmailSendStatus(
+        current.metadata.payload.input.attempt
+      );
       if (attempt?.status === 'CANCELLED') return;
       if (attempt?.status === 'SENT' || attempt?.status === 'SENDING')
         throw new EmailSendCancellationTooLate();
@@ -219,11 +235,10 @@ export async function cancelEmailSendAndConfirm(
 }
 
 /** A status check never resubmits a message. */
-export async function fetchEmailSendStatus(intent: EmailSendIntent) {
-  return await readEmailSendStatus(
-    intent.metadata.payload.input.attempt,
-    AbortSignal.timeout(15_000)
-  );
+export async function fetchEmailSendStatus(
+  attempt: SendEmailAttemptInput['attempt']
+) {
+  return await readEmailSendStatus(attempt, AbortSignal.timeout(15_000));
 }
 
 /** Restore the existing draft identity so uploaded and forwarded files stay attached. */

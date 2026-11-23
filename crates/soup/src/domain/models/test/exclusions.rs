@@ -1,5 +1,10 @@
 use super::*;
+use entity_access::domain::models::EntityAccessReceipt;
+use item_filters::ast::LiteralTree;
 use item_filters::ast::channel::{ChannelLiteral, ChannelThreadLiteral};
+use item_filters::ast::crm_association::CrmAssociation;
+use item_filters::ast::crm_company::CrmCompanyLiteral;
+use item_filters::ast::document::DocumentLiteral;
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
 use models_pagination::CursorVal;
 
@@ -9,14 +14,16 @@ enum Leg {
     Channel,
     ChannelThread,
     Call,
+    CrmCompany,
     ForeignEntity,
 }
 
-const LEGS: [Leg; 5] = [
+const LEGS: [Leg; 6] = [
     Leg::Email,
     Leg::Channel,
     Leg::ChannelThread,
     Leg::Call,
+    Leg::CrmCompany,
     Leg::ForeignEntity,
 ];
 
@@ -38,6 +45,9 @@ fn filter_for(leg: Leg, tree: &Expr<Uuid>) -> EntityFilterAst {
             filter.channel_thread_filter = Some(map_ids(tree, ChannelThreadLiteral::ThreadId));
         }
         Leg::Call => filter.call_filter = Some(map_ids(tree, CallLiteral::CallId)),
+        Leg::CrmCompany => {
+            filter.crm_company_filter = Some(map_ids(tree, CrmCompanyLiteral::Id));
+        }
         Leg::ForeignEntity => {
             filter.foreign_entity_filter = Some(map_ids(tree, ForeignEntityLiteral::Id));
         }
@@ -70,12 +80,23 @@ fn request<T>(filter: T, follow_up: bool) -> SoupRequest<T> {
     }
 }
 
+fn team_receipt() -> EntityAccessReceipt<MemberTeamRole> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap(),
+        &id(4).to_string(),
+        EntityType::Team,
+    )
+}
+
 fn builds_request(leg: Leg, request: &SoupRequest<Option<EntityFilterAst>>) -> bool {
     match leg {
         Leg::Email => request.build_email_request(None).is_some(),
         Leg::Channel => request.build_comms_request().is_some(),
         Leg::ChannelThread => request.build_comms_thread_request().is_some(),
         Leg::Call => request.build_call_request().is_some(),
+        Leg::CrmCompany => request
+            .build_crm_company_request(&Some(team_receipt()))
+            .is_some(),
         Leg::ForeignEntity => request.build_foreign_entity_query().is_some(),
     }
 }
@@ -101,6 +122,7 @@ fn legacy_rest_exclusions_skip_requests_after_ast_expansion() {
         "channel_filters": { "channel_ids": [nil] },
         "channel_thread_filters": { "thread_ids": [nil] },
         "call_filters": { "call_ids": [nil] },
+        "crm_company_filters": { "company_ids": [nil] },
         "foreign_entity_filters": { "ids": [nil] }
     }))
     .unwrap();
@@ -127,24 +149,32 @@ fn absent_filters_and_real_entity_ids_keep_domain_requests() {
 fn exclusion_respects_and_or_and_not_without_dropping_possible_matches() {
     let excluded = Expr::val(Uuid::nil());
     let included = Expr::val(id(1));
+    // (tree, other legs, CRM company leg). The CRM leg answers what its query
+    // would: the extractor fails closed on a negation and unions `And`ed ids,
+    // so only an id list that is all nil is skipped.
     let cases = [
-        (Expr::and(excluded.clone(), included.clone()), false),
-        (Expr::and(included.clone(), excluded.clone()), false),
-        (Expr::or(excluded.clone(), excluded.clone()), false),
-        (Expr::or(excluded.clone(), included.clone()), true),
-        (Expr::or(included.clone(), excluded.clone()), true),
-        (Expr::is_not(excluded.clone()), true),
-        (Expr::is_not(included), true),
+        (Expr::and(excluded.clone(), included.clone()), false, true),
+        (Expr::and(included.clone(), excluded.clone()), false, true),
+        (Expr::or(excluded.clone(), excluded.clone()), false, false),
+        (Expr::or(excluded.clone(), included.clone()), true, true),
+        (Expr::or(included.clone(), excluded.clone()), true, true),
+        (Expr::is_not(excluded.clone()), true, false),
+        (Expr::is_not(included), true, false),
         // Negations are deliberately not simplified: pruning is conservative.
-        (Expr::is_not(Expr::is_not(excluded)), true),
+        (Expr::is_not(Expr::is_not(excluded)), true, false),
     ];
     for leg in LEGS {
-        for (tree, expected) in &cases {
+        for (tree, expected, crm_expected) in &cases {
+            let expected = if matches!(leg, Leg::CrmCompany) {
+                *crm_expected
+            } else {
+                *expected
+            };
             for follow_up in [false, true] {
                 let req = request(Some(filter_for(leg, tree)), follow_up);
                 assert_eq!(
                     builds_request(leg, &req),
-                    *expected,
+                    expected,
                     "{leg:?}: {tree:?} (follow_up={follow_up})"
                 );
             }
@@ -199,7 +229,10 @@ fn exclusion_only_skips_the_targeted_entity_type() {
             false,
         );
         let built = LEGS.map(|leg| builds_request(leg, &req));
-        assert_eq!(built.into_iter().filter(|built| *built).count(), 4);
+        assert_eq!(
+            built.into_iter().filter(|built| *built).count(),
+            LEGS.len() - 1
+        );
     }
 }
 
@@ -217,6 +250,264 @@ fn notified_hydration_legs_also_skip_excluded_entities() {
             let mut req = request(None, false);
             req.cursor = SoupQuery::Notified(NotifiedQueryInner(Query::Sort(NotifiedAt, filter)));
             assert_eq!(builds_request(leg, &req), expected, "{leg:?}: {tree:?}");
+        }
+    }
+}
+
+#[test]
+fn hidden_crm_company_exclusions_preserve_the_admin_check() {
+    for hidden in [true, false] {
+        let mut filter = filter_for(Leg::CrmCompany, &Expr::val(Uuid::nil()));
+        filter.crm_company_filter = filter.crm_company_filter.map(|ids| {
+            Arc::new(Expr::and(
+                Arc::unwrap_or_clone(ids),
+                Expr::val(CrmCompanyLiteral::Hidden(hidden)),
+            ))
+        });
+        for follow_up in [false, true] {
+            let req = request(Some(filter.clone()), follow_up);
+            assert_eq!(
+                builds_request(Leg::CrmCompany, &req),
+                hidden,
+                "hidden={hidden} (follow_up={follow_up})"
+            );
+        }
+    }
+}
+
+#[test]
+fn nil_channel_pins_skip_channel_threads() {
+    let filter = |channel: Uuid| EntityFilterAst {
+        channel_thread_filter: Some(Arc::new(Expr::val(ChannelThreadLiteral::ChannelId(
+            channel,
+        )))),
+        ..EntityFilterAst::default()
+    };
+    for follow_up in [false, true] {
+        let excluded = request(Some(filter(Uuid::nil())), follow_up);
+        assert!(!builds_request(Leg::ChannelThread, &excluded));
+        let included = request(Some(filter(id(1))), follow_up);
+        assert!(builds_request(Leg::ChannelThread, &included));
+    }
+}
+
+#[test]
+fn channel_directory_pages_are_sorted_bounded_and_leave_channel_threads_out() {
+    let no_threads = filter_for(Leg::ChannelThread, &Expr::val(Uuid::nil()));
+    for follow_up in [false, true] {
+        let page = request(no_threads.clone(), follow_up);
+        assert!(page.is_channel_directory_page(), "follow_up={follow_up}");
+
+        let mut largest = request(no_threads.clone(), follow_up);
+        largest.limit = CHANNEL_DIRECTORY_PAGE_LIMIT;
+        assert!(largest.is_channel_directory_page(), "follow_up={follow_up}");
+
+        let mut too_large = request(no_threads.clone(), follow_up);
+        too_large.limit = CHANNEL_DIRECTORY_PAGE_LIMIT + 1;
+        assert!(
+            !too_large.is_channel_directory_page(),
+            "follow_up={follow_up}"
+        );
+
+        for threads in [
+            EntityFilterAst::default(),
+            filter_for(Leg::ChannelThread, &Expr::val(id(1))),
+            filter_for(Leg::Channel, &Expr::val(id(1))),
+        ] {
+            assert!(
+                !request(threads.clone(), follow_up).is_channel_directory_page(),
+                "{threads:?} (follow_up={follow_up})"
+            );
+        }
+    }
+
+    for cursor in [
+        SoupQuery::new_sort_notified(no_threads.clone()),
+        SoupQuery::new_sort_touched(no_threads.clone()),
+        SoupQuery::new_sort_frecency(Frecency, no_threads.clone()),
+    ] {
+        let mut page = request(no_threads.clone(), false);
+        page.cursor = cursor;
+        assert!(!page.is_channel_directory_page());
+    }
+}
+
+fn directory_page_with_channels(
+    channels: Expr<ChannelLiteral>,
+    follow_up: bool,
+) -> SoupRequest<EntityFilterAst> {
+    let mut filter = filter_for(Leg::ChannelThread, &Expr::val(Uuid::nil()));
+    filter.channel_filter = Some(Arc::new(channels));
+    request(filter, follow_up)
+}
+
+fn named(ids: impl IntoIterator<Item = u128>) -> Expr<ChannelLiteral> {
+    ids.into_iter()
+        .map(|n| Expr::val(ChannelLiteral::ChannelId(id(n))))
+        .reduce(Expr::or)
+        .expect("at least one id")
+}
+
+fn either_participation() -> Expr<ChannelLiteral> {
+    Expr::or(
+        Expr::val(ChannelLiteral::IsParticipant(true)),
+        Expr::val(ChannelLiteral::IsParticipant(false)),
+    )
+}
+
+#[test]
+fn channel_directory_pages_read_newest_first() {
+    let no_threads = filter_for(Leg::ChannelThread, &Expr::val(Uuid::nil()));
+    for follow_up in [false, true] {
+        let mut ascending = request(no_threads.clone(), follow_up);
+        ascending.sort_direction = SoupSortDirection::Asc;
+        assert!(
+            !ascending.is_channel_directory_page(),
+            "follow_up={follow_up}"
+        );
+    }
+}
+
+#[test]
+fn channel_directory_pages_admit_only_channel_filters_the_request_bounds() {
+    let limit = u128::from(CHANNEL_DIRECTORY_PAGE_LIMIT);
+    let admitted = [
+        // The web's by-id read: named ids, whether joined or not.
+        Expr::and(named(1..=3), either_participation()),
+        Expr::and(named(1..=limit), either_participation()),
+        named(1..=3),
+        Expr::and(named([1]), Expr::val(ChannelLiteral::IsParticipant(true))),
+        // The most participation states a page may carry.
+        Expr::and(
+            named(1..=limit),
+            Expr::and(
+                Expr::val(ChannelLiteral::IsParticipant(true)),
+                Expr::val(ChannelLiteral::IsParticipant(true)),
+            ),
+        ),
+    ];
+    let refused = [
+        // A membership check per candidate for each participation state.
+        Expr::and(
+            named(1..=3),
+            Expr::and(either_participation(), either_participation()),
+        ),
+        Expr::and(
+            named(1..=limit),
+            Expr::and(
+                Expr::val(ChannelLiteral::IsParticipant(true)),
+                either_participation(),
+            ),
+        ),
+        // Every channel of the user's teams, bounded by no id.
+        either_participation(),
+        Expr::val(ChannelLiteral::IsParticipant(false)),
+        Expr::and(named(1..=limit + 1), either_participation()),
+        Expr::and(
+            named(1..=3),
+            Expr::val(ChannelLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+        ),
+        Expr::val(ChannelLiteral::NotificationState(
+            item_filters::NotificationState::Unseen,
+        )),
+        Expr::and(named(1..=3), Expr::val(ChannelLiteral::Importance(true))),
+        Expr::or(named([1]), Expr::val(ChannelLiteral::TeamId(id(9)))),
+        // Either a named channel or any channel the user has not joined.
+        Expr::or(named([1]), Expr::val(ChannelLiteral::IsParticipant(false))),
+        Expr::is_not(named([1])),
+        Expr::and(Expr::is_not(named([1])), either_participation()),
+        // NOT keeps every participation state it holds.
+        Expr::and(
+            named(1..=3),
+            Expr::is_not(Expr::and(either_participation(), either_participation())),
+        ),
+        Expr::val(ChannelLiteral::TeamId(id(9))),
+    ];
+    for follow_up in [false, true] {
+        for channels in admitted.clone() {
+            assert!(
+                directory_page_with_channels(channels.clone(), follow_up)
+                    .is_channel_directory_page(),
+                "{channels:?} (follow_up={follow_up})"
+            );
+        }
+        for channels in refused.clone() {
+            assert!(
+                !directory_page_with_channels(channels.clone(), follow_up)
+                    .is_channel_directory_page(),
+                "{channels:?} (follow_up={follow_up})"
+            );
+        }
+    }
+}
+
+/// A document filter that names `record`, negated when `negated`.
+fn documents_naming(record: CrmAssociation, negated: bool) -> LiteralTree<DocumentLiteral> {
+    let literal = Expr::val(DocumentLiteral::CrmAssociated(record));
+    Some(Arc::new(if negated {
+        Expr::is_not(literal)
+    } else {
+        literal
+    }))
+}
+
+#[test]
+fn channel_directory_pages_carry_no_scope_soup_turns_into_channel_ids() {
+    let scopes: [(&str, fn(&mut EntityFilterAst)); 7] = [
+        ("favorites", |filter| filter.favorites_only = Some(true)),
+        // A record the document filter names is resolved the same way, even
+        // under NOT.
+        ("document company", |filter| {
+            filter.document_filter = documents_naming(CrmAssociation::Company(id(7)), false);
+        }),
+        ("document contact", |filter| {
+            filter.document_filter = documents_naming(CrmAssociation::Contact(id(7)), false);
+        }),
+        ("document company under NOT", |filter| {
+            filter.document_filter = documents_naming(CrmAssociation::Company(id(7)), true);
+        }),
+        ("company", |filter| {
+            filter.crm_association = Some(CrmAssociation::Company(id(7)));
+        }),
+        ("contact", |filter| {
+            filter.crm_association = Some(CrmAssociation::Contact(id(7)));
+        }),
+        ("activity", |filter| {
+            filter.crm_association = Some(CrmAssociation::Activity);
+        }),
+    ];
+    for follow_up in [false, true] {
+        for channels in [None, Some(Expr::and(named(1..=3), either_participation()))] {
+            let page = || match channels.clone() {
+                Some(channels) => directory_page_with_channels(channels, follow_up),
+                None => request(
+                    filter_for(Leg::ChannelThread, &Expr::val(Uuid::nil())),
+                    follow_up,
+                ),
+            };
+            assert!(page().is_channel_directory_page(), "follow_up={follow_up}");
+            let mut unscoped = page();
+            unscoped.cursor = unscoped.cursor.map(|mut filter| {
+                filter.favorites_only = Some(false);
+                filter
+            });
+            assert!(
+                unscoped.is_channel_directory_page(),
+                "favorites_only false (follow_up={follow_up})"
+            );
+            for (name, scope) in scopes {
+                let mut scoped = page();
+                scoped.cursor = scoped.cursor.map(|mut filter| {
+                    scope(&mut filter);
+                    filter
+                });
+                assert!(
+                    !scoped.is_channel_directory_page(),
+                    "{name} (follow_up={follow_up})"
+                );
+            }
         }
     }
 }

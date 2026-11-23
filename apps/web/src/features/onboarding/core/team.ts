@@ -33,12 +33,18 @@ export function prefillableTeammates(args: {
 }): string[] {
   const { contacts, domain, ownEmail } = args;
   if (!domain) return [];
-  const teammates = new Set(
-    contacts.filter(
-      (address) => address !== ownEmail && emailDomain(address) === domain
-    )
-  );
-  return [...teammates].slice(0, PREFILL_CAP);
+  const teammates: string[] = [];
+  const seen = new Set<string>();
+  const target = domain.trim().toLowerCase();
+  const self = ownEmail?.trim().toLowerCase();
+  for (const address of contacts) {
+    const key = address.trim().toLowerCase();
+    if (key === self || seen.has(key) || emailDomain(key) !== target) continue;
+    seen.add(key);
+    teammates.push(address);
+    if (teammates.length === PREFILL_CAP) break;
+  }
+  return teammates;
 }
 
 /**

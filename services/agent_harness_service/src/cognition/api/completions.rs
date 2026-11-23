@@ -3,6 +3,9 @@ use axum::{extract, response::IntoResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_env_var::maybe_env_vars;
 
+#[cfg(test)]
+mod test;
+
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
 
 maybe_env_vars! {
@@ -38,10 +41,37 @@ pub async fn handler(
         tracing::error!(error=?err, "failed to read chat completion response");
         (axum::http::StatusCode::BAD_GATEWAY, err.to_string())
     })?;
+    if !status.is_success() {
+        genai_telemetry::provider_account::report_provider_error(
+            "openai",
+            Some(status.as_u16()),
+            openai_error_code(&bytes).as_deref().unwrap_or_default(),
+        );
+    }
 
     Ok::<_, (axum::http::StatusCode, String)>((
         status,
         [(axum::http::header::CONTENT_TYPE, "application/json")],
         bytes,
     ))
+}
+
+#[derive(serde::Deserialize)]
+struct OpenaiErrorResponse {
+    error: OpenaiError,
+}
+
+#[derive(serde::Deserialize)]
+struct OpenaiError {
+    code: Option<String>,
+}
+
+/// The `error.code` of an OpenAI error body. Only the code is classified: the
+/// message can echo the caller's request, so matching it would let any caller
+/// trigger the account alert.
+fn openai_error_code(body: &[u8]) -> Option<String> {
+    serde_json::from_slice::<OpenaiErrorResponse>(body)
+        .ok()?
+        .error
+        .code
 }

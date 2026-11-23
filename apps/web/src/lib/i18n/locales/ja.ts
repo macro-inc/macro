@@ -53,8 +53,6 @@ export default {
     projectBadge: 'プロジェクト',
     newProject: '新規プロジェクト',
     contentAlreadyOpen: 'コンテンツはすでに開いています',
-    unableToOpenConversation:
-      '会話を開けませんでした。もう一度お試しください。',
     mobileSearchPlaceholder: '検索…',
     closeSearch: '検索を閉じる',
     searchFullTextFor: '「{{query}}」を全文検索',
@@ -105,7 +103,6 @@ export default {
     close: '閉じる',
     delete: '削除',
     rename: '名前を変更',
-    more: 'その他',
     search: '検索',
     settings: '設定',
   },
@@ -511,6 +508,9 @@ export default {
       other: '{{count}}件の項目を削除しました',
     },
     toastDeleteFailed: '削除できませんでした',
+    toastPropertySet: {
+      other: '{{count}}件の項目に{{property}}を設定しました',
+    },
     toastAddedToFavorites: 'お気に入りに追加しました',
     toastAddedCountToFavorites: {
       other: '{{count}}件の項目をお気に入りに追加しました',
@@ -569,10 +569,6 @@ export default {
       other: '{{count}}件中{{accepted}}件を未完了にしました',
     },
     toastMarkNotDoneFailed: '未完了にできませんでした',
-    toastThreadStaysDone:
-      'このスレッドには受信したメッセージがないため、完了のままになります',
-    toastThreadsStayDone:
-      'これらのスレッドには受信したメッセージがないため、完了のままになります',
     toastCountNotRestored: {
       other: '{{count}}件を復元できませんでした。',
     },
@@ -666,8 +662,6 @@ export default {
     create: '作成',
     getMobileApp: 'モバイルアプリを入手',
     signedInAs: '{{name}}としてログイン中',
-    commandMenu: 'コマンドメニュー',
-    searchEverything: 'すべてを検索',
     customizeSidebar: 'サイドバーをカスタマイズ',
     customizeSidebarDescription:
       'サイドバーに表示するアプリを選択し、ドラッグして並べ替えます。ホームは常に先頭に表示されます。',
@@ -735,7 +729,7 @@ export default {
     tabMobileApp: 'モバイルアプリ',
     tabTags: 'タグ',
     tabIntegrations: '連携',
-    tabRuntimes: 'ランタイム',
+    tabRuntimes: 'マシン',
     tabMcpServer: 'MCPサーバー',
     tabApiKeys: 'APIキー',
     tabBots: 'ボット',
@@ -752,7 +746,6 @@ export default {
       '設定が見つかりません。「署名」「テーマ」「カレンダー」などで検索してください。',
     backToSettings: '設定に戻る',
     closeSettings: '設定を閉じる',
-    goToTab: '設定タブ{{number}}に移動',
     editProfile: 'プロフィールを編集',
     logOut: 'ログアウト',
     yourAccount: 'アカウント',

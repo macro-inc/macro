@@ -1,19 +1,22 @@
 import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
+import { t } from '@app/lib/i18n';
 import {
-  createInputAttachmentTracker,
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
-import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
-import { modelLabel } from '@core/component/AI/constant/model-label';
 import {
-  acceleratedSpeed,
-  speedForModel,
-} from '@core/component/AI/constant/speed';
-import { fastModeEnabled } from '@core/component/AI/signal/speed';
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
+import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
+import {
+  preferredSpeed,
+  setPreferredSpeed,
+} from '@core/component/AI/signal/speed';
 import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -31,24 +34,36 @@ import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
 import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
-import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
   type EffortChoice,
   effortConfigOption,
-  effortLabel,
+  selectConfigOption,
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
-import { type AgentKind, kindForMode } from '../core/agent-kind';
+import { type AgentKind, kindForMode, modeForKind } from '../core/agent-kind';
 import {
   type AgentsMode,
   agentsModeLabel,
   type ComposerMode,
 } from '../core/mode';
 import { defaultBranchFor, sameRepository } from '../core/repository';
-import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
+  MACRO_PERSONA_ID,
+  type RosterAgent,
+  rosterAgentForMention,
+} from '../core/roster';
+import { UnifiedModelSelector } from '../model-selector';
+import {
+  createPersistedComposerAttachments,
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
@@ -61,8 +76,10 @@ import { createComposerModels } from '../queries/composer-models';
 import { createReachableRepositories } from '../queries/reachable-repositories';
 import { createRepositoryBranches } from '../queries/repository-branches';
 import { AGENTS_TOUR } from '../tour';
-import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
+
+/** Another surface asking the composer to select an agent. */
+export type AgentRequest = { agentId: string; request: string };
 
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {
@@ -84,6 +101,8 @@ export type StartConversation = {
 /** One agent choice determines the session kind, default model, and repository context. */
 export function NewChatPage(props: {
   compact?: boolean;
+  /** Keep Home's original settings drawer and mode tabs. */
+  homeLayout?: boolean;
   active?: boolean;
   workspaceId?: string;
   draft?: string;
@@ -99,6 +118,12 @@ export function NewChatPage(props: {
    */
   mode?: ComposerMode;
   onModeChange?: (mode: ComposerMode) => void;
+  /**
+   * An agent to select, e.g. one just set up on a Macro computer. Each
+   * request selects it again, also after the user picked another; one not in
+   * the roster yet is selected once it arrives.
+   */
+  requestedAgent?: AgentRequest;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -108,6 +133,8 @@ export function NewChatPage(props: {
   updateSessions?: readonly AgentSessionEntity[];
   onOpenUpdateSession?: (sessionId: string) => void;
   showUpdates?: boolean;
+  /** Centered under the composer, such as the Agents tutorial pill. */
+  belowComposer?: JSX.Element;
 }) {
   const userId = useUserId();
   const billing = useAiBillingSummaryQuery();
@@ -125,6 +152,25 @@ export function NewChatPage(props: {
     props.roster.filter((agent) => agent.kind === kindForMode(kind));
   const options = () => optionsFor(agentsMode());
   const [agentId, setAgentId] = createSignal<string>();
+  // A mention made before the roster has loaded is applied once it has,
+  // unless something later decides first: another mention, a pick, a mode
+  // switch or a requested agent.
+  const [pendingMention, setPendingMention] = createSignal<string>();
+  createEffect(
+    on(
+      () => props.requestedAgent,
+      (requested) => {
+        if (!requested) return;
+        setPendingMention(undefined);
+        setAgentId(requested.agentId);
+      }
+    )
+  );
+  // A switch between Chat and Code, not Auto appearing once the flags load.
+  const agentKind = createMemo(agentsMode);
+  createEffect(
+    on(agentKind, () => setPendingMention(undefined), { defer: true })
+  );
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
@@ -165,6 +211,8 @@ export function NewChatPage(props: {
   };
   const selected = createMemo(() => preferredAgent(agentsMode(), agentId()));
   const selectedCatalog = createComposerModels(selected);
+  const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);
+  const macroCatalog = createComposerModels(macro);
   /** In-memory choices come from the owner's catalog; other runtimes keep their rules. */
   const composerModelOverride = () => {
     const agent = selected();
@@ -196,6 +244,27 @@ export function NewChatPage(props: {
     effortConfigOption(
       capabilities.isSuccess ? capabilities.data.configOptions : []
     );
+  /** The selected model's tier option, when Macro's agent offers more than standard. */
+  const speedOption = () => {
+    if (capabilityTarget()?.harness !== 'in-memory') return;
+    const option = selectConfigOption(
+      capabilities.isSuccess ? capabilities.data.configOptions : [],
+      'speed',
+      'speed'
+    );
+    const offered = nativeSpeeds(
+      option?.options.map((choice) => choice.value) ?? []
+    );
+    return option && offered ? { option, offered } : undefined;
+  };
+  const speedOverride = () => {
+    const tiers = speedOption();
+    if (!tiers) return;
+    return {
+      configId: tiers.option.id,
+      value: resolveSpeed(preferredSpeed(), tiers.offered),
+    };
+  };
   /** The last effort picked for the selected runtime and model, while it is still offered. */
   const selectedEffort = () => {
     const target = capabilityTarget();
@@ -241,6 +310,15 @@ export function NewChatPage(props: {
     const agent = selected();
     if (!agent) return 'Choose an agent to start';
     if (agent.unavailableReason) return agent.unavailableReason;
+    // A paid tier would otherwise be dropped silently while the model's
+    // options are still loading.
+    if (
+      capabilityTarget()?.harness === 'in-memory' &&
+      capabilities.isPending &&
+      preferredSpeed() !== 'standard'
+    ) {
+      return t('agentControls.loadingTiers');
+    }
     if (canSelectRepository() && repoUrl()) {
       if (reachable.loading()) return 'Loading repositories';
       if (reachable.error()) return 'Retry loading repositories before sending';
@@ -284,6 +362,13 @@ export function NewChatPage(props: {
   };
 
   const connect = (agent: RosterAgent) => {
+    if (agent.needsRuntimeAccess && agent.harnessId) {
+      fireAndForget(
+        requestRuntimeAccess(agent.harnessId),
+        'runtime-sharing.request'
+      );
+      return;
+    }
     // Both land on Settings → Runtimes: Cursor to save an API key, macrod to
     // restart the local runtime (one click on desktop) or re-pair it.
     if (agent.harness === 'cursor' || agent.harness === 'macrod') {
@@ -291,17 +376,13 @@ export function NewChatPage(props: {
     }
   };
 
-  const attachmentTracker = createMemo(() => {
-    const identity = userId();
-    const key = props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY;
-    return createInputAttachmentTracker({
-      // Unknown identities never read shared storage. Parents may own the
-      // text draft without owning files; those still persist here.
-      persistenceKey: identity
-        ? `${key}:${encodeURIComponent(identity)}`
-        : undefined,
-    });
-  });
+  // Parents may own the text draft without owning files; those still persist here.
+  const attachmentTracker = createMemo(() =>
+    createPersistedComposerAttachments(
+      props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY,
+      userId()
+    )
+  );
   const attachFiles = (files: File[]) =>
     fireAndForget(
       uploadInputAttachments({
@@ -390,13 +471,8 @@ export function NewChatPage(props: {
         ? { modelFallback: true }
         : {}),
       effortOverride: coder ? undefined : effortOverride(),
-      ...(model && inMemory && acceleratedSpeed(model)
-        ? {
-            speedOverride: {
-              configId: 'speed',
-              value: speedForModel(model, fastModeEnabled()),
-            },
-          }
+      ...(inMemory && speedOverride()
+        ? { speedOverride: speedOverride() }
         : {}),
     });
     // Macro's preferred model and the picked efforts stay; coding-agent model
@@ -409,6 +485,8 @@ export function NewChatPage(props: {
     model?: string,
     selection?: EffortChoice
   ) => {
+    // The latest pick wins over a mention still waiting for the roster.
+    setPendingMention(undefined);
     setAgentId(agent.id);
     if (agent.id === MACRO_PERSONA_ID) {
       if (model) preferredInmem.remember(model);
@@ -420,6 +498,41 @@ export function NewChatPage(props: {
     }
     if (selection) rememberEffort(selection);
   };
+
+  // An @mentioned agent becomes the active one, switching to its mode, as
+  // mentioning it in a channel starts it; the mention stays in the prompt.
+  // An unavailable one is selected too, so the send is blocked with its
+  // reason instead of going to another agent. The last agent picked wins.
+  // Mentioning the agent already active changes nothing, so a model picked
+  // for it stays.
+  const activateMentioned = (agent: RosterAgent) => {
+    const agentMode = modeForKind(agent.kind);
+    if (agent.id === selected()?.id && mode() === agentMode) return;
+    if (mode() !== agentMode) setMode(agentMode);
+    selectAgent(agent);
+  };
+  const selectMentionedAgent = (mentionedId: string) => {
+    // Only agents select; a person mentioned meanwhile keeps a pending one.
+    if (!mentionedId.startsWith('bot|')) return;
+    const agent = rosterAgentForMention(props.roster, mentionedId);
+    if (agent) {
+      setPendingMention(undefined);
+      activateMentioned(agent);
+    } else if (props.rosterLoading || props.availabilityLoading)
+      setPendingMention(mentionedId);
+  };
+  createEffect(
+    on(
+      () => [props.roster, props.rosterLoading] as const,
+      ([roster, loading]) => {
+        const mentionedId = pendingMention();
+        if (!mentionedId) return;
+        const agent = rosterAgentForMention(roster, mentionedId);
+        if (agent || !loading) setPendingMention(undefined);
+        if (agent) activateMentioned(agent);
+      }
+    )
+  );
 
   let focusInput: (() => void) | undefined;
   const chatAboutUpdate = (sessionId: string, sessionName: string) => {
@@ -437,31 +550,79 @@ export function NewChatPage(props: {
     event.preventDefault();
     focusInput?.();
   };
+  // Keep catalog identities stable when capability discovery updates the menu.
+  // Recreating option objects remounts their discovery observers and restarts requests.
+  const catalogModels = createMemo(() =>
+    selectedCatalog.models().map((option) => ({
+      id: option.id,
+      label: modelLabel(option.id, option.name, option.description),
+      group: option.group ?? undefined,
+    }))
+  );
+  const suggestedModels = createMemo(() =>
+    (macro() ? macroCatalog.models() : selectedCatalog.models()).map(
+      (option) => ({
+        id: option.id,
+        label: modelLabel(option.id, option.name, option.description),
+        group: option.group ?? undefined,
+      })
+    )
+  );
   const agentSelector = () => (
-    <AgentPicker
-      agents={options()}
-      selected={selected()}
-      modelOverride={composerModelOverride()}
-      loading={props.rosterLoading}
-      effortLabel={
-        selectedEffort()?.name ?? effortLabel(effort(), effortOverride()?.value)
-      }
-      effortSelection={effortOverride()}
-      onCloseAutoFocus={restoreInputFocus}
-      onSelect={selectAgent}
-      onSelectEffort={selectAgent}
-      onConnect={connect}
-      onCreate={() => props.onOpenRoster(coding() ? 'coder' : 'agent')}
+    <UnifiedModelSelector
+      state={{
+        agent: selected(),
+        agents: options().filter((agent) => agent.id !== MACRO_PERSONA_ID),
+        model:
+          composerModelOverride() ??
+          selected()?.defaultModel ??
+          selectedCatalog.currentModel(),
+        models: catalogModels(),
+        suggestedModels: suggestedModels(),
+        suggestedDisabled: Boolean((macro() ?? selected())?.unavailableReason),
+        suggestedSelected: !macro() || selected()?.id === macro()?.id,
+        loading: props.rosterLoading,
+        effort: effort(),
+        effortValue: effortOverride()?.value,
+        speeds: speedOption()?.option.options.map((option) => option.value),
+        speedValue: speedOverride()?.value,
+        suggestedHarness: macro()?.harness ?? selected()?.harness,
+        suggestedSpeeds:
+          selected()?.id === MACRO_PERSONA_ID &&
+          composerModelOverride() &&
+          speedOption()
+            ? { [composerModelOverride()!]: speedOption()!.offered }
+            : undefined,
+        onModel: (model) => {
+          const agent = selected();
+          if (agent) selectAgent(agent, model);
+        },
+        onSuggestedModel: (model) => {
+          const agent =
+            options().find((option) => option.id === MACRO_PERSONA_ID) ??
+            selected();
+          if (agent && !agent.unavailableReason) selectAgent(agent, model);
+        },
+        onAgent: (agent) => selectAgent(agent),
+        onConnect: connect,
+        onCreate: () => props.onOpenRoster(coding() ? 'coder' : 'agent'),
+        onEffort: rememberEffort,
+        onSpeed: setPreferredSpeed,
+        onOpenChange: setEffortPickerOpen,
+        onCloseAutoFocus: restoreInputFocus,
+      }}
     />
   );
 
   const setMode = (next: ComposerMode) => {
+    setPendingMention(undefined);
     // A model picked for the other mode's agent does not carry over.
     setModelOverride(undefined);
     if (props.onModeChange) props.onModeChange(next);
     else ownMode.setMode(next);
   };
 
+  const phoneComposer = () => !!props.compact && isTouchDevice();
   const modeSwitch = () => (
     <div ref={tourTarget(AGENTS_TOUR.modeSwitch)} class="shrink-0">
       <Tabs
@@ -479,19 +640,30 @@ export function NewChatPage(props: {
           { value: 'chat', label: agentsModeLabel('chat'), icon: ChatIcon },
           { value: 'code', label: agentsModeLabel('code'), icon: CodeIcon },
         ]}
-        variant="track"
-        fullWidth
+        {...(props.homeLayout
+          ? {
+              variant: 'track' as const,
+              fullWidth: true,
+              class: ownMode.autoAvailable()
+                ? 'w-72 touch:w-36'
+                : 'w-56 touch:w-24',
+            }
+          : {
+              variant: 'grouped' as const,
+              touch: 'inset' as const,
+              size: isTouchDevice() ? ('composer' as const) : ('sm' as const),
+            })}
         // Phones keep the icons; the name stays for assistive tech.
         iconOnly={isTouchDevice()}
         value={mode()}
         onChange={setMode}
-        class={ownMode.autoAvailable() ? 'w-72 touch:w-36' : 'w-56 touch:w-24'}
       />
     </div>
   );
 
   const repositoryPicker = () => (
     <RepositoryPicker
+      compactPhone={phoneComposer()}
       onOpenChange={setRepositoryPickerOpen}
       repoUrl={repoUrl()}
       branch={repoBranch()}
@@ -515,6 +687,8 @@ export function NewChatPage(props: {
     <ChatComposer
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
+      phoneLayout={phoneComposer()}
+      settingsPlacement={props.homeLayout ? 'below' : 'inside'}
       controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
       registerFocus={(focus) => {
         focusInput = focus;
@@ -527,28 +701,26 @@ export function NewChatPage(props: {
         // Auto picks the agent per prompt, so it has no agent, model, or effort to choose.
         <div class="flex min-w-0 items-center gap-1" hidden={auto()}>
           {agentSelector()}
-          <EffortSelector
-            onCloseAutoFocus={restoreInputFocus}
-            onOpenChange={setEffortPickerOpen}
-            config={effort()}
-            value={effortOverride()?.value}
-            disabled={Boolean(blocked())}
-            onChange={rememberEffort}
-          />
-          <Show
-            when={['macro-inmem', 'in-memory'].includes(
-              selected()?.harness ?? ''
-            )}
-          >
-            <SpeedToggle model={composerModelOverride() ?? ''} />
-          </Show>
         </div>
       }
       drawer={
-        <div class="flex w-full min-w-0 items-center gap-2">
+        <div
+          class="flex min-w-0 items-center gap-2"
+          classList={{
+            'w-full': isTouchDevice() || props.homeLayout,
+            'flex-wrap not-touch:justify-end': !props.homeLayout,
+          }}
+        >
           {modeSwitch()}
           <Show when={coding()}>
-            <div class="min-w-0 flex-1 touch:[&>div]:justify-end">
+            <div
+              class="min-w-0"
+              classList={{
+                'w-60 max-w-full': !phoneComposer() && !props.homeLayout,
+                'flex-1 touch:[&>div]:justify-end': props.homeLayout,
+                'w-fit max-w-[calc(100%_-_96px)]': phoneComposer(),
+              }}
+            >
               {repositoryPicker()}
             </div>
           </Show>
@@ -557,11 +729,10 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
-      modelName={modelLabel(
+      onMentionUser={selectMentionedAgent}
+      modelName={catalogModelLabel(
         composerModelOverride(),
-        selectedCatalog
-          .models()
-          .find((model) => model.id === composerModelOverride())?.name
+        selectedCatalog.models()
       )}
       supportsImages={
         selectedCatalog
@@ -599,12 +770,13 @@ export function NewChatPage(props: {
           >
             <div
               data-agent-new-composer={props.workspaceId}
-              class="agents-view-portal touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
+              class="agents-view-portal agents-scope touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
             >
               <LocalRuntimePrompt />
               {composer()}
             </div>
           </FloatRegionOrInline>
+          {props.belowComposer}
           <Show
             when={
               props.showUpdates &&

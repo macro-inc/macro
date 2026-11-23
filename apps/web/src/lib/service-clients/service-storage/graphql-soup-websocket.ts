@@ -377,12 +377,13 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               );
             }
             if (document === SoupUpdatesDocument && result.data != null) {
+              const patches = (result.data as SoupUpdatesSubscription)
+                .soupUpdates;
               fireAndForget(
-                revalidateCallListsForSoupUpdates(
-                  (result.data as SoupUpdatesSubscription).soupUpdates
-                ),
+                revalidateCallListsForSoupUpdates(patches),
                 'graphql-soup-subscriptions'
               );
+              channelHandler.onSoupUpdates(patches);
             }
             if (
               document === NotificationUpdatesDocument &&

@@ -39,6 +39,14 @@ RUN : \
 
 COPY --chmod=755 --from=builder /app/svc /app/svc
 
+# agent_harness_service spawns `git http-backend` for agent git remotes.
+RUN if [ "$SERVICE_NAME" = "agent_harness_service" ]; then \
+    apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*; \
+  fi
+
 # Only the agent harness hosts code-mode subprocesses.
 RUN --mount=from=deno,source=/usr/bin/deno,target=/tmp/deno,ro \
   if [ "$SERVICE_NAME" = "agent_harness_service" ]; then \

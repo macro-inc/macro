@@ -24,6 +24,7 @@ serde_json = { workspace = true, features = ["preserve_order"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]

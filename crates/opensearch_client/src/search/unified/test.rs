@@ -1491,3 +1491,68 @@ fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn a_one_character_query_is_a_whole_word_in_content_and_a_capped_prefix_in_names()
+-> anyhow::Result<()> {
+    let args = UnifiedSearchArgs {
+        search_indices: HashSet::from([
+            OpenSearchEntityType::Documents,
+            OpenSearchEntityType::Emails,
+        ]),
+        user_id: "user".to_string(),
+        page_size: 10,
+        match_type: "partial".to_string(),
+        document_search_args: UnifiedDocumentSearchArgs {
+            terms: vec!["a".to_string()],
+            mode: DocumentSearchMode::NameContent,
+            ..Default::default()
+        },
+        email_search_args: UnifiedEmailSearchArgs {
+            terms: vec!["a".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let request = serde_json::to_string(&build_unified_search_request(&args)?.to_json())?;
+
+    assert!(request.contains(r#""query":{"match_phrase":{"content":"a"}}"#));
+    assert!(request.contains(
+        r#"{"match_phrase_prefix":{"document_name":{"query":"a","max_expansions":256}}}"#
+    ));
+    assert!(request.contains(r#"{"query":"(a)","fields":["subject""#));
+    assert!(!request.contains(r#""match_phrase_prefix":{"content""#));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_unified_search_asks_for_its_phase_timings_and_tolerates_missing_indices() {
+    let (url, server) = crate::test_support::serve_once(
+        "200 OK",
+        r#"{"took":12,"timed_out":false,"_shards":{"total":6,"successful":6,"skipped":0,"failed":0},"hits":{"total":{"value":0,"relation":"eq"},"max_score":null,"hits":[]},"phase_took":{"dfs_pre_query":0,"query":9,"fetch":2,"dfs_query":0,"expand":0,"can_match":0}}"#,
+    );
+    let client = crate::OpensearchClient::new(url, String::new(), String::new()).unwrap();
+    let args = UnifiedSearchArgs {
+        search_indices: HashSet::from([OpenSearchEntityType::Projects]),
+        user_id: "macro|viewer@example.com".to_string(),
+        page_size: 10,
+        match_type: "partial".to_string(),
+        cursor: SearchCursorOption::NotDone(None),
+        project_search_args: UnifiedProjectSearchArgs {
+            terms: vec!["roadmap".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let (hits, cursor) = client.search_unified(args).await.unwrap();
+    let (request_line, _) = server.join().unwrap();
+
+    assert_eq!(
+        request_line.trim_end(),
+        "POST /projects/_search?ignore_unavailable=true&phase_took=true HTTP/1.1"
+    );
+    assert!(hits.is_empty());
+    assert!(matches!(cursor, SearchCursorOption::Done));
+}

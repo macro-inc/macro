@@ -25,9 +25,10 @@ export default {
   tabMobileApp: 'Mobile App',
   tabTags: 'Tags',
   tabIntegrations: 'Integrations',
-  tabRuntimes: 'Runtimes',
+  tabRuntimes: 'Machines',
   tabMcpServer: 'MCP server',
   tabApiKeys: 'API Keys',
+  tabAccountManagers: 'Account Managers',
   tabBots: 'Bots',
   tabDebug: 'Debug',
 
@@ -45,7 +46,6 @@ export default {
     'No settings found. Try “signature”, “theme”, or “calendar”.',
   backToSettings: 'Back to settings',
   closeSettings: 'Close settings',
-  goToTab: 'Go to settings tab {{number}}',
   editProfile: 'Edit profile',
   logOut: 'Log out',
   yourAccount: 'Your account',
@@ -55,4 +55,6 @@ export default {
   sectionUnavailable: 'This settings section is unavailable.',
   createTeam: 'Create a team',
   inviteTeam: 'Invite your team',
+  inviteAgents: 'Invite agents',
+  teamActions: 'Team actions',
 };

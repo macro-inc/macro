@@ -15,9 +15,6 @@ vi.mock('./calendar/open-tool-event', () => ({
   openToolCalendarEvent,
   toolInputOpenTime: vi.fn(),
 }));
-vi.mock('./calendar/ChatCompose', () => ({
-  CalendarChatCompose: () => <div>calendar composer</div>,
-}));
 vi.mock('@ui', () => ({
   Layer: (props: ParentProps) => props.children,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -118,7 +115,6 @@ it('shows a confirmed create in flight as the plain create card', () => {
   });
   expect(screen.getByText('Create calendar event')).toBeTruthy();
   expect(screen.getByText('Board sync')).toBeTruthy();
-  expect(screen.queryByText('calendar composer')).toBeNull();
 });
 
 it('renders the created event directly, with no composer or pending state', () => {
@@ -128,7 +124,6 @@ it('renders the created event directly, with no composer or pending state', () =
     createdEvent
   );
   expect(screen.getByText('Done')).toBeTruthy();
-  expect(screen.queryByText('calendar composer')).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { expanded: false }));
   expect(screen.getByText('1 attendee: guest@example.com')).toBeTruthy();
@@ -140,9 +135,11 @@ it('renders the created event directly, with no composer or pending state', () =
   );
 });
 
-it('still defers the plain create to the composer', () => {
+it('shows a pending create as an uncreated card with no actions', () => {
   tool('CreateCalendarEvent', draft, 'PendingUserExecution');
-  expect(screen.getByText('calendar composer')).toBeTruthy();
+  expect(screen.getByText('Not created')).toBeTruthy();
+  expect(screen.getByText('Board sync')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Create event' })).toBeNull();
 });
 
 it('keeps a failed call on its own card and reveals the reason on request', () => {

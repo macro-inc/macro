@@ -9,7 +9,6 @@ import { Tooltip } from '@ui';
 import { format, isSameDay, subDays } from 'date-fns';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
-import { CalendarChatCompose } from './calendar/ChatCompose';
 import {
   openToolCalendarEvent,
   type ToolCalendarEvent,
@@ -190,12 +189,12 @@ export const createCalendarEventHandler = createToolRenderer({
         }
       >
         <Match when={response() === 'PendingUserExecution'}>
-          <CalendarChatCompose
-            chatId={ctx.chat_id}
-            initialData={ctx.tool.data}
-            messageId={ctx.message_id}
-            streamLocked={ctx.renderContext.isStreaming}
-            toolCallId={ctx.tool.id}
+          <CalendarMutationCard
+            icon={CalendarPlus}
+            label="Create calendar event"
+            renderContext={ctx.renderContext}
+            status="Not created"
+            title={ctx.tool.data.title}
           />
         </Match>
         <Match when={response() === 'Rejected'}>

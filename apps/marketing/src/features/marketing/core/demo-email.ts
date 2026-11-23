@@ -30,7 +30,7 @@ export const demoEmails: readonly DemoEmail[] = [
     id: 'dana',
     tags: ['customers', 'follow-up'],
     favorite: true,
-    sender: 'Valentina',
+    sender: 'Austin Barron',
     subject: 'Homepage feedback',
     snippet:
       'The demo is looking good. Can we make the mobile scroll feel more natural?',
@@ -89,7 +89,7 @@ export const demoEmails: readonly DemoEmail[] = [
     id: 'plan',
     tags: ['launch', 'customers'],
     favorite: true,
-    sender: 'Julia, Valentina',
+    sender: 'Julia, Austin Barron',
     subject: 'Team rollout plan',
     snippet: 'Here are the next steps we discussed on the call.',
     time: 'Sep 28',

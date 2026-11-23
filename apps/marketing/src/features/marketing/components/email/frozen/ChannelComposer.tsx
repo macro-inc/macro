@@ -1,6 +1,6 @@
-import Microphone from '@phosphor/microphone.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import X from '@phosphor/x.svg';
+import Microphone from '@icon/system/regular/microphone.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import X from '@icon/system/regular/x.svg';
 import { ComposerSurface, SendButton } from '@ui';
 import {
   createSignal,
@@ -23,6 +23,7 @@ import { Layout } from './ComposerLayout';
 // SendAction presentation with a website-local draft instead of app commands.
 export type ChannelComposerHandle = {
   setText: (text: string, leadingMention?: DemoMention) => void;
+  setContent: (parts: readonly (string | DemoMention)[]) => void;
   send: () => void;
 };
 
@@ -51,6 +52,26 @@ export function ChannelComposer(props: {
   onMount(() => {
     props.onReady?.({
       send: () => send(),
+      setContent: (parts) => {
+        if (!input) return;
+        if (input instanceof HTMLTextAreaElement) {
+          const text = parts
+            .map((part) => (typeof part === 'string' ? part : part.label))
+            .join('');
+          input.value = text;
+          setDraft(text);
+        } else {
+          input.replaceChildren(
+            ...parts.map((part) =>
+              typeof part === 'string'
+                ? document.createTextNode(part)
+                : createDemoMentionElement(part)
+            )
+          );
+          setDraft(serializeDemoEditor(input));
+        }
+        queueMicrotask(resize);
+      },
       setText: (text, leadingMention) => {
         if (!input) return;
         const prefix = leadingMention

@@ -2,59 +2,97 @@
 
 ## Notifications view — `/app/notifications`
 
-Behind `enable-unified-notifications` (with GraphQL Soup), the bell below Home
+Behind `enable-unified-notifications`, the bell below Home
 on the outer rail (`g i`) opens one list of everything that needs you, newest
 first. The flag is on in dev and comes from PostHog elsewhere;
-`VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. With the flag off the
+`VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. GraphQL Soup has no
+dev default, so a local stack shows the view only with
+`VITE_ENABLE_GRAPHQL_SOUP=true` (or the flag from PostHog). With the flag off the
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
-Home keeps `g h`.
+Home keeps `g h`. With `enable-new-home` on (desktop), this route is New Home's
+Notifications tab instead and the rail's bell gives way to New Home; see
+[New Home](home.md#new-home).
 
-Each card is one row of the server's notification inbox
+With unified notifications on, the outer rail and mobile dock show unread dots
+from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
+follow reads, done, clears and new activity within about a second on each open
+tab. With unified notifications off, the buttons use their earlier presence
+checks.
+The notification service makes no row for activity it receives while a type
+is turned off in Settings → Notifications ("New email", say), whichever the
+flag. With unified notifications on, rows made before stay unread, and keep
+their button lit, until read or done; with it off, the Mail dot reads the
+setting and goes out at once.
+
+Unread numbers are off by default in every environment while their accuracy is
+under investigation. Set `VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a
+frontend build to show numbers alongside the unified inbox. The Notifications
+button counts all unread rows, Channels counts channel rows, and Mail counts
+mail rows. Counts above 99 show as `99+`. Home keeps a dot on the desktop rail.
+On the mobile dock the Home bell opens Notifications and carries the total.
+
+Each list row is one row of the server's notification inbox
 (`user.notificationInbox`): an email thread, a channel's top-level messages, one
 top-level message with everything about it (its replies, mentions and reactions,
 once there is more than one thing), an entity's comments, a task assignment, a
 pull request, a calendar event, an access request or grant, or an agent session.
-A top-level message that mentions you has its own card, with its thread; an
-entity's comments stay on one card even when one mentions you. The server decides
+A top-level message that mentions you has its own row, with its thread; an
+entity's comments stay on one row even when one mentions you. The server decides
 all of this (`crates/notification_inbox/src/domain/rows.rs`), so live updates and
-reads stack the same way. A card shows who it is from (an avatar, an initial for a
+reads stack the same way. A row shows who it is from (an avatar, an initial for a
 sender known only by name such as an email's, or the kind of notification for a
 reminder), with a badge on the avatar's corner saying what kind it is, in the theme's color for
 the entity it is on, as on that entity's icon elsewhere (Channel,
 Message, Mention, Reply, Reaction, Email, Comment, Invite, Access, Agent, Task, Pull
 request, Event or Reminder; a stack's newest notification decides, except that a
 mention stays one). It is as tall as it has something to say: who did it (for example
-**&lt;first name&gt; assigned you a task**), with an unread dot; what it is about;
+**&lt;first name&gt; assigned you a task**); what it is about;
 and up to two lines of what was said. An email has all three (sender, subject,
 snippet), a message in a channel has no middle line, and a task has no last one.
-Several notifications on a row make a stack, with paper edges: it names
-who, what they share (the top-level message when a notification carries it, the
+Rows sit flat on the panel, each with a hairline below it that starts where its
+text does (none above a date divider). An unread row has a dot in the gutter
+left of its avatar, centered on it, as in Messages; a read row leaves the gutter
+empty, so avatars stay in line. An unfolded notification of an unread stack has
+its dot just left of its own smaller avatar. Several notifications on a row make a
+stack: it names who, what they share (the top-level message when a notification carries it, the
 channel, session, document or thread), and the newest line, with its sender when
 there are several people.
-Choosing a stack opens it and leaves it folded; only its caret unfolds it: the card
-stays exactly as it was, its notifications spread into small cards below it, inset
-evenly where its paper edges sat, and every other card dims until you close it. Hovering or moving to a dimmed
-card brings it back. Each small card opens that notification:
+Choosing a stack opens it and leaves it folded; only its caret unfolds it. At phone
+width the caret sits on the first line; wider, it sits at the bottom of the row with
+how many more (**2 more**) and, once open, reads **Hide** in the same place and
+again at the bottom of the stack; either folds it. The row stays exactly as it
+was, its notifications list below it indented to its text, and the other rows
+stay as they are. Each unfolded notification opens that notification:
 its message or reply, its comment, or an agent's turn. A channel invite and an
 email have no message of their own, so they open the channel or the thread.
-A stack stays open as new notifications land. The time always shows; on hover Mark done takes its place, and nothing else moves. The author is
+A stack stays open as new notifications land. The first line ends with the time. With a pointer, hovering a row hides its time and shows Mark done in its place, as on an unfolded notification, so nothing moves. Touch has no Mark done button. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't
-know yet shows as a plain card with no author and no button.
+know yet shows as a plain row with no author and no button.
 Date dividers split the list into Home's sections (**Last hour**, **This
 morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
 skip them.
 
 Click a row or press Enter to preview it beside the list, opened at the
-notification's message, thread, or comment, under a **Notifications >**
-breadcrumb that clears the preview. Previewing marks the row seen, including
+notification's message, thread, or comment. A conversation's composer takes
+focus, and Esc returns to the row; see
+[composer focus and Esc](channels.md#composer-focus-and-esc). The shown row and stacked
+notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
+row is a history entry and browser or split back returns to the previous one;
+stepping with `j`/`k` and moving on from a done row replace the entry instead.
+On desktop, a new split shows the list beside its empty preview, like any
+split wider than 720px. In splits 720px wide or narrower the list fills the split until a
+row opens, which then fills it with **Back** (left arrow) returning to the list.
+Previewing marks the row seen, including
 notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
 list and through unfolded notifications; `l` or the right arrow unfolds the focused
 stack and the left arrow folds it from anywhere inside it. Opening a notification
-marks its whole row seen, and `e` on one marks its whole stack done. Choosing what's
-shown again re-aims it. Calendar events and projects
-open in their own views instead. Shift-click or the alternate key opens a new
+marks its whole row seen. Each unfolded notification has its own **Mark done** on hover, or `e` while it is focused, or a left swipe on touch: it completes that notification and the ones about the same message, the stack counts one less, and the stack's last one completes the row; a preview of it moves to the stack's next notification. Undo works as for a row. Choosing what's
+shown again re-aims it. A calendar event or join request opens the Calendar
+beside the list at the event, at `/app/notifications/calendar/<period>` with the
+event in `sN.calendar.*`, with the row in the same entry; the list keeps its place.
+Projects open in their own view instead. Shift-click or the alternate key opens a new
 split. Hover a row and choose **Mark done**, or press `e`, to complete that row
 only: the channel thread stays when the channel's top-level row is done, and an
 open preview moves to the next row. A toast offers **Undo**, as does
@@ -73,40 +111,71 @@ whose review was requested offers **Review**, which opens the pull request on
 GitHub and marks the row seen.
 
 **All** and **Unread** under the header switch the list (`1` and `2`, or Tab, also
-switch), and the choice is kept per user across reloads. A row you read under
-Unread, or a stack you're going through, stays until you next switch or reload.
+switch), and the choice is kept per user across reloads. Unread reads only unread
+rows from the server, so it pages through unread rows alone; a row read elsewhere
+leaves it and new activity brings one back. A row you read under Unread, or a
+stack you're going through, stays until you next switch or reload.
 With nothing unread, Unread shows **You're all caught up**.
 
+**Clear notifications** (double check, beside the filter; a sheet beside the
+filter pill on touch) offers **Clear today** (everything since local midnight,
+the rows under the list's today sections), **Clear all**, and **Clear by kind**
+for each kind the filters show. It acts on the whole inbox, not only the
+loaded rows, and never on a kind the filters hide; under Unread the choices
+read **Clear today's unread** and **Clear all unread** and take unread rows
+only. Clearing marks the rows done, but unlike a row's Mark done it doesn't
+archive email threads; a cleared email row stays gone until new mail arrives.
+The clear belongs to the server: it finishes even if the tab closes, the
+connection drops or the server restarts, and it takes only what had arrived
+when it started. Its rows leave at once, on the reader's other devices too. A
+toast says how many were cleared and offers **Undo**, as does `⌘Z`/`Ctrl+Z`; a
+large clear that is still at work says **so far; still clearing**, then
+announces its final count. Undo works while the clear is still at work and
+stops it. Undo, of a clear or of any Mark done, brings each notification back
+as it was: unread ones stay unread, and anything the reader changed since the
+clear is left alone.
+
 **Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
-checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
-Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mentions
-covers both channel and comment mentions, Replies both channel and comment
-threads). The trigger counts hidden types, and **Reset filters** shows them all
-again without changing All or Unread. Choices persist per user across reloads.
-Hiding every type shows **Every kind of notification is hidden** with Reset
-filters; types that hide every row show **No notifications match these filters**. The gear beside
-the filter opens **Settings → Notifications**, which decides what is delivered
-at all (including push and email).
+unchecked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
+Calendar, Access requests, and Agents. Nothing selected shows every kind;
+selecting kinds narrows the feed to those kinds, and unchecking the last one
+restores everything. Selecting every current kind still excludes kinds added by
+a newer server; only no selection automatically includes those new kinds.
+Mentions covers both channel and comment mentions, Replies both channel and
+comment threads. A row that is two kinds shows when either is
+selected, once: a thread whose reply mentions you is under Mentions and Replies,
+a top-level message that mentions you and has replies likewise, an entity's
+comments that mention you under Mentions and Comments, and a pull request or
+agent session that mentions you under Mentions and Pull requests or Agents.
+Clearing either kind takes such a row whole. The trigger counts selected kinds;
+**Reset filters** (or **Clear** in the touch drawer) empties the selection without
+changing All or Unread. Choices persist per user across reloads. Old saved hidden
+kinds convert to the kinds that remained visible; an old empty hidden list becomes
+no selection. Selections without matching rows show **No notifications match
+these filters**. The gear beside the filter opens **Settings → Notifications**,
+which decides what is delivered at all (including push and email).
 
 On touch devices the dock's bell (**Notifications**) opens this view with the
 flag on, as the list alone under the floating controls Home, Email, Tasks and Drive
-use: the filter drawer (Type), then All and Unread pills. Cards keep the same anatomy with 44px targets
+use: the filter drawer (Type), then All and Unread pills. Rows keep the same anatomy with 44px targets
 and inline row buttons; at phone width they have a larger avatar and slightly larger
-text and sit further apart; a read card there loses its fill, fades its avatar and
-mutes its text, so unread cards stand out. A tablet keeps the desktop's sizes. Tapping a card or an unfolded notification opens it
+text; a read row there fades its avatar and mutes its text, so unread rows stand
+out. A tablet keeps the desktop's sizes. Tapping a row or an unfolded notification opens it
 full-screen in place, tapping a stack's caret unfolds it, a left swipe marks it
-done (with the same Undo), and pulling down refreshes. Hover controls and the preview pane are desktop-only. The
+done (with the same Undo), and pulling down refreshes. A done on touch (a swipe, or a
+row button that completes the row) folds the row's height away before the row leaves,
+so the rows below slide up; with reduced motion it leaves at once. Hover controls and the preview pane are desktop-only. The
 dock keeps the bell active while the view shows.
 
-The list updates live, without a reload, and a live change never remounts a card:
-list items are one object per row id and each card reads its row's latest data
-(`primitives/inbox-date-headers.ts`). Scrolled down, a card landing above what
+The list updates live, without a reload, and a live change never remounts a row:
+list items are one object per row id and each row reads its row's latest data
+(`primitives/inbox-date-headers.ts`). Scrolled down, a row landing above what
 you're reading doesn't move it.
 
 Verify with two accounts and the inbox left open: two top-level messages in a
 channel stack on it; two reactions to your message, or a reaction and a reply, stack
-on that message and leave the channel's card; comments in different threads of a
-document share one card. Each appears within a second with no reload. Unfold a stack
+on that message and leave the channel's row; comments in different threads of a
+document share one row. Each appears within a second with no reload. Unfold a stack
 with its caret and choose each notification: the preview moves to that message or
 comment, and stays there as new ones land. Marking one
 done leaves the others, Undo restores it in place, and a new notification in a done
@@ -133,7 +202,7 @@ marking it read. Local-only drafts must not issue a mailbox read.
 Channel/thread rows retain their scoped reads, and message readers still require
 actual visibility; opening another entity must not mark hidden replies seen.
 
-With GraphQL Soup enabled, modern project **Mark read** and **Mark done** actions
+Modern project **Mark read** and **Mark done** actions
 target all of the project's notifications, including notifications absent from
 the loaded feed. The target is `INITIATIVE`; legacy Drive folders retain the
 separate `PROJECT` target.
@@ -220,6 +289,14 @@ both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
 
+On iOS, Macro stays visible whenever it leaves the foreground without a tap:
+opening the app switcher, Control Center, or Notification Center over it keeps
+its content on screen, including on its switcher card. A tap on a banner over
+the open app navigates in place. A tap that opens the app from the background
+or the Lock Screen goes from the system's blank launch screen to the
+destination, never through the previous page. A tap in Notification Center
+pulled down over Macro reveals the same blank cover, then the destination.
+
 For an iOS warm resume, leave the app running past its startup timeout before
 backgrounding it. Tap an uncached notification without a direct channel target
 and fail its notification lookup: the app must reveal the existing page and
@@ -268,21 +345,45 @@ while that query is pending, then apply only the second account's response.
 Toast regions are labeled `Notifications (alt+T)`; seven empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
 
+Toasts with supporting details show their actions below the description. Without
+supporting details, a single action sits beside the short title. Undo and navigation
+actions use icons only when useful: Undo and recovery icons lead, Open has a
+trailing open icon, and Open split has a trailing split icon. View, Dismiss,
+Not now, and Maybe later remain text-only. Desktop Undo and navigation toasts
+replace **Dismiss** with a close icon on the right. On phones, swipe left or right
+to dismiss. Closing the toast does not perform Undo or change its expiry. Optional
+setup prompts use **Not now** instead of **Dismiss**. Recovery and update-ready
+prompts use **Maybe later**, except draft-save recovery uses a desktop close icon
+and keeps **Save as new draft** as its only action. Dismissal keeps the same
+suppression behavior.
+Recovery prompts have danger-colored titles and subject icons: mail for inbox-only
+reconnect and email access, a calendar for **Reconnect email and calendar**, and
+a plug for integration reconnect. Draft-save recovery uses the default error
+icon and danger color. Their descriptions and Save, Reconnect, and Try again
+buttons remain neutral, not destructive. The update-ready prompt is distinct:
+it uses the Macro logo, the standard neutral toast background and border, an
+accent **Reload** button, and secondary **Maybe later**. Its title remains
+**A new version of Macro is ready** in neutral ink.
+Leading icons align with the title's first line even when the title or actions wrap.
+
 Staff Noise emails still create in-app notification rows, but do not send a new-notification
 event over GraphQL or the legacy WebSocket gateway, so they do not trigger browser popups.
 Those rows are available on the next fetch/refetch. Signal delivery and the existing
 staff/customer eligibility rules are unchanged; no browser eligibility request is needed.
 
-Discussion composers on companies, contacts, documents, tasks, and PRs use the
-shared channel/AI composer surface, 26.25px desktop corners, 15px desktop text, and
-a circular neutral Send button. Edit with AI uses the same composer treatment.
+Discussion composers on projects, companies, contacts, documents, tasks, and PRs
+use the shared channel/AI composer surface, 26.25px desktop corners, 15px desktop
+text, and a circular neutral Send button. Edit with AI uses the same composer treatment.
 Inline comments, replies, and their edits use a plain
 input without a surface background, rounded frame, or shadow. Attachment and
 formatting actions stay available.
-On mobile, open documents and tasks put their new-comment composer in the
-accessory dock above navigation, using the channel input's compact pill and
-expanded surface. New is hidden when the comment composer is available; list
-screens keep New. Users without comment permission have no comment composer.
+On phones, projects, tasks, and companies use the shared Discussion entry and
+sheet with a pinned new-comment composer. The thread shrinks around the keyboard
+without moving the sheet. Ordinary documents and tablet tasks keep their
+new-comment composer in the accessory dock above navigation, using the channel
+input's compact pill and expanded surface. New is hidden when that docked
+composer is available; list screens keep New. Users without comment permission
+have no comment composer.
 The floating Ask AI input appears only on the AI/Agents view.
 
 On touch devices, an email thread's floating action bar has Previous email and
@@ -319,16 +420,153 @@ Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
 
+### Macro computer agent sign-ins
+
+`agent_sign_in_expiry` notifications (inbox, browser, and phone push) carry the
+agent (`claude` for now) and warn the person who signed a team computer in to
+it, plus the team's owner and
+admins, that the sign-in expires soon (three days out), expires today (its last
+day), or expired (passed). They name the computer and
+open **Settings → Runtimes**, where the computer's **Sign in with Claude** runs
+the paste-the-code flow; see the
+[Macro computers walkthrough](settings.md#macro-computers). To check one
+without waiting days, set the computer's active `harness_account_logins` row's
+`expires_at` to within three days on a local stack: the notice arrives within a
+minute.
+
+`computer_setup` notifications (in-app notice, browser, and phone push) tell a
+computer's buyer that first-time setup finished ("Your computer is ready:
+connect your AI and finish setup") or failed ("<computer> could not be set
+up", with the failure reason the computer's status shows). They carry the
+computer id, name, and outcome; opening one reopens that computer's setup
+dialog on Bring your AI (see the Macro computers walkthrough in
+[settings.md](settings.md)). An agent teammate's computer notifies its
+inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
+with **Message <name>** and, for owners and admins, **Connect Claude plan**, or
+"<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
+Team → Members (see Agent teammates in [settings.md](settings.md)).
+
+## Pings
+
+Agent code (ExecuteCode) and SDK scripts ping people: they put a notification
+they write on an entity with `macro.notifications.send({ body, link, to? })`, which
+calls `POST /user_notifications/send` on the notification service. It becomes a
+ping (notification kind `ping`): in-app, desktop/browser alert and phone push, all
+subject to each recipient's preferences (**Settings → Notifications → AI →
+Agent pings** turns them off; a muted or snoozed entity stays quiet).
+
+Sending is behind the `enable-agent-notifications` flag, read for the sender:
+with it off the call answers 403 "agent notifications are not enabled for this
+account", and 503 when the flag cannot be read. The same flag shows the Agent
+pings setting, and its entry in settings search, in the web app. On a local
+stack both sides are on for everyone; `VITE_ENABLE_AGENT_NOTIFICATIONS=false`
+turns the web side off there. A deployment asks PostHog, and the notification
+service needs `POSTHOG_API_KEY` to do so: without it nobody can send.
+
+`body` is the whole message: required, at most 280 characters once trimmed
+(400 "body is longer than 280 characters" past that, 400 when blank). A ping
+has no title; who sent it and what it is about frame it.
+
+`link` is what the notification is about: a document or task, a channel or
+one of its messages, an email thread, a folder, a project, a calendar event, a
+company or contact, a chat or a listed agent session. `to` is one user or a
+list, and defaults to the sender. The sender must be able to open `link` (404
+otherwise). Each recipient who cannot is skipped and returned in `skipped`
+with reason `no_access`; nobody is given access, and the call still succeeds
+for the others. Recipients are also skipped as `not_listed` or
+`recipient_limit` (below). It returns `{ notified, skipped }`. Recipients who have the
+kind turned off are in `notified`: the sender is not told their settings. A
+background run that may send nothing (`no_send` scope) cannot ping anyone,
+itself included: the request is refused before it reaches the handler.
+
+Two guards stop a looping program from flooding people. The same body about
+the same `link` to the same recipients from the same sender is
+delivered once in each ten-minute window. Windows are fixed spans of the
+clock, so a repeat that falls in the next one is delivered again; a dropped
+repeat still answers 200. One call
+names at most 100 recipients (400 past that), and a sender can notify at most
+1,000 recipients an hour, counted per notified recipient: past that the call
+answers 429 with a message and `Retry-After`, and notifies nobody.
+
+A push reads "<sender> pinged you", then what it is about, then the body: on
+iOS the entity's name is the subtitle, and Android, which has no subtitle,
+titles it "<sender> pinged you — <entity>". A browser alert is titled like
+Android; the macOS app shows "<sender> pinged you" with the entity beneath,
+like iOS. An email digest lists it as "<sender> pinged you — <entity>" over
+the body. The sender is the agent (its name and avatar as they were
+when sent), else the sending user by the local part of their email, as other
+pushes name people; a ping to oneself without an agent reads "You pinged
+yourself". The entity's name is taken when the ping is sent, from the
+recipients' own inbox listing: `#name` for a public or team channel, an
+email's subject, an item's name. A direct message has no name that reads the
+same to both sides, so its push has no subtitle.
+
+A link must be something the Notifications view lists, or the ping would be
+delivered and never shown. The service takes the allowed kinds from the
+inbox's `CANDIDATE_TYPES` and refuses the rest (routines, databases, forms)
+with 400. Each recipient (the sender, for a ping to oneself) then gets it only
+if their own inbox would list it: the service runs the inbox's candidate query
+for them on the primary database, with their team, the link probed as if a
+notification about it were pending, through the inbox's own filter and
+hydration. Anyone it would leave out is skipped with reason `not_listed`:
+access only through a link share or an attachment, a deleted entity, an
+unlisted or hidden session (a routine's runs, unless the routine lists them,
+or followed), mail that is not the recipient's own Signal inbox mail (so only
+the thread's owner gets pings about it), and a calendar event they neither own
+nor see through a linked inbox. Snippets pass: the inbox lists them, though
+Home does not.
+
+Each person receives at most 60 pings an hour from others, from all senders
+together; past that they are skipped with reason `recipient_limit` and the
+others still get it. Pings to oneself are not counted, so a person's own
+routines and agents always get through.
+
+In the unified Notifications view a ping joins the row its
+entity already has, stacked with what is there, and its badge is the icon of
+that entity (a task's, a document's, a channel's, an email's):
+
+| Linked entity | Row it joins |
+| --- | --- |
+| Document, task, folder, project, company, contact | The entity's comments row |
+| Channel | The channel's row |
+| Channel message | That message's thread row |
+| Email thread | The email's row, which stays unread until the ping is seen |
+| Calendar event | The event's row |
+| Chat, agent session | The agent row |
+
+The card names the sender ("Scout pinged you"), then the entity, then the
+body. A ping people send themselves without an agent reads "You pinged
+yourself". Home shows it the same way, under the entity's icon. Clicking the
+row opens the entity; a ping on a channel message opens the channel at that
+message.
+
+Verify from an agent session: ask the agent to ping you and two teammates
+about a task, one who can open it and one who cannot. You and the teammate
+with access each get a row on that task reading "<agent> pinged you", the
+task's name and the body, with the task icon as its badge, and a desktop alert
+from "<agent> pinged you" about the task; clicking the row opens the task.
+The agent's result lists the other teammate under `skipped` (`no_access`),
+and they receive nothing. Someone who has only the task's public link is
+skipped as `not_listed`.
+
 ## Notification sounds
 
 **Settings → Notifications → Sounds** turns on an in-app sound for incoming
 notifications. It is off by default and saved per person on each device
-(user-scoped localStorage), so a laptop and a phone choose separately. With
-sounds on, it shows a volume slider and one row per type (Messages, Mentions,
-Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
-else), each with its own on/off switch, sound picker, and play button. Picking
-a sound previews it. Email, AI & agents, and Everything else start off.
+(user-scoped localStorage), so a laptop and a phone choose separately. The
+volume slider appears when notification sounds or Call sounds are on. Turning
+notification sounds on reveals one row per type (Messages, Mentions, Thread
+replies, Email, Meetings & reminders, Tasks, AI & agents, Everything else), each
+with its own on/off switch, sound picker, and play button. Picking a sound
+previews it. Email, AI & agents, and Everything else start off.
 Channel join requests use Everything else, alongside sharing and invitations.
+
+**Call sounds** is a separate, default-on toggle with Join and Leave preview
+buttons. Browser calls use fixed ascending/descending cues for deliberate
+participation changes, including your own. They share this volume and quiet
+hours but do not require notification sounds to be on. See
+[join and leave sounds](calls.md#join-and-leave-sounds) for recovery and platform
+limits.
 
 Sounds are synthesized with Web Audio (`features/notification-sounds`); there
 are no audio files. Event types map to rows in `core/categories.ts`; a new
@@ -336,9 +574,11 @@ backend event type stays quiet until it is mapped there. Incoming calls keep
 their own ring and never use these sounds. Only unseen notifications play,
 notifications within 1.5 s of a sound share it, and only the Macro tab the
 person last focused or touched plays, so several tabs ding once. Closing that
-tab hands sound back to the others until one is focused. Browsers keep
-audio suspended until the page has had a gesture; a notification before that
-stays silent rather than playing late.
+tab hands sound back to the others until one is focused. Mouse, touch, Enter,
+and Space activation unlock audio even while sounds are off, so enabling a
+sound setting also unlocks playback. A cue that cannot resume audio within
+250 ms stays silent rather than playing on a later gesture. Notification sounds
+use the system-default output; call cues follow the selected call speaker.
 
 When Macro plays a sound for a notification, its browser or macOS alert is
 sent silent so the person hears one sound. macOS builds older than the
@@ -362,3 +602,11 @@ persistence, previews, and delivery through a stand-in notification feed:
 (from `apps/web`). To check real delivery, turn sounds on, click anywhere in
 Macro, and trigger a mention from another session; then turn Mentions off and
 check that the next mention is quiet.
+
+
+Password access requests can be grouped under the current team. These are
+notification-only groups: a card or stack notification opens its requested
+item in Passwords, with no separate Team page or generic preview. The group
+is hidden while Passwords or the current team is unavailable, when Passwords
+is disabled, or when its request does not belong to the current team. Other
+notification groups keep their existing navigation.

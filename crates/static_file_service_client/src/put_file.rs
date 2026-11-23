@@ -1,9 +1,12 @@
 use super::StaticFileServiceClient;
 use anyhow::{Context, Result};
 use bytes::Bytes;
-use reqwest::header::CONTENT_TYPE;
+use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+#[cfg(test)]
+mod test;
 
 // HACK: duplicate logic. put into model crate later
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,6 +18,9 @@ pub struct PutFileRequest {
     /// extra metadata to store with file
     /// don't put anything private in here it is public
     pub extension_data: Option<Value>,
+    /// Exact upload size in bytes, signed into the upload URL when set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_length: Option<u64>,
 }
 
 // HACK: duplicate logic. put into model crate later
@@ -30,7 +36,12 @@ pub struct PutFileResponse {
 
 impl StaticFileServiceClient {
     pub async fn put_file(&self, file_url: &str) -> Result<PutFileResponse> {
-        let response = self.client.get(file_url).send().await?;
+        let response = self
+            .client
+            .get(file_url)
+            .send()
+            .await
+            .map_err(reqwest::Error::without_url)?;
 
         let content_type = response
             .headers()
@@ -39,7 +50,10 @@ impl StaticFileServiceClient {
             .map(String::from)
             .context("content-type header not found")?;
 
-        let file_bytes = response.bytes().await?;
+        let file_bytes = response
+            .bytes()
+            .await
+            .map_err(reqwest::Error::without_url)?;
 
         self.put_file_with_bytes(file_url, file_bytes, content_type)
             .await
@@ -57,6 +71,7 @@ impl StaticFileServiceClient {
                 file_name: file_url.to_string(),
                 content_type: Some(content_type.clone()),
                 extension_data: None,
+                content_length: None,
             },
             file_bytes,
             &content_type,
@@ -83,6 +98,7 @@ impl StaticFileServiceClient {
                 file_name: file_name.to_string(),
                 content_type: Some(content_type.to_string()),
                 extension_data: None,
+                content_length: None,
             },
             bytes,
             content_type,
@@ -104,6 +120,7 @@ impl StaticFileServiceClient {
                 file_name: file_name.to_string(),
                 content_type: Some(content_type.to_string()),
                 extension_data: None,
+                content_length: None,
             },
             bytes,
             content_type,
@@ -121,6 +138,30 @@ impl StaticFileServiceClient {
         file_name: &str,
         content_type: &str,
     ) -> Result<PutFileResponse> {
+        self.reserve(owner_id, file_name, content_type, None).await
+    }
+
+    /// Like [`Self::reserve_for_user`], but storage rejects an upload of any
+    /// size other than `content_length`.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn reserve_sized_for_user(
+        &self,
+        owner_id: &str,
+        file_name: &str,
+        content_type: &str,
+        content_length: u64,
+    ) -> Result<PutFileResponse> {
+        self.reserve(owner_id, file_name, content_type, Some(content_length))
+            .await
+    }
+
+    async fn reserve(
+        &self,
+        owner_id: &str,
+        file_name: &str,
+        content_type: &str,
+        content_length: Option<u64>,
+    ) -> Result<PutFileResponse> {
         let full_url = format!("{}/internal/file", self.url);
         let res = self
             .client
@@ -130,13 +171,15 @@ impl StaticFileServiceClient {
                 file_name: file_name.to_string(),
                 content_type: Some(content_type.to_string()),
                 extension_data: None,
+                content_length,
             })
             .send()
-            .await?;
+            .await
+            .map_err(reqwest::Error::without_url)?;
 
         let status_code = res.status();
         if status_code != reqwest::StatusCode::OK {
-            let body: String = res.text().await?;
+            let body: String = res.text().await.map_err(reqwest::Error::without_url)?;
             tracing::error!(
                 body=%body,
                 status=%status_code,
@@ -145,7 +188,7 @@ impl StaticFileServiceClient {
             anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
-        Ok(res.json().await?)
+        Ok(res.json().await.map_err(reqwest::Error::without_url)?)
     }
 
     /// Reserve a file (owned by `owner_id`, when given) and PUT its bytes to
@@ -162,12 +205,12 @@ impl StaticFileServiceClient {
         if let Some(owner_id) = owner_id {
             request = request.header(crate::INTERNAL_MACRO_USER_ID_HEADER, owner_id);
         }
-        let res = request.send().await?;
+        let res = request.send().await.map_err(reqwest::Error::without_url)?;
 
         let status_code = res.status();
 
         if status_code != reqwest::StatusCode::OK {
-            let body: String = res.text().await?;
+            let body: String = res.text().await.map_err(reqwest::Error::without_url)?;
             tracing::error!(
                 body=%body,
                 status=%status_code,
@@ -176,7 +219,7 @@ impl StaticFileServiceClient {
             anyhow::bail!(body);
         }
 
-        let res = res.json().await?;
+        let res = res.json().await.map_err(reqwest::Error::without_url)?;
 
         let put_file_data: PutFileResponse = serde_json::from_value(res)?;
 
@@ -187,13 +230,17 @@ impl StaticFileServiceClient {
         let presigned_url =
             macro_aws_config::transform_aws_url_for_internal_fetch(&put_file_data.upload_url);
 
+        // Without the explicit length an empty file goes out with no
+        // Content-Length at all, which storage refuses with 411.
         let upload_response = self
             .client
             .put(&presigned_url)
             .header(CONTENT_TYPE, content_type)
+            .header(CONTENT_LENGTH, bytes.len())
             .body(bytes.to_vec())
             .send()
-            .await?;
+            .await
+            .map_err(reqwest::Error::without_url)?;
 
         if !upload_response.status().is_success() {
             anyhow::bail!("Upload failed: {}", upload_response.status());

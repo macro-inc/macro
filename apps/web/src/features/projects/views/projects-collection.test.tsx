@@ -22,12 +22,16 @@ import { createProjectCollection } from '../primitives/project-collection';
 import { ProjectsCollection } from './projects-collection';
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), failure: vi.fn() }));
-const device = vi.hoisted(() => ({ mobile: false }));
+const device = vi.hoisted(() => ({ mobile: false, touch: false }));
+const searchHotkey = vi.hoisted(() => ({ run: () => {} }));
 const ganttFlag = vi.hoisted(() => ({
   enabled: (): boolean | undefined => true,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => device.mobile }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 // Touch timing is covered by the directive; a test event stands in for it.
 vi.mock('@core/directive/touchHandler', () => ({
   touchHandler: (
@@ -50,7 +54,6 @@ vi.mock('@app/components/view-shell', () => ({
   ListSortDropdown: () => null,
   ListGroupDropdown: () => null,
   ListFilterDropdown: () => null,
-  ListFilterCountBadge: () => null,
   ViewLayoutDropdown: (props: {
     label: string;
     layouts: ('list' | 'board' | 'gantt')[];
@@ -71,11 +74,15 @@ vi.mock('@app/components/view-shell', () => ({
       </For>
     </div>
   ),
-  useViewControlHotkeys: () => {},
+  useViewControlHotkeys: (options: { search: { run(): void } }) => {
+    searchHotkey.run = options.search.run;
+  },
 }));
-vi.mock('@app/components/view-shell/ListHeader', () => ({
+vi.mock('@app/components/view-shell/ListHeader', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@app/components/view-shell/ListHeader')
+  >()),
   ListHeader: (props: ParentProps) => props.children,
-  ListHeaderSearch: () => null,
 }));
 vi.mock('@app/components/view-shell/SidebarCreateButton', () => ({
   SidebarCreateButton: () => null,
@@ -102,7 +109,7 @@ vi.mock('@entity', () => ({
   InlineEntity: (props: { entity: { name: string } }) => props.entity.name,
 }));
 // Rows portal their property editors, as the real cells do.
-vi.mock('../components/project-row', async () => {
+vi.mock('../project-row', async () => {
   const { Portal } = await import('solid-js/web');
   return {
     ProjectListHeader: () => null,
@@ -143,6 +150,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   device.mobile = false;
+  device.touch = false;
   ganttFlag.enabled = () => true;
   vi.unstubAllGlobals();
   animationStyle.remove();
@@ -247,6 +255,7 @@ function setup(
       refresh: async () => {},
     }),
     createProjectSource: unused,
+    createProjectIdentitySource: unused,
     createPropertyDefinitionsSource: () => ({
       properties: () => options.properties ?? [status, priority],
       loading: () => false,
@@ -304,6 +313,20 @@ function setup(
   return { ...view, service, host, collection, rowKey };
 }
 
+it('keeps touch project search and its hotkey connected to the collection', async () => {
+  device.touch = true;
+  const { collection } = setup([project('alpha', 'Alpha launch', 'owner')]);
+  fireEvent.click(screen.getByRole('button', { name: 'Search projects' }));
+  const input = await screen.findByRole('searchbox', {
+    name: 'Search projects',
+  });
+  fireEvent.input(input, { target: { value: 'Alpha' } });
+  expect(collection.search()).toBe('Alpha');
+  input.blur();
+  searchHotkey.run();
+  await waitFor(() => expect(document.activeElement).toBe(input));
+});
+
 async function openMenu(name: string) {
   expect(
     fireEvent.contextMenu(screen.getByText(name), { clientX: 20, clientY: 20 })
@@ -314,7 +337,7 @@ async function openMenu(name: string) {
 const entries = () =>
   screen
     .getAllByRole('menuitem')
-    .map((item) => item.firstChild?.textContent ?? '');
+    .map((item) => item.querySelector('.flex-1')?.textContent ?? '');
 
 function choose(name: string | RegExp) {
   fireEvent.keyDown(screen.getByRole('menuitem', { name }), { key: 'Enter' });

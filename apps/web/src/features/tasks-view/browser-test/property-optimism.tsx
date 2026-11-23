@@ -2,7 +2,6 @@
 // cache. Only HTTP is replaced; no hosted workspace data is read or changed.
 import '@app/index.css';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -30,7 +29,6 @@ import { stringifyDocument } from '@urql/core';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 
-enableGraphqlSoup.override = true;
 const taskIds = [
   '00000000-0000-0000-0000-000000000101',
   '00000000-0000-0000-0000-000000000102',
@@ -198,10 +196,14 @@ function Fixture() {
   );
   onMount(async () => {
     if (!groupedMode) return;
-    const host = getGraphqlCacheHost()!;
+    const host = getGraphqlCacheHost();
+    if (!host?.authority)
+      throw new Error('Fixture cache authority is required');
+    const generation = (await host.authority.current()).generation;
     // Real historical query variants, none registered as an active view.
     for (let limit = 3; limit < 133; limit++) {
       await host.writeQuery({
+        generation,
         query: stringifyDocument(GroupSoupMembershipDocument),
         operationName: 'GroupSoupMembership',
         variables: { input: { initial: { ...groupedInput.initial, limit } } },

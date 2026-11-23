@@ -1,20 +1,28 @@
+import type { SearchableOptionSourceFactory } from '@app/features/next-soup/soup-view/filters-bar/option-source';
+import { SearchableSourceStatus } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
+import { t } from '@app/lib/i18n';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SlidersHorizontalIcon from '@icon/system/regular/sliders-horizontal.svg?component-solid';
 import XIcon from '@icon/system/regular/x.svg';
-import { Accordion } from '@kobalte/core/accordion';
+import { Accordion, useAccordionContext } from '@kobalte/core/accordion';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn } from '@ui';
+import { Button, CountBadge, cn, inputClasses } from '@ui';
 import {
   type Accessor,
   children,
   createContext,
+  createEffect,
+  createMemo,
   createSignal,
+  For,
   type JSX,
   Show,
   useContext,
@@ -29,6 +37,11 @@ type MobileFilterDrawerProps = {
   triggerLabel?: string;
   label?: string;
   class?: string;
+  /**
+   * The trigger sits in an in-flow header row, sized and framed like the
+   * row's other icon buttons, rather than floating as an island.
+   */
+  inline?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onContentPresentChange?: (present: boolean) => void;
@@ -63,19 +76,17 @@ function Root(props: MobileFilterDrawerProps) {
         ref={setTrigger}
         as={Button}
         aria-label={props.triggerLabel ?? 'Open filters'}
-        variant="ghost"
-        size="icon-md"
+        variant={props.inline ? 'secondary' : 'ghost'}
+        size={props.activeCount > 0 ? 'md' : 'icon-md'}
         class={cn(
-          'island bg-chrome pointer-events-auto relative z-10 size-10 shrink-0 rounded-full',
+          'pointer-events-auto relative z-10 shrink-0',
+          !props.inline && 'island bg-chrome h-10 rounded-full',
+          !props.inline && (props.activeCount > 0 ? 'px-3' : 'w-10'),
           props.class
         )}
       >
         <SlidersHorizontalIcon class="size-6 shrink-0" />
-        <Show when={props.activeCount > 0}>
-          <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-            {props.activeCount}
-          </span>
-        </Show>
+        <CountBadge count={props.activeCount} />
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
@@ -209,11 +220,10 @@ function Section(props: {
         >
           <span class="font-medium">{props.label}</span>
           <div class="flex items-center gap-2">
-            <Show when={props.activeCount > 0}>
-              <span class="group-data-expanded:hidden flex size-4 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-                {props.activeCount}
-              </span>
-            </Show>
+            <CountBadge
+              count={props.activeCount}
+              class="group-data-expanded:hidden"
+            />
             <CaretDownIcon class="size-4 text-ink-muted transition-transform duration-200 group-data-expanded:rotate-180" />
           </div>
         </Accordion.Trigger>
@@ -227,6 +237,7 @@ function Option(props: {
   children: JSX.Element;
   icon?: JSX.Element;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
   selectionMode?: 'single' | 'multiple';
   class?: string;
@@ -241,6 +252,7 @@ function Option(props: {
       data-checked-checkbox={
         props.selectionMode !== 'single' && props.checked ? '' : undefined
       }
+      disabled={props.disabled}
       class={cn(
         '[&[data-checked-checkbox]:has(+[data-checked-checkbox])]:rounded-b-none [&[data-checked-checkbox]+[data-checked-checkbox]]:rounded-t-none',
         props.class
@@ -249,7 +261,10 @@ function Option(props: {
     >
       <Show when={props.icon}>
         {(icon) => (
-          <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted [&>svg]:size-5">
+          <span
+            aria-hidden="true"
+            class="flex size-5 shrink-0 items-center justify-center text-ink-muted [&>svg]:size-5"
+          >
             {icon()}
           </span>
         )}
@@ -264,4 +279,87 @@ function Option(props: {
   );
 }
 
-export const MobileFilterDrawer = Object.assign(Root, { Section, Option });
+function SourceOptions<TId extends string>(props: {
+  groupId: string;
+  createSource: SearchableOptionSourceFactory<TId>;
+  activeIds: Accessor<readonly TId[]>;
+  enabled: Accessor<boolean>;
+  placeholder?: string;
+  onChange: (id: TId, checked: boolean) => void;
+}) {
+  const accordion = useAccordionContext();
+  const source = props.createSource(
+    props.activeIds,
+    () =>
+      props.enabled() &&
+      accordion.listState().selectionManager().isSelected(props.groupId)
+  );
+  let input: HTMLInputElement | undefined;
+  const committedWindow = createMemo(source.windowKey);
+  createEffect(() => {
+    if (committedWindow() !== undefined)
+      input?.scrollIntoView({ block: 'nearest' });
+  });
+  const visible = createMemo(() => {
+    const ids = new Set(source.visibleIds());
+    return source.options().filter((option) => ids.has(option.id));
+  });
+  // Further pages load as the end of the options scrolls into view. The
+  // sentinel opts out of scroll anchoring, which would otherwise hold it in
+  // view as pages land above it.
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => source.hasNext() && !source.error(),
+    isFetchingNextPage: source.loading,
+    fetchNextPage: source.next,
+  });
+  return (
+    <>
+      <div class="px-3 py-2">
+        <input
+          ref={input}
+          class={inputClasses({ class: 'w-full' })}
+          value={source.search()}
+          placeholder={props.placeholder}
+          aria-label={props.placeholder}
+          onInput={(event) => source.setSearch(event.currentTarget.value)}
+        />
+      </div>
+      <SearchableSourceStatus source={source} />
+      <For each={visible()}>
+        {(option) => (
+          <Option
+            checked={props.activeIds().includes(option.id)}
+            disabled={option.disabled}
+            onChange={(checked) => props.onChange(option.id, checked)}
+            icon={option.icon?.()}
+          >
+            {option.content?.() ?? option.label}
+          </Option>
+        )}
+      </For>
+      <Show
+        when={source.error()}
+        fallback={
+          <Show when={source.hasNext()}>
+            <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+          </Show>
+        }
+      >
+        <MobileDrawer.Item
+          disabled={source.loading()}
+          onClick={() => fireAndForget(source.retry(), 'filter-options')}
+        >
+          {t('viewMenus.retryOptions')}
+        </MobileDrawer.Item>
+      </Show>
+    </>
+  );
+}
+
+export const MobileFilterDrawer = Object.assign(Root, {
+  Section,
+  Option,
+  SourceOptions,
+});

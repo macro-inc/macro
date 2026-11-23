@@ -4,6 +4,7 @@
 //! [`generate_validated_input_schema`](super::generate::generate_validated_input_schema)
 //! instead.
 
+mod depth;
 mod extract;
 mod one_of;
 mod recursive;
@@ -16,6 +17,7 @@ use super::error::ValidationError;
 use extract::Extract;
 use schemars::Schema;
 
+pub use depth::{GEMINI_MAX_SCHEMA_DEPTH, nesting_depth, validate_gemini_nesting_depth};
 pub use one_of::ValidateNoOneOf;
 pub use recursive::RecursiveValidate;
 pub use ref_loop::{required_ref_loop, validate_no_required_ref_loop};
@@ -38,7 +40,8 @@ pub trait Validate {
 /// metadata. Requires an object root without `oneOf`, `anyOf`, or `allOf`,
 /// and rejects residual `oneOf` throughout the schema. Nested `anyOf` is
 /// supported, so tagged variants belong under a named property. Rejects a
-/// `$ref` loop made only of required fields, which Gemini refuses.
+/// `$ref` loop made only of required fields and nesting deeper than
+/// [`GEMINI_MAX_SCHEMA_DEPTH`], both of which Gemini refuses.
 ///
 /// See:
 /// * <https://platform.claude.com/docs/en/agents-and-tools/tool-use/strict-tool-use>
@@ -62,6 +65,7 @@ pub fn validate_tool_schema(schema: &Schema) -> Result<(String, String), Validat
 
     RecursiveValidate(ValidateNoOneOf).validate(schema)?;
     validate_no_required_ref_loop(schema)?;
+    validate_gemini_nesting_depth(schema)?;
 
     Ok((name, description))
 }

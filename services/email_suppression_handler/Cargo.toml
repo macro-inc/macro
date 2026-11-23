@@ -7,7 +7,6 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["sns"] }
-chrono = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_db_client = { path = "../../crates/macro_db_client" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
@@ -20,3 +19,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }

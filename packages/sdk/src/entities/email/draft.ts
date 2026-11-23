@@ -2,10 +2,14 @@ import type {
   AddDraftAttachmentRequest,
   ApiDraftInput,
 } from '../../../generated/email/types.gen';
+import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { EmailAttachment } from './attachment';
 import { EmailMessage } from './message';
 import type { EmailThread } from './thread';
+
+// The largest page the thread route returns.
+const THREAD_PAGE_SIZE = 100;
 
 /** Draft content; relationships use message and thread handles. */
 export type DraftOptions = Omit<
@@ -40,6 +44,20 @@ export type DraftOptions = Omit<
   replyingTo?: EmailMessage;
 };
 
+/** Options for sending or scheduling a saved draft. */
+export interface DraftSendOptions {
+  /** `false` leaves the inbox signature off this one email; omit for the inbox's default. */
+  includeSignature?: boolean;
+  /**
+   * The user's own reply approving this send, quoted verbatim. Required from
+   * an agent's program; never the request that asked for the email.
+   */
+  userConfirmation?: string;
+}
+
+/** How far ahead `send` schedules, so the server, which refuses a time already past, accepts it despite clock skew. */
+const DRAFT_SEND_LEAD_MS = 10_000;
+
 /** A draft email. Sending remains an explicit separate operation. */
 export class EmailDraft extends EmailMessage {
   private async draftContext() {
@@ -58,7 +76,13 @@ export class EmailDraft extends EmailMessage {
   /** Edit generation to capture with content before saving or transferring it. */
   readonly draftGeneration = this.field('draft_generation');
 
-  /** Replace draft content without changing its identity or sending it. */
+  /**
+   * Replace draft content without changing its identity or sending it.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async update(options: DraftOptions): Promise<void> {
     const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
@@ -75,7 +99,13 @@ export class EmailDraft extends EmailMessage {
     );
   }
 
-  /** Delete the draft. */
+  /**
+   * Delete the draft.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async delete(): Promise<void> {
     const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
@@ -83,11 +113,17 @@ export class EmailDraft extends EmailMessage {
     );
   }
 
-  /** Schedule this draft for sending. */
-  async schedule(
-    sendTime: string,
-    options?: { includeSignature?: boolean },
-  ): Promise<void> {
+  /**
+   * Schedule this draft for sending; an agent's program must quote the user's reply approving this send in `userConfirmation`, or it is refused (403).
+   *
+   * The draft goes out as saved, attachments included, at `sendTime` (ISO
+   * 8601, in the future). Write the draft out for the user and ask before
+   * scheduling it; the request that asked for the email is not the approval.
+   *
+   * @send
+   * @openworld
+   */
+  async schedule(sendTime: string, options?: DraftSendOptions): Promise<void> {
     const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
       c.email.upsertScheduledMessage({
@@ -97,12 +133,36 @@ export class EmailDraft extends EmailMessage {
         body: {
           send_time: sendTime,
           include_signature: options?.includeSignature,
+          user_confirmation: options?.userConfirmation,
         },
       }),
     );
   }
 
-  /** Remove a scheduled send. */
+  /**
+   * Send this draft now, as saved; an agent's program must quote the user's reply approving this send in `userConfirmation`, or it is refused (403).
+   *
+   * The draft is handed to the scheduled sender, which delivers it within
+   * about a minute; until then {@link unschedule} still stops it. Write the
+   * draft out for the user and ask before sending it.
+   *
+   * @send
+   * @openworld
+   */
+  async send(options?: DraftSendOptions): Promise<void> {
+    await this.schedule(
+      new Date(Date.now() + DRAFT_SEND_LEAD_MS).toISOString(),
+      options,
+    );
+  }
+
+  /**
+   * Remove a scheduled send.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async unschedule(): Promise<void> {
     const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
@@ -114,7 +174,11 @@ export class EmailDraft extends EmailMessage {
     );
   }
 
-  /** Reserve an attachment upload. Upload to the returned URL, then call complete(). */
+  /**
+   * Reserve an attachment upload. Upload to the returned URL, then call complete().
+   *
+   * @write
+   */
   async addAttachment(options: {
     fileName: string;
     sha: string;
@@ -149,7 +213,72 @@ export class EmailDraft extends EmailMessage {
     };
   }
 
-  /** Forward an existing attachment into this draft. */
+  /**
+   * The files attached to this draft: uploads reserved with
+   * {@link addAttachment} (`pending` until `complete()` runs) and attachments
+   * forwarded with {@link forwardAttachment}. A draft's files are not among
+   * {@link attachments}, which lists a message's received or sent files.
+   *
+   * @readonly
+   */
+  async draftAttachments(): Promise<DraftAttachment[]> {
+    const { thread_db_id } = await this.detail.get();
+    const record = await this.threadRecord(thread_db_id);
+    if (!record) throw new Error(`Draft ${this.id} is not in its thread`);
+    return [
+      ...record.attachments_draft.map((a) =>
+        DraftAttachment.byId(
+          this.client,
+          this,
+          a.id,
+          false,
+          record.draft_generation,
+          {
+            fileName: a.file_name,
+            contentType: a.content_type,
+            size: a.size,
+            pending: a.upload_pending,
+          },
+        ),
+      ),
+      ...record.attachments_forwarded.map((a) =>
+        DraftAttachment.byId(
+          this.client,
+          this,
+          a.attachment_id,
+          true,
+          record.draft_generation,
+          {
+            fileName: a.filename ?? undefined,
+            contentType: a.mime_type ?? undefined,
+            size: a.size_bytes ?? undefined,
+            pending: false,
+          },
+        ),
+      ),
+    ];
+  }
+
+  // The thread route is the one that returns a draft's files; read it a page
+  // at a time until the draft appears or the thread ends.
+  private async threadRecord(threadId: string) {
+    for (let offset = 0; ; offset += THREAD_PAGE_SIZE) {
+      const { thread } = unwrap(
+        await this.client.email.getThread({
+          path: { thread_id: threadId },
+          query: { offset, limit: THREAD_PAGE_SIZE },
+        }),
+      );
+      const record = thread.messages.find((m) => m.db_id === this.id);
+      if (record || thread.messages.length < THREAD_PAGE_SIZE) return record;
+    }
+  }
+
+  /**
+   * Forward an existing attachment into this draft.
+   *
+   * @write
+   */
   async forwardAttachment(
     attachment: EmailAttachment,
   ): Promise<DraftAttachment> {
@@ -171,7 +300,12 @@ export class EmailDraft extends EmailMessage {
     );
   }
 
-  /** Remove a draft attachment. */
+  /**
+   * Remove a draft attachment.
+   *
+   * @destructive
+   * @idempotent
+   */
   async removeAttachment(attachment: DraftAttachment): Promise<void> {
     if (attachment.draft.id !== this.id)
       throw new Error('Attachment belongs to another draft');
@@ -195,7 +329,12 @@ export class EmailDraft extends EmailMessage {
       );
   }
 
-  /** Complete verification of an uploaded attachment. */
+  /**
+   * Complete verification of an uploaded attachment.
+   *
+   * @write
+   * @idempotent
+   */
   async verifyAttachment(attachment: DraftAttachment): Promise<void> {
     if (attachment.draft.id !== this.id || attachment.forwarded)
       throw new Error('Expected an uploaded attachment on this draft');
@@ -217,6 +356,8 @@ export class DraftAttachment {
     readonly forwarded: boolean,
     /** Draft generation captured when the attachment was reserved. */
     readonly draftGeneration: number,
+    /** The file, when read from the draft by {@link EmailDraft.draftAttachments}. */
+    readonly file?: DraftAttachmentFile,
   ) {}
 
   /** Construct a draft scoped attachment handle. */
@@ -226,16 +367,27 @@ export class DraftAttachment {
     id: string,
     forwarded = false,
     draftGeneration = 0,
+    file?: DraftAttachmentFile,
   ): DraftAttachment {
-    return new DraftAttachment(draft, id, forwarded, draftGeneration);
+    return new DraftAttachment(draft, id, forwarded, draftGeneration, file);
   }
 
-  /** Complete verification after uploading the file. */
+  /**
+   * Complete verification after uploading the file.
+   *
+   * @write
+   * @idempotent
+   */
   complete(): Promise<void> {
     return this.draft.verifyAttachment(this);
   }
 
-  /** Remove this attachment from its draft. */
+  /**
+   * Remove this attachment from its draft.
+   *
+   * @destructive
+   * @idempotent
+   */
   remove(): Promise<void> {
     return this.draft.removeAttachment(this);
   }
@@ -247,8 +399,21 @@ export class DraftAttachment {
       draftId: this.draft.id,
       forwarded: this.forwarded,
       draftGeneration: this.draftGeneration,
+      ...(this.file && { file: this.file }),
     };
   }
+}
+
+/** A draft attachment's file, as the draft holds it. */
+export interface DraftAttachmentFile {
+  /** File name. */
+  fileName?: string;
+  /** MIME type. */
+  contentType?: string;
+  /** Size in bytes. */
+  size?: number;
+  /** An upload whose `complete()` has not run yet. */
+  pending: boolean;
 }
 
 /** Translate draft content to the generated contract. */

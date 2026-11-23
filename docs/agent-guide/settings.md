@@ -12,8 +12,7 @@ Deleted or replaced scratch databases fail the old import instead of silently
 continuing with incomplete history; its cleanup must leave a replacement intact.
 
 In **Integrations → Accounts**, the **Slack export** row appears only for team admins
-and owners with `enable-slack-archive-import` enabled. Production rollout stays
-off until explicitly enabled. Select an export ZIP, filter the grouped conversation
+and owners. Select an export ZIP, filter the grouped conversation
 picker, optionally show archived conversations, and use Space to toggle focused
 checkboxes. **Select all visible conversations** preserves selections hidden by
 filters; unchecking it or **Clear visible selection** clears only visible selections.
@@ -104,6 +103,12 @@ editing resumes without a conversion prompt.
 With Gmail and Outlook inboxes connected, confirm only Gmail offers import
 (including Gmail accounts on a custom domain), while both support HTML and Rich
 text editing. Empty Outlook signatures must not suggest Gmail import.
+Gmail keeps images pasted into its signature editor from a message as
+`mail.google.com` URLs only that mailbox's session can load; import reads them
+from the inbox's own mailbox (the message, or for sent mail its thread) through
+the Gmail API and rehosts them. An image the mailbox doesn't hold still shows
+the image import error; a rate-limited or transient Gmail read failure shows
+the generic "try again" error instead.
 Type an unsaved Rich text draft and clear it, both with and without an existing
 saved signature. Reopen settings and confirm the editor stays empty and the
 composer no longer includes a signature. A delayed clear must preserve a newer
@@ -118,24 +123,36 @@ under that action, including the account catalog's durable refresh.
 
 ### Email read receipts
 
-Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
+**Settings → Email → Read
 receipts** lists each owned inbox with a switch that saves immediately. It is
 on by default, and the section's only copy is "See when recipients open
 messages you send." Messages sent from an inbox with it on carry an invisible
 pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
 
+### Email row style
+
+**Settings → Email → Display options → Row style** picks how Mail rows look on
+this device: **Minimalist** (the default; an unread dot, the checkbox on hover)
+or **Classic** (rows wall to wall with one faint line between them and above
+each date group's first row, unread rows on a raised fill with bolder sender,
+subject and date, and the selection checkbox always shown instead of the dot).
+Below the tabs, an inert sample of two made-up rows (one unread, one read)
+shows the chosen style, drawn by the real Mail row; screen readers get a short
+description instead. The choice saves immediately and applies to every open
+Mail list. Phones always show Minimalist rows, so the section and its search
+entry are absent there. The backend-free desktop, tablet and phone
+regression, which also covers the sample (`?view=settings` in the fixture), is
+`bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts row-styles.browser.e2e.ts`.
+
 ### Notification permission prompt
 
-After onboarding, an eligible desktop app user sees **Enable Desktop
-Notifications**. Select **Enable** to request permission through the native
-notification provider; macOS uses its system permission dialog. The Android app
-says **Enable Notifications** and requests the Android notification permission
-through the same native provider. The web prompt says **Enable Browser
-Notifications** and uses browser permissions.
-**Enable** is its only action; closing the prompt (its corner **Close** on
-desktop, a swipe on phones) counts as a decline and stops it returning on the
-next load. It waits in the same region as other prompts, one card at a time. On
-phones it stays under open sheets and their pickers.
+After onboarding, eligible desktop, Android, and web users see **Enable
+notifications**. Select **Enable** to request permission through the native
+notification provider on desktop and Android, or browser permissions on the web;
+macOS uses its system permission dialog. **Not now** dismisses the prompt and
+stops it returning on the next load, as does swiping it away on phones. It appears
+with other persistent prompts; on phones it stays under open sheets and their
+pickers.
 
 ### Notification snoozes
 
@@ -147,10 +164,11 @@ under **Muted items**, with **Snooze instead** to replace one with a timed pause
 The Chat detail pane also supplies these commands for its current channel or DM;
 focus the conversation before opening the command menu.
 
-To snooze an entity, right-click its row (long-press on mobile) and choose
-**Snooze notifications…**, or select/open the entity and search for that command
-in Cmd/Ctrl+K. Multi-selection applies the chosen deadline to all selected items.
-Use arrow keys and Enter, click a preset, or type a future date/time such as
+To mute an entity, right-click its row (long-press on mobile) and choose
+**Mute notifications**. Select **Until I turn it off**, a timed preset, or
+**Custom…** to open the searchable time picker. Multi-selection applies the choice
+to all selected items. Cmd/Ctrl+K retains **Snooze notifications** as a direct
+shortcut to that picker. Use arrow keys and Enter, click a preset, or type a future date/time such as
 `2h` or `tomorrow 10am`. The next morning means the next local 9 AM; the weekend
 preset resumes on Monday at 9 AM. The picker displays the exact local date and
 time before saving. Escape closes the picker; before choosing a time, it makes
@@ -165,9 +183,10 @@ save appears in notification settings.
 If only some selected items save, the picker shows the saved count and retries
 only the remaining items. Closing it keeps any snoozes already saved.
 
-On phones, long-press opens the entity actions drawer. The snooze time picker
-uses the same responsive `Dialog`, width, and `CommandMenuShell` as Cmd/Ctrl+K,
-with larger touch targets and tap instructions. Swipe the preset list when the
+On phones, long-press opens the entity actions drawer. Mute opens the same
+choices in a drill-in page; Back returns without changing notifications.
+The custom time picker uses the same responsive `Dialog`, width, and
+`CommandMenuShell` as Cmd/Ctrl+K, with larger touch targets and tap instructions. Swipe the preset list when the
 viewport is short. In **More views → Settings → Notifications**, item names and
 deadlines sit above **Change time** and **Resume**. Saving or cancelling a picker
 returns to the settings sheet. Start new snoozes from an entity's actions or
@@ -190,21 +209,33 @@ that trial, so members who join get Pro, like on an active subscription.
 On a local stack started with `--no-doppler`, verify free-team creation from a
 fresh passwordless signup. It must work without Stripe credentials.
 
-The invite dialog (**Invite** on **Team → Members**, or **Invite your team**)
+The invite dialog (**Invite Human** on **Team → Members**, or **Invite your team**)
 starts with the team's **Invite link**: **Create link** makes one and copies it,
 **Copy link** copies it after that. Anyone signed in who opens
 `/app/team-invite?link=<token>` sees **Join <team>** and joins as a member with
 the same billing and channel effects as an emailed invite; users already on
-another team are told to leave it first. Team admins and owners also see
-**Reset link** (the old link stops working and a new one is copied) and
-**Turn off**, each behind a confirmation. Anyone who may invite can copy the
+another team are told to leave it first. Team admins and owners also get a
+settings (gear) menu beside **Copy link** with **Reset link** (the old link
+stops working and a new one is copied) and **Turn off**, each behind a
+confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before; **Invite as agent** invites every address in the dialog as an agent,
-and its email and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
-[agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
+as before. Existing agent accounts are still invited with
+`team.invite(email, { agent: true })` (see [agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
+After a person invite sends, the dialog's second step, **Let them know it's
+coming**, lists the addresses and offers **Copy invite link** (creating the
+first link when there is none) and **Done**. **Team → Members** also shows **Copy invite link** beside **Invite**,
+and onboarding's team confirmation asks a creator who just invited teammates
+to send them the link too.
+A signed-out invitee who opens an emailed or link invite is sent to
+`/app/login?redirect=/team-invite?…`; once signed in or signed up (including
+desktop Google sign-in, whose `macro:///login` callback carries the redirect)
+they return to the invite before onboarding, so they join first and onboarding
+opens on the team. Channel invites (`/channel-invite`) also open before
+onboarding. Other `?redirect=` deep links, such as meetings, return there after
+sign-in, or after onboarding for a new account.
 An unanswered invite gets up to two reminder emails, with subjects starting
 **Reminder:**, 3 days after the last email and 4 days after that. Invites more
 than 14 days old, already-members, and invites whose sender left the team get none.
@@ -212,6 +243,122 @@ than 14 days old, already-members, and invites whose sender left the team get no
 last sent, for owners and admins, who can **Resend**, copy the invite link,
 or cancel it. Resend unlocks an hour after the last email, the email's rate
 limit; re-inviting the address from **Invite** follows the same rule.
+
+#### Agent teammates
+
+**Team → Members** has **+ Invite Human** (the people invite dialog) and,
+behind `enable-agent-teammates` (on in dev) and the Macro computers rollout,
+**+ Invite Agent** for owners and admins, beside **Copy invite link**; on a
+narrow page the two invite buttons wrap, together, onto their own line. The
+desktop settings sidebar lists **Invite agents** under **Invite your team** for
+the same viewers. Members, and everyone while a flag is off or still loading,
+see only the people invite. **Invite Agent** opens **Invite an agent**, which asks only for a name and the
+agent's computer size; picture, voice and role come later, and the agent asks
+what to take on once it is online. While the name is empty, **Try** offers
+**Ada**, **Bo**, **Kim** and **Nova**, and the avatar shows the name's first
+letter. Sizes come from the same catalog and prices as Buy a computer
+(sold-out sizes are disabled and marked **Sold out**). The agent's seat is
+included, so the button reads **Add <name> · $X/month** (or **Add <name>**
+when included); while it is disabled, the line under it says why ("Give your
+agent a name to continue.", a name too long, no size for sale). Adding calls
+`POST /team_agents` with `jobDescription` and `personality` empty, then waits
+in the dialog (**Adding <name>…**, "Starting <name>…") reading
+`GET /team_agents` every 500 ms until the agent reports itself online, and
+closes into the agent's DM, where it has said hi; no toast. Past five seconds
+it closes into the DM anyway, where the banner says it is still being set up
+and its Members row shows the setup step. Every failure stays in the dialog
+with the name and size kept: a declined card (402 `payment_declined`;
+nothing was bought) with **Update card** (Settings → Billing) and **Try again ·
+$X/month**, which sends a new purchase key; no room for the size (409
+`no_room`, checked before any charge), which marks the size sold out and picks
+the next one on sale; a computer that didn't start, whose **Retry** is the
+computer's own retry (`POST /team/computers/{id}/retry`, no new charge); and a
+second failed start, which the server undoes (computer released, charge
+refunded, agent taken back), with **Retry** buying afresh. Other refusals
+(a trial, an invite already in flight, a failed workspace) show in place.
+The new agent appears in **Team → Members** as its own row (name, **Agent**
+tag) with a status on the summary line where a person's role and plan are: **Setting up** with a spinner while its
+computer provisions, with the computer's setup step under it (**Creating the
+computer**, **Starting up**, **Connecting to Macro**), then **Starting**
+(spinner; the computer is up and the agent hasn't reported online yet), then
+**Running**, **Paused**, **Not responding** (its computer stopped answering
+after setup, or crashed and is restarting; it comes back by itself),
+**Needs attention** or **Released**. A failed
+computer's row offers owners and admins **Retry**, the computer's own retry,
+so it never buys a second computer. Owners and admins pick a voice later from
+the row's ⋯ (**Change voice**), which also holds **Remove agent**: **Save voice** calls
+`PUT /team_agents/{agent}/voice`, which commits `config/voice.json` in the
+agent's repository and applies from its next call; a failed save keeps the
+pick for retry.
+
+When the agent itself first reports online (not when its computer connects),
+its inviter (the team agent's `created_by`) gets the `computer_setup` notification with the agent's
+`agent { userId, name }`: "<name> is ready", in-app as a one-minute notice
+with **Message <name>** and, for owners and admins (who own the computer's runtime), **Connect
+Claude plan**. A failed first setup notifies "<name> couldn't be set up" with the
+reason and **Retry**. Clicking the notification opens the DM (ready) or
+**Team → Members** (failed). **Message <name>**, the notification, and the end
+of adding an agent all open the agent's real DM, created if it doesn't exist
+yet (`openTeamAgentDirectMessage`, `POST /channels/get_or_create_dm`), because
+the agent says hi first; a person's DM would wait for the viewer's first
+message (see [Empty direct messages](channels.md#empty-direct-messages)). If it
+can't be opened, a "Couldn't open the conversation. Try again." toast says so.
+The agent flow has no **Chat with <agent>**; that stays in
+the computer purchase flow. With `enable-macro-computers` on, **Connect
+<name> to your Claude plan** is the Claude sign-in for the agent's computer,
+opened from the notification or the row, never as a step of the invite. One
+screen, two steps: **Open claude.ai** (a button with "Preparing the sign-in
+link…" until the computer has made the link, then the link; **Open again**
+once used), then the code field with **Complete sign-in**, which is primary
+only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
+A failure shows one inline alert with its way out: **Get a new link** (link
+expired, code rejected, including the CLI's own "Invalid code", or the
+computer's sign-in timed out), **Try again** (couldn't get a link), or send
+the code again (malformed code, computer busy or unreachable, or the service
+timed out waiting for the computer, which may still have finished). The harness
+tells its two 403s apart: `rollout_disabled` reads "Computers aren't
+available for this account yet." with **Try again** before a link exists;
+after a code was sent the sign-in still waits, so the field stays open to
+paste the same code again. A bare 403 (no manage rights) reads "You can't
+change this computer. Ask a team owner or admin." with no action, and the
+link and code field are disabled. The footer's one action is
+**Keep using Macro credits** (closes), or **Switch to Macro credits** (a
+confirmation, then sign-out) when the agent is on its plan; closing while a
+code is checked lets it finish, with a toast either way. Owners and admins
+see the agent's Claude under its job description: **Claude: Macro credits ·
+Connect Claude plan** (offered only while the computer is connected),
+**Claude: your plan · Switch to Macro credits** (a confirmation, then
+sign-out), or
+**Claude sign-in expired · Reconnect Claude plan**. The sign-in spans carry
+`claude.sign_in.entry` (`team_agent_row`, `notification`).
+
+A DM with an agent teammate that isn't running says so in its header (a
+short chip) and above the composer; messages still send. **Setting up** (also
+while the agent is **Starting**): "<name>
+is still being set up. It'll answer once it's ready."; a failed setup:
+"<name> isn't running: setup failed." with **Retry** for owners and admins;
+a powered-off computer, or one that is **Not responding**: "<name> isn't
+running: its computer is offline."; a released one: "<name> isn't running
+right now." The state comes from the team's agents, the same source as the
+Members row, so every member sees the same banner.
+
+Owners and admins remove an agent with its trash button and a destructive
+confirmation, **Remove <name>?** ("Its computer and files are deleted. This
+can't be undone."), with **Cancel** and **Remove**; removing releases its
+computer and deletes its account.
+
+An agent teammate is reached only by DM or in channels, like any member: its
+computer's runtime (`team_agent_user_id` on `/harnesses`) never appears in
+**Where it runs**, the Agents page or composer roster, the machine strips,
+Settings → Runtimes, or teammates' machines; its computer setup offers no
+**Chat with <agent>** or **Add another agent**; and the API refuses saving an agent or
+opening a session on it (409). Connect Claude plan and the DM banner still read it
+from the full `/harnesses` list. On phones the dialog and
+confirmation are sheets and rows stay touch rows. Backend-free check (invite,
+Members row, notifications, Connect Claude plan and its failure states, and
+the DM banner):
+`bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`
+from `apps/web` (desktop 1440 and phone 390).
 
 Under **Team → Members** (**Invite settings**), owners/admins can turn
 **Auto-join on domain** off and can restrict invitations to admins with
@@ -222,6 +369,26 @@ domain. Both should appear in the team's member list and configured auto-join
 channels without an upgrade prompt. Repeat with auto-join disabled to verify a
 same-domain signup is not added automatically.
 
+### Team subscription breakdown
+
+On the existing **Billing** page, billing admins with an active provider
+subscription see **Subscription breakdown** below their plan. It shows actual
+paid **Human seats**, each mapped computer's size, status,
+and current subscription price, and any other provider subscription items.
+Each computer appears once, with recorded specifications when available; there is
+no duplicate Computers subtotal. Included rows say **Included**, with an
+**Included for Macro** note. If today’s catalog price differs from an existing
+charge, the row keeps the actual subscribed amount and explains the new-computer price.
+
+**Total per month/year** uses the current subscription interval and currency.
+Amounts use that currency's minor-unit precision, including zero-decimal currencies.
+**Next invoice** uses the provider's upcoming amount due and invoice date;
+proration or credits can make it differ from the subscription total. There
+are no estimated taxes or invented add-ons. Without an active subscription,
+or without billing access, the existing plan UI remains; no invoice or
+currency amount is fabricated. On a phone the rows wrap within the existing
+Settings card, and the page scrolls vertically.
+
 ### Navigation
 
 On phones, **More views → Settings** opens an inset glass sheet over the current
@@ -229,7 +396,8 @@ page. The main page has a profile shortcut and the same grouped Team, Blocks, Pe
 and Developer sections as desktop, plus enabled admin settings. Search finds
 individual settings; selecting a result opens its page and reveals the section. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
-previous scroll position. `API Keys` is desktop-only and has no row here.
+previous scroll position. `API Keys` is desktop-only and has no row here; `Account Managers` has one, so
+access can be revoked from a phone.
 **Close settings** at the top right, Escape, an
 outside tap, or a downward swipe dismisses the sheet. A tap that dismisses a
 menu opened inside the sheet leaves the sheet itself open. Opening Settings again
@@ -242,13 +410,18 @@ like any other rail item, and Shift-click opens it in a new split.
 `/app/settings/<tab>` opens it as the only split with the app rail still
 visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
 sidebar matches Email and Tasks: a **Settings** title bar, a rounded
-**Search settings** field, the grouped section pills, and a team action pinned
-to the bottom: **Invite your team** (opens the invite dialog; hidden for members
-when the team limits invites to admins) or, with no team, **Create a team**
-(opens the create-team dialog). Unlike other views, it cannot be hidden at
-desktop widths: there is no **Hide navigation** toggle and `Cmd .` does
-nothing, even if it was hidden before. Below 720px the sidebar becomes an overlay opened from **Show
-navigation** (or `Cmd .`), which starts closed. Escape closes a
+**Search settings** field, a team action at the top of the list (hidden while
+searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
+hidden for members when the team limits invites to admins), then, for owners
+and admins with agent teammates and Macro computers on, **Invite agents** in
+the same style (opens **Invite an agent**), or, with no team,
+**Create a team** (opens the create-team dialog), then the grouped section
+pills. Above 720px, **Hide navigation** beside the title collapses the sidebar;
+**Show navigation** restores it. Wide touch panes always dock the sidebar left
+of the page, with no collapse control and no section pills. Below 720px the
+sidebar becomes an overlay that starts closed; narrow touch panes switch
+sections from pills at the top, led by **Show navigation**. `Cmd .` also
+toggles navigation. Escape closes a
 settings split that shares the layout, or steps back to the previous view when
 it is the only split (Home when there is none). Leave settings by picking any
 other rail item; there is no separate back or fullscreen control.
@@ -305,15 +478,16 @@ Left nav (feature and platform gates still apply):
   **Team · Members**. The team Slack export import and the GitHub App live in
   Integrations; `/app/settings/team-connections` opens Integrations.
 - **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
-  sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
+  sidebar can be collapsed, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
-- **Developer**: Runtimes, MCP server, API Keys, Bots.
+- **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
 **Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
-date card in the desktop app. Build date is when the running JavaScript was
-built, not when it was installed on the computer. Bundle date is when the active
+date card in the desktop app. Build date is when the installed native binary
+was built (from `get_native_build_time`), not when it was installed or when the
+running JavaScript was built, so OTA updates don't change it. Bundle date is when the active
 OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
 the app's embedded bundle runs. In the browser it links to the latest desktop release
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
@@ -341,7 +515,10 @@ Appearance starts with visual **System**, **Light**, and **Dark** mode choices.
 The previews use the saved themes; System follows the device and exposes both
 per-mode theme selectors. Light or Dark shows its own theme selector. Each selector
 retains theme search, editing, copying, custom theme creation, and importing
-themes from the clipboard.
+themes from the clipboard. The pencil beside a theme pill opens the inline theme
+editor under that row: a custom theme is edited in place, a default theme opens
+as a `<name> copy` fork. `features/settings/Appearance.test.tsx` covers opening
+it for both default themes, whose hex grays once crashed the editor's color pickers.
 
 The default Macro Dark theme uses a neutral `#0E0E0E` outer background and
 `#121212` inset content panels. The app rail follows the outer background;
@@ -412,14 +589,10 @@ language has loaded, PostHog stores it on the person as `interface_language`
 `interface_language`.
 
 Existing settings URLs remain valid; `connections` still opens Integrations,
-`agent-connections` aliases Integrations, and `harness` aliases Runtimes.
+`agent-connections` aliases Integrations, and `harness` aliases Machines (tab id `Harness`, slug `runtimes`).
 
-`Usage` appears directly above Billing, including for Free accounts. In
-production, the `enable-ai-usage-billing` PostHog flag controls activation. While
-it is off or loading, the page shows **AI billing changes take effect on October
-8, 2026.** and all Usage controls are disabled. Turning the flag on activates the
-page and removes the announcement. Dev and local remain interactive even with
-the flag off. The production usage-limit dialog follows the same flag. Its
+`Usage` appears directly above Billing, including for Free accounts. The
+usage-limit dialog's
 **Monthly limit** meter displays a percentage using the backend's current-period
 usage and allowance. The info button explains AI agent chat and AI document
 editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
@@ -540,8 +713,7 @@ users keep their current plan. Cards appear only for users who can
 manage their subscription. Team-paid members see no plan options, including
 on Free seats. Member options stay hidden until the billing summary confirms
 they pay for their own seat. On a team, a plan change moves only the viewer's
-own seat. Max lists "10x more AI usage than Pro"; Free and Pro allowance labels
-still follow the `enable-ai-usage-billing` flag. Usage controls live in Usage.
+own seat. Max lists "10x more AI usage than Pro". Usage controls live in Usage.
 The upgrade modal and Billing use the same plan cards and benefits, including
 the same flag-gated AI usage label and responsive card layout. The modal offers
 Pro and Max to Free accounts, only Max to Pro accounts, and no upgrade cards to
@@ -569,15 +741,21 @@ Max stays active until renewal; **Keep Max plan** cancels a pending downgrade
 without resetting usage. Failed renewal-detail reads offer **Try again**.
 Team members who cannot manage billing see the notice without its action.
 
-`Team → Members` (`/app/settings/team-members`; on a paid team each row shows the seat's plan,
-and admins/owners can move a seat between Pro and Max with the `Seat plan`
-menu; Max upgrades are immediate and prorated, except the first Max seat on a
+`Team → Members` (`/app/settings/team-members`; every row, owner, admin,
+member or agent, is the picture, name, email, one summary line (role, then the
+seat's plan on a paid team) and a ⋯ holding what the viewer can change: a menu
+on desktop and a sheet on touch, like Machines. Admins/owners move a seat
+between Pro and Max under the ⋯'s **Plan**; Max upgrades are immediate and prorated, except the first Max seat on a
 trialing team, which ends the trial and bills Max for a new cycle today.
-Pro downgrades start at renewal.
-**Keep Max** appears only for a confirmed pending downgrade and cancels it;
+Pro downgrades start at renewal, and the row's summary says **Pro at renewal**
+until then.
+**Keep Max** appears in the ⋯ only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (a `Team CRM` switch that admins use to enable or disable it;
-once enabled, a `Stages` section for the company Stage options that new pipelines
+scheduled plans show no retry notice). CRM (for owners and admins while
+`enable-crm-member-access-changes` is on, **Who can use CRM** first: each person's
+CRM access switch, the same setting as their ⋯ in Members; individual email contribution, gated selective sharing rules with JSON,
+count preview and history subpages, and team/personal domain exclusions;
+a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow
 keys (up/down buttons on touch), delete, `Add stage`, and `Reset to defaults`,
 editable by the role set as `edit_stages_role`)
@@ -611,7 +789,7 @@ available in all channels should refresh there without reloading the channel.
 
 ![Integrations overview with example connections](assets/settings-integrations.png)
 
-With `pipedream-mcp` enabled, Settings → Integrations is one searchable list
+Settings → Integrations is one searchable list
 styled like the Drive and Tasks lists, spanning nearly the full settings page
 width. Rows are separated by faint dividers and have Name (icon, name, an
 `mcp` or `native` badge, and a smaller, fainter second line on what it does in
@@ -625,20 +803,23 @@ dot sits beside the name.
   description. **Connect** (or **Add account** with multi-inbox) starts that
   provider's flow; Outlook checks availability first. **Manage** opens Email
   settings, where each inbox is managed.
-- **GitHub**: one row for the account link (pull request reviews and status)
-  and agent tools. Its menu has **Configure GitHub App**, **Agent tools** (the
-  GitHub provider page) and **Disconnect**.
+- **GitHub**: one row for pull request reviews and status and agent tools.
+  Its status is the server's (`app/github`), not the account link's; the link
+  only adds the username and, when linked, **Configure GitHub App** to the
+  menu beside **Agent tools** (the GitHub provider page) and **Disconnect**.
 - **Slack**, **Linear**, **Notion**: agent tools, with **Connect**/**Manage**
   opening the provider page and **Import** beside it. Slack's Import opens the
   Slack export importer for team admins with archive import enabled, otherwise
   the connector import dialog.
 - **Granola**, **Claude Code, Codex, and ChatGPT** (Macro MCP setup), and
   **Coding agents on your computer** (Claude Code, Codex, OpenCode, OpenClaw,
-  Hermes; opens Runtimes within Integrations and follows the Runtimes
+  Hermes; opens Machines within Integrations and follows the Machines
   availability gate; Back returns to Integrations).
 - Installed catalog apps and custom MCP servers, with their More menus.
-- The catalog: every Pipedream app not yet connected, tagged with its directory
-  categories. Apps Macro can import from show **Import** beside **Connect**.
+- The catalog: every app not yet held, tagged with its directory categories.
+  Apps Macro can import from show **Import** beside **Connect**; a held app
+  shows **Import** only when the server says its connection can be imported
+  from (`importAvailable`).
 
 The search filters every row by name, description and category and also searches
 the catalog. **Add custom** sits beside it. Gmail, Google Calendar and Google
@@ -646,25 +827,33 @@ Sheets are hidden from the catalog because Macro syncs email and calendars
 natively. LinkedIn never appears in the catalog or its search: the backend
 hides it. Scrolling toward the end loads the next catalog page; a failed page
 keeps loaded apps and offers Retry.
-Overlaid catalog apps (the `mcp_overlays` table, served at
-`GET /pipedream/mcp/overlays`) look the same in the catalog but never open
-Pipedream: their Connect action opens the vendor's own MCP OAuth consent in a new
-tab (system browser on native) and the row turns connected once that server is
-authorized, after which it lists as that catalog app (its icon, Agent tools
-category) among the integrations in use, not with the custom MCP servers at
-the top; native servers wait for the overlay list before rendering so one never
-jumps. Verify with an overlaid app such as Sentry or Asana; completing a
-Pipedream connection for one answers 409.
-GitHub is overlaid onto `api.githubcopilot.com/mcp`, but its server is
-authorized by the GitHub account link (the same GitHub App), so connecting
-GitHub anywhere (catalog, chat connect card, import dialog, the GitHub AI
-provider page) runs the account link, and a linked account shows GitHub
-connected for Macro AI with no second consent. Disconnecting GitHub on its AI
-provider page unlinks the account. Verify by linking GitHub from its row and
-checking the GitHub catalog entry reads connected.
+Every row's status is the server's (`GET /connectors`); the page computes
+none and never says which provider holds a connection. Connect asks the server
+how (`POST /connectors/{key}/connect`) and follows its answer: a consent page
+in a new tab (system browser on native) or the embedded connect dialog, then
+`POST /connectors/{key}/complete` records it. A server added by URL is listed
+as a custom MCP server unless the server reports it as an app; existing native
+Linear and Notion connections therefore appear among the custom servers, and
+the Linear and Notion rows read Not connected. A server added by URL can count as
+connected without a sign-in, so every server row offers **Sign in**, which
+runs `POST /connectors/server/{id}/connect`: on the row while it is not
+connected (it reads **Sign in required** when its grant is dead: a sign-in
+that never finished, or an expired token with no refresh), in its menu
+otherwise. An app with a row of its own
+(Granola) is listed once, in that row. A held connection that no longer
+counts (for example one through a provider the user is not on) reads
+**Not connected** with **Connect**.
+Connecting GitHub anywhere (its row, the chat connect card, the import
+dialog, the GitHub AI provider page) asks the server like any app. When
+GitHub's connection is the GitHub account link (the same GitHub App), the
+server answers with `/app/connect/github`, which starts the link and returns
+to Integrations; someone on Macro Connect gets Connect's consent page instead,
+and a linked account then reads Not connected. A link needing reauthorization
+reads as such, and disconnecting GitHub (`DELETE /connectors/app/github`)
+unlinks the account.
 The Agents workspace opens this same Integrations page. The list includes featured providers, a searchable catalog,
-and `Add Custom`. Pipedream Slack OAuth is available in production and
-development from the featured Slack provider. Connecting Slack here grants tool
+and `Add Custom`. Slack is available in production and development from the
+featured Slack provider. Connecting Slack here grants tool
 access; channel import is a separate action where the user chooses channels.
 Provider Back returns to the combined integrations overview; navigation
 is local to each mounted Integrations page.
@@ -699,10 +888,8 @@ have the owner use Reconnect under Custom MCP; there is no `Connect` chip for
 custom servers. Agents configured with a fixed app selection do not receive the
 owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
-Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
-featured or offered in the Connections catalog. Settings → Integrations lists
-Email, Accounts and AI apps above the agent tools and app catalog. The native-only integrations section remains
-available when `pipedream-mcp` is disabled.
+Cursor stays in Agents → Machines with its API key, default model and default effort controls; it is not
+featured or offered in the Connections catalog.
 Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
 `Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
@@ -741,9 +928,15 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Runtimes settings tab stays available in the desktop app even if the newer Agents view is disabled. A running runtime with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+Under its title and description, the `Machines` section shows the MacroD `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog, except on touch devices. The `Machines` section shows built-in Macro, Cursor, and Codex configuration (under `Built-in machines`), followed by paired macrod machines. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in machines: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this machine) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Machines settings tab stays available in the desktop app even if the newer Agents view is disabled. A running machine with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped machine offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Machines navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New machine` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. `Pending requests`, at the top and only while any wait, lists teammates' requests to use machines the viewer owns (`<person> requested to use <machine>`, with `Deny` and `Approve`) and the viewer's own requests on teammates' machines (`Your access: Requested`, whose `Requested` button cancels); the `Machines` entry in the settings sidebar and the phone settings sheet shows how many incoming requests wait. `Your machines` lists every machine the viewer owns, offline ones included. Each row shows a status dot before the name, then a meta line (`Private` or `Team machine`, the count of waiting access requests in accent ink, and the last connection), with `Share`, `Options`, `Rename` and `Remove` at the top right; on narrow rows the name wraps, the meta line sits under it and the actions get their own line. `Options` opens a small menu on desktop and a sheet on touch with one toggle, `Don't ask before acting` (the machine's permission bypass: turning it on asks for confirmation and applies from each session's next turn). Only the owner can change it; everyone else sees it disabled with its current value. A machine's name and this toggle are set only here, and its sharing through Share; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns the toggle on for the new machine. Back/Cancel returns to the machine list. Destructive removal still requires confirmation. Every paired machine has one person as its owner; its `Team machine` or `Private` label says whether every teammate is a user of it. Everyone else on the team can see it and holds a role: No Access, Read (sees what is on it but cannot run agents), or User (can run agents); non-coding agents bound to it are Residents. `Share` opens the machine Share menu: the `Team machine` switch, the owner, residents, people with a `Read` or `User` role picker, access requests (each reads `Requested to use <machine>`) with `Approve` and `Deny`, and a filterable list of teammates to `Add` as users. It has no link, channel or outside sharing. Removing or lowering access a resident depends on first warns that it shuts the agent down. `Teammates' machines`, below, groups the team's other machines by owner. Each row uses the same layout: status dot and name, a meta line with `Online`/`Offline` and `Your access: None/Read/User/Requested`, `Request access` (or the pending `Requested`, which cancels) when the viewer cannot run agents on it, and the read-only `Options`; the team's owner also gets `Remove` on team machines. People never show machines: user cards, hover cards, drawers and chips list none. Agent cards and the agent session pane still show the machine an agent runs or lives on (`Runs on <machine>` / `Lives on <machine>`), with `Request access`, and so do the agent and routine pickers. When an agent's owner loses access to the machine it lives on, the agent stops: its session pane and DM header say `Stopped: no access to <machine>` with `Request access` for the owner, a prompt to it leaves a refusal line in the transcript instead of running, and the owner gets a notification ("<person> removed your access to <machine>" / "<agent> has stopped.") that opens this section with that machine pointed out. These notifications are filed under the machine and listed in Notifications (Access); clicking the row opens what its newest notification opens. An access-request notification ("requested to use <machine>") opens this section with that machine's row highlighted and its Share menu open; a grant notification highlights the row only. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported. A Macro computer is listed only under **Macro computers**, not here.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
-the same live model discovery and retains its existing save action.
+the same live model discovery and retains its existing save action. Beside it,
+the composer's labeled Effort control (the bottom sheet on touch) offers the
+selected default model's own effort stops and saves on change; it is hidden for a
+model with fewer than two stops. Changing the default model clears the saved
+effort, and a saved effort the model no longer offers shows, and starts
+sessions on, the model's default. New Cursor sessions on the default model start
+on the saved effort; an effort picked in the composer still overrides it.
 
 The Codex row uses the OpenAI logo and the same icon, button, and status styling
 as Cursor. Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
@@ -767,6 +960,283 @@ The Codex section and its auth/config requests were exercised in Chromium with
 mocked backend responses on 2026-09-15. Provider login and a full deployed Macro
 session were not exercised by that UI check.
 
+### Macro computers
+
+Macro computers are hosted machines a team buys for its agents, billed on the
+team subscription. They never sleep. They sit in `Machines`, behind the
+`enable-macro-computers` flag for purchases and Claude account controls, and
+need a team: without one the page shows nothing about them. The web asks the
+backend (`GET /team/computers/rollout`), which evaluates the PostHog flag and,
+in dev only, `COMPUTERS_ROLLOUT_ALLOWLIST`. With the
+flag off, the computer UI is hidden (the Macro computers section, Billing,
+Agents and settings search show nothing about computers; a team owner or admin
+still sees an existing computer under Your machines as an ordinary machine
+they can rename), while existing computers keep running and billing. Turning the flag off is a sales kill switch, not a way to manage
+computers. Team purchase and offers return 403 when the rollout is off,
+missing or unavailable. If the environment has no computer prices configured,
+offers and purchases answer 503 with `computers are not available in
+this environment`; partial price configuration prevents the authentication
+service from starting.
+
+**Macro computers** lists every team computer once; its runtime is not listed
+again under **Your machines**. Each row uses the same layout as a Your machines
+row: status dot, name, one muted line, at most one action, and **⋯** (a sheet
+on touch) for the rest. The line is the size and the resources recorded at
+purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progress
+(`Setting up · Starting up (2 of 3)`, or **Waiting for space on the
+host**), **Starting…** while a power-on runs, **Powered off**, **Not responding**
+(past setup but unreachable or restarting after a crash; it comes back by
+itself), a fault, or how
+Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
+`Claude: not signed in`; a shimmer while the mode loads). A purchase whose
+charge is still being confirmed (`purchasing`, or the API's billing setup
+step) reads `Setting up · Updating billing… · 0:12`. Then the billing state: `Payment past due` while the team
+subscription is past due, `Cancels <date>` while a cancellation is pending
+(`billing: ending`), or `Kept until <date>` once billing has ended and the disk
+is retained (`billing: ended`). The list polls every 3 seconds while any
+computer is purchasing, setting up, waiting for capacity, starting or
+stopping.
+
+A powered-on computer that has run shows a second muted line: `CPU 12%` and
+`Memory 1.8 of 8 GB`, each with a tiny line of the last 24 hours
+(`GET /team/computers/usage`, refetched every minute; every team member sees
+it). CPU is the share of the computer's CPUs in use; memory is what the
+computer uses on its own (shown from a computer's first reading, a minute
+before its CPU, which reads `–` until then), and a tooltip says memory shared with its system
+image isn't counted. A computer with no reading in the last three minutes
+keeps its lines and reads `idle` in place of each value. On phones the two
+metrics stack, each with its line at the right edge. A computer that is off, setting up or failed has no such line.
+
+The row's one action is **Retry setup** on a `failed` computer (team owner
+and admins; it sets it up again, billing untouched), else **Finish setup**
+while guided setup is incomplete (only for the team's owner and admins; an
+agent teammate's computer counts as set up once its agent first comes online), else
+**Sign in with Claude** when the computer is on its own Claude account but
+signed out, else none. A failed row's line reads `Setup failed: <reason>`
+with the API's `failureReason`, else `Failed`. A row with no action keeps its
+**⋯** on the name's line on phones. **⋯** holds,
+in order: **Don't ask before acting** (the computer's permission bypass, for
+the team's owner and admins; a computer belongs to its team, so it has no Share
+menu); **Retry** on a `failed` computer when the row does not already offer
+**Retry setup**; **Turn off** (confirm: agents on it stop
+until it is turned back on) or **Turn on**; **Switch to Macro credits** or
+**Sign in with Claude** (confirm: it affects everyone on the team); **Cancel at
+period end**, **Undo cancel** while the cancellation is pending, or **Restore**
+once billing has ended and the disk is still retained (`canRestore`; confirm:
+it is billed again, prorated for the rest of the period, and stays powered
+off; **Turn on** is hidden until then, since the server refuses it); and
+**Release now** last. A `purchasing` computer has none of power, billing or
+release (the server answers 409 until it is confirmed). Release asks for the
+computer's exact name and says how many agents
+it deletes (`<N> agents on this computer will be deleted`, naming them when
+there are three or fewer). Team admins and owners get power, billing and
+release; whoever manages the runtime gets the Claude items.
+
+To buy one as a team admin:
+
+1. Open `/app/settings/runtimes` (mobile: Settings sheet → Machines). The top
+   of the page, above every other section, is the **Get a Macro computer**
+   panel: "A hosted computer where your team's agents run.", three facts
+   (**Always on, never sleeps**, **Runs on your Claude plan or Macro
+   credits**, **From <price>/month** from the cheapest size on sale, or
+   **Included**), and a large primary **Get a computer** (full width on
+   phones). It stays the same once the team has computers; a compact
+   one-row variant (`variant="compact"`: "Hosted, always on · from
+   <price>/month" with a small **Get a computer**) exists for comparison. In **Settings →
+   Agents**, a team without a computer also sees **Run coding agents on a Macro
+   computer** in the agents list, and **Where it runs** ends with **New Macro
+   computer**. Computers are for paying teams: on a trialing subscription the
+   panel instead reads "Computers can be added once your trial ends and your
+   team is on a paid plan." and on a team with no paid plan (offers answers
+   422) "Computers need a paid Macro plan. Your team does not have one yet.",
+   each with **Go to Billing**, and the Agents entries are hidden. The API
+   answers 403 with `code: "team_on_trial"` to offers, purchase, undo and
+   restore. Showing the panel loads the offers, so the dialog opens with the
+   sizes already there.
+2. **Get a computer** opens the Buy dialog (a sheet on phones), titled **Get a
+   Macro computer**: the size radios (**Standard**, **Large**, **XL**) with
+   price per interval, a sold-out size disabled and marked **Sold out**, a size
+   too large for every host left out (with none left the step shows only "No
+   computer sizes are available right now." and "Macro's hosts have no room
+   for a new computer. Try again later.", with **Close** and no Name, price
+   line, heads-up or Buy); **Name**, prefilled "<first name>'s Agent Box"
+   (**Agent Box** without a first name); the price line; and under **Buy** the
+   heads-up "It's ready in a couple of seconds, on the list with the team's
+   other computers." While the sizes load, three shimmering size cards stand
+   in for the radios and **Buy** is disabled. Every computer request gives up
+   after 15 seconds; the sizes request retries once on a 5xx or a dropped
+   connection and never on a 4xx or a timeout. When the sizes cannot load the
+   step says why, in place of the cards: no paid plan (422) or a trial (403
+   `team_on_trial`) with **Go to Billing**; an account outside the rollout (any
+   other 403, "Computers aren't available for this account yet.") with only
+   **Close**; computers unavailable (503, "Computers aren't available right
+   now. Try again later."), the billing provider failing (502, "Macro's
+   billing provider didn't answer. Try again in a moment."), a timeout
+   ("Loading computer sizes took too long. Try again.") or a dropped
+   connection ("Couldn't reach Macro. Check your connection and try again."),
+   each with **Retry**.
+3. **Buy · <price>/month** (or **Buy** for an included offer) adds it, then
+   waits in the dialog, with one status on the button (**Getting your
+   computer…**), reading
+   `GET /team/computers` every 500 ms until the computer is ready (at most
+   five seconds), then, in the same dialog and with no step bar, sets up the
+   computer's agent on Macro credits under its default name and ends on its
+   Ready (**Chat with <agent>**, below). No toast. Each opening of the dialog
+   makes one `purchaseKey`, sent again on every retry, so a retried Buy never
+   charges twice. Every refusal means nothing was charged and stays in the
+   dialog: a declined card (402 `payment_declined`) with **Update card** and
+   **Try again · <price>/month**, which uses a new key; no room for the size
+   (409 `no_room`), which marks it sold out and picks the next size on sale;
+   a key used for another purchase (409), a trial (403 `team_on_trial`), a
+   subscription that can't add computers (422), the billing provider failing
+   (502), a timeout, or sales unavailable (503). Agents are added through
+   **Add an agent teammate**, so Buy asks nothing about the agent; its own
+   Claude account is brought later from the row's menu (**Sign in with
+   Claude**). The row's **Finish setup** reopens the same stepless dialog
+   on Ready. The guided variant below (`afterPurchase="guided"` on `ComputerBuyFlow`, not
+   used by the app) moves from Buy to **Configure agent** after the same
+   wait.
+
+While the computer provisions, one progress line sits under the step bar: the current stage and how long it has taken, "Starting
+up · 0:24" (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
+else from when the step was first seen here, the billing wait from the
+purchase; "Waiting for space on the host" while it waits for capacity; "Sign
+in to Claude", without a timer, once the computer is up). Pressing it
+(`aria-expanded`) opens the **Setup progress** list, which stays open across
+steps: the same phases the row shows (Updating billing…, Creating the
+computer, Starting up, Connecting to Macro, Sign in to Claude; the same five
+on every step, the sign-in marked with a dash as "Sign in to Claude · skipped",
+"Not needed", once Macro credits is chosen), done stages with a check and
+worded as done (Billing updated, Computer created, Started up, Connected to
+Macro, Signed in to Claude), the current one a spinner and its time. A
+stopped setup replaces the line with one banner at the top of the dialog:
+`failed` says which stage failed and why on one line ("Couldn't create the
+computer: the host ran out of disk", the server's `failureReason` in lower
+case after the colon), with **Retry setup** (`POST .../retry`) and
+**Details** ("Retry sets it up again at no extra charge. Contact support if
+it fails again."); `needs_attention` reads "Needs attention — contact
+support" with neither. The agent form below stays usable. Disabled controls
+say why beside them (**Buy**: sizes loading; **Complete sign-in**: paste the
+code), except **Continue**, whose two fields sit right above it. The row in Machines shows the same live line, `Setting up ·
+Starting up (2 of 3) · 0:42`. The dialog closes at any time while setup
+carries on; the row's **Finish setup** reopens the same dialog where it left
+off. **Let's set up an agent on it** (no subtitle) names the agent Macro
+creates on the computer ("<buyer first name>'s Agent", a coding agent that
+bypasses permission prompts) and asks **Which Claude should it use?** with a
+two-option segmented control, **Your Claude account** or **Macro credits**
+(each option's hint is its description and desktop tooltip); nothing is
+preselected. Both options must stay reachable at any viewport height: the
+step's body scrolls above a footer that never covers it, and the buy-flow
+browser test checks both options at 1280x720/600/480 and 390x664/560. The name and
+choice apply once the computer is up: the rename (`PATCH /bots/{bot_id}`), then
+Claude, then setup-complete.
+
+- **Your Claude account** goes to **Bring your AI**, titled **Sign in to
+  Claude**. The sign-in link is minted by harnessd inside the computer, so
+  nothing of it can start before the computer connects: until then the step
+  explains that, shows a live status line ("Preparing sign-in… Starting up ·
+  0:42") instead of a greyed button, lists the sign-in as a later stage that
+  unlocks by itself, and offers only **Close** and **Use Macro credits
+  instead**. Once connected, the same two-step sign-in as an agent's
+  **Connect Claude plan** appears (see Agent teammates above); after **Open
+  claude.ai** the tab title becomes "● Paste your Claude code — Macro". Closed meanwhile, the setup notice
+  (below) reopens the modal on that step. The code is pasted in the same modal.
+- **Macro credits** skips **Bring your AI**, shown muted with a dash as
+  "Bring your AI · skipped" (phones keep "Your AI" with the dash), never struck
+  through. Choosing **Use Macro credits instead** after opening **Bring your
+  AI** marks it done instead: a check and "Bring your AI · Macro credits".
+- A **failed** or stuck setup stops the **Bring your AI** step: it says setup
+  stopped before the computer came up and to use the banner's **Retry setup**
+  above, with
+  no spinner, no elapsed time, no shared-sign-in note and no **Use Macro
+  credits instead**.
+
+Macro creates that agent once, on the computer's first connection, with the
+handle `@<first-name>-s-agent` (`-2`, `-3`… when taken), on Claude Code's
+default model, all channels and the runner's connected apps. Deleting or moving
+it never brings it back; if creating it fails, setup still finishes and anyone
+can create one under **Agents**. Agents created later on a computer also
+default to bypassing permission prompts. Releasing a computer, or its disk
+being destroyed, deletes every agent on it.
+
+**Create agent**, the last step, waits in the dialog while setup finishes
+(about three seconds: "Setting up <agent>", the button reading **Setting
+up…**), then shows "<agent> is ready". Finishing runs rename, the Claude
+sign-out (Macro credits only), setup-complete and a status refresh in order,
+each with a 20-second deadline and its own span under
+`computers.setup.finish` (`setup.finish.step`, `setup.finish.outcome`). A step
+that fails or runs out stops there: "Couldn't finish setting up <agent>" with
+the reason when it has one (outside the rollout: "Computers aren't available
+for this account yet.") and **Retry**, which runs the steps again and reads
+**Retrying…** while it does. A caller without manage rights reads "You can't
+change this computer. Ask a team owner or admin." with no **Retry**, only
+**Close**. Ready has one action:
+
+- **Chat with <agent>** opens the DM with the computer's agent
+  (`useOpenAgentDm`, `bot|<botId>`), like an agent's **Message**. With
+  `ENABLE_AGENT_DMS` off it is not offered, and **Done** is the action. The
+  agent is created server-side when the computer first comes up, so the setup
+  steps refetch a cached agents list that lacks it.
+- **Add another agent**, a quiet link in the body, opens **Settings → Agents**
+  on the **New agent** form with this computer chosen under **Where it runs**
+  (`requestCreateAgent(harnessId)` in `agentSettingsState.ts`). Bought from an
+  agent's **Where it runs**, the action is **Use for this agent** instead, and
+  only closes: the editor selects the new computer when the modal closes.
+
+Closing at any step keeps its place; the row's **Finish setup** reopens it.
+
+**Setup notices.** Buying is asynchronous: the dialog closes at any step and
+nothing is cancelled. When the computer first connects, its buyer gets a
+`computer_setup` notification (an agent teammate's computer names its agent
+instead; see [Agent teammates](#agent-teammates)) ("Your computer is ready: connect your AI and
+finish setup", in-app notice, browser and phone push); when first setup fails,
+one titled "<computer> could not be set up" with the failure reason. In the
+app it shows as a one-minute notice whose **Finish setup** / **Retry setup**
+reopens the setup dialog for that computer on **Bring your AI** (a failed
+computer shows **Retry setup** in its progress list there), on desktop and in
+the phone settings sheet. Clicking the notification or tapping the push does
+the same, also on a cold start; the link is
+`/settings/runtimes?computerSetup=<computer id>`
+(`computers/primitives/setup-request.ts`). The dialog's own "ready" notice,
+shown when it was closed while waiting for the sign-in link, is the same
+notice, so the two never stack.
+The in-app "ready" notice is only for setup left unfinished: it is not shown
+while that computer's buy dialog is open (one already up is taken down), nor
+once the team's computer list says its setup is complete.
+
+**Sign in with Claude** is a dialog with the same two steps, failure states
+and footer as an agent's **Connect Claude plan** (see Agent teammates above),
+titled **Sign in with Claude** and with the computer's own small print
+("Everyone using this computer can use this sign-in…"). Success closes the
+dialog with "Signed in with Claude", and the row reads
+**Signed in with Claude**: the computer holds a one-year Claude credential
+(no email or plan to show). Everyone on the team uses it on the computer.
+
+In **Settings → Agents**, agents on a computer read `On a Macro computer ·
+<name>`. The editor's **Where it runs** has its own **On a Macro computer**
+option with a computer picker; a computer that is off reads `<name> · Powered
+off`, its model list comes from the last-known catalog, and a computer never
+shows "Could not load models". New agents on a computer default to **Always
+bypass**. In the composer's agent picker, an agent on a powered-off computer
+stays under **Your agents** with a **Powered off** badge and "Turn its computer
+on in Settings → Machines"; it is never "Needs connection" or "Reconnect
+machine".
+
+Team **Billing** lists the computers on the subscription breakdown with their
+specs, status (**Alive**, **Starting…**, **Setting up…**, **Stopped**,
+**Failed**) and amount, or under **Macro computers** when the subscription has
+no itemized billing.
+
+Whoever completed the sign-in, and the team's owner and admins, get a
+**Claude sign-in expires soon** notification three days before the sign-in
+expires, **… expires today** within its last day, and **… expired** once it
+passes; the notification list
+row uses the same titles. Each goes out once per sign-in, a later stage
+replacing the earlier ones it overtook, and none arrive after switching to
+Macro credits. Opening one lands on this section, where **Sign in with Claude**
+starts over. People can turn them off under **Settings → Notifications →
+Computer Claude sign-ins**.
+
 ### GitHub reconnect recovery
 
 When GitHub reports that reauthentication is required, reconnect starts OAuth
@@ -788,9 +1258,9 @@ how to add the bot to channels and use its token with the Macro SDK. **Create
 bot** keeps Profile and Channels visible. **Advanced** starts collapsed on both
 desktop and mobile and contains:
 
-- **Agent → Show in model selector**: makes the bot available when starting an
-  AI chat; connect an agent such as Codex or Hermes to handle requests. This
-  section remains gated by the agents rollout.
+- **Agent → Enable AI agent**: makes the bot available in the model selector
+  and lets it respond to mentions, using a chat agent or a connected external
+  runtime. Saving an agent configuration enables it regardless of harness.
 - **Ownership → Mentionable**: lets teammates find and @mention the bot and
   creates it under team ownership. With the switch off, the creator owns it.
   Only team admins and owners can enable this option.

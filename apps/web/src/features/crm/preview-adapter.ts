@@ -1,15 +1,19 @@
 import { storageServiceClient } from '@service-storage/client';
 import {
-  fetchCrmContactPreviews as fetchContacts,
   fetchCrmPipelinePreviews as fetchPipelines,
-  fetchCrmCompanyPreviews as fetchPreviews,
+  fetchCrmRecordPreviews as fetchRecords,
 } from './queries/previews';
-export function fetchCrmCompanyPreviews(ids: string[]) {
-  return fetchPreviews((input) => storageServiceClient.getCompany(input), ids);
-}
 
-export function fetchCrmContactPreviews(ids: string[]) {
-  return fetchContacts((input) => storageServiceClient.getContact(input), ids);
+/** Company and contact chips of one preview batch, in one request. */
+export function fetchCrmRecordPreviews(
+  companyIds: string[],
+  contactIds: string[]
+) {
+  return fetchRecords(
+    (body) => storageServiceClient.previewCrmRecords(body),
+    companyIds,
+    contactIds
+  );
 }
 
 export function fetchCrmPipelinePreviews(ids: string[]) {

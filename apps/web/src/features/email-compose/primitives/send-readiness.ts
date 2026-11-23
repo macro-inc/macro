@@ -1,4 +1,5 @@
 import { $isImageNode, $isVideoNode } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import {
   $getRoot,
   $isElementNode,
@@ -14,6 +15,7 @@ import type { DraftFormAttachment } from './email-form-state';
 
 /** Durable sends accept local handles; attachment uploads must already be complete. */
 export type SendRefusal =
+  | 'nothing-to-send'
   | 'offline'
   | 'offline-attachments'
   | 'media-not-uploaded'
@@ -23,6 +25,7 @@ export type SendRefusal =
   | 'files-uploading';
 
 const SEND_REFUSAL_SUBTEXT: Record<SendRefusal, string> = {
+  'nothing-to-send': 'Write a message before sending.',
   offline: "You're offline",
   'offline-attachments': 'Reconnect to send this email.',
   'media-not-uploaded':
@@ -33,10 +36,12 @@ const SEND_REFUSAL_SUBTEXT: Record<SendRefusal, string> = {
   'files-uploading': 'Files are still uploading',
 };
 
+/** Refusals never reach the outbox, so this log is the only way to count them. */
 export function refuseSend(
   notices: Pick<EmailComposeFeedback, 'feedback'>,
   reason: SendRefusal
 ) {
+  Telemetry.warn('email_send.refused', { 'email_send.refusal': reason });
   notices.feedback.failure('Failed to send email', {
     subtext: SEND_REFUSAL_SUBTEXT[reason],
   });
@@ -57,10 +62,14 @@ export function sendRefusalBeforeSave(
 }
 
 /**
- * After the pre-send save: a queued-only handle cannot be addressed over
- * REST, and a local attachment without a record did not upload (its upload
- * already reported itself). A standalone compose may still send a draft
- * whose REST save failed before anything was queued or rejected.
+ * After the pre-send save. A draft with no identity had nothing to save, and
+ * every send is addressed by its draft's ids. A legacy REST send needs the
+ * server to hold the latest save: a latched (rejected) save or a queued-only
+ * handle cannot be addressed over REST. An outbox send carries the saved local copy under the
+ * draft's handles and the server validates it, so a failed or pending draft
+ * sync never blocks it. A local attachment without a record did not upload
+ * (its upload already reported itself). A standalone compose may still send a
+ * draft whose REST save failed before anything was queued or rejected.
  */
 export function sendRefusalAfterSave(input: {
   identity: DraftIdentity;
@@ -70,15 +79,17 @@ export function sendRefusalAfterSave(input: {
   queueActive?: boolean;
 }): SendRefusal | undefined {
   const { identity } = input;
-  if (!input.autosaveAllowed) return 'draft-not-confirmed';
-  if (!input.queueActive && identity.kind === 'server' && identity.queued)
-    return 'draft-not-confirmed';
-  if (
-    !input.queueActive &&
-    identity.kind === 'handle' &&
-    (!input.unqueuedHandleMaySend || identity.queued)
-  ) {
-    return 'draft-not-confirmed';
+  if (identity.kind === 'none') return 'nothing-to-send';
+
+  if (!input.queueActive) {
+    if (!input.autosaveAllowed) return 'draft-not-confirmed';
+    if (identity.kind === 'server' && identity.queued)
+      return 'draft-not-confirmed';
+    if (
+      identity.kind === 'handle' &&
+      (!input.unqueuedHandleMaySend || identity.queued)
+    )
+      return 'draft-not-confirmed';
   }
   if (
     input.attachments.some(

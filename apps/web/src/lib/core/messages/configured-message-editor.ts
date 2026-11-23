@@ -32,7 +32,10 @@ export type MessageEditorOptions = {
   mentionSources?: MentionBucketId[];
   onMentionCreate?: (mention: ItemMention) => void;
   onMentionRemove?: (mention: ItemMention) => void;
-  users?: () => IUser[];
+  /** Undefined selects the personal directory; [] stays explicitly scoped empty. */
+  users?: () => IUser[] | undefined;
+  /** Decorate only the current window/scoped roster, for example with agents. */
+  transformUsers?: (users: readonly IUser[]) => IUser[];
   onChange?: (markdown: string) => void;
   onEnter?: (event: KeyboardEvent, markdown: string) => boolean;
   onPasteFilesAndDirs?: (
@@ -60,6 +63,7 @@ export function createConfiguredMessageEditor(options: MessageEditorOptions) {
       onCreate: options.onMentionCreate,
       onRemove: options.onMentionRemove,
       users: options.users,
+      transformUsers: options.transformUsers,
       sources: options.mentionSources,
       block: options.groupMentions ? 'channel' : undefined,
       disableMentionTracking: options.disableMentionTracking,

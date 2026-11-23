@@ -4,24 +4,34 @@
 //! session of every agent bound to this harness.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 use tokio::time::Instant;
-use tokio_retry::strategy::ExponentialBackoff;
 use tokio_tungstenite::tungstenite;
 use tokio_util::task::AbortOnDropHandle;
 
+use crate::computer::Computer;
 use crate::config::{Harness, HarnessCredentials, MacroApi};
 use crate::harness::{self, BridgeEnd, Handoffs, LineTap};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::link;
+use crate::retry_delay::RetryDelays;
 use crate::turns::ActiveTurns;
 
 #[cfg(test)]
 mod test;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long one dial may take before it is retried.
+const DIAL_TIMEOUT: Duration = Duration::from_secs(5);
+/// A connection that lasted this long was healthy: its loss is redialed at
+/// once rather than after a backoff step.
+const HEALTHY_CONNECTION: Duration = Duration::from_secs(10);
+/// The first redial after a failure; later ones double up to the cap. Short:
+/// a booting computer's first dial often races its network.
+const FIRST_RECONNECT_DELAY: Duration = Duration::from_millis(250);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 
 /// The daemon's connection to its harness's sessions.
@@ -31,6 +41,7 @@ const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 /// socket and terminates the ACP process group.
 pub struct Runtime {
     connected: watch::Receiver<bool>,
+    agents_changed: Arc<Notify>,
     _task: AbortOnDropHandle<()>,
 }
 
@@ -47,8 +58,10 @@ impl Runtime {
         turns: ActiveTurns,
         adopted: Option<RunningAgent>,
         handoffs: Handoffs,
+        computer: Option<Arc<Computer>>,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
+        let agents_changed = Arc::new(Notify::new());
         let task = tokio::spawn(serve(
             macro_api.gateway_url(),
             credentials.token.clone(),
@@ -57,13 +70,27 @@ impl Runtime {
             tap,
             turns,
             connected_tx,
+            Arc::clone(&agents_changed),
             adopted,
             handoffs,
+            computer,
         ));
         Self {
             connected,
+            agents_changed,
             _task: AbortOnDropHandle::new(task),
         }
+    }
+
+    /// Follows whether the runtime connection is currently up.
+    pub fn connection_state(&self) -> watch::Receiver<bool> {
+        self.connected.clone()
+    }
+
+    /// Raised when the service says the agents bound to this harness may have
+    /// changed. A raise while nobody waits is kept for the next waiter.
+    pub fn agents_changed(&self) -> Arc<Notify> {
+        Arc::clone(&self.agents_changed)
     }
 
     /// Wait briefly for the supervisor to connect before dispatching a prompt.
@@ -86,7 +113,8 @@ impl Runtime {
 /// the supervisor until the user re-pairs or restarts the daemon.
 ///
 /// An `adopted` agent (handed over by the previous process image) serves the
-/// first connection instead of a fresh spawn. A handoff request ends the
+/// first connection instead of a fresh spawn. Otherwise the agent is started
+/// before each dial, so it boots while the socket opens. A handoff request ends the
 /// supervisor: the bridge answers it with its agent, and between bridges it
 /// is answered with whatever agent is still waiting for a connection.
 #[expect(clippy::too_many_arguments, reason = "the supervisor's whole input")]
@@ -98,13 +126,19 @@ async fn serve(
     tap: Option<LineTap>,
     turns: ActiveTurns,
     connected: watch::Sender<bool>,
+    agents_changed: Arc<Notify>,
     mut adopted: Option<RunningAgent>,
     mut handoffs: Handoffs,
+    computer: Option<Arc<Computer>>,
 ) {
     let mut backoff = reconnect_strategy();
     loop {
+        let mut lasted = None;
+        if adopted.is_none() {
+            adopted = start_ahead(&harness, &cwd);
+        }
         let dialed = tokio::select! {
-            dialed = tokio::time::timeout(CONNECT_TIMEOUT, link::dial(&gateway_url, &token)) => dialed,
+            dialed = tokio::time::timeout(DIAL_TIMEOUT, link::dial(&gateway_url, &token)) => dialed,
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;
@@ -123,6 +157,8 @@ async fn serve(
                     &turns,
                     adopted.take(),
                     &mut handoffs,
+                    computer.clone(),
+                    &agents_changed,
                 )
                 .await
                 {
@@ -138,9 +174,7 @@ async fn serve(
                     }
                 }
                 connected.send_replace(false);
-                if started.elapsed() >= MAX_RECONNECT_DELAY {
-                    backoff = reconnect_strategy();
-                }
+                lasted = Some(started.elapsed());
             }
             Ok(Err(error)) => {
                 if !worth_redialing(&error) {
@@ -152,7 +186,7 @@ async fn serve(
             Err(_) => tracing::warn!("runtime connection timed out; reconnecting"),
         }
         tokio::select! {
-            () = tokio::time::sleep(backoff.next().unwrap_or(MAX_RECONNECT_DELAY)) => {}
+            () = tokio::time::sleep(redial_delay(lasted, &mut backoff)) => {}
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;
@@ -161,8 +195,23 @@ async fn serve(
     }
 }
 
+/// Start the agent while the runtime dials, so a session that arrives with
+/// the connection (a computer's first prompt) does not also wait for the
+/// agent's own startup: a Node adapter takes a quarter of a second or more.
+/// It stays ready across failed dials. A failed start is left to the bridge,
+/// which starts it again and reports why it could not.
+fn start_ahead(harness: &Harness, cwd: &Path) -> Option<RunningAgent> {
+    let _span = tracing::info_span!("macrod.agent.start_ahead").entered();
+    harness::agent_process(harness, cwd)
+        .start()
+        .inspect_err(
+            |error| tracing::warn!(error = ?error, "could not start the agent ahead of the dial"),
+        )
+        .ok()
+}
+
 /// Answer a handoff that arrived while no bridge was relaying: only an agent
-/// adopted and not yet connected is running.
+/// adopted or started ahead, and not yet connected, is running.
 #[cfg(unix)]
 fn answer_between_bridges(
     reply: harness::HandoffRequest,
@@ -172,7 +221,7 @@ fn answer_between_bridges(
     let handed = adopted.and_then(|agent| {
         agent
             .hand_off(turns.snapshot())
-            .inspect_err(|error| tracing::warn!(error = %error, "could not hand the agent off"))
+            .inspect_err(|error| tracing::warn!(error = ?error, "could not hand the agent off"))
             .ok()
     });
     let _ = reply.send(handed);
@@ -202,8 +251,16 @@ fn worth_redialing(error: &tungstenite::Error) -> bool {
         || status == tungstenite::http::StatusCode::TOO_MANY_REQUESTS
 }
 
-fn reconnect_strategy() -> ExponentialBackoff {
-    ExponentialBackoff::from_millis(2)
-        .factor(500)
-        .max_delay(MAX_RECONNECT_DELAY)
+/// How long to wait before the next dial, given how long the last
+/// connection lasted (`None` when the dial itself failed).
+fn redial_delay(lasted: Option<Duration>, backoff: &mut RetryDelays) -> Duration {
+    if lasted.is_some_and(|lasted| lasted >= HEALTHY_CONNECTION) {
+        backoff.reset();
+        return Duration::ZERO;
+    }
+    backoff.next_delay()
+}
+
+fn reconnect_strategy() -> RetryDelays {
+    RetryDelays::new(FIRST_RECONNECT_DELAY, MAX_RECONNECT_DELAY)
 }

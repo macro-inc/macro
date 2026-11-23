@@ -3,7 +3,7 @@
 use crate::public_mcp::markdown_images::{MarkdownImageResolver, tool_result_with_images};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
-use rmcp::model::{CallToolResult, Content, RawResource};
+use rmcp::model::{CallToolResult, ContentBlock, Resource};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -73,8 +73,8 @@ pub(crate) async fn tool_result_with_media<R: MarkdownImageResolver>(
             }
             MediaKind::Image => {}
             MediaKind::Video => {
-                result.content.push(Content::resource_link(
-                    RawResource::new(
+                result.content.push(ContentBlock::resource_link(
+                    Resource::new(
                         attachment.url,
                         format!("Channel video attachment {}", attachment.entity_id),
                     )
@@ -89,13 +89,13 @@ pub(crate) async fn tool_result_with_media<R: MarkdownImageResolver>(
     // Video links are ready before any image fetch is awaited. Resolve the
     // bounded image batch concurrently, retaining attachment order in the output.
     for (attachment, image) in join_all(image_resolutions).await.into_iter().flatten() {
-        result.content.push(Content::text(format!(
+        result.content.push(ContentBlock::text(format!(
             "Channel image attachment {} ({})",
             attachment.entity_id, attachment.url,
         )));
         result
             .content
-            .push(Content::image(image.data, image.mime_type));
+            .push(ContentBlock::image(image.data, image.mime_type));
     }
     result
 }
@@ -106,24 +106,26 @@ fn canvas_render_result(mut value: Value) -> CallToolResult {
         .as_object_mut()
         .and_then(|object| object.remove("modelMedia"));
     let Some(Value::Array(images)) = media else {
-        return CallToolResult::error(vec![Content::text("Invalid Canvas image result")]);
+        return CallToolResult::error(vec![ContentBlock::text("Invalid Canvas image result")]);
     };
     if images.is_empty() || images.len() > 2 {
-        return CallToolResult::error(vec![Content::text("Invalid Canvas image count")]);
+        return CallToolResult::error(vec![ContentBlock::text("Invalid Canvas image count")]);
     }
     let mut content = Vec::with_capacity(images.len());
     for image in images {
         let Some(data) = image.get("data").and_then(Value::as_str) else {
-            return CallToolResult::error(vec![Content::text("Missing Canvas image data")]);
+            return CallToolResult::error(vec![ContentBlock::text("Missing Canvas image data")]);
         };
         if image["type"] != "image"
             || image["mediaType"] != "image/png"
             || data.len() > 4_000_000
             || !data.starts_with("iVBORw0KGgo")
         {
-            return CallToolResult::error(vec![Content::text("Invalid bounded Canvas PNG result")]);
+            return CallToolResult::error(vec![ContentBlock::text(
+                "Invalid bounded Canvas PNG result",
+            )]);
         }
-        content.push(Content::image(data, "image/png"));
+        content.push(ContentBlock::image(data, "image/png"));
     }
     // Keep the scene revision/crop/layout available to text-only clients without
     // duplicating image bytes into their context or structured JSON histories.

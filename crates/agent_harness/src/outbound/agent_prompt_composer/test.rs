@@ -59,6 +59,7 @@ async fn the_trigger_reaches_the_lexical_service_beside_the_people() {
             markdown: "The popover scrolls the page behind it.".to_owned(),
             status: Some("Todo".to_owned()),
             priority: None,
+            start: None,
             due: None,
             assignees: Vec::new(),
             project: Some(ProjectRef {
@@ -79,6 +80,12 @@ async fn the_trigger_reaches_the_lexical_service_beside_the_people() {
         .compose(
             "Work on the task",
             Some("Be brief."),
+            Some(&SessionBot {
+                id: bot_id::BotId::TEST_A,
+                name: "pickle".to_owned(),
+                handle: "pickle".to_owned(),
+                avatar_url: None,
+            }),
             Some(&PromptPeople {
                 owner: owner.clone(),
                 sender: Some(owner),
@@ -94,6 +101,11 @@ async fn the_trigger_reaches_the_lexical_service_beside_the_people() {
         serde_json::json!({
             "promptMarkdown": "Work on the task",
             "instructions": "Be brief.",
+            "agent": {
+                "id": format!("bot|{}", bot_id::BotId::TEST_A),
+                "name": "pickle",
+                "handle": "pickle"
+            },
             "owner": { "id": "macro|julia@example.com", "name": "julia@example.com" },
             "sender": { "id": "macro|julia@example.com", "name": "julia@example.com" },
             "currentTime": {
@@ -150,7 +162,7 @@ async fn a_prompt_without_a_trigger_sends_none() {
     .with_clock(afternoon_in_new_york);
 
     let composed = composer
-        .compose("Raw prompt", None, None, None)
+        .compose("Raw prompt", None, None, None, None)
         .await
         .unwrap();
 

@@ -677,6 +677,33 @@ fn auto_accept_cancels_a_request_without_an_allow_option() {
 }
 
 #[test]
+fn a_withdrawn_bypass_holds_the_next_request_open() {
+    let mut machine = live_machine_under(PermissionPolicy::AutoAccept);
+
+    assert!(
+        machine
+            .handle(Input::SetPermissionPolicy(PermissionPolicy::Prompt))
+            .is_empty()
+    );
+    let effects = machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    assert!(matches!(effects[..], [Effect::Log { .. }]));
+}
+
+#[test]
+fn a_granted_bypass_answers_the_next_request() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+
+    machine.handle(Input::SetPermissionPolicy(PermissionPolicy::AutoAccept));
+    let effects = machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    assert!(matches!(
+        permission_outcome(&effects[1], &permission_id(0)),
+        RequestPermissionOutcome::Selected(_)
+    ));
+}
+
+#[test]
 fn prompting_holds_the_request_open_and_only_logs_it() {
     let mut machine = live_machine_under(PermissionPolicy::Prompt);
     let effects = machine.handle(permission_request(permission_id(0), allow_or_reject()));

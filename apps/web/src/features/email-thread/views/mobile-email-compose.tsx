@@ -12,7 +12,7 @@ export function MobileEmailCompose(props: {
 
   const replyInfo = createMemo(() => {
     const messageId = context.mobileReplyComposer.messageId();
-    if (!messageId || !context.permissions().isOwner) return;
+    if (!messageId || !context.permissions().canReply) return;
 
     const replyingTo = context.messages
       .unfiltered()

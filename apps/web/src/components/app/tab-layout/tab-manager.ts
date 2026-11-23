@@ -417,6 +417,16 @@ export function createTabManager(options: TabManagerOptions) {
     activeTabId,
     ...layers,
 
+    /**
+     * Which tab a block mounting now belongs to, so each tab gets its own
+     * instance of a shared entity. The first tab keeps the unscoped blocks that
+     * were already mounted when tabs turned on.
+     */
+    blockScope(): string | undefined {
+      const live = liveTabId();
+      return live === INITIAL_LAYER_ID ? undefined : live;
+    },
+
     /** Live title for the strip: the active tab reads the layout manager.
      * Undefined when the tab has no title yet; the strip renders the
      * translated placeholder. */
@@ -434,23 +444,6 @@ export function createTabManager(options: TabManagerOptions) {
 
     activateTab(id: DesktopTabId): void {
       fireAndForget(activateTab(id), SURFACE);
-    },
-
-    /**
-     * Brings up the background tab holding a parked split, focused on that
-     * split. False when no background tab holds it, so the split is live.
-     */
-    revealSplit(id: SplitId): boolean {
-      const holder = untrack(tabs).find(
-        (tab) =>
-          tab.id !== untrack(activeTabId) &&
-          parkedPanes(tab).some((pane) => (pane as string) === id)
-      );
-      if (holder?.stored.kind !== 'parked') return false;
-
-      setTab({ ...holder, stored: { ...holder.stored, activeSplit: id } });
-      fireAndForget(activateTab(holder.id), SURFACE);
-      return true;
     },
 
     closeTab(id: DesktopTabId): void {
@@ -513,6 +506,12 @@ export function createTabManager(options: TabManagerOptions) {
         // The intercepted navigation is still settling; activate after it.
         queueMicrotask(() => fireAndForget(activateTab(tab.id), SURFACE));
       }
+    },
+
+    /** The tab Cmd+`number` opens: the Nth, except 9, which is always the last. */
+    tabByNumber(number: number): DesktopTab | undefined {
+      const list = tabs();
+      return number === 9 ? list.at(-1) : list[number - 1];
     },
 
     activateNextTab(step: 1 | -1): void {

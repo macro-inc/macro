@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
+use macro_service_urls::GoogleCalendarApiUrl;
 use reqwest::{Client, RequestBuilder, StatusCode};
 use rootcause::Report;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -20,7 +21,7 @@ use crate::domain::{
         EventTime, EventTransparency, EventType, EventVisibility, GoogleEventSyncBatch,
         GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, GuestPolicy, OccurrenceRange,
         OutOfOfficeProperties, ProviderCalendar, ProviderCalendarTarget, ProviderEventSource,
-        ViewerCapabilities,
+        ViewerCapabilities, is_system_calendar,
     },
     ports::{
         CalendarMutationProvider, CalendarProviderError, CalendarProviderErrorKind,
@@ -30,7 +31,6 @@ use crate::domain::{
     },
 };
 
-const GOOGLE_CALENDAR_API: &str = "https://www.googleapis.com/calendar/v3";
 // Events.list excludes the lower end bound and ignores fractional seconds.
 // A full second of padding admits points at the requested inclusive start;
 // normalization still filters occurrences against the exact requested range.
@@ -68,21 +68,31 @@ pub struct GoogleCalendarClient<G = UnmeteredGate> {
 impl GoogleCalendarClient<UnmeteredGate> {
     /// Construct an unmetered client using the application's HTTP client.
     pub fn new(client: Client) -> Self {
+        Self::with_gate(client, UnmeteredGate)
+    }
+
+    /// Construct an unmetered client for a given Google Calendar API base,
+    /// such as `crates/gmail_emulator`'s in a test.
+    pub fn new_with_url(client: Client, api_base: String) -> Self {
         Self {
             client,
             gate: UnmeteredGate,
-            api_base: GOOGLE_CALENDAR_API.into(),
+            api_base,
         }
     }
 }
 
 impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     /// Construct a client whose requests must pass the supplied quota gate.
+    ///
+    /// The API base is Google's unless `OVERRIDE_GOOGLE_CALENDAR_API_URL`
+    /// names another, and a process whose override cannot be read does not
+    /// start.
     pub fn with_gate(client: Client, gate: G) -> Self {
         Self {
             client,
             gate,
-            api_base: GOOGLE_CALENDAR_API.into(),
+            api_base: GoogleCalendarApiUrl::unwrap_new().to_string(),
         }
     }
 
@@ -384,7 +394,12 @@ async fn send_google<T: DeserializeOwned>(
 }
 
 fn provider_transport_error(error: reqwest::Error) -> CalendarProviderError {
-    CalendarProviderError::new(CalendarProviderErrorKind::Transient, format!("{error:?}"))
+    // The request URL names the calendar, and a primary calendar is named
+    // after its owner's address.
+    CalendarProviderError::new(
+        CalendarProviderErrorKind::Transient,
+        format!("{:?}", error.without_url()),
+    )
 }
 
 fn provider_response_error(
@@ -490,7 +505,10 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
 
     #[tracing::instrument(
         skip(self, access_token, context),
-        fields(provider_calendar_id = %context.target.provider_calendar_id),
+        fields(
+            calendar_id = %context.target.calendar_id,
+            system_calendar = is_system_calendar(&context.target.provider_calendar_id),
+        ),
         err
     )]
     async fn sync_events(
@@ -586,11 +604,12 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
         })
     }
 
-    #[tracing::instrument(skip(self, access_token, config))]
+    #[tracing::instrument(skip(self, access_token, provider_calendar_id, config))]
     async fn watch_calendar(
         &self,
         access_token: &str,
         email_link_id: Uuid,
+        calendar_id: Uuid,
         provider_calendar_id: &str,
         channel_id: Uuid,
         config: &GoogleWatchConfig,
@@ -748,7 +767,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             Err(error) => {
                 tracing::warn!(
                     error=?error,
-                    provider_calendar_id=%target.provider_calendar_id,
+                    calendar_id=%target.calendar_id,
                     provider_event_id,
                     "rejecting malformed changed Google Calendar series"
                 );
@@ -1071,7 +1090,7 @@ impl From<CalendarProviderError> for PatchFailure {
 impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> {
     #[tracing::instrument(
         skip(self, access_token, target, draft),
-        fields(provider_calendar_id = %target.provider_calendar_id),
+        fields(calendar_id = %target.calendar_id),
         err
     )]
     async fn create_event(
@@ -1156,7 +1175,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
 
     #[tracing::instrument(
         skip(self, access_token, target, patch),
-        fields(provider_calendar_id = %target.provider_calendar_id),
+        fields(calendar_id = %target.calendar_id),
         err
     )]
     async fn update_event(
@@ -1177,7 +1196,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
 
     #[tracing::instrument(
         skip(self, access_token, target, patch),
-        fields(provider_calendar_id = %target.provider_calendar_id),
+        fields(calendar_id = %target.calendar_id),
         err
     )]
     async fn update_event_instance(
@@ -1237,7 +1256,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
 
     #[tracing::instrument(
         skip(self, access_token, target),
-        fields(provider_calendar_id = %target.provider_calendar_id),
+        fields(calendar_id = %target.calendar_id),
         err
     )]
     async fn refresh_event(
@@ -1261,7 +1280,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
 
     #[tracing::instrument(
         skip(self, access_token, target),
-        fields(provider_calendar_id = %target.provider_calendar_id),
+        fields(calendar_id = %target.calendar_id),
         err
     )]
     async fn delete_event(
@@ -1276,7 +1295,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
 
     #[tracing::instrument(
         skip(self, access_token, target),
-        fields(provider_calendar_id = %target.provider_calendar_id),
+        fields(calendar_id = %target.calendar_id),
         err
     )]
     async fn delete_event_instance(
@@ -1329,7 +1348,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
 
     #[tracing::instrument(
         skip(self, access_token, target),
-        fields(provider_calendar_id = %target.provider_calendar_id),
+        fields(calendar_id = %target.calendar_id),
         err
     )]
     async fn truncate_recurring_event(
@@ -1397,7 +1416,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
 
     #[tracing::instrument(
         skip(self, access_token, target, actor),
-        fields(provider_calendar_id = %target.provider_calendar_id),
+        fields(calendar_id = %target.calendar_id),
         err
     )]
     async fn rsvp_event(
@@ -1459,7 +1478,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
 
     #[tracing::instrument(
         skip(self, access_token, target, actor, guests),
-        fields(provider_calendar_id = %target.provider_calendar_id),
+        fields(calendar_id = %target.calendar_id),
         err
     )]
     async fn add_attendees(
@@ -1878,15 +1897,15 @@ fn truncate_recurrence_lines(lines: &[String], cutoff: &EventStart) -> Vec<Strin
 /// the caller maps it to a reauth prompt rather than a retry.
 fn non_retryable_after_write(error: CalendarProviderError) -> CalendarProviderError {
     match error.kind() {
-        CalendarProviderErrorKind::Transient | CalendarProviderErrorKind::SyncTokenExpired => {
-            CalendarProviderError::new(
-                CalendarProviderErrorKind::Permanent,
-                format!(
-                    "Google Calendar applied the change but has not returned it yet, refresh to see it: {}",
-                    error.message()
-                ),
-            )
-        }
+        CalendarProviderErrorKind::Transient
+        | CalendarProviderErrorKind::SyncTokenExpired
+        | CalendarProviderErrorKind::Deferred => CalendarProviderError::new(
+            CalendarProviderErrorKind::Permanent,
+            format!(
+                "Google Calendar applied the change but has not returned it yet, refresh to see it: {}",
+                error.message()
+            ),
+        ),
         CalendarProviderErrorKind::Permanent
         | CalendarProviderErrorKind::ReauthRequired
         | CalendarProviderErrorKind::PushUnsupported => error,

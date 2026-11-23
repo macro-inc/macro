@@ -1,7 +1,16 @@
+use contacts::domain::list_writes::ListWritesGate;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
+use feature_flags::outbound::posthog::PostHogFeatureFlags;
 
 use crate::{config::Config, service::s3::S3};
+use account_manager::{
+    domain::service::AccountManagerServiceImpl,
+    inbound::axum_router::AccountManagerRouterState,
+    outbound::{
+        dm_delivery::DmAccountManagerDelivery, pg_account_manager_repo::PgAccountManagerRepo,
+    },
+};
 use axum::extract::FromRef;
 use bots::{
     domain::service::BotServiceImpl,
@@ -178,6 +187,20 @@ use webhook::{
 /// Event broker shared by DSS services.
 pub(crate) type DssEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
+/// The notification service behind the GraphQL mutations that change a
+/// notification's state. Unlike [`ai_tools::ToolNotificationService`], it
+/// publishes each change, so the viewer's other sessions and the server's
+/// own live feeds and unread counts hear a read or a done made here.
+pub(crate) type GraphqlNotificationWriter =
+    notification::domain::service::NotificationReaderService<
+        notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+        ai_tools::ToolNotificationQueue,
+        ai_tools::NoOpSnsEndpointManager,
+        notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher<
+            DssEventBroker,
+        >,
+    >;
+
 /// CRM service for DSS — no-op resolver since DSS doesn't populate.
 pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
     crm::outbound::companies_repo::CompaniesRepositoryImpl,
@@ -213,6 +236,13 @@ pub(crate) type DssPipelineState = crm::inbound::pipelines::PipelineRouterState<
     AuthorizationService,
 >;
 
+pub(crate) type DssPipelineWorkflowState =
+    crm::inbound::pipeline_workflows::PipelineWorkflowRouterState<
+        ai_tools::ToolPipelineWorkflows,
+        ai_tools::ToolCrmTransferService,
+        AuthorizationService,
+    >;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
@@ -223,7 +253,10 @@ pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
 pub(crate) type DssSoupService = SoupImpl<
     PgSoupRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
-    ReadonlyEmailPreviewAdapter<DssEmailService>,
+    crate::service::email_previews::ConsistentEmailPreviewReader<
+        ReadonlyEmailPreviewAdapter<DssEmailService>,
+        ReadonlyEmailPreviewAdapter<DssEmailService>,
+    >,
     ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>,
     call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     DssCrmService,
@@ -265,7 +298,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssEntityMutationService,
     FavoritesMutationServiceType,
     DssChannelService,
-    ai_tools::ToolNotificationService,
+    GraphqlNotificationWriter,
     Arc<ai_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
@@ -276,9 +309,11 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
 
 /// GraphQL activity reader over the Postgres activity log (readonly pool).
 pub(crate) type DssActivityReader = complete_graph::ActivityPortReader<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+    activity::domain::visible_reads::VisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
-        EntityAccessService,
+        activity::outbound::entity_access_audience::EntityAccessActivityAudience<
+            EntityAccessService,
+        >,
     >,
 >;
 
@@ -311,7 +346,7 @@ pub(crate) type DssCalendarJoinRequestService =
         calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
             NotificationIngressType,
         >,
-        crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh,
+        calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh,
     >;
 
 /// Calendar join-request router state.
@@ -471,6 +506,7 @@ pub(crate) type ProjectService = ProjectServiceImpl<
     ShaCountAdapter,
     EntityAccessManagementService,
     SqsProjectSearchIndexer<DssEventBroker>,
+    crate::outbound::filed_items::FiledItemsUnfilerAdapter,
     DssEventBroker,
 >;
 
@@ -500,7 +536,9 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
                     notification::outbound::withdrawal::PgNotificationWithdrawal,
                 >,
             >,
-            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            ContactsChannelDispatcher<
+                ListWritesGate<SqsContactsIngress<SqsContactsQueue>, PostHogFeatureFlags>,
+            >,
             DssEventBroker,
         >,
     >,
@@ -513,8 +551,12 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, ai_tools::PipedreamMcpAppCatalog>;
+pub(crate) type DssBotService = BotServiceImpl<
+    PgBotsRepo,
+    DssEventBroker,
+    DssHarnessService,
+    ai_tools::ConnectorsAppCatalog<connectors::Connectors>,
+>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -523,6 +565,7 @@ pub(crate) type DssBotsState =
 /// Type alias for the harnesses service wired into DSS.
 pub(crate) type DssHarnessService = harnesses::domain::service::HarnessServiceImpl<
     harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+    hosted_runtimes::outbound::pg::PgComputerAgents,
 >;
 
 /// Type alias for the harnesses router state.
@@ -642,9 +685,34 @@ pub(crate) type ChannelLabelsServiceType = ChannelLabelsServiceImpl<PgChannelLab
 pub(crate) type DssChannelLabelsState =
     ChannelLabelsRouterState<ChannelLabelsServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the time tracking service.
+pub(crate) type TimeTrackingServiceType = time_tracking::domain::service::TimeTrackingServiceImpl<
+    time_tracking::outbound::pg_time_repo::PgTimeTrackingRepository,
+    EntityAccessService,
+    time_tracking::outbound::kafka_events::BrokerTimeEntryEventPublisher<DssEventBroker>,
+    time_tracking::outbound::gateway_updates::GatewayTimeTrackingUpdates,
+>;
+
+/// Type alias for the time tracking router state.
+pub(crate) type DssTimeTrackingState = time_tracking::inbound::axum_router::TimeTrackingRouterState<
+    TimeTrackingServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 /// Type alias for the favorites router state.
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
+
+/// Type alias for the account manager service.
+pub(crate) type AccountManagerServiceType = AccountManagerServiceImpl<
+    PgAccountManagerRepo,
+    DmAccountManagerDelivery<DssChannelService, EntityAccessService>,
+>;
+
+/// Type alias for the account manager router state.
+pub(crate) type DssAccountManagerState =
+    AccountManagerRouterState<AccountManagerServiceType, AuthorizationService>;
 
 /// Type alias for the user API key service.
 pub(crate) type UserApiKeyServiceType = UserApiKeyServiceImpl<PgUserApiKeysRepo>;
@@ -662,11 +730,19 @@ pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterStat
     DatabasesServiceType,
     EntityAccessService,
     DssSoupService,
+    DssContactReads,
+    AuthorizationService,
+>;
+
+/// Contact reads that follow each viewer's `contacts-list-reads` flag between
+/// the legacy graph and the list-aware tables.
+pub(crate) type DssContactReads = contacts::domain::list_reads::FlaggedContactReads<
     contacts::domain::service::ContactsDomainService<
         contacts::outbound::repository::DbContactsRepository,
         Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
     >,
-    AuthorizationService,
+    contacts::outbound::repository::DbContactsRepository,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 
 /// Type alias for the databases router state.
@@ -812,6 +888,14 @@ pub(crate) type InitiativeServiceType =
 pub(crate) type DssInitiativeState =
     InitiativeRouterState<InitiativeServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the initiative history router state.
+pub(crate) type DssInitiativeActivityState =
+    initiative::inbound::axum_router::InitiativeActivityRouterState<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        EntityAccessService,
+        AuthorizationService,
+    >;
+
 /// Type alias for the collab-surface service.
 pub(crate) type CollabSurfaceServiceType = collab_surface::outbound::PgCollabSurfaceService<
     forms::outbound::collaborative_layout::RepositoryFormIds<
@@ -895,8 +979,11 @@ pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
 /// Type alias for the service backing the webhook-event SSE endpoint.
-pub(crate) type DssSseStreamService =
-    WebhookEventStreamServiceImpl<EntityAccessService, PgWebhookRepo>;
+pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
+    EntityAccessService,
+    PgWebhookRepo,
+    crate::outbound::stream_contacts::ContactsStreamChecker<DssContactReads>,
+>;
 
 /// Type alias for the webhook-event SSE router state.
 pub(crate) type DssSseStreamState =
@@ -914,6 +1001,14 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
+    /// Each caller's unified search lane, shared by both search mounts.
+    pub search_lanes: Arc<search_service::SearchLanes>,
+    /// The search allowance each account's user API keys share, in Redis.
+    pub api_key_search_buckets: Arc<dyn search_service::SearchTokenBuckets>,
+    pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
+    pub passwords_agent_state:
+        passwords::inbound::agent_router::AgentRouterState<AuthorizationService>,
     pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,
@@ -928,32 +1023,49 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
+    pub agent_session_activity_subscriptions: complete_graph::AgentSessionActivitySubscriptions,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub graphql_notification_writer: Arc<GraphqlNotificationWriter>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
     pub channel_labels_state: DssChannelLabelsState,
+    #[from_ref(skip)]
+    pub channel_sections_state: DssChannelLabelsState,
+    pub time_tracking_state: DssTimeTrackingState,
     pub user_api_key_state: DssUserApiKeyState,
+    pub account_manager_state: DssAccountManagerState,
     pub reminders_state: DssRemindersState,
     pub access_requests_state: AccessRequestsState,
     pub slack_state: DssSlackState,
     pub external_chat_state: crate::external_chat::State,
     pub initiative_state: DssInitiativeState,
+    pub initiative_activity_state: DssInitiativeActivityState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_time_tracking_context: graphql_time_tracking::TimeTrackingGraphqlContext,
     pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
+    pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
+    pub graphql_registered_work_context: complete_graph::RegisteredWorkGraphqlContext,
     pub graphql_notification_inbox_context: complete_graph::NotificationInboxGraphqlContext,
+    pub graphql_active_notification_ids_context:
+        complete_graph::ActiveNotificationIdsGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
     /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.
     pub email_focus_reader: Arc<dyn complete_graph::EmailFocusReader>,
     pub graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader,
+    /// The Soup lists with their channels read from the primary, for pages
+    /// that ask `channelReads: PRIMARY`.
+    pub graphql_primary_channel_soup: graphql_soup::PrimaryChannelSoup<
+        <DssGraphqlSoupSchema as complete_graph::SoupSchemaService>::Service,
+    >,
     pub graphql_soup_item_loader: graphql_soup::SoupItemDataLoader,
     pub databases_state: DssDatabasesState,
     pub sql_state: DssSqlState,
@@ -968,6 +1080,9 @@ pub(crate) struct ApiContext {
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
+    /// The saved-view service behind GraphQL, the REST definitions routes and
+    /// the legacy `/saved_views` routes.
+    pub saved_views: Arc<crate::service::saved_views::DssSavedViewService>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub sync_sessions: sync_router::session::SyncSessionFactory,
     pub system_properties_service: Arc<SystemPropertiesService>,
@@ -1007,6 +1122,7 @@ pub(crate) struct ApiContext {
     pub crm_state: DssCrmState,
     pub owned_purge_state: DssOwnedPurgeState,
     pub pipeline_state: DssPipelineState,
+    pub pipeline_workflow_state: DssPipelineWorkflowState,
 }
 
 env_var! {
@@ -1037,6 +1153,7 @@ impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
         SearchHandlerState {
             db: ctx.readonly_db.clone(),
+            crm_db: ctx.db.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),
@@ -1053,7 +1170,16 @@ impl From<&ApiContext> for SearchHandlerState {
             calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
+            term_matching_rollout: ctx.search_term_matching.clone(),
+            search_lanes: ctx.search_lanes.clone(),
+            api_key_search_buckets: ctx.api_key_search_buckets.clone(),
         }
+    }
+}
+
+impl FromRef<ApiContext> for crate::api::saved_views::definitions::SavedViewDefinitionsState {
+    fn from_ref(ctx: &ApiContext) -> Self {
+        Self(ctx.saved_views.clone())
     }
 }
 

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET LOCAL max_parallel_workers_per_gather = 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9ff45f517b07295a9c55ad6a2328696894b3a06dec33a464283cd2cb581c70f3"
+}

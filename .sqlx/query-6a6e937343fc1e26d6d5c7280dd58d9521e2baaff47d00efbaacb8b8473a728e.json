@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id, share_with_team)\n            VALUES (\n                $1, $2, $3, $4, $5,\n                (SELECT c.channel_type NOT IN ('direct_message', 'private') FROM comms_channels c WHERE c.id = $2)\n            )\n            ON CONFLICT (channel_id) DO NOTHING\n            RETURNING id, channel_id, room_name, created_by, created_at, egress_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "room_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "egress_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "6a6e937343fc1e26d6d5c7280dd58d9521e2baaff47d00efbaacb8b8473a728e"
+}

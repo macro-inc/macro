@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   redactLinkTokenProperties,
   redactLinkTokens,
+  redactPrivatePageTokens,
   telemetryUrl,
 } from './telemetryUrl';
 
@@ -61,6 +62,39 @@ describe('meeting URL telemetry', () => {
       })
     ).toEqual({
       $current_url: 'https://macro.com/app/team-invite?link=:inviteToken',
+    });
+  });
+
+  it.each([
+    [
+      'https://auth.macro.com/session/login/fake-session-code',
+      'https://auth.macro.com/session/login/:sessionCode',
+    ],
+    [
+      'https://macro.com/app/login?token=fake-session-code&signed_up=true',
+      'https://macro.com/app/login?token=:sessionCode&signed_up=true',
+    ],
+    [
+      'tauri://localhost/#/login?signed_up=true&token=fake-session-code',
+      'tauri://localhost/#/login?signed_up=true&token=:sessionCode',
+    ],
+    [
+      '/app/login?redirect=%2Fwelcome%3Ftoken%3Dfake-session-code',
+      '/app/login?redirect=%2Fwelcome%3Ftoken%3D:sessionCode',
+    ],
+    ['/app/login?access_token=kept', '/app/login?access_token=kept'],
+  ])('redacts a sign-in session code in %s', (input, expected) => {
+    expect(redactLinkTokens(input)).toBe(expected);
+  });
+
+  it('reports sign-in return pages instead of treating them as private', () => {
+    const page = '/#/login?token=fake-session-code&signed_up=true';
+    expect(redactPrivatePageTokens(page)).toBe(page);
+    expect(
+      redactLinkTokenProperties({ $current_url: `tauri://localhost${page}` })
+    ).toEqual({
+      $current_url:
+        'tauri://localhost/#/login?token=:sessionCode&signed_up=true',
     });
   });
 

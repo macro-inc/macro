@@ -7,6 +7,7 @@ import {
   useIsNestedBlock,
 } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockFileSignal, blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
@@ -14,8 +15,9 @@ import { useSearchParams } from '@solidjs/router';
 import { Show } from 'solid-js';
 import type { CanvasView } from '../core/view';
 import type { CanvasData } from '../definition';
+import { CanvasHeader } from '../views/canvas-header';
+import { MobileCanvasHeader } from '../views/mobile/canvas-header';
 import { CanvasDocument, type CanvasDocumentMethods } from './CanvasDocument';
-import { TopBar } from './TopBar';
 
 export type BlockCanvasProps = {
   view?: CanvasView;
@@ -64,7 +66,14 @@ export default function BlockCanvas(props: BlockCanvasProps) {
                   <SidePanel.Layout floating>
                     <FileSidePanelSections />
                     <div class="flex size-full min-w-0 flex-col overflow-hidden">
-                      <TopBar state={state} />
+                      <div>
+                        <Show
+                          when={isTouchDevice()}
+                          fallback={<CanvasHeader state={state} />}
+                        >
+                          <MobileCanvasHeader state={state} />
+                        </Show>
+                      </div>
                       {content}
                     </div>
                   </SidePanel.Layout>

@@ -7,10 +7,11 @@ import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { describe, expect, it, vi } from 'vitest';
 import { EMAIL_TAB_IDS } from '../constants';
-import type { EmailTab } from '../types';
+import type { EmailTab, EmailViewConditions } from '../types';
 import {
   buildEmailQuery,
   type EmailQueryContext,
+  type EmailSavedViewScope,
   emailViewForTab,
 } from './email-query';
 import { groupEmailEntitiesByDate } from './email-results';
@@ -302,13 +303,111 @@ describe('buildEmailQuery', () => {
     );
   });
 
-  it('leaves attachment facets to the client', () => {
+  it('leaves attachment facets to the client on built-in tabs', () => {
     const plain = buildEmailQuery(contextFor()).body;
     const withAttachments = buildEmailQuery(
       contextFor({ facets: { attachments: ['attachment-pdf'] } })
     ).body;
 
     expect(withAttachments).toEqual(plain);
+  });
+
+  describe('saved views', () => {
+    const scope = (
+      overrides: Partial<EmailViewConditions> = {}
+    ): EmailSavedViewScope => ({
+      conditions: {
+        participants: [],
+        participantFields: ['from', 'to', 'cc'],
+        subject: [],
+        starred: false,
+        ...overrides,
+      },
+    });
+
+    it('matches any chosen person in any chosen field over GraphQL', () => {
+      const args = buildEmailQuery(
+        contextFor({
+          savedView: scope({
+            participants: [
+              { type: 'address', email: 'Me@Example.com' },
+              { type: 'domain', domain: 'example.org' },
+            ],
+            participantFields: ['to', 'cc'],
+          }),
+        })
+      );
+      const tree = serialize(
+        makeGraphqlSoupInput(args).initial?.filters?.emailFilter
+      );
+
+      expect(args.transport).toBeUndefined();
+      expect(args.body.emailView).toBe('all');
+      for (const direction of ['recipient', 'cc']) {
+        expect(tree).toContain(
+          serialize({
+            literal: { [direction]: { complete: 'me@example.com' } },
+          })
+        );
+        expect(tree).toContain(
+          serialize({ literal: { [direction]: { domain: 'example.org' } } })
+        );
+      }
+      expect(tree).not.toContain('sender');
+      expect(tree).toContain(serialize({ literal: { shared: 'EXCLUDE' } }));
+    });
+
+    it('matches nothing for people of a kind it does not know, not every thread', () => {
+      const unknown = JSON.parse('{"type":"team","id":"later"}');
+      const args = buildEmailQuery(
+        contextFor({ savedView: scope({ participants: [unknown] }) })
+      );
+
+      expect(serialize(args.body.ef)).toContain(
+        serialize({ l: { ThreadId: NIL } })
+      );
+    });
+
+    it('sends subjects, recency, starred, and attachments to the server', () => {
+      const args = buildEmailQuery(
+        contextFor({
+          facets: { attachments: ['attachment-pdf', 'attachment-document'] },
+          savedView: {
+            ...scope({ subject: ['FYI', 'Heads up'], starred: true }),
+            receivedSince: '2026-10-27T00:00:00.000Z',
+          },
+        })
+      );
+      const ef = serialize(args.body.ef);
+
+      expect(ef).toContain(serialize({ l: { Subject: 'FYI' } }));
+      expect(ef).toContain(serialize({ l: { Subject: 'Heads up' } }));
+      expect(ef).toContain(serialize({ l: { Attachment: 'pdf' } }));
+      expect(ef).toContain(serialize({ l: { Attachment: 'document' } }));
+      expect(ef).toContain('2026-10-27T00:00:00.000Z');
+      expect(args.body.favorites_only).toBe(true);
+    });
+
+    it('keeps 100 people below the ingress recursion limit', () => {
+      const participants = Array.from({ length: 100 }, (_, index) => ({
+        type: 'address' as const,
+        email: `person${index}@example.com`,
+      }));
+      const args = buildEmailQuery(
+        contextFor({
+          savedView: scope({
+            participants,
+            participantFields: ['from', 'to', 'cc', 'bcc'],
+          }),
+        })
+      );
+      const depth = (node: unknown): number =>
+        node && typeof node === 'object'
+          ? 1 + Math.max(0, ...Object.values(node).map(depth))
+          : 0;
+
+      expect(depth(args.body.ef)).toBeLessThan(40);
+    });
   });
 
   it('refines by selected tags as a property filter', () => {
@@ -414,21 +513,30 @@ describe('buildEmailSearchRequest', () => {
     expect(filtersFor('all')).toEqual({});
   });
 
-  it('leaves Drafts and Sent search unscoped', () => {
+  it('scopes Drafts and Sent search to their views, like the list', () => {
     const filtersFor = (tab: EmailTab) =>
       requestFor({ tab }).filters.email_filters;
 
-    // Macro-composed drafts are unindexed and unlabeled; the client trims
-    // both tabs' results instead (see tabFilters).
-    expect(filtersFor('drafts')).toEqual({});
-    expect(filtersFor('sent')).toEqual({});
+    expect(filtersFor('drafts')).toEqual({ view: 'drafts' });
+    expect(filtersFor('sent')).toEqual({ view: 'sent' });
   });
 
-  it('excludes shared threads from archived search', () => {
+  it('searches archived mail as done and unshared, like the list', () => {
     const filtersFor = (tab: EmailTab) =>
       requestFor({ tab }).filters.email_filters;
 
-    expect(filtersFor('archived')).toEqual({ shared: 'exclude' });
+    expect(filtersFor('archived')).toEqual({ shared: 'exclude', done: true });
+  });
+
+  it('matches nothing when Archived is narrowed to mail not done', () => {
+    expect(
+      requestFor({ tab: 'archived', facets: { done: ['not-done'] } }).filters
+        .email_filters?.email_thread_ids
+    ).toEqual([NIL]);
+    expect(
+      requestFor({ tab: 'archived', facets: { done: ['done'] } }).filters
+        .email_filters
+    ).toEqual({ shared: 'exclude', done: true });
   });
 
   it('restricts to the selected inboxes', () => {
@@ -439,36 +547,37 @@ describe('buildEmailSearchRequest', () => {
     expect(none).toEqual({ link_ids: [NIL] });
   });
 
-  it('maps email read independently of notification state selections', () => {
+  it('maps read status and done to the thread states the list filters by', () => {
     const filters = requestFor({
       facets: { read: ['unread'], done: ['not-done'] },
     }).filters.email_filters;
 
-    expect(filters).toEqual({
-      is_read: false,
-      notification_filters: { states: ['unseen', 'seen'] },
-    });
+    expect(filters).toEqual({ is_read: false, done: false });
     expect(
       requestFor({ facets: { read: ['read'] } }).filters.email_filters
     ).toEqual({ is_read: true });
     expect(
       requestFor({ facets: { read: ['read'], done: ['done'] } }).filters
         .email_filters
-    ).toEqual({
-      is_read: true,
-      notification_filters: { states: ['done'] },
-    });
+    ).toEqual({ is_read: true, done: true });
   });
 
-  it('maps the calendar facet and ignores attachment facets', () => {
+  it('maps the calendar facet and the attachment kinds', () => {
     const filters = requestFor({
       facets: {
         calendar: ['has-calendar-invite'],
-        attachments: ['attachment-pdf'],
+        attachments: ['attachment-pdf', 'attachment-image', 'attachment-pdf'],
       },
     }).filters.email_filters;
 
-    expect(filters).toEqual({ calendar_only: true });
+    expect(filters).toEqual({
+      calendar_only: true,
+      attachments: ['pdf', 'image'],
+    });
+    expect(
+      requestFor({ facets: { attachments: ['attachment-document'] } }).filters
+        .email_filters
+    ).toEqual({ attachments: ['document'] });
   });
 
   it('sends selected tags as an entity-wide filter', () => {

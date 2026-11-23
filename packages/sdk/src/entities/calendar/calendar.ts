@@ -11,7 +11,13 @@ import { MacroEntity } from '../entity';
  * handle loads its detail by listing the caller's calendars and matching on id.
  */
 export class Calendar extends MacroEntity<VisibleCalendar> {
-  /** Set whether this calendar contributes to the caller's availability. */
+  /**
+   * Set whether this calendar contributes to the caller's availability.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async setContributesToAvailability(
     contributesToAvailability: boolean,
   ): Promise<void> {
@@ -59,8 +65,9 @@ export class Calendar extends MacroEntity<VisibleCalendar> {
    * can hold that on someone else's calendar, so it does not mean it is theirs. */
   readonly isWritable = this.field('isWritable');
 
-  /** Whether this calendar counts toward the caller's busy time: their
-   * setting, by default only the primary calendars of inboxes they own. */
+  /** Whether this calendar counts toward the caller's busy time: their Busy
+   * switch in Settings → Calendar, on for every calendar until they turn it
+   * off. Booking links, team availability and agents all read it. */
   readonly contributesToAvailability = this.field('contributesToAvailability');
 
   /** Whether this is a subscribed system calendar (holidays, birthdays). */

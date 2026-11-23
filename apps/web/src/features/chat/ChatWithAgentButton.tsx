@@ -1,6 +1,7 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
@@ -10,12 +11,9 @@ import {
 } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  enableChatV3Agents,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
+import { buildMentionMarkdownString } from '@macro-inc/lexical-core/utils/mentions';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ButtonSize } from '@ui';
 import { createSignal } from 'solid-js';
@@ -32,9 +30,13 @@ type ChatWithAgentEntity =
       blockParams?: Record<string, string>;
     }
   | { type: 'project'; id: string; name: string }
-  | { type: 'channel'; id: string; name: string; channelType: ChannelType };
+  | { type: 'chat'; id: string; name: string }
+  | { type: 'channel'; id: string; name: string; channelType: ChannelType }
+  | { type: 'pr'; id: string; url: string };
 
-function buildMention(entity: ChatWithAgentEntity): ChatAttachmentMention {
+type ChatWithAgentAttachment = Exclude<ChatWithAgentEntity, { type: 'pr' }>;
+
+function buildMention(entity: ChatWithAgentAttachment): ChatAttachmentMention {
   const blockName =
     entity.type === 'document'
       ? fileTypeToBlockName(entity.fileType, true)
@@ -76,8 +78,7 @@ async function createAndOpenAgent(seed: {
     seed.input !== undefined &&
     !seed.message &&
     !seed.model &&
-    !seed.instructions &&
-    isFeatureEnabled(enableChatV3Agents)
+    !seed.instructions
   ) {
     openAgentComposer(manager, !seed.replaceSplit, {
       draft: seed.input,
@@ -114,9 +115,32 @@ async function createAndOpenAgent(seed: {
   return true;
 }
 
-export async function openChatWithAgent(entity: ChatWithAgentEntity) {
-  const input = `${chatAttachmentMentionToMarkdown(buildMention(entity))} `;
-  return createAndOpenAgent({ input });
+function entityMentionMarkdown(entity: ChatWithAgentEntity): string {
+  if (entity.type === 'pr') {
+    // The Macro id lets the agent read the diff through the SDK.
+    return buildMentionMarkdownString({
+      type: 'pr',
+      id: entity.id,
+      url: entity.url,
+      label: '',
+    });
+  }
+
+  return chatAttachmentMentionToMarkdown(buildMention(entity));
+}
+
+/** Prefixes a read-only chat's mention so the agent knows to read that chat and carry on. */
+const CONTINUE_CHAT_PREFIX = 'Continue this chat: ';
+
+export async function openChatWithAgent(
+  entity: ChatWithAgentEntity,
+  /** Typed after the mention, unsent, for the person to finish. */
+  request = ''
+) {
+  const mention = `${entityMentionMarkdown(entity)} `;
+  const input =
+    entity.type === 'chat' ? `${CONTINUE_CHAT_PREFIX}${mention}` : mention;
+  return createAndOpenAgent({ input: `${input}${request}` });
 }
 
 /** Open a new agent session with `initialInput` unsent, on `model`, told `instructions` privately. */
@@ -164,6 +188,7 @@ export function ChatWithAgentButton(props: {
   label?: string;
   disabled?: boolean;
   grouped?: boolean;
+  size?: ButtonSize;
 }) {
   const [opening, setOpening] = createSignal(false);
   async function open() {
@@ -178,6 +203,7 @@ export function ChatWithAgentButton(props: {
   return (
     <HeaderActionButton
       grouped={props.grouped}
+      size={props.size}
       tooltip={props.label ?? 'Chat with Agent'}
       label={props.label ?? 'Chat'}
       icon={
@@ -200,8 +226,8 @@ export function AskMacroButton(props: {
       grouped={props.grouped}
       size={props.size}
       onClick={() => openChatWithAgent(props.entity)}
-      tooltip="Ask Macro"
-      label="Ask Macro"
+      tooltip={t('entityActions.askMacro')}
+      label={t('entityActions.askMacro')}
       icon={
         <AgentIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       }

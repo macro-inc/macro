@@ -4,6 +4,7 @@
 
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import type { IUser } from '@core/user/types';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
@@ -31,21 +32,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('./use-open-event-email', () => ({ useOpenEventEmail: () => vi.fn() }));
-vi.mock('@core/user', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/user')>()),
-  useContacts: () => () => [
-    {
-      id: 'macro|ada@example.com',
-      email: 'ada@example.com',
-      name: 'Ada Lovelace',
-    },
-    {
-      id: 'macro|grace@example.com',
-      email: 'grace@example.com',
-      name: 'Grace Hopper',
-    },
-  ],
-}));
 vi.mock('@queries/calendar/mutations', () => ({
   useInviteCalendarEventGuestsMutation: () => ({ mutateAsync: mocks.invite }),
   isGuestInviteRefused: (error: unknown) =>
@@ -66,11 +52,13 @@ vi.mock('@property/editors/selectors/PropertyEntitySelector', async () => {
     PropertyEntitySelector: (props: {
       config: {
         placeholder: string;
-        users?: () => { id: string; name: string }[];
+        users?: () => IUser[];
+        additionalUsers?: () => IUser[];
         excludedIds?: () => ReadonlySet<string>;
       };
       selectedOptions: () => Set<string>;
       setSelectedOptions: (ids: Set<string>) => void;
+      onUserSelected?: (user: IUser, custom: boolean) => void;
       onClose?: () => void;
     }) => {
       const root = document.createElement('div');
@@ -86,17 +74,36 @@ vi.mock('@property/editors/selectors/PropertyEntitySelector', async () => {
       createRenderEffect(() => {
         const excluded = props.config.excludedIds?.() ?? new Set();
         suggestions.replaceChildren(
-          ...(props.config.users?.() ?? [])
+          ...(
+            props.config.users?.() ?? [
+              ...new Map(
+                [
+                  {
+                    id: 'macro|ada@example.com',
+                    email: 'ada@example.com',
+                    name: 'Ada Lovelace',
+                  },
+                  {
+                    id: 'macro|grace@example.com',
+                    email: 'grace@example.com',
+                    name: 'Grace Hopper',
+                  },
+                  ...(props.config.additionalUsers?.() ?? []),
+                ].map((user) => [user.id, user])
+              ).values(),
+            ]
+          )
             .filter((user) => !excluded.has(user.id))
             .map((user) => {
               const option = document.createElement('button');
               option.type = 'button';
               option.textContent = `Suggest ${user.name}`;
-              option.addEventListener('click', () =>
+              option.addEventListener('click', () => {
+                props.onUserSelected?.(user, false);
                 props.setSelectedOptions(
                   new Set([...props.selectedOptions(), user.id])
-                )
-              );
+                );
+              });
               return option;
             })
         );

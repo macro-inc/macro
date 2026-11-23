@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO harnesses (\n            id, name, owner_user_id, created_by, computer_id, capabilities, capabilities_reported_at\n        )\n        VALUES (\n            $1, 'Build box', 'macro|owner@example.com', 'macro|owner@example.com', $2,\n            '{\"screen\": true, \"claude\": {\"status\": \"signed_in\", \"account_id\": \"acct-1\", \"account\": \"team@example.com\", \"expires_at\": \"2026-11-25T12:00:00Z\"}}',\n            '2026-11-01T12:01:00Z'\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ac17b832b8ce48630f8b76a6d1e837234ecda48475b6de3d20152f39d64702a7"
+}

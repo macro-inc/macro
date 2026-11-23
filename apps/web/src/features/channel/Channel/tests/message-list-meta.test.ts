@@ -39,6 +39,30 @@ const entries = (messages: MessageListItem[]) =>
   messages.map((message) => ({ type: 'message' as const, message }));
 
 describe('buildChannelMessageListMeta', () => {
+  it('keeps a call row apart from the messages around it', () => {
+    const first = createMessage('m1', '2026-02-20T09:00:00.000Z');
+    const call = createMessage('call', '2026-02-20T09:00:30.000Z');
+    const second = createMessage('m2', '2026-02-20T09:01:00.000Z');
+    const meta = buildChannelMessageListMeta(
+      [
+        { type: 'message', message: first },
+        { type: 'call', message: call },
+        { type: 'message', message: second },
+      ],
+      () => true,
+      true
+    );
+    expect(meta.call).toMatchObject({
+      index: 1,
+      isNewMessage: false,
+      isGroupedWithPrevious: false,
+    });
+    expect(meta.m2).toMatchObject({
+      previousTopLevelCreatedAt: '2026-02-20T09:00:30.000Z',
+      isGroupedWithPrevious: false,
+    });
+  });
+
   it('counts activity rows and breaks sender runs and rails at them', () => {
     const first = createMessage('m1', '2026-02-20T09:00:00.000Z');
     const second = createMessage('m2', '2026-02-20T09:01:00.000Z');

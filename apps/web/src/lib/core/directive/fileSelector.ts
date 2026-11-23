@@ -41,6 +41,11 @@ export function fileSelector(
   // Each click opens a picker on its own input. This setup can run again
   // while a picker is open (a Button's tooltip re-runs its ref when it opens
   // or closes), so the input must not be replaced or unhooked by a cleanup.
+  //
+  // The input stays in the document until the picker answers. WebKit drops
+  // the picker's result when it garbage-collects a detached input while the
+  // picker is open, which the iOS app's photo and file pickers give it time
+  // to do, so the picked files would vanish without an error.
   const clickInput = (e: MouseEvent) => {
     e.stopPropagation();
     const options = accessor();
@@ -61,7 +66,11 @@ export function fileSelector(
     }
     input.accept = acceptString;
     input.multiple = options?.multiple ?? false;
+    // Keep the input's own click away from document-level handlers.
+    input.addEventListener('click', (event) => event.stopPropagation());
+    input.addEventListener('cancel', () => input.remove());
     input.addEventListener('change', () => {
+      input.remove();
       // The control was removed while the picker was open.
       if (!element.isConnected) return;
       const validFiles = Array.from(input.files || []).filter(isFileTypeValid);
@@ -69,6 +78,7 @@ export function fileSelector(
         accessor()?.onSelect(validFiles);
       }
     });
+    document.body.append(input);
     input.click();
   };
 

@@ -66,3 +66,42 @@ fn team_bot_token_names_the_bot_actor_without_a_user() {
         ),
     );
 }
+
+#[tokio::test]
+async fn signed_document_grant_retains_invocation_attribution() {
+    let id = Uuid::now_v7();
+    let principal = CreationPrincipal::BotForUser {
+        bot: MACRO_AI_BOT_ID,
+        user: user(),
+    };
+    let token = agent_correlation::context::scope(Some(id), async {
+        encode_principal_permission_token(
+            &principal,
+            "doc-fixture".into(),
+            AccessLevel::Edit,
+            SECRET,
+        )
+        .unwrap()
+    })
+    .await;
+    assert_eq!(
+        decode_permission_token(&token, SECRET)
+            .unwrap()
+            .agent_correlation_id,
+        Some(id)
+    );
+    assert!(decode_permission_token(&token, "wrong-fixture-key").is_err());
+    let ordinary = encode_principal_permission_token(
+        &principal,
+        "doc-fixture".into(),
+        AccessLevel::Edit,
+        SECRET,
+    )
+    .unwrap();
+    assert_eq!(
+        decode_permission_token(&ordinary, SECRET)
+            .unwrap()
+            .agent_correlation_id,
+        None
+    );
+}

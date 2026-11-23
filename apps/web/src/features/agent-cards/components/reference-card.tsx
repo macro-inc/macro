@@ -7,17 +7,18 @@ import { formatDate } from '@core/util/date';
 import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
 import { isAccessiblePreviewItem } from '@queries/preview/types';
 import type { ItemType } from '@service-storage/client';
+import { Item } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { itemKind } from '../core/labels';
 import type { CardItemType } from '../core/types';
 import { Card, CardSingle } from './kit/card';
-import { Tile } from './kit/parts';
 
 /** The card types the preview service loads by id, and as what. */
 export type LoadableType = Exclude<CardItemType, 'calendar_event'>;
 
 export const PREVIEW_TYPES: Record<LoadableType, ItemType> = {
   document: 'document',
+  database: 'database',
   email_thread: 'email',
   project: 'project',
   channel: 'channel',
@@ -27,6 +28,7 @@ export const PREVIEW_TYPES: Record<LoadableType, ItemType> = {
 };
 
 const FALLBACK_ICONS: Record<Exclude<LoadableType, 'document'>, string> = {
+  database: 'database',
   email_thread: 'email',
   project: 'project',
   channel: 'channel',
@@ -57,12 +59,12 @@ export function OpenArrow() {
 }
 
 /**
- * One item as a card, from values already worked out: its tile, its name
+ * One item as a card, from values already worked out: its media, its name
  * and a line about it. Always 72 tall; the whole card opens the item when it
  * can be opened.
  */
 export function ReferenceCardView(props: {
-  tile: JSX.Element;
+  media: JSX.Element;
   title: string;
   meta: string;
   onOpen?: (event: MouseEvent) => void;
@@ -81,10 +83,10 @@ export function ReferenceCardView(props: {
       data-agent-card="reference"
     >
       <CardSingle
-        tile={props.tile}
+        media={props.media}
         title={props.title}
         struck={props.deleted}
-        meta={props.meta}
+        description={props.meta}
         trailing={
           <Show when={props.onOpen}>
             <OpenArrow />
@@ -96,18 +98,17 @@ export function ReferenceCardView(props: {
 }
 
 /**
- * One workspace item, loaded with the viewer's own access. Before the item
- * loads, and for a viewer who cannot open it, the card names its kind and
- * says why it cannot be opened - never what is inside.
+ * One workspace item, loaded with the viewer's own access: what a card or a
+ * row shows of it. Before the item loads, and for a viewer who cannot open
+ * it, the title is its kind and the meta says why it cannot be opened -
+ * never what is inside.
  */
-export function ReferenceCard(props: {
-  type: LoadableType;
-  id: string;
-  fileType?: string | null;
-}) {
+export function useReferenceItem(
+  props: () => { type: LoadableType; id: string; fileType?: string | null }
+) {
   const data = useItemPreviewData(() => ({
-    id: props.id,
-    type: PREVIEW_TYPES[props.type],
+    id: props().id,
+    type: PREVIEW_TYPES[props().type],
   }));
   const preview = () => data.item();
   const accessible = () => {
@@ -118,21 +119,21 @@ export function ReferenceCard(props: {
     const item = preview();
     return item.loading ? undefined : item.access;
   };
-  const fileType = () => accessible()?.fileType ?? props.fileType ?? undefined;
-  const kind = () => itemKind(props.type, fileType());
+  const fileType = () =>
+    accessible()?.fileType ?? props().fileType ?? undefined;
+  const kind = () => itemKind(props().type, fileType());
   const title = () => (accessible() ? data.name() : undefined) || kind();
   const meta = () => {
     if (missing() === 'no_access') return `${kind()} · You don't have access`;
     if (missing() === 'does_not_exist') return `${kind()} · Deleted`;
-    const owner =
-      props.type === 'email_thread' ? accessible()?.owner : undefined;
+    const isEmail = props().type === 'email_thread';
+    const owner = isEmail ? accessible()?.owner : undefined;
     const updatedAt = accessible()?.updatedAt;
     const updated = updatedAt ? formatDate(updatedAt) : undefined;
     return [
       kind(),
       owner,
-      updated &&
-        (props.type === 'email_thread' ? updated : `Updated ${updated}`),
+      updated && (isEmail ? updated : `Updated ${updated}`),
     ]
       .filter(Boolean)
       .join(' · ');
@@ -148,26 +149,40 @@ export function ReferenceCard(props: {
       event.shiftKey
     );
   };
+  const icon = (): EntityIconSelector =>
+    accessible()
+      ? data.targetType()
+      : fallbackIcon(props().type, props().fileType);
+  return {
+    title,
+    meta,
+    icon,
+    /** Opens the item; absent while it cannot be opened. */
+    open: () => (accessible() ? open : undefined),
+    muted: () => missing() === 'no_access' || missing() === 'does_not_exist',
+    deleted: () => missing() === 'does_not_exist',
+  };
+}
 
+/** One workspace item as a card; see {@link useReferenceItem}. */
+export function ReferenceCard(props: {
+  type: LoadableType;
+  id: string;
+  fileType?: string | null;
+}) {
+  const item = useReferenceItem(() => props);
   return (
     <ReferenceCardView
-      tile={
-        <Tile>
-          <EntityIcon
-            targetType={
-              accessible()
-                ? data.targetType()
-                : fallbackIcon(props.type, props.fileType)
-            }
-            size="sm"
-          />
-        </Tile>
+      media={
+        <Item.Media class="self-center">
+          <EntityIcon targetType={item.icon()} size="sm" />
+        </Item.Media>
       }
-      title={title()}
-      meta={meta()}
-      onOpen={accessible() ? open : undefined}
-      muted={missing() === 'no_access' || missing() === 'does_not_exist'}
-      deleted={missing() === 'does_not_exist'}
+      title={item.title()}
+      meta={item.meta()}
+      onOpen={item.open()}
+      muted={item.muted()}
+      deleted={item.deleted()}
     />
   );
 }

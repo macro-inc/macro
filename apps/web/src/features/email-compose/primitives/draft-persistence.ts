@@ -1,9 +1,14 @@
+import { Telemetry } from '@macro-inc/observability';
+import { ResultAsync } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type DeleteEmailDraft,
   DraftPersistRejected,
   type DraftSaveResult,
+  type EmailComposeFeedback,
+  type EmailDraftLifecycleState,
   type EmailDraftStorage,
+  type SentWorkingCopy,
 } from '../context/compose-capabilities';
 import type { EmailDraft } from '../core/email-draft';
 import type { LocalDraft } from '../core/local-draft';
@@ -15,6 +20,28 @@ export type DraftPersistence = ReturnType<typeof createDraftPersistence>;
 /** Sent from another device: the server outcome supersedes the local draft. */
 export const isAlreadySentRejection = (error: unknown) =>
   error instanceof DraftPersistRejected && error.code === 'DRAFT_ALREADY_SENT';
+
+/** Why a composer moved its text to a new draft instead of the one it edited. */
+export type KeptAsNewDraftReason =
+  | 'save-rejected'
+  | 'scheduled-elsewhere'
+  | 'sent-elsewhere'
+  | 'changed-elsewhere';
+
+/**
+ * A new draft beside a delivered one reads as a duplicate of the sent email,
+ * so every such move is recorded. Identity and counts only, never content.
+ */
+export function recordKeptAsNewDraft(
+  reason: KeptAsNewDraftReason,
+  draft: { draftId: string | undefined; unsavedEdits: number }
+): void {
+  Telemetry.warn('email_draft.kept_as_new', {
+    'email_draft.reason': reason,
+    'email_draft.draft_id': draft.draftId,
+    'email_draft.unsaved_edits': draft.unsavedEdits,
+  });
+}
 
 /**
  * A discard's delete. An already-sent verdict is not a failure: the reset
@@ -30,6 +57,86 @@ export async function deleteDraftForDiscard(
   } catch (error) {
     if (!isAlreadySentRejection(error)) throw error;
   }
+}
+
+/** What a composer knows of its draft once a save was refused as already sent. */
+export type SentDraft = {
+  type: 'sent';
+  threadId?: string;
+  sentCopy?: SentWorkingCopy;
+};
+
+type ReadDraftLifecycle = (identity: {
+  draftId: string;
+  threadId: string;
+  inboxId?: string;
+}) => Promise<EmailDraftLifecycleState | undefined>;
+
+/**
+ * Settles a draft whose save the server refused because another tab or
+ * device sent it, as a read that finds the draft sent is settled: `settle`
+ * keeps text the sent message lacks as a new draft (returning true) or
+ * leaves the draft. The draft is read first for the working copy a send
+ * from this browser carried. The refusal is the server's word that the
+ * draft was sent, so a failed read still settles it as sent: without the
+ * copy, text that looks unsaved is kept, never dropped.
+ */
+export function createAlreadySentSettlement(options: {
+  session: DraftSession;
+  read: ReadDraftLifecycle | undefined;
+  notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>;
+  /** The composer is gone, or a discard under way owns the draft. */
+  superseded(): boolean;
+  settle(sent: SentDraft): boolean;
+}) {
+  const { session, notices } = options;
+  // The epoch a copy kept after a refusal started at. Refused in turn before
+  // the server ever confirmed it, the copy would only be kept again, and
+  // again; its text stays in the editor instead.
+  let keptAt: number | undefined;
+  return async () => {
+    const draftId = session.draftId();
+    if (!draftId || options.superseded()) return;
+    if (
+      keptAt !== undefined &&
+      session.epoch() === keptAt + 1 &&
+      session.identity().kind !== 'server'
+    ) {
+      notices.reportError(
+        new Error('The server refused a kept draft as already sent')
+      );
+      return;
+    }
+    const epoch = session.epoch();
+    const threadId = session.threadId();
+    const read =
+      options.read && threadId
+        ? await ResultAsync.fromPromise(
+            options.read({ draftId, threadId, inboxId: session.inboxId() }),
+            (error) => error
+          )
+        : undefined;
+    if (read?.isErr()) notices.reportError(read.error);
+    // A discard, send or restore that settled the draft meanwhile stands,
+    // and so does a discard still under way. Each of those starts a new
+    // epoch; the server's ids for this draft arriving meanwhile do not.
+    if (
+      session.epoch() !== epoch ||
+      !session.alreadySent() ||
+      options.superseded()
+    )
+      return;
+    const observed = read?.isOk() ? read.value : undefined;
+    notices.feedback.alert(
+      'This scheduled email was sent. Your composer has been updated.'
+    );
+    const kept = options.settle(
+      observed?.type === 'sent'
+        ? observed
+        : { type: 'sent', threadId: session.threadId() }
+    );
+    keptAt = kept ? session.epoch() : undefined;
+  };
 }
 
 /**
@@ -62,16 +169,27 @@ export function createDraftPersistence(options: {
   /** A standalone compose mints its thread handle too; a reply saves into a known thread. */
   mintThreadHandle: boolean;
   localDraft?: Pick<LocalDraft, 'revision' | 'generation'>;
+  /** A save was refused as already sent; the session keeps the draft latched for the composer to settle. */
   onAlreadySent(): void;
 }) {
   const { session } = options;
   let localRevision = options.localDraft?.revision;
   let localGeneration = options.localDraft?.generation;
+  // Edits are counted by the caller. The newest local write records which edit
+  // its working-copy revision holds, so a server acknowledgement or a send of
+  // that revision can tell which edits it carried.
+  let lastLocalEdit:
+    | { edit: number; generation: string; revision: number }
+    | undefined;
+  // The newest edit a committed save put on the server.
+  let savedEdit = 0;
   let removal: Promise<void> = Promise.resolve();
   const mint = (draft: EmailDraft) => {
     if (session.draftId()) return;
     localRevision = undefined;
     localGeneration = undefined;
+    lastLocalEdit = undefined;
+    savedEdit = 0;
     session.dispatch({
       type: 'minted',
       draftId: uuidv7(),
@@ -81,10 +199,15 @@ export function createDraftPersistence(options: {
     });
   };
 
-  // The session records deterministic rejections (latch, or drop on
-  // already-sent); transport failures just reject and the next save may retry.
+  // The session latches deterministic rejections; an already-sent one also
+  // hands the draft to the composer, once. Transport failures just reject
+  // and the next save may retry.
   const recordRejection = (error: unknown, epoch: number) => {
-    if (!(error instanceof DraftPersistRejected) || session.isStale(epoch))
+    if (
+      !(error instanceof DraftPersistRejected) ||
+      session.isStale(epoch) ||
+      session.alreadySent()
+    )
       return;
     session.dispatch({ type: 'rejected', epoch, code: error.code });
     if (error.code === 'DRAFT_ALREADY_SENT') options.onAlreadySent();
@@ -96,14 +219,63 @@ export function createDraftPersistence(options: {
         ? { generation: localGeneration, revision: localRevision }
         : undefined;
     },
-    restored(local: Pick<LocalDraft, 'revision' | 'generation'> | undefined) {
+    /**
+     * The composer replaced its content with a restored draft as of `content`'s
+     * edit, or (without `content`) moved to a draft with no working copy.
+     */
+    restored(
+      local: Pick<LocalDraft, 'revision' | 'generation'> | undefined,
+      content?: { edit: number; persistence: 'committed' | 'queued' }
+    ) {
       localRevision = local?.revision;
       localGeneration = local?.generation;
+      lastLocalEdit =
+        local && content
+          ? {
+              edit: content.edit,
+              generation: local.generation,
+              revision: local.revision,
+            }
+          : undefined;
+      if (content?.persistence === 'committed') savedEdit = content.edit;
+    },
+    /** A save resolved as committed, or a delete completed, as of `edit`. */
+    saved(edit: number) {
+      savedEdit = Math.max(savedEdit, edit);
+    },
+    /**
+     * The server acknowledged the working copy. A save that rode the offline
+     * queue commits after its call returned, so this is how its edits count.
+     */
+    acknowledged(
+      local: Pick<LocalDraft, 'generation' | 'acknowledgedRevision'>
+    ) {
+      if (!lastLocalEdit) return;
+      if (local.generation !== lastLocalEdit.generation) return;
+      if (local.acknowledgedRevision < lastLocalEdit.revision) return;
+      savedEdit = Math.max(savedEdit, lastLocalEdit.edit);
+    },
+    /**
+     * How many edits up to `edit` no committed save holds and no send from
+     * this browser carried: the text that dropping the draft would lose. A
+     * send locks the working copy it captures, so it carries every edit this
+     * composer wrote to that generation.
+     */
+    unsavedEdits(edit: number, sentCopy?: SentWorkingCopy): number {
+      const sent =
+        sentCopy &&
+        lastLocalEdit?.generation === sentCopy.generation &&
+        lastLocalEdit.revision <= sentCopy.revision
+          ? lastLocalEdit.edit
+          : 0;
+      return Math.max(0, edit - Math.max(savedEdit, sent));
     },
     async saveLocally(input: {
       draft: EmailDraft | null;
       inboxId?: string;
       attachments: readonly DraftFormAttachment[];
+      /** The caller's edit counter for this snapshot. */
+      edit: number;
     }) {
       if (!options.drafts.saveLocalDraft) return;
       // The copy being deleted refuses edits. Address the draft the delete
@@ -124,7 +296,9 @@ export function createDraftPersistence(options: {
       if (identity.kind === 'none') return;
       const epoch = session.epoch();
       const local = await options.drafts.saveLocalDraft({
-        expectedRevision: localRevision,
+        // A composer that opened no working copy expects none: overwriting one
+        // another composer wrote would drop text it never saw.
+        expectedRevision: localRevision ?? 0,
         expectedGeneration: localGeneration,
         draft: {
           ...draft,
@@ -140,6 +314,11 @@ export function createDraftPersistence(options: {
       if (!session.isStale(epoch)) {
         localRevision = local.revision;
         localGeneration = local.generation;
+        lastLocalEdit = {
+          edit: input.edit,
+          generation: local.generation,
+          revision: local.revision,
+        };
       }
     },
     async retry() {
@@ -203,15 +382,7 @@ export function createDraftPersistence(options: {
       // never replay on its own — a doomed save would block the queue.
       if (!session.autosaveAllowed()) return;
       const previousThreadId = session.threadId();
-      if (!session.draftId()) {
-        session.dispatch({
-          type: 'minted',
-          draftId: uuidv7(),
-          threadId: options.mintThreadHandle
-            ? uuidv7()
-            : (input.draft.thread_db_id ?? undefined),
-        });
-      }
+      mint(input.draft);
       const identity = session.identity();
       const epoch = session.epoch();
       const confirmed = identity.kind === 'server' ? identity : undefined;

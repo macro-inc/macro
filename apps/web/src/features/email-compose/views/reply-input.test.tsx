@@ -41,10 +41,11 @@ it.each([
   { body: undefined, expected: '' },
   { body: null, expected: '' },
   { body: btoa('<p>Saved reply</p>'), expected: '<p>Saved reply</p>' },
+  { body: '', committed: true, expected: '' },
   { body: undefined, missing: true, expected: '<p>Seed quote</p>' },
 ])(
-  'restores authoritative reply HTML ($body, missing=$missing)',
-  async ({ body, text, missing, expected }) => {
+  'restores reply HTML and saved ID ($body, committed=$committed, missing=$missing)',
+  async ({ body, text, committed, missing, expected }) => {
     const context = createComposeContext();
     context.drafts.readDraft = async () =>
       missing
@@ -55,7 +56,7 @@ it.each([
               body_html_sanitized: body,
               body_text: text,
             }),
-            persistence: 'queued',
+            persistence: committed ? 'committed' : 'queued',
           };
     render(() => (
       <ErrorBoundary fallback={<div>Controller captured</div>}>
@@ -68,6 +69,7 @@ it.each([
           session={{
             thread: () => undefined,
             recipientOptions: () => [],
+            ownsThreadInbox: () => true,
             isPersonalReply: () => false,
             onDraftRemoved() {},
             exitToThread: () => false,
@@ -80,6 +82,9 @@ it.each([
       expect(capture).toHaveBeenCalledWith(
         expect.objectContaining({ preloadedHtml: expected })
       )
+    );
+    expect(capture.mock.calls[0][0].initialSavedDraftId).toBe(
+      committed ? 'draft' : undefined
     );
   }
 );

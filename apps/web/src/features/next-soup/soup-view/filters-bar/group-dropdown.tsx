@@ -27,7 +27,7 @@ interface GroupDropdownProps {
 export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
   const triggerSize = () => {
     if (!props.hideLabel) return 'sm';
-    return props.grouped ? 'icon-sm' : 'icon-md';
+    return 'icon-md';
   };
   return (
     <Dropdown

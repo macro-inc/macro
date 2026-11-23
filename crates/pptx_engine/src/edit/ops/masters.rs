@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Master ▸ Insert Placeholder menu).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum PlaceholderKind {
     /// Any content: text with bullets, or a picture, chart, table, SmartArt,

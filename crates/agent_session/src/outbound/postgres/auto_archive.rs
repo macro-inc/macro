@@ -225,6 +225,8 @@ impl<B: BotFacts + 'static> AutoArchiveRepo for PgAgentSessionRepo<B> {
         .await
         .context("archive agent session")?;
         touch_entity_updated(&mut transaction, session, Some(modified_at)).await?;
+        super::work_registration::end_work_registrations_on_archive(&mut transaction, session)
+            .await?;
         transaction
             .commit()
             .await

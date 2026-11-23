@@ -7,7 +7,7 @@
 import type { ColumnKindOneOfFiveType } from './columnKindOneOfFiveType';
 
 /**
- * A checkbox.
+ * A number shown as a percent: 0.25 displays as 25%.
  */
 export type ColumnKindOneOfFive = {
   type: ColumnKindOneOfFiveType;

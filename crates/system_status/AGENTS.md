@@ -13,6 +13,8 @@ broadcasts the new `CurrentSystemStatus` to every open app as a
 `system_status` websocket message through the connection gateway's
 `/message/broadcast`. Apps load `GET /system-status` (public) on start and
 keep whichever of the fetched or pushed status is newer (`updatedAt`).
+The current status carries the `id` of the update that set it; the banner
+remembers a dismissal by that id.
 
 ## Start here
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { CalendarEvent as CalendarEventRecord } from '../../../generated/storage/types.gen';
 import type { MacroClient } from '../../utils/client';
+import { User } from '../users/user';
 import { CalendarNamespace } from './namespace';
 
 function guest(email: string, isOrganizer: boolean) {
@@ -419,5 +420,101 @@ describe('calendar occurrences', () => {
 
     expect(noGuests?.role).toBe('organizer');
     expect(invitedBySecondary?.role).toBe('organizer');
+  });
+});
+
+describe('team availability', () => {
+  test('selects teammates by handle and returns people as handles', async () => {
+    const bodies: unknown[] = [];
+    const client = {
+      storage: {
+        getTeamAvailability: async (options: { body: unknown }) => {
+          bodies.push(options.body);
+          return {
+            data: {
+              start: '2026-10-07T09:00:00Z',
+              end: '2026-10-07T17:00:00Z',
+              members: [
+                {
+                  userId: 'macro|user@example.com',
+                  busy: [
+                    {
+                      start: '2026-10-07T10:00:00Z',
+                      end: '2026-10-07T11:00:00Z',
+                    },
+                  ],
+                  coverage: 'complete',
+                  unknownReasons: [],
+                },
+              ],
+              unknownUserIds: ['macro|former@example.com'],
+              complete: false,
+              summary: 'Coverage is incomplete',
+            },
+          };
+        },
+      },
+    } as unknown as MacroClient;
+
+    const availability = await new CalendarNamespace(client).teamAvailability({
+      start: '2026-10-07T09:00:00Z',
+      end: '2026-10-07T17:00:00Z',
+      members: [User.byId(client, 'macro|former@example.com')],
+    });
+
+    expect(bodies).toEqual([
+      {
+        start: '2026-10-07T09:00:00Z',
+        end: '2026-10-07T17:00:00Z',
+        userIds: ['macro|former@example.com'],
+      },
+    ]);
+    expect(availability.members.map((member) => member.user.id)).toEqual([
+      'macro|user@example.com',
+    ]);
+    expect(availability.members[0]?.busy).toEqual([
+      { start: '2026-10-07T10:00:00Z', end: '2026-10-07T11:00:00Z' },
+    ]);
+    expect(availability.unknownUsers.map((user) => user.id)).toEqual([
+      'macro|former@example.com',
+    ]);
+    expect(availability.freeWindows).toBeUndefined();
+    expect(availability.complete).toBe(false);
+  });
+
+  test('omits the selection to read the whole team', async () => {
+    const bodies: unknown[] = [];
+    const client = {
+      storage: {
+        getTeamAvailability: async (options: { body: unknown }) => {
+          bodies.push(options.body);
+          return {
+            data: {
+              start: '2026-10-07T00:00:00Z',
+              end: '2026-10-08T00:00:00Z',
+              members: [],
+              freeWindows: [
+                { start: '2026-10-07T00:00:00Z', end: '2026-10-08T00:00:00Z' },
+              ],
+              unknownUserIds: [],
+              complete: true,
+              summary: 'Everyone is free',
+            },
+          };
+        },
+      },
+    } as unknown as MacroClient;
+
+    const availability = await new CalendarNamespace(client).teamAvailability({
+      start: '2026-10-07T00:00:00Z',
+      end: '2026-10-08T00:00:00Z',
+    });
+
+    expect(bodies).toEqual([
+      { start: '2026-10-07T00:00:00Z', end: '2026-10-08T00:00:00Z' },
+    ]);
+    expect(availability.freeWindows).toEqual([
+      { start: '2026-10-07T00:00:00Z', end: '2026-10-08T00:00:00Z' },
+    ]);
   });
 });

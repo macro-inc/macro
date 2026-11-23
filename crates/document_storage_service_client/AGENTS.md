@@ -8,7 +8,7 @@ documents, projects, threads, notifications, and uploads.
 
 ## Start here
 
-- `src/lib.rs`: `DocumentStorageServiceClient`, built with two `reqwest`
+- `src/lib.rs`: `DocumentStorageServiceClient`, built with shared `reqwest`
   clients (see Gotchas).
 - `src/error.rs`: `DssClientError`, the shared error type most methods return.
 - `src/document.rs`, `src/project.rs`, `src/thread.rs`, `src/notification.rs`,
@@ -47,8 +47,14 @@ documents, projects, threads, notifications, and uploads.
 
 - Two `reqwest::Client`s: `client` carries the internal auth header for
   service-to-service calls; `external_client` (via `external_request`) sends
-  a caller's JWT instead — don't mix them up.
+  a caller's JWT instead — don't mix them up. A third private shared
+  `lifecycle_client` bounds namespace purge to 30 seconds and refuses redirects;
+  construct it once rather than building transport per deletion.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+- Team vault namespace requests use internal authentication, trace propagation, a
+  bounded timeout and no redirects. Accept only HTTP 204 as completed; preserve
+  typed busy/unavailable failures and reject every other status.

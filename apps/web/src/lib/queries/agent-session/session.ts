@@ -65,7 +65,7 @@ function agentSessionExternalUrlQueryOptions(id: string | undefined) {
 const STATUS_POLL_INTERVAL_MS = 5_000;
 const MAX_STATUS_POLLS = 120;
 
-function agentSessionQueryOptions(id: string) {
+export function agentSessionQueryOptions(id: string) {
   return queryOptions({
     queryKey: agentSessionKeys.detail(id).queryKey,
     queryFn: () => throwOnErr(() => agentHarnessServiceClient.get(id)),

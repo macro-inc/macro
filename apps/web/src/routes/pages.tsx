@@ -11,9 +11,10 @@ import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { lazy } from '@core/util/lazy';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { Button } from '@ui';
-import { lazy, onCleanup, onMount } from 'solid-js';
+import { onCleanup, onMount } from 'solid-js';
 import {
   bookingReceiptRoute,
   EMAIL_SIGNUP_CALLBACK_PATH,
@@ -81,6 +82,17 @@ export function LoginPopupSuccess() {
       </div>
     </div>
   );
+}
+
+/** GitHub's connect step; its code loads only when someone connects GitHub. */
+const GithubConnectPage = lazy(async () => ({
+  default: (
+    await import('@app/features/settings/connections/github-connect-page')
+  ).GithubConnectPage,
+}));
+
+export function GithubConnectRoutePage() {
+  return <GithubConnectPage />;
 }
 
 export function TaskSlugPage() {

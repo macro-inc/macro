@@ -7,6 +7,8 @@ mod internal;
 mod macro_authorization;
 mod optional;
 mod policy;
+mod program;
+mod program_json;
 mod user;
 mod user_api_key;
 
@@ -42,13 +44,15 @@ pub use internal::{
 pub use macro_authorization::MacroAuthorizationExtractor;
 pub use optional::OptionalMacroAuthorizationExtractor;
 pub use policy::{
-    ActingUser, ActingUserAuthorization, AnyPrincipal, AuthorizationPolicy, BotOnly, HarnessOnly,
-    InternalAuthorization, InternalEntity, InternalOnly, UserBotOrHarness,
-    UserBotOrHarnessAuthorization, UserBotOrHarnessEntity, UserOnly, UserOrBot,
+    AccountHolderOrInternal, ActingUser, ActingUserAuthorization, AnyPrincipal,
+    AuthorizationPolicy, BotOnly, HarnessOnly, InternalAuthorization, InternalEntity, InternalOnly,
+    UserBotOrHarness, UserBotOrHarnessAuthorization, UserBotOrHarnessEntity, UserOnly, UserOrBot,
     UserOrBotAuthorization, UserOrBotEntity, UserOrInternal, UserOrInternalAuthorization,
     UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
     UserOrInternalServiceAuthorization,
 };
+pub use program::{CODE_EXECUTION_HEADER, PROGRAM_SIGN_IN_REFUSAL, is_agent_run, is_program_run};
+pub use program_json::{request_is_program, rewrite_program_json};
 pub use user_api_key::USER_API_KEY_HEADER;
 
 /// The authenticated entity responsible for a request.
@@ -149,6 +153,7 @@ pub(super) fn authenticated_user(
         origin,
         agent_id: None,
         agent_via: None,
+        routine_id: None,
         macro_user_id,
         user_context,
     })

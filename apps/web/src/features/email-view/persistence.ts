@@ -18,6 +18,10 @@ import {
   EMAIL_FOCUS_SORT_IDS,
   EMAIL_TAB_IDS,
 } from './constants';
+import {
+  emailViewConditionsSchema,
+  restoreEmailTabFilters,
+} from './filters/email-saved-view';
 import { normalizeInboxSelection } from './inbox-selection';
 import type { EmailViewState } from './types';
 
@@ -30,6 +34,11 @@ const emailLocalStateStorage = createUserScopedStorage(
 const emailTabSchema = z.enum(EMAIL_TAB_IDS).catch(DEFAULT_EMAIL_TAB);
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));
+// Absent in state from before tabs kept conditions; its facets then refine
+// the tab's own filters.
+const emailConditionsSchema = emailViewConditionsSchema
+  .optional()
+  .catch(undefined);
 const aliasFilterSchema = z
   .object({ inboxId: z.string().min(1), emailAddress: z.string().email() })
   .optional()
@@ -47,6 +56,7 @@ const emailEntryStateSchemaWithDefaults = z.object({
   search: z.string().default(''),
   aliasFilter: aliasFilterSchema,
   facets: emailFacetsSchema.default({}),
+  conditions: emailConditionsSchema,
 });
 
 type EmailEntryState = z.infer<typeof emailEntryStateSchemaWithDefaults>;
@@ -105,16 +115,30 @@ function createEmailEntryStorage(options: {
         tab: restored.tab,
         search: restored.search,
         aliasFilter: restored.aliasFilter,
-        facets: normalizeFacetSelection(restored.facets),
+        ...restoreEmailTabFilters(
+          restored.tab,
+          restored.facets,
+          restored.conditions
+        ),
       };
     },
-    select: (state): EmailEntryState => ({
-      version: 1,
-      tab: state.tab,
-      search: state.search,
-      aliasFilter: state.aliasFilter,
-      facets: normalizeFacetSelection(state.facets),
-    }),
+    // An open view's filters come back from its definition, so the entry
+    // keeps the tab it was opened from, as local state does.
+    select: (state): EmailEntryState => {
+      const scope = state.beforeSavedView ?? state;
+      return {
+        version: 1,
+        tab: scope.tab,
+        search: state.search,
+        aliasFilter: scope.aliasFilter,
+        facets: state.beforeSavedView
+          ? {}
+          : normalizeFacetSelection(state.facets),
+        ...(state.beforeSavedView || !state.conditions
+          ? {}
+          : { conditions: state.conditions }),
+      };
+    },
   });
 }
 
@@ -127,6 +151,7 @@ const emailLocalStateSchemaWithDefaults = z.object({
   inboxIds: inboxIdsEntrySchema,
   aliasFilter: aliasFilterSchema,
   facets: emailFacetsSchema.default({}),
+  conditions: emailConditionsSchema,
   focusSort: emailFocusSortSchema.default(DEFAULT_EMAIL_FOCUS_SORT),
 });
 
@@ -138,13 +163,19 @@ const emailLocalStateSchema = emailLocalStateSchemaWithDefaults.catch(
   DEFAULT_EMAIL_LOCAL_STATE
 );
 
+// A saved view's filters come from its definition, so while one is open the
+// next visit restores the tab it was opened from instead.
 function selectLocalState(state: EmailViewState): EmailLocalState {
+  const scope = state.beforeSavedView ?? state;
   return {
     version: 1,
-    tab: state.tab,
-    inboxIds: normalizeInboxSelection(state.inboxIds),
-    aliasFilter: state.aliasFilter,
-    facets: normalizeFacetSelection(state.facets),
+    tab: scope.tab,
+    inboxIds: normalizeInboxSelection(scope.inboxIds),
+    aliasFilter: scope.aliasFilter,
+    facets: state.beforeSavedView ? {} : normalizeFacetSelection(state.facets),
+    ...(state.beforeSavedView || !state.conditions
+      ? {}
+      : { conditions: state.conditions }),
     focusSort: state.focusSort,
   };
 }
@@ -176,7 +207,11 @@ function createEmailLocalStateStorage(options: {
             ? [restored.aliasFilter.inboxId]
             : restored.inboxIds,
           aliasFilter: restored.aliasFilter,
-          facets: normalizeFacetSelection(restored.facets),
+          ...restoreEmailTabFilters(
+            restored.tab,
+            restored.facets,
+            restored.conditions
+          ),
           focusSort: restored.focusSort,
         };
       } catch {
@@ -227,8 +262,10 @@ function createInboxIdsEntryStorage(options: {
             : undefined,
       };
     },
-    select: (state): string[] | undefined =>
-      state.inboxIds === undefined ? undefined : [...state.inboxIds],
+    select: (state): string[] | undefined => {
+      const { inboxIds } = state.beforeSavedView ?? state;
+      return inboxIds === undefined ? undefined : [...inboxIds];
+    },
   });
 }
 

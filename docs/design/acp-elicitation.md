@@ -197,7 +197,8 @@ through to "handshake and configuration traffic: nothing to render."
 
 `AgentAction` is `Prompt | SetModel | Compact | Stop`. Those mint a new
 `AgentActionId` (`agent_session:{uuid}`) used as the JSON-RPC **request**
-id. Control requires `OwnerAccessLevel`.
+id. Control requires `EditAccessLevel`. Only directly authenticated users may
+answer permissions or elicitations; agent programs and runtimes are refused.
 
 An elicitation answer is a JSON-RPC **response** to the agent's request id,
 the same shape as the permission auto-reply. It does not mint a new ACP
@@ -339,7 +340,7 @@ elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-t
   updates.
 - Web: the calendar and email composers split from their chat bindings
   behind `UserToolReviewSink`; `ElicitationPart` mounts them for a review
-  and settles into the finished user tool; the owner gate lives in the
+  and settles into the finished user tool; the edit-access gate lives in the
   controller; the MagicChip gets an `asking` state with a compact card.
 
 Third pass, same branch - the answer surface typed end to end (see [Answers
@@ -479,9 +480,11 @@ would leave the agent blocked on a request nothing could answer.
    native harness feature and as the local integration path. Sending from
    `cursor_cloud_agents` remains a later slice.
 2. **Do not auto-answer.** Permissions stay auto-approved. Elicitation
-   waits for the session owner.
+   waits for a directly authenticated user with edit access.
 3. **Advertise both modes.** `{ form: {}, url: {} }`.
-4. **Owner answers.** Same `OwnerAccessLevel` gate as every other control.
+4. **A person with edit access answers.** Controls require `EditAccessLevel`
+   and direct user authentication. Agent programs and runtimes cannot answer
+   permissions or elicitations, even using a user's credential.
 5. **Session-scoped only.** Request-scoped (`requestId`, no `sessionId`)
    is answered `-32602`. Those fire before `session/new`; the session
    machine is the wrong place for them.
@@ -493,7 +496,7 @@ would leave the agent blocked on a request nothing could answer.
    `session/cancel`. Disconnect / `acp_ready` drops it — the JSON-RPC id
    is dead across connections and cannot be answered.
 9. **Form answers are conversation content.** Logged as ACP frames, folded
-   into the transcript. No password widget; the user's tool is Decline.
+   into the transcript. No password widget; the user's tool is Skip (a decline).
 10. **URL opens in a new tab** after consent. No iframe, no prefetch.
 11. **No new table, no new gateway message type.** The log is the record;
     the fold derives the pending slot into `SessionMetadata`; the existing
@@ -502,9 +505,9 @@ would leave the agent blocked on a request nothing could answer.
     timeout re-arms while a question is out; a review waits as long as the
     user takes, until an answer, a Stop, or the connection going away. No
     cap for now.
-13. **Only the owner answers, everywhere it shows.** The controller knows
-    the owner and the viewer; the session block and the chip render the
-    question locked for anyone else and name who is being waited on.
+13. **Only a person with edit access answers, everywhere it shows.** The
+    session block and chip lock the question for viewers without edit access.
+    The server also refuses agent programs and runtimes.
 14. **The fold shapes answers, it does not forward values.** An accepted
     answer folds to `Vec<AnsweredField>` - correlated with the schema that
     asked, option titles resolved, the harness "Other" idiom collapsed - and
@@ -815,7 +818,7 @@ pub enum ElicitationPropertySchema {
         options: Vec<ElicitationOption>, default: Vec<String>,
     },
     /// A property type this fold does not know. The browser renders a
-    /// "cannot display" row; Decline / Cancel still work.
+    /// "cannot display" row; Skip still works.
     Unrecognized { #[serde(rename = "type")] type_name: String, #[specta(type = Unknown)] raw: serde_json::Value },
 }
 
@@ -1031,7 +1034,8 @@ count, `format` for email/uri/date/date-time, `pattern` via `new RegExp`
 wrapped in a try and a 50 ms budget check (fail closed to "invalid").
 
 URL card: `message`, full URL monospace, host highlighted, warning when
-host starts with `xn--`, buttons Open / Decline / Cancel. Open →
+host starts with `xn--`, buttons Open / Skip (Skip declines; the web offers no
+Cancel, which no agent stops for). Open →
 `respondElicitation({ action: 'accept' })` **then**
 `window.open(url, '_blank', 'noopener,noreferrer')`. Never fetch the URL.
 
@@ -1101,8 +1105,8 @@ holding the request wedges every agent that uses it.
 ## Open questions (decide before step 4)
 
 1. Should Stop cancel the elicitation, or only the model? Plan says both.
-2. Should a viewer (non-owner) see the form disabled, or hidden? Plan says
-   disabled with "Only the session owner can answer".
+2. Should a viewer without edit access see the form disabled, or hidden?
+   Plan says disabled, waiting for an editor.
 3. URL accept: fire the POST before or after `window.open`? Plan says
    before, so the agent learns consent even if the popup is blocked; the
    card then shows the link as a fallback.

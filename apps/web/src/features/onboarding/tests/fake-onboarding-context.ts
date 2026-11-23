@@ -1,6 +1,9 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import { createEmptyDraft } from '@app/features/routines/core/routine-draft';
+import type { RoutineTemplate } from '@app/features/routines/core/routine-templates';
+import { TEST_CATALOG } from '@app/features/routines/tests/catalog';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
-import type { ServerResponse } from '@service-cognition/generated/schemas';
+import type { RoutineSuggestions } from '@service-scheduled-action/generated/schemas';
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import type {
@@ -15,7 +18,11 @@ import type {
 } from '../context/onboarding-context';
 import type { EmailAccount } from '../core/email-accounts';
 import {
-  nativeToolSlug,
+  catalogSuggestionDraft,
+  suggestionByline,
+} from '../core/routine-suggestions';
+import {
+  type HeldApp,
   onboardingConnectedTools,
   onboardingToolState,
 } from '../queries/connected-tools';
@@ -32,15 +39,17 @@ export type FakeOnboardingWorld = {
   emailAccounts: EmailAccount[];
   /** Addresses the next inbox connects link, in order. */
   inboxesToConnect: string[];
+  /** Whether the server lets this user connect an Outlook inbox. */
+  outlookAvailable: boolean;
   record: OnboardingRecord;
   teams: Team[];
   invites: TeamInvite[];
   contacts: string[];
   catalog: Tool[];
-  connectedTools: string[];
-  githubLinkStatus: 'linked' | 'unlinked' | 'reauthentication_required';
-  nativeTools: ServerResponse[];
-  connectionFailures: ('pipedream' | 'native' | 'github')[];
+  /** The apps the user holds, with the server's status for each. */
+  connectors: HeldApp[];
+  /** Reading the connector list fails. */
+  connectorsFail: boolean;
   githubStars: number | undefined;
   inviteOffer: InviteOffer | null;
   trialEligible: boolean;
@@ -51,6 +60,17 @@ export type FakeOnboardingWorld = {
   /** How many refreshes a checkout's webhook takes to land. */
   webhookDelayPolls: number;
   accent: string | undefined;
+  /** Suggestions are on, so the flow ends with the routines step. */
+  routineSuggestionsEnabled: boolean;
+  /** The person's suggestions are on, apart from routine suggestions. */
+  suggestionsEnabled: boolean;
+  /** The scheduler's answer; undefined until it is first read. */
+  routineSuggestions: RoutineSuggestions | undefined;
+  routineCatalog: RoutineTemplate[];
+  /** Suggestions whose routine fails to be created. */
+  routineCreateFailures: string[];
+  /** Routines created from suggestions, by suggestion id. */
+  routinesCreated: string[];
   /** Capabilities that fail, with the message they report. */
   failures: Partial<
     Record<
@@ -86,6 +106,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     },
     emailAccounts: [],
     inboxesToConnect: ['ada@acme.com', 'ada.personal@gmail.com'],
+    outlookAvailable: false,
     record: { status: 'active', suggestedTeamDomain: 'acme.com' },
     teams: [],
     invites: [],
@@ -97,10 +118,8 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
         iconUrl: fixtureConnectorIcon(name.toLowerCase()),
       })
     ),
-    connectedTools: [],
-    githubLinkStatus: 'unlinked',
-    nativeTools: [],
-    connectionFailures: [],
+    connectors: [],
+    connectorsFail: false,
     githubStars: 12_345,
     inviteOffer: null,
     trialEligible: true,
@@ -133,8 +152,22 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     webhookPollsRemaining: undefined,
     webhookDelayPolls: 1,
     accent: undefined,
+    routineSuggestionsEnabled: false,
+    suggestionsEnabled: false,
+    routineSuggestions: { status: 'none', suggestions: [] },
+    routineCatalog: TEST_CATALOG,
+    routineCreateFailures: [],
+    routinesCreated: [],
     failures: {},
   };
+}
+
+/** How a recorded createTeam call marks domain join: `:closed` without it,
+ * `:quiet` with it but no notice, nothing when both are on. */
+function domainSuffix(allowDomainJoin: boolean, notifyDomain: boolean) {
+  if (!allowDomainJoin) return ':closed';
+  if (!notifyDomain) return ':quiet';
+  return '';
 }
 
 /**
@@ -215,8 +248,8 @@ export function createFakeOnboarding(
       accounts: () => loadable('emailAccounts', () => world.emailAccounts),
       refresh: async () => {},
     }),
-    connectInbox: () => {
-      call('connectInbox');
+    connectInbox: (provider) => {
+      call(provider ? `connectInbox:${provider}` : 'connectInbox');
       return roundTrip(() =>
         update((draft) => {
           const address = draft.inboxesToConnect.shift();
@@ -229,6 +262,7 @@ export function createFakeOnboarding(
         })
       );
     },
+    createOutlookAvailability: () => () => world.outlookAvailable,
     createToolCatalog: () => {
       const [search, setSearch] = createSignal('');
       return {
@@ -248,59 +282,41 @@ export function createFakeOnboarding(
       };
     },
     createConnectedTools: () => ({
-      connected: () =>
-        onboardingConnectedTools(
-          new Set(world.connectedTools),
-          world.nativeTools,
-          world.githubLinkStatus === 'linked'
-        ),
+      connected: () => onboardingConnectedTools(world.connectors),
       state: (slug) =>
         onboardingToolState(
           slug,
-          world.connectionFailures.includes('pipedream')
+          world.connectorsFail
             ? { t: 'error' }
-            : {
-                t: 'ready',
-                value: world.connectedTools.map((app_slug) => ({
-                  app_slug,
-                  enabled: true,
-                })),
-              },
-          world.connectionFailures.includes('native')
-            ? { t: 'error' }
-            : { t: 'ready', value: world.nativeTools },
-          world.connectionFailures.includes('github')
-            ? { t: 'error' }
-            : { t: 'ready', value: world.githubLinkStatus }
+            : { t: 'ready', value: world.connectors }
         ),
       retry: () => call('retryConnections'),
     }),
     configureGithubRepositories: () => call('configureGithubRepositories'),
-    // Native GitHub OAuth returns to the current step; Pipedream stays in an iframe.
+    // GitHub's account link returns to the current step; other apps connect
+    // in place.
     connectTool: async (tool) => {
-      if (tool.slug === 'github') {
-        if (world.githubLinkStatus === 'linked') return;
-        call('connectNativeGithub');
-        return roundTrip(() =>
-          update((draft) => {
-            draft.githubLinkStatus = 'linked';
-          })
-        );
-      }
-      const native = world.nativeTools.find(
-        (server) => server.authenticated && nativeToolSlug(server) === tool.slug
-      );
-      if (native) {
+      const held = world.connectors.find((app) => app.slug === tool.slug);
+      if (held?.status === 'connected') return;
+      if (held?.status === 'disabled') {
         update((draft) => {
-          const server = draft.nativeTools.find((s) => s.url === native.url);
-          if (server) server.enabled = true;
+          const app = draft.connectors.find((item) => item.slug === tool.slug);
+          if (app) app.status = 'connected';
         });
         return;
       }
+      const connect = () =>
+        update((draft) => {
+          const app = draft.connectors.find((item) => item.slug === tool.slug);
+          if (app) app.status = 'connected';
+          else draft.connectors.push({ slug: tool.slug, status: 'connected' });
+        });
+      if (tool.slug === 'github') {
+        call('connectNativeGithub');
+        return roundTrip(connect);
+      }
       call(`connectTool:${tool.slug}`);
-      update((draft) => {
-        draft.connectedTools.push(tool.slug);
-      });
+      connect();
     },
     createTeamDirectory: () => ({
       teams: () => loadable('teams', () => world.teams),
@@ -308,9 +324,9 @@ export function createFakeOnboarding(
       contacts: () => ({ t: 'ready', value: world.contacts }),
       retry: () => call('retryTeams'),
     }),
-    createTeam: async ({ name, invites, allowDomainJoin }) => {
+    createTeam: async ({ name, invites, allowDomainJoin, notifyDomain }) => {
       call(
-        `createTeam:${name}:${invites.join(',')}${allowDomainJoin ? '' : ':closed'}`
+        `createTeam:${name}:${invites.join(',')}${domainSuffix(allowDomainJoin, notifyDomain)}`
       );
       fail('createTeam');
       update((draft) => {
@@ -372,6 +388,53 @@ export function createFakeOnboarding(
       });
       return { t: 'completed' };
     },
+    routineSuggestionsEnabled: () => world.routineSuggestionsEnabled,
+    suggestionGenerationEnabled: () =>
+      world.routineSuggestionsEnabled || world.suggestionsEnabled,
+    startSuggestionGeneration: () => call('startSuggestionGeneration'),
+    createRoutinesStep: () => ({
+      answer: () => world.routineSuggestions,
+      failed: () => false,
+      refresh: async () => call('refreshRoutineSuggestions'),
+      row: (suggestion) => {
+        const byline = suggestionByline(suggestion);
+        const surface = suggestion.surfaces[0] ?? 'agents';
+        if (suggestion.kind === 'routine')
+          return {
+            id: suggestion.id,
+            surface,
+            title: suggestion.routine.name,
+            does: suggestion.routine.description ?? '',
+            byline,
+          };
+        const entry = world.routineCatalog.find(
+          (routine) => routine.key === suggestion.key
+        );
+        if (!entry) return undefined;
+        const draft = catalogSuggestionDraft(
+          suggestion,
+          entry,
+          { ...createEmptyDraft('model'), triggers: [], enabled: true },
+          { target: { kind: 'model', model: 'model' }, codeSteps: true }
+        );
+        return {
+          id: suggestion.id,
+          surface,
+          title: entry.title,
+          does: draft.description || entry.description,
+          byline,
+        };
+      },
+      create: async (suggestion, edits) => {
+        call(`createRoutine:${suggestion.id}:${edits.name}`);
+        if (world.routineCreateFailures.includes(suggestion.id))
+          throw new Error('create failed');
+        update((draft) => {
+          draft.routinesCreated.push(suggestion.id);
+        });
+        return `routine-${suggestion.id}`;
+      },
+    }),
     repairTutorial: async () => {
       call('repairTutorial');
       update((draft) => {

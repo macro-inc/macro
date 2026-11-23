@@ -5,12 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { HarnessOwnerOneOf } from './harnessOwnerOneOf';
-import type { HarnessOwnerOneOfThree } from './harnessOwnerOneOfThree';
 
 /**
  * Harness owner.
 
-Exactly one of a user or a team, mirroring the bots owner pattern. There
-are no system harnesses.
+Always one person: a machine is someone's computer. A team machine is a
+person's machine with a grant to the team, never one owned by the team.
  */
-export type HarnessOwner = HarnessOwnerOneOf | HarnessOwnerOneOfThree;
+export type HarnessOwner = HarnessOwnerOneOf;

@@ -46,6 +46,7 @@ pub async fn sync_content_updated_handler<
     // legacy ids are dropped, as they always were, so search still extracts.
     if let Some(actor) = request.actor.and_then(|actor| Actor::try_from(actor).ok()) {
         editors.push(DocumentSyncEditor {
+            agent_correlation_id: None,
             actor,
             on_behalf_of: request
                 .on_behalf_of

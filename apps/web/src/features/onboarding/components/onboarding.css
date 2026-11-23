@@ -47,6 +47,12 @@ html[data-theme-light='true'] .onboarding-flow {
   --glass-shade-base: 3%;
 }
 
+/* This palette redefines `--color-ink`, so the selection tint restarts here
+   (see the `::selection` rule in index.css). */
+.onboarding-flow::selection {
+  background-color: oklch(from var(--color-ink) l c h / 0.1);
+}
+
 html[data-theme-light='true'] .onboarding-flow h1,
 html[data-theme-light='true'] .onboarding-flow h2 {
   color: #000;

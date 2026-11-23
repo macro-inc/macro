@@ -44,6 +44,7 @@ use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
 use sqlx::postgres::PgPoolOptions;
 use stream::outbound::redis_pg::{RedisPostgresStreamManager, RedisPostgresStreamRepo};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tower_http::cors::CorsLayer;
 
 #[tokio::main]
@@ -115,6 +116,14 @@ async fn main() -> Result<()> {
     let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());
     let stream_manager = RedisPostgresStreamManager::new(stream_service.obj());
 
+    let background = TaskTracker::new();
+    let shutdown = CancellationToken::new();
+    let seen_recorder = service::seen::SeenRecorder::start(
+        activity::outbound::pg_activity_repo::PgActivityRepo::new(pgpool.clone()),
+        &background,
+        shutdown.clone(),
+    );
+
     let fanout_gateway_id: Arc<str> = Arc::from(uuid::Uuid::new_v4().to_string());
     let context = context::ApiContext {
         connection_manager,
@@ -127,6 +136,7 @@ async fn main() -> Result<()> {
         frecency_ingestor_service: EventIngestorImpl::new(FrecencyPgStorage::new(pgpool.clone())),
         stream_manager,
         last_online_worker,
+        seen_recorder,
     };
 
     tokio::spawn(poll_messages(context.clone()));
@@ -138,7 +148,7 @@ async fn main() -> Result<()> {
 
     let config = Arc::new(config);
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
-        MacroAuthJwtValidator::new(jwt_args),
+        MacroAuthJwtValidator::new(jwt_args.clone()),
         InternalAuthConfig {
             api_key: config.internal_api_key.to_string(),
             default_user_id: None,
@@ -147,6 +157,7 @@ async fn main() -> Result<()> {
         PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(pgpool.clone())),
     )));
 
+    let correlation = agent_correlation::inbound::CorrelationState::new(pgpool.clone(), jwt_args);
     let app = router(AppState {
         context,
         config: Arc::clone(&config),
@@ -157,7 +168,11 @@ async fn main() -> Result<()> {
         )),
     })
     .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-    .layer(cors);
+    .layer(cors)
+    .layer(axum::middleware::from_fn_with_state(
+        correlation,
+        agent_correlation::inbound::propagate,
+    ));
 
     tracing::info!(
         "connection gateway is up and running with environment {:?} on port {}",
@@ -169,9 +184,17 @@ async fn main() -> Result<()> {
         .await
         .context("failed to bind to port")?;
 
-    axum::serve(listener, app.into_make_service())
+    let served = axum::serve(listener, app.into_make_service())
         .await
-        .context("failed to serve")?;
+        .context("failed to serve");
 
-    Ok(())
+    // Reached only when serving fails: there is no graceful shutdown, so a
+    // stopped instance exits without this and its last round of seen marks
+    // (at most `FLUSH_EVERY`) is never written. Its clients reconnect to
+    // another instance, which marks them again on connect.
+    shutdown.cancel();
+    background.close();
+    background.wait().await;
+
+    served
 }

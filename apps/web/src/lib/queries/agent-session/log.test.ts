@@ -4,18 +4,17 @@
  * cached log only once the fetched one is what the cache holds.
  */
 
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import type { AgentSessionLogQuery } from '@service-storage/graphql/generated/graphql';
 import type { OperationResult } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, type Source } from 'wonka';
 
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: () => true,
-}));
+const telemetry = vi.hoisted(() => ({ traceFollowResumed: vi.fn() }));
 vi.mock('@core/agent-session/load-telemetry', () => ({
   traceCacheWrite: () => undefined,
+  traceFollowResumed: telemetry.traceFollowResumed,
 }));
 
 const metadata = vi.hoisted(() => new WeakMap<object, { source: string }>());
@@ -78,38 +77,58 @@ type Result<T> = OperationResult<T>;
 
 /** A result the exchange marked as coming from the network. */
 function fromNetwork<T>(data: T): Result<T> {
-  const result = { data, stale: false, hasNext: false } as unknown as Result<T>;
+  const result = {
+    data,
+    stale: false,
+    hasNext: false,
+    operation: {
+      context: { cacheSessionGeneration: cacheSessionGeneration.capture() },
+    },
+  } as unknown as Result<T>;
   metadata.set(result, { source: 'live-network' });
   return result;
 }
 
 /** A result the exchange marked as a cache read. */
 function fromCache<T>(data: T): Result<T> {
-  const result = { data, stale: false, hasNext: false } as unknown as Result<T>;
+  const result = {
+    data,
+    stale: false,
+    hasNext: false,
+    operation: {
+      context: { cacheSessionGeneration: cacheSessionGeneration.capture() },
+    },
+  } as unknown as Result<T>;
   metadata.set(result, { source: 'normalized-cache-hit' });
   return result;
 }
 
 let query: ReturnType<typeof makeSubject<Result<AgentSessionLogQuery>>>;
-let appended: ReturnType<
+type Appended = ReturnType<
   typeof makeSubject<
     Result<{ agentSessionLogAppended: ReturnType<typeof entry>[] }>
   >
 >;
+/** The latest subscription the client opened. */
+let appended: Appended;
+/** Every subscription the client opened, in order. */
+let subscriptions: Appended[];
 /** The order the client was asked for things in. */
 let calls: string[];
 
 beforeEach(() => {
   vi.useFakeTimers();
   calls = [];
+  subscriptions = [];
   query = makeSubject();
-  appended = makeSubject();
   client.query.mockImplementation((): Source<unknown> => {
     calls.push('query');
     return query.source;
   });
   client.subscription.mockImplementation((): Source<unknown> => {
     calls.push('subscription');
+    appended = makeSubject();
+    subscriptions.push(appended);
     return appended.source;
   });
   host.readQuery.mockResolvedValue({ kind: 'miss' });
@@ -125,6 +144,48 @@ afterEach(() => {
 const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe('watchAgentSessionLog', () => {
+  it('retains source stamps on buffered and delayed frames across a same-access baseline correction', async () => {
+    const original = cacheSessionGeneration.capture();
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows: () => undefined,
+      gap: () => undefined,
+    });
+    query.next(fromNetwork(logData([1])));
+    await watch.fetched;
+    host.readQuery.mockResolvedValue({ kind: 'hit', data: logData([1]) });
+    appended.next(fromNetwork({ agentSessionLogAppended: [entry(2)] }));
+    cacheSessionGeneration.initialize('corrected-owner-generation');
+    const delayed = fromNetwork({ agentSessionLogAppended: [entry(3)] });
+    delayed.extensions = { cacheSessionGeneration: original };
+    appended.next(delayed);
+    appended.next(fromNetwork({ agentSessionLogAppended: [entry(4)] }));
+    watch.stop();
+    await settle();
+    expect(host.writeQuery.mock.calls.map(([args]) => args.generation)).toEqual(
+      [original, 'corrected-owner-generation']
+    );
+    expect(
+      host.writeQuery.mock.calls[0][0].data.user.agentSession.log.entries.map(
+        (entry: { id: string }) => entry.id
+      )
+    ).toEqual([entry(1).id, entry(2).id, entry(3).id]);
+  });
+
+  it('drops buffered log frames when their session generation retires', async () => {
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows: () => undefined,
+      gap: () => undefined,
+    });
+    query.next(fromNetwork(logData([1])));
+    await watch.fetched;
+    host.readQuery.mockResolvedValue({ kind: 'hit', data: logData([1]) });
+    appended.next(fromNetwork({ agentSessionLogAppended: [entry(2)] }));
+    await cacheSessionGeneration.transition(async () => {});
+    watch.stop();
+    await settle();
+    expect(host.writeQuery).not.toHaveBeenCalled();
+  });
+
   it('loads and follows notification frames over GraphQL', async () => {
     const rows = vi.fn();
     const gap = vi.fn();
@@ -251,19 +312,102 @@ describe('watchAgentSessionLog', () => {
     expect(written.user.agentSession?.log.entries).toHaveLength(2);
   });
 
-  it('reports a gap when the subscription errors', async () => {
+  it('reopens a subscription the server ended with an error, then reports the gap', async () => {
+    const rows = vi.fn();
+    const gap = vi.fn();
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows,
+      gap,
+    });
+    query.next(fromNetwork(logData([1])));
+    await watch.fetched;
+
+    // What urql hands on when the server closes a subscriber that fell
+    // behind: the error, then the end of the stream.
+    const closed = subscriptions[0];
+    closed.next({
+      error: new Error('closed after falling behind'),
+      stale: false,
+      hasNext: false,
+    } as unknown as Result<{ agentSessionLogAppended: never[] }>);
+    closed.complete();
+    expect(gap).not.toHaveBeenCalled();
+    await settle();
+
+    expect(subscriptions).toHaveLength(2);
+    expect(calls).toEqual(['subscription', 'query', 'subscription']);
+    expect(gap).toHaveBeenCalledOnce();
+    expect(telemetry.traceFollowResumed).toHaveBeenCalledExactlyOnceWith(
+      SESSION,
+      'error',
+      1,
+      0
+    );
+
+    // The control answer the runtime logs after the wake reaches the
+    // session live, without a reread.
+    subscriptions[1].next(fromNetwork({ agentSessionLogAppended: [entry(2)] }));
+    expect(rows).toHaveBeenCalledWith([row(2)]);
+    watch.stop();
+  });
+
+  it('reopens a subscription that ended without an error', async () => {
     const gap = vi.fn();
     const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
       rows: () => undefined,
       gap,
     });
-    appended.next({
-      error: new Error('closed after falling behind'),
-      stale: false,
-      hasNext: false,
-    } as unknown as Result<{ agentSessionLogAppended: never[] }>);
+    subscriptions[0].complete();
+    await settle();
 
+    expect(subscriptions).toHaveLength(2);
     expect(gap).toHaveBeenCalledOnce();
+    expect(telemetry.traceFollowResumed).toHaveBeenCalledExactlyOnceWith(
+      SESSION,
+      'ended',
+      1,
+      0
+    );
     watch.stop();
+  });
+
+  it('backs off while the subscription keeps ending, and starts over once it delivers', async () => {
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows: () => undefined,
+      gap: () => undefined,
+    });
+    subscriptions[0].complete();
+    await settle();
+    expect(subscriptions).toHaveLength(2);
+
+    subscriptions[1].complete();
+    await vi.advanceTimersByTimeAsync(999);
+    expect(subscriptions).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(subscriptions).toHaveLength(3);
+
+    subscriptions[2].complete();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(subscriptions).toHaveLength(4);
+
+    subscriptions[3].next(fromNetwork({ agentSessionLogAppended: [entry(2)] }));
+    subscriptions[3].complete();
+    await settle();
+    expect(subscriptions).toHaveLength(5);
+    watch.stop();
+  });
+
+  it('does not reopen once stopped', async () => {
+    const gap = vi.fn();
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows: () => undefined,
+      gap,
+    });
+    subscriptions[0].complete();
+    watch.stop();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(subscriptions).toHaveLength(1);
+    expect(gap).not.toHaveBeenCalled();
   });
 });

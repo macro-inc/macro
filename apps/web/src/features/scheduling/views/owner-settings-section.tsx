@@ -1,3 +1,4 @@
+import { TutorialRow } from '@app/features/video-tutorials';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Copy from '@icon/system/regular/copy.svg';
 import { CopyButton } from '@ui';
@@ -9,10 +10,12 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
 import { AvailabilityPanel } from '../components/availability-panel';
 import { BookingPageEditor } from '../components/booking-page-editor';
 import { EventTypesPanel } from '../components/event-types-panel';
 import { useScheduling } from '../context/scheduling-context';
+import { availabilityTimeFormat } from '../core/availability-month';
 import type { SchedulingOwner } from '../primitives/create-scheduling-owner';
 import { BookingsView } from './bookings-view';
 import { EventDetailsDialog } from './event-details-view';
@@ -33,6 +36,7 @@ export function OwnerSettingsSection(props: {
   registerSearchFocus?: (focus: () => void) => void;
 }) {
   const capabilities = useScheduling();
+  const [preferences] = useCalendarPreferences();
   const owner = props.owner;
   const {
     scope,
@@ -79,8 +83,8 @@ export function OwnerSettingsSection(props: {
       }
       disabled={!source.profile()?.revision}
       onClick={copyPageLink}
+      icon={<Copy aria-hidden="true" class="size-4" />}
     >
-      <Copy aria-hidden="true" class="size-4" />
       Copy link
     </CopyButton>
   );
@@ -163,6 +167,14 @@ export function OwnerSettingsSection(props: {
                 )}
               </Show>
               <EventTypesPanel
+                listStart={
+                  // Booking rows lead with their toggle; the inset puts the
+                  // row's play icon and label over each link's icon and title,
+                  // while the row's hover still spans the list.
+                  <div class="[--tutorial-row-inset:1.5rem]">
+                    <TutorialRow tutorial="scheduling" />
+                  </div>
+                }
                 owner={scope()}
                 search={props.search ?? ''}
                 events={p().eventTypes}
@@ -250,6 +262,7 @@ export function OwnerSettingsSection(props: {
               <div hidden={!!schedule()}>
                 <AvailabilityPanel
                   profile={p()}
+                  timeFormat={availabilityTimeFormat(preferences.timeFormat)}
                   search={props.search}
                   canEdit={scope().canEdit}
                   saving={source.saving()}

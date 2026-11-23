@@ -1,0 +1,17 @@
+.model-catalog-search {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-ink) 3%, transparent);
+}
+
+/* Keep the focus indicator around the complete search row, including its icon. */
+.model-catalog-search:has(input:focus-visible) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 35%, transparent);
+}
+
+.model-catalog-search input,
+.model-catalog-search input:focus-visible {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+}

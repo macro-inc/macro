@@ -250,7 +250,7 @@ fn render_permission(frame: &mut Frame, pending: &PendingPermission, area: Rect)
         ]));
     }
     lines.push(Line::from(Span::styled(
-        "Approve or deny it in Macro; a runtime cannot answer its own request.",
+        "Approve or deny it in Macro; a machine cannot answer its own request.",
         Style::new().fg(DIM),
     )));
     frame.render_widget(Paragraph::new(lines).block(block), area);

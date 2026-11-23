@@ -8,11 +8,11 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct RunId(pub Uuid);
 
-/// A JavaScript ES module exporting an async `main` function.
+/// A TypeScript ES module exporting an async `main` function.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExecuteRequest {
-    /// Complete JavaScript module, including imports and `export async function main`.
+    /// Complete TypeScript module, including imports and `export async function main`.
     pub source: String,
     /// Total budget including queueing and API requests.
     pub timeout_ms: u64,
@@ -31,8 +31,74 @@ pub struct RunEnvironment {
     pub session_id: Option<Uuid>,
     /// Current execution handle made available to the program.
     pub execution_id: Option<Uuid>,
-    /// Explicit Macro SDK service base URLs, also used for Deno's network allowlist.
+    /// Where the SDK sends requests and what its links point at.
+    #[serde(flatten)]
+    pub endpoints: SdkEndpoints,
+    /// Set for a program that runs with nobody watching (a routine step)
+    /// instead of an agent's or a person's call.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unattended: Option<Unattended>,
+    /// How the program's requests leave its process. Host-only: the child
+    /// sees only the hosts it may reach.
+    #[serde(skip)]
+    pub egress: Egress,
+}
+
+/// The handles an attended program's `main` receives besides the SDK, which
+/// decide the `CodeContext` it is type-checked with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ContextShape {
+    /// `session`: the run belongs to an agent session.
+    pub session: bool,
+    /// `execution`: the run is one of the session's code executions.
+    pub execution: bool,
+}
+
+impl RunEnvironment {
+    /// What `main` receives: `execution` only with `session`, as the
+    /// bootstrap passes them.
+    pub fn shape(&self) -> ContextShape {
+        ContextShape {
+            session: self.session_id.is_some(),
+            execution: self.session_id.is_some() && self.execution_id.is_some(),
+        }
+    }
+}
+
+/// How a program's requests reach the SDK hosts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Egress {
+    /// Straight from the process to the hosts, which `--allow-net` names.
+    #[default]
+    Direct,
+    /// Through a loopback forwarder the host runs for the run, the only
+    /// address `--allow-net` names; it marks every request.
+    Proxied,
+}
+
+/// The deployment's Macro SDK targets, so a program's requests and links stay
+/// in the environment it runs in.
+#[derive(Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkEndpoints {
+    /// Service base URLs, also used for Deno's network allowlist.
     pub hosts: std::collections::BTreeMap<String, String>,
+    /// The web app origin that `webUrl()` links start with.
+    pub web_app_url: String,
+}
+
+/// How an unattended program runs: its source is TypeScript, and `main`
+/// receives `macro` and `arguments` but never the credential.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Unattended {
+    /// Spread into `main`'s argument beside `macro`.
+    pub arguments: serde_json::Map<String, Value>,
+    /// No write runs: each one returns an empty result to the program and is
+    /// reported as skipped, so a run shows what it would have done. Writes
+    /// are every catalog operation that isn't a known read, so an operation
+    /// missing from the catalog is a write.
+    pub dry_run: bool,
 }
 
 /// Frame bytes kept beside a full-size result for its `{"type":"result",...}` envelope.
@@ -57,6 +123,17 @@ pub struct Limits {
     pub max_result_bytes: usize,
     /// Maximum regular events, plus a separate equal budget for advisory progress.
     pub max_events: usize,
+    /// Calls of any one SDK operation a program may make; the next one stops
+    /// the run with an error naming it. A program reading the same thing in
+    /// an unbounded loop would otherwise hammer one API until the deadline
+    /// and end with nothing to tell the agent why.
+    pub max_calls_per_operation: u32,
+    /// CPU time a process may use across its threads before the kernel stops
+    /// it; `None` leaves only the wall-clock deadline.
+    pub max_cpu: Option<Duration>,
+    /// Run processes at a lower scheduling priority than the host, so busy
+    /// background programs yield the CPU to its requests.
+    pub background: bool,
 }
 
 impl Default for Limits {
@@ -70,6 +147,9 @@ impl Default for Limits {
             max_output_bytes: 2 * 1024 * 1024,
             max_result_bytes: 64 * 1024,
             max_events: 1024,
+            max_calls_per_operation: 200,
+            max_cpu: None,
+            background: false,
         }
     }
 }
@@ -88,6 +168,10 @@ impl Limits {
             || self.max_result_bytes < 512
             || self.max_result_bytes + RESULT_FRAME_OVERHEAD > self.max_frame_bytes
             || !(2..=65536).contains(&self.max_events)
+            || !(1..=100_000).contains(&self.max_calls_per_operation)
+            || self
+                .max_cpu
+                .is_some_and(|cpu| cpu < Duration::from_secs(1) || cpu > self.max_duration)
         {
             return Err(AdmissionError::InvalidLimits);
         }
@@ -119,7 +203,7 @@ pub enum AdmissionError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureCode {
-    /// Legacy source compilation failure retained for persisted outcomes.
+    /// The program didn't type-check against the SDK, so it never ran.
     Compile,
     /// Program threw or exited without a result.
     Runtime,
@@ -228,4 +312,46 @@ pub struct ExecutionEvent {
     /// Event payload.
     #[serde(flatten)]
     pub kind: EventKind,
+}
+
+/// One type-checker problem, as the checker reported it. Locations are
+/// `<file>:<line>:<column>`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Diagnostic {
+    /// The file it is in, when it is in one of the checked files.
+    pub file: Option<String>,
+    /// The problem with its code, the offending line and its location.
+    pub message: String,
+}
+
+/// A TypeScript module checked together with others.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceFile {
+    /// Its file name: lowercase letters, digits and `_`, ending in `.ts`.
+    pub name: String,
+    /// Its source.
+    pub source: String,
+}
+
+/// The modules a checked program may import besides its own files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgramImports {
+    /// Only `@macro-inc/sdk`, as an unattended program runs with.
+    Sdk,
+    /// `@macro-inc/sdk` and `handlebars`, as an attended program runs with.
+    SdkAndHandlebars,
+}
+
+/// The checker couldn't decide whether a program checks.
+#[derive(Debug, thiserror::Error)]
+pub enum CheckError {
+    /// Empty or oversized source.
+    #[error("source must be nonempty and within the configured size limit")]
+    InvalidSource,
+    /// Every checker slot and queue place is taken.
+    #[error("type checking is busy; try again later")]
+    Busy,
+    /// The checker process failed or ran out of time.
+    #[error("type checking failed to run")]
+    Internal,
 }

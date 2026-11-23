@@ -9,7 +9,7 @@ import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { match } from 'ts-pattern';
 import type { EmailFormContextInputs } from '../context/email-form-inputs';
 import { decodeBase64Utf8 } from '../core/decode-base64';
-import { replySenderAddress } from '../core/email-sender';
+import { inboxAddresses, replySenderAddress } from '../core/email-sender';
 import { forwardedAttachments } from '../core/forwarded-attachments';
 import {
   convertContactInfoToEmailRecipient,
@@ -124,9 +124,24 @@ export function createEmailFormState(
 
   // The inbox this compose sends from. Defaults to the inbox that owns the
   // thread/draft; the user can change it via the "from" selector.
-  const [selectedInboxId, setSelectedInboxId] = createSignal<
-    string | undefined
-  >((draft ?? replyingTo)?.link_id ?? undefined);
+  const [chosenInboxId, setSelectedInboxId] = createSignal<string | undefined>(
+    draft?.link_id ?? undefined
+  );
+  // A thread shared with the viewer sits in its owner's inbox, which the viewer
+  // cannot send from; that default yields to the composer's own-inbox fallback.
+  const replyInboxId = () => {
+    const inboxId = replyingTo?.link_id;
+    return context.inboxes().some((inbox) => inbox.id === inboxId)
+      ? inboxId
+      : undefined;
+  };
+  const selectedInboxId = () => chosenInboxId() ?? replyInboxId();
+  // The inbox a reply to a shared thread actually sends from, so recipients
+  // are judged against that inbox's addresses.
+  const sharedReplyInboxId = () =>
+    replyingTo
+      ? (context.primaryInboxId?.() ?? context.inboxes()[0]?.id)
+      : undefined;
   // Reply logic ("did I send this?") must be judged against the inbox the
   // message is sent from, not the account's primary email — otherwise replying
   // from a secondary or delegated inbox misclassifies the sender and picks the
@@ -140,8 +155,7 @@ export function createEmailFormState(
     context
       .inboxes()
       .find(
-        (inbox) =>
-          inbox.id === (selectedInboxId() ?? (draft ?? replyingTo)?.link_id)
+        (inbox) => inbox.id === (selectedInboxId() ?? sharedReplyInboxId())
       );
   const senderEmail = () => {
     const choice = senderChoice();
@@ -150,11 +164,9 @@ export function createEmailFormState(
   };
   const inboxEmail = () => senderEmail() ?? userEmail() ?? '';
   const ownAddresses = () =>
-    [
-      inboxEmail(),
-      sendingInbox()?.email_address,
-      ...(sendingInbox()?.sendAs ?? []).map((sender) => sender.email_address),
-    ].filter((address): address is string => !!address);
+    [inboxEmail(), ...inboxAddresses(sendingInbox())].filter(
+      (address) => !!address
+    );
   const [recipientsEdited, setRecipientsEdited] = createSignal(false);
 
   const decodedBody = (message?: EmailMessage) => {

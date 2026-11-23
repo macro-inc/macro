@@ -351,6 +351,88 @@ fn a_speculated_prompt_has_no_time() {
     assert_eq!(machine.messages()[0].posted_at, None);
 }
 
+/// A reply shows when it was sent: when the log stored the frame that
+/// finished it, not when it began streaming.
+#[test]
+fn a_finished_reply_carries_the_time_its_turn_ended() {
+    let log = [
+        (TEXT_PROMPT, "2026-10-15T14:02:00Z"),
+        (
+            r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"done"}}}}}"#,
+            "2026-10-15T14:02:05Z",
+        ),
+        (
+            r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p0","result":{"stopReason":"end_turn"}}}"#,
+            "2026-10-15T14:03:10Z",
+        ),
+    ];
+    let mut machine = FoldMachineImpl::new();
+    for (line, logged_at) in log {
+        for entry in parse_log(line) {
+            let _ = machine.push(AgentSessionLog {
+                logged_at: Some(logged_at.parse().unwrap()),
+                ..entry
+            });
+        }
+    }
+
+    let reply = &machine.messages()[1];
+    assert_eq!(reply.stop, Some(StopReason::EndTurn));
+    assert_eq!(
+        reply.posted_at,
+        Some("2026-10-15T14:03:10Z".parse().unwrap())
+    );
+}
+
+/// A reply still streaming has no time: it has not been sent yet.
+#[test]
+fn a_running_reply_has_no_time() {
+    let log = [
+        TEXT_PROMPT,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"working"}}}}}"#,
+    ];
+    let mut machine = FoldMachineImpl::new();
+    for line in log {
+        for entry in parse_log(line) {
+            let _ = machine.push(AgentSessionLog {
+                logged_at: Some("2026-10-15T14:02:00Z".parse().unwrap()),
+                ..entry
+            });
+        }
+    }
+
+    assert_eq!(machine.messages()[1].stop, None);
+    assert_eq!(machine.messages()[1].posted_at, None);
+}
+
+/// A failed turn is a reply too, and shows when the failure came back.
+#[test]
+fn a_failed_reply_carries_the_time_of_its_error() {
+    let log = [
+        (TEXT_PROMPT, "2026-10-15T14:02:00Z"),
+        (
+            r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p0","error":{"code":-32603,"message":"rate limited"}}}"#,
+            "2026-10-15T14:02:03Z",
+        ),
+    ];
+    let mut machine = FoldMachineImpl::new();
+    for (line, logged_at) in log {
+        for entry in parse_log(line) {
+            let _ = machine.push(AgentSessionLog {
+                logged_at: Some(logged_at.parse().unwrap()),
+                ..entry
+            });
+        }
+    }
+
+    let reply = &machine.messages()[1];
+    assert!(matches!(reply.stop, Some(StopReason::Failed { .. })));
+    assert_eq!(
+        reply.posted_at,
+        Some("2026-10-15T14:02:03Z".parse().unwrap())
+    );
+}
+
 /// A summary can land while a tool runs. The divider sits where it landed:
 /// after the running call, before everything the turn does next - whether
 /// the transcript watched it happen or folded it on reload.

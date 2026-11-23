@@ -4,6 +4,7 @@ mod access;
 mod events;
 mod initial_properties;
 mod reads;
+mod telemetry;
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     OwnerAccessLevel, ViewAccessLevel,
@@ -54,6 +55,7 @@ fn share_permission() -> SharePermissionV2 {
 
 fn detail(member_ids: Vec<MacroUserIdStr<'static>>) -> InitiativeDetail {
     InitiativeDetail {
+        appearance: None,
         id: initiative_id(),
         name: "Launch".to_string(),
         owner_id: user(OWNER),
@@ -538,6 +540,7 @@ async fn get_and_list_call_the_repo() {
     repo.expect_get_basic().return_once(|_| {
         Box::pin(async {
             Ok(Some(InitiativeBasic {
+                appearance: None,
                 id: initiative_id(),
                 name: "Launch".into(),
                 owner_id: user(OWNER),
@@ -550,6 +553,7 @@ async fn get_and_list_call_the_repo() {
         Box::pin(async {
             Ok(InitiativeList {
                 initiatives: vec![InitiativeSummary {
+                    appearance: None,
                     id: initiative_id(),
                     name: "Launch".into(),
                     updated_at: now(),
@@ -662,7 +666,13 @@ async fn replayed_import_reuses_only_the_same_owners_project() {
     };
     let attribution = || activity::Attribution::direct(activity::Actor::new_from_user(user(OWNER)));
     let reused = service
-        .create_imported(&user(OWNER), request(), attribution(), initiative_id())
+        .create_imported(
+            &user(OWNER),
+            request(),
+            attribution(),
+            initiative_id(),
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
+        )
         .await
         .unwrap();
     assert_eq!(reused.id, initiative_id());
@@ -672,7 +682,34 @@ async fn replayed_import_reuses_only_the_same_owners_project() {
             request(),
             activity::Attribution::direct(activity::Actor::new_from_user(user(OTHER))),
             initiative_id(),
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
         )
         .await;
     assert!(matches!(other, Err(InitiativeError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn personal_imported_project_ignores_team_link_default() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_detail()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(async { Ok(Some(TeamLinkShareDefault(Some(LinkShare::Team)))) }));
+    repo.expect_create()
+        .withf(|_, permission, _| permission.link_share_state() == LinkShareState::Off)
+        .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
+    service(repo)
+        .create_imported(
+            &user(OWNER),
+            CreateInitiativeRequest {
+                name: "Imported".into(),
+                share_with_team: Some(false),
+                ..Default::default()
+            },
+            activity::Attribution::direct(activity::Actor::new_from_user(user(OWNER))),
+            initiative_id(),
+            models_permissions::share_permission::InitialLinkShare::Exact(LinkShareState::Off),
+        )
+        .await
+        .unwrap();
 }

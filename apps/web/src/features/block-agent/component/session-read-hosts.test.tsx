@@ -1,11 +1,13 @@
 import { AgentSessionPane } from '@app/features/agents-view/components/AgentSessionPane';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '@components/app/split-layout/context';
 import type { NotificationSource } from '@notifications/notification-source';
-import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { createSignal, type JSX, useContext } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentMessageTarget } from '../core/search-location';
 import BlockAgent from './Block';
@@ -15,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   loaded: (): boolean => false,
   failed: (): boolean => false,
   active: (): boolean => false,
+  touch: false,
   source: undefined as NotificationSource | undefined,
   target: (): AgentMessageTarget | undefined => undefined,
   navigate: (_params: Record<string, unknown>) => {},
@@ -22,6 +25,10 @@ const mocks = vi.hoisted(() => ({
 
 // Keep both real session hosts and the real read marker. Replace unrelated
 // editor/chrome surfaces and provide the session/notification boundary data.
+vi.mock('@app/features/runtime-sharing/views/SessionAgentRuntime', () => ({
+  SessionAgentRuntime: () => null,
+}));
+
 vi.mock('@notifications/notification-helpers', () => ({
   markNotificationsForEntityAsRead: mocks.markRead,
 }));
@@ -58,9 +65,11 @@ vi.mock('../context/pending-session', () => ({
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useCanAutofocusSplitContent: () => false,
+  useSplitPanel: () => useContext(SplitPanelContext),
   useSplitPanelOrThrow: () => ({ isPanelActive: () => mocks.active() }),
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'placeholder-session' }));
+vi.mock('@core/internal/open-tracker', () => ({ createOpenTracker: vi.fn() }));
 vi.mock('@core/orchestrator', () => ({
   createMethodRegistration: (
     _handle: unknown,
@@ -75,6 +84,9 @@ vi.mock('../primitives/create-agent-route-target', () => ({
 }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'owner' }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.touch,
+}));
 vi.mock('@core/util/url', () => ({ openExternalUrl: vi.fn() }));
 vi.mock('@app/features/next-soup/actions', () => ({
   useBlockEntityCommands: vi.fn(),
@@ -112,8 +124,20 @@ vi.mock('@core/component/TopBar/ShareButton', () => ({
 vi.mock('@core/component/TopBar/shareModal', () => ({
   useShareModal: () => () => {},
 }));
-vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
-  FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,
+vi.mock(
+  '@components/app/mobile/float-regions/FloatRegion',
+  async (original) => ({
+    ...(await original<
+      typeof import('@components/app/mobile/float-regions/FloatRegion')
+    >()),
+    FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,
+  })
+);
+vi.mock('@components/app/SplitHeaderScope', () => ({
+  SplitHeaderScope: {
+    Root: (props: { children: JSX.Element }) => props.children,
+    TopBar: () => null,
+  },
 }));
 vi.mock('@app/features/changes/agent-session-changes', () => ({
   AgentChangesProvider: (props: { children: JSX.Element }) => props.children,
@@ -126,10 +150,15 @@ vi.mock('@app/features/changes/changes', () => ({
 }));
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
+    FLOATING_CLEARANCE_PX: 344,
     Layout: (props: { children: JSX.Element }) => props.children,
     Root: (props: { children: JSX.Element }) => props.children,
     Toggle: () => null,
   },
+  useSidePanel: () => null,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   SplitFileMenu: () => null,
@@ -141,11 +170,19 @@ vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
 vi.mock('./AgentComposer', () => ({ AgentComposer: () => null }));
 vi.mock('./AgentPullRequestChip', () => ({ AgentPullRequestChip: () => null }));
 vi.mock('./AgentTaskChip', () => ({ AgentTaskChip: () => null }));
-vi.mock('./AgentSplitHeader', () => ({
-  AgentSplitHeader: () => null,
+vi.mock('./agent-session-header', () => ({
+  useAgentSessionHeader: () => ({}),
   agentSessionTitle: () => 'Agent session',
-  sessionRepositoryUrl: () => undefined,
 }));
+vi.mock('../views/agent-session-header', () => ({
+  AgentSessionHeader: () => null,
+}));
+vi.mock(
+  '../views/mobile/redesigned-session-header/redesigned-session-header',
+  () => ({
+    MobileAgentSessionHeader: () => null,
+  })
+);
 vi.mock('./sidepanel/AgentSidePanelSections', () => ({
   AgentSidePanelSections: () => null,
 }));
@@ -171,6 +208,7 @@ beforeEach(() => {
   mocks.loaded = () => false;
   mocks.failed = () => false;
   mocks.active = () => false;
+  mocks.touch = false;
   mocks.target = () => undefined;
   mocks.source = {
     notificationsByEntity: () => ({}),
@@ -204,8 +242,9 @@ describe.each(['Home', 'Agents'] as const)('%s session host', (host) => {
   function mountHost() {
     const panel = {
       isPanelActive: () => mocks.active(),
+      handle: { id: 'session-pane' },
     } as SplitPanelContextType;
-    render(() => (
+    return render(() => (
       <SplitPanelContext.Provider value={panel}>
         {host === 'Home' ? (
           <BlockAgent />
@@ -221,6 +260,48 @@ describe.each(['Home', 'Agents'] as const)('%s session host', (host) => {
     ));
   }
 
+  it('hides the dock only while the phone session owns the active pane', () => {
+    mocks.touch = true;
+    const [active, setActive] = createSignal(true);
+    mocks.active = active;
+    const dock = render(() => (
+      <>
+        <div ref={(element) => FloatRegions.setMount('dock', element)} />
+        <FloatRegion region="dock">
+          <button type="button">App navigation</button>
+        </FloatRegion>
+      </>
+    ));
+    expect(screen.getByRole('button', { name: 'App navigation' })).toBeTruthy();
+
+    const session = mountHost();
+    expect(screen.queryByRole('button', { name: 'App navigation' })).toBeNull();
+    expect(dock.container.firstElementChild?.childElementCount).toBe(0);
+
+    // Back or swipe-back changes the active pane before the session unmounts.
+    setActive(false);
+    expect(screen.getByRole('button', { name: 'App navigation' })).toBeTruthy();
+    setActive(true);
+    expect(screen.queryByRole('button', { name: 'App navigation' })).toBeNull();
+
+    session.unmount();
+    expect(screen.getByRole('button', { name: 'App navigation' })).toBeTruthy();
+  });
+
+  it('does not suppress the dock for a desktop session', () => {
+    mocks.active = () => true;
+    const dock = FloatRegions.register({
+      region: 'dock',
+      priority: 0,
+      isActive: () => true,
+    });
+    try {
+      mountHost();
+      expect(dock.isWinner()).toBe(true);
+    } finally {
+      dock.unregister();
+    }
+  });
   it('marks the resolved session only after it loads in the focused split', async () => {
     const [loaded, setLoaded] = createSignal(false);
     const [active, setActive] = createSignal(false);

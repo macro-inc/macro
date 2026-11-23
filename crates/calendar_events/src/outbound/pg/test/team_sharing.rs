@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::team::{CalendarTeamRepository, TeamCalendarCoverage, TeamCalendarSharing};
+use crate::domain::team::{
+    AvailabilityCalendar, CalendarTeamRepository, TeamCalendarCoverage, TeamCalendarSharing,
+};
 use crate::outbound::pg_team::PgCalendarTeamRepository;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -397,7 +399,10 @@ async fn team_sources_require_current_membership_and_verified_source_entitlement
         subscribed.event.conference_url.as_deref(),
         Some("https://reader.example.com")
     );
-    assert!(!subscribed.contributes_to_availability);
+    assert!(
+        subscribed.contributes_to_availability,
+        "a calendar the owner never chose for counts, as booking links count it"
+    );
     assert!(
         team.sources(outsider, july_2026_range(), &owners, None, 100)
             .await
@@ -499,29 +504,29 @@ async fn team_sources_require_current_membership_and_verified_source_entitlement
             .contributes_to_availability
     };
     assert!(
-        contributes(&visible, primary),
-        "an inbox's primary calendar is the owner's schedule by default"
+        contributes(&visible, primary) && contributes(&visible, secondary),
+        "every calendar counts until the owner turns it off"
     );
-    assert!(
-        !contributes(&visible, secondary),
-        "any other calendar is not, whatever access the owner holds on it"
-    );
-    assert!(
-        team.set_availability_calendar(owner, secondary, true)
-            .await
-            .unwrap()
-    );
-    assert!(
-        team.availability_calendars(owner)
-            .await
-            .unwrap()
+    let listed = |calendars: &[AvailabilityCalendar], id: Uuid| {
+        calendars
             .iter()
-            .find(|calendar| calendar.calendar_id == secondary)
+            .find(|calendar| calendar.calendar_id == id)
             .unwrap()
             .contributes_to_availability
-    );
+    };
+    let settings = team.availability_calendars(owner).await.unwrap();
+    assert!(listed(&settings, primary) && listed(&settings, secondary));
     assert!(
-        contributes(
+        team.set_availability_calendar(owner, secondary, false)
+            .await
+            .unwrap()
+    );
+    assert!(!listed(
+        &team.availability_calendars(owner).await.unwrap(),
+        secondary
+    ));
+    assert!(
+        !contributes(
             &repo.list_visible_calendars(owner).await.unwrap(),
             secondary
         ),
@@ -592,7 +597,10 @@ async fn team_sources_follow_direct_delegation_without_recursive_resharing(pool:
         .unwrap();
     assert_eq!(rows.len(), 2);
     assert!(rows.iter().all(|row| row.shared_by == sharer));
-    assert!(rows.iter().all(|row| !row.contributes_to_availability));
+    assert!(
+        rows.iter().all(|row| row.contributes_to_availability),
+        "a delegated inbox counts until the delegate turns it off, as booking links count it"
+    );
     assert!(
         team.sources(
             viewer,

@@ -3,13 +3,14 @@ import { unwatchFile, watchFile } from 'node:fs';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
-import type { Plugin, Rollup, UserConfigFn } from 'vite';
+import type { Plugin, Rolldown, UserConfigFn } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { browserslist, version } from './package.json';
+import { unexpectedCostlySelectors } from './scripts/costly-selectors';
 import { devCompression } from './scripts/dev-compression';
 import { devHttps } from './scripts/dev-https';
 import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
@@ -79,11 +80,11 @@ function gitBranchHmrPlugin(): Plugin {
 }
 
 /**
- * Orval's generated schemas are top-level `zod.object(...)` chains. Rollup
- * cannot prove those calls are side-effect free, so every schema (≈700 for the
- * storage service alone) stayed in the entry chunk and was constructed at
- * startup, used or not. Annotating each one pure lets Rollup drop the unused
- * ones; the annotation is applied at build time so regenerated files keep it.
+ * Orval's generated schemas are top-level `zod.object(...)` chains. The
+ * bundler cannot prove those calls are side-effect free, so every schema (≈700
+ * for the storage service alone) stayed in the entry chunk and was constructed
+ * at startup, used or not. Annotating each one pure lets the bundler drop the
+ * unused ones; the annotation is applied at build time so regenerated files keep it.
  */
 function pureGeneratedZodSchemas(): Plugin {
   return {
@@ -100,6 +101,25 @@ function pureGeneratedZodSchemas(): Plugin {
       };
     },
   };
+}
+
+/**
+ * Vite writes imported videos to `web-hosted/` instead of `assets/`. The web
+ * deploy publishes that directory with the rest of `dist`, but every native
+ * bundle deletes it (`build-tauri`, the OTA archive in `infra/stacks/web-app`,
+ * the desktop derivation in `nix/tauri-desktop.nix`): the tutorial videos
+ * alone added 105 MB to each app binary and OTA download. The apps load these
+ * files from the web origin instead (`webHostedUrl`).
+ */
+const WEB_HOSTED_FILE = /\.(mp4|webm|mov)$/i;
+
+// Hosted names keep their hash even in NO_MINIFY builds: a native bundle
+// always loads the web deploy's copy, which is hashed.
+function assetFileNames(bundledPattern: string) {
+  return (asset: Rolldown.PreRenderedAsset) =>
+    asset.names.some((name) => WEB_HOSTED_FILE.test(name))
+      ? 'web-hosted/[name]-[hash][extname]'
+      : `assets/${bundledPattern}`;
 }
 
 /**
@@ -141,16 +161,28 @@ function cloudFrontCompressionLimit(): Plugin {
  * `.map` next to each chunk, and gives up on maps over 25,000,000 bytes. The
  * entry chunk's map once crossed that and every frame in it stayed minified,
  * so fail the build on a missing or oversized map.
+ *
+ * Rolldown emits each map as a `<chunk>.map` asset and none for a chunk that
+ * renders no source code: a facade that only re-exports another chunk, or its
+ * own runtime and Vite's preload polyfill (virtual `\0` modules). Those have
+ * no frames to symbolicate, so only a chunk with source code needs a map.
  */
 function posthogSourceMapLimit(): Plugin {
   const limitBytes = 25_000_000;
+  const rendersSource = (chunk: Rolldown.OutputChunk) =>
+    Object.entries(chunk.modules).some(
+      ([id, module]) => !id.startsWith('\0') && module.renderedLength > 0
+    );
   return {
     name: 'posthog-source-map-limit',
     apply: 'build',
     generateBundle(_options, bundle) {
       const problems = Object.values(bundle).flatMap((file) => {
         if (file.type === 'chunk') {
-          return file.map ? [] : [`${file.fileName} has no source map`];
+          const mapped =
+            bundle[`${file.fileName}.map`] !== undefined ||
+            !rendersSource(file);
+          return mapped ? [] : [`${file.fileName} has no source map`];
         }
         if (!file.fileName.endsWith('.map')) return [];
         const bytes =
@@ -167,36 +199,264 @@ function posthogSourceMapLimit(): Plugin {
   };
 }
 
+/**
+ * Every whole-page restyle (a custom property written on <html>, a theme
+ * switch) tests each element against Chrome's universal rules, and some of
+ * those cost every element real work: `:root ::selection` and
+ * `:where(.a, .b) *` once made a restyle three times slower. Fail the build
+ * on a new one; `scripts/costly-selectors.ts` says what counts and how to
+ * scope it.
+ */
+function costlySelectorBudget(): Plugin {
+  return {
+    name: 'costly-selector-budget',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const problems = Object.values(bundle).flatMap((file) => {
+        if (file.type !== 'asset' || !file.fileName.endsWith('.css')) return [];
+        const css =
+          typeof file.source === 'string'
+            ? file.source
+            : Buffer.from(file.source).toString('utf8');
+        return unexpectedCostlySelectors(css, file.fileName).map(
+          (selector) => `${selector} (${file.fileName})`
+        );
+      });
+      if (problems.length === 0) return;
+      this.error(
+        `These selectors make Chrome do work for every element on each whole-page restyle: ${problems.join(', ')}. Give the walk an ancestor class outside :is()/:where() (\`.x *\`, \`:where(.x) *\`), set a ::selection on the subtree root, or add the selector to ALLOWED_COSTLY_SELECTORS in scripts/costly-selectors.ts with why it must reach every element.`
+      );
+    },
+  };
+}
+
+/**
+ * A chain of chunks the entries load statically that leads back to its start,
+ * or undefined. In such a cycle a module can read a binding of another before
+ * it is initialized. Dynamic imports are left out: one cannot close a cycle
+ * among chunks the entries load statically. Cycles among lazy chunks alone are
+ * not checked.
+ */
+export function startupChunkCycle(
+  chunks: readonly Pick<
+    Rolldown.OutputChunk,
+    'fileName' | 'imports' | 'isEntry'
+  >[]
+): string[] | undefined {
+  const byName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]));
+  const finished = new Set<string>();
+  for (const entry of chunks) {
+    if (!entry.isEntry || finished.has(entry.fileName)) continue;
+    const path: string[] = [entry.fileName];
+    const next: number[] = [0];
+    const onPath = new Map([[entry.fileName, 0]]);
+    while (path.length > 0) {
+      const name = path[path.length - 1];
+      const imports = byName.get(name)?.imports ?? [];
+      const index = next[next.length - 1];
+      if (index >= imports.length) {
+        finished.add(name);
+        onPath.delete(name);
+        path.pop();
+        next.pop();
+        continue;
+      }
+      next[next.length - 1] = index + 1;
+      const imported = imports[index];
+      const open = onPath.get(imported);
+      if (open !== undefined) return [...path.slice(open), imported];
+      if (finished.has(imported) || !byName.has(imported)) continue;
+      onPath.set(imported, path.length);
+      path.push(imported);
+      next.push(0);
+    }
+  }
+  return undefined;
+}
+
+/** Fails the build if startup chunks import each other in a cycle. */
+function acyclicStartupChunks(): Plugin {
+  return {
+    name: 'acyclic-startup-chunks',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const chunks = Object.values(bundle).filter(
+        (file): file is Rolldown.OutputChunk => file.type === 'chunk'
+      );
+      const cycle = startupChunkCycle(chunks);
+      if (!cycle) return;
+      this.error(
+        `Startup chunks import each other in a cycle, so a module could read a binding before it is initialized: ${cycle.join(' -> ')}. Check the groups in startupChunks().`
+      );
+    },
+  };
+}
+
 const isNodeModule = (id: string) => id.includes('/node_modules/');
 const isGeneratedSource = (id: string) =>
   !isNodeModule(id) && /\/generated\//.test(id);
 
+/** The startup chunk a module moves to, and the group that captures it. */
+type StartupPart = { name: string; rank: number };
+
 /**
- * Splits the entry chunk so each source map stays under PostHog's limit: one
- * map with every startup module was 44 MB, most of it library code and the
- * embedded text of generated API clients.
- *
- * Only modules the entry already imports statically move, so startup loads
- * the same code in three files and lazy code stays lazy. A generated module
- * moves only if it imports nothing but libraries and other generated modules;
- * otherwise the chunks would import each other and could read bindings before
- * they are initialized.
+ * Module code per startup chunk, before minification. Smaller chunks start the
+ * app sooner: Chrome compiles each one as it arrives while later ones
+ * download, and V8 re-parses a whole chunk on the main thread the first time
+ * code in it builds a stack trace, which some libraries do as they load.
+ * 800 KB parts beat 2 MB parts on a slow CPU, and both beat one chunk per kind.
+ * A single module, or modules that import each other in a cycle, stay in one
+ * chunk however large, such as the generated GraphQL client.
  */
-function startupChunks(): Rollup.ManualChunksOption {
-  const plans = new WeakMap<Rollup.GetModuleInfo, Map<string, string>>();
-  const planChunks = (
-    getModuleInfo: Rollup.GetModuleInfo,
-    moduleIds: Iterable<string>
-  ) => {
-    const imports = (id: string) => getModuleInfo(id)?.importedIds ?? [];
-    const startup = new Set<string>();
-    const pending = [...moduleIds].filter((id) => getModuleInfo(id)?.isEntry);
-    for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
-      if (startup.has(id)) continue;
-      startup.add(id);
-      pending.push(...imports(id));
+export const STARTUP_PART_CODE_BYTES = 800_000;
+/** Groups available to startup chunks; the plan fails the build if it needs more. */
+const STARTUP_PART_GROUPS = 48;
+
+/** A module being visited and the next of its imports to visit. */
+type ImportFrame = { id: string; imports: readonly string[]; next: number };
+
+/**
+ * Positions of modules in an order where every module comes after the modules
+ * it imports. Modules that import each other in a cycle share one position.
+ * This is Tarjan's strongly connected components algorithm, which finishes a
+ * component only after every component it reaches. It keeps its own stack so
+ * a long import chain cannot overflow the call stack.
+ */
+export function dependencyFirstPositions(
+  ids: Iterable<string>,
+  importsOf: (id: string) => readonly string[]
+): Map<string, number> {
+  const visitIndex = new Map<string, number>();
+  const lowLink = new Map<string, number>();
+  const open = new Set<string>();
+  const openStack: string[] = [];
+  const positions = new Map<string, number>();
+  let visited = 0;
+
+  for (const root of ids) {
+    if (visitIndex.has(root)) continue;
+    const frames: ImportFrame[] = [];
+    const enter = (id: string) => {
+      visitIndex.set(id, visited);
+      lowLink.set(id, visited);
+      visited += 1;
+      openStack.push(id);
+      open.add(id);
+      frames.push({ id, imports: importsOf(id), next: 0 });
+    };
+    const lower = (id: string, value: number | undefined) => {
+      if (value !== undefined && value < (lowLink.get(id) ?? value)) {
+        lowLink.set(id, value);
+      }
+    };
+
+    enter(root);
+    while (frames.length > 0) {
+      const frame = frames[frames.length - 1];
+      if (frame.next < frame.imports.length) {
+        const imported = frame.imports[frame.next];
+        frame.next += 1;
+        if (!visitIndex.has(imported)) enter(imported);
+        else if (open.has(imported)) lower(frame.id, visitIndex.get(imported));
+        continue;
+      }
+
+      frames.pop();
+      const parent = frames[frames.length - 1];
+      if (parent) lower(parent.id, lowLink.get(frame.id));
+      if (lowLink.get(frame.id) !== visitIndex.get(frame.id)) continue;
+
+      const position = positions.size;
+      let member = openStack.pop();
+      while (member !== undefined) {
+        open.delete(member);
+        positions.set(member, position);
+        if (member === frame.id) break;
+        member = openStack.pop();
+      }
     }
-    const schemas = new Set([...startup].filter(isGeneratedSource));
+  }
+  return positions;
+}
+
+/**
+ * Cuts modules sorted by dependency-first position into parts of at least
+ * STARTUP_PART_CODE_BYTES of code (the last part may be smaller), never
+ * between modules that share a position because they import each other.
+ */
+export function cutIntoParts(
+  ids: readonly string[],
+  positionOf: (id: string) => number,
+  bytesOf: (id: string) => number
+): string[][] {
+  const parts: string[][] = [[]];
+  let partBytes = 0;
+  for (const [index, id] of ids.entries()) {
+    const startsComponent =
+      index === 0 || positionOf(ids[index - 1]) !== positionOf(id);
+    if (partBytes >= STARTUP_PART_CODE_BYTES && startsComponent) {
+      parts.push([]);
+      partBytes = 0;
+    }
+    parts[parts.length - 1].push(id);
+    partBytes += bytesOf(id);
+  }
+  return parts;
+}
+
+/**
+ * Splits the code the HTML entries load at startup into chunks of about
+ * STARTUP_PART_CODE_BYTES of module code, so each source map stays well under
+ * PostHog's limit (one map with every startup module was 44 MB, most of it
+ * library code and the embedded text of generated API clients), startup stays
+ * fast, and index.html preloads a known set of files.
+ * Left alone, Rolldown splits startup code that lazy chunks also import into
+ * hundreds of small chunks, and index.html preloads every one.
+ *
+ * Only modules an entry already imports statically move, so startup loads the
+ * same code and lazy code stays lazy:
+ * - libraries go to `vendor-<n>`;
+ * - generated API modules go to `api-schemas-<n>`, but only if they import
+ *   nothing but libraries and other generated modules;
+ * - the rest of the app's code goes to `startup-<entries>-<n>` for the set of
+ *   entries that loads it, except the modules an entry imports directly, which
+ *   stay in its entry chunk.
+ *
+ * Chunks must never import each other in a cycle, or a module could read a
+ * binding before it is initialized. Each kind's modules are cut into parts
+ * along an order where a module follows everything it imports, and each part
+ * gets its own group: parts earlier in that order, libraries, and code for more
+ * entries (a module's static imports load with at least the same entries) get
+ * a higher priority. A group also captures the not yet captured modules its
+ * modules import, so a chunk only ever imports chunks captured before it.
+ * (Rolldown's own `maxSize` splits a group without that order and its parts
+ * import each other in cycles.)
+ */
+function startupChunks(
+  entries: Record<string, string>
+): Rolldown.CodeSplittingOptions {
+  const entryIds = new Set(Object.values(entries));
+  const entryCount = entryIds.size;
+  const planChunks = (
+    context: Rolldown.ChunkingContext
+  ): Map<string, StartupPart> => {
+    const imports = (id: string) =>
+      context.getModuleInfo(id)?.importedIds ?? [];
+    const loadedBy = new Map<string, string[]>();
+    const direct = new Set<string>();
+    for (const [entry, entryId] of Object.entries(entries)) {
+      for (const id of imports(entryId)) direct.add(id);
+      const seen = new Set<string>();
+      const pending = [entryId];
+      for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        loadedBy.set(id, [...(loadedBy.get(id) ?? []), entry]);
+        pending.push(...imports(id));
+      }
+    }
+
+    const schemas = new Set([...loadedBy.keys()].filter(isGeneratedSource));
     let changed = true;
     while (changed) {
       changed = false;
@@ -210,20 +470,85 @@ function startupChunks(): Rollup.ManualChunksOption {
         }
       }
     }
-    const plan = new Map<string, string>();
-    for (const id of startup) {
-      if (isNodeModule(id)) plan.set(id, 'vendor');
-      else if (schemas.has(id)) plan.set(id, 'api-schemas');
+
+    // Each moving module's kind, ranked so a kind only imports earlier kinds.
+    const kinds = new Map<string, { order: number; ids: string[] }>();
+    const addToKind = (kind: string, order: number, id: string) => {
+      const members = kinds.get(kind) ?? { order, ids: [] };
+      members.ids.push(id);
+      kinds.set(kind, members);
+    };
+    for (const [id, loaders] of loadedBy) {
+      if (isNodeModule(id)) addToKind('vendor', 0, id);
+      else if (schemas.has(id)) addToKind('api-schemas', 1, id);
+      else if (!entryIds.has(id) && !direct.has(id)) {
+        addToKind(
+          `startup-${loaders.join('-')}`,
+          2 + entryCount - loaders.length,
+          id
+        );
+      }
+    }
+
+    // Cut each kind into parts along the import order, never inside a cycle.
+    const positions = dependencyFirstPositions(loadedBy.keys(), (id) =>
+      imports(id).filter((imported) => loadedBy.has(imported))
+    );
+    const positionOf = (id: string) => positions.get(id) ?? 0;
+    const plan = new Map<string, StartupPart>();
+    let rank = 0;
+    const ordered = [...kinds].sort(([, a], [, b]) => a.order - b.order);
+    for (const [kind, { ids }] of ordered) {
+      ids.sort((a, b) => positionOf(a) - positionOf(b));
+      const parts = cutIntoParts(
+        ids,
+        positionOf,
+        (id) => context.getModuleInfo(id)?.code?.length ?? 0
+      );
+      for (const [index, part] of parts.entries()) {
+        const name = parts.length === 1 ? kind : `${kind}-${index + 1}`;
+        for (const id of part) plan.set(id, { name, rank });
+        rank += 1;
+      }
+    }
+    if (rank > STARTUP_PART_GROUPS) {
+      throw new Error(
+        `startupChunks() planned ${rank} startup chunks but has ${STARTUP_PART_GROUPS} groups; raise STARTUP_PART_GROUPS or STARTUP_PART_CODE_BYTES.`
+      );
     }
     return plan;
   };
-  return (id, { getModuleInfo, getModuleIds }) => {
-    let plan = plans.get(getModuleInfo);
+  // Rolldown reuses one context for every call of a chunking pass.
+  const plans = new WeakMap<
+    Rolldown.ChunkingContext,
+    Map<string, StartupPart>
+  >();
+  const planFor = (context: Rolldown.ChunkingContext) => {
+    let plan = plans.get(context);
     if (!plan) {
-      plan = planChunks(getModuleInfo, getModuleIds());
-      plans.set(getModuleInfo, plan);
+      plan = planChunks(context);
+      plans.set(context, plan);
     }
-    return plan.get(id);
+    return plan;
+  };
+  return {
+    groups: Array.from(
+      { length: STARTUP_PART_GROUPS },
+      (_, rank): Rolldown.CodeSplittingGroup => ({
+        debugName: `startup chunk ${rank + 1}`,
+        name: (id, context) => {
+          const part = planFor(context).get(id);
+          return part?.rank === rank ? part.name : null;
+        },
+        tags: ['$initial'],
+        priority: STARTUP_PART_GROUPS - rank,
+        // Rolldown's default, spelled out: the group also takes the modules its
+        // modules import that no group claimed, such as Vite's preload helper.
+        // acyclicStartupChunks() checks on every build that startup chunks
+        // still import each other in one direction.
+        includeDependenciesRecursively: true,
+      })
+    ),
   };
 }
 
@@ -324,6 +649,13 @@ function htmlPreloads(): Plugin {
   };
 }
 
+/** The app's pages; each loads its own startup code (see startupChunks). */
+const HTML_ENTRIES = {
+  app: resolve(__dirname, 'index.html'),
+  pipedreamConnect: resolve(__dirname, 'pipedream-connect.html'),
+  canvasRender: resolve(__dirname, 'canvas-render.html'),
+};
+
 export const createAppViteConfig = (): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
@@ -358,6 +690,8 @@ export const createAppViteConfig = (): UserConfigFn => {
         gitBranchHmrPlugin(),
         cloudFrontCompressionLimit(),
         posthogSourceMapLimit(),
+        costlySelectorBudget(),
+        acyclicStartupChunks(),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,
@@ -369,7 +703,7 @@ export const createAppViteConfig = (): UserConfigFn => {
           }),
           posthogSourceMapLimit(),
         ],
-        rollupOptions: {
+        rolldownOptions: {
           output: {
             format: 'es',
             chunkFileNames: '[name]-[hash].js',
@@ -390,14 +724,10 @@ export const createAppViteConfig = (): UserConfigFn => {
         // The gzip-size console report re-compresses every chunk, adding ~20 s
         // to each build; nothing reads it.
         reportCompressedSize: false,
-        rollupOptions: {
-          input: {
-            app: resolve(__dirname, 'index.html'),
-            pipedreamConnect: resolve(__dirname, 'pipedream-connect.html'),
-            canvasRender: resolve(__dirname, 'canvas-render.html'),
-          },
+        rolldownOptions: {
+          input: HTML_ENTRIES,
           // KaTeX and PDF.js are now reachable through lazy boundaries. Let
-          // Rollup place them naturally; forcing lazy code into named chunks
+          // Rolldown place them naturally; forcing lazy code into named chunks
           // hoists shared CommonJS helpers into those chunks and makes the
           // entry preload otherwise-lazy code.
           output: NO_MINIFY
@@ -406,14 +736,15 @@ export const createAppViteConfig = (): UserConfigFn => {
                 // https://github.com/vitejs/vite/issues/378
                 entryFileNames: `assets/[name].js`,
                 chunkFileNames: `assets/[name].js`,
-                assetFileNames: `assets/[name].[ext]`,
-                manualChunks: startupChunks(),
+                assetFileNames: assetFileNames('[name].[ext]'),
+                codeSplitting: startupChunks(HTML_ENTRIES),
               }
             : {
                 format: 'es',
                 chunkFileNames: '[name]-[hash].js',
                 entryFileNames: '[name]-[hash].js',
-                manualChunks: startupChunks(),
+                assetFileNames: assetFileNames('[name]-[hash][extname]'),
+                codeSplitting: startupChunks(HTML_ENTRIES),
               },
         },
         assetsInlineLimit: (filePath) => {
@@ -422,12 +753,11 @@ export const createAppViteConfig = (): UserConfigFn => {
         },
         sourcemap: true,
       },
-      esbuild: {
-        supported: {
-          'top-level-await': true,
+      oxc: {
+        jsx: {
+          runtime: 'automatic',
+          importSource: 'solid-js',
         },
-        jsx: 'automatic',
-        jsxImportSource: 'solid-js',
       },
       optimizeDeps: {
         include: [
@@ -442,16 +772,18 @@ export const createAppViteConfig = (): UserConfigFn => {
           'fflate',
           'saxes',
         ],
-        // loro-crdt is a wasm singleton. The app imports it directly (esbuild
-        // pre-bundles a copy) while the linked `@loro-mirror/core` workspace
+        // loro-crdt is a wasm singleton. The app imports it directly (the dep
+        // optimizer pre-bundles a copy) while the linked `@loro-mirror/core` workspace
         // source imports it through vite-plugin-wasm — two module evaluations,
         // two wasm memories. A LoroDoc from one instance handed to a Mirror on
         // the other yields cross-instance container handles → `index out of
         // bounds` panics in dev only. Excluding it from pre-bundling collapses
         // everyone onto the single plugin-handled instance.
         exclude: ['loro-crdt'],
-        esbuildOptions: {
-          target: 'esnext',
+        rolldownOptions: {
+          transform: {
+            target: 'esnext',
+          },
         },
       },
       resolve: {

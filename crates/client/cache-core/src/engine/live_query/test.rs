@@ -724,3 +724,34 @@ fn evicted_continuations_require_registration_again() {
         assert!(registered.reset);
     });
 }
+
+#[test]
+fn rotating_subscribers_beyond_one_pane_keep_receiving_deltas() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(&mut engine, "a", 1).await;
+        // One channel pane registers about 33 views and reads all of them after
+        // every cache write.
+        let subscribers = 40;
+        let mut cursors = Vec::new();
+        for id in 0..subscribers {
+            let first = engine
+                .read_live_query(&id.to_string(), spec(), None)
+                .await
+                .unwrap();
+            cursors.push(first.revision.parse::<CacheRevision>().unwrap());
+        }
+        for round in 0..3 {
+            seed(&mut engine, &format!("new-{round}"), 10 + round).await;
+            for (id, cursor) in cursors.iter_mut().enumerate() {
+                let update = engine
+                    .read_live_query(&id.to_string(), spec(), Some(*cursor))
+                    .await
+                    .unwrap();
+                assert!(!update.reset, "view {id} was rebuilt in round {round}");
+                assert_eq!(update.upserts.len(), 1);
+                *cursor = update.revision.parse().unwrap();
+            }
+        }
+    });
+}

@@ -1,11 +1,12 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeFavoriteAction,
 } from '@app/features/next-soup/actions';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
@@ -20,9 +21,9 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { enableForms } from '@core/constant/featureFlags';
 import { useGetPermissions } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import type { DatabaseEntity } from '@entity';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
@@ -30,7 +31,7 @@ import type { TableDetail } from '@service-storage/generated/schemas/tableDetail
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { ButtonGroup } from '@ui';
 import type { ResultAsync } from 'neverthrow';
-import { createSignal, lazy, Show, Suspense } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { DatabaseTitle } from '../../database/components/database-title';
 import {
   type DatabaseEntityFailure,
@@ -65,7 +66,6 @@ export function TopBar(props: {
 }) {
   const databaseId = props.databaseId;
   const permissions = useGetPermissions();
-  const formsFlag = useFeatureFlag(enableForms);
   let editTitle: (() => void) | undefined;
   const name = () => props.detail?.database.name ?? 'Database';
   const openShare = useShareModal(() => {
@@ -79,18 +79,16 @@ export function TopBar(props: {
       owner: detail.database.owner_id,
       userPermissions: permissions(),
       // Form editors hold Edit here through their form: say so, and where.
-      audience: formsFlag().enabled
-        ? () => (
-            <Suspense>
-              <DatabaseFormEditors databaseId={databaseId} />
-            </Suspense>
-          )
-        : undefined,
+      audience: () => (
+        <Suspense>
+          <DatabaseFormEditors databaseId={databaseId} />
+        </Suspense>
+      ),
     };
   });
   const favoriteAction = makeFavoriteAction();
-  const copyLinkAction = makeCopyLinkAction();
-  const copyEntityIdAction = makeCopyEntityIdAction();
+  const copyLinkAction = makeCopyLinkAction({ silent: true });
+  const copyEntityIdAction = makeCopyEntityIdAction({ silent: true });
   const itemOperations = useItemOperations();
   const { replaceOrInsertSplit } = useSplitLayout();
   // One copy at a time: the menu can reopen while a copy is being written.
@@ -117,6 +115,7 @@ export function TopBar(props: {
     name: detail.database.name,
     ownerId: detail.database.owner_id,
     grant: detail.grant,
+    appearance: readEntityAppearance(detail.database.appearance),
     projectId: detail.database.project_id ?? undefined,
   });
   const entityActions = (detail: DatabaseDetail): DatabaseEntityActions => ({
@@ -126,16 +125,8 @@ export function TopBar(props: {
         favoriteAction.execute([entity(detail)]),
         'database-actions'
       ),
-    onCopyLink: () =>
-      fireAndForget(
-        copyLinkAction.execute([entity(detail)]),
-        'database-actions'
-      ),
-    onCopyId: () =>
-      fireAndForget(
-        copyEntityIdAction.executeById(databaseId),
-        'database-actions'
-      ),
+    onCopyLink: () => copyLinkAction.execute([entity(detail)]),
+    onCopyId: () => copyEntityIdAction.executeById(databaseId),
     duplicating: duplicating(),
     onDuplicate: () => fireAndForget(duplicate(detail), 'database-actions'),
     onMoveToFolder:
@@ -161,6 +152,16 @@ export function TopBar(props: {
       <SplitHeaderLeft>
         <BlockItemSplitLabel
           name={name}
+          icon={
+            <Show when={props.detail}>
+              {(detail) => (
+                <EntityAppearanceTrigger
+                  entity={entity(detail())}
+                  editable={props.canEdit}
+                />
+              )}
+            </Show>
+          }
           title={
             <Show when={props.detail}>
               <DatabaseTitle
@@ -191,7 +192,7 @@ export function TopBar(props: {
                   canEdit={props.canEdit}
                   onSelect={props.onSelectTable}
                   menuItems={
-                    formsFlag().enabled && props.activeTable
+                    props.activeTable
                       ? () => (
                           <Suspense>
                             <DatabaseFormsEntry

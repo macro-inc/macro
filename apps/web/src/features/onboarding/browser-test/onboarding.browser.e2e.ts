@@ -28,7 +28,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await page.getByRole('button', { name: 'Continue' }).click();
 
   // Google sign-up leaves the page; the account exists when it returns.
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(heading(page, /Connect your work/)).toBeVisible();
   expect((await fakeWorld(page)).accent).toBe('#f77d67');
 
@@ -74,7 +74,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
     licensed: true,
   });
   expect(world.teams).toEqual([{ name: 'Acme' }]);
-  expect(world.connectedTools).toEqual(['linear']);
+  expect(world.connectors).toEqual([{ slug: 'linear', status: 'connected' }]);
 });
 
 test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
@@ -371,7 +371,7 @@ test.describe('with motion', () => {
     const steps: [string, string | RegExp][] = [
       ['Get started', 'Which features do you want to try first?'],
       ['Continue', 'A workspace built to earn your trust.'],
-      ['Continue', /Connect your work/],
+      ['Continue', /Continue with your work/],
     ];
     await expect(heading(page, 'Create your workspace')).toBeVisible();
     for (const [button, next] of steps) {
@@ -538,21 +538,13 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
       ['asana', 'Asana'],
       ['trello', 'Trello'],
       ['slack', 'Slack'],
-      ['slack_v2', 'Slack'],
       ['linear', 'Linear'],
     ].map(([slug, name]) => ({
       slug,
       name,
       iconUrl: fixtureConnectorIcon(slug),
     })),
-    nativeTools: [
-      {
-        url: 'https://mcp.linear.app/mcp/',
-        server_name: 'My issues',
-        authenticated: true,
-        enabled: true,
-      },
-    ],
+    connectors: [{ slug: 'linear', status: 'connected' }],
   });
   await page.evaluate(() =>
     localStorage.setItem(
@@ -669,24 +661,12 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
   ).toBeDisabled();
 });
 
-for (const githubLinkStatus of [
-  'unlinked',
-  'reauthentication_required',
-] as const) {
-  test(`GitHub uses native account linking from ${githubLinkStatus} and returns to tools`, async ({
+for (const status of ['notConnected', 'needsReauth'] as const) {
+  test(`GitHub uses native account linking from ${status} and returns to tools`, async ({
     page,
   }) => {
     await openFixture(page, '/?view=flow', {
-      githubLinkStatus,
-      connectedTools: ['github'],
-      nativeTools: [
-        {
-          url: 'https://api.githubcopilot.com/mcp',
-          authenticated: true,
-          enabled: true,
-          server_name: 'GitHub MCP',
-        },
-      ],
+      connectors: [{ slug: 'github', status }],
     });
     await page.evaluate(() =>
       localStorage.setItem(
@@ -701,26 +681,28 @@ for (const githubLinkStatus of [
       .click();
     await expect(
       page.getByRole('button', {
-        name: 'Account linked to GitHub',
+        name: 'Connected to GitHub',
         exact: true,
       })
     ).toBeDisabled();
     await expect(heading(page, 'Connect your tools.')).toBeVisible();
-    expect((await fakeWorld(page)).githubLinkStatus).toBe('linked');
+    expect((await fakeWorld(page)).connectors).toEqual([
+      { slug: 'github', status: 'connected' },
+    ]);
     await page.reload();
     await expect(
       page.getByRole('button', {
-        name: 'Account linked to GitHub',
+        name: 'Connected to GitHub',
         exact: true,
       })
     ).toBeDisabled();
   });
 }
 
-test('connection status failure leaves native GitHub available', async ({
+test('connection status failure holds connecting and offers retry', async ({
   page,
 }) => {
-  await openFixture(page, '/?view=flow', { connectionFailures: ['pipedream'] });
+  await openFixture(page, '/?view=flow', { connectorsFail: true });
   await page.evaluate(() =>
     localStorage.setItem(
       'onboarding-flow-step',
@@ -728,29 +710,18 @@ test('connection status failure leaves native GitHub available', async ({
     )
   );
   await page.reload();
-  await expect(
-    page.getByRole('button', { name: 'Connect GitHub', exact: true })
-  ).toBeEnabled();
-  await expect(
-    page.getByRole('button', { name: 'Connect Notion', exact: true })
-  ).toBeDisabled();
+  for (const name of ['GitHub', 'Notion'])
+    await expect(
+      page.getByRole('button', { name: `Connect ${name}`, exact: true })
+    ).toBeDisabled();
   await expect(
     page.getByRole('button', { name: 'Retry connection status' })
   ).toBeVisible();
 });
 
-test('enables an existing native tool without reconnecting', async ({
-  page,
-}) => {
+test('enables a held tool without reconnecting', async ({ page }) => {
   await openFixture(page, '/?view=flow', {
-    nativeTools: [
-      {
-        url: 'https://mcp.linear.app/mcp',
-        server_name: 'Linear',
-        authenticated: true,
-        enabled: false,
-      },
-    ],
+    connectors: [{ slug: 'linear', status: 'disabled' }],
   });
   await page.evaluate(() =>
     localStorage.setItem(
@@ -765,8 +736,9 @@ test('enables an existing native tool without reconnecting', async ({
   await expect(
     page.getByRole('button', { name: 'Connected to Linear', exact: true })
   ).toBeDisabled();
-  expect((await fakeWorld(page)).connectedTools).toEqual([]);
-  expect((await fakeWorld(page)).nativeTools[0].enabled).toBe(true);
+  expect((await fakeWorld(page)).connectors).toEqual([
+    { slug: 'linear', status: 'connected' },
+  ]);
 });
 
 for (const width of [1280, 390]) {
@@ -839,4 +811,40 @@ test.describe('subscription recovery', () => {
       ).toBe(true);
     });
   }
+});
+
+test('connecting an inbox starts the first suggestions generation once, without routine suggestions', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow&step=tools', {
+    suggestionsEnabled: true,
+  });
+  await expect(heading(page, 'Connect your tools.')).toBeVisible();
+  const starts = () =>
+    page.evaluate(
+      () =>
+        window.onboardingFixture
+          .calls()
+          .filter((call) => call === 'startSuggestionGeneration').length
+    );
+  expect(await starts()).toBe(0);
+
+  const connect = (addresses: string[]) =>
+    page.evaluate((addresses) => {
+      const ownerId = window.onboardingFixture.world().viewer?.id ?? '';
+      window.onboardingFixture.update({
+        emailAccounts: addresses.map((address) => ({
+          address,
+          isPrimary: true,
+          ownerId,
+        })),
+      });
+    }, addresses);
+  await connect(['work@example.com']);
+  await expect.poll(starts).toBe(1);
+
+  // A second inbox starts nothing more.
+  await connect(['work@example.com', 'home@example.com']);
+  await page.waitForTimeout(300);
+  expect(await starts()).toBe(1);
 });

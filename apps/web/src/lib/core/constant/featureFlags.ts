@@ -116,26 +116,6 @@ export function isFeatureEnabled(flag: Flag): boolean {
   return flag.enabled;
 }
 
-/** Databases rollout. Local HMR is on; deployed environments defer to PostHog. */
-export const enableDatabases = defineFlag({
-  key: 'enable-databases',
-  env: 'ENABLE_DATABASES',
-  default: LOCAL_ONLY || undefined,
-});
-
-/**
- * Macro Forms (`block-form`): questionnaires whose answers land as rows of a
- * database table. On under local HMR, like databases; deployed environments
- * follow PostHog. The flag gates authoring (create entries, builder, `/poll`,
- * `/form`, database controls); responding, form cards and mentions follow the
- * service's access whatever it says.
- */
-export const enableForms = defineFlag({
-  key: 'enable-forms',
-  env: 'ENABLE_FORMS',
-  default: LOCAL_ONLY || undefined,
-});
-
 /**
  * Shows the SQL behind database answers and tool results. Off everywhere;
  * turn on locally with VITE_SHOW_DATABASE_SQL=true.
@@ -154,21 +134,10 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
-/**
- * Connect apps Macro Connect serves through it instead of Pipedream. The
- * backend reads the same PostHog key and decides per app; this side only
- * reserves the consent popup inside the click. Off in dev too: dev has no
- * Connect customer key until one is added to Doppler.
- */
-export const macroConnect = defineFlag({
-  key: 'macro-connect',
-  env: 'ENABLE_MACRO_CONNECT',
-});
-
-/** HTML artifact nodes on Canvas, including running their scripts in a sandbox. */
-export const enableCanvasArtifacts = defineFlag({
-  key: 'enable-canvas-artifacts',
-  env: 'ENABLE_CANVAS_ARTIFACTS',
+/** Controls appearance editing only; saved icons and colors remain visible. */
+export const enableEntityAppearance = defineFlag({
+  key: 'enable-entity-appearance',
+  env: 'ENABLE_ENTITY_APPEARANCE',
   default: onInDev,
 });
 
@@ -179,18 +148,14 @@ export const enableDesktopTabs = defineFlag({
   default: onInDev,
 });
 
-// Leave the production PostHog flag disabled until archive-import rollout.
-export const enableSlackArchiveImport = defineFlag({
-  key: 'enable-slack-archive-import',
-  env: 'ENABLE_SLACK_ARCHIVE_IMPORT',
-  default: onInDev,
-});
-
-/** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
-export const enableSidebarPromotions = defineFlag({
-  key: 'enable-sidebar-promotions',
-  env: 'ENABLE_SIDEBAR_PROMOTIONS',
-  default: onInDev,
+/**
+ * Agent teammates: team admins invite an AI agent, with its own account and
+ * Macro computer, from Settings → Team → Members.
+ */
+export const enableAgentTeammates = defineFlag({
+  key: 'enable-agent-teammates',
+  env: 'ENABLE_AGENT_TEAMMATES',
+  default: DEV_MODE_ENV || undefined,
 });
 
 /**
@@ -490,44 +455,47 @@ export const ENABLE_GRAPHQL_BACKFILL = defineFlag({
 
 export const ENABLE_CALLS = true;
 
-export const enableQuickCalls = defineFlag({
-  key: 'enable-quick-calls',
-  env: 'ENABLE_QUICK_CALLS',
-  default: true,
+// Emergency stop for CRM contact results in @ mentions and Command K/mobile
+// name searches. Companies and Macro users remain searchable. Off until
+// PostHog enables it; override with VITE_DISABLE_CRM_CONTACT_SEARCH.
+export const disableCrmContactSearch = defineFlag({
+  key: 'disable-crm-contact-search',
+  env: 'DISABLE_CRM_CONTACT_SEARCH',
 });
 
-// Email signatures: the settings editor, the compose / reply / AI-chat signature
-// previews, and the per-message include toggle. PostHog-gated with a dev-mode
-// default; override with VITE_ENABLE_EMAIL_SIGNATURES.
-export const enableEmailSignatures = defineFlag({
-  key: 'enable-email-signatures',
-  env: 'ENABLE_EMAIL_SIGNATURES',
-  default: onInDev,
+// Stores each contact's `GraphqlContact.lists` in the local cache. Off in dev
+// too: a server without the field refuses any read that selects it, so this
+// waits for the server to ship it. Override with VITE_ENABLE_CONTACT_LISTS.
+export const enableContactLists = defineFlag({
+  key: 'enable-contact-lists',
+  env: 'ENABLE_CONTACT_LISTS',
 });
 
-// Email read receipts: the per-inbox switch in Settings › Email and the
-// opened status on sent messages. Which copies load Macro's pixels, and so
-// count as opens, does not depend on this flag.
-export const enableEmailReadReceipts = defineFlag({
-  key: 'enable-email-read-receipts',
-  env: 'ENABLE_EMAIL_READ_RECEIPTS',
-  default: onInDev,
+// In a tab without the local cache, reads the people typed text names from the
+// whole directory (`GraphqlUser.contactsNamedBy`) instead of the exact-name
+// scan of the first 2,000 contacts. Off in dev too: a server without the field
+// refuses any read that selects it, so this waits for the server to ship it.
+// Override with VITE_ENABLE_NAMED_CONTACT_SEARCH.
+export const enableNamedContactSearch = defineFlag({
+  key: 'enable-named-contact-search',
+  env: 'ENABLE_NAMED_CONTACT_SEARCH',
 });
 
-// CRM companies & contacts frontend: the Companies view + sidebar entry, the
-// company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
-// global search. PostHog-gated (currently targeted at the Macro team in prod)
-// with a dev-mode default; override with VITE_ENABLE_CRM.
-export const enableCrm = defineFlag({
-  key: 'enable-crm',
-  env: 'ENABLE_CRM',
-  default: onInDev,
+// No dev override: the server requires this same remote flag before accepting writes.
+export const enableCrmMemberAccessChanges = defineFlag({
+  key: 'enable-crm-member-access-changes',
 });
 
-/** CRM activity tabs and context-aware task composition. Off until opted in. */
-export const enableCrmActivity = defineFlag({
-  key: 'enable-crm-activity',
-  env: 'ENABLE_CRM_ACTIVITY',
+// Stay off until all ingestion and Team email reader binaries support exceptions.
+// No dev default or local override: the server independently requires this flag.
+export const enableCrmThreadExclusions = defineFlag({
+  key: 'enable-crm-thread-exclusions',
+});
+
+// Default off in dev and local too; authoring requires the matching server gate.
+export const enableCrmSelectiveEmailContribution = defineFlag({
+  key: 'enable-crm-selective-email-contribution',
+  env: 'ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION',
 });
 
 // Company collections are paused until ready; preserve stored lists while off.
@@ -537,26 +505,38 @@ export const enableCrmLists = defineFlag({
   default: false,
 });
 
-// Pipelines roll out per team; while off the CRM tab hides them without touching stored pipelines.
-export const enableCrmPipelines = defineFlag({
-  key: 'enable-crm-pipelines',
-  env: 'ENABLE_CRM_PIPELINES',
-  default: onInDev,
-});
-
-// Native Projects frontend: navigation, creation, task assignment and project
-// views. Enabled in development; PostHog controls production rollout. Override
-// with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.
-export const enableProjects = defineFlag({
-  key: 'enable-projects',
-  env: 'ENABLE_PROJECTS',
-  default: onInDev,
-});
-
 /** Prefill the editable Source property from contextual task actions. */
 export const enableTaskSourceProperty = defineFlag({
   key: 'enable-task-source-property',
   env: 'ENABLE_TASK_SOURCE_PROPERTY',
+  default: onInDev,
+});
+
+/**
+ * Start Date on tasks and projects: the dates pill and picker, the details
+ * row, the composer, and the range in list cells and board cards.
+ */
+export const enableTaskStartDate = defineFlag({
+  key: 'enable-task-start-date',
+  env: 'ENABLE_TASK_START_DATE',
+  default: onInDev,
+});
+
+/**
+ * Time tracking on tasks: the Time pill and its entries, the running timer,
+ * and Time logged wherever task properties show. The backend refuses time
+ * writes under the same key.
+ */
+export const enableTimeTracking = defineFlag({
+  key: 'enable-time-tracking',
+  env: 'ENABLE_TIME_TRACKING',
+  default: onInDev,
+});
+
+/** Task-composer template selection, authoring, and saved-draft recovery. */
+export const enableTaskTemplates = defineFlag({
+  key: 'enable-task-templates',
+  env: 'ENABLE_TASK_TEMPLATES',
   default: onInDev,
 });
 
@@ -570,9 +550,18 @@ export const enableReminders = defineFlag({
   default: onInDev,
 });
 
+// Mail's search field takes over the list header while searching, lists
+// recent searches, and keeps the rows on screen while results load; on phones
+// it adds a search page to the Email list.
+export const enableEmailWideSearch = defineFlag({
+  key: 'enable-email-wide-search',
+  env: 'ENABLE_EMAIL_WIDE_SEARCH',
+  default: onInDev,
+});
+
 // The Focus tab in Mail: signal threads the email focus worker classified as
-// worth the owner's attention. Only allowlisted inboxes are classified, so the
-// tab is empty for everyone else.
+// worth the owner's attention. The worker reads this same flag for each inbox
+// owner and classifies only theirs, so a rollout step changes both together.
 export const enableEmailFocus = defineFlag({
   key: 'enable-email-focus',
   env: 'ENABLE_EMAIL_FOCUS',
@@ -585,23 +574,11 @@ export const enableHistoryComponent = defineFlag({
   default: onInDev,
 });
 
-export const enableGitBlame = defineFlag({
-  key: 'enable-git-blame',
-  env: 'ENABLE_GIT_BLAME',
-  default: onInDev,
-});
-
-// Inline AI editing: the floating document AI edit pill and the AI editing
-// tool in the selection formatting menu.
-export const enableInlineAiEditing = defineFlag({
-  key: 'inline-ai-editing',
-  env: 'INLINE_AI_EDITING',
-  default: onInDev,
-});
-
-export const enableMultiInbox = defineFlag({
-  key: 'enable-multi-inbox',
-  env: 'ENABLE_MULTI_INBOX',
+// Continue with Microsoft on sign-up, sign-in and the onboarding work step,
+// including the Outlook connect that follows a Microsoft sign-up.
+export const enableMicrosoftSignup = defineFlag({
+  key: 'enable-microsoft-signup',
+  env: 'ENABLE_MICROSOFT_SIGNUP',
   default: onInDev,
 });
 
@@ -617,20 +594,6 @@ export const enableSoupFilterPersistence = defineFlag({
   env: 'ENABLE_SOUP_FILTER_PERSISTENCE',
 });
 
-export const enableTaskDuplicates = defineFlag({
-  key: 'enable-task-duplicates',
-  default: onInDev,
-});
-
-// Snippets: reusable markdown documents, the `c` launcher entry, and the `;`
-// insert menu. PostHog-gated (currently targeted at the Macro team) with a
-// dev-mode default; override with VITE_ENABLE_SNIPPETS.
-export const enableSnippets = defineFlag({
-  key: 'enable-snippets',
-  env: 'ENABLE_SNIPPETS',
-  default: onInDev,
-});
-
 export const enableSupportedSoupForeignEntities = defineFlag({
   key: 'enable-supported-soup-foreign-entities',
   default: onInDev,
@@ -642,12 +605,7 @@ export const enableInboxNotifiedSort = defineFlag({
   default: onInDev,
 });
 
-export const enableGraphqlSoup = defineFlag({
-  key: 'enable-graphql-soup',
-  env: 'ENABLE_GRAPHQL_SOUP',
-});
-
-/** Serves calendar reads from the normalized cache; requires GraphQL Soup. */
+/** Serves calendar reads from the normalized cache. */
 export const enableGraphqlCalendar = defineFlag({
   key: 'enable-graphql-calendar',
   env: 'ENABLE_GRAPHQL_CALENDAR',
@@ -675,29 +633,9 @@ export function isAutoUpdateUiEnabled(): boolean {
   return !isFeatureEnabled(disableAutoUpdateUi);
 }
 
-// Bot management in Settings, channels, and the command menu. Override locally
-// with VITE_BOT_MANAGEMENT.
-export const botManagement = defineFlag({
-  key: 'bot-management',
-  env: 'BOT_MANAGEMENT',
-  default: onInDev,
-});
-
-// Calendar UI: calendar surfaces and the elevated-permissions upgrade flow
-// that re-runs Google consent for inboxes connected before the calendar
-// scope existed. PostHog-gated with a dev-mode default; override with
-// VITE_ENABLE_CALENDAR_UI.
-export const enableCalendarUi = defineFlag({
-  key: 'enable-calendar-ui',
-  env: 'ENABLE_CALENDAR_UI',
-  default: onInDev,
-});
-
 // Calendar event search UI: the Search view's Calendar type (and calendar
-// rows) plus the in-calendar keyword search. A sub-feature of the calendar UI
-// — opening a hit needs the calendar block — so it only takes effect where
-// `enable-calendar-ui` is also on. PostHog-gated with a dev-mode default;
-// override with VITE_ENABLE_CALENDAR_SEARCH_UI.
+// rows) plus the in-calendar keyword search. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_CALENDAR_SEARCH_UI.
 export const enableCalendarSearchUi = defineFlag({
   key: 'enable-calendar-search-ui',
   env: 'ENABLE_CALENDAR_SEARCH_UI',
@@ -705,46 +643,12 @@ export const enableCalendarSearchUi = defineFlag({
 });
 
 export function isCalendarSearchUiEnabled(): boolean {
-  return (
-    isFeatureEnabled(enableCalendarUi) &&
-    isFeatureEnabled(enableCalendarSearchUi)
-  );
+  return isFeatureEnabled(enableCalendarSearchUi);
 }
-
-// Scheduling settings, calendar shortcuts, and public booking/receipt pages.
-// On in dev; production defers to PostHog.
-export const enableCalendarScheduling = defineFlag({
-  key: 'enable-calendar-scheduling',
-  env: 'ENABLE_CALENDAR_SCHEDULING',
-  default: onInDev,
-});
-
-// The "Enable calendar" prompt on phones. Off by default everywhere,
-// including dev: the mobile toast layout drops the body and the close button,
-// so the prompt lands as an undismissable one-line bar over the composer.
-// Settings › Email keeps a per-inbox "Enable calendar" button, so nothing
-// becomes unreachable while this is off. Flip it on in PostHog once the
-// mobile layout is fixed, or locally with
-// VITE_ENABLE_CALENDAR_PROMPT_MOBILE=true.
-export const enableCalendarPromptMobile = defineFlag({
-  key: 'enable-calendar-prompt-mobile',
-  env: 'ENABLE_CALENDAR_PROMPT_MOBILE',
-});
-
-// The "Enable calendar" prompt on desktop/web, the counterpart to
-// `enable-calendar-prompt-mobile`. Off by default everywhere, including dev,
-// until the PostHog rollout is raised; Settings › Email keeps a per-inbox
-// "Enable calendar" button, so nothing becomes unreachable while this is off.
-// Override locally with VITE_ENABLE_CALENDAR_PROMPT_WEB=true.
-export const enableCalendarPromptWeb = defineFlag({
-  key: 'enable-calendar-prompt-web',
-  env: 'ENABLE_CALENDAR_PROMPT_WEB',
-});
 
 // Team out of office: the calendar side panel's "Team out of office" section
 // and the read-only teammate absence chips on the grid. Purely additive: when
 // off, the section never mounts and no team out-of-office query is issued.
-// Lives inside the calendar block, so `enable-calendar-ui` already gates it.
 // PostHog-gated with a dev-mode default; override with
 // VITE_ENABLE_CALENDAR_TEAM_OOO.
 export const enableCalendarTeamOoo = defineFlag({
@@ -805,11 +709,38 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
-// Redesigned Chat sidebar sections. On in development;
+// Redesigned desktop Chat sections and phone section tabs. On in development;
 // deployed environments defer to PostHog. Override with VITE_ENABLE_CHAT_SIDEBAR_SECTIONS.
 export const enableChatSidebarSections = defineFlag({
   key: 'enable-chat-sidebar-sections',
   env: 'ENABLE_CHAT_SIDEBAR_SECTIONS',
+  default: onInDev,
+});
+
+// Channel and Chat section Notification Settings (All messages, Messages
+// involving me, Nothing, Custom) beside Mute, in place of Only @mentions. On in
+// development; deployed environments defer to PostHog. Override with
+// VITE_ENABLE_CHANNEL_NOTIFICATION_SETTINGS.
+export const enableChannelNotificationSettings = defineFlag({
+  key: 'enable-channel-notification-settings',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_SETTINGS',
+  default: onInDev,
+});
+
+// Opt-in vertical resizing for desktop Chat sections. Keep it off in development
+// too so sections use their natural height unless PostHog or a local override enables it.
+export const enableChatSidebarSectionResize = defineFlag({
+  key: 'enable-chat-sidebar-section-resize',
+  env: 'ENABLE_CHAT_SIDEBAR_SECTION_RESIZE',
+});
+
+// Desktop channel gutter: a Mark done check beside each notification stack,
+// and a bell toggle opening a list of the channel's not-done or unread stacks.
+// On in development; deployed environments defer to PostHog (Macro staff
+// first).
+export const enableChannelNotificationGutter = defineFlag({
+  key: 'enable-channel-notification-gutter',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_GUTTER',
   default: onInDev,
 });
 
@@ -840,6 +771,16 @@ export const enableEntityActivitySection = defineFlag({
   default: onInDev,
 });
 
+// The agent session side panel's live list of what the agent did, read from
+// the activity log. Off means the section never mounts and no activity query
+// is issued. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_AGENT_SESSION_ACTIVITY.
+export const enableAgentSessionActivity = defineFlag({
+  key: 'enable-agent-session-activity',
+  env: 'ENABLE_AGENT_SESSION_ACTIVITY',
+  default: onInDev,
+});
+
 // The Activity view: the user's own activity feed from the GraphQL activity
 // log, replacing the retired soup/notification-derived timeline. Gates the
 // view (the /activity route redirects to the inbox when off) and its
@@ -849,6 +790,19 @@ export const enableActivityFeed = defineFlag({
   key: 'enable-activity-feed',
   env: 'ENABLE_ACTIVITY_FEED',
   default: onInDev,
+});
+
+/**
+ * Notifications a person, agent or script writes with
+ * `macro.notifications.send`: their "Agent pings" setting. The notification
+ * service refuses to send while the same flag is off for the sender. On only
+ * on a local stack, where that service is on for everyone; a deployment asks
+ * PostHog on both sides. Override with VITE_ENABLE_AGENT_NOTIFICATIONS.
+ */
+export const enableAgentNotifications = defineFlag({
+  key: 'enable-agent-notifications',
+  env: 'ENABLE_AGENT_NOTIFICATIONS',
+  default: LOCAL_ONLY || undefined,
 });
 
 // The unified notifications view: the /notifications route (redirects to Home
@@ -861,22 +815,45 @@ export const enableUnifiedNotifications = defineFlag({
   default: onInDev,
 });
 
-// Agents home: pending updates from coding agents shown as a stack under the
-// new-chat composer, and the Open PRs section in the Agents sidebar.
-// Override with VITE_ENABLE_AGENT_UPDATES.
-export const enableAgentUpdates = defineFlag({
-  key: 'enable-agent-updates',
-  env: 'ENABLE_AGENT_UPDATES',
+// New Home: Home with Recent and Notifications tabs, desktop only. Replaces
+// the rail's Notifications entry and takes `g h`; old Home stays beside it
+// unless `disable-old-home` is also on. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_NEW_HOME.
+export const enableNewHome = defineFlag({
+  key: 'enable-new-home',
+  env: 'ENABLE_NEW_HOME',
   default: onInDev,
 });
 
-// AI agents: the folded agent-session view in channels, and which bot the
-// single `@macro` mention targets — the agent session when on, the classic
-// in-channel reply when off.
-// Override with VITE_ENABLE_CHAT_V3_AGENTS.
-export const enableChatV3Agents = defineFlag({
-  key: 'enable-chat-v3-agents',
-  env: 'ENABLE_CHAT_V3_AGENTS',
+// With `enable-new-home` on, hide old Home so New Home takes its place and
+// `/home`. Off in dev, so dev keeps both Homes side by side to compare;
+// override with VITE_DISABLE_OLD_HOME.
+export const disableOldHome = defineFlag({
+  key: 'disable-old-home',
+  env: 'DISABLE_OLD_HOME',
+});
+
+// Keep navigation numbers off in every environment while unread counts are
+// being investigated. Unified unread dots continue to use the subscription.
+export const enableNavigationUnreadCounts = defineFlag({
+  env: 'ENABLE_NAVIGATION_UNREAD_COUNTS',
+  default: false,
+});
+
+// Agents home: pending updates from coding agents shown as a stack under the
+// new-chat composer, and the Open PRs section in the Agents sidebar.
+// Override with VITE_ENABLE_AGENT_UPDATES.
+// Work: what an account registered as its work, in DMs with agent accounts and
+// in calls.
+export const enableAgentWork = defineFlag({
+  key: 'enable-agent-work',
+  env: 'ENABLE_AGENT_WORK',
+  default: onInDev,
+});
+
+export const enableAgentUpdates = defineFlag({
+  key: 'enable-agent-updates',
+  env: 'ENABLE_AGENT_UPDATES',
   default: onInDev,
 });
 
@@ -903,19 +880,46 @@ export const enableCursorAgents = defineFlag({
   default: onInDev,
 });
 
-// Codex composer choices also require enableChatV3Agents.
-// Override with VITE_ENABLE_CODEX_AGENTS.
+// Codex composer choices. Override with VITE_ENABLE_CODEX_AGENTS.
 export const enableCodexAgents = defineFlag({
   key: 'enable-codex-agents',
   env: 'ENABLE_CODEX_AGENTS',
 });
 
-// Yes/no conditions on routine event triggers, checked by the Jev classifier
-// before a run starts. The scheduled-action service rejects conditions until
-// its TYPESAFE_API_KEY is set. Override with VITE_ENABLE_ROUTINE_CONDITIONS.
-export const enableRoutineConditions = defineFlag({
-  key: 'enable-routine-conditions',
-  env: 'ENABLE_ROUTINE_CONDITIONS',
+// Macro's built-in routine templates (Sort my inbox, Morning brief, ...): the
+// strip above the routines list and New routine's Templates section. Not
+// shared templates, which follow enable-routine-sharing.
+export const enableRoutineStarterTemplates = defineFlag({
+  key: 'enable-routine-starter-templates',
+  env: 'ENABLE_ROUTINE_STARTER_TEMPLATES',
+  default: onInDev,
+});
+
+// Routines AI picks for the user from the catalog: sidebar cards, the
+// Routines page and onboarding's last step. The scheduler checks the same
+// PostHog flag before it reads mail or generates, so with it off there are
+// none to show.
+export const enableRoutineSuggestions = defineFlag({
+  key: 'enable-routine-suggestions',
+  env: 'ENABLE_ROUTINE_SUGGESTIONS',
+  default: onInDev,
+});
+
+// New routine drafts in the background: the dialog shows the draft's progress,
+// it keeps going after the dialog closes, and a toast says when it is ready.
+// Off, the dialog waits on the blocking draft request as before. The
+// background routes must be deployed before this turns on.
+export const enableRoutineBackgroundDrafts = defineFlag({
+  key: 'enable-routine-background-drafts',
+  env: 'ENABLE_ROUTINE_BACKGROUND_DRAFTS',
+  default: onInDev,
+});
+
+// Suggestions: the For you feed of proactive suggestions. The backend gates every
+// suggestions route on the same PostHog flag.
+export const enableSuggestions = defineFlag({
+  key: 'enable-suggestions',
+  env: 'ENABLE_SUGGESTIONS',
   default: onInDev,
 });
 
@@ -924,6 +928,14 @@ export const enableRoutineConditions = defineFlag({
 export const enableRoutineSharing = defineFlag({
   key: 'enable-routine-sharing',
   env: 'ENABLE_ROUTINE_SHARING',
+});
+
+// Event triggers (Macro and GitHub events). The server checks the same key per
+// routine owner, on save and before each run, so follow PostHog even in
+// development.
+export const enableEventRoutines = defineFlag({
+  key: 'enable-event-routines',
+  env: 'ENABLE_EVENT_ROUTINES',
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
@@ -980,39 +992,6 @@ export const enableAiEditor = defineFlag({
   default: onInDev,
 });
 
-// PostHog controls the internal pilot and team targeting in every environment.
-export const enableSpreadsheets = defineFlag({
-  key: 'enable-spreadsheets',
-  env: 'ENABLE_SPREADSHEETS',
-});
-
-/**
- * Speech-to-text in the channel, agent, and AI chat composers. Recordings go
- * to OpenAI Whisper through DSS and are billed per audio minute, so this
- * carries a remote kill switch rather than an env-only one. Off hides the
- * microphone everywhere and never opens the recorder, so no audio is captured
- * and no request is made. On in dev; production follows PostHog.
- */
-export const enableDictation = defineFlag({
-  key: 'enable-dictation',
-  env: 'ENABLE_DICTATION',
-  default: onInDev,
-});
-
-/**
- * AI usage billing UI: enables production Usage controls and the usage-limit
- * dialog, plus the "$N of AI usage" plan copy. Dev and local Usage remain
- * interactive regardless of this flag. Presentation only:
- * backend quota admission and settlement are gated separately by
- * `ENABLE_AI_USAGE_ENFORCEMENT` and `ENABLE_AI_USAGE_BILLING`. On in dev;
- * production follows PostHog. Override with VITE_ENABLE_AI_USAGE_BILLING.
- */
-export const enableAiUsageBilling = defineFlag({
-  key: 'enable-ai-usage-billing',
-  env: 'ENABLE_AI_USAGE_BILLING',
-  default: onInDev,
-});
-
 /**
  * Automatic in-app feature tours on desktop views (`features/tours`). Follows
  * PostHog everywhere, including the local dev server; set
@@ -1032,4 +1011,16 @@ export const enableInAppTours = defineFlag({
 export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
+});
+
+/**
+ * Passwords v1: the `/passwords` route and its rail and dock entries (which
+ * also need a team). The backend evaluates the same key. On only for local
+ * stacks; hosted dev and production follow the remote PostHog flag. Override
+ * locally with VITE_ENABLE_PASSWORDS=true.
+ */
+export const enablePasswords = defineFlag({
+  key: 'enable-passwords-v1',
+  env: 'ENABLE_PASSWORDS',
+  default: LOCAL_ONLY || undefined,
 });

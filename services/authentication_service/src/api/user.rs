@@ -22,16 +22,22 @@ pub(in crate::api) mod patch_user_onboarding;
 pub(in crate::api) mod post_get_names;
 pub(in crate::api) mod post_get_names_with_email;
 pub(in crate::api) mod post_profile_pictures;
+pub(in crate::api) mod profile_picture_change;
 pub(in crate::api) mod put_name;
 pub(in crate::api) mod put_profile_picture;
 pub(in crate::api) mod put_profile_picture_file;
 pub(in crate::api) mod stripe;
 
-pub fn router() -> Router<ApiContext> {
-    Router::new().merge(router_with_auth())
+pub fn router(state: ApiContext) -> Router<ApiContext> {
+    Router::new().merge(router_with_auth(state))
 }
 
-fn router_with_auth() -> Router<ApiContext> {
+fn router_with_auth(state: ApiContext) -> Router<ApiContext> {
+    // Setup returns the agent account's lasting API key: people only.
+    let people_only = axum::middleware::from_fn_with_state(
+        state.authorization_state.clone(),
+        super::middleware::refuse_program_agent_setup::handler,
+    );
     Router::new()
         .route("/me", get(get_user_info::handler))
         .route("/me", delete(delete_user::handler))
@@ -42,7 +48,10 @@ fn router_with_auth() -> Router<ApiContext> {
             post(put_profile_picture_file::create_upload_handler)
                 .put(put_profile_picture_file::handler),
         )
-        .route("/agent_setup", post(agent_setup::handler))
+        .route(
+            "/agent_setup",
+            post(agent_setup::handler).layer(people_only),
+        )
         .route("/name", put(put_name::handler))
         .route("/name", get(get_name::handler))
         .route("/get_names", post(post_get_names::handler_external))

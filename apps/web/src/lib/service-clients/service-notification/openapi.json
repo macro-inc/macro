@@ -29,6 +29,281 @@
         }
       }
     },
+    "/notification_settings/channels": {
+      "get": {
+        "tags": ["notification_settings"],
+        "summary": "List the authenticated user's channels that have notification settings.",
+        "operationId": "list_channel_notification_settings",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListChannelNotificationSettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notification_settings/channels/{channel_id}": {
+      "delete": {
+        "tags": ["notification_settings"],
+        "summary": "Remove the authenticated user's settings for one channel, including a\nlegacy mentions-only preference, so it follows its sections again.",
+        "operationId": "reset_channel_notification_settings",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "The channel the settings apply to.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["notification_settings"],
+        "summary": "Change the authenticated user's notification settings for one channel.",
+        "operationId": "update_channel_notification_settings",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "The channel the settings apply to.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChannelNotificationSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelNotificationSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notification_settings/sections": {
+      "get": {
+        "tags": ["notification_settings::sections"],
+        "summary": "List the authenticated user's Chat sections that have notification settings.",
+        "operationId": "list_section_notification_settings",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSectionNotificationSettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["notification_settings::sections"],
+        "summary": "Change the authenticated user's notification settings for one Chat section.",
+        "operationId": "update_section_notification_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSectionNotificationSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionNotificationSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/unsubscribe": {
       "get": {
         "tags": ["unsubscribe::get_unsubscribes"],
@@ -113,7 +388,7 @@
     "/unsubscribe/item/{item_type}/{item_id}": {
       "post": {
         "tags": ["unsubscribe::unsubscribe_item"],
-        "summary": "Unsubscribes a user from a given item for notifications.",
+        "summary": "Unsubscribes a user from a given item for notifications, or, with\n`mentions_only`, from everything on a channel but their direct mentions.",
         "operationId": "unsubscribe_item",
         "parameters": [
           {
@@ -140,6 +415,15 @@
             "schema": {
               "type": ["string", "null"],
               "format": "date-time"
+            }
+          },
+          {
+            "name": "mentions_only",
+            "in": "query",
+            "description": "Keep notifying for messages that @mention the user directly and silence\nthe rest. Channels only; cannot be combined with `snoozed_until`.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -515,6 +799,214 @@
         }
       }
     },
+    "/v1/user_notifications/bulk": {
+      "delete": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Soft-delete multiple user notifications.",
+        "operationId": "bulk_delete_user_notifications_v2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/bulk/done": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as done.",
+        "operationId": "bulk_mark_notifications_done",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/bulk/seen": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as seen.",
+        "operationId": "bulk_mark_notifications_seen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/bulk/undone": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as not done.",
+        "operationId": "bulk_mark_notifications_undone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/user_notifications/item/bulk": {
       "post": {
         "tags": ["user_notification"],
@@ -831,6 +1323,105 @@
         }
       }
     },
+    "/v1/user_notifications/send": {
+      "post": {
+        "tags": ["ping"],
+        "summary": "Send a notification the caller wrote about an entity, to themselves or to\npeople who can already see that entity. Recipients who cannot see it,\nwhose inbox would not list it, or who have received 60 from others this\nhour are skipped and returned. Delivered like any other notification and\nsubject to each recipient's notification preferences. The same notification\nsent again in the same ten-minute window of the clock is delivered once; a\nrepeat that falls in the next window is delivered again. A sender can\nnotify at most 1000 recipients an hour. Refused with 403 while the\n`enable-agent-notifications` flag is off for the caller.",
+        "operationId": "send_ping",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendPingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Queued for the recipients who can see the link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PingOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Agent notifications are not enabled for the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The link does not exist or the caller cannot see it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The sender has notified too many recipients this hour; `Retry-After` says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Whether agent notifications are enabled for the caller could not be checked; try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/user_notifications/{notification_id}": {
       "get": {
         "tags": ["user_notification"],
@@ -900,217 +1491,7 @@
             }
           }
         }
-      }
-    },
-    "/v2/user_notifications/bulk": {
-      "delete": {
-        "tags": ["notification_crate::inbound::http"],
-        "summary": "Soft-delete multiple user notifications.",
-        "operationId": "bulk_delete_user_notifications_v2",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/user_notifications/bulk/done": {
-      "patch": {
-        "tags": ["notification_crate::inbound::http"],
-        "summary": "Mark notifications as done.",
-        "operationId": "bulk_mark_notifications_done",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/user_notifications/bulk/seen": {
-      "patch": {
-        "tags": ["notification_crate::inbound::http"],
-        "summary": "Mark notifications as seen.",
-        "operationId": "bulk_mark_notifications_seen",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/user_notifications/bulk/undone": {
-      "patch": {
-        "tags": ["notification_crate::inbound::http"],
-        "summary": "Mark notifications as not done.",
-        "operationId": "bulk_mark_notifications_undone",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/user_notifications/{notification_id}": {
+      },
       "delete": {
         "tags": ["notification_crate::inbound::http"],
         "summary": "Soft-delete a single user notification.",
@@ -1167,6 +1548,11 @@
   },
   "components": {
     "schemas": {
+      "AgentProvider": {
+        "type": "string",
+        "description": "Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.",
+        "enum": ["claude"]
+      },
       "AgentSessionMentionedMetadata": {
         "allOf": [
           {
@@ -1310,6 +1696,40 @@
           }
         ],
         "description": "An agent is blocked on a question only the session's owner can answer."
+      },
+      "AgentSignInExpiryMetadata": {
+        "type": "object",
+        "description": "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines.",
+        "required": ["agent", "harnessId", "computerName", "stage"],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentProvider",
+            "description": "The agent whose sign-in is running out."
+          },
+          "computerName": {
+            "type": "string",
+            "description": "The computer's name when the notice was sent."
+          },
+          "expiresAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the sign-in expires or expired; absent when the agent rejected it."
+          },
+          "harnessId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The computer's harness, whose runtime row holds the sign-in."
+          },
+          "stage": {
+            "$ref": "#/components/schemas/AgentSignInExpiryStage",
+            "description": "How close the sign-in is to no longer working."
+          }
+        }
+      },
+      "AgentSignInExpiryStage": {
+        "type": "string",
+        "description": "How close a computer's agent sign-in is to no longer working.",
+        "enum": ["expires_soon", "expires_today", "expired"]
       },
       "AiResponseMetadata": {
         "type": "object",
@@ -1679,6 +2099,41 @@
           }
         ]
       },
+      "ChannelNotificationKind": {
+        "type": "string",
+        "description": "A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.",
+        "enum": [
+          "channel_message_send",
+          "channel_message_reply",
+          "channel_mention",
+          "channel_message_reaction",
+          "call_started",
+          "channel_access_requested"
+        ]
+      },
+      "ChannelNotificationSettingsResponse": {
+        "type": "object",
+        "description": "One channel's own notification settings.",
+        "required": ["channelId", "enabled", "overridesSectionMute"],
+        "properties": {
+          "channelId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enabled": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ChannelNotificationKind"
+            },
+            "description": "The channel's own settings: exactly the kinds it notifies for,\nwhatever its sections say. `null` follows the sections.",
+            "uniqueItems": true
+          },
+          "overridesSectionMute": {
+            "type": "boolean",
+            "description": "The channel notifies even when the sections holding it are muted."
+          }
+        }
+      },
       "ChannelReplyMetadata": {
         "allOf": [
           {
@@ -1718,6 +2173,60 @@
             }
           }
         ]
+      },
+      "ChannelSection": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A custom section, team-shared or personal, manual or rule-based.",
+            "required": ["labelId", "type"],
+            "properties": {
+              "labelId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The section's `channel_label` id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["label"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user's favorite channels.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["favorites"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Direct messages and group chats.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["direct_messages"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Team channels in none of the user's custom sections.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["team_channels"]
+              }
+            }
+          }
+        ],
+        "description": "A Chat sidebar section a user can set notifications for. The catch-all\n\"All channels\" section has no settings and is not one of these."
       },
       "ChannelType": {
         "type": "string",
@@ -1799,6 +2308,92 @@
             "$ref": "#/components/schemas/ChannelType"
           }
         }
+      },
+      "ComputerSetupAgent": {
+        "type": "object",
+        "description": "The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.",
+        "required": ["userId", "name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The agent's name."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The agent's Macro user id, to open a DM with it."
+          }
+        }
+      },
+      "ComputerSetupMetadata": {
+        "type": "object",
+        "description": "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow.",
+        "required": ["computerId", "computerName", "outcome"],
+        "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerSetupAgent",
+                "description": "The agent teammate the computer runs; absent for a plain computer."
+              }
+            ]
+          },
+          "computerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The computer that was set up."
+          },
+          "computerName": {
+            "type": "string",
+            "description": "The computer's name when the notice was sent."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The computer's harness, once macrod has connected."
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ComputerSetupOutcome",
+            "description": "Ready, or why setup failed."
+          }
+        }
+      },
+      "ComputerSetupOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "macrod connected for the first time: the computer is ready.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["ready"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Setup gave up before the computer was ready.",
+            "required": ["failureReason", "kind"],
+            "properties": {
+              "failureReason": {
+                "type": "string",
+                "description": "Why, in the words the computer's status shows."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["failed"]
+              },
+              "released": {
+                "type": "boolean",
+                "description": "Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry."
+              }
+            }
+          }
+        ],
+        "description": "How a computer's first setup ended."
       },
       "ConnGatewayNotificationPayload": {
         "$ref": "#/components/schemas/RealtimeNotif_TaggedContent_Value",
@@ -2028,6 +2623,7 @@
           "crm_contact",
           "crm_pipeline",
           "reminder",
+          "harness",
           "skill",
           "agent_session",
           "scheduled_action",
@@ -2498,6 +3094,10 @@
             "$ref": "#/components/schemas/InviteePlan",
             "description": "What the invitee gets by joining, as the team stood when the invite was sent."
           },
+          "inviterName": {
+            "type": ["string", "null"],
+            "description": "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+          },
           "isAgent": {
             "type": "boolean",
             "description": "Whether the invite creates an agent account."
@@ -2565,6 +3165,32 @@
               "type": "string"
             },
             "description": "List of user IDs that the item is shared with"
+          }
+        }
+      },
+      "ListChannelNotificationSettingsResponse": {
+        "type": "object",
+        "required": ["channels"],
+        "properties": {
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelNotificationSettingsResponse"
+            },
+            "description": "Every channel with settings; any other channel follows its sections."
+          }
+        }
+      },
+      "ListSectionNotificationSettingsResponse": {
+        "type": "object",
+        "required": ["sections"],
+        "properties": {
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectionNotificationSettingsResponse"
+            },
+            "description": "Every section with settings; any other section allows everything and\nis unmuted."
           }
         }
       },
@@ -3151,6 +3777,21 @@
           },
           {
             "type": "object",
+            "description": "An agent asked for access to a vault item the user manages.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/PasswordAccessRequestedMetadata",
+                "description": "An agent asked for access to a vault item the user manages."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["password_access_requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "One of the user's routines finished a run, successfully or not.",
             "required": ["content", "tag"],
             "properties": {
@@ -3161,6 +3802,66 @@
               "tag": {
                 "type": "string",
                 "enum": ["routine_run_finished"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AgentSignInExpiryMetadata",
+                "description": "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agent_sign_in_expiry"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A Macro computer the user bought finished first-time setup, or\ncould not be set up.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ComputerSetupMetadata",
+                "description": "A Macro computer the user bought finished first-time setup, or\ncould not be set up."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["computer_setup"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/PingMetadata",
+                "description": "Someone, usually agent code through the SDK, sent the user a\nnotification they wrote."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["ping"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/RuntimeAccessRemovedMetadata",
+                "description": "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["runtime_access_removed"]
               }
             }
           }
@@ -3239,6 +3940,141 @@
       "NotificationTypeName": {
         "type": "string",
         "description": "newtype wrapper for the the typename of a Notification"
+      },
+      "PasswordAccessRequestedMetadata": {
+        "type": "object",
+        "description": "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values.",
+        "required": ["requestId", "teamId", "itemId", "itemName"],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Requested item."
+          },
+          "itemName": {
+            "type": "string",
+            "description": "Item display name when the request was made."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Request under review."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team owning the item."
+          }
+        }
+      },
+      "PingAgent": {
+        "type": "object",
+        "description": "The agent a ping reads as being from, as it was when sent.",
+        "required": ["id", "name"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "The agent's avatar."
+          },
+          "id": {
+            "type": "string",
+            "description": "A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids."
+          },
+          "name": {
+            "type": "string",
+            "description": "The agent's display name."
+          }
+        }
+      },
+      "PingLink": {
+        "type": "object",
+        "description": "What a ping opens.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The entity's id."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "One of document, chat, channel, channel_message, project, initiative,\nemail_thread, calendar_event, crm_company, crm_contact or\nagent_session: the kinds the inbox lists. A channel message is filed\nunder its channel and opens at the message. Each recipient's inbox\nmust also list it: their access comes from a share the inbox reads\n(not a link share or an attachment), it is not deleted, a session is\nlisted, and an email thread is the recipient's own Signal mail in\ntheir inbox. Anyone else is skipped as `not_listed`."
+          }
+        }
+      },
+      "PingMessage": {
+        "type": "object",
+        "description": "The channel message a ping points at.",
+        "required": ["messageId"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The message."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The top-level message it replies to; absent when it is top-level\nitself."
+          }
+        }
+      },
+      "PingMetadata": {
+        "type": "object",
+        "description": "A notification written by its sender: their words, and the entity it\nopens. The sender is the notification's `sender_id`, or nobody when people\nnotify themselves. One about a channel message is filed under the\nmessage's channel and names the message.",
+        "required": ["body"],
+        "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PingAgent",
+                "description": "The agent whose code sent it, when one did."
+              }
+            ]
+          },
+          "body": {
+            "type": "string",
+            "description": "What the sender wrote."
+          },
+          "entityName": {
+            "type": ["string", "null"],
+            "description": "The linked entity's name when it was sent, for a push to show under\nwho sent it. Absent when it has none that reads the same to every\nrecipient, such as a direct message."
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PingMessage",
+                "description": "The channel message it opens at, when the sender linked one."
+              }
+            ]
+          }
+        }
+      },
+      "PingOutcome": {
+        "type": "object",
+        "description": "Who a ping was sent to. A notified recipient's own\npreferences can still keep it from them; that is theirs to know.",
+        "required": ["notified", "skipped"],
+        "properties": {
+          "notified": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The recipients it was queued for, in the order they were named."
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedRecipient"
+            },
+            "description": "The recipients it was not sent to."
+          }
+        }
       },
       "PushNotificationData": {
         "type": "object",
@@ -3484,6 +4320,146 @@
         "description": "How a routine run ended, as its notification reports it.",
         "enum": ["succeeded", "failed"]
       },
+      "RuntimeAccessRemovedMetadata": {
+        "type": "object",
+        "description": "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped.",
+        "required": ["runtimeName", "agents"],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoppedAgent"
+            },
+            "description": "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+          },
+          "runtimeName": {
+            "type": "string",
+            "description": "The runtime's name."
+          }
+        }
+      },
+      "SectionMute": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The section's channels notify.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["unmuted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Muted until the user unmutes it.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["muted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Muted until a deadline.",
+            "required": ["until", "state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["snoozed"]
+              },
+              "until": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the section notifies again."
+              }
+            }
+          }
+        ],
+        "description": "Whether a section is muted."
+      },
+      "SectionNotificationSettingsResponse": {
+        "type": "object",
+        "description": "One section's settings. They apply to every channel the section holds for\nthe user: a channel notifies for a kind when any of its sections allows\nit, and its sections mute it only when all of them are muted.",
+        "required": ["section", "disabled", "mute"],
+        "properties": {
+          "disabled": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelNotificationKind"
+            },
+            "description": "Kinds the section does not allow.",
+            "uniqueItems": true
+          },
+          "mute": {
+            "$ref": "#/components/schemas/SectionMute"
+          },
+          "section": {
+            "$ref": "#/components/schemas/ChannelSection"
+          }
+        }
+      },
+      "SendPingRequest": {
+        "type": "object",
+        "description": "A notification written by the caller.",
+        "required": ["body", "link"],
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "What to tell them, at most 280 characters once trimmed: one or two\nsentences, since `link` holds the detail."
+          },
+          "link": {
+            "$ref": "#/components/schemas/PingLink",
+            "description": "What the notification opens; the caller must be able to see it."
+          },
+          "recipientIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Who gets it, at most 100; the caller when omitted or empty. Anyone\nwho cannot already see `link`, or whose inbox would not list it, is\nskipped, never given access."
+          }
+        }
+      },
+      "SkipReason": {
+        "type": "string",
+        "description": "Why a recipient was left out of a ping.",
+        "enum": ["no_access", "not_listed", "recipient_limit"]
+      },
+      "SkippedRecipient": {
+        "type": "object",
+        "description": "A recipient a ping was not sent to.",
+        "required": ["userId", "reason"],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/SkipReason",
+            "description": "Why they were left out."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The recipient."
+          }
+        }
+      },
+      "StoppedAgent": {
+        "type": "object",
+        "description": "One of the recipient's agents that stopped with their runtime access.",
+        "required": ["botId", "name"],
+        "properties": {
+          "botId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The agent's bot id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The agent's display name."
+          }
+        }
+      },
       "TaskAssignedMetadata": {
         "type": "object",
         "description": "Metadata for when a user is assigned to a task",
@@ -3529,6 +4505,65 @@
           }
         }
       },
+      "UpdateChannelNotificationSettingsRequest": {
+        "type": "object",
+        "description": "A change to one channel's settings. A channel either follows its sections\nfor every kind or has its own setting for all of them.",
+        "properties": {
+          "enabled": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ChannelNotificationKind"
+            },
+            "description": "Give the channel its own settings: exactly these kinds notify,\nwhatever its sections say. Omit to keep the current kinds.",
+            "uniqueItems": true
+          },
+          "inherit": {
+            "type": "boolean",
+            "description": "Drop the channel's own kinds so it follows its sections again. Can't\nbe combined with `enabled`."
+          },
+          "overridesSectionMute": {
+            "type": ["boolean", "null"],
+            "description": "Keep notifying while the sections holding the channel are muted.\nOmit to keep the current value."
+          }
+        }
+      },
+      "UpdateSectionNotificationSettingsRequest": {
+        "type": "object",
+        "description": "A change to one section's settings. Kinds the change does not name keep\ntheir setting.",
+        "required": ["section"],
+        "properties": {
+          "disable": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelNotificationKind"
+            },
+            "description": "Kinds to stop allowing.",
+            "uniqueItems": true
+          },
+          "enable": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelNotificationKind"
+            },
+            "description": "Kinds to allow.",
+            "uniqueItems": true
+          },
+          "mute": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SectionMute",
+                "description": "The new mute. Omit to keep the current one."
+              }
+            ]
+          },
+          "section": {
+            "$ref": "#/components/schemas/ChannelSection"
+          }
+        }
+      },
       "UserUnsubscribe": {
         "type": "object",
         "required": ["item_id", "item_type"],
@@ -3540,6 +4575,10 @@
           "item_type": {
             "type": "string",
             "description": "The item type"
+          },
+          "mentions_only": {
+            "type": "boolean",
+            "description": "The item still notifies the user when a message @mentions them directly."
           },
           "snoozed_until": {
             "type": ["string", "null"],

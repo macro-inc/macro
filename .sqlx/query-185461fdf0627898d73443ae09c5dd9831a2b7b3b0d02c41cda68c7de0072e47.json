@@ -1,0 +1,111 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            page.item_type as \"item_type!\",\n            page.id as \"id!\",\n            CAST(COALESCE(di.id, db.id) as TEXT) as \"document_version_id\",\n            page.user_id as \"user_id!\",\n            page.name as \"name!\",\n            page.file_type as \"file_type\",\n            page.created_at as \"created_at\",\n            page.updated_at as \"updated_at\",\n            page.deleted_at as \"deleted_at!\",\n            page.project_id as \"project_id\",\n            page.is_persistent as \"is_persistent\",\n            dt.sub_type as \"sub_type?: DocumentSubType\",\n            CASE\n                WHEN dt.sub_type = 'task'\n                    AND ep_status.values->'value' ? $5\n                THEN true\n                WHEN dt.sub_type = 'task'\n                THEN false\n                ELSE NULL\n            END as \"is_completed\"\n        FROM (\n            (\n                SELECT\n                    'document' as item_type,\n                    d.id,\n                    d.owner as user_id,\n                    d.name,\n                    d.\"fileType\" as file_type,\n                    d.\"createdAt\"::timestamptz as created_at,\n                    d.\"updatedAt\"::timestamptz as updated_at,\n                    d.\"deletedAt\"::timestamptz as deleted_at,\n                    d.\"projectId\" as project_id,\n                    NULL::boolean as is_persistent\n                FROM \"Document\" d\n                WHERE d.owner = $1\n                    AND d.\"deletedAt\" IS NOT NULL\n                    AND (d.\"deletedAt\", d.id)\n                        < (COALESCE($2::timestamptz, 'infinity'), COALESCE($3::text, ''))\n                ORDER BY d.\"deletedAt\" DESC, d.id DESC\n                LIMIT $4\n            )\n            UNION ALL\n            (\n                SELECT\n                    'chat',\n                    c.id,\n                    c.\"userId\",\n                    c.name,\n                    NULL,\n                    c.\"createdAt\"::timestamptz,\n                    c.\"updatedAt\"::timestamptz,\n                    c.\"deletedAt\"::timestamptz,\n                    c.\"projectId\",\n                    c.\"isPersistent\"\n                FROM \"Chat\" c\n                WHERE c.\"userId\" = $1\n                    AND c.\"deletedAt\" IS NOT NULL\n                    AND (c.\"deletedAt\", c.id)\n                        < (COALESCE($2::timestamptz, 'infinity'), COALESCE($3::text, ''))\n                ORDER BY c.\"deletedAt\" DESC, c.id DESC\n                LIMIT $4\n            )\n            UNION ALL\n            (\n                SELECT\n                    'project',\n                    p.id,\n                    p.\"userId\",\n                    p.name,\n                    NULL,\n                    p.\"createdAt\"::timestamptz,\n                    p.\"updatedAt\"::timestamptz,\n                    p.\"deletedAt\"::timestamptz,\n                    p.\"parentId\",\n                    NULL\n                FROM \"Project\" p\n                WHERE p.\"userId\" = $1\n                    AND p.\"deletedAt\" IS NOT NULL\n                    AND (p.\"deletedAt\", p.id)\n                        < (COALESCE($2::timestamptz, 'infinity'), COALESCE($3::text, ''))\n                ORDER BY p.\"deletedAt\" DESC, p.id DESC\n                LIMIT $4\n            )\n            ORDER BY deleted_at DESC, id DESC\n            LIMIT $4\n        ) page\n        LEFT JOIN document_sub_type dt\n            ON page.item_type = 'document'\n            AND dt.document_id = page.id\n        LEFT JOIN entity_properties ep_status\n            ON dt.sub_type = 'task'\n            AND ep_status.entity_id = page.id\n            AND ep_status.entity_type = 'TASK'\n            AND ep_status.property_definition_id = $6\n        LEFT JOIN LATERAL (\n            SELECT\n                b.id\n            FROM\n                \"DocumentBom\" b\n            WHERE\n                page.item_type = 'document'\n                AND b.\"documentId\" = page.id\n            ORDER BY\n                b.\"createdAt\" DESC\n            LIMIT 1\n        ) db ON true\n        LEFT JOIN LATERAL (\n            SELECT\n                i.id\n            FROM\n                \"DocumentInstance\" i\n            WHERE\n                page.item_type = 'document'\n                AND i.\"documentId\" = page.id\n            ORDER BY\n                i.\"updatedAt\" DESC\n            LIMIT 1\n        ) di ON true\n        ORDER BY page.deleted_at DESC, page.id DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "document_version_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "file_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "deleted_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_persistent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "sub_type?: DocumentSubType",
+        "type_info": {
+          "Custom": {
+            "name": "document_sub_type_value",
+            "kind": {
+              "Enum": [
+                "task",
+                "snippet",
+                "skill",
+                "initiative_description"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "is_completed",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Int8",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      true,
+      null
+    ]
+  },
+  "hash": "185461fdf0627898d73443ae09c5dd9831a2b7b3b0d02c41cda68c7de0072e47"
+}

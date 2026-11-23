@@ -58,11 +58,12 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../bot_id" }
 entity_access = { path = "../entity_access", default-features = false, features = ["inbound", "outbound", "ports"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 image = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 models_permissions = { path = "../models_permissions" }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tower = { workspace = true, features = ["util"] }

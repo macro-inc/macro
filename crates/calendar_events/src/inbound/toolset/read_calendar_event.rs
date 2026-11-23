@@ -11,7 +11,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{CalendarLabels, CalendarToolContext, description_preview, time_fields};
+use super::{
+    CalendarLabels, CalendarToolContext, description_preview, local_time_fields, time_fields,
+    user_time_zone,
+};
 use crate::domain::{
     join_requests::CalendarJoinRequestStatus,
     labels::off_schedule_summary,
@@ -80,6 +83,12 @@ pub struct ReadCalendarEventResponse {
     pub start: String,
     /// Exclusive end: RFC 3339 UTC instant, or YYYY-MM-DD for all-day events.
     pub end: String,
+    /// Start with its weekday, in the user's time zone when known (it names the
+    /// zone). State days and dates from this field.
+    pub start_local: String,
+    /// Exclusive end with its weekday, like `start_local`. For an all-day event
+    /// the last day covered is the day before this one.
+    pub end_local: String,
     /// Whether the event covers whole days.
     pub is_all_day: bool,
     /// IANA time zone the event was scheduled in, when known.
@@ -112,11 +121,16 @@ pub struct ReadCalendarEventResponse {
 }
 
 impl ReadCalendarEventResponse {
-    fn from_preview(event: CalendarMentionEvent, labels: &CalendarLabels) -> Self {
+    fn from_preview(
+        event: CalendarMentionEvent,
+        labels: &CalendarLabels,
+        user_time_zone: Option<&str>,
+    ) -> Self {
         let on_schedule = labels.on_schedule(event.viewer_calendar_ids.iter().copied());
         let access = CalendarEventAccess::of(&event, on_schedule == Some(true));
         let calendar_name = labels.calendar_name(event.viewer_calendar_ids.first().copied());
         let (start, end, is_all_day, time_zone) = time_fields(&event.time);
+        let (start_local, end_local) = local_time_fields(&event.time, user_time_zone);
         let summary = match access {
             CalendarEventAccess::OnYourCalendar => {
                 format!("{} is on the user's calendar.", event.title)
@@ -151,6 +165,8 @@ impl ReadCalendarEventResponse {
             title: event.title,
             start,
             end,
+            start_local,
+            end_local,
             is_all_day,
             time_zone,
             is_recurring: event.is_recurring,
@@ -176,8 +192,9 @@ impl ReadCalendarEventResponse {
 Read one calendar event by id: the `documentId` of a calendar event mention (`blockName` \
 `calendar`) in a message, document, or email, or an `eventId` a calendar tool returned. \
 Returns what the mention's preview card shows: title, time, location, description \
-(truncated), organizer, guest count, and whether it repeats. ReadContent and ReadMetadata \
-read documents only; use this tool for calendar events.\n\
+(truncated), organizer, guest count, and whether it repeats. Take days and weekdays from \
+`startLocal` and `endLocal`. ReadContent and ReadMetadata read documents only; use this tool \
+for calendar events.\n\
 \n\
 `access` says how the user holds the meeting, as the card does. `on_your_calendar`: their own \
 event, on a calendar of their schedule. `on_visible_calendar`: it is on a calendar they can see \
@@ -244,7 +261,12 @@ where
         match previews.into_iter().next() {
             Some(CalendarMentionPreview::Accessible(event)) => {
                 let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
-                Ok(ReadCalendarEventResponse::from_preview(*event, &labels))
+                let time_zone = user_time_zone(&*service_context.occurrences, &requester_id).await;
+                Ok(ReadCalendarEventResponse::from_preview(
+                    *event,
+                    &labels,
+                    time_zone.as_deref(),
+                ))
             }
             Some(CalendarMentionPreview::NoAccess) => Err(not_readable(
                 "The calendar event is not on any of the user's calendars and was not shared \

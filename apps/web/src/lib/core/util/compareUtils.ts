@@ -71,7 +71,7 @@ function _uniqueByKeySorted<T>(
 
 /**
  * Deep equality check for two values.
- * Handles primitives, arrays, objects, null, and undefined.
+ * Handles primitives, dates, arrays, objects, null, and undefined.
  * Arrays are compared by value (order matters).
  */
 export function deepEqual(a: unknown, b: unknown): boolean {
@@ -83,6 +83,13 @@ export function deepEqual(a: unknown, b: unknown): boolean {
 
   // Different types
   if (typeof a !== typeof b) return false;
+
+  // Dates have no enumerable keys, so compare the instants they hold.
+  if (a instanceof Date || b instanceof Date) {
+    return (
+      a instanceof Date && b instanceof Date && a.getTime() === b.getTime()
+    );
+  }
 
   // Arrays
   if (Array.isArray(a) && Array.isArray(b)) {

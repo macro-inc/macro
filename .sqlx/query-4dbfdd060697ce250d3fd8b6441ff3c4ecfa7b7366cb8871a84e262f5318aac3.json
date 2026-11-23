@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE hosted_runtime SET state = jsonb_set(state, '{phase}', '{\"phase\": \"destroying\"}') WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4dbfdd060697ce250d3fd8b6441ff3c4ecfa7b7366cb8871a84e262f5318aac3"
+}

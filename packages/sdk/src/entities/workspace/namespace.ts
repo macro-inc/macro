@@ -1,5 +1,5 @@
 import type { PostSoupAstRequest } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { properties, workspaceItem } from './items';
 import { WorkspaceQuery } from './query';
@@ -11,10 +11,11 @@ import type {
 } from './types';
 
 /**
- * Browse recent workspace documents (including tasks), chats, projects, email,
- * channels, message threads, calls, calendar events and foreign entities.
- * Queries run with the caller's normal access permissions. Use search namespaces
- * to find specific names/content; use this namespace for activity and filtered lists.
+ * Browse recent workspace documents (including tasks), agent sessions, AI chats,
+ * projects, email, channels, message threads, calls, calendar events and
+ * foreign entities. Queries run with the caller's normal access permissions.
+ * Use `macro.search` to find specific names/content; use this namespace for
+ * activity and filtered lists.
  *
  * Each item has an existing `entity` handle plus a generated API `snapshot` for
  * reading metadata without another request. Calendar snapshots contain event time
@@ -74,26 +75,69 @@ import type {
  * `ft`, `id`, `pid`, and `ca`/`ua` timestamp bounds. `ef` supports `Sender`,
  * `Recipient`, `Read`, `ThreadId`, `ca`/`ua`/`va`; `chanf` supports `ChannelId`,
  * `Sender`, `IsParticipant`; `cthf` supports `ChannelId`/`ThreadId`; `callf`
- * supports `CallId`/`ChannelId`/`Speaker`/`Attended`. Filters remain server-validated.
- * CRM, agent sessions, initiatives and database rows have their own namespaces
- * and are not included in this browsing surface.
+ * supports `CallId`/`ChannelId`/`Speaker`/`Attended`; `asf` supports `id`, `o`
+ * (owner principal), `src` and `vis`. Filters remain server-validated.
+ * CRM, initiatives and database rows have their own namespaces and are not
+ * included in this browsing surface.
+ *
+ * @routing Use when browsing the user's recent or filtered workspace items, such as what changed today; not keyword search (`macro.search`).
  */
 export class WorkspaceNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** One bounded page. Resume using nextCursor and the same options. */
+  /**
+   * One bounded page of recent items, newest first by default; resume using nextCursor and the same options.
+   *
+   * @readonly
+   */
   async page(options: WorkspacePageOptions = {}): Promise<WorkspacePage> {
     const query = new WorkspaceQuery(this.client);
     return this.fetch(query, await query.body(options), options.cursor);
   }
 
   /**
-   * Lazy automatic pagination. `limit` is a page size, not a total result limit.
+   * Every matching item, newest first by default, auto-paginated; `maxItems` caps the total. `limit` is a
+   * page size; `maxItems` caps the total.
    * Break a `for await` loop to stop; no speculative next page is fetched.
    * Tag/inbox resolution is reused within this iterator.
+   *
+   * @readonly
    */
-  async *list(
-    options: WorkspaceListOptions = {},
+  list(
+    options: WorkspaceListOptions & IterationOptions = {},
+  ): AsyncGenerator<WorkspaceItem> {
+    const { maxItems: _maxItems, ...list } = options;
+    return iterate(
+      'workspace.list',
+      options,
+      {
+        df: true,
+        pf: true,
+        cf: true,
+        ef: true,
+        chanf: true,
+        cthf: true,
+        callf: true,
+        fef: true,
+        calf: true,
+        asf: true,
+        propf: true,
+        includeTypes: true,
+        favoritesOnly: true,
+        sortBy: true,
+        limit: true,
+        tags: true,
+        tagsMatch: true,
+        inbox: true,
+        emailPreset: true,
+        emailView: true,
+      },
+      () => this.listPages(list),
+    );
+  }
+
+  private async *listPages(
+    options: WorkspaceListOptions,
   ): AsyncGenerator<WorkspaceItem> {
     const query = new WorkspaceQuery(this.client);
     const body = await query.body(options);

@@ -6,6 +6,7 @@ const host = vi.hoisted(() => ({
   entityFilter: vi.fn(),
   readRecordsByKeys: vi.fn(),
   dispose: vi.fn(),
+  authority: { current: vi.fn() },
 }));
 vi.mock('../../host/worker-host', () => ({
   createWorkerCacheHost: () => host,
@@ -16,6 +17,9 @@ beforeEach(() => {
   vi.resetAllMocks();
   document.body.innerHTML = html;
   host.writeQuery.mockResolvedValue({});
+  host.authority.current.mockResolvedValue({
+    generation: '00000000-0000-4000-8000-000000000001',
+  });
   host.entityFilter.mockResolvedValue({
     kind: 'mail-page',
     keys: [],
@@ -60,5 +64,8 @@ it.each(['entityFilter', 'readRecordsByKeys'] as const)(
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(result.getAttribute('data-status')).toBe('ready');
     expect(result.textContent).toBe('0 cached emails shown');
-  }
+  },
+  // Each test re-imports the harness after resetModules, which can pass 5 s on a
+  // busy runner. A late import then runs into the next test and fails it too.
+  30_000
 );

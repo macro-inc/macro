@@ -3,10 +3,18 @@ import * as Effect from 'effect/Effect';
 import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
+  type CacheTelemetryEventName,
+  type CacheTelemetryObservation,
   type CacheTelemetryRecorderLike,
-  classifyCacheError,
+  describeCacheError,
   isolateCacheTelemetry,
 } from '../telemetry';
+import {
+  type CompiledEngine,
+  dropPrefetchedCompiledEngine,
+  offerCompiledEngine,
+  prefetchCompiledEngine,
+} from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CacheReadState,
@@ -32,6 +40,7 @@ import {
   staleCacheDatabaseIdentities,
 } from './stale-databases';
 import { CacheBootstrapExhaustedError } from './startup';
+import { compileCacheWasm } from './wasm-compile';
 
 export interface SharedWorkerLike {
   readonly port: MessagePort;
@@ -67,7 +76,9 @@ export interface CacheCoordinatorPageAdapterOptions {
   ) => void;
   onOwnerChanged?: (ownerEpoch: number | undefined) => void;
   /** Another context holds the database, so the cache stays off until reload. */
-  onCacheUnavailable?: (reason: string) => void;
+  /** `superseded`: a newer build took the database over, so this build never
+   * gets it back. */
+  onCacheUnavailable?: (reason: string, superseded: boolean) => void;
   /** A newer app build took the database over; this page should reload. */
   onCacheSuperseded?: (reason: string) => void;
   /** When this page's app build was made, in ms since the epoch. Defaults to
@@ -83,6 +94,10 @@ export interface CacheCoordinatorPageAdapterOptions {
   onProtocolError?: (error: Error) => void;
   /** Fatal SharedWorker/MessagePort/envelope failure after resources close. */
   onTerminalError?: (error: Error) => void;
+  /** Compiles the engine for the first engine worker before this page knows
+   * it owns the cache; `null` leaves the compile to the worker. Defaults to
+   * the production asset outside the dev server. */
+  compileEngine?: (() => Promise<CompiledEngine>) | null;
   gracefulTimeoutMs?: number;
   /** Privacy-safe lifecycle recorder supplied by the browser host. */
   telemetry?: CacheTelemetryRecorderLike;
@@ -130,6 +145,35 @@ const defaultDedicatedWorkerFactory = (
     name: `graphql-cache-engine:${scope}:${ownerEpoch}`,
   });
 
+const PREFETCH_EVENT_NAMES: Partial<
+  Record<CacheTelemetryEventName, CacheTelemetryEventName>
+> = {
+  'graphql_cache.wasm_download': 'graphql_cache.wasm_prefetch_download',
+  'graphql_cache.wasm_compile': 'graphql_cache.wasm_prefetch_compile',
+};
+
+const compileProductionEngine =
+  (telemetry: CacheTelemetryRecorderLike) =>
+  async (): Promise<CompiledEngine> => {
+    // The same asset the engine worker would load: the worker only takes a
+    // module compiled from it.
+    const url = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
+    const now = (): number => performance.now();
+    // Recorded apart from the worker's own download and compile: a follower
+    // tab compiles ahead too, and no engine starts from it.
+    const prefetchTelemetry = {
+      record: (event: CacheTelemetryObservation) =>
+        telemetry.record({
+          ...event,
+          name: PREFETCH_EVENT_NAMES[event.name] ?? event.name,
+        }),
+    };
+    return {
+      assetUrl: url.href,
+      module: await compileCacheWasm(url, prefetchTelemetry, now),
+    };
+  };
+
 const defaultCleanupWorkerFactory = (scope: string): DedicatedWorkerLike =>
   new Worker(new URL('./cache.engine-worker.ts', import.meta.url), {
     type: 'module',
@@ -169,6 +213,7 @@ export class CacheCoordinatorPageAdapter {
   };
   private coordinatorConnection: CoordinatorConnection | undefined;
   private engineWorker: DedicatedWorkerLike | undefined;
+  private compiledEnginePort: MessagePort | undefined;
   private ownerEpoch: number | undefined;
   private registered = false;
   private startPromise: Promise<void> | undefined;
@@ -295,6 +340,7 @@ export class CacheCoordinatorPageAdapter {
     this.disposePromise = new Promise<void>((resolve) => {
       this.resolveDispose = resolve;
     });
+    dropPrefetchedCompiledEngine();
     if (this.closed) {
       this.settleDispose();
       return this.disposePromise;
@@ -413,6 +459,17 @@ export class CacheCoordinatorPageAdapter {
     }
     if (!lockManager) throw new Error('Web Locks are unavailable');
 
+    // Most pages become the owner, and their engine worker starts only after
+    // the liveness lock, the coordinator and the election. The engine's
+    // download and compile run meanwhile, off the main thread.
+    const compileEngine =
+      this.options.compileEngine === undefined
+        ? import.meta.env.DEV || typeof WebAssembly !== 'object'
+          ? null
+          : compileProductionEngine(this.telemetry)
+        : this.options.compileEngine;
+    if (compileEngine) prefetchCompiledEngine(compileEngine);
+
     const livenessLockName = tabLivenessLockName(
       this.options.scope,
       this.tabId
@@ -448,7 +505,7 @@ export class CacheCoordinatorPageAdapter {
         name: 'graphql_cache.lock_wait',
         operationCategory: 'lifecycle',
         outcome: 'error',
-        errorCode: classifyCacheError(error),
+        ...describeCacheError(error),
         durationMs: this.now() - lockStartedAt,
       });
       throw error;
@@ -548,6 +605,14 @@ export class CacheCoordinatorPageAdapter {
         Math.max(this.latestEngineReplacedEpoch, this.latestReadStateEpoch)
       ) {
         this.latestReadStateEpoch = message.ownerEpoch;
+        // Another page runs the engine: a compile kept for this one is only
+        // memory until this page is elected, which then compiles again.
+        if (
+          message.state === 'ready' &&
+          message.ownerEpoch !== this.ownerEpoch
+        ) {
+          dropPrefetchedCompiledEngine();
+        }
         this.options.onCacheReadAvailabilityChanged?.(message.state);
       }
       return;
@@ -561,6 +626,9 @@ export class CacheCoordinatorPageAdapter {
           return;
         }
         this.registered = true;
+        // Another visible tab runs the engine: this one compiled ahead for a
+        // worker it will not start. Elected later, its worker compiles.
+        if (message.ownerElsewhere) dropPrefetchedCompiledEngine();
         this.resolveRegistration?.();
         this.resolveRegistration = undefined;
         this.rejectRegistration = undefined;
@@ -663,6 +731,10 @@ export class CacheCoordinatorPageAdapter {
         )
           return;
         this.latestEngineReplacedEpoch = message.ownerEpoch;
+        // Another page's engine replaced the last one, as when this page
+        // registered during a drain: its compile ahead is only memory.
+        if (message.ownerEpoch !== this.ownerEpoch)
+          dropPrefetchedCompiledEngine();
         this.highestOwnerEpochSeen = Math.max(
           this.highestOwnerEpochSeen,
           message.ownerEpoch
@@ -686,7 +758,10 @@ export class CacheCoordinatorPageAdapter {
         );
         break;
       case 'cache-unavailable':
-        this.options.onCacheUnavailable?.(message.reason);
+        this.options.onCacheUnavailable?.(
+          message.reason,
+          message.superseded === true
+        );
         break;
       case 'cache-superseded':
         this.options.onCacheSuperseded?.(message.reason);
@@ -862,6 +937,7 @@ export class CacheCoordinatorPageAdapter {
       this.closePort(directChannel.port2);
       return;
     }
+    const compiledEngineChannel = new MessageChannel();
     try {
       worker.postMessage(
         withVersion<PageToEngineEnvelope>({
@@ -873,10 +949,14 @@ export class CacheCoordinatorPageAdapter {
           ownerLockName: election.ownerLockName,
           hotCapacity: election.hotCapacity,
         }),
-        [directChannel.port2]
+        [directChannel.port2, compiledEngineChannel.port2]
       );
+      this.compiledEnginePort = compiledEngineChannel.port1;
+      offerCompiledEngine(compiledEngineChannel.port1);
     } catch (error) {
       this.closePort(directChannel.port2);
+      this.closePort(compiledEngineChannel.port1);
+      this.closePort(compiledEngineChannel.port2);
       this.failTerminal(
         error instanceof Error ? error : new Error(String(error))
       );
@@ -908,6 +988,8 @@ export class CacheCoordinatorPageAdapter {
       cleanupError ??=
         error instanceof Error ? error : new Error(String(error));
     }
+    if (this.compiledEnginePort) this.closePort(this.compiledEnginePort);
+    this.compiledEnginePort = undefined;
     this.terminatedOwnerEpochs.add(ownerEpoch);
     this.engineWorker = undefined;
     this.ownerEpoch = undefined;
@@ -986,6 +1068,7 @@ export class CacheCoordinatorPageAdapter {
   private failTerminal(error: Error): void {
     if (this.terminalErrorReported) return;
     this.terminalErrorReported = true;
+    dropPrefetchedCompiledEngine();
     this.closed = true;
     this.registered = false;
     this.terminateCleanupWorker();
@@ -1016,6 +1099,8 @@ export class CacheCoordinatorPageAdapter {
   }
 
   private rejectStartAndQueued(error: Error): void {
+    // A page that leaves before owning the cache keeps no compile ahead.
+    dropPrefetchedCompiledEngine();
     this.rejectRegistration?.(error);
     this.rejectRegistration = undefined;
     this.resolveRegistration = undefined;

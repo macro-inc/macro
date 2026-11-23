@@ -1,0 +1,73 @@
+/* Product surfaces use their own type scale, independent of the article. */
+.post-product-graphic {
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100cqw;
+  max-width: none;
+  margin: 36px 0 16px;
+}
+.post-product-ui {
+  font: 370 14px/1.5 'Inter Variable', Inter, sans-serif;
+  text-align: left;
+  overflow-wrap: normal;
+}
+.post-product-ui .product-page { padding: 0; }
+.post-product-ui .feature-demo-art { padding: 28px 0; }
+.post-product-ui .feature-demo-backdrop { inset: -20px 0; }
+.post-product-ui .guide-graphic { margin: 0; }
+.post-product-ui .email-desktop-demo { margin: 0; }
+.post-product-ui, .post-product-ui * { scrollbar-width: none; }
+.post-product-ui *::-webkit-scrollbar { display: none; }
+.post-product-ui .homepage-compose-loading { min-height: 480px; }
+.post-agent-scene {
+  border: 1px solid var(--color-edge-muted);
+  border-radius: 24px;
+  padding: 28px;
+  background: var(--color-panel);
+}
+.post-scene-label { color: var(--color-ink-muted); font-size: 13px; margin-bottom: 28px; }
+.post-agent-scene .homepage-conversation { margin: 0; font-size: 15px; }
+.post-agent-scene .homepage-enter { opacity: 1; transform: none; animation: none; }
+.post-mention-example { position: relative; margin: 24px 0 0 auto; max-width: 360px; }
+.post-mention-example .demo-mention-menu { position: relative; inset: auto; width: 100%; }
+.post-history-quote { margin: 36px 0; padding: 24px; border-left: 2px solid var(--post-rule); background: var(--post-card, transparent); }
+.post-history-quote blockquote { margin: 0; color: var(--post-ink); font-size: 17.5px; }
+.post-history-quote figcaption { margin-top: 16px; color: var(--post-faint); font-size: 12px; line-height: 1.8; }
+@media (max-width: 699px) {
+  .post-agent-scene { padding: 16px; }
+  .post-product-ui .feature-demo-art { padding: 16px 0; }
+}
+
+/* Desktop demonstrations are scaled inside the article, never the viewport. */
+.post-product-ui .email-desktop-demo { width: 100%; margin: 0; }
+.post-product-ui .email-desktop-wallpaper { padding: 0; background: none; border: 0; }
+.post-product-ui .email-desktop-window { border-radius: 24px; }
+.post-product-ui .email-desktop-content .dummy-sidebar { width: 200px; }
+.post-product-ui .feature-demo-primary { width: 100%; }
+.post-email-surface { overflow: hidden; border: 1px solid var(--color-edge-muted); border-radius: 22px; background: var(--color-panel); }
+.post-email-task .post-email-surface { width: 88%; margin-left: auto; transform: rotate(1deg); }
+.post-task-example { position: relative; width: min(560px, 100%); margin: auto; }
+.post-email-task .post-task-example { margin: -50px 0 0; transform: rotate(-1deg); }
+.post-task-created { display: flex; flex-direction: column; align-items: flex-start; gap: 20px; padding: 24px; border: 1px solid var(--color-edge-muted); border-radius: 22px; background: var(--color-panel); }
+.post-email-splits { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.post-email-splits > * { min-width: 0; }
+.post-email-splits .post-email-draft { margin-top: 80px; overflow: hidden; border: 1px solid var(--color-edge-muted); border-radius: 22px; background: var(--color-panel); }
+.post-email-splits .homepage-email-demo { width: 100%; }
+@media (max-width: 699px) {
+  .post-email-splits { display: flex; flex-direction: column; gap: 0; }
+  .post-email-splits .post-email-surface { width: 96%; margin-left: auto; }
+  .post-email-splits .post-email-draft { position: relative; width: 96%; margin: -24px 0 0; }
+  .post-email-task .post-email-surface { width: 96%; }
+  .post-email-task .post-task-example { width: 96%; margin-top: -24px; }
+}
+.post-chat-splits { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.post-chat-splits > * { min-width: 0; }
+.post-chat-splits .sample-chat-log { padding: 20px 14px; }
+@media (max-width: 699px) { .post-chat-splits { grid-template-columns: 1fr; } }
+/* Keep each narrow pane's identity visible instead of squeezing it behind tabs. */
+.post-chat-splits [data-view-shell-top-bar] > [role=radiogroup],
+.post-chat-splits [data-view-shell-top-bar] > div:last-child { display: none; }
+.post-chat-splits [data-view-shell-top-bar] > span { flex: 1; }
+.post-product-ui .product-demo *::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.post-product-ui .post-mention-example .demo-mention-menu { position: relative; inset: auto; transform: none; width: 100%; min-width: 0; max-height: none; }

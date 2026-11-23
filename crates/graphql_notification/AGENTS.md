@@ -15,6 +15,10 @@ mutations, and the realtime subscription.
   discussion, ...) — add a new file here per event kind.
 - `src/subscriptions.rs`: `workFeedUpdates`-style realtime notification push.
 - `src/mutations.rs`: mark read/unread for an entity or explicit id set.
+- `src/active_notification_ids.rs`: `GraphqlUser.activeNotificationIds`, read
+  through `ActiveNotificationIdsGraphqlContext` in request data; invalid input
+  returns `BAD_USER_INPUT`, a storage failure `INTERNAL_SERVER_ERROR` with
+  `timedOut: true` when the read timed out.
 
 ## Scope
 
@@ -46,7 +50,7 @@ mutations, and the realtime subscription.
 
 - `notification_event/external_chat.rs` exposes live external chat message metadata (provider, chat name, message id); its notification targets the external chat entity.
 - `notification_event/whatsapp_group_stub.rs` is an uninhabited, schema-only `GraphqlWhatsappGroupMessageMetadata` union member kept because released clients spread it; nothing returns it. Delete it (and `GraphqlEntityType::WhatsappGroup`) after 2026-11-30.
-- Read a notification's type from `targetEntityType` (canonical `GraphqlEntityType`), so shared entities outside Soup keep their identity. `entityType` keeps its original `GraphqlSoupEntityType` output for deployed clients and is deprecated until 2026-12-01; changing its type would break them (`cargo x graphql-schema-compat`).
+- Read a notification's type from `targetEntityType` (canonical `GraphqlEntityType`), so shared entities outside Soup keep their identity. `entityType` keeps its original `GraphqlSoupEntityType` output for deployed clients and is deprecated until 2026-12-01; changing its type would break them (`cargo x graphql-schema-compat`). It returns `OUTSIDE_SOUP` for targets outside Soup (routines, external chats, users, teams); delete that value after its own date, 2026-12-15, once the field is gone.
 
 ## Related
 

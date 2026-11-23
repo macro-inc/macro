@@ -72,6 +72,9 @@ fn service(repo: FakeUserRepo) -> EmailServiceImpl<FakeUserRepo, (), (), (), (),
         macro_event_broker: (),
         sent_undo_delay_secs: 0,
         sender_provider: Arc::new(crate::domain::senders::UnavailableEmailSenderProvider),
+        shared_thread_replies: Arc::new(
+            crate::domain::shared_thread_replies::NoSharedThreadReplies,
+        ),
     }
 }
 
@@ -155,6 +158,7 @@ async fn links_are_scoped_to_the_user_and_enriched_by_domain_policy() {
             provider: UserProvider::Gmail,
             is_sync_active: true,
             needs_reauth: false,
+            mailbox_unavailable: false,
             settings: UserEmailLinkSettings {
                 signature_on_replies_forwards: true,
                 signature: Some("<p>Regards</p>".to_owned()),

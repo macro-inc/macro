@@ -20,6 +20,7 @@ import {
 } from '@core/util/upload';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
@@ -29,7 +30,7 @@ import { useMaybeSoupView } from './soup-view-context';
 const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
   documents: ['md', 'snippet', 'spreadsheet', 'canvas', 'code', 'project'],
   tasks: ['task'],
-  agents: ['agent', 'chat', 'routine', 'skill'],
+  agents: ['agent', 'routine', 'skill'],
   mail: ['email'],
   channels: ['channel'],
   folders: ['project'],
@@ -105,7 +106,7 @@ function getViewCreateOptions(
   if (view === 'folders') {
     options.push(IMPORT_FOLDER_OPTION);
   }
-  if (view === 'companies') {
+  if (view === 'companies' && crmAccessAllowed()) {
     options.push(CREATE_COMPANY_OPTION);
   }
   return options;

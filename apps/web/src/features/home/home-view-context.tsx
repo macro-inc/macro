@@ -23,6 +23,7 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { isModality } from '@core/mobile/inputModality';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
@@ -32,6 +33,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
 } from 'solid-js';
 import {
   createStore,
@@ -59,7 +61,11 @@ import type {
 
 type HomeViewProviderProps = ContextProviderProps & {
   initialState?: HomeViewStateOptions;
+  /** The one tab this Home lists, whatever its URL says: New Home's Recent. */
+  tab?: HomeTab;
 };
+
+export type HomeComposerFocusRequest = { channelId: string; id: number };
 
 export type HomeViewContext = {
   state: Store<HomeViewState>;
@@ -76,7 +82,21 @@ export type HomeViewContext = {
     entity: PreviewSelection,
     options?: { activate?: boolean }
   ) => boolean;
+  /**
+   * Set when a click or Enter previews a conversation: its composer takes
+   * focus, also when it was already open. Any other preview clears it.
+   */
+  composerFocusRequest: Accessor<HomeComposerFocusRequest | undefined>;
+  /** Keyboard focus back to the list, on its focused row; false without one. */
+  focusList: () => boolean;
+  /** The list supplies `focusList` for as long as it is mounted. */
+  registerListFocus: (focus: () => boolean) => void;
   closePreview: () => void;
+  /** Open a session the composer just started; the list highlights its row once listed. */
+  openStartedSession: (id: string) => void;
+  /** The started session whose row the list has yet to highlight. */
+  startedSessionToHighlight: Accessor<string | undefined>;
+  clearStartedSessionToHighlight: () => void;
   setTab: (tab: HomeTab) => void;
   setFacets: (facets: FacetSelection) => void;
 };
@@ -117,10 +137,16 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   );
 
   const state = persistedState;
+  // Before the list mounts, so it never starts on a tab it doesn't show.
+  if (props.tab) setState('tab', props.tab);
+
+  // Recent is New Home's alone; old Home reads a Recent link as Signal.
+  const urlTab = (): HomeTab =>
+    tabSearch.tab === 'recent' ? 'signal' : tabSearch.tab;
 
   createEffect(
     on(
-      () => tabSearch.tab,
+      () => props.tab ?? urlTab(),
       (tab) => {
         if (state.tab === tab) return;
         setState(
@@ -173,7 +199,10 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   };
   const navigateTarget = (target: PreviewBlockTarget, replace = false) =>
     navigateDetail(homePreviewTargetNavigation(target), replace);
+  const [startedSessionToHighlight, setStartedSessionToHighlight] =
+    createSignal<string>();
   const closePreview = () => {
+    setStartedSessionToHighlight(undefined);
     fireAndForget(
       navigate(
         { route: homeSplitRoute, params: {} },
@@ -184,14 +213,37 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   };
   const [previewNavigationRequest, setPreviewNavigationRequest] =
     createSignal(0);
+  const [composerFocusRequest, setComposerFocusRequest] =
+    createSignal<HomeComposerFocusRequest>();
+  let lastComposerFocusRequestId = 0;
   const openPreview = (
     entity: PreviewSelection,
     options?: { activate?: boolean }
   ) => {
+    setStartedSessionToHighlight(undefined);
     if (entity.type === 'calendar_event') {
+      setComposerFocusRequest(undefined);
       return openCalendarEvent(entity, options);
     }
-    return openPreviewTarget(previewBlockTarget(entity));
+    const target = previewBlockTarget(entity);
+    // A tap would raise the on-screen keyboard.
+    const focusComposer =
+      options?.activate === true &&
+      target.blockType === 'channel' &&
+      !isModality('touch');
+    setComposerFocusRequest(
+      focusComposer
+        ? { channelId: target.blockId, id: ++lastComposerFocusRequestId }
+        : undefined
+    );
+    return openPreviewTarget(target);
+  };
+  const [listFocus, setListFocus] = createSignal<() => boolean>();
+  const registerListFocus = (focus: () => boolean) => {
+    setListFocus(() => focus);
+    onCleanup(() =>
+      setListFocus((current) => (current === focus ? undefined : current))
+    );
   };
   const openPreviewTarget = (target: PreviewBlockTarget) => {
     if (!selectPreview.canSelect(target)) return false;
@@ -248,7 +300,17 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     calendarOpen,
     calendarRefocus,
     openPreview,
+    composerFocusRequest,
+    focusList: () => listFocus()?.() ?? false,
+    registerListFocus,
     closePreview,
+    openStartedSession: (id: string) => {
+      openPreview({ type: 'agent_session', id });
+      setStartedSessionToHighlight(id);
+    },
+    startedSessionToHighlight,
+    clearStartedSessionToHighlight: () =>
+      setStartedSessionToHighlight(undefined),
     setTab,
     setFacets,
   };

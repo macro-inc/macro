@@ -129,13 +129,16 @@ describe('calendar headers', () => {
     }
   );
 
-  it('retains the touch preview month picker and settings', () => {
+  it('leaves creation to the bottom New action in the phone header', () => {
     state.touch = true;
-    render(() => <Header presentation="preview" />);
+    render(() => <Header presentation="workspace" />);
     expect(screen.getByRole('button', { name: 'Choose month' })).toBeTruthy();
     expect(
       screen.getByRole('button', { name: 'Calendar settings' })
     ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'New event or call' })
+    ).toBeNull();
     expect(screen.queryByRole('heading', { name: 'October 2026' })).toBeNull();
   });
 });

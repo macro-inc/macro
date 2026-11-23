@@ -167,7 +167,7 @@ where
 
         let record = service_context
             .service
-            .get_company_for_team(&receipt)
+            .get_company_for_team(&receipt, true)
             .await
             .map_err(crm_error)?
             .ok_or_else(|| crm_error(CrmError::CompanyNotFoundForTeam))?;

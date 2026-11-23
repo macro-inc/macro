@@ -327,18 +327,30 @@ scenario!(
     a_recovery_backfill_does_not_bring_back_an_archive_that_landed_during_its_fetch,
     913,
     |world| {
-        use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
+        use models_email::email::service::backfill::{
+            BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
+        };
         let sim = &mut Sim::new(&mut world, 1);
         sim.act(Action::Archive(T1, true), false).await.unwrap();
         sim.deliver_all(Queue::Ops, Reply::RateLimited).await;
-        let ctx = sim.world.sync.clone();
-        let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, sim.world.link_id)
+        let backfill = sim.world.backfill.clone();
+        let link = email_db_client::links::get::fetch_link_by_id(&sim.world.db, sim.world.link_id)
             .await
             .unwrap()
             .unwrap();
+        let job = email_db_client::backfill::job::insert::create_backfill_job(
+            &sim.world.db,
+            link.id,
+            &link.fusionauth_user_id,
+            None,
+            true,
+        )
+        .await
+        .unwrap()
+        .unwrap();
         let scope = JobScopedPayload {
             link_id: link.id,
-            job_id: uuid::Uuid::from_u128(0xb0),
+            job_id: job.id,
             payload: BackfillMessagePayload {
                 thread_provider_id: THREADS[T1].to_string(),
                 thread_db_id: sim.world.thread_ids[THREADS[T1]],
@@ -351,9 +363,12 @@ scenario!(
             .gmail
             .pause_next(Kind::ReadFull, Some("m1a"), PauseAt::AfterApply);
         let mut backfill = tokio::spawn(async move {
-            let _ =
-                crate::pubsub::backfill::backfill_message::backfill_message(&ctx, &scope, &link)
-                    .await;
+            let _ = backfill
+                .service
+                .process(&BackfillPubsubMessage {
+                    backfill_operation: BackfillOperation::BackfillMessage(scope),
+                })
+                .await;
         });
         let arrived = tokio::select! {
             _ = &mut backfill => false,
@@ -567,8 +582,7 @@ async fn a_resumed_older_write_skips_messages_a_newer_write_took_over(pool: PgPo
 async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_rejection(
     pool: PgPool,
 ) {
-    use crate::pubsub::gmail_ops::operations::OperationError;
-    use crate::pubsub::gmail_ops::operations::modify_message_labels::modify_message_labels;
+    use email::domain::message_labels::gmail_ops::{OperationError, modify_message_labels};
     use email::domain::ports::EmailRepo;
     use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
     use uuid::Uuid;
@@ -622,7 +636,7 @@ async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_r
 
     wiring::reset_admission(&mut sim.world.redis, sim.world.link_id).await;
     let requests_before = sim.world.gmail.lock().log.len();
-    let result = modify_message_labels(&sim.world.ops, &link, &unarchive).await;
+    let result = modify_message_labels(sim.world.ops.service.as_ref(), &link, &unarchive).await;
     assert!(matches!(result, Err(OperationError::WaitingForNewerWrite)));
     let sent: Vec<String> = sim.world.gmail.lock().log[requests_before..]
         .iter()
@@ -637,12 +651,12 @@ async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_r
         .lock()
         .next_writes
         .push_back(Reply::Rejected);
-    let result = modify_message_labels(&sim.world.ops, &link, &archive).await;
+    let result = modify_message_labels(sim.world.ops.service.as_ref(), &link, &archive).await;
     assert!(matches!(result, Err(OperationError::Gmail(_))));
     assert!(in_inbox(sim, T2).await);
 
     wiring::reset_admission(&mut sim.world.redis, sim.world.link_id).await;
-    modify_message_labels(&sim.world.ops, &link, &unarchive)
+    modify_message_labels(sim.world.ops.service.as_ref(), &link, &unarchive)
         .await
         .unwrap();
     for message in [M1A, M1B, M1C, M2A, M2B] {

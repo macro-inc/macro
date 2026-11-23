@@ -1,4 +1,4 @@
-import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
+import { compareSoupNames } from '@app/features/soup/collection/transforms';
 import { compareDateDesc } from '@core/util/date';
 import type { DocumentEntity, EntityData } from '@entity';
 import type { DriveSelection } from '../context/drive-source';
@@ -11,8 +11,6 @@ function documentMatchesTab(
   userId: string | undefined
 ): boolean {
   if (entity.subType?.type === 'task') return false;
-  if (entity.subType?.type === 'snippet' && !isFeatureEnabled(enableSnippets))
-    return false;
   if (tab === 'shared') return Boolean(userId) && entity.ownerId !== userId;
   if (tab === 'owned' && scope === 'default') return entity.ownerId === userId;
 
@@ -75,6 +73,18 @@ export function driveEntityMatchesLocation(
   return documentMatchesTab(entity, location.tab, selection.scope, userId);
 }
 
+/** Matches the server's `name` order, then newest update and descending ID. */
+function compareNames(left: EntityData, right: EntityData): number {
+  const names = compareSoupNames(left.name, right.name);
+  if (names) return names;
+
+  const updated = compareDateDesc(left.updatedAt, right.updatedAt);
+  if (updated) return updated;
+  if (left.id === right.id) return 0;
+
+  return left.id > right.id ? -1 : 1;
+}
+
 /** Preserve recency sorting and the local-search featured prefix. */
 export function orderDriveEntities(
   entities: readonly EntityData[],
@@ -95,9 +105,12 @@ export function orderDriveEntities(
     return entity.sortTs ?? entity.updatedAt;
   };
 
-  const ordered = [...entities].sort((a, b) =>
-    compareDateDesc(timestamp(a), timestamp(b))
-  );
+  const ordered =
+    sort === 'name'
+      ? [...entities].sort(compareNames)
+      : [...entities].sort((a, b) =>
+          compareDateDesc(timestamp(a), timestamp(b))
+        );
 
   if (featuredIds.length === 0) return ordered;
 

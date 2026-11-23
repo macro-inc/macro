@@ -1,3 +1,5 @@
+import type { CacheAuthorityHost } from '../authority';
+import type { PeopleCache } from '../people/host';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
@@ -26,6 +28,7 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
+  HydrationScope,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
@@ -75,11 +78,18 @@ export type InspectQueryVariantsArgs = Omit<
 >;
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
+  /** Capture before dispatch; the shared owner compares it before publication. */
+  generation: string;
   data: unknown;
   /** Installs this active query's dependencies from the normalized response. */
   registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
+}
+
+export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
+  /** Reject a response from another account or cleared database before writing. */
+  hydrationScope?: HydrationScope;
 }
 
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
@@ -128,6 +138,8 @@ export type AffectedOperationsListener = (
 ) => void;
 
 export interface CacheHost {
+  /** Shared permission ordering; required by the current browser/native runtime. */
+  readonly authority?: CacheAuthorityHost;
   /** The host understands engine-maintained fragment query requests. */
   readonly liveQueries?: boolean;
   /** Stable id of this context; used to namespace operation ids. */
@@ -147,8 +159,14 @@ export interface CacheHost {
   readRecordsByKeys(
     args: ReadRecordsByKeysArgs
   ): Promise<ReadRecordsByKeysResult>;
-  /** Searches the compact write-through materialized projection. */
-  search(args: SearchCacheArgs): Promise<SearchCachePage>;
+  /** Context-aware contact policy; absent on disabled/older host adapters. */
+  readonly people?: PeopleCache;
+  /** Searches the compact write-through materialized projection. Aborting
+   * `signal` releases a search the caller has superseded. */
+  search(
+    args: SearchCacheArgs,
+    options?: { signal?: AbortSignal }
+  ): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
   entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
   /** Answers a calendar viewport from the local range index. */
@@ -156,7 +174,10 @@ export interface CacheHost {
     args: CalendarRangeCacheArgs
   ): Promise<CalendarRangeCacheResult>;
   /** Atomically applies calendar coverage, deletions, and sync state. */
-  calendarCommit(args: CalendarCommitArgs): Promise<CalendarCommitCacheResult>;
+  calendarCommit(
+    args: CalendarCommitArgs,
+    generation: string
+  ): Promise<CalendarCommitCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /**
    * Stores a background query response and returns only fields not marked
@@ -164,7 +185,7 @@ export interface CacheHost {
    * notifying foreground subscribers unless the write resets cache identity.
    * Cache-only consumers can opt into hydration via onCacheChanged.
    */
-  hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
+  hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
     args: EnqueueOptimisticMutationArgs,
@@ -176,7 +197,7 @@ export interface CacheHost {
   ): Promise<CachedQueryVariantWire[]>;
   /** Enumerates and materializes cached query field variants. */
   inspectQuery(args: InspectQueryArgs): Promise<CachedQueryInstanceWire[]>;
-  /** Read-only queue snapshots; their lease values do not authorize settlement. */
+  /** Read-only queue snapshots, each with its current lease when claimed. */
   inspectMutations?(): Promise<MutationInspection[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(
@@ -208,7 +229,10 @@ export interface CacheHost {
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<AffectedOperationsResult>;
   /** Apply explicit server-provided cache-deletion effects. */
-  deleteRecords(keys: string[]): Promise<AffectedOperationsResult>;
+  deleteRecords(
+    keys: string[],
+    authorityGeneration?: string
+  ): Promise<AffectedOperationsResult>;
   /** urql teardown for an operation key. */
   teardown(opKey: number): Promise<void>;
   /** Wipe all cached state (logout). */

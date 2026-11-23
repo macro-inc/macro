@@ -1,5 +1,7 @@
 use super::*;
 use ai_billing::domain::{Entitlement, PayerScope};
+use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+use hosted_runtimes::domain::rollout::{ComputerRollout, ENABLE_MACRO_COMPUTERS};
 use macro_user_id::cowlike::CowLike;
 use std::sync::Mutex;
 use teams::domain::model::SeatPlan;
@@ -27,16 +29,30 @@ impl EntitlementSource for Entitlements {
     }
 }
 struct Gateway {
+    access: billing_facts::BillingAccess,
+    access_reads: Mutex<usize>,
+    billing_reads: Mutex<Vec<bool>>,
     facts: Option<SubscriptionPlanFacts>,
     calls: Mutex<Vec<(String, SubscriptionScope, String)>>,
 }
 impl SubscriptionStatusGateway for Gateway {
+    async fn billing_access(
+        &self,
+        _: SubscriptionScope,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<billing_facts::BillingAccess, PlanChangeError> {
+        *self.access_reads.lock().unwrap() += 1;
+        Ok(self.access.clone())
+    }
+
     async fn status(
         &self,
         customer: &str,
         scope: SubscriptionScope,
         user: &MacroUserIdStr<'_>,
+        read_billing: bool,
     ) -> Result<Option<SubscriptionPlanFacts>, PlanChangeError> {
+        self.billing_reads.lock().unwrap().push(read_billing);
         self.calls
             .lock()
             .unwrap()
@@ -52,9 +68,27 @@ fn user() -> MacroUserIdStr<'static> {
 fn date(value: &str) -> DateTime<Utc> {
     value.parse().unwrap()
 }
+fn rollout(enabled: bool) -> ComputerRollout {
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(
+        user(),
+        Ok(FlagSnapshot::new([(
+            ENABLE_MACRO_COMPUTERS.into(),
+            FlagValue::Boolean(enabled),
+        )])),
+    );
+    ComputerRollout::new(flags)
+}
 fn service(
     value: Entitlement,
     change: Option<ScheduledSeatPlan>,
+) -> SubscriptionStatusService<Entitlements, Gateway> {
+    service_with_rollout(value, change, rollout(true))
+}
+fn service_with_rollout(
+    value: Entitlement,
+    change: Option<ScheduledSeatPlan>,
+    rollout: ComputerRollout,
 ) -> SubscriptionStatusService<Entitlements, Gateway> {
     SubscriptionStatusService::new(
         Entitlements {
@@ -62,12 +96,17 @@ fn service(
             customer_for: Mutex::new(Vec::new()),
         },
         Gateway {
+            access: billing_facts::BillingAccess::Personal,
+            access_reads: Mutex::new(0),
+            billing_reads: Mutex::new(vec![]),
             facts: Some(SubscriptionPlanFacts {
                 period_end: date("2026-11-01T12:00:00Z"),
                 scheduled_change: change,
+                billing: None,
             }),
             calls: Mutex::new(Vec::new()),
         },
+        rollout,
     )
 }
 fn downgrade(at: &str) -> Option<ScheduledSeatPlan> {
@@ -148,8 +187,8 @@ async fn canceled_schedule_has_no_banner_but_keeps_the_renewal_date() {
 }
 
 #[tokio::test]
-async fn free_and_unlimited_accounts_do_not_read_stripe() {
-    for (tier, unlimited) in [(PlanTier::Free, false), (PlanTier::Max, true)] {
+async fn free_accounts_do_not_read_stripe() {
+    for (tier, unlimited) in [(PlanTier::Free, false), (PlanTier::Free, true)] {
         let mut entitlement = Entitlement::personal(user(), tier);
         entitlement.unlimited = unlimited;
         let service = service(entitlement, None);
@@ -164,4 +203,61 @@ async fn free_and_unlimited_accounts_do_not_read_stripe() {
         assert!(service.gateway.calls.lock().unwrap().is_empty());
         assert!(service.entitlements.customer_for.lock().unwrap().is_empty());
     }
+}
+
+#[tokio::test]
+async fn unlimited_ai_usage_does_not_hide_an_existing_paid_subscription() {
+    let mut entitlement = Entitlement::personal(user(), PlanTier::Max);
+    entitlement.unlimited = true;
+    let service = service(entitlement, None);
+    assert!(
+        service
+            .status(&user())
+            .await
+            .unwrap()
+            .renewal_date
+            .is_some()
+    );
+    assert_eq!(service.gateway.calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn ordinary_team_members_keep_renewal_without_requesting_financial_details() {
+    let team_id = macro_uuid::generate_uuid_v7();
+    let mut entitlement = Entitlement::personal(user(), PlanTier::Max);
+    entitlement.scope = PayerScope::TeamMember { team_id };
+    let mut service = service(entitlement, None);
+    service.gateway.access =
+        billing_facts::BillingAccess::Team(Some(teams::domain::model::TeamRole::Member));
+    service.gateway.facts.as_mut().unwrap().billing =
+        Some(billing_facts::SubscriptionBillingFacts {
+            access: billing_facts::BillingAccess::Team(Some(teams::domain::model::TeamRole::Owner)),
+            currency: "usd".to_owned(),
+            interval: hosted_runtimes::domain::models::BillingInterval::Month,
+            items: vec![],
+            seats: vec![],
+            computers: vec![],
+            next_invoice: None,
+        });
+    let status = service.status(&user()).await.unwrap();
+    assert!(status.renewal_date.is_some());
+    assert!(status.billing.is_none());
+    assert_eq!(*service.gateway.billing_reads.lock().unwrap(), vec![false]);
+}
+
+#[tokio::test]
+async fn flag_off_billing_admins_keep_renewal_without_reading_the_billing_breakdown() {
+    let team_id = macro_uuid::generate_uuid_v7();
+    let mut entitlement = Entitlement::personal(user(), PlanTier::Max);
+    entitlement.scope = PayerScope::TeamMember { team_id };
+    let mut service = service_with_rollout(entitlement, None, rollout(false));
+    service.gateway.access =
+        billing_facts::BillingAccess::Team(Some(teams::domain::model::TeamRole::Owner));
+    let status = service.status(&user()).await.unwrap();
+    assert_eq!(status.renewal_date, Some(date("2026-11-01T12:00:00Z")));
+    assert!(status.billing.is_none());
+    // No team-member read, and the gateway skips computer rows and the
+    // upcoming-invoice preview.
+    assert_eq!(*service.gateway.access_reads.lock().unwrap(), 0);
+    assert_eq!(*service.gateway.billing_reads.lock().unwrap(), vec![false]);
 }

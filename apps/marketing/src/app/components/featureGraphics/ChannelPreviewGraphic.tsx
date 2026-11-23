@@ -1,3 +1,17 @@
+import IconArrowUp from '@icon/system/regular/arrow-up.svg';
+import IconCaretDown from '@icon/system/regular/caret-down.svg';
+import IconEye from '@icon/system/regular/eye.svg';
+import IconEyeSlash from '@icon/system/regular/eye-slash.svg';
+import IconHash from '@icon/system/regular/hash-straight.svg';
+import IconTaskGlyph from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconPaperclip from '@icon/system/regular/paperclip.svg';
+import IconCompose from '@icon/system/regular/pencil-simple.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconTaskPriority from '@icon/system/regular/priority-urgent.svg';
+import IconSortAscending from '@icon/system/regular/sort-ascending.svg';
+import IconTaskStatus from '@icon/system/regular/task-created.svg';
+import IconTextAa from '@icon/system/regular/text-aa.svg';
 import {
   type Component,
   createEffect,
@@ -10,21 +24,7 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import IconArrowUp from '../../../assets/icons/chat-scene/arrow-up.svg';
-import IconCall from '../../../assets/icons/chat-scene/call.svg';
-import IconHash from '../../../assets/icons/chat-scene/channel-hash.svg';
-import IconCompose from '../../../assets/icons/chat-scene/compose.svg';
-import IconEye from '../../../assets/icons/chat-scene/eye.svg';
-import IconEyeSlash from '../../../assets/icons/chat-scene/eye-slash.svg';
-import IconPaperclip from '../../../assets/icons/chat-scene/paperclip.svg';
-import IconSearch from '../../../assets/icons/chat-scene/search.svg';
-import IconSortAscending from '../../../assets/icons/chat-scene/sort-ascending.svg';
-import IconTaskGlyph from '../../../assets/icons/chat-scene/task-glyph.svg';
-import IconTaskPriority from '../../../assets/icons/chat-scene/task-priority.svg';
-import IconTaskStatus from '../../../assets/icons/chat-scene/task-status.svg';
-import IconTextAa from '../../../assets/icons/chat-scene/text-aa.svg';
 import ThreadElbow from '../../../assets/icons/chat-scene/thread-elbow.svg';
-import IconCaretDown from '../../../assets/icons/phosphor/caret-down.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob-work.webp';
 import avatarJulia from '../../../assets/people/julia.webp';
@@ -247,7 +247,7 @@ const NOTES = [
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 /** Ease OUT, for the beats that still play themselves: the callouts leave
     immediately and decelerate in. */
-const ease = (x: number) => 1 - Math.pow(1 - x, 3);
+const ease = (x: number) => 1 - (1 - x) ** 3;
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
 type Row = {
@@ -265,7 +265,7 @@ type Row = {
 const ROWS: Row[] = [
   {
     name: 'bug-reports',
-    sender: 'Teo',
+    sender: 'Teo Nys',
     message:
       'Confirmed on staging - flags are back. Thanks for dealing with this quickly!',
     time: '5:06 PM',
@@ -273,9 +273,9 @@ const ROWS: Row[] = [
     active: true,
   },
   {
-    name: 'Jacob',
+    name: 'Jacob Beckerman',
     avatar: avatarJacob,
-    sender: 'Jacob',
+    sender: 'Jacob Beckerman',
     message:
       'Hey! New graphics in onboarding flow look great. Can we add a tasteful animation to the SVGs in stage 4 and 5?',
     time: '4:29 PM',
@@ -283,7 +283,7 @@ const ROWS: Row[] = [
   },
   {
     name: 'customer feedback',
-    sender: 'Teo',
+    sender: 'Teo Nys',
     message: 'Can fix the automation tools',
     time: '3:52 PM',
     unread: true,
@@ -305,13 +305,13 @@ const ROWS: Row[] = [
   },
   {
     name: 'eng-standup',
-    sender: 'Teo',
+    sender: 'Teo Nys',
     message: 'Wrapping up the auth refactor today. PR is up for review',
     time: '1:30 PM',
   },
   {
     name: 'ship-it',
-    sender: 'Julia',
+    sender: 'Julia Westphal',
     message: 'v2.4.1 is live! Release notes are in the thread',
     time: '12:49 PM',
   },
@@ -324,13 +324,13 @@ const ROWS: Row[] = [
   },
   {
     name: 'product-updates',
-    sender: 'Teo',
+    sender: 'Teo Nys',
     message:
       "Revised the Q3 roadmap based on last week's retro. Link in thread",
     time: '11:20 AM',
   },
   {
-    name: 'Julia',
+    name: 'Julia Westphal',
     avatar: avatarJulia,
     sender: 'You',
     message:
@@ -339,14 +339,14 @@ const ROWS: Row[] = [
   },
   {
     name: 'frontend',
-    sender: 'Peter',
+    sender: 'Peter Chinman',
     message:
       'Anyone else seeing a flicker on the dropdown? Might be a re-render loop',
     time: '10:02 AM',
   },
   {
     name: 'random',
-    sender: 'Jacob',
+    sender: 'Jacob Beckerman',
     message:
       'Office snack restock happening Friday - drop your requests in the thread',
     time: '9:41 AM',
@@ -360,7 +360,7 @@ const ROWS: Row[] = [
   },
   {
     name: 'remote',
-    sender: 'Julia',
+    sender: 'Julia Westphal',
     message: 'Working from the Lisbon office this week if anyone is around',
     time: '8:58 AM',
   },
@@ -537,27 +537,27 @@ export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
 
   const MESSAGES: Msg[] = [
     {
-      who: 'Gabriel',
+      who: 'Gabriel Birman',
       avatar: avatarGabriel,
       time: '2:20 PM',
       text: 'Does anyone know why our posthog flags are broken?',
     },
     {
-      who: 'Rahul',
-      initials: 'RA',
+      who: 'Rahul Batra',
+      initials: 'RB',
       time: '2:20 PM',
       text: 'Which ones',
       reply: true,
     },
     {
-      who: 'Gabriel',
+      who: 'Gabriel Birman',
       avatar: avatarGabriel,
       time: '2:21 PM',
       text: 'all of them, flags just return false',
       reply: true,
     },
     {
-      who: 'Jacob',
+      who: 'Jacob Beckerman',
       avatar: avatarJacob,
       time: '4:29 PM',
       text: (
@@ -568,13 +568,13 @@ export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
       ),
     },
     {
-      who: 'Rahul',
-      initials: 'RA',
+      who: 'Rahul Batra',
+      initials: 'RB',
       time: '5:03 PM',
       text: 'Pushed a fix. Can someone verify on staging?',
     },
     {
-      who: 'Teo',
+      who: 'Teo Nys',
       avatar: avatarTeo,
       time: '5:06 PM',
       text: 'Confirmed on staging - flags are back. Thanks for dealing with this quickly!',
@@ -776,7 +776,7 @@ export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
           width: ${STAGE_W}px;
         }
         .cpg-headvar-narrow { padding: 0 8px 0 16px; width: ${RAIL_W}px; }
-        .cpg-title { font-size: 10px; font-weight: 600; white-space: nowrap; }
+        .cpg-title { font-size: 10px; font-weight: 500; white-space: nowrap; }
         /* Inset tab row -- the same shell as the narrow dropdown, carrying
            three tabs instead of one value and a caret. */
         .cpg-tabrow {
@@ -893,7 +893,7 @@ export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
            place relative to it at every width. */
         .cpg-namegroup { align-items: center; display: flex; gap: 7px; width: 136px; }
         .cpg-dot { background: #ff8f00; border-radius: 999px; flex-shrink: 0; height: 4px; width: 4px; }
-        .cpg-name { font-size: 10px; font-weight: 600; white-space: nowrap; }
+        .cpg-name { font-size: 10px; font-weight: 500; white-space: nowrap; }
         .cpg-trail {
           align-items: center;
           display: flex;
@@ -1019,7 +1019,7 @@ export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
         .cpg-threadrow { padding-left: 38px; position: relative; width: 100%; }
         .cpg-msgbody { display: flex; flex: 1 0 0; flex-direction: column; gap: 4px; min-width: 0; }
         .cpg-msghead { display: flex; font-size: 10px; justify-content: space-between; padding-bottom: 2px; width: 100%; }
-        .cpg-who { font-weight: 600; }
+        .cpg-who { font-weight: 500; }
         .cpg-msgtext { color: #fff; font-size: 10px; line-height: 1.45; margin: 0; }
         .cpg-mention {
           background: rgb(255 143 0 / 0.2);

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CALENDAR_PREFERENCES_KEY } from '../calendar-preferences';
+import { NextMeetingCountdownSetting } from './next-meeting-countdown-setting';
 
 afterEach(() => {
   cleanup();
@@ -8,10 +9,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-it('previews the countdown pill and hides it when switched off', async () => {
-  const { NextMeetingCountdownSetting } = await import(
-    './next-meeting-countdown-setting'
-  );
+it('previews the countdown pill and hides it when switched off', () => {
   const ui = render(() => <NextMeetingCountdownSetting />);
   const toggle = ui.getByRole('switch', { name: 'Next meeting countdown' });
   const preview = () =>

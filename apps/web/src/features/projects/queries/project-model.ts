@@ -7,6 +7,7 @@ export function toProjectDetail(
   return {
     id: project.id,
     name: project.name,
+    appearance: project.appearance,
     updatedAt: project.updatedAt,
     ownerId: project.ownerId,
     memberIds: project.memberIds,

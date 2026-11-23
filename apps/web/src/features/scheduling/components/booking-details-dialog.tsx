@@ -11,6 +11,7 @@ import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { buttonClasses } from '@ui/components/Button';
 import { createSignal, createUniqueId, For, type JSX, Show } from 'solid-js';
 import {
+  bookingAbandoned,
   bookingIsPast,
   bookingMeetingUrl,
   bookingTimeRange,
@@ -57,6 +58,8 @@ export function BookingDetailsDialog(props: {
   event?: EventType;
   members: SchedulingMember[];
   timeZone: string;
+  /** A 12-hour (`true`) or 24-hour (`false`) clock; the locale's when unset. */
+  hour12?: boolean;
   currentUserId: string;
   canManageBookings: boolean;
   busyId: string;
@@ -237,7 +240,11 @@ export function BookingDetailsDialog(props: {
               >
                 <p>{date(props.booking.startsAt)}</p>
                 <p class="mt-1 text-ink-muted">
-                  {bookingTimeRange(props.booking, props.timeZone)}
+                  {bookingTimeRange(
+                    props.booking,
+                    props.timeZone,
+                    props.hour12
+                  )}
                 </p>
               </DetailField>
               <Show when={hosts()}>
@@ -264,7 +271,11 @@ export function BookingDetailsDialog(props: {
               <p>{props.booking.timeZone.replaceAll('_', ' ')}</p>
               <p class="mt-1 text-ink-muted">
                 {date(props.booking.startsAt, props.booking.timeZone)} ·{' '}
-                {bookingTimeRange(props.booking, props.booking.timeZone)}
+                {bookingTimeRange(
+                  props.booking,
+                  props.booking.timeZone,
+                  props.hour12
+                )}
               </p>
             </DetailField>
             <Show when={(props.booking.rescheduleCount ?? 0) > 0}>
@@ -323,9 +334,13 @@ export function BookingDetailsDialog(props: {
             }
           >
             <p class="text-sm text-ink-muted">
-              {props.booking.status === 'failed'
-                ? 'Calendar synchronization failed. This booking is not confirmed. Contact support before creating a replacement to avoid duplicate calendar events.'
-                : 'This booking is still being synchronized with the calendar. It will appear in Upcoming once it is confirmed.'}
+              {bookingAbandoned(props.booking)
+                ? manageable()
+                  ? 'This booking couldn’t be added to your calendar, so it isn’t confirmed. Cancel it to free the time.'
+                  : 'This booking couldn’t be added to the host’s calendar, so it isn’t confirmed. A host can cancel it to free the time.'
+                : props.booking.status === 'failed'
+                  ? 'Calendar synchronization failed. This booking is not confirmed. Contact support before creating a replacement to avoid duplicate calendar events.'
+                  : 'This booking is still being synchronized with the calendar. It will appear in Upcoming once it is confirmed.'}
             </p>
           </Show>
         </ActionDialogShell.Body>
@@ -342,7 +357,7 @@ export function BookingDetailsDialog(props: {
               >
                 {props.booking.status === 'pending' ? 'Decline' : 'Cancel'}
               </Button>
-              <Show when={!past()}>
+              <Show when={!past() && props.booking.status !== 'failed'}>
                 <Button
                   variant="secondary"
                   size="md"

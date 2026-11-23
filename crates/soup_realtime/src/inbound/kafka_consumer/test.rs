@@ -1,3 +1,5 @@
+mod channel_events;
+mod folder_events;
 mod pull_requests;
 
 use std::collections::HashSet;
@@ -5,7 +7,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
-use channels::domain::models::ChannelSender;
+use channels::domain::broker_events::{
+    ChannelDeletedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
+};
+use channels::domain::models::{ChannelSender, ChannelType};
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
     ChatUpdatedMetadata,
@@ -14,7 +19,7 @@ use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
     DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata, InteractionReason,
+    DocumentUpdatedMetadata, EmailAttachmentsReleasedMetadata, InteractionReason,
 };
 use email::domain::events::{
     EmailEventOrigin, EmailTopicEvent, MessageDraftSyncedMetadata, ThreadBackfilledMetadata,
@@ -33,9 +38,12 @@ use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
 use properties::domain::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
 };
+use time_tracking::domain::events::TimeEntryChange;
+use time_tracking::domain::models::TimeEntrySource;
 use uuid::Uuid;
 
 use super::*;
+use crate::domain::models::Delivery;
 
 struct TestMessage {
     payload: Vec<u8>,
@@ -67,6 +75,7 @@ fn user() -> MacroUserIdStr<'static> {
 
 fn updated_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::User(user()),
         actor_user_id: None,
@@ -78,6 +87,13 @@ fn updated_event() -> Event<DocumentTopicEvent> {
         file_type: None,
         share_permission_updated: false,
     }))
+}
+
+fn access_source(patch: &SoupRealtimePatch) -> &Entity<'static> {
+    patch
+        .access_source
+        .as_ref()
+        .expect("patch has an access source")
 }
 
 fn patch_entity(patch: &SoupRealtimePatch) -> &Entity<'static> {
@@ -92,13 +108,13 @@ struct FlakyService {
 }
 
 impl SoupRealtimeService for FlakyService {
-    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
-        self.patches.lock().expect("patches lock").push(patch);
+    async fn notify_users(&self, patches: Vec<SoupRealtimePatch>) -> Result<Delivery, Report> {
+        self.patches.lock().expect("patches lock").extend(patches);
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst) + 1;
         if self.failures.contains(&attempt) {
             Err(rootcause::report!("temporary fan-out failure"))
         } else {
-            Ok(())
+            Ok(Delivery::default())
         }
     }
 }
@@ -126,8 +142,57 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.properties",
             "macro.initiatives",
             "macro.calls",
+            "macro.time_entries",
         ]
     );
+}
+
+fn time_entry_change() -> TimeEntryChange {
+    TimeEntryChange {
+        entry_id: Uuid::now_v7(),
+        task_id: DOCUMENT_ID.to_string(),
+        user_id: user(),
+        minutes: 45,
+        entry_date: chrono::NaiveDate::from_ymd_opt(2026, 11, 20).expect("valid date"),
+        source: TimeEntrySource::Manual,
+        total_minutes: 120,
+    }
+}
+
+#[test]
+fn every_time_entry_event_refreshes_its_task() {
+    for event in [
+        TimeEntryTopicEvent::Logged(time_entry_change()),
+        TimeEntryTopicEvent::Updated(time_entry_change()),
+        TimeEntryTopicEvent::Deleted(time_entry_change()),
+    ] {
+        let patches = patches_from_time_entry_event(&event);
+        assert_eq!(patches.len(), 1, "{event:?}");
+        assert!(matches!(patches[0].patch, Patch::Updated(_)));
+        assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Document);
+        assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
+        assert_eq!(access_source(&patches[0]), patch_entity(&patches[0]));
+    }
+}
+
+#[tokio::test]
+async fn logged_time_reaches_the_task_viewers_and_commits() {
+    let event =
+        DeclaredMacroEvent::TimeEntryMacroEvent(TimeEntryMacroEvent::logged(time_entry_change()));
+    let service = flaky_service(0);
+    let commits = AtomicUsize::new(0);
+
+    assert!(matches!(
+        process_event(&service, &NoPullRequestSessions, &event, || {
+            commits.fetch_add(1, Ordering::SeqCst);
+        })
+        .await,
+        EventOutcome::Notified
+    ));
+    assert_eq!(commits.load(Ordering::SeqCst), 1);
+    let patches = service.patches.lock().expect("patches lock");
+    assert_eq!(patches.len(), 1);
+    assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
 }
 
 #[test]
@@ -162,9 +227,35 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
 }
 
 #[test]
+fn released_email_attachments_leave_open_lists_only_when_trashed() {
+    let second = Uuid::now_v7().to_string();
+    let event = DocumentTopicEvent::EmailAttachmentsReleased(EmailAttachmentsReleasedMetadata {
+        trashed_document_ids: vec![DOCUMENT_ID.to_string(), second.clone()],
+        kept_document_ids: vec![Uuid::now_v7().to_string()],
+    });
+
+    let patches = patches_from_document_event(&event);
+
+    assert_eq!(patches.len(), 2);
+    assert!(
+        patches
+            .iter()
+            .all(|patch| matches!(patch.patch, Patch::Deleted(_)))
+    );
+    assert_eq!(
+        patches
+            .iter()
+            .map(|patch| patch_entity(patch).entity_id.clone())
+            .collect::<Vec<_>>(),
+        vec![DOCUMENT_ID.to_string(), second]
+    );
+}
+
+#[test]
 fn moving_a_document_out_of_a_project_updates_the_previous_project() {
     let previous_project_id = Uuid::now_v7().to_string();
     let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::User(user()),
         actor_user_id: None,
@@ -331,6 +422,7 @@ fn sent_chat_messages_refresh_the_soup_model() {
 #[test]
 fn task_property_updates_map_to_document_updates() {
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::now_v7(),
         entity_id: DOCUMENT_ID.to_string(),
         entity_type: PropertyEntityType::Task,
@@ -349,6 +441,34 @@ fn task_property_updates_map_to_document_updates() {
     assert!(matches!(patches[0].patch, Patch::Updated(_)));
     assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Document);
     assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
+}
+
+#[test]
+fn crm_contact_property_updates_map_to_contact_updates() {
+    let contact_id = Uuid::now_v7().to_string();
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
+        entity_property_id: Uuid::now_v7(),
+        entity_id: contact_id.clone(),
+        entity_type: PropertyEntityType::Contact,
+        property_definition_id: Uuid::now_v7(),
+        actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
+        source: None,
+        value: None,
+        previous_value: None,
+        updated_at: Utc::now(),
+    });
+
+    let patches = patches_from_property_event(&event);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(
+        patch_entity(&patches[0]).entity_type,
+        EntityType::CrmContact
+    );
+    assert_eq!(patch_entity(&patches[0]).entity_id, contact_id);
 }
 
 #[test]
@@ -461,6 +581,7 @@ fn attributed_initiative_clears_and_other_system_clears_still_refresh_soup() {
 fn a_cell_edit_updates_the_database_row() {
     let row = "70000000-0000-0000-0000-000000000001";
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::from_u128(0xe0000000_0000_0000_0000_000000000001),
         entity_id: row.to_string(),
         entity_type: PropertyEntityType::DatabaseRow,
@@ -484,7 +605,7 @@ fn a_cell_edit_updates_the_database_row() {
     );
     assert_eq!(patch_entity(&patches[0]).entity_id, row);
     assert_eq!(
-        patches[0].access_source.entity_type,
+        access_source(&patches[0]).entity_type,
         EntityType::DatabaseRow
     );
 }
@@ -636,6 +757,83 @@ fn posted(
 }
 
 #[test]
+fn deleting_a_channel_reaches_the_members_it_had() {
+    let channel_id = Uuid::now_v7();
+    let members = vec![
+        user(),
+        MacroUserIdStr::try_from("macro|member@example.com".to_string()).expect("valid user id"),
+    ];
+    let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
+        channel_id,
+        actor: ChannelSender::new_from_user(user()),
+        participant_user_ids: members.clone(),
+    });
+
+    let patches = patches_from_channel_event(&event);
+
+    assert_eq!(
+        patches,
+        vec![
+            SoupRealtimePatch::for_entity(Patch::Deleted(
+                EntityType::Channel.with_entity_string(channel_id.to_string())
+            ))
+            .with_named_recipients(members)
+        ]
+    );
+}
+
+#[test]
+fn removed_participants_lose_a_private_channel_and_keep_a_team_or_public_one() {
+    let channel_id = Uuid::now_v7();
+    let channel = EntityType::Channel.with_entity_string(channel_id.to_string());
+    let removed = vec![
+        MacroUserIdStr::try_from("macro|member@example.com".to_string()).expect("valid user id"),
+    ];
+    for (channel_type, for_removed) in [
+        (ChannelType::Private, Patch::Deleted(channel.clone())),
+        (ChannelType::DirectMessage, Patch::Deleted(channel.clone())),
+        (ChannelType::Team, Patch::Updated(channel.clone())),
+        (ChannelType::Public, Patch::Updated(channel.clone())),
+    ] {
+        let event = ChannelTopicEvent::ParticipantRemoved(ChannelParticipantRemovedMetadata {
+            channel_id,
+            channel_type,
+            removed_by: user(),
+            removed_user_ids: removed.clone(),
+        });
+
+        let patches = patches_from_channel_event(&event);
+
+        assert_eq!(
+            patches,
+            vec![
+                SoupRealtimePatch::for_entity(Patch::Updated(channel.clone())),
+                SoupRealtimePatch::only_for_former_members(for_removed, removed.clone()),
+            ],
+            "{channel_type:?}"
+        );
+    }
+}
+
+#[test]
+fn every_channel_settings_update_refreshes_the_channel_for_its_members() {
+    let channel_id = Uuid::now_v7();
+    let event = ChannelTopicEvent::Updated(ChannelUpdatedMetadata {
+        channel_id,
+        actor: user(),
+        previous_name: Some("Planning".to_string()),
+        channel_name: Some("Planning".to_string()),
+    });
+
+    assert_eq!(
+        patches_from_channel_event(&event),
+        vec![SoupRealtimePatch::for_entity(Patch::Updated(
+            EntityType::Channel.with_entity_string(channel_id.to_string())
+        ))]
+    );
+}
+
+#[test]
 fn attachment_events_update_referenced_documents_for_channel_members() {
     let channel_id = Uuid::now_v7();
     let message_id = Uuid::now_v7();
@@ -659,8 +857,8 @@ fn attachment_events_update_referenced_documents_for_channel_members() {
     assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
     assert_eq!(patch_entity(&patches[1]).entity_type, EntityType::Document);
     assert_eq!(patch_entity(&patches[1]).entity_id, DOCUMENT_ID);
-    assert_eq!(patches[1].access_source.entity_type, EntityType::Channel);
-    assert_eq!(patches[1].access_source.entity_id, channel_id.to_string());
+    assert_eq!(access_source(&patches[1]).entity_type, EntityType::Channel);
+    assert_eq!(access_source(&patches[1]).entity_id, channel_id.to_string());
 }
 
 #[test]
@@ -679,8 +877,8 @@ fn posted_message_mentions_update_referenced_documents_for_channel_members() {
     assert_eq!(patches.len(), 3);
     assert_eq!(patch_entity(&patches[2]).entity_type, EntityType::Document);
     assert_eq!(patch_entity(&patches[2]).entity_id, DOCUMENT_ID);
-    assert_eq!(patches[2].access_source.entity_type, EntityType::Channel);
-    assert_eq!(patches[2].access_source.entity_id, channel_id.to_string());
+    assert_eq!(access_source(&patches[2]).entity_type, EntityType::Channel);
+    assert_eq!(access_source(&patches[2]).entity_id, channel_id.to_string());
 }
 
 #[test]
@@ -703,8 +901,8 @@ fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members(
         EntityType::AgentSession
     );
     assert_eq!(patch_entity(&patches[2]).entity_id, session_id);
-    assert_eq!(patches[2].access_source.entity_type, EntityType::Channel);
-    assert_eq!(patches[2].access_source.entity_id, channel_id.to_string());
+    assert_eq!(access_source(&patches[2]).entity_type, EntityType::Channel);
+    assert_eq!(access_source(&patches[2]).entity_id, channel_id.to_string());
 }
 
 #[test]
@@ -735,7 +933,7 @@ fn deleting_a_root_channel_message_deletes_its_thread_patch() {
     assert!(matches!(patches[0].patch, Patch::Updated(_)));
     assert!(matches!(patches[1].patch, Patch::Deleted(_)));
     assert_eq!(patch_entity(&patches[1]).entity_id, message_id.to_string());
-    assert_eq!(patches[1].access_source.entity_type, EntityType::Channel);
+    assert_eq!(access_source(&patches[1]).entity_type, EntityType::Channel);
 }
 
 #[tokio::test]
@@ -856,15 +1054,15 @@ fn reindex_event(thread_ids: Vec<Uuid>) -> DeclaredMacroEvent {
 }
 
 #[tokio::test(start_paused = true)]
-async fn multi_patch_event_retries_only_the_failed_patch_before_committing() {
-    let thread_ids = vec![Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+async fn multi_batch_event_retries_only_the_failed_batch_before_committing() {
+    let thread_ids: Vec<_> = (0..NOTIFY_BATCH_SIZE + 2).map(|_| Uuid::now_v7()).collect();
     let event = reindex_event(thread_ids.clone());
     let mut service = flaky_service(0);
     service.failures.insert(2);
     let commits = AtomicUsize::new(0);
 
     let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
-        assert_eq!(service.attempts.load(Ordering::SeqCst), 4);
+        assert_eq!(service.attempts.load(Ordering::SeqCst), 3);
         commits.fetch_add(1, Ordering::SeqCst);
     })
     .await;
@@ -873,10 +1071,13 @@ async fn multi_patch_event_retries_only_the_failed_patch_before_committing() {
     let patches = service.patches.lock().expect("patches lock");
     let attempts: Vec<_> = patches
         .iter()
-        .map(|patch| patch_entity(patch).entity_id.as_ref())
+        .map(|patch| patch_entity(patch).entity_id.to_string())
         .collect();
-    let expected: Vec<_> = [thread_ids[0], thread_ids[1], thread_ids[1], thread_ids[2]]
-        .into_iter()
+    let last_batch = &thread_ids[NOTIFY_BATCH_SIZE..];
+    let expected: Vec<_> = thread_ids[..NOTIFY_BATCH_SIZE]
+        .iter()
+        .chain(last_batch)
+        .chain(last_batch)
         .map(|id| id.to_string())
         .collect();
     assert_eq!(attempts, expected);
@@ -884,8 +1085,10 @@ async fn multi_patch_event_retries_only_the_failed_patch_before_committing() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn partial_event_failure_discards_remaining_patches_and_commits() {
-    let thread_ids = vec![Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+async fn partial_event_failure_discards_remaining_batches_and_commits() {
+    let thread_ids: Vec<_> = (0..2 * NOTIFY_BATCH_SIZE + 1)
+        .map(|_| Uuid::now_v7())
+        .collect();
     let event = reindex_event(thread_ids.clone());
     let mut service = flaky_service(0);
     service.failures = (2..=MAX_NOTIFY_ATTEMPTS + 1).collect();
@@ -903,15 +1106,13 @@ async fn partial_event_failure_discards_remaining_patches_and_commits() {
     assert!(matches!(outcome, EventOutcome::Dropped));
     assert_eq!(commits.load(Ordering::SeqCst), 1);
     let patches = service.patches.lock().expect("patches lock");
-    assert_eq!(
-        patch_entity(&patches[0]).entity_id,
-        thread_ids[0].to_string()
-    );
-    assert!(
-        patches[1..]
-            .iter()
-            .all(|patch| { patch_entity(patch).entity_id == thread_ids[1].to_string() })
-    );
+    let attempted: HashSet<String> = patches
+        .iter()
+        .map(|patch| patch_entity(patch).entity_id.to_string())
+        .collect();
+    assert_eq!(patches.len(), NOTIFY_BATCH_SIZE * (1 + MAX_NOTIFY_ATTEMPTS));
+    assert_eq!(attempted.len(), 2 * NOTIFY_BATCH_SIZE);
+    assert!(!attempted.contains(&thread_ids[2 * NOTIFY_BATCH_SIZE].to_string()));
 }
 
 #[tokio::test]
@@ -933,15 +1134,15 @@ async fn ignored_event_commits_without_notifying() {
 struct GatedService(tokio::sync::Semaphore);
 
 impl SoupRealtimeService for GatedService {
-    async fn notify_users(&self, _patch: SoupRealtimePatch) -> Result<(), Report> {
+    async fn notify_users(&self, _patches: Vec<SoupRealtimePatch>) -> Result<Delivery, Report> {
         self.0.acquire().await.expect("gate remains open").forget();
-        Ok(())
+        Ok(Delivery::default())
     }
 }
 
 #[tokio::test]
-async fn offset_is_committed_only_after_every_patch_finishes() {
-    let event = reindex_event(vec![Uuid::now_v7(), Uuid::now_v7()]);
+async fn offset_is_committed_only_after_every_batch_finishes() {
+    let event = reindex_event((0..NOTIFY_BATCH_SIZE + 1).map(|_| Uuid::now_v7()).collect());
     let service = GatedService(tokio::sync::Semaphore::new(0));
     let commits = AtomicUsize::new(0);
     let process = process_event(&service, &NoPullRequestSessions, &event, || {
@@ -1040,6 +1241,7 @@ fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
         }]))
     };
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::now_v7(),
         entity_id: DOCUMENT_ID.to_string(),
         entity_type: PropertyEntityType::Task,

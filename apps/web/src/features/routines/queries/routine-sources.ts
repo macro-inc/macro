@@ -1,61 +1,94 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
+import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
-import { createMemo, onMount } from 'solid-js';
+import { createMemo, createSignal, onMount } from 'solid-js';
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 import type {
   RoutineCreatorSource,
   RoutineDetailSource,
   RoutineListSource,
+  RoutineRowOperations,
 } from '../context/routine-sources';
+import { pendingCodeReview, taskSdk } from '../core/code-review';
+import type { ScheduleDraft } from '../core/draft';
+import type { UnusableItem } from '../core/knobs';
 import type { RoutineSnapshot } from '../core/routine';
+import { withDraftSteps } from '../core/routine-draft';
+import { picksItems, programSteps } from '../core/routine-steps';
 import { scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
   draftToCreateBody,
   draftToUpdateBody,
+  isUnchangedUpdate,
   scheduleToDuplicateBody,
 } from './routine-draft';
 import { useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
+  fetchChildren,
   invalidateSchedules,
+  useChildrenQuery,
+  useCodeUpgradesQuery,
   useCreateScheduleMutation,
+  useDetachScheduleMutation,
   useRunScheduleNowMutation,
   useScheduleHistoryQuery,
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
+  useSubRoutinesQuery,
+  useUnusableItemsQuery,
   useUpdateScheduleMutation,
 } from './schedules';
+import { unusableItemsFromWire } from './unusable-items';
 
 function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   if (!schedule.id) throw new Error('Routine has no ID');
   return {
     id: schedule.id,
     name: schedule.name,
+    appearance: readEntityAppearance(schedule.appearance),
     ownerId: schedule.owner,
     createdAt: schedule.created_at,
     enabled: schedule.enabled,
     nextRunAt: schedule.next_run_at,
     claimedAt: schedule.claimed,
-    lastRunFailed: schedule.last_run
-      ? !schedule.last_run.is_success
-      : undefined,
     revision: schedule.configuration_revision,
     configurationKey: JSON.stringify([
       schedule.name,
       schedule.kind,
       schedule.trigger,
-      schedule.task,
+      // The SDK its code was checked against is bookkeeping, not configuration.
+      { ...schedule.task, sdk: undefined },
       schedule.run_visibility,
+      schedule.description,
     ]),
     draft: draftFromSchedule(schedule),
     templateId: schedule.template_id ?? undefined,
+    lastRun: schedule.last_run ? toHistoryRecord(schedule.last_run) : undefined,
+    parent: schedule.sub_routine
+      ? {
+          id: schedule.sub_routine.parent_id,
+          createdByRunId: schedule.sub_routine.created_by_run_id,
+          pausedByParent: schedule.sub_routine.paused_by_parent ?? false,
+        }
+      : undefined,
   };
 }
+
+/**
+ * How the server refuses a routine to anyone but its owner: 401 without a
+ * grant, 404 with a grant but no ownership.
+ */
+const REFUSED_READ_CODES = ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'];
 
 type DetailCallbacks = {
   onError(title: string, error: unknown): void;
   onDuplicated(id: string): void;
+  /** The sub-routine became the owner's own routine. */
+  onKept(): void;
 };
 
 export function createRoutineDetailSource(
@@ -72,6 +105,19 @@ export function createRoutineDetailSource(
         ? list.data?.find((item) => item.id === id())
         : undefined)
   );
+  // A refetch with no data puts the query back to pending, so the refusal is
+  // kept for this routine until a read settles otherwise; the page doesn't
+  // swap views on every refocus.
+  const refusedId = createMemo<string | undefined>((previous) => {
+    if (detail.isSuccess) return undefined;
+    if (detail.isError) {
+      const refused = REFUSED_READ_CODES.some((code) =>
+        thrownResultErrorHasCode(detail.error, code)
+      );
+      return refused ? id() : undefined;
+    }
+    return previous === id() ? previous : undefined;
+  });
   const routine = createMemo(() => {
     const current = raw();
     return current?.id ? toRoutine(current) : undefined;
@@ -96,6 +142,56 @@ export function createRoutineDetailSource(
   const history = useScheduleHistoryQuery(id, () =>
     Boolean(raw() && raw()?.owner === userId())
   );
+  const upgrades = useCodeUpgradesQuery(id, () =>
+    Boolean(raw() && raw()?.owner === userId())
+  );
+  // Only a routine that picks an item can have one go missing.
+  const unusable = useUnusableItemsQuery(id, () => {
+    const current = raw();
+    return Boolean(
+      current && current.owner === userId() && picksItems(current.task)
+    );
+  });
+  const unusableItems = createMemo((): UnusableItem[] =>
+    unusable.isPending ? [] : unusableItemsFromWire(unusable.data ?? [])
+  );
+  const codeReview = createMemo(() => {
+    const current = raw();
+    return current && upgrades.isSuccess
+      ? pendingCodeReview(upgrades.data ?? [], taskSdk(current.task))
+      : undefined;
+  });
+  // What this routine's runs created; a sub-routine creates none of its own.
+  const created = useChildrenQuery(id, () =>
+    Boolean(raw() && raw()?.owner === userId() && !raw()?.sub_routine)
+  );
+  const children = createMemo(() =>
+    (created.isSuccess ? (created.data ?? []) : [])
+      .filter((item) => item.id)
+      .map(toRoutine)
+  );
+  const parentId = () => raw()?.sub_routine?.parent_id;
+  const parent = createMemo(() => {
+    const found =
+      list.isSuccess || list.isError
+        ? list.data?.find((item) => item.id === parentId())
+        : undefined;
+    return found?.id ? { id: found.id, name: found.name } : undefined;
+  });
+  const keep = useDetachScheduleMutation({
+    onSuccess: () => callbacks.onKept(),
+    onError: (error) => callbacks.onError('Failed to keep the routine', error),
+  });
+  const [approving, setApproving] = createSignal(false);
+  const save = async (draft: ScheduleDraft) => {
+    const previous = raw();
+    const body = previous && draftToUpdateBody(draft, previous);
+    if (!body) throw new Error('Choose a valid execution target.');
+    // An edit that changes nothing (a blur, a value picked again) writes
+    // nothing, so queued runs keep their configuration.
+    if (isUnchangedUpdate(body, previous)) return toRoutine(previous);
+    return toRoutine(await update.mutateAsync({ scheduleId: id(), body }));
+  };
   onMount(() => {
     fireAndForget(invalidateSchedules(), 'routines');
   });
@@ -107,12 +203,9 @@ export function createRoutineDetailSource(
     },
     loading: () => detail.isPending,
     error: () => detail.isError,
-    async update(draft) {
-      const previous = raw();
-      const body = previous && draftToUpdateBody(draft, previous);
-      if (!body) throw new Error('Choose a valid execution target.');
-      return toRoutine(await update.mutateAsync({ scheduleId: id(), body }));
-    },
+    // A refusal says nothing about a routine the viewer's own lists hold.
+    readRefused: () => !raw() && refusedId() === id(),
+    update: save,
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,
     setEnabled: (enabled) => activate.mutate({ scheduleId: id(), enabled }),
@@ -120,7 +213,7 @@ export function createRoutineDetailSource(
     duplicate() {
       const current = raw();
       const body = current && scheduleToDuplicateBody(current);
-      if (body && !duplicate.isPending) duplicate.mutate(body);
+      if (body && !duplicate.isPending) duplicate.mutate({ body });
     },
     duplicationPending: () => duplicate.isPending,
     history: createMemo(() =>
@@ -129,6 +222,33 @@ export function createRoutineDetailSource(
     historyLoading: () => history.isPending,
     historyError: () => history.isError,
     refreshHistory: () => history.refetch(),
+    subRoutines: children,
+    parent,
+    keepAsOwn: () => {
+      if (!keep.isPending) keep.mutate({ scheduleId: id() });
+    },
+    keepAsOwnPending: () => keep.isPending,
+    codeReview,
+    unusableItems,
+    // Saving checks the proposal against the current SDK again.
+    async approveCodeUpdate() {
+      const proposal = codeReview()?.proposal;
+      const current = raw();
+      const steps = proposal && programSteps(proposal.task);
+      const draft = current && toRoutine(current).draft;
+      if (!steps || !draft || approving()) return;
+      setApproving(true);
+      try {
+        await save(withDraftSteps(draft, steps));
+        activate.mutate({ scheduleId: id(), enabled: true });
+        await upgrades.refetch();
+      } catch (error) {
+        callbacks.onError('Failed to update the routine’s code', error);
+      } finally {
+        setApproving(false);
+      }
+    },
+    codeUpdatePending: approving,
   };
 }
 
@@ -137,7 +257,10 @@ export function createRoutineCreatorSource(): RoutineCreatorSource {
   return {
     pending: () => mutation.isPending,
     async create(draft) {
-      const created = await mutation.mutateAsync(draftToCreateBody(draft));
+      const created = await mutation.mutateAsync({
+        body: draftToCreateBody(draft),
+        suggestionId: draft.suggestionId,
+      });
       if (!created.id) throw new Error('Created routine has no ID');
       return created.id;
     },
@@ -148,8 +271,14 @@ export function createRoutineListSource(
   onError: (error: unknown) => void
 ): RoutineListSource {
   const query = useSchedulesQuery(() => true);
+  const children = useSubRoutinesQuery(() => true);
   const toggle = useSetScheduleEnabledMutation({ onError });
   return {
+    subRoutines: createMemo(() =>
+      (children.isSuccess || children.isError ? (children.data ?? []) : [])
+        .filter((item) => item.id)
+        .map(toRoutine)
+    ),
     routines: createMemo(() =>
       (query.isSuccess || query.isError ? (query.data ?? []) : [])
         .filter((item) => item.id)
@@ -161,5 +290,95 @@ export function createRoutineListSource(
     pendingId: () =>
       toggle.isPending ? toggle.variables?.scheduleId : undefined,
     setEnabled: (id, enabled) => toggle.mutate({ scheduleId: id, enabled }),
+  };
+}
+
+type RowOperationCallbacks = {
+  /** Which operation failed, for the host to say so. */
+  onError(operation: 'run' | 'duplicate' | 'keep', error: unknown): void;
+  onRunStarted(): void;
+  onDuplicated(id: string): void;
+  /** The sub-routine became the owner's own routine. */
+  onKept(): void;
+};
+
+/**
+ * One request per routine at a time, for several routines at once: a mutation's
+ * own `isPending` and `variables` cover only its latest call.
+ */
+function createPerRoutineMutation(mutate: (id: string) => Promise<unknown>) {
+  const [pending, setPending] = createSignal<readonly string[]>([]);
+  const settle = async (id: string) => {
+    // The mutation's own callbacks report how it went.
+    await ResultAsync.fromPromise(mutate(id), (error) => error);
+    setPending((ids) => ids.filter((other) => other !== id));
+  };
+  return {
+    start(id: string) {
+      if (pending().includes(id)) return;
+      setPending((ids) => [...ids, id]);
+      fireAndForget(settle(id), 'routines');
+    },
+    pending: (id: string) => pending().includes(id),
+  };
+}
+
+/**
+ * What the list's row menus do, over the list's own queries: routines and
+ * sub-routines both, since either can be a row.
+ */
+export function createRoutineRowOperations(
+  callbacks: RowOperationCallbacks
+): RoutineRowOperations {
+  const list = useSchedulesQuery(() => true);
+  const children = useSubRoutinesQuery(() => true);
+  const find = (id: string) =>
+    (list.isSuccess || list.isError ? list.data : undefined)?.find(
+      (item) => item.id === id
+    ) ??
+    (children.isSuccess || children.isError ? children.data : undefined)?.find(
+      (item) => item.id === id
+    );
+  const run = useRunScheduleNowMutation({
+    onSuccess: () => callbacks.onRunStarted(),
+    onError: (error) => callbacks.onError('run', error),
+  });
+  const duplicate = useCreateScheduleMutation(
+    {
+      onSuccess: (created) => {
+        if (created.id) callbacks.onDuplicated(created.id);
+      },
+      onError: (error) => callbacks.onError('duplicate', error),
+    },
+    'duplicate'
+  );
+  const keep = useDetachScheduleMutation({
+    onSuccess: () => callbacks.onKept(),
+    onError: (error) => callbacks.onError('keep', error),
+  });
+  const running = createPerRoutineMutation((id) =>
+    run.mutateAsync({ scheduleId: id })
+  );
+  const duplicating = createPerRoutineMutation(async (id) => {
+    const schedule = find(id);
+    const body = schedule && scheduleToDuplicateBody(schedule);
+    if (body) await duplicate.mutateAsync({ body });
+  });
+  const keeping = createPerRoutineMutation((id) =>
+    keep.mutateAsync({ scheduleId: id })
+  );
+  return {
+    entity(id) {
+      const schedule = find(id);
+      return schedule ? scheduleToEntity(schedule) : undefined;
+    },
+    run: running.start,
+    runPending: running.pending,
+    duplicate: duplicating.start,
+    keepAsOwn: keeping.start,
+    async createdCount(id) {
+      const created = await fetchChildren(id);
+      return created.isOk() ? created.value.length : undefined;
+    },
   };
 }

@@ -2,12 +2,22 @@
 use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "processing")]
-use crate::inbound::kafka_consumer::{KafkaProcessingContext, run_event_consumer};
+use crate::inbound::kafka_consumer::{
+    EmailLaneEvent, IndexMetrics, KafkaProcessingContext, Lane, LeaveTogether, LiveLaneEvent,
+    publish_lane_backlog, run_event_consumer,
+};
 use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
-    domain::{jobs::BackfillJobs, service::BackfillOrchestrator},
+    domain::{
+        backfill_gate::{
+            BackfillGate, PAUSE_POLL_INTERVAL, PAUSE_READ_TIMEOUT, read_pause, watch_pause,
+        },
+        jobs::BackfillJobs,
+        service::BackfillOrchestrator,
+    },
     outbound::{
+        backfill_control::DynamoBackfillControl,
         property_search_indexer::DirectPropertyBackfillIndexer, publisher::SqsSearchEventPublisher,
         source::PgBackfillSource,
     },
@@ -23,7 +33,7 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use opensearch_client::OpensearchClient;
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 use rust_embed::RustEmbed;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -60,6 +70,19 @@ pub type AgentSessionIndexer = domain::agent_session_index::AgentSessionIndexSer
     outbound::agent_session_search::OpenSearchAgentSessionIndex,
 >;
 
+/// Production wiring for the email attachment status backfill.
+pub type EmailAttachmentStatusBackfill =
+    domain::email_attachment_status::EmailAttachmentStatusBackfill<
+        outbound::document_email::PgLinkedDocuments,
+        outbound::email_attachment_search::OpenSearchEmailAttachmentFlags,
+    >;
+
+/// Production wiring for the deleted chat message repair.
+pub type DeletedChatMessageRepair = domain::chat_message_repair::DeletedChatMessageRepair<
+    outbound::chat_message_repair::OpenSearchChatMessages,
+    outbound::chat_message_repair::PgChatRows,
+>;
+
 /// Resolve a read-replica macrodb URL and
 /// connect a small pool. Returns `None` when the replica URL is missing,
 /// blank. Failures
@@ -85,7 +108,7 @@ async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<
     }
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 #[allow(dead_code)]
 #[derive(RustEmbed)]
 #[folder = "pdfium-lib/linux/"]
@@ -96,14 +119,16 @@ const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[cfg(feature = "processing")]
-async fn supervise_event_consumer(
+async fn supervise_event_consumer<L: Lane>(
     brokers: String,
     context: KafkaProcessingContext,
+    leave: LeaveTogether,
     shutdown_token: CancellationToken,
 ) {
     let _ = Retry::start(FixedInterval::new(CONSUMER_RESTART_DELAY), || {
         let consumer_brokers = brokers.clone();
         let consumer_context = context.clone();
+        let consumer_leave = leave.clone();
         let consumer_shutdown_token = shutdown_token.clone();
 
         async move {
@@ -113,9 +138,10 @@ async fn supervise_event_consumer(
 
             let task_shutdown_token = consumer_shutdown_token.clone();
             let consumer_result = tokio::spawn(async move {
-                run_event_consumer(
+                run_event_consumer::<L>(
                     &consumer_brokers,
                     consumer_context,
+                    consumer_leave,
                     task_shutdown_token.cancelled_owned(),
                 )
                 .await
@@ -123,26 +149,27 @@ async fn supervise_event_consumer(
             .await;
 
             if consumer_shutdown_token.is_cancelled() {
-                tracing::info!("search processing event consumer stopped after shutdown");
+                tracing::info!(lane = L::NAME, "search processing event consumer stopped after shutdown");
                 return Ok(());
             }
 
             match consumer_result {
                 Ok(Ok(())) => {
-                    tracing::error!("search processing event consumer exited unexpectedly");
+                    tracing::error!(lane = L::NAME, "search processing event consumer exited unexpectedly");
                 }
                 Ok(Err(error)) => {
-                    tracing::error!(error = ?error, "search processing event consumer failed");
+                    tracing::error!(lane = L::NAME, error = ?error, "search processing event consumer failed");
                 }
                 Err(error) if error.is_panic() => {
-                    tracing::error!(error = ?error, "search processing event consumer panicked");
+                    tracing::error!(lane = L::NAME, error = ?error, "search processing event consumer panicked");
                 }
                 Err(error) => {
-                    tracing::error!(error = ?error, "search processing event consumer task was cancelled");
+                    tracing::error!(lane = L::NAME, error = ?error, "search processing event consumer task was cancelled");
                 }
             }
 
             tracing::warn!(
+                lane = L::NAME,
                 restart_delay_seconds = CONSUMER_RESTART_DELAY.as_secs(),
                 "search processing event consumer stopped; waiting before restart"
             );
@@ -151,12 +178,15 @@ async fn supervise_event_consumer(
     })
     .await;
 
-    tracing::info!("search processing event consumer supervisor stopped");
+    tracing::info!(
+        lane = L::NAME,
+        "search processing event consumer supervisor stopped"
+    );
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let telemetry = MacroEntrypoint::default().init();
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
@@ -250,14 +280,55 @@ async fn main() -> anyhow::Result<()> {
         outbound::agent_session_search::OpenSearchAgentSessionIndex(opensearch_client.clone()),
     ));
 
+    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
+    let backfill_control = DynamoBackfillControl::new(
+        dynamodb_client.clone(),
+        config.backfill_jobs_table.to_string(),
+    );
+    // A task that starts while backfills are paused must not admit any first.
+    let paused_at_start = read_pause(&backfill_control, PAUSE_READ_TIMEOUT).await;
+    let (backfill_pause, backfill_paused) = tokio::sync::watch::channel(paused_at_start);
+    let backfill_gate = BackfillGate::new(config.backfill_max_in_flight, backfill_paused);
+
+    let email_attachment_status_backfill = Arc::new(EmailAttachmentStatusBackfill::new(
+        // The primary, not the backfill replica: a lagging replica can still
+        // show a link a release already removed, and the backfill would then
+        // write `true` after the release consumer wrote `false`.
+        outbound::document_email::PgLinkedDocuments::new(db.clone()),
+        outbound::email_attachment_search::OpenSearchEmailAttachmentFlags(
+            opensearch_client.clone(),
+        ),
+        backfill_gate.clone(),
+    ));
+
+    let deleted_chat_message_repair = Arc::new(DeletedChatMessageRepair::new(
+        outbound::chat_message_repair::OpenSearchChatMessages(opensearch_client.clone()),
+        outbound::chat_message_repair::PgChatRows::new(backfill_db.clone()),
+        outbound::chat_message_repair::PgChatRows::new(db.clone()),
+        backfill_gate.clone(),
+    ));
+
     let backfill_service = Arc::new(BackfillOrchestrator::new(
         PgBackfillSource::new(backfill_db, db.clone(), config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
         DirectPropertyBackfillIndexer::new(db.clone(), opensearch_client.clone()),
+        backfill_gate.clone(),
     ));
 
     let shutdown_token = CancellationToken::new();
+    let backfill_pause_tracker = TaskTracker::new();
+    backfill_pause_tracker.spawn(watch_pause(
+        backfill_control.clone(),
+        backfill_pause,
+        PAUSE_POLL_INTERVAL,
+        shutdown_token.clone(),
+    ));
+    backfill_pause_tracker.close();
     let event_broker_tracker = TaskTracker::new();
+    #[cfg(feature = "processing")]
+    let mailbox_delete_tracker = TaskTracker::new();
+    #[cfg(feature = "processing")]
+    let backlog_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -265,9 +336,11 @@ async fn main() -> anyhow::Result<()> {
     );
 
     #[cfg(feature = "processing")]
+    let queue_workers = TaskTracker::new();
+    #[cfg(feature = "processing")]
     let consumer_supervisor = {
         // Ensures that pdfium binary exists so we can kill the container early on failure
-        #[cfg(feature = "pdf")]
+        #[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
         if !std::fs::exists("./pdfium-lib/linux/libpdfium.so").expect("able to find file") {
             anyhow::bail!("libpdfium.so is missing");
         } else {
@@ -285,16 +358,7 @@ async fn main() -> anyhow::Result<()> {
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
-        let search_processing_context = SearchProcessingContext {
-            db: db.clone(),
-            worker: Arc::new(worker.clone()),
-            document_storage_bucket: config.document_storage_bucket.to_string(),
-            s3_client: s3_client.clone(),
-            opensearch_client: opensearch_client.clone(),
-            lexical_client: lexical_client.clone(),
-            calendar_search_enabled: config.calendar_search_enabled,
-        };
-        run_search_processing_workers(search_processing_context, config.worker_count);
+        let index_metrics = IndexMetrics::global();
 
         let kafka_processing_context = KafkaProcessingContext {
             agent_session_indexer: agent_session_indexer.clone(),
@@ -302,17 +366,63 @@ async fn main() -> anyhow::Result<()> {
             opensearch_client: opensearch_client.clone(),
             s3_client: s3_client.clone(),
             document_storage_bucket: config.document_storage_bucket.to_string(),
+            lexical_client: lexical_client.clone(),
+            calendar_search_enabled: config.calendar_search_enabled,
+            mailbox_deletes: process::email::mailbox_delete::MailboxDeletes::new(
+                opensearch_client.clone(),
+                mailbox_delete_tracker.clone(),
+                shutdown_token.clone(),
+            ),
+            metrics: index_metrics.clone(),
+            replays: sqs_client.clone(),
+        };
+        let search_processing_context = SearchProcessingContext {
+            db: db.clone(),
+            worker: Arc::new(worker.clone()),
+            document_storage_bucket: config.document_storage_bucket.to_string(),
+            s3_client: s3_client.clone(),
+            opensearch_client: opensearch_client.clone(),
             lexical_client,
             calendar_search_enabled: config.calendar_search_enabled,
+            broker_events: kafka_processing_context.clone(),
+            backfill_gate: backfill_gate.clone(),
+            messages_per_receive: u32::try_from(config.queue_max_messages).unwrap_or(1),
         };
-        tokio::spawn(supervise_event_consumer(
-            config.kafka_brokers.as_ref().to_owned(),
-            kafka_processing_context,
+        run_search_processing_workers(
+            search_processing_context,
+            config.worker_count,
             shutdown_token.clone(),
-        ))
+            &queue_workers,
+        );
+        queue_workers.close();
+        backlog_tracker.spawn(publish_lane_backlog(
+            index_metrics,
+            outbound::cloudwatch_backlog::CloudWatchBacklog::new(
+                config.environment,
+                aws_sdk_cloudwatch::Client::new(&aws_config),
+            ),
+            shutdown_token.clone(),
+        ));
+        let brokers = config.kafka_brokers.as_ref().to_owned();
+        let leave = LeaveTogether::new(2);
+        let email = tokio::spawn(supervise_event_consumer::<EmailLaneEvent>(
+            brokers.clone(),
+            kafka_processing_context.clone(),
+            leave.clone(),
+            shutdown_token.clone(),
+        ));
+        let live = tokio::spawn(supervise_event_consumer::<LiveLaneEvent>(
+            brokers,
+            kafka_processing_context,
+            leave,
+            shutdown_token.clone(),
+        ));
+        async move {
+            let (email, live) = tokio::join!(email, live);
+            email.and(live)
+        }
     };
 
-    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let backfill_jobs = BackfillJobs::new(
         dynamodb_client,
         config.backfill_jobs_table.to_string(),
@@ -334,17 +444,37 @@ async fn main() -> anyhow::Result<()> {
             config: Arc::new(config),
             backfill_service,
             backfill_jobs,
+            email_attachment_status_backfill,
+            deleted_chat_message_repair,
             macro_event_broker,
+            backfill_control,
+            backfill_gate,
         },
         shutdown_token.clone(),
     )
     .await;
 
     shutdown_token.cancel();
+    backfill_pause_tracker.wait().await;
+    // The queue workers drain beside the Kafka consumer, inside the task's
+    // stop timeout.
     #[cfg(feature = "processing")]
-    let consumer_result = consumer_supervisor
-        .await
-        .context("search processing event consumer supervisor failed");
+    let (consumer_result, ()) = tokio::join!(consumer_supervisor, queue_workers.wait());
+    #[cfg(feature = "processing")]
+    let consumer_result =
+        consumer_result.context("search processing event consumer supervisor failed");
+    if let Err(error) = telemetry.force_flush().await {
+        tracing::warn!(error = ?error, "could not flush telemetry after the consumer stopped");
+    }
+
+    // Followers stop at the cancelled token; OpenSearch finishes their tasks.
+    #[cfg(feature = "processing")]
+    {
+        mailbox_delete_tracker.close();
+        mailbox_delete_tracker.wait().await;
+        backlog_tracker.close();
+        backlog_tracker.wait().await;
+    }
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
@@ -360,6 +490,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     #[cfg(feature = "processing")]
-    consumer_result?;
-    api_result
+    let result = consumer_result.and(api_result);
+    #[cfg(not(feature = "processing"))]
+    let result = api_result;
+    telemetry.shutdown();
+    result
 }

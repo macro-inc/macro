@@ -44,6 +44,32 @@ it('keeps three desktop notices and queues the next until a slot opens', () => {
   expect(screen.getByText('Fourth saved')).toBeTruthy();
 });
 
+it('preserves an earlier failure action when the next failure opts out of deduplication', () => {
+  render(() => <ToastRegion />);
+  const retryFirst = vi.fn();
+  const retrySecond = vi.fn();
+  toast.failure('Folder creation failed', {
+    actions: [{ label: 'Retry first', onClick: retryFirst }],
+  });
+  toast.failure('Folder creation failed', {
+    stack: true,
+    actions: [{ label: 'Retry second', onClick: retrySecond }],
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Retry first' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry second' }));
+  expect(retryFirst).toHaveBeenCalledOnce();
+  expect(retrySecond).toHaveBeenCalledOnce();
+});
+
+it('still replaces stacked failure notices on mobile', () => {
+  mobile.value = true;
+  render(() => <ToastRegion />);
+  toast.failure('Earlier failure', { stack: true });
+  toast.failure('Latest failure', { stack: true });
+  expect(screen.queryByText('Earlier failure')).toBeNull();
+  expect(screen.getByText('Latest failure')).toBeTruthy();
+});
+
 it('keeps persistent prompts separate from transient notices', () => {
   render(() => <ToastRegion />);
   toast.custom(
@@ -160,4 +186,110 @@ it('keeps mobile prompt descriptions accessible', () => {
     { persistent: true }
   );
   expect(screen.getByText('Helpful details')).toBeTruthy();
+});
+
+it('changes an open toast in place through each state of one process', () => {
+  render(() => <ToastRegion />);
+  const onDismiss = vi.fn();
+  const id = toast.success('Sending…', {
+    persistent: true,
+    actions: [{ label: 'Undo', onClick: vi.fn() }],
+    onDismiss,
+  });
+  vi.advanceTimersByTime(10_000);
+  expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+
+  expect(toast.success('Sending…', { persistent: true, replace: id })).toBe(id);
+  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  vi.advanceTimersByTime(10_000);
+  expect(toast.success('Email sent', { replace: id })).toBe(id);
+  expect(screen.queryByText('Sending…')).toBeNull();
+  const sent = screen.getByText('Email sent').closest('[data-macro-toast]');
+  expect(sent?.hasAttribute('data-opened')).toBe(true);
+  expect(sent?.hasAttribute('data-replaced')).toBe(true);
+  expect(screen.getAllByRole('status', { hidden: true }).length).toBe(1);
+  expect(onDismiss).not.toHaveBeenCalled();
+
+  // The replacement keeps its own timing.
+  vi.advanceTimersByTime(4600);
+  expect(sent?.hasAttribute('data-closed')).toBe(true);
+});
+
+it('opens a new toast when the one it would replace has closed', () => {
+  render(() => <ToastRegion />);
+  const id = toast.success('Sending…', { persistent: true });
+  toast.dismiss(id!);
+  const next = toast.failure('Email failed to send', { replace: id });
+  expect(next).not.toBe(id);
+  expect(screen.getByText('Email failed to send')).toBeTruthy();
+});
+
+it('turns a timed toast persistent in place', () => {
+  render(() => <ToastRegion />);
+  const id = toast.success('Email queued to send');
+  vi.advanceTimersByTime(3000);
+  toast.failure('Email failed to send', { persistent: true, replace: id });
+  vi.advanceTimersByTime(10_000);
+  expect(
+    screen
+      .getByText('Email failed to send')
+      .closest('[data-macro-toast]')
+      ?.hasAttribute('data-opened')
+  ).toBe(true);
+});
+
+it('lets the next mobile notice replace a persistent notice', () => {
+  mobile.value = true;
+  render(() => <ToastRegion />);
+  toast.success('Sending…', { persistent: true });
+  toast.success('Copied', { stack: true });
+  expect(screen.queryByText('Sending…')).toBeNull();
+  expect(screen.getByText('Copied')).toBeTruthy();
+});
+
+it('keeps a mobile notice in the slot when it changes in place', () => {
+  mobile.value = true;
+  render(() => <ToastRegion />);
+  const id = toast.success('Sending…', { persistent: true });
+  toast.success('Email sent', { replace: id });
+  expect(screen.getByText('Email sent')).toBeTruthy();
+  toast.success('Later notice', { stack: true });
+  expect(screen.queryByText('Email sent')).toBeNull();
+  expect(screen.getByText('Later notice')).toBeTruthy();
+});
+
+it('gives a timed toast its full time again when it changes in place', () => {
+  render(() => <ToastRegion />);
+  const id = toast.success('Email queued to send');
+  vi.advanceTimersByTime(4000);
+  toast.success('Email sent', { replace: id });
+  vi.advanceTimersByTime(4000);
+  expect(
+    screen
+      .getByText('Email sent')
+      .closest('[data-macro-toast]')
+      ?.hasAttribute('data-opened')
+  ).toBe(true);
+});
+
+it('opens a new toast in place of one the mobile slot dismissed before it showed', () => {
+  mobile.value = true;
+  render(() => <ToastRegion />);
+  toast.custom({ title: 'Email failed to send' }, { persistent: true });
+  const queued = toast.success('Sending…');
+  toast.success('Copied');
+  const next = toast.success('Email sent', { replace: queued });
+  expect(next).not.toBe(queued);
+});
+
+it('reports closing a toast that was dismissed before it showed', () => {
+  render(() => <ToastRegion />);
+  toast.success('First', { stack: true });
+  toast.success('Second', { stack: true });
+  toast.success('Third', { stack: true });
+  const onDismiss = vi.fn();
+  const queued = toast.success('Queued', { stack: true, onDismiss });
+  toast.dismiss(queued!);
+  toast.dismiss(queued!);
+  expect(onDismiss).toHaveBeenCalledOnce();
 });

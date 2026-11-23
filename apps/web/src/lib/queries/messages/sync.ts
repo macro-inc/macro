@@ -27,6 +27,7 @@ import {
   getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
   insertActivitiesIntoMessageTimeline,
+  invalidateMessageTimeline,
   type MessageTimelineData,
   setMessageTimelineData,
 } from './timeline';
@@ -247,6 +248,11 @@ export function handleMessageEvent(
   }
   if (change.type === 'thread_updated') {
     applyThreadState(parent, change.state);
+    return;
+  }
+  if (change.type === 'call_root_posted') {
+    // The call's row carries server-owned life facts, so it is read, not built.
+    fireAndForget(invalidateMessageTimeline(parent), 'messages-sync');
     return;
   }
   const isRootPost = change.type === 'posted' && !change.message.thread_id;

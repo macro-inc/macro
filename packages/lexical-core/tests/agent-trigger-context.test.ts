@@ -319,6 +319,7 @@ describe('composeAgentContextPrompt with a trigger', () => {
       trigger: {
         kind: 'follow_up',
         addressed_by: 'inferred',
+        confidence: 72,
         discussion: {
           surface: {
             type: 'channel',
@@ -387,8 +388,8 @@ describe('composeAgentContextPrompt with a trigger', () => {
     expect(context).toContain('Choose acting_as explicitly');
     expect(context?.slice(context.indexOf('<trigger'))).toBe(
       [
-        '<trigger kind="follow_up" addressed_by="inferred">',
-        '  <note>This session was already running when Julia posted this message in its discussion. It neither mentions you nor quote-replies to you: a model judged from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it. The message is the prompt.</note>',
+        '<trigger kind="follow_up" addressed_by="inferred" confidence="72">',
+        '  <note>This session was already running when Julia posted this message in its discussion. It neither mentions you nor quote-replies to you: a model judged, 72% confident, from the discussion that it was meant for you. That judgment can be wrong, so if the message reads as meant for someone else, say so briefly instead of acting on it. The message is the prompt.</note>',
         '  <discussion>',
         '    <channel id="c1" name="eng" type="public"/>',
         '    <origin>This prompt was posted in a channel thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>',
@@ -422,6 +423,7 @@ describe('composeAgentContextPrompt with a trigger', () => {
             'The popover scrolls the page behind it. Ask <m-user-mention>{"userId":"macro|teo@example.com","displayName":"Teo"}</m-user-mention> for repro steps.',
           status: 'Todo',
           priority: 'High',
+          start: '2026-10-06T00:00:00Z',
           due: '2026-10-10T00:00:00Z',
           assignees: [
             { id: 'bot|00000000-0000-0000-0000-00000000c5c5', name: 'Cursor' },
@@ -443,7 +445,7 @@ describe('composeAgentContextPrompt with a trigger', () => {
         '<trigger kind="task_assigned" discussion="d1">',
         '  <note>Julia assigned you this task. Your replies are posted to your own discussion on the task, where Julia and others on the task read them.</note>',
         '  <assigned by="Julia" by_email="julia@example.com" by_id="macro|julia@example.com" at="2026-10-08T14:02:00Z"/>',
-        '  <task id="task-1" title="Fix calendar popover scroll" status="Todo" priority="High" due="2026-10-10T00:00:00Z">',
+        '  <task id="task-1" title="Fix calendar popover scroll" status="Todo" priority="High" start="2026-10-06T00:00:00Z" due="2026-10-10T00:00:00Z">',
         '    <project id="p-a1" name="Calendar polish"/>',
         '    <assignees>',
         '      <assignee name="Cursor" id="bot|00000000-0000-0000-0000-00000000c5c5"/>',

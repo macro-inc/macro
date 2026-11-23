@@ -37,23 +37,14 @@ export async function verifyDemo(
         await expect(
           workspace,
           `Workspace background matches the palette before JS (${label})`
-        ).toHaveCSS(
-          'background-color',
-          theme === 'cream' ? 'rgb(245, 241, 232)' : 'oklch(0.17 0 0)'
-        );
-        await expect(workspace).toHaveCSS(
-          'color',
-          theme === 'cream' ? 'oklch(0.2 0.004 70)' : 'oklch(1 0 21)'
-        );
+        ).toHaveCSS('background-color', 'oklch(0.17 0 0)');
+        await expect(workspace).toHaveCSS('color', 'oklch(1 0 21)');
         await expect(
           page.getByRole('heading', {
             name: 'What should we work on?',
             exact: true,
           })
-        ).toHaveCSS(
-          'color',
-          theme === 'cream' ? 'rgb(29, 28, 26)' : 'oklch(1 0 21)'
-        );
+        ).toHaveCSS('color', 'oklch(1 0 21)');
         const rail = page.locator('[data-ui="sidebar-rail"]');
         await expect(
           rail,

@@ -165,6 +165,52 @@ export function isEmailSendIntent(value: unknown): value is EmailSendIntent {
   return true;
 }
 
+export function settledSendAttempt(intent: EmailSendIntent) {
+  return (
+    intent.response?.cancelEmailSend?.attempt ??
+    intent.response?.sendEmailMessage?.attempt
+  );
+}
+
+export function emailSendMatchesDraft(
+  intent: EmailSendIntent,
+  draftId: string
+): boolean {
+  return (
+    intent.resolvedDraftId === draftId ||
+    intent.metadata.payload.input.message.draftId === draftId ||
+    settledSendAttempt(intent)?.message?.id === draftId
+  );
+}
+
+/** Still on its way: not delivered, cancelled, failed, or waiting on sign-in. */
+export function emailSendInProgress(intent: EmailSendIntent): boolean {
+  const status = settledSendAttempt(intent)?.status;
+  return (
+    !intent.dispatch?.paused &&
+    !intent.locallyCancelled &&
+    status !== 'SENT' &&
+    status !== 'CANCELLED' &&
+    (!!intent.cancellationRequested ||
+      (intent.phase !== 'failed' && status !== 'FAILED'))
+  );
+}
+
+/**
+ * Whether `messageId` is a message one of these sends is still delivering.
+ * The server holds it as a draft until the provider confirms it, and refuses
+ * a reply to a draft.
+ */
+export function emailSendDelivering(
+  intents: readonly EmailSendIntent[],
+  messageId: string
+): boolean {
+  return intents.some(
+    (intent) =>
+      emailSendInProgress(intent) && emailSendMatchesDraft(intent, messageId)
+  );
+}
+
 /** Even an unsupported record keeps recognizable identities reserved. */
 export function emailSendReservedDraftIds(value: unknown): string[] {
   if (!isRecord(value)) return [];

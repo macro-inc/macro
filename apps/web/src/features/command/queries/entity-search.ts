@@ -6,9 +6,13 @@ import {
 import { exclude } from '@core/context/quickAccess/types';
 import { useUserId } from '@core/context/user';
 import { isTransientRequestError } from '@core/util/request-error';
+import { useTeamMembers } from '@queries/team/members';
 import { type Accessor, createMemo } from 'solid-js';
 import { contactCommandItems, mergeCommandPeople } from '../contact-items';
-import { rankCommandSearchItems } from '../rank-command-search-items';
+import {
+  listOutsidePeopleLast,
+  rankCommandSearchItems,
+} from '../rank-command-search-items';
 import type { CategoryFilter } from '../types';
 import type { CommandContactSource, CommandMenuItem } from '../useCommandItems';
 
@@ -24,7 +28,8 @@ const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   dms: ['dm'],
   documents: ['note', 'document', 'snippet', 'project', 'database', 'form'],
   tasks: ['task'],
-  chats: ['chat'],
+  // Agent sessions are the Agents tab's rows; legacy AI chats stay listed.
+  chats: ['agent_session', 'chat'],
   projects: ['initiative'],
   people: ['person'],
 };
@@ -33,6 +38,15 @@ const CONTACT_CATEGORIES = new Set<EntitySearchCategory | 'commands'>([
   'dms',
   'people',
 ]);
+
+function sameIdSet(previous: ReadonlySet<string>, next: ReadonlySet<string>) {
+  if (previous.size !== next.size) return false;
+
+  for (const id of next) {
+    if (!previous.has(id)) return false;
+  }
+  return true;
+}
 
 function showInRecencyList(item: CommandMenuItem): boolean {
   return item.bucket !== 'crm_company' || item.timestamps.viewedAt != null;
@@ -78,6 +92,8 @@ export function useEntitySearch(
         : buckets,
       searchTerm: scopedSearchTerm,
       enabled: searchActive,
+      peopleMode: 'command',
+      excludeSelf: true,
     });
   });
   const contactsActive = () =>
@@ -87,7 +103,12 @@ export function useEntitySearch(
     contactsActive
   );
   const people = {
-    users: quickAccess.useList('person').items,
+    users: () => [
+      ...(activeList()
+        ?.items()
+        .filter((item) => item.kind === 'user') ?? []),
+      ...(contacts?.users?.() ?? []),
+    ],
     directMessages: quickAccess.useList('dm').items,
     viewerId: useUserId(),
   };
@@ -102,7 +123,9 @@ export function useEntitySearch(
       : []
   );
   const contactItemIds = createMemo(
-    () => new Set(contactItems().map((item) => item.id))
+    () => new Set(contactItems().map((item) => item.id)),
+    undefined,
+    { equals: sameIdSet }
   );
   const cachedItems = (): QuickAccessItem[] => activeList()?.items() ?? [];
   const withDiscovery = <T extends CommandMenuItem>(
@@ -124,15 +147,27 @@ export function useEntitySearch(
       : discovered;
   };
 
+  const team = useTeamMembers(searchActive);
+  const teammateIds = createMemo(
+    () => new Set(team.users().map((user) => user.id)),
+    undefined,
+    { equals: sameIdSet }
+  );
   const rankItems = <T extends CommandMenuItem>(
     items: T[],
     queryText: string
   ): T[] => {
-    if (!queryText.trim()) return items.filter(showInRecencyList);
+    if (!queryText.trim())
+      return listOutsidePeopleLast(items.filter(showInRecencyList), {
+        teammateIds: teammateIds(),
+        viewerId: people.viewerId(),
+      });
     return rankCommandSearchItems(items, queryText, {
       preserveAdditionalEntityMatches:
         quickAccess.usesRecordSelection() || quickAccess.usesSearchProjection(),
       preservedIds: contactItemIds(),
+      teammateIds: teammateIds(),
+      viewerId: people.viewerId(),
     });
   };
 
@@ -153,7 +188,23 @@ export function useEntitySearch(
     isLoadingEntities: () =>
       (!!activeList()?.isLoading() && activeList()?.items().length === 0) ||
       (contactsActive() && (contacts?.isLoading() ?? false)),
+    // Rows from other sources can be listed before the cache has answered a
+    // typed query, so its documents are still to come.
+    isSearchingEntities: () => hasQuery() && !!activeList()?.isSearching?.(),
     pagination: {
+      windowKey: () => {
+        if (
+          activeList()?.isLoading() ||
+          (contactsActive() && contacts?.isLoading())
+        )
+          return;
+        // People and contact matches grow in place for a query, so the
+        // window is the query: a source answering late is not a new window.
+        return activeList()?.windowKey?.() ||
+          (contactsActive() && contacts?.windowKey?.())
+          ? scopedSearchTerm()
+          : undefined;
+      },
       hasMore: () =>
         (activeList()?.hasMore() ?? false) ||
         (contactsActive() && (contacts?.hasMore() ?? false)),

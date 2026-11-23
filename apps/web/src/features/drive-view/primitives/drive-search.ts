@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 const searchSchema = z.object({
   scope: z.enum(['default', 'all', 'attachments']),
-  sort: z.enum(['updated_at', 'created_at', 'viewed_at']),
+  sort: z.enum(['updated_at', 'created_at', 'viewed_at', 'name']),
   facets: z.record(z.string(), z.array(z.string())),
   commentId: z.string(),
 });

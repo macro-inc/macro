@@ -2,6 +2,7 @@ import {
   FilterSubmenu,
   SearchableFilterSubmenu,
 } from '@app/features/next-soup/soup-view/filters-bar/filter-menu';
+import type { SearchableOptionSourceFactory } from '@app/features/next-soup/soup-view/filters-bar/option-source';
 import { t } from '@app/lib/i18n';
 import GanttIcon from '@icon/system/regular/chart-gantt.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -11,8 +12,22 @@ import ListIcon from '@icon/system/regular/list-bullets.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import GroupIcon from '@icon/system/regular/stack.svg';
 import { Key } from '@solid-primitives/keyed';
-import { Button, ButtonGroup, type ButtonSize, cn, Dropdown } from '@ui';
-import { batch, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  Button,
+  ButtonGroup,
+  type ButtonSize,
+  CountBadge,
+  cn,
+  Dropdown,
+} from '@ui';
+import {
+  type Accessor,
+  batch,
+  createSignal,
+  For,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { AiFilterInput, type AiFilterInputProps } from './AiFilterInput';
 
 export type ListControlOption<TId extends string> = {
@@ -205,10 +220,20 @@ export type ListFilterGroup<
   id: TGroupId;
   label: string;
   options: ListControlOption<TOptionId>[];
+  /** Lazy bounded multiselect source. Requires the dropdown's selectedIds;
+   * static options remain unchanged for other groups. */
+  createSource?: SearchableOptionSourceFactory<TOptionId>;
   selectionMode?: 'single' | 'multiple';
   defaultOptionId?: TOptionId;
   searchPlaceholder?: string;
+  /** In a searchable group, offers typed text no option lists as one. */
+  createOption?: (query: string) => ListControlOption<TOptionId> | undefined;
   contentClass?: string;
+  /** Keep the source ordering instead of promoting selected options. */
+  preserveOrder?: boolean;
+  /** Optional content below a searchable group's options. */
+  footer?: JSX.Element;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export type ListFilterDropdownProps<
@@ -247,18 +272,38 @@ export type ListFilterDropdownProps<
   footer?: JSX.Element;
 } & ListDropdownOpenProps;
 
-/**
- * Overlays the number of applied filters on a `ListFilterDropdown` trigger, so
- * a collapsed menu still reveals that the list is filtered. Render it as a
- * sibling of the dropdown inside a `relative` wrapper.
- */
-export function ListFilterCountBadge(props: { count: number }) {
+function SourcedFilterSubmenu<TId extends string>(props: {
+  createSource: SearchableOptionSourceFactory<TId>;
+  selected: Accessor<TId[]>;
+  enabled: Accessor<boolean>;
+  label: string;
+  placeholder?: string;
+  active: boolean;
+  change: (ids: string[], options: ListControlOption<TId>[]) => void;
+  close: () => void;
+}) {
+  const [open, setOpen] = createSignal(false);
+  const source = props.createSource(
+    props.selected,
+    () => props.enabled() && open()
+  );
+  const onOpenChange = (value: boolean) => {
+    setOpen(value);
+    if (!value) source.setSearch('');
+  };
   return (
-    <Show when={props.count > 0}>
-      <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-        {props.count}
-      </span>
-    </Show>
+    <SearchableFilterSubmenu
+      label={props.label}
+      placeholder={props.placeholder}
+      active={props.active}
+      options={source.options}
+      source={source}
+      activeIds={props.selected}
+      onChange={(ids) => props.change(ids, source.options())}
+      open={open}
+      onOpenChange={onOpenChange}
+      onSelectionComplete={props.close}
+    />
   );
 }
 
@@ -282,30 +327,38 @@ export function ListFilterDropdown<
 
   const isGroupActive = (group: ListFilterGroup<TGroupId, TOptionId>) =>
     props.isGroupActive?.(group.id) ??
-    group.options.some(
-      (option) =>
-        option.id !== group.defaultOptionId &&
-        props.isSelected(group.id, option.id)
-    );
+    selectedOptionIds(group).some((id) => id !== group.defaultOptionId);
 
-  const selectedOptionIds = (group: ListFilterGroup<TGroupId, TOptionId>) => [
-    ...new Set([
-      ...(props.selectedIds?.(group.id) ?? []),
-      ...group.options
-        .filter((option) => props.isSelected(group.id, option.id))
-        .map((option) => option.id),
-    ]),
-  ];
+  const selectedOptionIds = (group: ListFilterGroup<TGroupId, TOptionId>) => {
+    if (
+      group.createSource &&
+      (!props.selectedIds || group.selectionMode === 'single')
+    ) {
+      throw new Error(
+        'Query-driven filters require explicit selectedIds and multiple selection'
+      );
+    }
+    return [
+      ...new Set([
+        ...(props.selectedIds?.(group.id) ?? []),
+        ...group.options
+          .filter((option) => props.isSelected(group.id, option.id))
+          .map((option) => option.id),
+      ]),
+    ];
+  };
   const setSelectedOptionIds = (
     group: ListFilterGroup<TGroupId, TOptionId>,
-    ids: readonly string[]
+    ids: readonly TOptionId[],
+    options = group.options
   ) => {
     const current = selectedOptionIds(group);
+    // Typed entries (`createOption`) arrive with ids no option lists yet.
     const optionIds = [
-      ...new Set([...current, ...group.options.map((option) => option.id)]),
+      ...new Set([...current, ...options.map((option) => option.id), ...ids]),
     ];
     const next = optionIds.filter((id) => {
-      if (group.options.find((option) => option.id === id)?.disabled)
+      if (options.find((option) => option.id === id)?.disabled)
         return current.includes(id);
       return ids.includes(id);
     });
@@ -342,11 +395,7 @@ export function ListFilterDropdown<
             class={props.class}
           >
             <FilterIcon class="size-4 shrink-0" />
-            <Show when={props.activeCount}>
-              <span class="flex min-w-4 h-4 items-center justify-center rounded-full bg-accent px-1 text-xxs font-medium leading-none text-surface">
-                {props.activeCount}
-              </span>
-            </Show>
+            <CountBadge count={props.activeCount ?? 0} />
           </Dropdown.Trigger>
         }
       >
@@ -394,37 +443,64 @@ export function ListFilterDropdown<
           <Key each={props.groups} by="id">
             {(group) => (
               <Show
-                when={group().searchPlaceholder}
+                when={group().createSource}
                 fallback={
-                  <FilterSubmenu
-                    label={group().label}
-                    selectionMode={group().selectionMode}
-                    active={isGroupActive(group())}
-                    options={group().options}
-                    isSelected={(id) => props.isSelected(group().id, id)}
-                    onSelect={(id) =>
-                      props.onSelectionChange(
-                        group().id,
-                        id,
-                        group().selectionMode === 'single' ||
-                          !props.isSelected(group().id, id)
-                      )
+                  <Show
+                    when={group().searchPlaceholder}
+                    fallback={
+                      <FilterSubmenu
+                        label={group().label}
+                        selectionMode={group().selectionMode}
+                        active={isGroupActive(group())}
+                        options={group().options}
+                        isSelected={(id) => props.isSelected(group().id, id)}
+                        onSelect={(id) =>
+                          props.onSelectionChange(
+                            group().id,
+                            id,
+                            group().selectionMode === 'single' ||
+                              !props.isSelected(group().id, id)
+                          )
+                        }
+                        onOnly={(id) => setSelectedOptionIds(group(), [id])}
+                        closeOnSelect
+                        contentClass={group().contentClass}
+                      />
                     }
-                    onOnly={(id) => setSelectedOptionIds(group(), [id])}
-                    closeOnSelect
-                    contentClass={group().contentClass}
-                  />
+                  >
+                    <SearchableFilterSubmenu
+                      onSelectionComplete={() => setOpen(false)}
+                      label={group().label}
+                      active={isGroupActive(group())}
+                      options={() => group().options}
+                      activeIds={() => selectedOptionIds(group())}
+                      // The submenu returns this group's option and typed ids.
+                      onChange={(ids) =>
+                        setSelectedOptionIds(group(), ids as TOptionId[])
+                      }
+                      placeholder={group().searchPlaceholder}
+                      createOption={group().createOption}
+                      preserveOrder={group().preserveOrder}
+                      footer={group().footer}
+                      onOpenChange={group().onOpenChange}
+                    />
+                  </Show>
                 }
               >
-                <SearchableFilterSubmenu
-                  onSelectionComplete={() => setOpen(false)}
-                  label={group().label}
-                  active={isGroupActive(group())}
-                  options={() => group().options}
-                  activeIds={() => selectedOptionIds(group())}
-                  onChange={(ids) => setSelectedOptionIds(group(), ids)}
-                  placeholder={group().searchPlaceholder}
-                />
+                {(createSource) => (
+                  <SourcedFilterSubmenu
+                    createSource={createSource()}
+                    label={group().label}
+                    placeholder={group().searchPlaceholder}
+                    active={isGroupActive(group())}
+                    selected={() => selectedOptionIds(group())}
+                    enabled={isOpen}
+                    change={(ids, options) =>
+                      setSelectedOptionIds(group(), ids as TOptionId[], options)
+                    }
+                    close={() => setOpen(false)}
+                  />
+                )}
               </Show>
             )}
           </Key>

@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PairingId } from './pairingId';
 
 /**
  * A pairing the daemon created, including its claim credential.
@@ -19,7 +20,7 @@ export interface CreatedPairing {
   /** When the pairing expires. */
   expires_at: string;
   /** Pairing id used to poll for the claim. */
-  pairing_id: string;
+  pairing_id: PairingId;
   /**
    * Suggested delay between claim polls.
    * @minimum 0

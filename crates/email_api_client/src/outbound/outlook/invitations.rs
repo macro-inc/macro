@@ -25,7 +25,8 @@ impl MailboxCalendarClient for OutlookApiClientRepository {
             .map_err(|_| EmailApiError::Transient {
                 message: "Microsoft message download was interrupted".into(),
             })?;
-        let mime = mailparse::parse_mail(&bytes).map_err(|_| invalid_response())?;
+        let mime = mailparse::parse_mail(&bytes)
+            .map_err(|_| invalid_response("MIME source does not parse"))?;
         let mut parts = Vec::new();
         collect_calendar_parts(&mime, "0", &mut parts)?;
         Ok(parts)
@@ -47,7 +48,10 @@ fn collect_calendar_parts(
                 .cloned()
                 .or_else(|| mime.ctype.params.get("name").cloned()),
             mime_type: "text/calendar".into(),
-            inline_data: Some(mime.get_body_raw().map_err(|_| invalid_response())?),
+            inline_data: Some(
+                mime.get_body_raw()
+                    .map_err(|_| invalid_response("calendar part body does not decode"))?,
+            ),
             provider_attachment_id: None,
         });
     }

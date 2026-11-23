@@ -1,0 +1,20 @@
+{
+  "id": "evt_1OverageFailed",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "created": 1800000030,
+  "livemode": false,
+  "type": "invoice.payment_failed",
+  "data": {
+    "object": {
+      "id": "in_1Overage",
+      "object": "invoice",
+      "customer": "cus_Personal",
+      "status": "open",
+      "billing_reason": "manual",
+      "parent": null,
+      "metadata": {"macro_purpose": "ai_overage"},
+      "lines": {"object": "list", "has_more": false, "data": []}
+    }
+  }
+}

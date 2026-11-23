@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_profile_picture SET retry_at = now() WHERE account_id = $1 AND jid = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "47a897ec6da9a7b352b127c194575624d9194ebb2fd246dfe2467dda10ba3b8a"
+}

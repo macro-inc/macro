@@ -1,6 +1,6 @@
 import { DateTimeRangeFields } from '@app/components/date-time-range/date-time-range-fields';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import { format, isValid, parseISO } from 'date-fns';
+import { isValid, parseISO } from 'date-fns';
 import {
   createEffect,
   createMemo,
@@ -22,14 +22,15 @@ import {
   guestEmail,
 } from '../../calendar/components/composer/event-form-model';
 import { RecurrenceBuilder } from '../../calendar/components/composer/RecurrenceBuilder';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
 import { buildRecurrenceLines } from '../../calendar/utils/recurrence';
+import { formatCalendarTime } from '../../calendar/utils/time-format';
 import type { InputDisplay } from '../context/capabilities';
+import { formatRecipientTerms } from '../core/recipients';
 import { parseRecurrenceDraft } from '../core/recurrence';
+import { createRecipientSelection } from '../primitives/recipient-selection';
 import type { UniversalInputController } from '../primitives/universal-input';
-import {
-  composerRecipientOptions,
-  composerRecipients,
-} from '../queries/composer-recipients';
+import { composerRecipients } from '../queries/composer-recipients';
 
 /** Reuse the calendar composer's date/time menus and editable property pills. */
 export function CalendarDraft(props: {
@@ -39,6 +40,7 @@ export function CalendarDraft(props: {
   const s = props.state;
   const a = props.actions;
   const hintId = createUniqueId();
+  const [preferences] = useCalendarPreferences();
   onCleanup(() => a.captureCalendarEditor?.(undefined));
   const calendars = createMemo(() =>
     a.calendars().map((calendar) => ({
@@ -47,13 +49,15 @@ export function CalendarDraft(props: {
       color: 'var(--color-accent)',
     }))
   );
-  const guests = createMemo(() =>
-    composerRecipients(s.fields().guests, a.people())
+  const selection = createRecipientSelection(
+    () => s.fields().guests,
+    (text) => composerRecipients(text, a.person),
+    (guests) => formatRecipientTerms(guests.map(guestEmail)),
+    (text) => s.edit('guests', text)
   );
+  const guests = selection.selected;
   const options = createMemo(() =>
-    composerRecipientOptions(a.people()).filter(
-      (person) => person.kind !== 'custom'
-    )
+    guests().filter((person) => person.kind !== 'custom')
   );
   const recurrenceValues = (): EventEditorInitialValues => {
     const fields = s.fields();
@@ -105,7 +109,7 @@ export function CalendarDraft(props: {
     if (s.draft().edited.calendar.includes('start') || !phrase) return;
     const start = parseISO(s.fields().start);
     if (!isValid(start)) return;
-    return `Assumed ${format(start, 'h:mm a')} for “${phrase}”. Adjust the start time if you meant otherwise.`;
+    return `Assumed ${formatCalendarTime(start, preferences.timeFormat)} for “${phrase}”. Adjust the start time if you meant otherwise.`;
   };
   const changeStart = (start: string) => {
     const duration =
@@ -131,6 +135,7 @@ export function CalendarDraft(props: {
         startDisabled={s.sending()}
         endDisabled={s.sending()}
         describedBy={assumption() ? hintId : undefined}
+        hour12={preferences.timeFormat === '12-hour'}
       />
       <Show when={assumption()}>
         {(hint) => (
@@ -188,9 +193,7 @@ export function CalendarDraft(props: {
         <EventComposerGuestsPill
           options={options}
           selected={guests()}
-          onChange={(selected) =>
-            s.edit('guests', selected.map(guestEmail).join(', '))
-          }
+          onChange={selection.select}
           disabled={s.sending()}
         />
         <EventComposerLocationPill

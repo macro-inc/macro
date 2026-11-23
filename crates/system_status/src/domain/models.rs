@@ -126,6 +126,9 @@ pub struct CurrentSystemStatus {
     /// The status and its message.
     #[serde(flatten)]
     pub status: SystemStatus,
+    /// The id of the update that set it; absent when no status was ever set.
+    /// Clients remember dismissed banners by this id.
+    pub id: Option<Uuid>,
     /// When it was set; absent when no status was ever set. Clients keep the
     /// newest status they have seen, whether fetched or pushed.
     pub updated_at: Option<DateTime<Utc>>,
@@ -136,10 +139,12 @@ impl From<Option<StatusUpdate>> for CurrentSystemStatus {
         match update {
             Some(update) => Self {
                 status: update.status,
+                id: Some(update.id),
                 updated_at: Some(update.created_at),
             },
             None => Self {
                 status: SystemStatus::Operational,
+                id: None,
                 updated_at: None,
             },
         }

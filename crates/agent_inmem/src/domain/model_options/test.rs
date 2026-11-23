@@ -53,7 +53,7 @@ fn model_image_capability_survives_acp_projection() {
 #[test]
 fn speed_is_advertised_only_for_supported_models_with_current_value() {
     use agent::{ModelSpeed, ReasoningEffort};
-    use agent_client_protocol::schema::v1::SessionConfigKind;
+    use agent_client_protocol::schema::v1::{SessionConfigKind, SessionConfigSelectOptions};
     for (model, speed) in [
         ("openai/gpt-6-astra", ModelSpeed::Ultrafast),
         ("openai/gpt-6.1-sol", ModelSpeed::Ultrafast),
@@ -68,6 +68,16 @@ fn speed_is_advertised_only_for_supported_models_with_current_value() {
             panic!("speed must be selectable")
         };
         assert_eq!(select.current_value.to_string(), speed.as_str());
+        let SessionConfigSelectOptions::Ungrouped(choices) = &select.options else {
+            panic!("speed choices are flat")
+        };
+        assert_eq!(
+            choices
+                .iter()
+                .map(|choice| choice.value.to_string())
+                .collect::<Vec<_>>(),
+            ["standard", "priority", "ultrafast"]
+        );
     }
     assert!(super::speed_config_option("anthropic/claude-opus-5-5", ModelSpeed::Fast).is_none());
     assert!(

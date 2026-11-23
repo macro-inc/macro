@@ -69,6 +69,8 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 
 ## Gotchas
 
+- Preserve the Docker worker's empty OTLP default and explicit launcher `--var` forwarding; local tracing policy and shell-precedence controls are documented in `docs/development/running-locally.md`.
+
 - Bumping `loro-crdt` touches three lockfiles: `bun.lock`, the workspace
   `Cargo.lock`, and this directory's `package-lock.json` — update all three.
 - Durable Object in-memory state (including the loro document) evicts after
@@ -86,12 +88,17 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   source's mappings first. A peer's first owner keeps it; registration only
   claims peers the system author holds.
   A new write path does the same (`tests/peer_authors.test.ts`).
+- `docker/sync-service.Dockerfile` fetches the tools `worker-build` would
+  download (wasm-opt, esbuild, wasm-bindgen) into its cache first, with
+  retries: wasm-opt and esbuild at the versions `worker-build` 0.8.1 pins.
+  Bumping `worker-build` there means bumping those two with it.
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
 - Provision `LEXICAL_SERVICE_AUTH_KEY` to match lexical-service before deploying; `just check-secrets <environment>` checks binding presence without reading values.
 - Deploy `PeerCommentUpdate` support before clients send it; validate these frames as comment-only for editors as well as commenters, and reject viewers.
 - Never run `just deploy-dev` / `just deploy-prod` without explicit approval.
 - Wait at least five minutes after a manual worker deployment before publishing clients that require its new protocol; the CI worker job waits out Durable Objects' default 300-second code-update deferral.
+- A new input to the worker's bundle that lives outside its workspace closure must be added to `.github/scripts/sync-worker-key.sh`, or CI can skip deploying a changed worker.
 
 ## Related
 
@@ -101,3 +108,5 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   connection. To regress connect-before-initialize, build without
   `create-default-state` and run `SYNC_TEST_UNINITIALIZED_ROOMS=true npx vitest run
   tests/canvas_initialization.test.ts`; the usual test build seeds automatically.
+
+- Preserve signed document-grant agent correlation in editor metadata and pending batches; different invocations remain distinct editors.

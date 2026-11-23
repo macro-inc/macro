@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupDocumentSoupPropertiesFieldAllOfTwoAppearance } from './soupDocumentSoupPropertiesFieldAllOfTwoAppearance';
 import type { SoupDocumentSoupPropertiesFieldAllOfTwoBranchedFromId } from './soupDocumentSoupPropertiesFieldAllOfTwoBranchedFromId';
 import type { SoupDocumentSoupPropertiesFieldAllOfTwoBranchedFromVersionId } from './soupDocumentSoupPropertiesFieldAllOfTwoBranchedFromVersionId';
 import type { SoupDocumentSoupPropertiesFieldAllOfTwoDeletedAt } from './soupDocumentSoupPropertiesFieldAllOfTwoDeletedAt';
@@ -15,6 +16,7 @@ import type { SoupDocumentSoupPropertiesFieldAllOfTwoSubType } from './soupDocum
 import type { SoupDocumentSoupPropertiesFieldAllOfTwoViewedAt } from './soupDocumentSoupPropertiesFieldAllOfTwoViewedAt';
 
 export type SoupDocumentSoupPropertiesFieldAllOfTwo = {
+  appearance?: SoupDocumentSoupPropertiesFieldAllOfTwoAppearance;
   /** The id of the document this document branched from */
   branchedFromId?: SoupDocumentSoupPropertiesFieldAllOfTwoBranchedFromId;
   /** The id of the version this document branched from

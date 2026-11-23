@@ -1,17 +1,51 @@
 import {
+  ARTIFACT_HTML_MAX_LENGTH,
   canLabel,
   createGraphicsEditor,
   type GraphicsDocument,
   insertShapesCommand,
+  nextPresentOrder,
   nudgeCommand,
   type ShapeLabel,
+  setArtifactCommand,
+  setPresentationOrderCommand,
   setShapeLabelCommand,
   setTextCommand,
 } from '@macro-inc/graphics';
+import type { ArtifactLibraryEdit } from '@macro-inc/graphics/loro';
 import { plainRichText } from '@macro-inc/lexical-core/canvas-text';
 import { match } from 'ts-pattern';
 import { insertCanvasUserMention } from './mentions';
 import type { CanvasOp } from './schema';
+
+function replaceOnce(html: string, find: string, replace: string) {
+  const first = html.indexOf(find);
+  if (first === -1)
+    throw new Error('artifactEdit: the text to find is not in the HTML.');
+  if (html.indexOf(find, first + 1) !== -1)
+    throw new Error(
+      'artifactEdit: the text to find appears more than once. Include more surrounding text.'
+    );
+
+  const edited =
+    html.slice(0, first) + replace + html.slice(first + find.length);
+  if (edited.length > ARTIFACT_HTML_MAX_LENGTH)
+    throw new Error(
+      `artifactEdit: the HTML would exceed ${ARTIFACT_HTML_MAX_LENGTH} characters.`
+    );
+  return edited;
+}
+
+/** Shared library changes in a batch, committed with its scene change. */
+export function artifactLibraryEdits(ops: CanvasOp[]): ArtifactLibraryEdit[] {
+  return ops.flatMap((op): ArtifactLibraryEdit[] => {
+    if (op.kind === 'defineStyle')
+      return [{ kind: 'styles', name: op.name, source: op.css }];
+    if (op.kind === 'defineComponent')
+      return [{ kind: 'components', name: op.name, source: op.html }];
+    return [];
+  });
+}
 
 function label(
   text: string,
@@ -41,7 +75,8 @@ export function prepareCanvasEdit(
       const required =
         'ids' in op
           ? op.ids
-          : 'id' in op && !['create', 'connect'].includes(op.kind)
+          : 'id' in op &&
+              !['create', 'connect', 'createArtifact'].includes(op.kind)
             ? [op.id]
             : [];
       // A group's id is new; its members must already exist.
@@ -92,6 +127,47 @@ export function prepareCanvasEdit(
             },
           ]);
         })
+        .with({ kind: 'createArtifact' }, (op) => {
+          editor.execute(insertShapesCommand, [
+            {
+              point: { x: op.x, y: op.y },
+              item: {
+                id: op.id,
+                type: 'artifact',
+                appearance: { fill: 'transparent', stroke: 'transparent' },
+                geometry: {
+                  title: op.title,
+                  html: op.html,
+                  width: op.width ?? 640,
+                  height: op.height ?? 360,
+                  designWidth: op.designWidth ?? 1280,
+                  designHeight: op.designHeight ?? 720,
+                  presentOrder: nextPresentOrder(current),
+                },
+              },
+            },
+          ]);
+        })
+        .with({ kind: 'artifactSource' }, ({ kind: _, id, ...content }) => {
+          editor.execute(setArtifactCommand, { id, content });
+        })
+        .with({ kind: 'artifactEdit' }, (op) => {
+          const item = current.items[op.id];
+          if (item?.type !== 'artifact')
+            throw new Error(`Item ${op.id} is not an artifact.`);
+
+          editor.execute(setArtifactCommand, {
+            id: op.id,
+            content: {
+              html: replaceOnce(item.geometry.html, op.find, op.replace),
+            },
+          });
+        })
+        .with({ kind: 'presentOrder' }, (op) => {
+          editor.execute(setPresentationOrderCommand, { ids: op.ids });
+        })
+        // Library entries live beside the scene, not in it.
+        .with({ kind: 'defineStyle' }, { kind: 'defineComponent' }, () => {})
         .with({ kind: 'connect' }, (op) => {
           for (const end of [op.start, op.end]) {
             const target = end.binding && current.items[end.binding.targetId];

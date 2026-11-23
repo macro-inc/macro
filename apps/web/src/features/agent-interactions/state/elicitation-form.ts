@@ -134,6 +134,14 @@ function isBlank(value: FieldValue | undefined): boolean {
     .exhaustive();
 }
 
+/** Whether every required field has an answer; Submit waits for it. */
+export function requiredAnswered(
+  schema: ElicitationSchema,
+  values: FormValues
+): boolean {
+  return schema.required.every((name) => !isBlank(values[name]));
+}
+
 /**
  * Every field's problem, keyed by property name. Empty when the form can be
  * submitted.

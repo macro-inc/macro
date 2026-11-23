@@ -903,7 +903,12 @@ const shortcutSections: ShortcutSection[] = [
         codes: [CmdOrCtrl, 'KeyJ'],
         description: 'Focus AI chat',
       },
-      { keys: ['g'], codes: ['KeyG'], description: 'Go to a view' },
+      {
+        keys: ['g'],
+        codes: ['KeyG'],
+        description:
+          'Go to a view: then h Home, i Notifications (Home without them), a Agents, e Email (Signal), s Sent, f Files, d Documents, t Tasks, r Calendar, c Channels, o Customers; ? lists every letter, including those behind flags',
+      },
       {
         keys: ['?'],
         codes: ['ShiftLeft', 'Slash'],
@@ -935,6 +940,16 @@ const shortcutSections: ShortcutSection[] = [
         description: 'Focus split to the right',
       },
       {
+        keys: ['shift+arrowup'],
+        codes: ['ShiftLeft', 'ArrowUp'],
+        description: 'Focus split above',
+      },
+      {
+        keys: ['shift+arrowdown'],
+        codes: ['ShiftLeft', 'ArrowDown'],
+        description: 'Focus split below',
+      },
+      {
         keys: ['cmd+escape'],
         codes: ['MetaLeft', 'Escape'],
         description: 'Back to list / close split',
@@ -950,6 +965,42 @@ const shortcutSections: ShortcutSection[] = [
         codes: ['ShiftLeft', 'Backslash'],
         description: 'Create a split below',
       },
+    ],
+  },
+  {
+    title: 'Tabs',
+    items: [
+      {
+        keys: ['tab'],
+        codes: ['Tab'],
+        description:
+          'Next tab at the top of the pane you are in. In a field, an editor or on a button, Tab moves focus as usual',
+      },
+      {
+        keys: ['shift+tab'],
+        codes: ['ShiftLeft', 'Tab'],
+        description: 'Previous tab at the top of the pane',
+      },
+      {
+        keys: ['1'],
+        codes: ['Digit1'],
+        description:
+          'Go to a tab at the top of the pane by its position, 1 to 9',
+      },
+      ...(IS_MAC
+        ? [
+            {
+              keys: ['ctrl+tab'],
+              codes: ['ControlLeft', 'Tab'],
+              description: 'Next window tab (Mac app)',
+            },
+            {
+              keys: ['cmd+1'],
+              codes: ['MetaLeft', 'Digit1'],
+              description: 'Go to a window tab by its position (Mac app)',
+            },
+          ]
+        : []),
     ],
   },
   {
@@ -1012,7 +1063,6 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Email',
     items: [
-      { keys: ['/'], codes: ['Slash'], description: 'Search email' },
       { keys: ['s'], codes: ['KeyS'], description: 'Star or unstar' },
       {
         keys: ['shift+m'],
@@ -1024,12 +1074,6 @@ const shortcutSections: ShortcutSection[] = [
         keys: ['escape'],
         codes: ['Escape'],
         description: 'Back to the list, then to Signal',
-      },
-      {
-        keys: ['g'],
-        codes: ['KeyG'],
-        description:
-          'Then i Signal, o Noise, s Favorites, t Sent, d Drafts, e Archived, a All',
       },
       {
         keys: ['n', 'arrowdown'],
@@ -1050,6 +1094,16 @@ const shortcutSections: ShortcutSection[] = [
         keys: ['shift+o'],
         codes: ['ShiftLeft', 'KeyO'],
         description: 'Expand all messages',
+      },
+      {
+        keys: ['space'],
+        codes: ['Space'],
+        description: 'Scroll down a page',
+      },
+      {
+        keys: ['shift+space'],
+        codes: ['ShiftLeft', 'Space'],
+        description: 'Scroll up a page',
       },
       {
         keys: [`${cmdOrCtrl}+arrowup`],

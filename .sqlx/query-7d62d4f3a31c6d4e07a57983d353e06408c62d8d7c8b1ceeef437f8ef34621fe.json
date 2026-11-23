@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT clock_timestamp() AS \"granted_at!\"\n            FROM pg_advisory_xact_lock(hashtextextended('agent-session-search:' || $1::text, 0))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "granted_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7d62d4f3a31c6d4e07a57983d353e06408c62d8d7c8b1ceeef437f8ef34621fe"
+}

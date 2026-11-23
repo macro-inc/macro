@@ -90,10 +90,7 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'channel_thread' }, () => EntityType.CHANNEL)
     .with({ type: 'call' }, () => EntityType.CALL_RECORD)
     .with({ type: 'crm_company' }, () => EntityType.COMPANY)
-    .with({ type: 'crm_contact' }, () => {
-      // Contacts are entity-reference values (CONTACT), never property owners.
-      throw new Error('crm contacts do not support properties');
-    })
+    .with({ type: 'crm_contact' }, () => EntityType.CONTACT)
     .with({ type: 'agent_session' }, () => {
       throw new Error(
         'agent sessions are not property-service mutation targets'
@@ -114,6 +111,12 @@ export function macroEntityToPropertyEntityType(
     })
     .with({ type: 'form' }, () => {
       throw new Error('forms do not support properties');
+    })
+    .with({ type: 'harness' }, () => {
+      throw new Error('runtimes do not support properties');
+    })
+    .with({ type: 'team' }, () => {
+      throw new Error('teams do not support properties');
     })
     .exhaustive();
 }

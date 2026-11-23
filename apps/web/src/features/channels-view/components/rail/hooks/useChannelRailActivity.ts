@@ -15,6 +15,8 @@ const CHANNEL_GROUPS: ChannelsGroup[] = [
   'direct_messages',
 ];
 
+type NotificationWitness = NonNullable<ChannelEntity['unreadMentions']>[number];
+
 type ChannelActivityTarget = {
   channelId: string;
   source:
@@ -28,7 +30,9 @@ type ChannelActivityTarget = {
 
 export function useChannelRailActivity(
   channels: Accessor<readonly ChannelEntity[]>,
-  calls: ReturnType<typeof useChannelCalls>
+  calls: ReturnType<typeof useChannelCalls>,
+  /** Track favorites outside the lists without adding them to section counts. */
+  additionalChannels: Accessor<readonly ChannelEntity[]> = () => []
 ) {
   const notificationSource = useGlobalNotificationSource();
   const [activityTargets, setActivityTargets] = createStore<
@@ -60,18 +64,27 @@ export function useChannelRailActivity(
       created_at: DateValue;
     }[] = [];
     const legacyChannelIds = new Set<string>();
-    for (const channel of channels()) {
+    const mentionCounts = new Map<string, number>();
+    const notificationChannels = new Map(
+      [...additionalChannels(), ...channels()].map((channel) => [
+        channel.id,
+        channel,
+      ])
+    );
+    // Mark-seen intentionally leaves the normalized state unchanged until
+    // commit. Honor the same local intent as the app-shell Chat badge.
+    const isUnseen = (notification: NotificationWitness) =>
+      (notificationSource.withLocalState?.(notification) ??
+        notification.state) === 'unseen';
+    for (const channel of notificationChannels.values()) {
+      const mentions = (channel.unreadMentions ?? []).filter(isUnseen).length;
+      if (mentions > 0) mentionCounts.set(channel.id, mentions);
       if (channel.unreadNotifications === undefined) {
         legacyChannelIds.add(channel.id);
         continue;
       }
       for (const notification of channel.unreadNotifications) {
-        // Mark-seen intentionally leaves the normalized state unchanged until
-        // commit. Honor the same local intent as the app-shell Chat badge.
-        const state =
-          notificationSource.withLocalState?.(notification) ??
-          notification.state;
-        if (state !== 'unseen') continue;
+        if (!isUnseen(notification)) continue;
         notifications.push({
           id: notification.id,
           entity_id: channel.id,
@@ -121,6 +134,7 @@ export function useChannelRailActivity(
 
     return {
       latestTargets,
+      mentionCounts,
       unreadChannelIds,
       unreadNotificationIds,
       unreadCounts,
@@ -251,6 +265,10 @@ export function useChannelRailActivity(
   return {
     callStatuses: calls.callStatuses,
     incomingCallIds: calls.incomingCallIds,
+    /** Unread mentions of the viewer in a channel, threads included, capped by
+     * the list's mention edge. Zero for rows without that projection. */
+    mentionCount: (channelId: string) =>
+      notificationActivity().mentionCounts.get(channelId) ?? 0,
     targetChannelId,
     targetLabel,
     unreadChannelIds: () => notificationActivity().unreadChannelIds,

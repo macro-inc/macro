@@ -2,12 +2,15 @@ import { getFaviconUrl } from '@app/util/favicon';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
 import { committedThemeAccent } from '../theme/signals/themeSignals';
+import { channelPlace } from './channel-place';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import {
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,
+  pingedBy,
+  reactionText,
   shouldShowNotificationTarget,
 } from './notification-metadata';
 import { openNotification } from './notification-navigation';
@@ -19,7 +22,10 @@ import {
   type UserAvatarResolver,
   type UserNameResolver,
 } from './notification-resolvers';
-import { getNotificationSenderAvatarUrl } from './notification-sender';
+import {
+  getNotificationSenderAvatarUrl,
+  UNKNOWN_SENDER_NAME,
+} from './notification-sender';
 import type { UnifiedNotification } from './types';
 
 /// the interface for a singular notification on this device
@@ -46,7 +52,23 @@ export interface PlatformNotificationData {
   conversation?: { id: string; name?: string };
 }
 
-const USER_NAME_FALLBACK = 'Someone';
+/** As in the push: long enough to recognize, short enough that the
+ * channel line under it stays on screen. */
+const REACTION_EXCERPT_MAX_CHARS = 80;
+
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/** The message cut to whole characters, so a flag or skin tone never splits. */
+function reactionExcerpt(messageContent: string) {
+  const text = markdownToPlainText(messageContent)
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ');
+  const graphemes = Array.from(GRAPHEMES.segment(text), (part) => part.segment);
+  return graphemes.length > REACTION_EXCERPT_MAX_CHARS
+    ? `${graphemes.slice(0, REACTION_EXCERPT_MAX_CHARS).join('')}…`
+    : text;
+}
 
 /**
  * Who the notification reads as being from. Agent notifications and bot
@@ -66,6 +88,15 @@ async function resolveActorName(
   }
   if (meta.tag === 'routine_run_finished') {
     return meta.content.routineName;
+  }
+  if (meta.tag === 'computer_setup') {
+    return meta.content.agent?.name ?? meta.content.computerName;
+  }
+  if (meta.tag === 'agent_sign_in_expiry') {
+    return meta.content.computerName;
+  }
+  if (meta.tag === 'ping' && meta.content.agent) {
+    return meta.content.agent.name;
   }
   if ('senderDisplayName' in meta.content && meta.content.senderDisplayName) {
     return meta.content.senderDisplayName;
@@ -117,7 +148,48 @@ export async function toPlatformNotificationData(
     resolveActorName(notification, resolveUserName),
     resolveSenderAvatarUrl(notification, resolveUserAvatar),
   ]);
-  const actor = actorName ?? USER_NAME_FALLBACK;
+  const actor = actorName ?? UNKNOWN_SENDER_NAME;
+  const sender = actorName
+    ? {
+        id: notification.sender_id ?? actorName,
+        name: actorName,
+        avatarUrl,
+      }
+    : undefined;
+
+  // A ping reads like its push: who pinged and what about, then their words.
+  if (metadata.tag === 'ping') {
+    const about = metadata.content.entityName ?? undefined;
+    const deed = pingedBy(actorName);
+    return {
+      title: about ? `${deed} — ${about}` : deed,
+      options: {
+        body: markdownToPlainText(metadata.content.body),
+        icon,
+      },
+      // macOS titles an alert with its sender and puts the conversation
+      // beneath, so the sender says what they did.
+      sender: sender && { ...sender, name: deed },
+      conversation: { id: notification.entity_id, name: about },
+    };
+  }
+
+  // A reaction reads like Slack's: who reacted, then "Reacted 👍 to: …" and
+  // where. The channel stays out of the conversation, which macOS would put
+  // above the reaction.
+  if (metadata.tag === 'channel_message_reaction') {
+    const reacted = reactionText({
+      emoji: metadata.content.emoji,
+      messageContent: reactionExcerpt(metadata.content.messageContent),
+    });
+    const place = channelPlace(metadata.content);
+    return {
+      title: actor,
+      options: { body: place ? `${reacted}\n${place}` : reacted, icon },
+      sender,
+      conversation: { id: notification.entity_id, name: undefined },
+    };
+  }
 
   // An unresolved target is left out of the title, not shown as a placeholder.
   const targetName =
@@ -138,13 +210,7 @@ export async function toPlatformNotificationData(
       body: content ? markdownToPlainText(content) : action,
       icon,
     },
-    sender: actorName
-      ? {
-          id: notification.sender_id ?? actorName,
-          name: actorName,
-          avatarUrl,
-        }
-      : undefined,
+    sender,
     conversation: {
       id: notification.entity_id,
       name: showTarget ? targetName : undefined,

@@ -23,7 +23,7 @@ pub use folders::{
     FoldersQuery, FoldersQueryError, FoldersQueryReader, NoOpFoldersQueryReader, resolve_folders,
 };
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
-pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
+pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupChannelReads, SoupInput};
 pub use loaders::{
     AgentSessionEntityLoader, EntityAccessEmailThreadReader, PrimarySoupItemLoader,
     SoupEmailThreadReader, SoupItemDataLoader, SoupItemLoader, SoupItemLoaderError,
@@ -42,7 +42,8 @@ pub use objects::{
     SoupPatch, SoupUpdated,
 };
 pub use resolvers::{
-    SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,
-    resolve_soup_email_thread, resolve_soup_email_threads, resolve_soup_entity,
-    resolve_soup_updates,
+    PRIMARY_CHANNEL_READS_REFUSED, PRIMARY_CHANNEL_SOUP_MISSING, PrimaryChannelSoup,
+    SoupEmailThreadMutationOutput, load_soup_agent_session, resolve_grouped_soup, resolve_soup,
+    resolve_soup_agent_session, resolve_soup_email_thread, resolve_soup_email_threads,
+    resolve_soup_entity, resolve_soup_updates,
 };

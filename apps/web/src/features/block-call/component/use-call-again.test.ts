@@ -5,18 +5,12 @@ import { useCallAgain } from './use-call-again';
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   joinChannelCall: vi.fn(),
-  state: { enabled: true, shareToken: undefined as string | undefined },
+  state: { shareToken: undefined as string | undefined },
 }));
 
 vi.mock('@solidjs/router', () => ({ useNavigate: () => mocks.navigate }));
 vi.mock('@channel/Call/join-channel-call', () => ({
   joinChannelCall: mocks.joinChannelCall,
-}));
-vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
-  useQuickCallsFlag: () => () => ({
-    loading: false,
-    enabled: mocks.state.enabled,
-  }),
 }));
 vi.mock('@queries/call/meetings', () => ({
   useCallLinkQuery: (callId: () => string | undefined) => ({
@@ -34,12 +28,11 @@ vi.mock('@queries/call/meetings', () => ({
 beforeEach(() => {
   mocks.navigate.mockReset();
   mocks.joinChannelCall.mockReset();
-  mocks.state.enabled = true;
   mocks.state.shareToken = undefined;
 });
 
 describe('useCallAgain', () => {
-  it('rejoins a channel call without opening a meeting link', () => {
+  it('explicitly starts a channel call without opening a meeting link', () => {
     createRoot((dispose) => {
       const { canCallAgain, callAgain } = useCallAgain(
         () => 'call-id',
@@ -47,13 +40,29 @@ describe('useCallAgain', () => {
       );
       expect(canCallAgain()).toBe(true);
       callAgain();
-      expect(mocks.joinChannelCall).toHaveBeenCalledWith('channel-id');
+      expect(mocks.joinChannelCall).toHaveBeenCalledWith('channel-id', {
+        kind: 'start',
+      });
       expect(mocks.navigate).not.toHaveBeenCalled();
       dispose();
     });
   });
 
-  it('opens a standalone meeting invitation when quick calls are enabled', () => {
+  it('binds live Join to the record even if another call starts in its channel', () => {
+    createRoot((dispose) => {
+      const { joinCall } = useCallAgain(
+        () => 'call-id',
+        () => 'channel-id'
+      );
+      joinCall();
+      expect(mocks.joinChannelCall).toHaveBeenCalledWith('channel-id', {
+        kind: 'join',
+        callId: 'call-id',
+      });
+      dispose();
+    });
+  });
+  it('opens a standalone meeting invitation', () => {
     mocks.state.shareToken = 'invite-token';
     createRoot((dispose) => {
       const { canCallAgain, callAgain } = useCallAgain(
@@ -64,21 +73,6 @@ describe('useCallAgain', () => {
       callAgain();
       expect(mocks.navigate).toHaveBeenCalledWith('/meet/join/invite-token');
       expect(mocks.joinChannelCall).not.toHaveBeenCalled();
-      dispose();
-    });
-  });
-
-  it('hides standalone rejoin when quick calls are disabled', () => {
-    mocks.state.shareToken = 'invite-token';
-    mocks.state.enabled = false;
-    createRoot((dispose) => {
-      const { canCallAgain, callAgain } = useCallAgain(
-        () => 'call-id',
-        () => undefined
-      );
-      expect(canCallAgain()).toBe(false);
-      callAgain();
-      expect(mocks.navigate).not.toHaveBeenCalled();
       dispose();
     });
   });

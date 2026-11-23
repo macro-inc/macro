@@ -9,58 +9,44 @@
 //! (which drifted from the workspace toolchain) and gives the `cargo install`
 //! and xtask builds warm caches instead of compiling cold on every run.
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow,
-};
+use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall, ZizmorRule};
+use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::ActionsCheckout;
 use crate::workflows::{runners, steps, vars};
+
+/// Files whose change makes `PR CI` call this workflow.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("Cargo.toml"),
+    xtask_paths::repo_glob!("crates/**/Cargo.toml"),
+    xtask_paths::repo_glob!("services/**/Cargo.toml"),
+    xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"),
+    xtask_paths::repo_glob!("Cargo.lock"),
+    xtask_paths::repo_glob!(".config/hakari.toml"),
+    xtask_paths::repo_glob!("crates/workspace-hack/**"),
+    // Source of `cargo x deps` only — not every xtask crate. A nextest-filter
+    // or workflow-generator edit cannot drift the hack crate or closure map.
+    xtask_paths::repo_glob!("tooling/xtask/src/**"),
+    xtask_paths::repo_glob!("tooling/xtask/crates/xtask_deps/**"),
+    xtask_paths::repo_glob!("tooling/xtask/crates/xtask_graph/**"),
+    xtask_paths::repo_glob!(".github/workspace-dep-closures.json"),
+];
 
 /// Build the workflow.
 pub fn cargo_workspace_dependency_check() -> Workflow {
     Workflow::new("cargo workspace dependency check")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview)
-                .add_path(xtask_paths::repo_glob!("Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("crates/**/Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("services/**/Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("Cargo.lock"))
-                .add_path(xtask_paths::repo_glob!(".config/hakari.toml"))
-                .add_path(xtask_paths::repo_glob!("crates/workspace-hack/**"))
-                // Source of `cargo x deps` only — not every xtask crate. A
-                // nextest-filter or workflow-generator edit cannot drift the
-                // hack crate or closure map.
-                .add_path(xtask_paths::repo_glob!("tooling/xtask/src/**"))
-                .add_path(xtask_paths::repo_glob!(
-                    "tooling/xtask/crates/xtask_deps/**"
-                ))
-                .add_path(xtask_paths::repo_glob!(
-                    "tooling/xtask/crates/xtask_graph/**"
-                ))
-                .add_path(xtask_paths::repo_glob!(
-                    ".github/workspace-dep-closures.json"
-                )),
-        ))
-        .concurrency(
-            Concurrency::new(Expression::new(
-                "cargo-workspace-dependency-check-${{ github.ref }}",
-            ))
-            .cancel_in_progress(true),
-        )
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("dependency-check", dependency_check())
         .add_job("hakari-and-dep-closures", hakari_and_dep_closures())
 }
 
 fn rust_ci_job() -> Job {
     Job::default()
+        .timeout_minutes(15u32)
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .add_step(checkout())
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -71,6 +57,7 @@ fn dependency_check() -> Job {
         .add_step(install_checker())
         .add_step(run_checker())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// The workspace-hack crate pins every third-party dep to its union feature
@@ -85,14 +72,14 @@ fn hakari_and_dep_closures() -> Job {
     rust_ci_job()
         .add_step(deps_check())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
+    ActionsCheckout::new("Checkout Repo").step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "cargo metadata fetches git dependencies",
+    )
 }
 
 /// `cargo install` skips the build when the same version is already present

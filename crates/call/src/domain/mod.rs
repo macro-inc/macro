@@ -2,6 +2,8 @@
 pub mod activity;
 /// Kafka event contracts for call lifecycle events.
 pub mod events;
+/// Public call notifications for access-checked subscribers.
+pub mod notification_events;
 
 /// Domain models for calls.
 pub mod models;

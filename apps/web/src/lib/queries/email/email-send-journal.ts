@@ -12,6 +12,12 @@ import {
   isEmailSendIntent,
 } from './send-intent';
 
+const cancellationReceiptLimit = 64;
+const cancellationReceiptKey = (session: Session) => [
+  'cancelled-send-receipts',
+  session.accountId,
+];
+
 export function restoreEmailSendLocks(tx: IDBTransaction, accountId: string) {
   const request = tx.objectStore('sends').getAll();
   request.onsuccess = () => {
@@ -232,8 +238,26 @@ export function createEmailSendJournal(
                 session,
                 uuid,
                 (value) => {
-                  if (value && !(value instanceof Error)) landed = value;
-                  finish(value);
+                  // A replay can return a committed restoration whose
+                  // receipt another tab already took.
+                  if (!value || value instanceof Error || value === landed) {
+                    finish(value);
+                    return;
+                  }
+                  landed = value;
+                  // The restored draft and receipt become visible together,
+                  // even when recovery ran in a different tab.
+                  const meta = tx.objectStore('meta');
+                  const key = cancellationReceiptKey(session);
+                  const request = meta.get(key);
+                  request.onsuccess = () => {
+                    const receipts: string[] = request.result ?? [];
+                    meta.put(
+                      [...receipts, uuid].slice(-cancellationReceiptLimit),
+                      key
+                    );
+                    finish(value);
+                  };
                 },
                 landed
               ),
@@ -243,6 +267,39 @@ export function createEmailSendJournal(
       );
       if (result instanceof Error) throw result;
       return result;
+    },
+    async takeCancellationReceipt(
+      session: Session,
+      uuid: string
+    ): Promise<boolean> {
+      // Keep evidence read by a transaction whose completion was ambiguous.
+      let found = false;
+      return await transaction(
+        'readwrite',
+        (tx, finish) =>
+          withSession(
+            tx,
+            session,
+            () => {
+              const meta = tx.objectStore('meta');
+              const key = cancellationReceiptKey(session);
+              const request = meta.get(key);
+              request.onsuccess = () => {
+                const receipts: string[] = request.result ?? [];
+                if (receipts.includes(uuid)) {
+                  found = true;
+                  const remaining = receipts.filter((id) => id !== uuid);
+                  if (remaining.length) meta.put(remaining, key);
+                  else meta.delete(key);
+                }
+                finish(found);
+              };
+            },
+            finish,
+            false
+          ),
+        false
+      );
     },
     /** Claim and persist the submission boundary before any HTTP can start. */
     async claimSend(
@@ -434,21 +491,58 @@ export function createEmailSendJournal(
                 finish();
                 return;
               }
-              if (row)
-                for (const id of [
-                  row.resolvedDraftId,
-                  String(row.metadata.payload.input.message.draftId),
-                  row.metadata.payload.workingCopy?.key,
-                ]) {
-                  if (!id) continue;
-                  const lock = tx.objectStore('meta').get(['send-lock', id]);
-                  lock.onsuccess = () => {
-                    if (lock.result === uuid)
-                      tx.objectStore('meta').delete(['send-lock', id]);
-                  };
-                }
+              const copy = row.metadata.payload.workingCopy;
+              for (const id of [
+                row.resolvedDraftId,
+                String(row.metadata.payload.input.message.draftId),
+                copy?.key,
+              ]) {
+                if (!id) continue;
+                const lock = tx.objectStore('meta').get(['send-lock', id]);
+                lock.onsuccess = () => {
+                  if (lock.result === uuid)
+                    tx.objectStore('meta').delete(['send-lock', id]);
+                };
+                // Outlives the intent: a composer in another tab may learn of
+                // the delivery only after this removal.
+                if (copy)
+                  tx.objectStore('meta').put(
+                    { generation: copy.generation, revision: copy.revision },
+                    ['sent-copy', id]
+                  );
+              }
               tx.objectStore('sends').delete(uuid);
               finish();
+            };
+          },
+          finish,
+          undefined
+        )
+      );
+    },
+    /** The working-copy version a removed sent intent carried for a draft. */
+    async sentCopy(
+      session: Session,
+      draftId: string
+    ): Promise<Pick<LocalDraft, 'generation' | 'revision'> | undefined> {
+      return await transaction('readonly', (tx, finish) =>
+        withSession(
+          tx,
+          session,
+          () => {
+            const request = tx.objectStore('meta').get(['sent-copy', draftId]);
+            request.onsuccess = () => {
+              const copy: unknown = request.result;
+              finish(
+                typeof copy === 'object' &&
+                  copy !== null &&
+                  'generation' in copy &&
+                  'revision' in copy &&
+                  typeof copy.generation === 'string' &&
+                  typeof copy.revision === 'number'
+                  ? { generation: copy.generation, revision: copy.revision }
+                  : undefined
+              );
             };
           },
           finish,

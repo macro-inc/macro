@@ -25,6 +25,11 @@ export function createUnifiedInputManager(options?: {
   /** Binding restored from a history snapshot. */
   initialReplyTarget?: UnifiedReplyTargetSnapshot;
   /**
+   * The thread the input returns to when no reply is bound. Without one, the
+   * input is free to post to the channel itself.
+   */
+  defaultThreadId?: string;
+  /**
    * Called when a thread stops being the reply target — the reply closed, or
    * the binding moved to another thread — so the caller can clear anything
    * still pointing at it (e.g. a highlight set by the reply flag's navigate
@@ -32,9 +37,16 @@ export function createUnifiedInputManager(options?: {
    */
   onReplyThreadReleased?: (threadId: string) => void;
 }) {
-  const [replyTarget, setReplyTarget] = createSignal<
+  const [boundReplyTarget, setReplyTarget] = createSignal<
     UnifiedReplyTarget | undefined
   >(options?.initialReplyTarget);
+  const replyTarget = (): UnifiedReplyTarget | undefined => {
+    const bound = boundReplyTarget();
+    if (bound) return bound;
+    return options?.defaultThreadId
+      ? { threadId: options.defaultThreadId }
+      : undefined;
+  };
 
   const bindReply = (message: MessageData) => {
     const previous = replyTarget();

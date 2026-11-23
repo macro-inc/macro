@@ -86,9 +86,16 @@ pub struct ConversationTurnStatus {
 }
 
 /// Persistence mechanics only; authorization and execution decisions stay in the harness.
-/// A held reply reconciliation claim. Dropping it releases the claim, including
-/// on cancellation; no external action is retried by acquiring this lease.
-pub trait ConversationLease: Send {}
+/// A held reply reconciliation claim. Dropping it releases the claim soon
+/// after, including on cancellation; no external action is retried by acquiring
+/// this lease.
+#[async_trait::async_trait]
+pub trait ConversationLease: Send {
+    /// Release now, so the session is free for the next claim once this
+    /// returns. Dropping leaves the release to a background task, so a claim
+    /// made straight after a drop can still find the lease held.
+    async fn release(self: Box<Self>);
+}
 
 /// The persona configuration adopted when a conversation's session first opens.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

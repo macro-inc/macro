@@ -63,11 +63,41 @@ An API key always acts as the user who minted it. `requestedAs` is bot-only.
 #### Agent accounts
 
 An agent has its own account and seat. Invite one with
-`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or sign
-up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })` from your own
+key (an agent's program is refused), or sign up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
 web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
+
+Switch between earlier uploads with `macro.me.update({ profilePicture: macro.images.byId(savedId) })`,
+and read pictures with `macro.me.profilePicture()`, `user.profilePicture()` or
+`macro.users.profilePictures(users)`. Pictures set through Macro are a
+`StaticImage`; legacy URL pictures are an `ExternalProfilePicture` (`{ url }`).
+Setting a picture is throttled to once a second per user and uploads to 20 an
+hour; both fail with 429 beyond that.
+
+#### Account managers
+
+An agent account can manage a person's account: either side asks in their DM, and
+the other side approves. An agent account can't be managed.
+
+```ts
+// As the agent, ask to manage a person's account:
+const grant = await macro.accountManagers.askToManage(person);
+// Once the person approves, the agent gets the token, once:
+const token = await grant.claimToken();
+```
+
+An agent's program (ExecuteCode, a routine) can't ask, approve or claim: those return 403,
+so an agent account uses its own API key. A person can ask instead, with
+`macro.accountManagers.askToBeManagedBy(agent)`. Only the
+manager can claim, so the agent approves and claims with its own client, using the grant id
+from the card in the DM: `macro.accountManagers.byId(id)`.
+
+The token is an API key for the managed account, with full access except its
+managers, API keys and other credentials, sign-in, and deleting the account. It
+lasts until either side calls `grant.revoke()`, or the managed account revokes it
+in Settings → Account Managers.
 
 #### Bot token
 
@@ -155,6 +185,41 @@ await doc.setTeamShare(true);
 await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
+### Entity appearance
+
+Markdown documents, snippets, initiatives (task projects), forms, databases,
+and routines expose `appearance()` and `setAppearance()`. Appearance is shared
+with other viewers and requires edit access to change.
+
+```ts
+await doc.setAppearance({
+  icon: { kind: 'emoji', value: '🌱' },
+  color: 'green',
+});
+const appearance = await doc.appearance();
+await doc.setAppearance({}); // restore the default icon and color
+```
+
+Writes replace both overrides without changing content timestamps. Omit an
+override to restore its default. Colors use the same twelve-color palette as
+tags and only tint Macro icons; native emoji keep their own colors.
+
+### Sharing permissions
+Documents, projects, calls and chats change their link and channel sharing with
+`updateSharePermissions`; omitted fields are left as they are. Any item a
+channel message can carry (a document or task, project, database, form, call,
+email thread, agent session, external chat or calendar event) is shared with a
+channel's current members, as posting it there does, through `shareWithChannel`:
+
+```ts
+await project.updateSharePermissions({
+  linkShareAccessLevel: 'view',
+  channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
+});
+await doc.shareWithChannel(channel);
+await event.shareWithChannel(channel);
+```
+
 ### Listing and searching
 
 List/search methods that can page return a genreator that auto-paginates:
@@ -188,6 +253,53 @@ await doc.setProperty(macro.properties.byId('prop_status'), {
 const props = await doc.properties();
 ```
 
+### Task creation
+
+Task creation leaves an omitted `shareWithTeam` to the backend: tasks default to
+team sharing, or private when the calling session cannot share. Explicit `true`
+still requests sharing and is subject to the backend's permission checks.
+
+### Task templates
+
+`macro.taskTemplates` manages personal and team templates. Selected fields can
+stay blank or carry a default. An optional `title` is the default task title,
+separate from the template's `name`; description Markdown fills a blank task body.
+Read the default with `template.title()`. Omitted update fields stay unchanged;
+pass `title: ''` to clear the default.
+
+An optional `shareWithTeam` controls task sharing independently of the template's
+own `team`; `false` is an explicit private-task default. Omission leaves the
+composer switch unchanged. Read it with `template.shareWithTeam()` and update it
+with `template.update({ shareWithTeam: false })`. Property-only updates retain it.
+Without a current team the composer hides the switch and ignores the saved value.
+
+Pass a client-generated UUID as `idempotencyKey` and retain it with the same input
+when retrying creation. The server returns the same template rather than creating
+a duplicate; changed content or ownership conflicts.
+
+```ts
+const effort = macro.properties.definition('00000001-0000-0000-0000-000000000008');
+// Persist this key and input before sending; retries reuse both unchanged.
+const creation: Parameters<typeof macro.taskTemplates.create>[0] = {
+  idempotencyKey: crypto.randomUUID(),
+  name: 'Bug report',
+  title: 'Investigate issue',
+  shareWithTeam: false, // create private tasks even from a team-owned template
+  team: await macro.teams.current(), // omit for a personal template
+  properties: [{ property: effort, defaultValue: { type: 'number', value: 0 } }],
+  descriptionMarkdown: '## Details\n\n- [ ] Describe the task',
+};
+const template = await macro.taskTemplates.create(creation);
+// After an uncertain response: await macro.taskTemplates.create(creation).
+const templates = await macro.taskTemplates.list({ team: await macro.teams.current() });
+await template.update({ name: 'Detailed bug report' });
+```
+
+Current team members can use team templates; the creator and current team admins
+can edit or delete them. Ownership cannot change. Updates and `template.delete()`
+use the observed revision; after a conflict, read a fresh handle before retrying.
+Template edits and deletion never change tasks already created from them.
+
 ### Databases
 
 Databases are collections of tables. Tables, columns, and views are parts of
@@ -213,6 +325,23 @@ await database.query(`UPDATE "Guests" SET "Status" = 'Going' WHERE "Name" = 'Sam
 nonempty means a read hit the row cap and aggregates may be partial. SQL schemas
 are dynamic, so result cells use a generated tagged union rather than an inferred
 TypeScript interface for each table. The HTTP route is `POST /databases/query`.
+
+To show a live answer in a document, save the `SELECT` as a question. The
+server refuses anything but one `SELECT` that compiles, and chart columns the
+`SELECT` does not return (`POST /databases/queries`). `toBlock()` is the
+`<m-db-query>` block to put in a document's Markdown; it re-runs for whoever
+views it. `withView()` restyles the answer without saving a new question.
+`macro.databases.saveQuery()` saves a question whose tables span databases.
+
+```ts
+const question = await database.saveQuery({
+  sql: 'SELECT "Party", COUNT(*) AS invites FROM "Guests" GROUP BY "Party"',
+  title: 'Invites per party',
+  display: { mode: 'bar', chart: { x: 'Party', y: ['invites'] } },
+});
+await macro.documents.create({ name: 'Invites', markdown: question.toBlock() });
+const pie = question.withView({ displayMode: 'pie' }).toBlock();
+```
 
 The SDK's schema methods write typed ops through one endpoint,
 `POST /databases/{id}/ops`. The methods below each send a one-op batch: the
@@ -352,7 +481,9 @@ These will render as @mentions in the Macro UI.
 `macro.images.generate()` makes an image with Google's Nano Banana model, charged
 to the acting user's AI allowance, and stores it as a static file. Attach it to a
 message with `images`; its width and height let the message reserve space before
-the image loads. Pass up to three image documents or earlier images as
+the image loads. `image.toMarkdown()` is the `<m-image>` tag that shows it inline
+in Markdown, such as an agent's reply; a static image is not a document, so never
+mention its id as one. Pass up to three image documents or earlier images as
 `referenceImages` to edit or combine them. `examples/generate-image.ts` runs this
 end to end.
 
@@ -384,21 +515,57 @@ await macro.channels
   .send(msg`Deploy ${sha} finished. ${here}`);
 ```
 
+Pass `{ silent: true }` to `send` or `reply` for a routine update that should
+notify nobody, mentioned people included; the message still appears in the
+channel. It works with every credential.
+
 ### Routines
 
-Create scheduled or event-triggered agent tasks through `macro.routines`.
-Routine configuration takes typed agent and event resource handles:
+Create scheduled or event-triggered routines through `macro.routines`. A
+routine runs `steps` in order: an `agent` ("Ask AI") step hands the run to a
+model or agent, and `code` steps run TypeScript against this SDK as the owner,
+type-checked when saved. Routine configuration takes typed agent and event
+resource handles:
 
 ```ts
 const routine = await macro.routines.create({
   name: 'Daily summary',
-  prompt: 'Summarize my open tasks.',
-  userPrompt: 'A daily task summary',
-  trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'America/New_York' },
+  trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'America/New_York' },
+  steps: [
+    {
+      type: 'agent',
+      instructions: 'Summarize my open tasks.',
+      model: 'anthropic/claude-sonnet-5-5',
+    },
+  ],
 });
 await routine.setEnabled(false);
 const transcript = await routine.execute(); // Chat or AgentSession, if available
 const executions = await routine.history(); // Each retains its parent routine
+```
+
+A cron `schedule` has 6 fields (second minute hour day-of-month month
+day-of-week) or 7 with a year. The older single agent task (`prompt` and
+`userPrompt`, with `model`, `agent` or both, instead of `steps`) still saves
+and runs as one Ask AI step. Code steps' writes are attributed to Macro's
+agent acting for the owner; set `dangerouslyOperateAsUser: true` only when the
+user explicitly asks for the routine to act, send or post as them:
+
+```ts
+await macro.routines.create({
+  name: 'Say hello',
+  trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+  steps: [
+    {
+      type: 'code',
+      title: 'Post hello',
+      source: `export async function main({ macro }: StepContext) {
+  await macro.channels.byId(channelId).send('Hello');
+}`,
+    },
+  ],
+  dangerouslyOperateAsUser: true,
+});
 ```
 
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
@@ -439,8 +606,13 @@ await routine.update({
 
 ### Agents, conversations and hosts
 
-`macro.agents.list/create/byId` manage agent configuration. `AgentOptions` takes
-channel, team and host handles. Updates replace the configuration.
+`macro.agents.list/create/byId` manage agent configuration; listed agents read
+their runtime, coding/chat choice, apps, channel scope and permission settings.
+`agent.update(patch)` changes only the settings it names (`PATCH /agents/{id}`);
+`agent.replace(options)` replaces everything, including the owning team, and
+`AgentOptions` takes channel, team and host handles. `macro.agents.coding()` lists the coding personas the caller can
+start right now, built-in ones such as Cursor included; pass an entry's `agent`
+to `macro.agentSessions.createManaged`.
 `channel.agentConversations()` returns conversations with session and turn handles;
 `conversation.startFresh(session)` and `turn.retry(actionId)` expose explicit
 conversation controls. `session.toolApprovalById(id).answer(answer)` answers a
@@ -485,6 +657,125 @@ with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
 caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
 returns thread handles alongside reminder snapshots.
 
+### Saved views
+
+```ts
+const view = await macro.savedViews.create({
+  name: 'Invoices',
+  config: {
+    kind: 'email',
+    version: 1,
+    filters: {
+      inboxIds: [], participants: [{ type: 'domain', domain: 'example.com' }],
+      participantFields: ['from'], subject: ['invoice'], starred: false,
+      attachments: [], calendarInvite: false, tags: [],
+    },
+  },
+});
+await view.edit({ name: 'Bills', team: macro.teams.byId(teamId) });
+for await (const each of macro.savedViews.list({ kind: 'email' })) {
+  console.log(await each.name());
+}
+await macro.savedViews.reorder('email', [view]);
+await view.remove();
+```
+
+A saved view is a named filter definition the app shows in a surface's sidebar
+(`kind` picks the surface, such as Email). `edit` and `remove` are checked
+against the revision the handle last saw: a write made elsewhere since then
+fails with a 409 conflict instead of being overwritten, and `view.refresh()`
+picks up the current revision. Order is personal; `reorder` sets yours for one
+kind.
+
+### CRM email contribution
+
+`macro.crm.emailPrivacy` manages only the authenticated member's contribution,
+including when their CRM viewing permission is off. `get()` is read-only and
+returns the current mode, selectors, mailbox handle and observed-state token.
+`settings()` reads domain exclusions; `excludedThreads()` lazily lists private
+thread exceptions. Existing team-wide domain methods remain on `macro.crm`;
+`emailPrivacy.blockDomain` and `unblockDomain` edit personal exclusions.
+
+Rules use `{ schemaVersion: 1, include: [...] }`. Selectors are `thread` with an
+`EmailThread`, `contact` with a `Contact`, `company` with a `Company`, or
+`address` / `domain` with the corresponding string. A participant match includes
+the whole thread, across eligible past and future mail. Contact/company rules
+follow live records. Private-thread, domain and personal-email exclusions always
+win. Narrowing or withdrawal leaves CRM records in place; a teammate's eligible
+copy remains independent.
+
+```ts
+const privacy = macro.crm.emailPrivacy;
+const state = await privacy.get();
+if (!state.authoringAvailable || !state.token) {
+  throw new Error('Selective contribution is unavailable.');
+}
+const checked = await privacy.validateRules({
+  schemaVersion: 1,
+  include: [{ kind: 'domain', domain: 'example.com' }],
+});
+const idempotencyKey = crypto.randomUUID();
+const result = await privacy.replaceRules(checked.rules, {
+  ifPolicy: state.token,
+  idempotencyKey,
+});
+```
+
+`replaceRules` directly activates the replacement; member-authorized agents need
+no separate human confirmation. `enableAll` and `withdraw` take the same options.
+Keep the exact token, key and command for retries. A 409 requires fresh inspection
+and a new decision; the SDK never refreshes or retries automatically. A result
+with `replayed: true` describes the original commit, not current sharing. Server
+rollout and credential restrictions remain authoritative.
+
+Optional counts use `preview()` to inspect the current slot, then
+`previewRules(rules, { ifPolicy: state.token, ifPreview: previousPreview })`.
+A preview handle's `get()` refreshes only that preview and `cancel()` names that
+exact identity. Superseded handles cannot read or cancel newer work. Only
+`status: 'complete'` means exact counts; running/partial counts are lower bounds,
+and stale/cancelled results are not current estimates. Counts are mailbox-local,
+limited to 10,000 scanned raw threads and five minutes. Previewing does not grant
+contribution or schedule mail backfill.
+
+`history()` iterates owner-only audit events in pages of fifty. Revision handles
+on current state, mutation outcomes and history read immutable definitions with
+`get()`; they never fetch target content or reapply rules. Verified agent/session
+provenance is read from history, never supplied by the caller.
+
+Legacy members without a policy token retain `setConsent(false)` for withdrawal.
+`setConsent(true, inbox)` uses the existing all-mail opt-in, bound to the chosen
+primary inbox; members with a policy token use `enableAll` / `withdraw` instead.
+`setThreadExcluded(thread, excluded)` reuses the existing thread-exclusion API and
+its rollout gate. The SDK changes no flags and adds no settings UI.
+
+### CRM member access
+
+`macro.crm.access()` reads the caller's current team and effective CRM access,
+even when access is denied. `team.members()` includes `crmAccess` for each member.
+Admins and owners use `team.setMemberCrmAccess(user, enabled)` to deny or restore
+an ordinary member; admins and owners cannot be denied. This never changes the
+member's mailbox contribution consent. The mutation returns 503 until the
+server rollout enables access changes; existing denials remain enforced while
+changes are disabled. Record, search, email and tool requests
+recheck access on the server. A separately shared pipeline still exposes its own
+rows and cell values, while its CRM record references need separate access.
+
+### CRM contact fields
+
+A contact holds several addresses, one of them primary: `contact.emails()` lists
+them, primary first. `addEmail(address)` adds one, `setEmail(address)` makes one
+the primary (adding it when the contact does not hold it), and
+`removeEmail(address)` removes one; removing the primary promotes the oldest
+address left. Removing an address deletes nothing else: the contact stops
+showing that address's mail. An identical retry of any of them is safe.
+
+`setCompany(company)` links or switches a contact with a personal-provider
+primary to a Company handle in the same team, and `unlinkCompany()` removes the
+link. A contact with an address on one of its company's domains
+(`contact.companyDomain()`) can do neither, and the last of those addresses
+(`contact.companyDomainEmails()`) cannot be removed. All of them preserve
+identity and reject same-team email conflicts without merging records.
+
 ### CRM pipelines and initiatives
 
 `macro.crm.pipelines.create/list/byId` returns pipeline handles. Rename, sharing,
@@ -499,9 +790,25 @@ atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
 
-`macro.initiatives.create/list/byId` groups tasks and members. Relations return user
+A pipeline that tracks companies or contacts has an **Outcome** field (`Open`,
+`Won`, `Lost` or `Declined`, a deal the team turned down, independent of Stage) and a currency field beside each
+monetary field, such as `Revenue currency`; new entries default to `Open` and
+`USD`, and neither field can be emptied. `listWithFields()` and `find()` name
+each monetary field's `currencyField`, `find()` returns one total per
+`currency` for it, never converted or combined, and an update's changes carry
+`beforeCurrency` and `afterCurrency` for a monetary field.
+
+`macro.initiatives.create/byId` groups tasks and members. Relations return user
 and task handles; `initiative.update({ name, members, sharePermission })` and
-`delete()` manage it.
+`delete()` manage it. `initiatives.list({ query, status, priority, assignee,
+dueAfter, dueBefore, sort })` iterates the matching initiatives with their Status,
+Priority, assignees, due date and progress over the tasks the caller can view;
+`initiatives.summaries()` reads every name in one request.
+`initiative.description()` returns its description as Markdown, and
+`comments()`, `comment(body)` and `commentById(id)` read and write its
+discussion; `comment.reply(body)` answers a thread. Its comments are the same
+`DiscussionComment` handles CRM companies and contacts use (formerly
+`CrmComment`).
 
 ### Access requests and message threads
 
@@ -535,6 +842,30 @@ when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
 `call.meeting()` creates or reads its shareable meeting; calls also expose
 `editTranscript(assignments)` and `toggleTeamShare()`.
 
+### Programmatic calls
+
+Use `macro.calls.active()` to find joinable live calls and reconcile missed
+`call.*` events. `macro.calls.summaries(calls)` previews live or archived call
+handles in one request. `channel.activeCall()` checks without starting a call; use
+`channel.startCall()` only when intending to ring channel members. A live
+`call.join()` never creates a replacement call. `meeting.join()` enters with
+an account and `meeting.joinAsGuest(name)` uses the invitation link.
+
+Each entry returns a `CallConnection` with the LiveKit URL, token, identity,
+room name, call handle, and `started` flag. Pass the token directly to a
+LiveKit client; it is omitted from JSON and console inspection. Call
+`connection.leave()` when finished. Joins default to `onOtherCall: 'fail'`;
+pass `{ onOtherCall: 'switch' }` to move intentionally, or `{ replace: true }`
+to take over an existing connection for the same identity. Branch on
+`InOtherCallError`, `AlreadyConnectedError`, and `CallEndedError`.
+
+`call.ringState()` reads this account's ring state, `call.participants()` reads
+the live roster with user handles, `call.decline()` declines its ring,
+`call.discussion()` returns the call chat or its channel thread, and
+`call.recording.bytes()` downloads through the Macro host. Historical
+participants remain available as `call.historicParticipants()`.
+
+
 `calendar.occurrences(viewport)` auto-paginates and seeds event handles.
 `calendar.teamPage(viewport)` includes the roster and an optional next cursor;
 `teamOutOfOffice(viewport)` reports `hasMore` when its bounded results are truncated.
@@ -560,6 +891,53 @@ It returns the new revision, not a diff; read `content()` to see what changed.
 refused edit throws `DocumentEditRefusedError` with the editor's reason;
 `EditOutcomeUnknownError` means read the document before retrying.
 
+### Canvases
+
+`document.canvas()` reads and edits a native canvas's live, shared scene:
+
+```ts
+const canvas = document.canvas();
+const scene = await canvas.scene(); // stable item ids, geometry, text, revision
+await canvas.apply(
+  "editor.move(['box'], 0, 40); editor.text('box', snippets.label)",
+  { expectedRevision: scene.revision, snippets: { label: 'Shipped' } },
+);
+await canvas.edit('Arrange the boxes left to right as a flowchart.');
+const image = await canvas.render({ items: ['box'] }); // a StaticImage
+```
+
+`apply` runs CanvasEditor code without a model and commits the batch whole or
+not at all: `CanvasRevisionConflictError` (the scene changed since
+`expectedRevision`) and `CanvasEditRejectedError` (the code failed) mean nothing
+changed; `EditOutcomeUnknownError` means read the scene before retrying. `edit`
+takes natural-language instructions, like `document.edit`, and is billed as an
+AI edit. `render` keeps the PNG as a static file you own, ready to attach to a
+message. A canvas links to `canvas.webUrl()` (`/app/canvas/<id>`).
+
+### Spreadsheets
+
+`documents.createSpreadsheet({ name })` creates a blank native spreadsheet, and
+`documents.spreadsheet(document)` addresses an existing one. `read()` returns
+every sheet's summary and the cells of the requested ranges with the revision,
+`calculate(formulas, { overrides })` evaluates scratch formulas without saving,
+and `applyEdits(operations, { expectedRevision })` saves one atomic batch:
+
+```ts
+const sheet = macro.documents.spreadsheet(document);
+const { revision, sheets } = await sheet.read({ ranges: ['A1:D20'] });
+await sheet.applyEdits(
+  [{ type: 'set_cells', sheetId: sheets[0].id, cells: [{ address: 'D21', value: '=SUM(D2:D20)' }] }],
+  { expectedRevision: revision },
+);
+```
+
+A workbook that changed since the read throws `RevisionConflictError` and
+saves nothing: read again and rebuild the batch.
+
+`sheet.edit(instructions)` hands the change to an AI writer instead, which reads
+what it needs and saves one batch the same way. It is billed as an AI edit and
+throws `DocumentEditRefusedError` with the writer's reason when it can't do it.
+
 ### Document lifecycle and other resources
 
 `documents.createUpload(options)` reserves a binary document and returns upload
@@ -577,8 +955,10 @@ takes typed source/target references and returns a deletable mention handle.
 `macro.unfurls.get(url)` and `bulk(urls)` read URL preview metadata.
 
 `macro.apiKeys.create(name)` returns `{ key, secret }`. Save the secret immediately;
-the handle only retains metadata. `list()` and `key.delete()` manage keys.
-`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization.
+the handle only retains metadata. It and `bot.createToken()` are refused to an
+agent's program (ExecuteCode, a routine), whose results reach the model. `list()` and `key.delete()` manage keys.
+`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization;
+an agent's program is refused.
 
 `chat.send({ content, model, attachments, toolset })` starts a generation and returns
 its chat, response message and cancellable stream handle. Use
@@ -612,18 +992,24 @@ const stop = await macro.events.listen();
 model as persisted webhooks. If you omit `filters`, it derives one filter from
 the event names already registered with `.on()`. Pass `scope: 'team'` for a
 team workspace (defaults to `'user'`). Delivery is best-effort: there is no
-replay if you disconnect.
+replay if you disconnect. Reconnecting sends `Last-Event-ID`, but the service
+replays only for clients that also ask `resume=true`, which `listen()` does
+not, so a reconnected listener gets the live stream as before.
 
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.
 
-Four families are delivered: `document.*`, `channel.*`, `message.*`, and
-`agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
+Five families are delivered: `document.*`, `channel.*`, `message.*`, `user.*`,
+and `agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
 `attachment_created`, `attachment_removed`) cover channel messages and document
 comments alike: `metadata.parent` names the channel or document, and the
 hydrated `target` carries a `Channel` plus `Message` (and the `Thread` for a
 reply) or a `Document` plus `Comment`. `macro.events.onSelfMention` subscribes to
 `message.mentioned` deliveries that name the caller.
+`user.picture_changed` tells you a user's own profile picture changed (set or
+removed) and is delivered only to the changed user's own workspaces; it hydrates
+to the `User` and, when the picture is a static file, its `StaticImage` (`image`
+is undefined when the picture was removed or set by URL).
 Agent-session events describe a coding agent's life: `opened`, `turn_started`,
 `turn_ended`, `settled` (a turn ended with nothing queued behind it),
 `waiting_for_input` (the agent asked its owner a question), `input_received`,
@@ -744,9 +1130,10 @@ the build.
 
 You can add exceptions for stuff OpenAPI covers that we don't want the sdk to
 support by adding them to the `src/coverage/skipped.ts`. You can implement
-support by adding a wrapper to the appropriate model. There is CI to ensure that
-we don't forget to add coverage or explicitly skip coverage for new generated
-functions (endpoints).
+support by adding a wrapper to the appropriate model. Every wrapped generated
+method also needs a hand-assigned display verb in `src/utils/verbs.ts`; choose a
+read verb for a POST that only reads. Coverage fails for missing or stale verb
+entries as well as uncovered endpoints.
 
 ## Events
 
@@ -911,3 +1298,10 @@ for (const shared of await personal.externalChats.list()) {
 Keep the same idempotency key when retrying the same request. A delivery state of
 `unknown` must be reconciled; never automatically resend it. Uploads, quoted
 messages, mentions, mutations, and delivery references must belong to the same chat.
+
+## Live call media
+
+Use `@macro-inc/sdk/calls/node` or `@macro-inc/sdk/calls/browser` for room
+connections and screen sharing. Install the optional LiveKit runtime only when
+using those helpers. The core import does not load or bundle call media code.
+See [Call rooms](CALLS.md) for installation and examples.

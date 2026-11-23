@@ -2,9 +2,10 @@
  * @vitest-environment jsdom
  */
 
+import { runSplitBack } from '@components/app/split-layout/back-interceptor';
 import { Model } from '@core/component/AI/constant/model';
 import { useAgentModelsQueries } from '@queries/agents/models';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
 import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
 import type { Harness } from '@service-storage/client';
 import {
@@ -23,7 +24,11 @@ import { Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
-import { agentSettingsRequest, requestAgentDetail } from './agentSettingsState';
+import {
+  agentSettingsRequest,
+  requestAgentDetail,
+  requestCreateAgent,
+} from './agentSettingsState';
 import {
   chooseModelOption,
   chooseSelectOption,
@@ -31,6 +36,10 @@ import {
   selectOptions,
 } from './tests/select-helpers';
 
+const device = vi.hoisted(() => ({ touch: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 const agentsPageProps = {
   onCursor: vi.fn(),
   onSetUpRuntime: vi.fn(),
@@ -38,6 +47,17 @@ const agentsPageProps = {
 };
 
 // The real Lexical surface has its own Markdown round-trip suite.
+vi.mock('./computers/views/agent-computer-entry', () => ({
+  RunOnComputerRow: () => null,
+  ComputerWhereItRuns: (props: { harnessId: string; checked: boolean }) => (
+    <div
+      data-testid="computer-where-it-runs"
+      data-harness-id={props.harnessId}
+      data-checked={String(props.checked)}
+    />
+  ),
+}));
+
 vi.mock('./components/instructions-editor', () => ({
   AgentInstructionsEditor: (props: {
     markdown: string;
@@ -155,7 +175,7 @@ function modelTargetKey(target: {
 }
 
 function successfulModels(
-  models: { id: string; name: string }[],
+  models: { id: string; name: string; description?: string }[],
   currentModel = models[0]?.id
 ) {
   return {
@@ -200,7 +220,7 @@ const harnessMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
-  useHarnessesQuery: vi.fn(() => harnessMocks.query),
+  useRunnableHarnessesQuery: vi.fn(() => harnessMocks.query),
 }));
 
 vi.mock('@queries/agents/agents', () => ({
@@ -239,83 +259,93 @@ vi.mock('@core/component/Toast/Toast', () => ({
   },
 }));
 
-vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({
-    channels: () => [
-      { id: 'channel-general', name: 'general', channel_type: 'private' },
-      {
-        id: 'channel-engineering',
-        name: 'engineering',
-        channel_type: 'team',
-      },
-    ],
-  }),
-}));
+vi.mock('@core/context/channels', async () => {
+  const { directoryChannel } = await import(
+    '@queries/channel/tests/directory-channel'
+  );
+  const channels = [
+    directoryChannel('channel-general', {
+      name: 'general',
+      channelType: 'private',
+    }),
+    directoryChannel('channel-engineering', {
+      name: 'engineering',
+      channelType: 'team',
+    }),
+  ];
+  return { useChannelDirectory: () => ({ channels: () => channels }) };
+});
 
-const pipedreamMocks = vi.hoisted(() => ({
-  enabled: true,
+const connectorMocks = vi.hoisted(() => ({
   connected: [] as string[],
   connect: vi.fn(),
   catalog: [
     {
-      app_slug: 'linear',
-      display_name: 'Linear',
+      key: 'app/linear',
+      slug: 'linear',
+      name: 'Linear',
       description: 'Issue tracking',
-      icon_url: null,
+      iconUrl: null,
+      categories: [],
     },
     {
-      app_slug: 'notion',
-      display_name: 'Notion',
+      key: 'app/notion',
+      slug: 'notion',
+      name: 'Notion',
       description: 'Docs and wikis',
-      icon_url: null,
+      iconUrl: null,
+      categories: [],
     },
   ],
 }));
 
-vi.mock('@core/pipedream/flag', () => ({
-  usePipedreamMcpFlag: () => () => pipedreamMocks.enabled,
-}));
-
-vi.mock('@queries/pipedream-connectors', () => ({
-  usePipedreamConnectedSlugs: () => ({
-    slugs: () => new Set(pipedreamMocks.connected),
-    ready: () => true,
-  }),
-  usePipedreamCatalogIconsQuery: () => ({
-    isPending: false,
-    data: new Map(),
-  }),
-  usePipedreamCatalogQuery: (search: () => string) => ({
-    get data() {
-      const term = search().trim().toLowerCase();
+vi.mock('@queries/connectors', async () => {
+  const { createSignal } = await import('solid-js');
+  return {
+    appConnectorKey: (slug: string) => `app/${slug}`,
+    useConnectors: () => ({
+      connectedApps: () => new Set(connectorMocks.connected),
+      ready: () => true,
+    }),
+    useConnectorCatalogIconsQuery: () => ({
+      isPending: false,
+      data: new Map(),
+    }),
+    createConnectorCatalogSearch: (exclude: () => ReadonlySet<string>) => {
+      const [searchInput, setSearchInput] = createSignal('');
+      const entries = () => {
+        const term = searchInput().trim().toLowerCase();
+        return connectorMocks.catalog.filter(
+          (entry) =>
+            entry.name.toLowerCase().includes(term) &&
+            !exclude().has(entry.slug)
+        );
+      };
       return {
-        pages: [
-          {
-            servers: pipedreamMocks.catalog.filter((entry) =>
-              entry.display_name.toLowerCase().includes(term)
-            ),
-            next_cursor: null,
-          },
-        ],
-        pageParams: [undefined],
+        searchInput,
+        onSearchInput: (value: string) => setSearchInput(value),
+        search: searchInput,
+        entries,
+        query: {
+          isFetching: false,
+          isFetchingNextPage: false,
+          hasNextPage: false,
+          isError: false,
+          fetchNextPage: vi.fn(),
+          refetch: vi.fn(),
+        },
       };
     },
-    isFetching: false,
-    isSuccess: true,
-    isFetchingNextPage: false,
-    hasNextPage: false,
-    isError: false,
-    fetchNextPage: vi.fn(),
-    refetch: vi.fn(),
-  }),
-  connectPipedreamApp: pipedreamMocks.connect,
-}));
+    connectConnector: connectorMocks.connect,
+  };
+});
 
 beforeAll(() => {
   vi.stubGlobal('scrollTo', vi.fn());
 });
 
 beforeEach(() => {
+  device.touch = false;
   avatarMocks.upload.mockReset();
   apiKeyMocks.query.data = undefined;
   apiKeyMocks.save.mockReset();
@@ -337,15 +367,15 @@ beforeEach(() => {
   agentMocks.isTeamOwner = false;
   agentMocks.isTeamAdmin = false;
   harnessMocks.query.data = [];
-  pipedreamMocks.enabled = true;
-  pipedreamMocks.connected = [];
-  pipedreamMocks.connect.mockReset();
-  pipedreamMocks.connect.mockImplementation(
-    async (args: { appSlug: string }) => {
-      pipedreamMocks.connected = [...pipedreamMocks.connected, args.appSlug];
-      return 'connected';
-    }
-  );
+  connectorMocks.connected = [];
+  connectorMocks.connect.mockReset();
+  connectorMocks.connect.mockImplementation(async (args: { key: string }) => {
+    connectorMocks.connected = [
+      ...connectorMocks.connected,
+      args.key.replace(/^app\//, ''),
+    ];
+    return 'connected';
+  });
   modelMocks.queries = {
     'in-memory:': successfulModels([
       { id: Model.sonnet55, name: 'Claude Sonnet 4.5' },
@@ -365,9 +395,21 @@ const MACROD_HARNESS = {
   updated_at: '2026-08-27T12:00:00Z',
   connected: true,
   last_connected_at: '2026-08-27T12:34:00Z',
+  access: 'owner',
+  shared_team_ids: [],
 } satisfies Harness;
 
 describe('Agents', () => {
+  it('returns from a phone agent editor to its list before navigating away', () => {
+    device.touch = true;
+    updateSearchParams({ createAgent: 'true' });
+    render(() => <Agents {...agentsPageProps} />);
+    expect(screen.getByRole('region', { name: 'New agent' })).toBeTruthy();
+    const goBack = vi.fn();
+    expect(runSplitBack({ canGoBack: () => true, goBack })).toBe(true);
+    expect(screen.queryByRole('region', { name: 'New agent' })).toBeNull();
+    expect(goBack).not.toHaveBeenCalled();
+  });
   it('opens the new-agent form from a link and clears the action on cancel', () => {
     updateSearchParams({ createAgent: 'true' });
     render(() => <Agents {...agentsPageProps} />);
@@ -398,6 +440,8 @@ describe('Agents', () => {
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
+      // The agent list asks first, for no runtimes: no agent is on `default`.
+      vi.mocked(useAgentModelsQueries).mockImplementationOnce(() => []);
       vi.mocked(useAgentModelsQueries).mockImplementationOnce((targets) =>
         targets().map((target) =>
           useQuery(() => ({
@@ -540,7 +584,7 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Manage Cursor' }));
     expect(onCursor).toHaveBeenCalledTimes(2);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Manage paired runtimes' })
+      screen.getByRole('button', { name: 'Manage paired machines' })
     );
     expect(onManageRuntimes).toHaveBeenCalledOnce();
   });
@@ -674,10 +718,45 @@ describe('Agents', () => {
       within(list).getByText('In Cursor · cursor-small · All channels')
     ).toBeTruthy();
     expect(
-      within(list).getByText('In your harness · Dev box · codex · All channels')
+      within(list).getByText('On your machine · Dev box · codex · All channels')
     ).toBeTruthy();
     expect(
-      within(list).getByText('Disconnected runtime · codex · All channels')
+      within(list).getByText('Disconnected machine · codex · All channels')
+    ).toBeTruthy();
+  });
+
+  it("names the model a machine's default choice runs", () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([
+      { id: 'default', name: 'Default (recommended)', description: 'Opus 4.8' },
+      { id: 'sonnet', name: 'Sonnet', description: 'Sonnet 4.6' },
+    ]);
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-default',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Default helper',
+          handle: 'default-helper',
+          has_agent: true,
+        },
+        instructions: '',
+        harness: 'macrod',
+        harness_id: MACROD_HARNESS.id,
+        default_model: 'default',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents {...agentsPageProps} />);
+    const list = screen.getByRole('region', { name: 'Your agents' });
+
+    expect(
+      within(list).getByText(
+        'On your machine · Dev box · Opus 4.8 (default) · All channels'
+      )
     ).toBeTruthy();
   });
 
@@ -1143,9 +1222,9 @@ describe('Agents', () => {
       within(dialog).getByRole('radio', { name: 'In Cursor' })
     ).toHaveProperty('disabled', true);
     expect(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     ).toHaveProperty('disabled', true);
-    expect(within(dialog).queryByLabelText('Harness')).toBeNull();
+    expect(within(dialog).queryByLabelText('Machine')).toBeNull();
     expect(within(dialog).getAllByLabelText('Default model')).toHaveLength(1);
     expect(within(dialog).getByText('Who can use it')).toBeTruthy();
     expect(within(dialog).getByRole('group', { name: 'Share' })).toBeTruthy();
@@ -1182,13 +1261,13 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: 'New agent' });
     const ownHarness = within(dialog).getByRole('radio', {
-      name: 'In your harness',
+      name: 'On your machine',
     });
     expect(ownHarness).toHaveProperty('disabled', true);
     expect(
-      within(dialog).getByRole('button', { name: 'Set up your own harness' })
+      within(dialog).getByRole('button', { name: 'Set up your own machine' })
     ).toBeTruthy();
-    expect(within(dialog).queryByLabelText('Harness')).toBeNull();
+    expect(within(dialog).queryByLabelText('Machine')).toBeNull();
   });
 
   it('keeps mention, permission, and channel choices collapsed under Advanced', () => {
@@ -1240,9 +1319,11 @@ describe('Agents', () => {
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const teamOption = within(dialog).getByLabelText('Team');
     expect(teamOption).toHaveProperty('disabled', true);
-    const teamCardClasses = teamOption.closest('label')?.classList;
-    expect(teamCardClasses?.contains('cursor-not-allowed')).toBe(true);
-    expect(teamCardClasses?.contains('opacity-50')).toBe(true);
+    expect(
+      teamOption.closest('label')?.classList.contains('cursor-not-allowed')
+    ).toBe(true);
+    // The choice's text and radio dim; trailing actions stay legible.
+    expect(teamOption.classList.contains('opacity-50')).toBe(true);
     expect(
       within(dialog).getByText(
         'Team agents need a team owner. Create or join a team in Team settings to enable this option.'
@@ -1439,7 +1520,7 @@ describe('Agents', () => {
       within(dialog).queryByRole('button', { name: 'Connect Cursor' })
     ).toBeNull();
     expect(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     ).toHaveProperty('disabled', true);
 
     fireEvent.click(cursor);
@@ -1466,6 +1547,28 @@ describe('Agents', () => {
     );
   });
 
+  it('opens the create form on a requested Macro computer', () => {
+    const computer = {
+      ...MACROD_HARNESS,
+      id: 'computer-harness',
+      name: 'Agent Box',
+      computer_id: 'computer-1',
+    };
+    harnessMocks.query.data = [MACROD_HARNESS, computer];
+    requestCreateAgent('computer-harness');
+
+    render(() => <Agents {...agentsPageProps} />);
+
+    const dialog = screen.getByRole('region', { name: 'New agent' });
+    const where = within(dialog).getByTestId('computer-where-it-runs');
+    expect(where.dataset.harnessId).toBe('computer-harness');
+    expect(where.dataset.checked).toBe('true');
+    expect(
+      within(dialog).getByRole('radio', { name: 'In Macro' })
+    ).toHaveProperty('checked', false);
+    expect(agentSettingsRequest()).toBeUndefined();
+  });
+
   it('offers registered macrod harnesses in the harness picker', () => {
     harnessMocks.query.data = [MACROD_HARNESS];
 
@@ -1480,15 +1583,15 @@ describe('Agents', () => {
       within(dialog).getByRole('radio', { name: 'In Cursor' })
     ).toHaveProperty('disabled', true);
     const ownHarness = within(dialog).getByRole('radio', {
-      name: 'In your harness',
+      name: 'On your machine',
     });
     expect(ownHarness).toHaveProperty('disabled', false);
     expect(
-      within(dialog).queryByRole('button', { name: 'Set up your own harness' })
+      within(dialog).queryByRole('button', { name: 'Set up your own machine' })
     ).toBeNull();
 
     fireEvent.click(ownHarness);
-    const harness = within(dialog).getByLabelText('Harness');
+    const harness = within(dialog).getByLabelText('Machine');
     expect(harness).toHaveProperty('textContent', 'Dev box');
     expect(selectOptions(harness).getAllByRole('option')).toHaveLength(1);
     expect(
@@ -1504,7 +1607,7 @@ describe('Agents', () => {
     const fetchHarnesses = vi.fn(
       async (): Promise<Harness[]> => [{ ...MACROD_HARNESS }]
     );
-    vi.mocked(useHarnessesQuery).mockImplementationOnce(() =>
+    vi.mocked(useRunnableHarnessesQuery).mockImplementationOnce(() =>
       useQuery(() => ({
         queryKey,
         queryFn: fetchHarnesses,
@@ -1525,9 +1628,9 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
-    const harness = within(dialog).getByLabelText('Harness');
+    const harness = within(dialog).getByLabelText('Machine');
     expect(
       selectOptions(harness).getByRole('option', { name: 'Dev box' })
     ).toBeTruthy();
@@ -1609,13 +1712,13 @@ describe('Agents', () => {
 
     // The first paired harness is picked when the option is chosen.
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
-    const harness = within(dialog).getByLabelText('Harness');
+    const harness = within(dialog).getByLabelText('Machine');
     expect(harness).toHaveProperty('textContent', 'Dev box');
     expect(
       within(dialog).getByText(
-        'Model selection is unsupported by this runtime.'
+        'Model selection is unsupported by this machine.'
       )
     ).toBeTruthy();
 
@@ -1638,7 +1741,7 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
 
     const defaultModel = within(dialog).getByLabelText('Default model');
@@ -1661,7 +1764,7 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
 
     expect(within(dialog).getByLabelText('Default model')).toHaveProperty(
@@ -1681,7 +1784,7 @@ describe('Agents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
 
     const defaultModel = within(dialog).getByLabelText('Default model');
@@ -1711,7 +1814,7 @@ describe('Agents', () => {
       target: { value: 'Bug fixer' },
     });
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Create agent' })
@@ -1757,7 +1860,7 @@ describe('Agents', () => {
       true
     );
     fireEvent.click(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     );
     expect(within(dialog).getByLabelText('Coding agent')).toHaveProperty(
       'checked',
@@ -1849,9 +1952,9 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(
-      within(dialog).getByRole('radio', { name: 'In your harness' })
+      within(dialog).getByRole('radio', { name: 'On your machine' })
     ).toHaveProperty('checked', true);
-    expect(within(dialog).getByLabelText('Harness')).toHaveProperty(
+    expect(within(dialog).getByLabelText('Machine')).toHaveProperty(
       'textContent',
       'Dev box'
     );
@@ -1885,31 +1988,6 @@ describe('Agents', () => {
       ],
     },
   };
-
-  it('hides the Connections section when the Pipedream stack is off but keeps the selection', async () => {
-    pipedreamMocks.enabled = false;
-    agentMocks.query.data = [linearAgent];
-    render(() => <Agents {...agentsPageProps} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
-
-    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
-    expect(
-      within(dialog).getByRole('group', { name: 'Channels' })
-    ).toBeTruthy();
-    expect(within(dialog).queryByText('Connections')).toBeNull();
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Save changes' })
-    );
-
-    await waitFor(() => {
-      expect(agentMocks.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          mcp: { scope: 'selected', servers: linearAgent.mcp.servers },
-        })
-      );
-    });
-  });
 
   it('defaults new agents to the owner connections policy', () => {
     render(() => <Agents {...agentsPageProps} />);
@@ -2013,8 +2091,8 @@ describe('Agents', () => {
     );
 
     await waitFor(() => {
-      expect(pipedreamMocks.connect).toHaveBeenCalledWith(
-        expect.objectContaining({ appSlug: 'linear', serverName: 'Linear' })
+      expect(connectorMocks.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'app/linear' })
       );
     });
     expect(agentMocks.update).not.toHaveBeenCalled();
@@ -2048,7 +2126,7 @@ it('requires prompts unless the harness operator permits bypass', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
   const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
   fireEvent.click(
-    within(dialog).getByRole('radio', { name: 'In your harness' })
+    within(dialog).getByRole('radio', { name: 'On your machine' })
   );
   fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
@@ -2070,7 +2148,7 @@ it('offers bypass only after harness consent and resets the choice on harness ch
   fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
   const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
   fireEvent.click(
-    within(dialog).getByRole('radio', { name: 'In your harness' })
+    within(dialog).getByRole('radio', { name: 'On your machine' })
   );
   fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
@@ -2082,7 +2160,7 @@ it('offers bypass only after harness consent and resets the choice on harness ch
     'checked',
     true
   );
-  chooseSelectOption(within(dialog).getByLabelText('Harness'), 'Prompt only');
+  chooseSelectOption(within(dialog).getByLabelText('Machine'), 'Prompt only');
   expect(within(dialog).getByLabelText('Always prompt')).toHaveProperty(
     'checked',
     true

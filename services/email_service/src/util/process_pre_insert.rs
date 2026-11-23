@@ -3,7 +3,6 @@ use models_email::email::service;
 
 mod clean_message;
 pub mod sfs_map;
-pub mod sync_labels;
 
 // perform necessary processing on threads before inserting into the database
 #[tracing::instrument(skip(threads))]

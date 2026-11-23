@@ -12,14 +12,15 @@ use crate::domain::models::{
     Activity, ActivityType, AttachmentChannelReference, AttachmentCommentReference,
     AttachmentEntityReference, AttachmentGenericReference, ChannelAttachment,
     ChannelAttachmentType, ChannelParticipant, ChannelType, CreateEntityMentionOptions,
-    ParticipantRole, Sender,
+    ParticipantRole, ReferenceShareOutcome, ReferencedShareItem, Sender,
 };
 pub use crate::domain::models::{
     AddParticipantsRequest, ChannelJoinCodeResponse, ChannelPreview, ChannelPreviewData,
     CreateChannelRequest, CreateChannelResponse, CreateEntityMentionRequest,
     CreateEntityMentionResponse, DeleteEntityMentionResponse, GetBatchChannelPreviewRequest,
     GetBatchChannelPreviewResponse, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-    GetOrCreatePrivateRequest, PatchChannelRequest, RemoveParticipantsRequest, WithChannelId,
+    GetOrCreatePrivateRequest, PatchChannelRequest, RemoveParticipantsRequest,
+    ShareWithChannelRequest, WithChannelId,
 };
 use crate::domain::ports::{ChannelMessagesErr, ChannelMutationErr, ChannelService};
 use axum::{
@@ -192,6 +193,10 @@ where
         .route(
             "/{channel_id}/participants",
             delete(remove_participants_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/{channel_id}/shares",
+            post(share_with_channel_handler::<S, Svc, Auth>),
         )
 }
 
@@ -440,6 +445,65 @@ pub async fn add_participants_handler<
         .add_participants(actor, channel_id, req)
         .await?;
     Ok(StatusCode::OK)
+}
+
+/// Handler for `POST /channels/{channel_id}/shares`.
+///
+/// Grants the channel's current members access to one item, the way posting
+/// it in a message does. Calendar events can be shared only from the caller's
+/// own calendar, and private or confidential events are refused. Sharing again
+/// is a no-op.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "share_with_channel",
+    path = "/channels/{channel_id}/shares",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    request_body = ShareWithChannelRequest,
+    responses(
+        (status = 204, description = "The channel's members can see the item"),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse, description = "The caller cannot share this item"),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(entity_type = ?req.entity_type, entity_id = %req.entity_id)
+)]
+pub async fn share_with_channel_handler<
+    S: ChannelService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ChannelsRouterState<S, Svc, Auth>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
+    Json(req): Json<ShareWithChannelRequest>,
+) -> Result<StatusCode, ChannelsHandlerErr> {
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let actor = access
+        .entity_access_receipt
+        .get_authenticated_user()
+        .cloned()
+        .map_err(|_| ChannelsHandlerErr::BadRequest("authenticated user required"))?;
+    let item = ReferencedShareItem::new(req.entity_id.to_string(), req.entity_type.to_domain());
+    let results = state
+        .service
+        .share_referenced_items_with_channel(actor, channel_id, vec![item])
+        .await?;
+    if results
+        .iter()
+        .any(|result| result.outcome == ReferenceShareOutcome::Shared)
+    {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(ChannelMutationErr::Forbidden(req.entity_type.not_permitted().to_string()).into())
+    }
 }
 
 /// Handler for `DELETE /channels/{channel_id}/participants`.

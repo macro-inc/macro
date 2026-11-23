@@ -1,4 +1,5 @@
 import type { CreatableBlock } from '@app/features/command/types';
+import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { TOKENS } from '@core/hotkey/tokens';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
@@ -9,7 +10,6 @@ import type { MobileNavViewId } from './mobile-nav-views';
 const sources = vi.hoisted(() => ({
   view: vi.fn(),
   blocks: vi.fn(),
-  calendar: vi.fn(),
   openEvent: vi.fn(),
   openCalendarEvent: vi.fn(),
   raiseKeyboard: vi.fn(),
@@ -24,9 +24,6 @@ vi.mock('@app/features/command/Launcher', () => ({
   useCreateMenuBlocks: () => sources.blocks,
   setCreateMenuOpen: sources.openMenu,
 }));
-vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
-  useCalendarUiFlag: () => sources.calendar,
-}));
 vi.mock(
   '@app/features/calendar-view/components/use-open-event-composer',
   () => ({
@@ -36,8 +33,9 @@ vi.mock(
 vi.mock('@app/features/calendar-view/open-calendar-event', () => ({
   openCalendarEventSplit: sources.openCalendarEvent,
 }));
-vi.mock('@app/features/task-composer/new-task-title-focus', () => ({
-  raiseKeyboardForNewTaskTitle: sources.raiseKeyboard,
+vi.mock('@core/directive/focusInput', () => ({
+  focusStandInActive: () => false,
+  triggerFocusNewElement: sources.raiseKeyboard,
 }));
 vi.mock('@app/features/crm/creation-adapter', () => ({
   openCreateCompanyModal: sources.openCompany,
@@ -64,31 +62,23 @@ afterEach(() => {
 });
 
 function setup(view: MobileNavViewId = 'home') {
-  const [calendar, setCalendar] = createSignal(false);
   const [blocks, setBlocks] = createSignal<CreatableBlock[]>([]);
   sources.view.mockReturnValue(view);
-  sources.calendar.mockImplementation(calendar);
   sources.blocks.mockImplementation(blocks);
   render(() => <MobilePageCreateButton />);
-  return { setCalendar, setBlocks };
+  return { setBlocks };
 }
 
 describe('mobile create availability', () => {
-  it('reacts to the calendar flag in the inbox quick menu', () => {
-    const { setCalendar } = setup();
+  it('offers an event in the inbox quick menu', () => {
+    setup();
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
-    expect(screen.queryByRole('button', { name: 'Event' })).toBeNull();
-
-    setCalendar(true);
     expect(screen.getByRole('button', { name: 'Event' })).toBeTruthy();
-    setCalendar(false);
-    expect(screen.queryByRole('button', { name: 'Event' })).toBeNull();
     expect(sources.openEvent).not.toHaveBeenCalled();
   });
 
   it('shows an event made from the inbox quick menu in the calendar', async () => {
-    const { setCalendar } = setup();
-    setCalendar(true);
+    setup();
     sources.openCalendarEvent.mockResolvedValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
     fireEvent.click(screen.getByRole('button', { name: 'Event' }));
@@ -126,18 +116,58 @@ describe('mobile create availability', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Task' }));
     // iOS raises the keyboard only inside the tap; the composer opens after
     // the menu has closed.
-    expect(sources.raiseKeyboard).toHaveBeenCalledOnce();
+    expect(sources.raiseKeyboard).toHaveBeenCalledExactlyOnceWith(
+      NEW_TASK_TITLE_SELECTOR,
+      { touchOnly: true }
+    );
     expect(createTask).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
   });
 
-  it('uses a Calendar New menu when enabled and keeps the default fallback', async () => {
-    const { setCalendar, setBlocks } = setup('calendar');
+  it('creates an initiative rather than a Drive folder from Projects', () => {
+    const { setBlocks } = setup('projects');
+    const createProject = vi.fn(() => true);
+    const createFolder = vi.fn(() => true);
+    setBlocks([
+      {
+        label: 'Folder',
+        description: 'Create folder',
+        blockName: 'project',
+        hotkeyToken: TOKENS.create.project,
+        keyDownHandler: createFolder,
+      },
+      {
+        label: 'Project',
+        description: 'Create project',
+        blockName: 'initiative',
+        hotkeyToken: TOKENS.create.initiative,
+        keyDownHandler: createProject,
+      },
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    expect(createProject).toHaveBeenCalledOnce();
+    expect(createFolder).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a folder when project creation is unavailable', () => {
+    const { setBlocks } = setup('projects');
+    const createFolder = vi.fn(() => true);
+    setBlocks([
+      {
+        label: 'Folder',
+        description: 'Create folder',
+        blockName: 'project',
+        hotkeyToken: TOKENS.create.project,
+        keyDownHandler: createFolder,
+      },
+    ]);
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
     expect(sources.openMenu).toHaveBeenCalledWith(true);
-    expect(sources.openEvent).not.toHaveBeenCalled();
+    expect(createFolder).not.toHaveBeenCalled();
+  });
 
-    setCalendar(true);
+  it('uses a Calendar New menu', async () => {
+    const { setBlocks } = setup('calendar');
     const call = vi.fn(() => true);
     setBlocks([
       {
@@ -159,8 +189,7 @@ describe('mobile create availability', () => {
   });
 
   it('omits unavailable Calendar Call and Reminder actions', async () => {
-    const { setCalendar } = setup('calendar');
-    setCalendar(true);
+    setup('calendar');
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
     const menu = await screen.findByRole('dialog', { name: 'Create new' });
     expect(menu.querySelectorAll('button')).toHaveLength(2);
@@ -170,8 +199,7 @@ describe('mobile create availability', () => {
   });
 
   it('uses the gated Call action in the Calendar New menu', async () => {
-    const { setCalendar, setBlocks } = setup('calendar');
-    setCalendar(true);
+    const { setBlocks } = setup('calendar');
     const call = vi.fn(() => true);
     setBlocks([
       {

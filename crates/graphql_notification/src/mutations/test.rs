@@ -30,6 +30,7 @@ fn operation_name(status: &NotificationStatus) -> &'static str {
         NotificationStatus::Seen => "seen",
         NotificationStatus::Done(true) => "done",
         NotificationStatus::Done(false) => "undone",
+        NotificationStatus::Reopen { .. } => "reopened",
     }
 }
 

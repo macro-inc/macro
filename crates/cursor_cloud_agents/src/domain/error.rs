@@ -179,6 +179,34 @@ impl RunFailed {
     }
 }
 
+/// Cursor refused the API key itself, with a 401 or 403 it did not mark
+/// retryable.
+///
+/// Seen in production as a 403 `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS` when the
+/// connected key is a team-owned service token, which Cursor does not allow on
+/// user routes such as `GET /v1/models`. Asking again with the same key cannot
+/// succeed, and only the person who connected it can fix it, so this is theirs
+/// to read rather than an upstream outage.
+#[derive(Debug, Error)]
+#[error("cursor {method} {path} -> {status}: {detail}")]
+pub struct CredentialRejected {
+    /// The request method, for the logs.
+    pub method: &'static str,
+    /// The request path, for the logs.
+    pub path: String,
+    /// Cursor's status, 401 or 403.
+    pub status: u16,
+    /// Cursor's own error body, verbatim, for the logs.
+    pub detail: String,
+}
+
+impl CredentialRejected {
+    /// What to show the person whose key was refused.
+    pub const USER_MESSAGE: &'static str = "Cursor refused your connected API key. \
+        Team-owned service tokens can't be used here. Reconnect Cursor in Settings \
+        with a personal or service-account Cursor API key.";
+}
+
 /// A provider response proving a prompt was rejected before execution.
 #[derive(Debug, Error)]
 #[error("{0}")]

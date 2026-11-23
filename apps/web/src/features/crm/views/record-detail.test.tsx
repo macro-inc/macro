@@ -13,7 +13,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmCommentTarget } from '../context/workspace-context';
 import type { CrmContact } from '../core/contact';
@@ -26,17 +26,25 @@ import { CrmRecordDetail } from './record-detail';
 
 const taskContext = vi.hoisted(() => ({
   records: [] as (() => CrmTaskRecord)[],
+  canAccess: (): boolean => true,
   get record() {
     return this.records.at(-1);
   },
   contactCompanyId: undefined as string | undefined,
+  companyLoaded: false,
   recordError: (): boolean => false,
 }));
+const createOpenTracker = vi.hoisted(() => vi.fn());
+vi.mock('@core/internal/open-tracker', () => ({ createOpenTracker }));
+const trackedItems = () =>
+  createOpenTracker.mock.calls.map(([block, item]) => [block, item()]);
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    canAccess: () => taskContext.canAccess(),
+    accessState: () => (taskContext.canAccess() ? 'allowed' : 'denied'),
+    retryAccess: async () => {},
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     listsEnabled: () => () => false,
-    pipelinesEnabled: () => () => false,
     isTeamAdmin: () => () => false,
     openCreateContact: vi.fn(),
     registerTaskComposerRecord: (source: () => CrmTaskRecord) => {
@@ -52,6 +60,7 @@ vi.mock('../context/crm-context', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/utils/classname')),
   Tooltip: (props: ParentProps) => <>{props.children}</>,
+  EmptyStatePanel: (props: { title: string }) => <p>{props.title}</p>,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
@@ -65,6 +74,9 @@ vi.mock('@components/app/side-panel', () => ({
   },
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
+vi.mock('@app/components/view-shell/create-frame-width', () => ({
+  createFrameWidth: () => () => 1200,
+}));
 vi.mock('./record-header-actions', () => ({ RecordHeaderActions: () => null }));
 vi.mock('./record-details-section', () => ({
   RecordDetailsSection: () => null,
@@ -84,18 +96,22 @@ vi.mock('./use-crm', () => ({
         return taskContext.recordError();
       },
     },
-    company: () => undefined,
+    company: () =>
+      taskContext.companyLoaded
+        ? { id: 'company-1', name: 'Acme', domains: [] }
+        : undefined,
     contacts: () => [],
   }),
-  useContactQuery: () => ({
+  useContactQuery: (contactId: () => string) => ({
     isSuccess: !!taskContext.contactCompanyId,
     get isError() {
       return taskContext.recordError();
     },
     data: taskContext.contactCompanyId
-      ? { companyId: taskContext.contactCompanyId }
+      ? { id: contactId(), companyId: taskContext.contactCompanyId }
       : undefined,
   }),
+  useCrmPermissions: () => ({ canEditCrm: () => true }),
   useIsTeamAdmin: () => () => false,
   useSetCompanyHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
   useSetContactHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
@@ -172,7 +188,7 @@ vi.mock('./contact-detail', () => ({
 vi.mock('./company-contacts-section', () => ({
   CompanyContactsSection: () => null,
 }));
-vi.mock('./company-discussion-section', () => ({
+vi.mock('../company-discussion-section', () => ({
   CompanyDiscussionSection: () => null,
 }));
 vi.mock('./company-emails-section', () => ({
@@ -201,7 +217,14 @@ vi.mock('./record-associations', () => ({
   RecordReferencesSection: () => null,
 }));
 
+// Import the real composition once outside the individual behavior-test budget.
+// Its cold dependency graph can exceed five seconds on a busy CI worker.
+beforeAll(async () => {
+  await vi.importActual('./company-detail');
+  await vi.importActual('./contact-detail');
+}, 30_000);
 beforeEach(() => {
+  taskContext.canAccess = () => true;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -216,7 +239,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
   taskContext.records.length = 0;
   taskContext.contactCompanyId = undefined;
+  taskContext.companyLoaded = false;
   taskContext.recordError = () => false;
+  createOpenTracker.mockReset();
 });
 
 /** Stands in for the route: each open hands the detail a new trail. */
@@ -315,8 +340,19 @@ it('registers the actual company detail while mounted and clears it on unmount',
     <Company companyId="company-1" section="files" />
   ));
   expect(taskContext.record?.()).toEqual({ type: 'company', id: 'company-1' });
+  expect(trackedItems()).toEqual([['company', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
+});
+
+it('records an open of a company once it has loaded', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  taskContext.companyLoaded = true;
+  render(() => <Company companyId="company-1" section="files" />);
+  expect(trackedItems()).toEqual([['company', 'company-1']]);
 });
 
 it('registers the actual contact detail with its loaded company', async () => {
@@ -333,6 +369,7 @@ it('registers the actual contact detail with its loaded company', async () => {
     id: 'contact-1',
     companyId: 'company-1',
   });
+  expect(trackedItems()).toEqual([['contact', 'contact-1']]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
 });
@@ -350,6 +387,7 @@ it('registers an unloaded contact without an unrelated company', async () => {
     id: 'contact-2',
     companyId: undefined,
   });
+  expect(trackedItems()).toEqual([['contact', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
 });

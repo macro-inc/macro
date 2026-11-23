@@ -1,6 +1,4 @@
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { Show } from 'solid-js';
 import { ProjectChip } from './components/project-chip';
@@ -9,14 +7,6 @@ import { useProjectIdentityQuery } from './queries/project-identity';
 
 /** Native project attachment adapter for channel messages and channel files. */
 export function ProjectAttachment(props: { id: string }) {
-  return (
-    <ShowFeatureFlag flag={enableProjects}>
-      <ProjectAttachmentContent id={props.id} />
-    </ShowFeatureFlag>
-  );
-}
-
-function ProjectAttachmentContent(props: { id: string }) {
   const layout = useSplitLayout();
   const userId = useUserId();
   const query = useProjectIdentityQuery(() => props.id, userId);
@@ -28,7 +18,12 @@ function ProjectAttachmentContent(props: { id: string }) {
       <ProjectChip
         reference={
           !query.isError && query.isSuccess && query.data
-            ? { state: 'visible', id: query.data.id, name: query.data.name }
+            ? {
+                state: 'visible',
+                id: query.data.id,
+                name: query.data.name,
+                appearance: query.data.appearance,
+              }
             : { state: 'unavailable' }
         }
         onOpen={(id, event) =>

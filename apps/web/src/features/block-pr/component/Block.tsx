@@ -1,15 +1,13 @@
-import { ViewShell } from '@app/components/view-shell';
 import { SidePanel } from '@components/app/side-panel';
-import { SplitPanel } from '@components/app/split-panel';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { useBlockId } from '@core/block';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Show } from 'solid-js';
 import { createPrActions } from '../primitives/create-pr-actions';
-import { prDisplayName } from '../util/prKey';
 import { PrDetailActions, PrDetailBody, usePrDetail } from '../views/PrDetail';
 import { confirmMergePullRequest } from './MergePullRequestButton';
 import { PrSplitHeader } from './PrSplitHeader';
-import { PrStatusIcon } from './PrStatus';
 import { PrSidePanelSections } from './sidepanel/PrSidePanelSections';
 
 /** Legacy block boundary for previews until the block runtime is retired. */
@@ -17,31 +15,22 @@ export default function PrBlock() {
   const foreignEntityId = useBlockId();
   const detail = usePrDetail(() => foreignEntityId);
   const actions = createPrActions(detail.data, confirmMergePullRequest);
-  const name = () => {
-    const data = detail.data();
-    return (
-      data?.pullRequest.name ??
-      (data ? prDisplayName(data.prRef) : 'Pull request')
-    );
-  };
   return (
     <div class="size-full overflow-hidden flex flex-col relative">
-      <SidePanel.Layout floating>
+      <SidePanel.Layout floating headerToggle={!isTouchDevice()}>
         <PrSidePanelSections
           enrichment={detail.data()?.pullRequest}
           status={detail.query.status}
         />
         <div class="flex flex-col size-full min-w-0">
-          <ViewShell.TopBar class="hidden touch:flex">
-            <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-            <Show when={detail.data()?.pullRequest.status}>
-              {(status) => <PrStatusIcon status={status()} />}
-            </Show>
-            <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
-            <PrDetailActions detail={detail.data()} actions={actions} />
-          </ViewShell.TopBar>
           <Show when={detail.data()}>
             {(data) => <PrSplitHeader detail={data()} actions={actions} />}
+          </Show>
+          {/* Touch headers carry the same actions as the standalone PR. */}
+          <Show when={isTouchDevice()}>
+            <SplitHeaderRight>
+              <PrDetailActions detail={detail.data()} actions={actions} />
+            </SplitHeaderRight>
           </Show>
           <PrDetailBody
             foreignEntityId={foreignEntityId}

@@ -50,8 +50,22 @@ nearly every Rust service's `main.rs` calls.
 - Local OTLP export is opt-in (`OTEL_EXPORTER_OTLP_ENDPOINT` must be set);
   xtask sets it only for trace-enabled local runs.
 - Prod/develop export logs as JSON on stdout for Datadog, not via OTLP — only
-  spans go through OTLP there.
+  spans and metrics go through OTLP there.
+- `init` installs the global OTLP meter provider (60-second export) wherever it
+  exports spans, so services record metrics through
+  `opentelemetry::global::meter`. Keep metric attributes low-cardinality: never
+  a per-entity id.
+- The OTel resource starts from `Resource::builder()`, whose env detector
+  reads `OTEL_RESOURCE_ATTRIBUTES` from the process environment. ECS task
+  definitions set `service.version` there from the image digest
+  (`imageVersion` in `infra/packages/resources`); Datadog reads it as the
+  `version` tag that marks deploys. Keep that builder (not `builder_empty`).
 
 ## Related
 
 - Skill: `new-service` · Docs: `docs/guides/new-service.md`
+
+OTLP-enabled entrypoints also install the global tracer provider (for spans
+built with the OpenTelemetry API, such as `hosted_runtimes` setup waits with
+recorded timestamps) and a global meter provider on the same
+collector endpoint; `shutdown` flushes it with the trace and log providers.

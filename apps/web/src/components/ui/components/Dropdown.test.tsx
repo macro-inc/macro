@@ -37,3 +37,63 @@ it('keeps an item with a disabled reason reachable, described, and inert', () =>
   expect(select).not.toHaveBeenCalled();
   expect(screen.getByRole('menu')).toBeTruthy();
 });
+
+it('keeps copy items open, waits for completion, and guards pending activations', async () => {
+  let finish!: () => void;
+  const copy = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+  render(() => (
+    <Dropdown open>
+      <Dropdown.Trigger>Actions</Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.CopyItem onCopy={copy}>Copy link</Dropdown.CopyItem>
+      </Dropdown.Content>
+    </Dropdown>
+  ));
+  const item = screen.getByRole('menuitem', { name: 'Copy link' });
+  item.focus();
+  fireEvent.keyDown(item, { key: 'Enter' });
+  fireEvent.click(item);
+  expect(copy).toHaveBeenCalledOnce();
+  expect(item.querySelector('[data-copy-feedback]')).toBeNull();
+  finish();
+  await Promise.resolve();
+  expect(item.querySelector('[data-copy-feedback]')).not.toBeNull();
+  expect(item.textContent).toBe('Copy link');
+  expect(document.activeElement).toBe(item);
+  expect(screen.getByRole('menu')).toBeTruthy();
+});
+
+it.each([() => false, () => Promise.reject(new Error('denied'))])(
+  'keeps failed copy items open without showing success',
+  async (copy) => {
+    render(() => (
+      <Dropdown open>
+        <Dropdown.Trigger>Actions</Dropdown.Trigger>
+        <Dropdown.Content>
+          <Dropdown.CopyItem onCopy={copy}>Copy link</Dropdown.CopyItem>
+        </Dropdown.Content>
+      </Dropdown>
+    ));
+    const item = screen.getByRole('menuitem', { name: 'Copy link' });
+    fireEvent.click(item);
+    await Promise.resolve();
+    expect(item.querySelector('[data-copy-feedback]')).toBeNull();
+    expect(screen.getByRole('menu')).toBeTruthy();
+  }
+);
+
+it('does not call disabled copy items', () => {
+  const copy = vi.fn();
+  render(() => (
+    <Dropdown open>
+      <Dropdown.Trigger>Actions</Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.CopyItem disabled onCopy={copy}>
+          Copy link
+        </Dropdown.CopyItem>
+      </Dropdown.Content>
+    </Dropdown>
+  ));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Copy link' }));
+  expect(copy).not.toHaveBeenCalled();
+});

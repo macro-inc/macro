@@ -1,9 +1,5 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { isWithNotification } from '@entity/types/notification';
 import {
@@ -30,10 +26,10 @@ type MakeMarkNotificationsReadOptions = {
 /**
  * Marks the unread notifications attached to Soup entities as read.
  *
- * With GraphQL Soup enabled, mutate by entity so correctness does not depend
- * on either the row edge or the bounded global notification window. The
- * legacy transport still snapshots IDs from the row edge first, then falls
- * back to the global source.
+ * Mutates by entity so correctness does not depend on either the row edge or
+ * the bounded global notification window. Entities without a notification
+ * entity ref snapshot IDs from the row edge first, then fall back to the
+ * global source.
  */
 export const makeMarkNotificationsReadAction = (
   options: MakeMarkNotificationsReadOptions
@@ -66,12 +62,11 @@ export const makeMarkNotificationsReadAction = (
     const notificationsById = new Map<string, UnifiedNotification>();
     const entityRefs: NotificationEntityRef[] = [];
     const expectedNotificationIds: string[] = [];
-    const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
     let targetCount = 0;
 
     for (const entity of entities) {
       const entityRef = toNotificationEntityRef(entity);
-      if (useEntityMutations && entityRef) {
+      if (entityRef) {
         entityRefs.push(entityRef);
         expectedNotificationIds.push(
           ...shownUnseenNotificationIds(

@@ -6,7 +6,7 @@
 //! builds the next cursor from this page's length, and a short page here
 //! genuinely means the feed is exhausted.
 
-use activity::VIEW_ACTION_TAGS;
+use activity::NON_TOUCH_ACTION_TAGS;
 use model_entity::EntityType;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -22,10 +22,10 @@ use crate::outbound::pg_soup_repo::type_err;
 /// The candidate row's entity id, as the gates see it.
 const ID_SQL: &str = "ae.entity_id";
 
-/// Renders [`VIEW_ACTION_TAGS`] as a SQL `IN`-list body, e.g. `'opened'`.
+/// Renders actions excluded from recency as a SQL IN-list body.
 /// The tags are compile-time constants of this workspace, never user input.
-pub(super) fn view_tags_sql() -> String {
-    VIEW_ACTION_TAGS
+pub(super) fn non_touch_tags_sql() -> String {
+    NON_TOUCH_ACTION_TAGS
         .iter()
         .map(|tag| format!("'{tag}'"))
         .collect::<Vec<_>>()
@@ -78,7 +78,7 @@ pub(super) async fn touched_soup_page(
         return Ok(Vec::new());
     }
 
-    let view_tags = view_tags_sql();
+    let view_tags = non_touch_tags_sql();
     let sql = format!(
         r#"
         WITH user_source_ids AS (

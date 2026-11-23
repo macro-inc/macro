@@ -26,21 +26,15 @@ impl CallToolResultExt for CallToolResult {
         self.content
             .iter()
             .filter_map(|content| {
-                content
-                    .raw
-                    .as_text()
-                    .map(|text| text.text.clone())
-                    .or_else(|| {
-                        let resource = content.raw.as_resource()?;
-                        match &resource.resource {
-                            ResourceContents::TextResourceContents { text, .. }
-                                if !text.is_empty() =>
-                            {
-                                Some(text.clone())
-                            }
-                            _ => None,
+                content.as_text().map(|text| text.text.clone()).or_else(|| {
+                    let resource = content.as_resource()?;
+                    match &resource.resource {
+                        ResourceContents::TextResourceContents { text, .. } if !text.is_empty() => {
+                            Some(text.clone())
                         }
-                    })
+                        _ => None,
+                    }
+                })
             })
             .collect::<Vec<_>>()
             .join("\n")

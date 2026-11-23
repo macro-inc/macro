@@ -165,7 +165,7 @@ async fn the_default_model_round_trips_and_clears(pool: Pool<Postgres>) -> anyho
     insert_user(&pool, USER_ID).await?;
     upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
 
-    assert!(set_default_model_id(&pool, USER_ID, Some("grok-4.6")).await?);
+    assert!(set_default_model(&pool, USER_ID, Some("grok-4.6"), None).await?);
     assert_eq!(
         get_cursor_api_key(&pool, USER_ID)
             .await?
@@ -175,7 +175,7 @@ async fn the_default_model_round_trips_and_clears(pool: Pool<Postgres>) -> anyho
         Some("grok-4.6")
     );
 
-    assert!(set_default_model_id(&pool, USER_ID, None).await?);
+    assert!(set_default_model(&pool, USER_ID, None, None).await?);
     assert_eq!(
         get_cursor_api_key(&pool, USER_ID)
             .await?
@@ -186,15 +186,40 @@ async fn the_default_model_round_trips_and_clears(pool: Pool<Postgres>) -> anyho
     Ok(())
 }
 
-/// Rotating the key leaves the chosen model alone — a new paste is not a reset.
+/// The effort is stored with its model, a new model without one clears it,
+/// and an effort with no model is dropped rather than stored.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_default_effort_round_trips_with_its_model(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, USER_ID).await?;
+    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
+
+    assert!(set_default_model(&pool, USER_ID, Some("gpt-5.5"), Some("high")).await?);
+    let stored = get_cursor_api_key(&pool, USER_ID).await?.expect("present");
+    assert_eq!(stored.default_model_id.as_deref(), Some("gpt-5.5"));
+    assert_eq!(stored.default_effort.as_deref(), Some("high"));
+
+    assert!(set_default_model(&pool, USER_ID, Some("composer-2.5"), None).await?);
+    let stored = get_cursor_api_key(&pool, USER_ID).await?.expect("present");
+    assert_eq!(stored.default_model_id.as_deref(), Some("composer-2.5"));
+    assert_eq!(stored.default_effort, None);
+
+    assert!(set_default_model(&pool, USER_ID, None, Some("high")).await?);
+    let stored = get_cursor_api_key(&pool, USER_ID).await?.expect("present");
+    assert_eq!(stored.default_model_id, None);
+    assert_eq!(stored.default_effort, None);
+    Ok(())
+}
+
+/// Rotating the key leaves the chosen model and effort alone — a new paste is not a reset.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn rotating_the_key_keeps_the_default_model(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, USER_ID).await?;
     upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
-    set_default_model_id(&pool, USER_ID, Some("claude-opus-5")).await?;
+    set_default_model(&pool, USER_ID, Some("claude-opus-5"), Some("high")).await?;
 
     let rotated = upsert_cursor_api_key(&pool, USER_ID, &encrypted(2)).await?;
     assert_eq!(rotated.default_model_id.as_deref(), Some("claude-opus-5"));
+    assert_eq!(rotated.default_effort.as_deref(), Some("high"));
     Ok(())
 }
 
@@ -203,6 +228,6 @@ async fn rotating_the_key_keeps_the_default_model(pool: Pool<Postgres>) -> anyho
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn setting_a_model_without_a_key_is_a_noop(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, USER_ID).await?;
-    assert!(!set_default_model_id(&pool, USER_ID, Some("grok-4.6")).await?);
+    assert!(!set_default_model(&pool, USER_ID, Some("grok-4.6"), None).await?);
     Ok(())
 }

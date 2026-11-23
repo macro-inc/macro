@@ -24,11 +24,13 @@ pub enum OpensearchOperation {
     BulkUpsertSingleChunk,
     UpdateDocumentMetadata,
     UpdateDocumentProperties,
+    BulkUpdateDocumentEmailAttachment,
     UpsertChannelMessage,
     UpsertChatMessageParent,
     UpsertChatMessageChild,
     UpdateChatMetadata,
     UpdateChatProperties,
+    ReadIndexedChatMessages,
     UpsertEmailMessage,
     BulkUpsertEmailMessages,
     UpdateEmailThreadProperties,
@@ -38,18 +40,26 @@ pub enum OpensearchOperation {
     UpdateCalendarEventProperties,
     BulkUpsertCallRecordSegments,
     UpdateCallRecordProperties,
+    ReadAgentSessionParent,
     ReconcileAgentSessionParent,
     ReconcileAgentSessionBulk,
     ReconcileAgentSessionPrune,
     DeleteDocumentById,
+    DeleteStaleDocumentChunks,
     DeleteDocumentByOwnerId,
     DeleteChannelById,
     DeleteChannelMessageById,
     DeleteChatById,
     DeleteChatMessageById,
     DeleteChatByUserId,
-    DeleteEmailByLinkId,
+    BulkDeleteChatMessages,
+    StartEmailLinkDelete,
+    EmailDeleteTask,
+    RunningEmailLinkDeletes,
+    DeleteEmailMessages,
     DeleteEmailMessageById,
+    DeleteEmailMessageOutsideThread,
+    RefreshEmailIndex,
     DeleteEmailByUserId,
     DeleteProjectById,
     DeleteCalendarEventById,
@@ -113,6 +123,13 @@ impl TransportFailure {
                 return Some(Self::ConnectionClosed);
             }
         }
+        // Over HTTP/2 a recycled connection arrives as GOAWAY or RST_STREAM, and
+        // `h2::Error` exposes no source for the I/O failure it wraps.
+        if let Some(error) = cause.downcast_ref::<h2::Error>()
+            && (error.is_go_away() || error.is_reset() || error.is_io())
+        {
+            return Some(Self::ConnectionClosed);
+        }
         if let Some(error) = cause.downcast_ref::<std::io::Error>() {
             use std::io::ErrorKind;
             return match error.kind() {
@@ -130,6 +147,28 @@ impl TransportFailure {
         }
         None
     }
+}
+
+/// Why OpenSearch refused a write to protect itself.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    strum::Display,
+    strum::AsRefStr,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum WriteRefusal {
+    /// A 429: a full write queue or a tripped circuit breaker.
+    TooManyRequests,
+    /// A `cluster_block_exception`, such as the read-only block OpenSearch puts
+    /// on an index once a node crosses the flood-stage disk watermark.
+    ClusterBlock,
 }
 
 #[derive(thiserror::Error, Debug, serde::Serialize, PartialEq)]
@@ -153,14 +192,41 @@ pub enum OpensearchClientError {
         operation: OpensearchOperation,
     },
 
-    /// The request produced no response: connect, TLS, timeout, or a
-    /// connection closed or reset before the response arrived.
+    /// The request produced no complete response: connect, TLS, timeout, or a
+    /// connection closed or reset before the response finished.
     #[error(
         "request to opensearch failed. operation: {operation} cause: {cause} details: {details}"
     )]
     RequestFailed {
         details: String,
         cause: TransportFailure,
+        operation: OpensearchOperation,
+    },
+
+    /// OpenSearch refused the write to protect itself. Sending it again adds
+    /// to the load that caused the refusal, so callers stop and resume later
+    /// instead of retrying.
+    #[error(
+        "opensearch refused the write. operation: {operation} cause: {cause} details: {details}"
+    )]
+    WritesRefused {
+        details: String,
+        cause: WriteRefusal,
+        operation: OpensearchOperation,
+    },
+
+    /// OpenSearch answered a `_bulk` request but failed some of its items.
+    /// The items it wrote stay written; the request's work is not done.
+    #[error(
+        "opensearch failed {failed} of {total} bulk items. operation: {operation} refusal: {refusal:?} errors: {errors:?}"
+    )]
+    BulkItemsFailed {
+        failed: usize,
+        total: usize,
+        /// Set when OpenSearch refused at least one item to protect itself.
+        refusal: Option<WriteRefusal>,
+        /// The first few distinct item errors, as `type: reason`.
+        errors: Vec<String>,
         operation: OpensearchOperation,
     },
 
@@ -211,14 +277,82 @@ impl OpensearchClientError {
         }
     }
 
-    /// A response body that could not be read or parsed, including one cut
-    /// off by a dropped connection.
+    /// A response body that could not be read or parsed. A body cut off by a
+    /// dropped connection or deadline is a request failure with that cause.
     pub(crate) fn deserialization_failed(operation: OpensearchOperation, error: &Error) -> Self {
-        Self::DeserializationFailed {
-            details: error_chain(error),
-            operation,
+        match TransportFailure::classify(error) {
+            TransportFailure::Other => Self::DeserializationFailed {
+                details: error_chain(error),
+                operation,
+            },
+            cause => Self::RequestFailed {
+                details: error_chain(error),
+                cause,
+                operation,
+            },
         }
     }
+
+    /// The connection closed or refused before a complete response, so the same
+    /// request can succeed on a new connection.
+    pub(crate) fn lost_connection(&self) -> bool {
+        matches!(
+            self,
+            Self::RequestFailed {
+                cause: TransportFailure::ConnectionClosed | TransportFailure::Connect,
+                ..
+            }
+        )
+    }
+
+    /// Whether OpenSearch refused the request, or one of its items, to protect
+    /// itself. Requests that keep OpenSearch's error body in `details` are read
+    /// from it: an error response's `status` and `error.type`, or a by-query
+    /// response's `failures`.
+    pub fn refusal(&self) -> Option<WriteRefusal> {
+        match self {
+            Self::WritesRefused { cause, .. } => Some(*cause),
+            Self::BulkItemsFailed { refusal, .. } => *refusal,
+            Self::NetworkError { status_code, .. } => {
+                write_refusal(*status_code, &serde_json::Value::Null)
+            }
+            Self::Unknown { details, .. } => refusal_in_body(details),
+            _ => None,
+        }
+    }
+
+    /// How many items of a bulk request OpenSearch failed.
+    pub fn failed_items(&self) -> usize {
+        match self {
+            Self::BulkItemsFailed { failed, .. } => *failed,
+            _ => 0,
+        }
+    }
+}
+
+/// The refusal, if any, in a request's or an item's status and `error`.
+pub(crate) fn write_refusal(status: u16, error: &serde_json::Value) -> Option<WriteRefusal> {
+    if error["type"].as_str() == Some("cluster_block_exception") {
+        return Some(WriteRefusal::ClusterBlock);
+    }
+    (status == 429).then_some(WriteRefusal::TooManyRequests)
+}
+
+fn refusal_in_body(body: &str) -> Option<WriteRefusal> {
+    let body = serde_json::from_str::<serde_json::Value>(body).ok()?;
+    let status_of = |value: &serde_json::Value| {
+        value["status"]
+            .as_u64()
+            .and_then(|status| u16::try_from(status).ok())
+            .unwrap_or_default()
+    };
+    // A by-query error keeps its `failures` list, alone or in the response.
+    let failures = body.as_array().or_else(|| body["failures"].as_array());
+    write_refusal(status_of(&body), &body["error"]).or_else(|| {
+        failures?
+            .iter()
+            .find_map(|failure| write_refusal(status_of(failure), &failure["cause"]))
+    })
 }
 
 /// reqwest's `Display` omits the cause (timeout, reset, refused connection),

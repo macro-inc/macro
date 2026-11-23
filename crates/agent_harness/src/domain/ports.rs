@@ -4,7 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::domain::model::PermissionPolicyConfig;
+use crate::domain::model::{ListedSessions, PermissionPolicyConfig, RuntimeAccessFacts};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
@@ -105,20 +105,31 @@ pub trait HarnessBindings: Send + Sync + 'static {
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
 
+    /// What decides whether a turn may run on the bot's harness, or `None` for
+    /// an unbound bot.
+    fn access_facts(
+        &self,
+        bot: BotId,
+        actor: Option<&MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = anyhow::Result<Option<RuntimeAccessFacts>>> + Send;
+
     /// The sessions holding one of `acp_sessions` whose bot is bound to
-    /// `harness` now. Scoping by binding is the authorization: a runtime
-    /// naming another harness's ACP sessions reattaches nothing.
+    /// `harness` now, split into live and dormant ones in one query. Scoping
+    /// by binding is the authorization: a runtime naming another harness's
+    /// ACP sessions reattaches nothing. Archived sessions are left out: a
+    /// runtime that keeps listing them never brings them back.
     fn sessions_on_harness(
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> impl Future<Output = anyhow::Result<Vec<AgentSessionId>>> + Send;
+    ) -> impl Future<Output = anyhow::Result<ListedSessions>> + Send;
 }
 
 /// Loads facts for the domain to resolve a bot's permission policy.
 ///
-/// Resolved at attach time like [`HarnessBindings`], so changing the agent's
-/// setting takes effect on its existing sessions the next time they attach.
+/// Resolved at attach time and again before every turn, so changing the
+/// agent's setting or its harness's bypass consent takes effect on its live
+/// sessions from their next prompt.
 pub trait PermissionPolicySource: Send + Sync + 'static {
     /// The persona choice and harness limit for `bot` right now.
     fn permission_policy(
@@ -130,8 +141,8 @@ pub trait PermissionPolicySource: Send + Sync + 'static {
 /// Loads a persona's choice of whether it is a coding agent.
 ///
 /// Read when a turn is announced or its reply resolved, like
-/// [`PermissionPolicySource`] is read on attach, so changing the agent's
-/// setting takes effect on its next turn. The domain applies the choice
+/// [`PermissionPolicySource`] is read before each turn, so changing the
+/// agent's setting takes effect on its next turn. The domain applies the choice
 /// with [`crate::domain::model::is_coding_agent`].
 pub trait CodingAgentSource: Send + Sync + 'static {
     /// The persona's setting for `bot`; `None` only for a fixed system bot,
@@ -142,21 +153,63 @@ pub trait CodingAgentSource: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<Option<bool>>> + Send;
 }
 
+pub use agent_session::domain::connection::RuntimeConnectionId;
+
+/// What recording a runtime's connection did to the agents bound to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionRecorded {
+    /// The harness's agents are as they were.
+    AgentsUnchanged,
+    /// An agent was bound to the harness (a Macro computer's first agent).
+    AgentBound,
+}
+
+/// The optional messages a runtime said, when it dialed, that it accepts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RuntimeAccepts {
+    /// `ToRuntimeMessage::AgentsChanged`.
+    pub agents_changed: bool,
+    /// `ToRuntimeMessage::ApplyAgent`: without it the runtime can't run an
+    /// agent teammate.
+    pub apply_agent: bool,
+}
+
+/// A harness and one of its runtime connections.
+pub type HarnessConnection = (HarnessId, RuntimeConnectionId);
+
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
 /// The registry itself is in-process liveness; this is what lets the rest of
-/// the product (the harness settings page) see whether a daemon is up.
+/// the product (the harness settings page) see whether a daemon is up. Each
+/// report names its connection because a harness's redial can land on another
+/// replica, which then learns nothing about the older socket being closed here.
 /// Methods take `Arc<Self>` and return owned futures so the registry can fire
 /// them from its own background tasks.
 pub trait HarnessPresence: Send + Sync + 'static {
-    /// A runtime attached for this harness.
-    fn connected(self: Arc<Self>, harness: HarnessId) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+    /// A runtime attached for this harness, accepting the optional messages
+    /// in `accepts`. Says whether recording it bound an agent to the harness.
+    fn connected(
+        self: Arc<Self>,
+        harness: HarnessId,
+        connection: RuntimeConnectionId,
+        accepts: RuntimeAccepts,
+    ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>>;
 
-    /// This harness's runtime connection closed.
+    /// This connection closed. Other connections of the harness are unaffected.
     fn disconnected(
         self: Arc<Self>,
         harness: HarnessId,
+        connection: RuntimeConnectionId,
     ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+
+    /// These connections are still held by this process, so a crash of this
+    /// process stops vouching for them. Returns the ones whose rows were
+    /// missing and had to be written again: one that closed after `live` was
+    /// listed is among them, and the caller closes it again.
+    fn renew(
+        self: Arc<Self>,
+        live: Vec<HarnessConnection>,
+    ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>>;
 }
 
 /// Resolves the runtime configuration for a bot that may receive agent
@@ -185,11 +238,13 @@ pub trait MessagePromptContext: Send + Sync + 'static {
 pub trait AgentPromptComposer: Send + Sync + 'static {
     /// Return the markdown that should be delivered to the agent runtime:
     /// the sanitized prompt behind a private context node that states the
-    /// current time and whatever instructions, people, and trigger it has.
+    /// current time and whatever instructions, agent identity, people, and
+    /// trigger it has.
     fn compose(
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
+        agent: Option<&agent_session::domain::model::SessionBot>,
         people: Option<&super::model::PromptPeople>,
         trigger: Option<&trigger_context::TriggerContext>,
     ) -> impl Future<Output = Result<String>> + Send;
@@ -405,8 +460,19 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
 
+    /// What decides whether a turn may run on the bot's harness, or `None` for
+    /// an unbound bot. Same resolution as [`HarnessBindings::access_facts`].
+    fn access_facts(
+        &self,
+        bot: BotId,
+        actor: Option<&MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = anyhow::Result<Option<RuntimeAccessFacts>>> + Send;
+
     /// Whether this process currently holds `harness`'s physical runtime socket.
     fn is_connected(&self, harness: HarnessId) -> bool;
+
+    /// The dial `harness`'s runtime is connected on in this process, if any.
+    fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId>;
 
     /// The sessions a runtime dialing in for `harness` reported as live, as
     /// [`HarnessBindings::sessions_on_harness`] resolves them.
@@ -414,7 +480,7 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> impl Future<Output = anyhow::Result<Vec<AgentSessionId>>> + Send;
+    ) -> impl Future<Output = anyhow::Result<ListedSessions>> + Send;
 }
 
 /// Mints the one secret a sandbox is given, and the config that points it at
@@ -545,4 +611,33 @@ pub trait ContainerManager: Send + Sync + 'static {
     /// this is the end of the session: nothing will reattach. A session with
     /// no container is already in the state this asks for, so it succeeds.
     fn teardown(&self, session: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Free what this process holds in memory for a session nothing has used
+    /// lately, after the harness released its actor. A later
+    /// [`Self::resume`] rebuilds it from the durable log, the way it does
+    /// after a restart.
+    ///
+    /// Only local memory: nothing durable, no container, and nothing another
+    /// replica holds. The default does nothing, which is right for a provider
+    /// whose sessions keep nothing in this process (sandboxes stop through
+    /// their own idle reapers). The two defaults are a pair: a provider that
+    /// overrides this to drop state must also override
+    /// [`Self::idle_release_is_lossless`].
+    fn release_idle(&self, _session: AgentSessionId) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
+    }
+
+    /// Whether [`Self::release_idle`] followed by [`Self::resume`] would give
+    /// the session's agent exactly the state it runs on now. Asked before the
+    /// harness closes anything: a session that would come back different is
+    /// not released.
+    ///
+    /// The default answers yes, which is only true because the default
+    /// [`Self::release_idle`] drops nothing. Override both or neither.
+    fn idle_release_is_lossless(
+        &self,
+        _session: AgentSessionId,
+    ) -> impl Future<Output = Result<bool>> + Send {
+        async { Ok(true) }
+    }
 }

@@ -5,6 +5,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+use super::profile_picture_change::{
+    picture_changed_metadata, publish_picture_changed, throttle_set,
+};
 use crate::api::context::{ApiContext, AuthorizationService};
 
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
@@ -26,16 +29,22 @@ pub struct ProfilePictureQueryParams {
         responses(
             (status = 200, body=EmptyResponse),
             (status = 401, body=String),
+            (status = 429, body=ErrorResponse, description = "Picture changed less than a second ago"),
             (status = 500, body=ErrorResponse),
         ),
         params(ProfilePictureQueryParams),
     )]
-#[tracing::instrument(skip(ctx, authorization))]
+#[tracing::instrument(skip(ctx, authorization), fields(rate_limited = tracing::field::Empty))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     Query(params): Query<ProfilePictureQueryParams>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
+    let macro_user_id = authorization.authorization.user.macro_user_id.clone();
+    throttle_set(&ctx, macro_user_id.as_ref())
+        .await
+        .map_err(IntoResponse::into_response)?;
+
     update_profile_picture(
         &ctx.db,
         &authorization.authorization.user.user_context.fusion_user_id,
@@ -47,5 +56,9 @@ pub async fn handler(
         tracing::error!(error=?e, user_id = %authorization.authorization.user.user_context.user_id, "failed to update user profile picture");
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
     })?;
+    publish_picture_changed(
+        &ctx,
+        picture_changed_metadata(macro_user_id, None, &params.url),
+    );
     Ok((StatusCode::OK, Json(EmptyResponse {})).into_response())
 }

@@ -6,10 +6,6 @@ import {
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import {
-  enableCrmActivity,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { Show } from 'solid-js';
@@ -26,9 +22,10 @@ import { crmTaskComposerContext } from './task-composer';
 
 /**
  * The record's Tasks tab: the production Tasks list, scoped to tasks
- * associated with the record through its Companies or Contacts property or a
- * reference (for a company, also through any of its contacts). It owns its
- * tag sets because a standalone record has no list provider above it.
+ * associated with the record through its Companies or Contacts property, a
+ * custom entity property that names the record, or a reference (for a
+ * company, also through any of its contacts). It owns its tag sets because a
+ * standalone record has no list provider above it.
  */
 export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
   const layout = useSplitLayout();
@@ -83,17 +80,13 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
   let listElement: HTMLDivElement | undefined;
 
   const composeTask = () => {
-    const context = crmTaskComposerContext(props.scope);
-    const adaptive = isFeatureEnabled(enableCrmActivity);
     layout.popoverSplit({
       type: 'component',
       id: 'task-compose',
       params: {
-        // Record identity/associations must survive a restart even with the
-        // standard property row; they cannot live only in a create callback.
-        composerContext: adaptive
-          ? context
-          : { ...context, visiblePropertyIds: undefined },
+        // Record identity/associations must survive a restart; they cannot
+        // live only in a create callback.
+        composerContext: crmTaskComposerContext(props.scope),
       },
     });
   };

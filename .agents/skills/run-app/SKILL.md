@@ -18,7 +18,7 @@ The app is http://localhost:3000/app. Open it in the VM browser. The user's lapt
 
 The `.cursor` scripts re-enter the pinned nix shell. For any other `docker`, `just`, `bun`, or `doppler` command, prefix with `nix develop /workspace --command`.
 
-Do not run `just run_local`. That is the laptop TUI.
+Do not run `just run_local` on Cursor Cloud: it compiles every service, while these scripts use the baked Nix binaries. Everywhere else, `just run_local` is the right command and needs no terminal; see the `local-preview` skill.
 
 ## Start
 
@@ -54,7 +54,7 @@ bash .cursor/frontend.sh stop && bash .cursor/frontend.sh
 
 Use the same restart after a frontend dependency or Vite config change.
 
-Do not run `just stack update --frontend`. That builds a static bundle. This Cloud stack does not serve one. On a `--no-frontend` stack that flag then tells you to re-run `just stack up`, which wipes volumes.
+Do not run `just stack update --frontend`. That builds a static bundle. This Cloud stack does not serve one. On a `--no-frontend` stack that flag fails and points at `just run_local --fresh`, which wipes volumes.
 
 ## Show the change
 

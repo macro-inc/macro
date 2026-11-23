@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import {
   isForwardRecipientRefusal,
   useForwardCalendarEventMutation,
@@ -151,6 +152,7 @@ export function createGuestInviteController(
       actions: [
         {
           label: 'Retry',
+          icon: ArrowCounterClockwise,
           onClick: () => sendForward(current, forward),
         },
       ],

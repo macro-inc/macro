@@ -400,3 +400,54 @@ describe('answer details', () => {
     rendered.unmount();
   });
 });
+
+describe('a live answer while it loads', () => {
+  it.each([
+    ['table', 'table', 4],
+    ['bar', 'figure', 0],
+  ] as const)(
+    'draws a %s answer as its shape, not as text',
+    (displayMode, shape, rows) => {
+      const rendered = render(() => (
+        <PlainAnswerDisplay>
+          <LiveQuestion
+            source={{ queryId: 'meetings', prompt: 'Meetings', displayMode }}
+            loading
+            onRefresh={vi.fn()}
+          />
+        </PlainAnswerDisplay>
+      ));
+      const loading = rendered.getByRole('status', { name: 'Loading answer' });
+      expect(loading.textContent).toBe('Loading answer');
+      const skeleton = loading.querySelector('[aria-hidden="true"]')!;
+      expect(skeleton.querySelector('table, figure, .space-y-3')).toBeTruthy();
+      expect(skeleton.querySelectorAll('tr').length).toBe(rows);
+      if (shape === 'figure')
+        expect(skeleton.querySelectorAll('.rounded-sm').length).toBe(3);
+      expect(rendered.queryByText('Loading answer…')).toBeNull();
+      rendered.unmount();
+    }
+  );
+
+  it('keeps an inline value’s place with a bar and names it for assistive tech', () => {
+    const rendered = render(() => (
+      <PlainAnswerDisplay>
+        <LiveQuestion
+          source={{
+            queryId: 'open-tickets',
+            prompt: 'Open tickets',
+            displayMode: 'scalar',
+          }}
+          loading
+          onRefresh={vi.fn()}
+        />
+      </PlainAnswerDisplay>
+    ));
+    const chip = rendered.getByRole('button', {
+      name: 'Open tickets: Loading answer…',
+    });
+    expect(chip.querySelector('.skeleton-shimmer')).toBeTruthy();
+    expect(chip.textContent).not.toContain('Loading answer…');
+    rendered.unmount();
+  });
+});

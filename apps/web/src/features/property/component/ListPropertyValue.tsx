@@ -4,15 +4,23 @@ import type { Property as PropertyType } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { cn, Layer } from '@ui';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { SYSTEM_PROPERTY_IDS } from '../constants';
 import { PropertyEmptyIcon } from '../extractors/PropertyEmpty';
 import { formatDate } from '../utils/formatting';
+import { UserFilterActions } from './UserFilterActions';
 
 /** Shared property cell for unified task and native project lists. */
 export function ListPropertyValue(props: {
   property: PropertyType;
   entityId: string;
   class?: string;
+  /** Offers "Filter by <name>" for each person in the value's hover card. */
+  onFilterByUser?: (userId: string) => void;
+  /** Text shown with the date icon in place of the value, such as a range. */
+  valueText?: string;
+  /** The editor the cell opens instead of the property's own. */
+  editor?: typeof Property.PopoverEditor;
 }) {
   const context = usePropertiesContext();
   const isInlineType = () =>
@@ -58,6 +66,9 @@ export function ListPropertyValue(props: {
           property={property}
           entityId={props.entityId}
           class={props.class}
+          onFilterByUser={props.onFilterByUser}
+          valueText={props.valueText}
+          editor={props.editor}
         />
       )}
     </Property.Root>
@@ -68,6 +79,9 @@ function ListPropertyCell(props: {
   property: Accessor<PropertyType>;
   entityId: string;
   class?: string;
+  onFilterByUser?: (userId: string) => void;
+  valueText?: string;
+  editor?: typeof Property.PopoverEditor;
 }) {
   const context = usePropertiesContext();
   const isUserEntity = () =>
@@ -77,9 +91,10 @@ function ListPropertyCell(props: {
     if (!isUserEntity()) return 0;
     return getEntityValues(props.property()).length;
   };
-  const isEmpty = () => !hasValue(props.property());
+  const isEmpty = () => !hasValue(props.property()) && !props.valueText;
   const label = () => {
     const property = props.property();
+    if (props.valueText) return `${property.displayName}: ${props.valueText}`;
     if (property.valueType === 'DATE' && property.value) {
       return `${property.displayName}: ${formatDate(property.value)}`;
     }
@@ -88,7 +103,19 @@ function ListPropertyCell(props: {
 
   return (
     <>
-      <Property.Tooltip property={props.property()}>
+      <Property.Tooltip
+        property={props.property()}
+        actions={
+          <Show when={props.onFilterByUser}>
+            {(onFilter) => (
+              <UserFilterActions
+                property={props.property()}
+                onFilter={onFilter()}
+              />
+            )}
+          </Show>
+        }
+      >
         <Layer depth={2}>
           <Property.Pill
             aria-label={label()}
@@ -167,20 +194,34 @@ function ListPropertyCell(props: {
                   />
                 </Match>
               </Switch>
-              <Property.Text
-                property={props.property()}
-                hideIcon={props.property().specificEntityType === 'INITIATIVE'}
-                resolveSingleEntity={
-                  props.property().specificEntityType === 'INITIATIVE'
+              <Show
+                when={props.valueText}
+                fallback={
+                  <Property.Text
+                    property={props.property()}
+                    hideIcon={
+                      props.property().specificEntityType === 'INITIATIVE'
+                    }
+                    resolveSingleEntity={
+                      props.property().specificEntityType === 'INITIATIVE'
+                    }
+                    class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:sr-only"
+                  />
                 }
-                class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:sr-only"
-              />
+              >
+                {(text) => (
+                  <span class="min-w-0 max-w-full flex-1 truncate @max-[840px]/u-list:sr-only">
+                    {text()}
+                  </span>
+                )}
+              </Show>
             </Show>
             <Property.Caret class="@max-[840px]/u-list:hidden" />
           </Property.Pill>
         </Layer>
       </Property.Tooltip>
-      <Property.PopoverEditor
+      <Dynamic
+        component={props.editor ?? Property.PopoverEditor}
         entitySelfFilter={{
           entityType: context.entityType,
           blockId: props.entityId,

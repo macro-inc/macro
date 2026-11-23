@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT h.computer_id AS \"computer_id!\", count(*) AS \"agents!\"\n            FROM harnesses h\n            JOIN agent_configs a ON a.harness_id = h.id\n            JOIN bots b ON b.id = a.bot_id\n            WHERE h.computer_id = ANY($1)\n              AND h.deleted_at IS NULL\n              AND b.deleted_at IS NULL\n            GROUP BY h.computer_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "agents!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "0bf476e9a7fb781610ef18f7b9967074216fb1ae8c8906cc6f112b33f4d4f0bd"
+}

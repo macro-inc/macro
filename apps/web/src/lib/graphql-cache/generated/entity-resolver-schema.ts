@@ -91,11 +91,17 @@ export const entityResolverSchema = {
         'GraphqlSoupDocument',
         'GraphqlSoupEmailThread',
         'GraphqlSoupForeignEntity',
+        'GraphqlSoupHarness',
         'GraphqlSoupInitiative',
         'GraphqlSoupProject',
         'GraphqlSoupReminder',
+        'GraphqlSoupTeam',
       ],
       argumentPaths: [['input', 'entityId']],
+    },
+    visibleInitiative: {
+      targets: ['GraphqlSoupInitiative'],
+      argumentPaths: [['initiativeId']],
     },
   },
 } as const;
@@ -117,9 +123,11 @@ export type GeneratedEntityResolverTarget =
   | 'GraphqlSoupDocument'
   | 'GraphqlSoupEmailThread'
   | 'GraphqlSoupForeignEntity'
+  | 'GraphqlSoupHarness'
   | 'GraphqlSoupInitiative'
   | 'GraphqlSoupProject'
-  | 'GraphqlSoupReminder';
+  | 'GraphqlSoupReminder'
+  | 'GraphqlSoupTeam';
 export type GeneratedEntityResolverArgumentPath =
   | readonly ['id']
   | readonly ['initiativeId']

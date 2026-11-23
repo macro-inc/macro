@@ -45,7 +45,7 @@ async fn bulk_user_upsert_raises_viewers_and_adds_strangers_but_leaves_the_owner
     tx.commit().await.unwrap();
 
     upsert_user_entity_access_bulk(
-        &pool,
+        &mut *pool.acquire().await.unwrap(),
         &[owner.clone(), viewer.clone(), stranger.clone()],
         &session_id,
         EntityType::AgentSession,
@@ -1129,7 +1129,12 @@ async fn ensuring_comment_access_upgrades_view_and_preserves_stronger_grants(
         .execute(&pool)
         .await?;
         for _ in 0..2 {
-            ensure_call_participant_comment_access(&pool, &entity, user.clone()).await?;
+            ensure_call_participant_comment_access(
+                &mut *pool.acquire().await?,
+                &entity,
+                user.clone(),
+            )
+            .await?;
         }
         let level = sqlx::query_scalar!(
             r#"SELECT access_level AS "access_level!: AccessLevel" FROM entity_access WHERE entity_id = $1 AND entity_type = 'call' AND source_id = $2 AND source_type = 'user' AND granted_from_project_id IS NULL"#,
@@ -1156,7 +1161,12 @@ async fn participant_grants_reject_channel_calls_nonparticipants_and_departed_us
 ) -> anyhow::Result<()> {
     let call_id = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
     let participant = MacroUserIdStr::try_from_email("user-b@test.com")?;
-    ensure_call_participant_comment_access(&pool, &call_id, participant.copied()).await?;
+    ensure_call_participant_comment_access(
+        &mut *pool.acquire().await?,
+        &call_id,
+        participant.copied(),
+    )
+    .await?;
     assert!(
         !fetch_entity_access_rows(&pool, &call_id, EntityType::Call)
             .await
@@ -1168,7 +1178,12 @@ async fn participant_grants_reject_channel_calls_nonparticipants_and_departed_us
         .execute(&pool)
         .await?;
     let stranger = MacroUserIdStr::try_from_email("stranger@test.com")?;
-    ensure_call_participant_comment_access(&pool, &call_id, stranger.copied()).await?;
+    ensure_call_participant_comment_access(
+        &mut *pool.acquire().await?,
+        &call_id,
+        stranger.copied(),
+    )
+    .await?;
     sqlx::query!(
         "UPDATE call_participants SET left_at = now() WHERE call_id = $1 AND user_id = $2",
         call_id,
@@ -1176,7 +1191,12 @@ async fn participant_grants_reject_channel_calls_nonparticipants_and_departed_us
     )
     .execute(&pool)
     .await?;
-    ensure_call_participant_comment_access(&pool, &call_id, participant.copied()).await?;
+    ensure_call_participant_comment_access(
+        &mut *pool.acquire().await?,
+        &call_id,
+        participant.copied(),
+    )
+    .await?;
     let rows = fetch_entity_access_rows(&pool, &call_id, EntityType::Call).await;
     assert!(
         !rows

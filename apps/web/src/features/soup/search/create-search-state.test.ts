@@ -4,7 +4,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
-vi.mock('./context', () => ({ useOptionalSearchContext: () => undefined }));
 
 const [query, setQuery] = createStore({
   isSuccess: false,
@@ -15,7 +14,8 @@ const [query, setQuery] = createStore({
 });
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => query,
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
 }));
 
 import { createSearchState } from './create-search-state';

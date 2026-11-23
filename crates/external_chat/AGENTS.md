@@ -13,14 +13,16 @@ files, notification effects and the `/external-chats` routes, over the
 ## Start here
 
 - `src/domain/ports.rs`: `ChatProvider` (accounts, who can send, members,
-  names, communities, adopt/detach, the provider's send outbox) and the
-  repository, publisher, file store and rate limiter ports.
+  names, communities, pictures, adopt/detach, the provider's send outbox) and
+  the repository, publisher, file store (attachments and provider pictures,
+  `store_picture`) and rate limiter ports.
 - `src/domain/service.rs` + `service/timeline.rs`: the use cases. The
   `ReplyBlock` decision (`reply_block`) combines `SendAuthority`, the
   provider account and its `SendingFacts`.
 - `src/domain/timeline.rs` + `timeline/view.rs`: DTOs and how stored rich
-  content, mentions and votes become names and tallies (`People` comes from
-  the provider). `src/domain/rich.rs`: stored `RichContent`.
+  content, mentions and votes become names and tallies. `People` comes from
+  the provider (`ChatProvider::people`) and names provider ids and stored
+  persons (senders, reactors, voters); this crate's SQL never names anyone. `src/domain/rich.rs`: stored `RichContent`.
 - `src/domain/effects.rs`, `media.rs`: notification outbox and attachment
   import drained by DSS. `src/signals.rs`: channels DSS listens on.
 - `src/outbound/pg.rs`: the adapter, plus public transaction helpers
@@ -50,6 +52,13 @@ files, notification effects and the `/external-chats` routes, over the
 - View access is `external_chat_access_level` (see
   `docs/architecture/external-chats.md`); bot view receipts read but never
   borrow a person's account, sends or unread cursor (`view_scope`).
+- The send route refuses an agent's program (`macro_authorization::is_agent_run`)
+  unless `SendReply.user_confirmation` quotes the user's approval
+  (`refuse_unconfirmed_program_send`, 403 `confirmation_required`), as email
+  send does; owner routines and the person's own credentials send as before.
+  The quote is dropped (`send_intent`) before the idempotency digest and the
+  stored send. Uploads only stage a file, so they are not checked: nothing
+  leaves until a confirmed send names it.
 
 ## Related
 

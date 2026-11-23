@@ -4,15 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { Message } from './message';
 import type { MessageChangeOneOfNineType } from './messageChangeOneOfNineType';
-import type { ThreadState } from './threadState';
 
 /**
- * Thread resolution, placement, or deletion changed.
+ * A channel call's thread root was created. It stands for the call, so it
+reaches viewers and moves the channel up without any of what a post
+causes: no notifications, agents, routines, webhooks or search documents.
  */
 export type MessageChangeOneOfNine = {
-  /** Persisted thread state. */
-  state: ThreadState;
+  /** Persisted root. */
+  message: Message;
   type: MessageChangeOneOfNineType;
 };

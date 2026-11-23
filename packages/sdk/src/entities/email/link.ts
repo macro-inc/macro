@@ -51,7 +51,11 @@ export class Link extends MacroEntity<LinkRecord> {
   /** The inbox's avatar URL, if any. */
   readonly photoUrl = this.field('photo_url');
 
-  /** Read category and sender-policy changes for this inbox. */
+  /**
+   * Read category and sender-policy changes for this inbox.
+   *
+   * @readonly
+   */
   async settingsOperations(): Promise<MailboxSettingsOperation[]> {
     return unwrap(
       await this.client.email.mailboxSettingsOperations({

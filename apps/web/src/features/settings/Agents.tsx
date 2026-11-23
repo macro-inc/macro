@@ -4,9 +4,15 @@ import {
   isCoderHarness,
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
+import { t } from '@app/lib/i18n';
+import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import {
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import {
@@ -14,9 +20,9 @@ import {
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { usePipedreamMcpFlag } from '@core/pipedream/flag';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
@@ -48,13 +54,14 @@ import {
   useAgentModelsQueries,
 } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
-import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
+import { useConnectors } from '@queries/connectors';
+import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
 import {
   useCurrentTeamQuery,
   useIsTeamAdmin,
   useIsTeamOwner,
 } from '@queries/team/teams';
+import type { AgentModelDto } from '@service-agent-harness/generated/schemas/agentModelDto';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useSearchParams } from '@solidjs/router';
@@ -70,6 +77,7 @@ import {
   on,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
@@ -78,6 +86,7 @@ import {
   agentSettingsRequest,
   consumeAgentSettingsRequest,
 } from './agentSettingsState';
+import { ConnectorAppPicker } from './ConnectorAppPicker';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
 import { AutoArchiveSetting } from './components/auto-archive-setting';
@@ -86,11 +95,14 @@ import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
 import { WhereItRunsOption } from './components/where-it-runs-option';
 import {
+  ComputerWhereItRuns,
+  RunOnComputerRow,
+} from './computers/views/agent-computer-entry';
+import {
   type ApiKeyProvider,
   apiKeyProviderName,
   apiKeyProviderOf,
 } from './core/agent-api-key';
-import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
   SettingsCard,
@@ -125,9 +137,14 @@ type ConnectedHarness = {
   allowPermissionBypass: boolean;
   target: AgentModelTarget;
   connected?: boolean;
+  /** A team's Macro computer rather than a machine someone paired. */
+  computer?: boolean;
 };
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
+
+/** The model id a runtime lists for its own default choice (Claude Code's). */
+const DEFAULT_HARNESS_MODEL = 'default';
 
 const IN_MEMORY_HARNESS: ConnectedHarness = {
   id: 'in-memory',
@@ -160,11 +177,21 @@ export function Agents(props: {
   const messageAgent = (id: string) =>
     agentDm?.open(id === MACRO_AGENT_BOT_ID ? MACRO_NEW_BOT_ID : id);
   const agentList = tourTarget(AGENTS_TOUR.agentList);
-  const [creating, setCreating] = createSignal(false);
+  // A create request already waiting opens the form on first render, so the
+  // list never flashes before it.
+  const pendingCreate = untrack(agentSettingsRequest);
+  const [creating, setCreating] = createSignal(
+    pendingCreate?.type === 'create'
+  );
+  // A machine chosen elsewhere, such as a Macro computer just set up.
+  const [createHarnessId, setCreateHarnessId] = createSignal(
+    pendingCreate?.type === 'create' ? pendingCreate.harnessId : undefined
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const creatingFromLink = () => searchParams.createAgent === 'true';
   const closeCreateAgent = () => {
     setCreating(false);
+    setCreateHarnessId(undefined);
     setEditingAgent(undefined);
     setDeletingAgent(undefined);
     props.onCloseCreate?.();
@@ -174,7 +201,7 @@ export function Agents(props: {
   };
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
-  const channelsContext = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const currentUserId = useUserId();
   const agentsQuery = useAgentsQuery();
   const createAgentMutation = useCreateAgentMutation();
@@ -186,7 +213,7 @@ export function Agents(props: {
   const cursorStatus = useCursorApiKeyStatusQuery();
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
-  const harnessesQuery = useHarnessesQuery();
+  const harnessesQuery = useRunnableHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => {
     const harnesses = harnessesQuery.isSuccess ? harnessesQuery.data : [];
     return buildAgentModelTargets(cursorConnected(), harnesses).map(
@@ -205,13 +232,30 @@ export function Agents(props: {
         const harness = harnesses.find(
           (candidate) => candidate.id === target.harnessId
         );
+        if (harness?.computer_id) {
+          // A computer away is turned off; its agents start once it is on.
+          return {
+            id: harness.id,
+            name: [
+              harness.name,
+              harness.connected ? undefined : t('computers.stopped'),
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            kind: 'macrod',
+            allowPermissionBypass: harness.allow_permission_bypass ?? false,
+            target,
+            connected: harness.connected,
+            computer: true,
+          };
+        }
         return {
           id: target.harnessId ?? '',
           // Offline runtimes stay selectable: binding an agent to a machine
-          // that is merely asleep is normal, and the label says what to expect.
+          // that is turned off is normal, and the label says what to expect.
           name: [
             harness?.name ?? 'macrod',
-            harness?.owner.type === 'team' ? 'Team' : undefined,
+            harness?.shared_team_ids.length ? 'Team machine' : undefined,
             harness && !harness.connected ? 'Offline' : undefined,
           ]
             .filter(Boolean)
@@ -225,7 +269,7 @@ export function Agents(props: {
     );
   };
   const channelOptions = createMemo(() =>
-    botAssignableChannelOptions(channelsContext.channels())
+    botAssignableChannelOptions(channelDirectory.channels())
   );
   const currentTeamId = () =>
     currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
@@ -242,14 +286,37 @@ export function Agents(props: {
       isTeamOwner(),
       isTeamAdmin()
     );
+  const managedAgents = () =>
+    (agentsQuery.isSuccess ? agentsQuery.data : []).filter((agent) =>
+      canManageAgent(agent.bot, currentUserId(), currentTeamId())
+    );
+  // Only a runtime's own catalog says which model its `default` resolves to,
+  // so load the catalogs of runtimes that have an agent on `default`.
+  const defaultModelHarnesses = createMemo(() =>
+    connectedHarnesses().filter((harness) =>
+      managedAgents().some(
+        (agent) =>
+          agent.default_model === DEFAULT_HARNESS_MODEL &&
+          (agent.harness_id ?? agent.harness) === harness.id
+      )
+    )
+  );
+  const defaultModelQueries = useAgentModelsQueries(() =>
+    defaultModelHarnesses().map((harness) => harness.target)
+  );
+  const catalogFor = (harnessId: string) => {
+    const index = defaultModelHarnesses().findIndex(
+      (harness) => harness.id === harnessId
+    );
+    const query = index >= 0 ? defaultModelQueries[index] : undefined;
+    return query?.isSuccess && query.data.status === 'available'
+      ? query.data.models
+      : [];
+  };
   const agents = createMemo(() =>
-    (agentsQuery.isSuccess ? agentsQuery.data : [])
-      .filter((agent) =>
-        canManageAgent(agent.bot, currentUserId(), currentTeamId())
-      )
-      .map((agent) =>
-        summarizeAgent(agent, connectedHarnesses(), channelOptions())
-      )
+    managedAgents().map((agent) =>
+      summarizeAgent(agent, connectedHarnesses(), channelOptions(), catalogFor)
+    )
   );
   const teamAgents = createMemo(() => [
     MACRO_AGENT,
@@ -259,11 +326,21 @@ export function Agents(props: {
     agents().filter((agent) => agent.share === 'Private')
   );
 
+  createEffect(
+    on(agentSettingsRequest, (request) => {
+      if (request?.type !== 'create') return;
+      setEditingAgent(undefined);
+      setCreateHarnessId(request.harnessId);
+      setCreating(true);
+      consumeAgentSettingsRequest(request.id);
+    })
+  );
+
   // Opened from an agent's user card: wait for the list, then show that
   // agent's editor if it is one the viewer manages.
   createEffect(
     on([agentSettingsRequest, () => agentsQuery.isPending], ([request]) => {
-      if (!request || agentsQuery.isPending) return;
+      if (request?.type !== 'edit' || agentsQuery.isPending) return;
       const agent = agents().find(
         (candidate) => candidate.id === request.agentId
       );
@@ -389,6 +466,7 @@ export function Agents(props: {
                     />
                   )}
                 </For>
+                <RunOnComputerRow />
                 <Show when={agentsQuery.isPending}>
                   <p class="px-6 py-4 text-sm text-ink-muted">
                     Loading agents…
@@ -411,6 +489,7 @@ export function Agents(props: {
       <Show keyed when={props.createKind ?? (creating() || creatingFromLink())}>
         <AgentEditorPage
           initialKind={props.createKind}
+          initialHarnessId={createHarnessId()}
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
@@ -454,7 +533,8 @@ export function Agents(props: {
 function summarizeAgent(
   agent: AgentWithHarnessId,
   harnesses: readonly ConnectedHarness[],
-  channels: readonly ChannelOption[]
+  channels: readonly ChannelOption[],
+  catalogFor: (harnessId: string) => readonly AgentModelDto[]
 ): AgentSummary {
   const harnessKey = agent.harness_id ?? agent.harness;
   const harness = harnesses.find((option) => option.id === harnessKey);
@@ -476,7 +556,10 @@ function summarizeAgent(
     instructions: agent.instructions,
     whereItRuns: whereItRunsLabel(harnessKey, harness),
     defaultModel:
-      MODEL_PRETTYNAME[agent.default_model as Model] ?? agent.default_model,
+      agent.default_model === DEFAULT_HARNESS_MODEL
+        ? catalogModelLabel(agent.default_model, catalogFor(harnessKey))
+        : (MODEL_PRETTYNAME[agent.default_model as Model] ??
+          agent.default_model),
     channelSummary,
     share: agent.bot.owner?.type === 'team' ? 'Team' : 'Private',
     persistedAgent: agent,
@@ -489,7 +572,9 @@ function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
   if (id === 'cursor') return 'In Cursor';
   // Any other id is a registered macrod harness uuid; if it is not in the
   // connected list any more, the harness has been removed.
-  return harness ? `In your harness · ${harness.name}` : 'Disconnected runtime';
+  if (harness?.computer)
+    return `${t('computers.onComputer')} · ${harness.name}`;
+  return harness ? `On your machine · ${harness.name}` : 'Disconnected machine';
 }
 
 function AgentRow(props: {
@@ -645,6 +730,8 @@ function AgentDeleteDialog(props: {
 
 function AgentEditorPage(props: {
   initialKind?: AgentKind;
+  /** The machine a new agent starts on under Where it runs. */
+  initialHarnessId?: string;
   agent?: AgentWithHarnessId;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
@@ -671,6 +758,7 @@ function AgentEditorPage(props: {
   const [harnessId, setHarnessId] = createSignal(
     props.agent?.harness_id ??
       props.agent?.harness ??
+      props.initialHarnessId ??
       (props.initialKind === 'coder'
         ? props.connectedHarnesses.find((harness) =>
             isCoderHarness(harness.kind === 'macrod' ? 'macrod' : harness.id)
@@ -696,7 +784,7 @@ function AgentEditorPage(props: {
   };
   const preferredModelId = (id: string) => {
     const data = modelDataForHarness(id);
-    if (data?.status === 'unsupported') return 'default';
+    if (data?.status === 'unsupported') return DEFAULT_HARNESS_MODEL;
     if (data?.status !== 'available') return '';
     const current = data.currentModel;
     if (
@@ -745,8 +833,9 @@ function AgentEditorPage(props: {
       // The built-in runtime reports slugs as names; other runtimes name
       // their own models.
       label:
-        harnessId() === IN_MEMORY_HARNESS.id
-          ? modelLabel(model.id, model.name)
+        harnessId() === IN_MEMORY_HARNESS.id ||
+        model.id === DEFAULT_HARNESS_MODEL
+          ? modelLabel(model.id, model.name, model.description)
           : model.name,
       description: model.description ?? undefined,
       group: model.group ?? undefined,
@@ -760,8 +849,7 @@ function AgentEditorPage(props: {
   const [share, setShare] = createSignal<AgentShare>(
     props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
   );
-  const pipedreamMcp = usePipedreamMcpFlag();
-  const connections = usePipedreamConnectedSlugs();
+  const connections = useConnectors();
   const [mcp, setMcp] = createSignal<AgentMcpServers>(
     props.agent?.mcp ?? { scope: 'owner_connections' }
   );
@@ -784,9 +872,14 @@ function AgentEditorPage(props: {
     rememberedMcpServers = servers;
     setMcp({ scope: 'selected', servers });
   };
-  const [autoAcceptChoice, setAutoAcceptChoice] = createSignal(
-    props.agent?.auto_accept_permissions === true
-  );
+  // A Macro computer is the team's own sandbox, so its agents bypass
+  // permission prompts unless someone chooses otherwise.
+  const [autoAcceptPick, setAutoAcceptChoice] = createSignal<boolean>();
+  const autoAcceptChoice = () =>
+    autoAcceptPick() ??
+    (props.agent
+      ? props.agent.auto_accept_permissions === true
+      : selectedHarness()?.computer === true);
   const allowPermissionBypass = () =>
     selectedHarness()?.allowPermissionBypass === true;
   const autoAcceptPermissions = () =>
@@ -811,7 +904,11 @@ function AgentEditorPage(props: {
   const cursorHarness = () =>
     props.connectedHarnesses.find((harness) => harness.id === 'cursor');
   const macrodHarnesses = () =>
-    props.connectedHarnesses.filter((harness) => harness.kind === 'macrod');
+    props.connectedHarnesses.filter(
+      (harness) => harness.kind === 'macrod' && !harness.computer
+    );
+  const computerHarnesses = () =>
+    props.connectedHarnesses.filter((harness) => harness.computer);
   // Back from a setup guide, land on what was just set up.
   const finishSetup = () => {
     const finished = setup();
@@ -826,13 +923,9 @@ function AgentEditorPage(props: {
       channelMode() === 'all'
         ? 'All channels'
         : `${selectedChannelIds().length} ${selectedChannelIds().length === 1 ? 'channel' : 'channels'}`,
-      ...(pipedreamMcp()
-        ? [
-            mcp().scope === 'owner_connections'
-              ? 'Your connected apps'
-              : `${selectedMcpServers().length} selected apps`,
-          ]
-        : []),
+      mcp().scope === 'owner_connections'
+        ? 'Your connected apps'
+        : `${selectedMcpServers().length} selected apps`,
     ].join(' · ');
   const modelPicker = () => (
     <div class="flex min-w-0 flex-col gap-1.5">
@@ -864,30 +957,45 @@ function AgentEditorPage(props: {
             <Show
               when={!query.isError}
               fallback={
-                <div class="flex items-center gap-2">
-                  <p class="min-w-0 flex-1 text-xs text-negative">
-                    Could not load models for{' '}
-                    {selectedHarness()?.name ?? 'this runtime'}.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Retry models for ${selectedHarness()?.name ?? 'this runtime'}`}
-                    onClick={() =>
-                      fireAndForget(query.refetch(), 'agent-settings')
-                    }
-                  >
-                    Retry
-                  </Button>
-                </div>
+                <Show
+                  when={
+                    !computerHarnesses().some(
+                      (harness) => harness.id === harnessId()
+                    )
+                  }
+                  fallback={
+                    // A status line, not a field: it wraps on a phone
+                    // instead of spilling out of an input's fixed height.
+                    <p class="flex min-h-9 not-touch:min-h-8 items-center text-sm text-ink-muted">
+                      {t('computers.modelsWhenOn')}
+                    </p>
+                  }
+                >
+                  <div class="flex items-center gap-2">
+                    <p class="min-w-0 flex-1 text-xs text-negative">
+                      Could not load models for{' '}
+                      {selectedHarness()?.name ?? 'this machine'}.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Retry models for ${selectedHarness()?.name ?? 'this machine'}`}
+                      onClick={() =>
+                        fireAndForget(query.refetch(), 'agent-settings')
+                      }
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </Show>
               }
             >
               <Show
                 when={selectedModelData()?.status === 'available'}
                 fallback={
                   <p class="settings-input text-ink-muted">
-                    Model selection is unsupported by this runtime.
+                    Model selection is unsupported by this machine.
                   </p>
                 }
               >
@@ -895,7 +1003,7 @@ function AgentEditorPage(props: {
                   when={selectedModelOptions().length > 0}
                   fallback={
                     <p class="settings-input text-ink-muted">
-                      This runtime did not return any models.
+                      This machine did not return any models.
                     </p>
                   }
                 >
@@ -1136,6 +1244,16 @@ function AgentEditorPage(props: {
     close();
   };
 
+  const panel = useSplitPanel();
+  if (isTouchDevice()) {
+    useSplitBackInterceptor(() => {
+      if (panel && !panel.isPanelActive()) return false;
+      if (busy()) return true;
+      if (setup()) finishSetup();
+      else close();
+      return true;
+    });
+  }
   return (
     <Switch>
       <Match when={setup() === 'cursor'}>
@@ -1276,7 +1394,8 @@ function AgentEditorPage(props: {
                 title="Where it runs"
                 description="Pick where this agent does its work."
               >
-                <fieldset class="flex flex-col gap-2">
+                {/* A fieldset is min-content wide by default; a long option would widen the phone form. */}
+                <fieldset class="flex min-w-0 flex-col gap-2">
                   <legend class="sr-only">Where it runs</legend>
                   <WhereItRunsOption
                     value="in-memory"
@@ -1323,10 +1442,12 @@ function AgentEditorPage(props: {
                   </WhereItRunsOption>
                   <WhereItRunsOption
                     value="harness"
-                    title="In your harness"
+                    title="On your machine"
                     description="Your own agent on your own machine. Local Claude Code, Codex, or other harness, via Macrod."
                     icon={<TerminalIcon />}
-                    checked={selectedHarness()?.kind === 'macrod'}
+                    checked={macrodHarnesses().some(
+                      (harness) => harness.id === harnessId()
+                    )}
                     disabled={macrodHarnesses().length === 0}
                     action={
                       <Show when={macrodHarnesses().length === 0}>
@@ -1335,7 +1456,7 @@ function AgentEditorPage(props: {
                           variant="ghost"
                           size="sm"
                           class="text-ink"
-                          aria-label="Set up your own harness"
+                          aria-label="Set up your own machine"
                           disabled={busy()}
                           onClick={() => setSetup('pairing')}
                         >
@@ -1351,10 +1472,10 @@ function AgentEditorPage(props: {
                     <div class="grid grid-cols-1 gap-3 @min-[440px]:grid-cols-[repeat(2,minmax(0,280px))]">
                       <div class="flex min-w-0 flex-col gap-1.5">
                         <span class="text-xs font-medium text-ink-muted">
-                          Harness
+                          Machine
                         </span>
                         <SettingsSelect
-                          label="Harness"
+                          label="Machine"
                           options={macrodHarnesses()}
                           value={harnessId()}
                           onChange={handleHarnessChange}
@@ -1363,6 +1484,16 @@ function AgentEditorPage(props: {
                       {modelPicker()}
                     </div>
                   </WhereItRunsOption>
+                  <ComputerWhereItRuns
+                    computers={computerHarnesses()}
+                    harnessId={harnessId()}
+                    checked={computerHarnesses().some(
+                      (harness) => harness.id === harnessId()
+                    )}
+                    busy={busy()}
+                    modelPicker={modelPicker()}
+                    onSelect={handleHarnessChange}
+                  />
                 </fieldset>
                 <Show when={!keyProvider() ? savedApiKey() : undefined}>
                   {(saved) => (
@@ -1484,7 +1615,9 @@ function AgentEditorPage(props: {
                           when={allowPermissionBypass()}
                           fallback={
                             <p class="text-xs text-ink-muted">
-                              This runtime requires permission prompts.
+                              This machine requires permission prompts. Turn on
+                              Don't ask before acting in its Options in Machines
+                              settings.
                             </p>
                           }
                         >
@@ -1501,52 +1634,50 @@ function AgentEditorPage(props: {
                       </fieldset>
                     </Show>
 
-                    <Show when={pipedreamMcp()}>
-                      <AdvancedGroup
-                        title="Connections"
-                        description="Which connected apps (MCP tools) this agent can use."
-                      >
-                        <fieldset class="flex flex-col gap-2">
-                          <legend class="sr-only">Connections</legend>
-                          <ChoiceRow
-                            name="agent-mcp-mode"
-                            value="owner_connections"
-                            checked={mcp().scope === 'owner_connections'}
-                            title="Use my connected apps"
-                            description="The agent uses whatever apps the person running it has connected."
-                            onChange={() => setMcpScope('owner_connections')}
-                          />
-                          <ChoiceRow
-                            name="agent-mcp-mode"
-                            value="selected"
-                            checked={mcp().scope === 'selected'}
-                            title="Specific apps"
-                            description="Pick apps from the catalog. Each person connects their own account."
-                            onChange={() => setMcpScope('selected')}
-                          />
-                        </fieldset>
+                    <AdvancedGroup
+                      title="Connections"
+                      description="Which connected apps (MCP tools) this agent can use."
+                    >
+                      <fieldset class="flex flex-col gap-2">
+                        <legend class="sr-only">Connections</legend>
+                        <ChoiceRow
+                          name="agent-mcp-mode"
+                          value="owner_connections"
+                          checked={mcp().scope === 'owner_connections'}
+                          title="Use my connected apps"
+                          description="The agent uses whatever apps the person running it has connected."
+                          onChange={() => setMcpScope('owner_connections')}
+                        />
+                        <ChoiceRow
+                          name="agent-mcp-mode"
+                          value="selected"
+                          checked={mcp().scope === 'selected'}
+                          title="Specific apps"
+                          description="Pick apps from the catalog. Each person connects their own account."
+                          onChange={() => setMcpScope('selected')}
+                        />
+                      </fieldset>
 
-                        <Show when={mcp().scope === 'selected'}>
-                          <div class="mt-3 border-t border-edge-muted pt-3">
-                            <PipedreamAppPicker
-                              selected={selectedMcpServers()}
-                              onChange={setSelectedMcpServers}
-                              connectedSlugs={connections.slugs}
-                              connectionsReady={connections.ready}
-                              connectContainer={() => pageContentRef}
-                            />
-                          </div>
-                        </Show>
+                      <Show when={mcp().scope === 'selected'}>
+                        <div class="mt-3 border-t border-edge-muted pt-3">
+                          <ConnectorAppPicker
+                            selected={selectedMcpServers()}
+                            onChange={setSelectedMcpServers}
+                            connectedSlugs={connections.connectedApps}
+                            connectionsReady={connections.ready}
+                            connectContainer={() => pageContentRef}
+                          />
+                        </div>
+                      </Show>
 
-                        <Show when={share() === 'Team'}>
-                          <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
-                            Connections are personal. Teammates who use this
-                            agent connect these apps under Agents → Connections;
-                            the indicators here show only your own.
-                          </p>
-                        </Show>
-                      </AdvancedGroup>
-                    </Show>
+                      <Show when={share() === 'Team'}>
+                        <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+                          Connections are personal. Teammates who use this agent
+                          connect these apps under Agents → Connections; the
+                          indicators here show only your own.
+                        </p>
+                      </Show>
+                    </AdvancedGroup>
 
                     <AdvancedGroup
                       title="Channels"

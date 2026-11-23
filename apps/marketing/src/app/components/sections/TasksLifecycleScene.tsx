@@ -1,3 +1,24 @@
+import IconShare from '@icon/share.svg';
+import IconReply from '@icon/system/regular/arrow-bend-up-left.svg';
+import IconArrowUp from '@icon/system/regular/arrow-up.svg';
+import IconArrowsOut from '@icon/system/regular/arrows-out.svg';
+import IconCalendar from '@icon/system/regular/calendar-blank.svg';
+import IconCaretDown from '@icon/system/regular/caret-down.svg';
+import IconChannel from '@icon/system/regular/chats-circle.svg';
+import IconCheck from '@icon/system/regular/check.svg';
+import IconDots from '@icon/system/regular/dots-three-vertical.svg';
+import IconGitBranch from '@icon/system/regular/git-branch.svg';
+import IconPullRequest from '@icon/system/regular/git-pull-request.svg';
+import IconLink from '@icon/system/regular/link.svg';
+import IconTask from '@icon/system/regular/list-checks.svg';
+import IconPaperclip from '@icon/system/regular/paperclip.svg';
+import IconPhone from '@icon/system/regular/phone.svg';
+import PriorityHigh from '@icon/system/regular/priority-high.svg';
+import IconSmiley from '@icon/system/regular/smiley.svg';
+import StatusCreated from '@icon/system/regular/task-created.svg';
+import StatusDone from '@icon/system/regular/task-done.svg';
+import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import IconTextAa from '@icon/system/regular/text-aa.svg';
 import {
   type Accessor,
   type Component,
@@ -12,28 +33,7 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import IconChannel from '../../../assets/icons/icon-channels.svg';
 import IconGithub from '../../../assets/icons/icon-github.svg';
-import IconReply from '../../../assets/icons/phosphor/arrow-bend-up-left.svg';
-import IconArrowUp from '../../../assets/icons/phosphor/arrow-up.svg';
-import IconArrowsOut from '../../../assets/icons/phosphor/arrows-out.svg';
-import IconCalendar from '../../../assets/icons/phosphor/calendar-blank.svg';
-import IconCaretDown from '../../../assets/icons/phosphor/caret-down.svg';
-import IconCheck from '../../../assets/icons/phosphor/check.svg';
-import IconDots from '../../../assets/icons/phosphor/dots-three-vertical.svg';
-import IconGitBranch from '../../../assets/icons/phosphor/git-branch.svg';
-import IconPullRequest from '../../../assets/icons/phosphor/git-pull-request.svg';
-import IconLink from '../../../assets/icons/phosphor/link.svg';
-import IconPaperclip from '../../../assets/icons/phosphor/paperclip.svg';
-import IconPhone from '../../../assets/icons/phosphor/phone.svg';
-import IconShare from '../../../assets/icons/phosphor/share.svg';
-import IconSmiley from '../../../assets/icons/phosphor/smiley.svg';
-import IconTextAa from '../../../assets/icons/phosphor/text-aa.svg';
-import StatusCreated from '../../../assets/icons/square-task-created-circle.svg';
-import StatusDone from '../../../assets/icons/square-task-done-circle.svg';
-import StatusInProgress from '../../../assets/icons/square-task-in-progress-circle.svg';
-import PriorityHigh from '../../../assets/icons/wide-priority-high.svg';
-import IconTask from '../../../assets/icons/wide-task.svg';
 import avatarAidan from '../../../assets/people/aidan.webp';
 import avatarTeo from '../../../assets/people/teo.webp';
 import { viewportWidth } from '../../utils/utilBreakpoint';
@@ -246,7 +246,7 @@ const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
     can be swapped for another without the box reflowing around it. */
 const PIN = { left: 0, position: 'absolute', right: 0, top: 0 } as const;
 const ease = (x: number) =>
-  x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
 // --- primitives --------------------------------------------------------------
@@ -487,13 +487,13 @@ const THREAD: Msg[] = [
   {
     who: 'teo',
     time: '2:54 PM',
-    text: 'Do we have the launch date and owners confirmed? Valentina asked for the plan before the team call.',
+    text: 'Do we have the launch date and owners confirmed? Austin Barron asked for the plan before the team call.',
     reaction: true,
   },
   {
     who: 'aidan',
     time: '3:00 PM',
-    text: 'The Website launch plan is updated. Thursday at 9, and Valentina has the email. We just need to check invites.',
+    text: 'The Website launch plan is updated. Thursday at 9, and Austin Barron has the email. We just need to check invites.',
   },
   {
     who: 'teo',
@@ -618,7 +618,7 @@ const travel = (k: number, o: number, i: number): number => {
   // When the throw ends, and whether the hand needs one correction or two.
   const kb = 0.54 + 0.12 * vary(i, 1);
   const twoHops = vary(i, 2) > 0.45;
-  if (k <= kb) return (1 + o) * (1 - Math.pow(1 - clamp01(k / kb), 3));
+  if (k <= kb) return (1 + o) * (1 - (1 - clamp01(k / kb)) ** 3);
   const rest = 1 - kb;
   // How far back the first correction carries, and when each hop lands. Both
   // vary per move: corrections that all undershoot by the same fraction on the

@@ -21,6 +21,7 @@ import {
   downloadPdfDocument,
   printPdfDocument,
 } from '@block-pdf/util/pdf-file-actions';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { useIsAuthenticated } from '@core/auth';
@@ -35,6 +36,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import Printer from '@icon/system/regular/printer.svg';
 import { Telemetry } from '@macro-inc/observability';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
@@ -162,15 +164,18 @@ export function PdfDetailDocument(props: {
       userAccessLevel={props.data.userAccessLevel}
     >
       <SidePanel.HeaderActions>
-        <AskMacroButton
-          entity={{
-            type: 'document',
-            id: props.documentId,
-            name:
-              props.data.documentMetadata.documentName ?? 'Unknown Filename',
-            fileType: 'pdf',
-          }}
-        />
+        <HeaderActionGroup label="Actions">
+          <AskMacroButton
+            grouped
+            entity={{
+              type: 'document',
+              id: props.documentId,
+              name:
+                props.data.documentMetadata.documentName ?? 'Unknown Filename',
+              fileType: 'pdf',
+            }}
+          />
+        </HeaderActionGroup>
       </SidePanel.HeaderActions>
       <PdfDocument
         documentId={props.documentId}
@@ -202,10 +207,14 @@ export function PdfDetail(props: {
 }) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="pdf"
       label="PDF"
       load={loadPdfDocument}
+      discard={(data) =>
+        fireAndForget(data.documentProxy.destroy(), 'drive-pdf-discard')
+      }
     >
       {(data) => (
         <PdfDetailDocument

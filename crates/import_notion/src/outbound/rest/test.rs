@@ -505,11 +505,11 @@ async fn a_query_past_notions_result_cap_restarts_from_the_last_creation_time() 
     );
     let source = NotionId::parse("1a44be1209534631a1d67d4c2b1b4a2f").unwrap();
 
-    let rows = crate::domain::inventory::all_rows(&client, &source)
+    let drained = crate::domain::inventory::all_rows(&client, &source)
         .await
         .unwrap();
 
-    let ids: Vec<&str> = rows.iter().map(|row| row.id.as_str()).collect();
+    let ids: Vec<&str> = drained.rows.iter().map(|row| row.id.as_str()).collect();
     assert_eq!(
         ids,
         vec![
@@ -518,6 +518,7 @@ async fn a_query_past_notions_result_cap_restarts_from_the_last_creation_time() 
             "ee5f0f84409a440f983aa5315961c6e4",
         ]
     );
+    assert!(drained.complete, "the restart listed every row");
     let bodies: Vec<Option<serde_json::Value>> = transport
         .requests()
         .into_iter()
@@ -542,6 +543,63 @@ async fn a_query_past_notions_result_cap_restarts_from_the_last_creation_time() 
             })),
         ]
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_cap_that_makes_no_progress_drains_the_rows_it_listed_as_incomplete() {
+    let row = |id: &str| {
+        json!({
+            "object": "page",
+            "id": id,
+            "created_time": "2026-02-01T12:00:00.000Z",
+            "last_edited_time": "2026-02-01T12:00:00.000Z",
+            "parent": {"type": "data_source_id", "data_source_id": "1a44be12-0953-4631-a1d6-7d4c2b1b4a2f", "database_id": "d9824bdc-8445-4327-be8b-5b47500af6ce"},
+            "url": "https://www.notion.so/row",
+            "properties": {}
+        })
+    };
+    let transport = ScriptedTransport::new(vec![
+        ok(json!({
+            "object": "list",
+            "results": [row("598337872cf94fdf8782e53db20768a5")],
+            "next_cursor": null,
+            "has_more": false,
+            "request_status": {"type": "incomplete", "incomplete_reason": "query_result_limit_reached"}
+        })),
+        ok(json!({
+            "object": "list",
+            "results": [
+                row("598337872cf94fdf8782e53db20768a5"),
+                row("c7f0aa501f0e4a529a17e2f6f3a3b0c1")
+            ],
+            "next_cursor": null,
+            "has_more": false,
+            "request_status": {"type": "incomplete", "incomplete_reason": "query_result_limit_reached"}
+        })),
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let source = NotionId::parse("1a44be1209534631a1d67d4c2b1b4a2f").unwrap();
+
+    let drained = crate::domain::inventory::all_rows(&client, &source)
+        .await
+        .unwrap();
+
+    let ids: Vec<&str> = drained.rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        vec![
+            "598337872cf94fdf8782e53db20768a5",
+            "c7f0aa501f0e4a529a17e2f6f3a3b0c1",
+        ]
+    );
+    assert!(
+        !drained.complete,
+        "the restart returned rows from the same instant only, so the rest are missing"
+    );
+    assert_eq!(transport.requests().len(), 2);
 }
 
 #[tokio::test(start_paused = true)]

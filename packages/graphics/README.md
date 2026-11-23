@@ -16,7 +16,10 @@ the pure core. Expanding peer support is deferred.
 
 - `@macro-inc/graphics`: document, affine math, scene queries, selection, editing,
   validation and local history. No DOM, Solid, app or Loro imports.
-- `@macro-inc/graphics/browser`: pointer capture, keyboard and wheel input.
+- `@macro-inc/graphics/browser`: pointer capture, keyboard, wheel and touch input.
+- `@macro-inc/graphics/pan-zoom`: the inertial glide and two-finger step shared
+  by Canvas and the image viewers. It owns no transform and imports nothing
+  from the scene, so other pan/zoom surfaces can use it.
 - `@macro-inc/graphics/solid`: read-only reactive projection and keyed renderers.
 - `@macro-inc/graphics/loro`: optional Loro backend and presence APIs. The
   in-memory peer transport lives in test support only.
@@ -66,8 +69,22 @@ original item references. No document snapshots are retained by the stacks.
 Validation still checks scene-wide containment, ordering and connector invariants.
 The optional backend owns its own history; Loro continues using its UndoManager.
 
+A surface inside a scrolling page can leave one finger and the plain wheel to
+that page with the `yieldToPage` input option: it then sets
+`touch-action: pan-x pan-y` and ignores single touches, while two fingers, a
+pinch and Ctrl/Cmd-wheel still navigate. The host switches it off while the
+person interacts with the canvas.
+
+The surface never stays scrolled. A browser scrolls it to reveal a caret that
+left it (hosted text typed past an edge, or behind an on-screen keyboard), after
+which the camera and the pixels disagree; `attachCameraControls` takes the scroll
+as a pan and resets it.
+
 `fitScene(viewport)` centers the full scene's world bounds and zooms in or out
 until the first axis fills the current viewport with 100 screen pixels per side.
+A host whose controls cover part of the view passes them as `viewport.inset`
+(the content is fitted to and centred in what is left), and may pass its own
+`viewport.padding` in place of the 100 pixels.
 It respects camera zoom limits and reduces padding in small embedded viewports.
 The host supplies its actual current dimensions; selection and current camera
 offset do not influence the fit.
@@ -485,7 +502,8 @@ design size and a presentation sort key. The HTML lays out at the design size an
 scales to fit the box. Core treats the HTML as opaque content: it never parses or
 executes it, and the default Solid renderer shows a placeholder. Hosts own
 sandboxed rendering. `setArtifactCommand` edits content fields in one undo step;
-box size and pose stay with transform commands.
+box size and pose stay with transform commands. `presentationOrder` lists artifacts
+for presenting, and `setPresentationOrderCommand` reorders them in one undo step.
 
 
 ### Host-measured text fitting

@@ -1,5 +1,6 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { analytics } from '@app/lib/analytics';
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
@@ -8,8 +9,10 @@ import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
-import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
+import type { CrmContactDetailResponse } from '@service-storage/generated/schemas/crmContactDetailResponse';
 import {
+  type Query,
+  type QueryClient,
   type QueryKey,
   queryOptions,
   useMutation,
@@ -17,6 +20,7 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CompanyImporter } from '../context/crm-sources';
+import { contactCompanySummary } from '../core/contact';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
 import { listCanIncludeCrm } from './list-refresh';
@@ -35,22 +39,21 @@ function companyQueryOptions(deps: CrmRecordDependencies, companyId: string) {
       if (!companyId) {
         throw new Error('company id is required to fetch company');
       }
-      return throwOnErr(() => deps.storage.getCompany({ companyId }));
+      return throwOnErr(() =>
+        deps.storage.getCompany({ companyId, includeContacts: false })
+      );
     },
     staleTime: COMPANY_STALE_TIME,
     enabled: !!companyId && companyId !== NIL_UUID,
   });
 }
 
-/** A contact row as embedded in the company response. */
-export type CompanyContact = CrmContactResponse;
-
 /**
  * Fetches a single CRM company by id via `GET /crm/companies/{id}`.
  * The endpoint is role-aware via [`CrmCompanyAccessLevelExtractor`]:
  * non-admin viewers 404 on hidden rows, admin/owner reach hidden rows
- * for unhide UI. Contacts arrive embedded in the response so the
- * company panel hydrates in a single round trip.
+ * for unhide UI. It asks for no contacts: the Team list pages them through
+ * `useCompanyContactsQuery`.
  *
  * Disabled until a non-NIL companyId is available so callers can pass
  * a sentinel placeholder before their own data loads without firing a
@@ -71,11 +74,7 @@ export function useCompanyQuery(
     return responseToEntity(data);
   });
 
-  const contacts = createMemo<CompanyContact[]>(() =>
-    query.isSuccess ? (query.data?.contacts ?? []) : []
-  );
-
-  return { query, company, contacts };
+  return { query, company };
 }
 
 function responseToEntity(response: CrmCompanyResponse): CrmCompanyEntity {
@@ -153,12 +152,13 @@ function wipeCompanyEmailCache(
  * display name + optional domain). Seeds the company detail cache from the
  * response and invalidates soup so the new company appears in the
  * Customers listings. Server-side failures worth surfacing: 409 when the
- * team already tracks the domain, 403 when CRM is disabled for the team,
+ * team already tracks the domain, 403 without team membership,
  * 400 on a malformed/generic-provider domain.
  */
 export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
+      onMutate: () => captureQueryAuthorization(),
       mutationFn: ({ name, domain }: { name: string; domain?: string }) =>
         Telemetry.span('crm.company.create', async (span) => {
           span.setAttr('crm.company.has_domain', !!domain);
@@ -168,8 +168,9 @@ export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.company.id', company.id);
           return company;
         }),
-      onSuccess: (data) => {
+      onSuccess: (data, _variables, canCache) => {
         analytics.track('crm_company_created', { companyId: data.id });
+        if (!canCache?.()) return;
         deps.client.setQueryData(crmKeys.company(data.id).queryKey, data);
         return deps.client.invalidateQueries({ queryKey: soupKeys._def });
       },
@@ -188,12 +189,14 @@ export function createCompanyImporter(
 ): CompanyImporter {
   return {
     async create(input) {
+      const canCache = captureQueryAuthorization();
       const created = await deps.storage.createCompany(input);
       if (created.isOk()) {
-        deps.client.setQueryData(
-          crmKeys.company(created.value.id).queryKey,
-          created.value
-        );
+        if (canCache())
+          deps.client.setQueryData(
+            crmKeys.company(created.value.id).queryKey,
+            created.value
+          );
         return 'created';
       }
       if (created.error.some((error) => error.code === 'CONFLICT'))
@@ -207,15 +210,15 @@ export function createCompanyImporter(
 /**
  * Manually creates a contact via `POST /crm/companies/{id}/contacts`, or
  * `POST /crm/contacts` for a contact without a company (a display name +
- * optional email). Invalidates the company detail query (contacts arrive
- * embedded there) and soup so contact listings refresh. Server-side
- * failures worth surfacing: 409 when the email is already tracked, 404 when
- * the company isn't visible to the caller, 403 when CRM is disabled for the
- * team.
+ * optional email). Invalidates the company's Team list and soup so contact
+ * listings refresh. Server-side failures worth surfacing: 409 when the email
+ * is already tracked, 404 when the company isn't visible to the caller, 403
+ * without team membership.
  */
 export function useCreateContactMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
+      onMutate: () => captureQueryAuthorization(),
       mutationFn: ({
         companyId,
         name,
@@ -235,15 +238,16 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.contact.id', contact.id);
           return contact;
         }),
-      onSuccess: (contact, { companyId }) => {
+      onSuccess: (contact, { companyId }, canCache) => {
         analytics.track('crm_contact_created', {
           companyId,
           contactId: contact.id,
         });
+        if (!canCache?.()) return;
         return Promise.all([
           companyId &&
             deps.client.invalidateQueries({
-              queryKey: crmKeys.company(companyId).queryKey,
+              queryKey: crmKeys.companyContacts(companyId).queryKey,
             }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);
@@ -257,9 +261,10 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
  * Renames a company via `PUT /crm/companies/{id}/name`. The name is a
  * team-scoped override (`crm_companies.custom_name`) that read paths resolve
  * over the global directory name — the shared directory is never touched.
- * Optimistically updates the company detail cache (with rollback on error) so
- * the title flips immediately, then invalidates it plus soup so the Customers
- * listings pick up the new name.
+ * Optimistically updates the company detail and the summaries of loaded
+ * contact details (with rollback on error) so the name flips immediately,
+ * then invalidates them plus soup so the Customers listings pick up the new
+ * name.
  */
 export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -267,8 +272,14 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
       mutationFn: ({ companyId, name }: { companyId: string; name: string }) =>
         throwOnErr(() => deps.storage.setCompanyName({ companyId, name })),
       onMutate: async ({ companyId, name }) => {
+        const canCache = captureQueryAuthorization();
         const queryKey = crmKeys.company(companyId).queryKey;
-        await deps.client.cancelQueries({ queryKey });
+        const details = contactDetailsOfCompanyFilter(companyId);
+        await Promise.all([
+          deps.client.cancelQueries({ queryKey }),
+          deps.client.cancelQueries(details),
+        ]);
+        if (!canCache()) return;
         const previous = deps.client.getQueryData<CrmCompanyResponse>(queryKey);
         if (previous) {
           deps.client.setQueryData<CrmCompanyResponse>(queryKey, {
@@ -276,12 +287,22 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
             name,
           });
         }
-        return { previous, optimisticName: name };
+        const previousDetails =
+          deps.client.getQueriesData<CrmContactDetailResponse>(details);
+        for (const [key, detail] of previousDetails) {
+          if (!detail?.company) continue;
+          deps.client.setQueryData<CrmContactDetailResponse>(key, {
+            ...detail,
+            company: { ...detail.company, name },
+          });
+        }
+        return { previous, previousDetails, optimisticName: name, canCache };
       },
       // Roll back only if the cache still holds this mutation's optimistic
       // name — a stale failure must not clobber a newer rename's update.
       onError: (_err, { companyId }, context) => {
-        if (context?.previous) {
+        if (!context?.canCache()) return;
+        if (context.previous) {
           deps.client.setQueryData<CrmCompanyResponse>(
             crmKeys.company(companyId).queryKey,
             (current) =>
@@ -290,7 +311,18 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
                 : current
           );
         }
+        for (const [key, detail] of context.previousDetails) {
+          const name = detail?.company?.name;
+          deps.client.setQueryData<CrmContactDetailResponse>(key, (current) =>
+            current?.company?.id === companyId &&
+            current.company.name === context.optimisticName
+              ? { ...current, company: { ...current.company, name } }
+              : current
+          );
+        }
       },
+      onSuccess: (_data, { companyId }) =>
+        refreshContactDetailsOfCompany(deps.client, companyId),
       onSettled: async (_data, _err, { companyId }) => {
         await invalidateCachedCrmContacts();
         return Promise.all([
@@ -302,6 +334,60 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
       },
     }),
     () => deps.client
+  );
+}
+
+/** Loaded contact details whose summary is of `companyId`. */
+function contactDetailsOfCompanyFilter(companyId: string) {
+  return {
+    queryKey: crmKeys.contact._def,
+    predicate: (query: Query) =>
+      contactCompanySummary(
+        query.state.data as CrmContactDetailResponse | undefined
+      )?.id === companyId,
+  };
+}
+
+/**
+ * Contact details carry their company's name, so a rename refreshes those of
+ * the company's contacts, and any still loading, whose answer may predate the
+ * rename. A loading read is cancelled first: invalidating it would only join
+ * the read already in flight, whose answer then clears the invalidation.
+ */
+async function refreshContactDetailsOfCompany(
+  client: QueryClient,
+  companyId: string
+): Promise<void> {
+  const loading = new Set(
+    client
+      .getQueryCache()
+      .findAll({ queryKey: crmKeys.contact._def, predicate: isFirstLoad })
+      .map((query) => query.queryHash)
+  );
+  await client.cancelQueries({
+    queryKey: crmKeys.contact._def,
+    predicate: (query) => loading.has(query.queryHash),
+  });
+  await client.invalidateQueries({
+    queryKey: crmKeys.contact._def,
+    predicate: (query) =>
+      loading.has(query.queryHash) ||
+      contactOfCompany(query.state.data, companyId),
+  });
+}
+
+function isFirstLoad(query: Query): boolean {
+  return (
+    query.state.data === undefined && query.state.fetchStatus === 'fetching'
+  );
+}
+
+function contactOfCompany(data: unknown, companyId: string): boolean {
+  return (
+    !!data &&
+    typeof data === 'object' &&
+    'companyId' in data &&
+    data.companyId === companyId
   );
 }
 
@@ -404,9 +490,9 @@ export function useSetCompanyHiddenMutation(deps: CrmRecordDependencies) {
 
 /**
  * Toggles `crm_companies.email_sync` via `PUT /crm/companies/{id}/email-sync`.
- * Purely a read-side visibility gate controlling whether the team can see each
- * other's emails with this company — existing CRM data is never destroyed and
- * re-enabling needs no backfill.
+ * Blocks ingestion and CRM email visibility for the company's domains while
+ * preserving its records. Re-enabling schedules a backfill for consenting
+ * contributors.
  */
 export function useSetEmailSyncMutation(deps: CrmRecordDependencies) {
   return useMutation(

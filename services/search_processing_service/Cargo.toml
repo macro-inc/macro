@@ -8,6 +8,7 @@ version = "0.1.0"
 [features]
 default = ["processing", "service", "pdf"]
 processing = [
+  "dep:aws-sdk-cloudwatch",
   "dep:call",
   "dep:channels",
   "dep:chat",
@@ -17,11 +18,14 @@ processing = [
   "dep:macro_event_broker",
   "dep:macro_event_topics",
   "dep:models_properties",
+  "dep:opentelemetry",
   "dep:projects",
   "dep:properties",
+  "dep:rand",
   "dep:rdkafka",
   "dep:rootcause",
   "dep:tokio-retry",
+  "dep:tracing-opentelemetry",
 ]
 service = [
   "dep:documents",
@@ -31,6 +35,10 @@ service = [
   "dep:properties",
 ]
 pdf = ["dep:pdfium-render"]
+# Local stacks skip pdfium: its bundled library is amd64-only and isn't in their
+# runtime image. Additive, unlike dropping the default `pdf` feature, so this
+# service builds in the same cargo invocation as every other local service.
+no_pdf = []
 
 [[bin]]
 name = "search_processing_service"
@@ -48,6 +56,7 @@ entity_registry = { path = "../../crates/entity_registry/entity_registry", defau
 entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 agent_fold = { path = "../../crates/folds/agent_fold" }
 anyhow = { workspace = true }
+aws-sdk-cloudwatch = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -60,6 +69,7 @@ chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 email = { path = "../../crates/email", default-features = false, optional = true }
 email_db_client = { path = "../../crates/email_db_client" }
+encoding_rs = { workspace = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util", optional = true }
@@ -83,7 +93,6 @@ macro_event_topics = { path = "../../crates/macro_event_topics", optional = true
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false }
 macro_user_id = { path = "../../crates/macro_user_id" }
-macro_uuid = { path = "../../crates/macro_uuid" }
 mention_utils = { path = "../../crates/mention_utils" }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", default-features = false, optional = true }
@@ -96,17 +105,18 @@ model_owner = { path = "../../crates/model_owner" }
 s3_key = { path = "../../crates/s3_key" }
 models_email = { path = "../../crates/models_email" }
 model_file_type = { path = "../../crates/model_file_type" }
-models_opensearch = { path = "../../crates/models_opensearch" }
 models_properties = { path = "../../crates/models_properties", optional = true }
 models_search = { path = "../../crates/models_search" }
 nom = { workspace = true }
 opensearch_client = { path = "../../crates/opensearch_client" }
+opentelemetry = { workspace = true, features = ["metrics", "trace"], optional = true }
 ensure_exists = { path = "../../crates/ensure_exists", features = ["dynamodb"] }
 pdfium-render = { workspace = true, optional = true }
 properties = { path = "../../crates/properties", default-features = false, features = [
   "outbound",
 ], optional = true }
 projects = { path = "../../crates/projects", default-features = false, optional = true }
+rand = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 rust-embed = "8.6.0"
@@ -126,9 +136,16 @@ tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["metrics", "trace", "testing"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }

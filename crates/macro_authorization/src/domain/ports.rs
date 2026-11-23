@@ -4,10 +4,12 @@ use model_user::UserContext;
 use rootcause::Report;
 
 use super::models::{
-    BotActingUserClaims, BotAuthentication, BotScope, BotTokenAuthorization, HarnessAuthentication,
-    HarnessTokenAuthorization, InternalIdentityClaims, MacroAuthorizationError, ResolvedApiKeyUser,
-    ResolvedBotActingUser, ValidatedCredential, ValidatedIdentity,
+    AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication, BotScope, BotTokenAuthorization,
+    HarnessAuthentication, HarnessTokenAuthorization, InternalIdentityClaims,
+    MacroAuthorizationError, ResolvedApiKeyUser, ResolvedBotActingUser, ValidatedCredential,
+    ValidatedIdentity,
 };
+use harness_id::HarnessId;
 use uuid::Uuid;
 
 /// Persistence facts required to authorize bot credentials.
@@ -78,15 +80,21 @@ pub trait UserApiKeyAuthorizationRepo: Clone + Send + Sync + 'static {
         &self,
         api_key: &str,
     ) -> impl Future<Output = Result<Option<ResolvedApiKeyUser>, Self::Err>> + Send;
+
+    /// Record that an account manager credential was just used.
+    fn mark_account_manager_grant_used(
+        &self,
+        grant_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Validates user API key credentials and resolves the owner's identity.
 pub trait UserApiKeyAuthorizer: Clone + Send + Sync + 'static {
-    /// Authorize a user API key and return the owner's user context.
+    /// Authorize a user API key and return the account it acts as.
     fn authorize_user_api_key(
         &self,
         api_key: &str,
-    ) -> impl Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send;
+    ) -> impl Future<Output = Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>>> + Send;
 }
 
 /// User API key authorizer used by services that do not support this credential.
@@ -97,7 +105,7 @@ impl UserApiKeyAuthorizer for NoUserApiKeyAuthorizer {
     async fn authorize_user_api_key(
         &self,
         _api_key: &str,
-    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+    ) -> Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>> {
         Err(Report::new(MacroAuthorizationError::InvalidCredentials))
     }
 }
@@ -125,11 +133,12 @@ pub trait HarnessAuthorizationRepo: Clone + Send + Sync + 'static {
         macro_user_id: &str,
     ) -> impl Future<Output = Result<Option<ResolvedBotActingUser>, Self::Err>> + Send;
 
-    /// Check whether a user is a current member of a team.
-    fn user_has_team(
+    /// Check whether a user may run agents on a harness: its owner, or a user
+    /// through a live direct or team grant. Readers may not.
+    fn user_may_use_harness(
         &self,
-        fusion_user_id: &str,
-        team_id: Uuid,
+        harness_id: HarnessId,
+        macro_user_id: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
@@ -237,14 +246,15 @@ pub trait MacroAuthorizationService: Clone + Send + Sync + 'static {
         claims: InternalIdentityClaims,
     ) -> impl Future<Output = Result<Option<UserContext>, Report<MacroAuthorizationError>>> + Send;
 
-    /// Authorize a user API key and return the owner's user context.
+    /// Authorize a user API key and return the account it acts as.
     ///
     /// Services reject user API keys unless they explicitly provide a user API
     /// key authorizer.
     fn authorize_user_api_key(
         &self,
         _api_key: &str,
-    ) -> impl Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send {
+    ) -> impl Future<Output = Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>>> + Send
+    {
         async { Err(Report::new(MacroAuthorizationError::InvalidCredentials)) }
     }
 }

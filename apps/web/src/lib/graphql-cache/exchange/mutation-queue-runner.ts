@@ -15,6 +15,7 @@
  *         ▼
  *       preparing ── superseded discard ──▶ idle
  *         │       └─ veto or recovery failure ──▶ settling
+ *         │          (a recovery failure is first deferred and asked again)
  *         ▼
  *       in-flight ── replay rejected unsettled ──▶ settling
  *         ▼
@@ -28,6 +29,16 @@
  * Head changes go through `transition`, which checks the token, and each
  * awaited step rechecks `isCurrent` before it acts. Releasing live callers as
  * queued and scheduling the pump are idempotent wakeups and are not fenced.
+ *
+ * A page that reloads or closes mid-attempt leaves its lease on the head. When
+ * the pump finds the head held, it waits for the holder's page to go
+ * (`MutationQueueOwner.departed`), gives a request the page may have left in
+ * flight `LEASE_RELEASE_GRACE_MS` to land, looks at the head again, and
+ * releases the claim the holder has on it then with the holder's own owner and
+ * generation, so the head runs again without waiting out `QUEUE_LEASE_MS`. The
+ * engine refuses the release once the claim has moved on. Inspections read the
+ * whole queue, so the pump looks at most once per poll, plus twice for each
+ * owner it saw leave: after the grace, and after a refused release.
  */
 
 import { anyAbortSignal } from '@core/util/abort-signal';
@@ -42,15 +53,20 @@ import {
 } from '@urql/core';
 import { type DocumentNode, Kind, parse } from 'graphql';
 import { match } from 'ts-pattern';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type { CacheHost } from '../host/types';
 import type {
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
   MutationClaim,
+  MutationLease,
   QueryRevalidationWire,
 } from '../protocol';
+import { cacheSessionGeneration } from '../session-generation';
+import type { MutationQueueOwner } from './mutation-queue-owner';
 import {
   failureDetails,
+  type LeaseReleaseOutcome,
   type MutationAttemptDetails,
   type MutationAttemptOutcome,
   type MutationAttemptTelemetry,
@@ -75,9 +91,17 @@ const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
 export const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 export const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+// A departed page's request may still reach the server, as a request whose
+// connection dropped may: the runner sends that one again after
+// `retryDelayMs(1)`, and a departed page's claim waits as long.
+const LEASE_RELEASE_GRACE_MS = retryDelayMs(1);
 // A deferred admission usually waits on user info, which lands within a
 // second or two of the cache client at startup.
 const DEFERRED_ADMISSION_RETRY_MS = 1_000;
+// Admission reads local storage, which can stall or reopen (a busy tab, a
+// resumed app). Ask again before treating that as the head's failure; the
+// bound keeps a broken head from holding the queue.
+const MAX_ADMISSION_FAILURES = 3;
 const MAX_MUTATION_SERVER_FAILURES = 10;
 const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
 
@@ -101,10 +125,12 @@ async function boundedMutationLifecycle<T>(work: () => Promise<T>): Promise<T> {
 /** Storage generation captured when work starts; a reset retires it. */
 export type StorageEpoch = { storageGeneration: number };
 
+/** A storage epoch and the lease owner a claim made in it uses. */
+export type ClaimEpoch = StorageEpoch & { leaseOwner: string };
+
 /** Fences one claimed attempt in this runner and in the durable queue. */
-type AttemptToken = StorageEpoch & {
+type AttemptToken = ClaimEpoch & {
   transactionId: string;
-  leaseOwner: string;
   leaseGeneration: string;
 };
 
@@ -167,12 +193,34 @@ function retryDelayMs(attemptCount: number): number {
   return Math.min(1_000 * 2 ** Math.max(0, attemptCount - 1), 60_000);
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** The head's unexpired claim, as an inspection reports it. */
+type HeadClaim = {
+  transactionId: string;
+  itemId: string;
+  lease: MutationLease;
+};
+
+function sameClaim(a: HeadClaim, b: HeadClaim): boolean {
+  return (
+    a.transactionId === b.transactionId &&
+    a.lease.owner === b.lease.owner &&
+    a.lease.generation === b.lease.generation
+  );
+}
+
 /** Bounds network time inside the lease and retains HTTP status for settlement. */
 export function withQueueRequestTimeout(op: Operation): Operation {
   const operationFetch = op.context.fetch ?? globalThis.fetch;
   const attempt = queueAttemptOf(op);
   return makeOperation(op.kind, op, {
     ...op.context,
+    cacheSessionGeneration: cacheSessionGeneration.capture(),
     fetch: async (input, init) => {
       const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
       const send = () =>
@@ -289,8 +337,8 @@ export type MutationQueueRunnerDeps = {
     | 'onCacheError'
     | 'mutationQueueTelemetry'
   >;
-  /** Lease owner for this exchange's claims. */
-  owner: string;
+  /** Lease owner for this exchange's claims, and other owners' liveness. */
+  owner: MutationQueueOwner;
   /** Sends an operation down the exchange's network stream. */
   forward: (op: Operation) => void;
   /** Delivers a result through the exchange's normal write path. */
@@ -299,12 +347,15 @@ export type MutationQueueRunnerDeps = {
   ) => Promise<OperationResult | undefined>;
   /** Query text and variables the cache normalizes `op`'s data against. */
   cacheDocument: (op: Operation) => {
+    generation?: string;
     query: string;
     operationName?: string;
     variables?: Record<string, unknown>;
   };
-  /** Evicts records a successful response implies were deleted. */
-  deleteReportedRecords: (result: OperationResult) => Promise<unknown>;
+  /** Returns whether reported deletion may have changed observer membership. */
+  deleteReportedRecords: (
+    result: OperationResult
+  ) => Promise<{ attempted: boolean }>;
   /**
    * Replays explicit deletions mixed into a committed response, in order.
    * Undefined when there is nothing to replay, so settlement does not yield.
@@ -317,21 +368,26 @@ export type MutationQueueRunnerDeps = {
   /** Refreshes queries a settled mutation could not update in place. */
   revalidate: (
     revalidations: QueryRevalidationWire[],
-    mutation?: Operation
+    mutation?: Operation,
+    affectedOps?: readonly string[],
+    refetchAll?: boolean
   ) => Promise<void>;
 };
 
 /** The exchange's view of the queue runner. */
 export type MutationQueueRunner = {
-  /** Captures the storage epoch an enqueue starts in. */
-  epoch: () => StorageEpoch;
+  /**
+   * Captures the storage epoch an enqueue starts in, and the lease owner its
+   * initial claim must use.
+   */
+  epoch: () => ClaimEpoch;
   /** False once a storage reset has retired `epoch`. */
   isCurrent: (epoch: StorageEpoch) => boolean;
   /** Holds a durably enqueued caller until the strict queue routes it. */
   admit: (
     op: Operation,
     enqueue: EnqueueOptimisticMutationResult,
-    epoch: StorageEpoch
+    epoch: ClaimEpoch
   ) => Promise<OperationResult | undefined>;
   /** Settles a queue attempt's network result. */
   settle: (
@@ -367,10 +423,16 @@ export function createMutationQueueRunner(
   let head: HeadState = IDLE;
   // Pump state: wakeups and the retry hint are independent of the head.
   let queuePreparation: Promise<void> | undefined;
+  // Failed admissions per head; cleared once the head is admitted or failed.
+  const admissionFailures = new Map<string, number>();
   let drainRunning = false;
   let drainRequested = false;
   let deferredUntil: number | undefined;
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
+  // Lease owners whose page this runner is waiting to see go.
+  const watchedOwners = new Set<string>();
+  // When a drain last inspected the queue for a held head.
+  let headInspectedAt: number | undefined;
 
   function isNewClaim(claim: ClaimedMutation): boolean {
     if (!latestClaim) return true;
@@ -435,12 +497,12 @@ export function createMutationQueueRunner(
    */
   async function routeClaimedMutation(
     claimed: ClaimedMutation,
-    epoch: StorageEpoch
+    epoch: ClaimEpoch
   ): Promise<void> {
     const attempt: QueueAttemptContext = {
       mutation: claimed,
       transactionId: claimed.transactionId,
-      leaseOwner: owner,
+      leaseOwner: epoch.leaseOwner,
       leaseGeneration: claimed.leaseGeneration,
       attemptCount: claimed.attemptCount,
       serverFailureCount: claimed.serverFailureCount ?? 0,
@@ -498,6 +560,7 @@ export function createMutationQueueRunner(
         return;
       }
       if (!admission) {
+        admissionFailures.delete(claimed.transactionId);
         // preparing → settling → idle: discard obsolete local intent.
         if (!transition(attempt, SETTLING)) return;
         await host.rollbackOptimisticWrite(
@@ -513,7 +576,28 @@ export function createMutationQueueRunner(
         return;
       }
     } catch {
+      const failures = (admissionFailures.get(claimed.transactionId) ?? 0) + 1;
+      if (failures < MAX_ADMISSION_FAILURES) {
+        admissionFailures.set(claimed.transactionId, failures);
+        await deferAdmission(claimed, attempt);
+        attemptTelemetry.finish('retry-scheduled', {
+          failure: 'local',
+          errorCode: 'LOCAL_RECOVERY_FAILED',
+          retryDelayMs: DEFERRED_ADMISSION_RETRY_MS,
+        });
+        return;
+      }
+      admissionFailures.delete(claimed.transactionId);
       await failPreparation(claimed, attempt, attemptTelemetry);
+      return;
+    }
+    admissionFailures.delete(claimed.transactionId);
+    if (!owner.holds(attempt.leaseOwner)) {
+      // The page was hidden while this head waited for admission and let its
+      // owner go, so another page may have released and sent this claim.
+      // Hand the claim back; the next drain claims it under the page's owner.
+      await deferAdmission(claimed, attempt);
+      attemptTelemetry.finish('deferred');
       return;
     }
     // A superseded create can already exist on the server. Replay it to
@@ -633,7 +717,10 @@ export function createMutationQueueRunner(
     }
   }
 
-  /** preparing → settling → idle for a head whose recovery state failed. */
+  /**
+   * preparing → settling → idle for a head whose recovery state kept failing.
+   * Its live caller was released as queued by the first deferral.
+   */
   async function failPreparation(
     claimed: ClaimedMutation,
     attempt: QueueAttemptContext,
@@ -642,17 +729,14 @@ export function createMutationQueueRunner(
     queuePreparation = undefined;
     try {
       if (!transition(attempt, SETTLING)) return;
-      const live = liveQueuedOps.get(claimed.transactionId);
-      const operation =
-        live?.operation ??
-        makeOperation(
-          'mutation',
-          createRequest(
-            replayDocument(claimed.query, claimed.operationName),
-            claimed.variables
-          ),
-          { url: '', requestPolicy: 'network-only' }
-        );
+      const operation = makeOperation(
+        'mutation',
+        createRequest(
+          replayDocument(claimed.query, claimed.operationName),
+          claimed.variables
+        ),
+        { url: '', requestPolicy: 'network-only' }
+      );
       const failure = new CombinedError({
         graphQLErrors: [
           {
@@ -683,13 +767,6 @@ export function createMutationQueueRunner(
         failure: 'local',
         errorCode: 'LOCAL_RECOVERY_FAILED',
       });
-      liveQueuedOps.delete(claimed.transactionId);
-      live?.resolveRoute(
-        withOptimisticMutationDisposition(result, {
-          kind: 'permanently-failed',
-          transactionId: claimed.transactionId,
-        })
-      );
       deferredUntil = undefined;
     } finally {
       if (transition(attempt, IDLE)) {
@@ -728,14 +805,20 @@ export function createMutationQueueRunner(
       if (deferredUntil !== undefined && deferredUntil <= now) {
         deferredUntil = undefined;
       }
-      const epoch: StorageEpoch = { storageGeneration };
+      const epoch: ClaimEpoch = {
+        storageGeneration,
+        leaseOwner: owner.claimOwner(),
+      };
       const claimed = await host.claimNextMutation(
-        owner,
+        epoch.leaseOwner,
         now,
         now + QUEUE_LEASE_MS
       );
       if (!claimed) {
         resolveLiveOperationsAsQueued();
+        // Not this runner's backoff: another runner may hold the head.
+        if (deferredUntil === undefined)
+          fireAndForget(watchHeadLease(), 'graphql-cache-mutation-queue');
         // Short retries keep their deadline; uncertain five-minute lease
         // backoffs must not prevent regular polling after a wakeup.
         scheduleDrain(
@@ -759,6 +842,122 @@ export function createMutationQueueRunner(
     } finally {
       drainRunning = false;
       if (drainRequested) scheduleDrain();
+    }
+  }
+
+  /**
+   * A page that reloads or closes mid-attempt leaves its claim on the head
+   * until the lease runs out, and every later mutation waits behind it. Looks
+   * at the head at most once per poll and watches the owner of its claim.
+   */
+  async function watchHeadLease(): Promise<void> {
+    const now = Date.now();
+    if (
+      headInspectedAt !== undefined &&
+      now - headInspectedAt < EMPTY_QUEUE_POLL_MS
+    )
+      return;
+    headInspectedAt = now;
+    let head: HeadClaim | undefined;
+    try {
+      head = await inspectHeadClaim();
+    } catch {
+      // The next drain that finds the head held looks again.
+      return;
+    }
+    if (head) await watchOwner(head.lease.owner);
+  }
+
+  /**
+   * Waits for the page behind `holder` to go, then releases the claim it holds
+   * on the head by then. An owner whose liveness is unknown keeps its lease.
+   */
+  async function watchOwner(holder: string): Promise<void> {
+    if (watchedOwners.has(holder)) return;
+    const departure = owner.departed(holder);
+    if (!departure) return;
+    watchedOwners.add(holder);
+    let next: string | undefined;
+    try {
+      await departure;
+      await wait(LEASE_RELEASE_GRACE_MS);
+      next = await releaseHeadOf(holder);
+    } catch {
+      // Liveness is unknown after all, or the queue could not be read: the
+      // lease runs out as before, and the next poll looks again.
+      return;
+    } finally {
+      watchedOwners.delete(holder);
+    }
+    if (next) await watchOwner(next);
+  }
+
+  /**
+   * Releases the head's claim if `departed` holds it. Returns the owner of a
+   * claim that holds the head instead, to watch next.
+   */
+  async function releaseHeadOf(departed: string): Promise<string | undefined> {
+    const head = await inspectHeadClaim();
+    if (!head) {
+      wakeDrain();
+      return undefined;
+    }
+    if (head.lease.owner !== departed) return head.lease.owner;
+    let after: HeadClaim | undefined;
+    const outcome = await telemetry.releaseLease(
+      {
+        transactionId: head.transactionId,
+        itemId: head.itemId,
+        expiresAtMs: head.lease.expiresAtMs,
+      },
+      async () => {
+        const released = await releaseLease(head);
+        after = released.after;
+        return released.outcome;
+      }
+    );
+    if (outcome === 'failed') return undefined;
+    if (outcome === 'released' || !after) {
+      wakeDrain();
+      return undefined;
+    }
+    return after.lease.owner === departed ? undefined : after.lease.owner;
+  }
+
+  /** The head's claim, unless it has none or it has run out. */
+  async function inspectHeadClaim(): Promise<HeadClaim | undefined> {
+    const queued = await host.inspectMutations?.();
+    const first = queued?.[0];
+    const lease = first?.lease;
+    if (!first || !lease || lease.expiresAtMs <= Date.now()) return undefined;
+    return { transactionId: first.transactionId, itemId: first.uuid, lease };
+  }
+
+  /**
+   * Releases `head` with its own owner and generation. A refusal says the
+   * claim was settled, claimed again or released by another page, unless
+   * the head still carries the same claim: then the release failed.
+   */
+  async function releaseLease(
+    head: HeadClaim
+  ): Promise<{ outcome: LeaseReleaseOutcome; after?: HeadClaim }> {
+    try {
+      await host.deferOptimisticWrite(
+        head.transactionId,
+        { owner: head.lease.owner, generation: head.lease.generation },
+        Date.now(),
+        'Lease owner left'
+      );
+      return { outcome: 'released' };
+    } catch {
+      let after: HeadClaim | undefined;
+      try {
+        after = await inspectHeadClaim();
+      } catch {
+        return { outcome: 'failed' };
+      }
+      if (after && sameClaim(after, head)) return { outcome: 'failed' };
+      return { outcome: 'moved', after };
     }
   }
 
@@ -799,7 +998,7 @@ export function createMutationQueueRunner(
   async function admit(
     op: Operation,
     enqueue: EnqueueOptimisticMutationResult,
-    epoch: StorageEpoch
+    epoch: ClaimEpoch
   ): Promise<OperationResult | undefined> {
     notifyOptimisticMutationEnqueued(op);
     // Enqueue IDs are monotonic and immutable. A delayed acknowledgement must
@@ -899,8 +1098,8 @@ export function createMutationQueueRunner(
       | 'permanently-failed' = 'queued';
     let outcome: MutationAttemptOutcome = 'detached';
     let details: MutationAttemptDetails = {};
+    const response = result.error?.response ?? attempt.response;
     try {
-      const response = result.error?.response ?? attempt.response;
       const httpServerFailure = (response?.status ?? 0) >= 500;
       // A valid GraphQL payload can arrive over HTTP 5xx without an
       // urql error. Never commit it or bypass the retry policy.
@@ -919,7 +1118,10 @@ export function createMutationQueueRunner(
         let retry = false;
         if (result.error && options.shouldRetryMutation) {
           try {
-            retry = await options.shouldRetryMutation(result.error);
+            retry = await options.shouldRetryMutation(
+              result.error,
+              attempt.mutation
+            );
           } catch (error) {
             options.onCacheError?.(error, op);
           }
@@ -1001,10 +1203,18 @@ export function createMutationQueueRunner(
         if (!transition(attempt, confirm(confirmed))) return detachedResult();
         await recordAttemptResult(attempt, result, false);
         if (!isCurrent(attempt)) return detachedResult();
+        const snapshotGeneration =
+          typeof op.context.cacheSessionGeneration === 'string'
+            ? op.context.cacheSessionGeneration
+            : UNKNOWN_CACHE_GENERATION;
         const committed = await host.commitOptimisticWrite(
           attempt.transactionId,
           claim,
-          { ...deps.cacheDocument(op), data: result.data }
+          {
+            ...deps.cacheDocument(op),
+            data: result.data,
+            generation: snapshotGeneration,
+          }
         );
         if (!transition(attempt, forgetConfirmed)) return detachedResult();
         settled = true;
@@ -1043,18 +1253,39 @@ export function createMutationQueueRunner(
           replacementTransactionId = committed.replacementTransactionId;
           disposition = 'superseded';
           outcome = 'superseded';
-          await deps.deleteReportedRecords(result);
+          if (cacheSessionGeneration.isCurrent(snapshotGeneration))
+            await deps.deleteReportedRecords(result);
+          else
+            await deps.revalidate(
+              committed.revalidations ?? [],
+              op,
+              committed.affectedOps ?? [],
+              true
+            );
         } else {
           disposition = 'committed';
           outcome = 'committed';
-          await deps.deleteReportedRecords(result);
-          if (!isCurrent(attempt)) return detachedResult();
-          const replay = deps.replayExplicitEffects(op, result.data, () =>
-            isCurrent(attempt)
-          );
-          if (replay) await replay;
-          if (isCurrent(attempt))
-            await deps.revalidate(committed.revalidations ?? [], op);
+          if (!cacheSessionGeneration.isCurrent(snapshotGeneration)) {
+            await deps.revalidate(
+              committed.revalidations ?? [],
+              op,
+              committed.affectedOps ?? [],
+              true
+            );
+          } else {
+            const deleted = await deps.deleteReportedRecords(result);
+            if (!isCurrent(attempt)) return detachedResult();
+            const replay = deps.replayExplicitEffects(op, result.data, () =>
+              isCurrent(attempt)
+            );
+            if (replay) await replay;
+            if (isCurrent(attempt))
+              await deps.revalidate(
+                committed.revalidations ?? [],
+                op,
+                deleted.attempted || replay ? undefined : committed.affectedOps
+              );
+          }
         }
       }
     } catch (error) {
@@ -1099,6 +1330,7 @@ export function createMutationQueueRunner(
 
   function resetStorage(): void {
     storageGeneration += 1;
+    admissionFailures.clear();
     activeAttempt = undefined;
     latestClaim = undefined;
     head = IDLE;
@@ -1108,7 +1340,7 @@ export function createMutationQueueRunner(
   }
 
   return {
-    epoch: () => ({ storageGeneration }),
+    epoch: () => ({ storageGeneration, leaseOwner: owner.claimOwner() }),
     isCurrent,
     admit,
     settle,

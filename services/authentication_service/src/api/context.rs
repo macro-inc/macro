@@ -15,7 +15,16 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
-use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
+use contacts::{
+    domain::{list_writes::ListWritesGate, service::SqsContactsIngress},
+    outbound::ingress::SqsContactsQueue,
+};
+
+/// The contacts ingress whose list-aware messages wait for `contacts-list-writes`.
+pub(crate) type GatedContactsIngress = ListWritesGate<
+    SqsContactsIngress<SqsContactsQueue>,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
+>;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use foreign_entity::domain::service::ForeignEntityServiceImpl;
@@ -80,7 +89,7 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
             PgChannelSideEffectContext,
             ConnectionGatewayChannelRealtimePublisher,
             NotificationChannelSender<NotificationIngressType>,
-            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            ContactsChannelDispatcher<GatedContactsIngress>,
             AuthenticationEventBroker,
         >,
     >,
@@ -91,7 +100,7 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
 /// resolved through roles + teams and collected through Stripe.
 pub(crate) type AiBillingServiceType = ai_billing::domain::BillingServiceImpl<
     ai_billing::outbound::RolesTeamsEntitlementSource<
-        UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+        UserRolesAndPermissionsServiceImpl<MacroDB>,
         teams::outbound::team_repo::TeamRepositoryImpl,
     >,
     ai_billing::outbound::PgUsageReader,
@@ -99,20 +108,31 @@ pub(crate) type AiBillingServiceType = ai_billing::domain::BillingServiceImpl<
     ai_billing::outbound::StripePaymentGateway,
 >;
 
+pub(crate) type StripePlanGatewayType = crate::outbound::subscription_plan::StripePlanGateway<
+    teams::outbound::customer_repo::CustomerRepositoryImpl,
+    teams::outbound::team_repo::TeamRepositoryImpl,
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+>;
+
 pub(crate) type SubscriptionStatusServiceType =
     crate::service::subscription_status::SubscriptionStatusService<
         ai_billing::outbound::RolesTeamsEntitlementSource<
-            UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+            UserRolesAndPermissionsServiceImpl<MacroDB>,
             teams::outbound::team_repo::TeamRepositoryImpl,
         >,
-        crate::outbound::subscription_plan::StripePlanGateway<
-            teams::outbound::customer_repo::CustomerRepositoryImpl,
-        >,
+        StripePlanGatewayType,
     >;
 
 pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNoticeServiceImpl<
     teams::outbound::colleague_directory::ContactsColleagueDirectory<
-        contacts::outbound::repository::DbContactsRepository,
+        contacts::domain::list_reads::FlaggedContactReads<
+            contacts::domain::service::ContactsDomainService<
+                contacts::outbound::repository::DbContactsRepository,
+                Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+            >,
+            contacts::outbound::repository::DbContactsRepository,
+            feature_flags::outbound::posthog::PostHogFeatureFlags,
+        >,
     >,
     teams::domain::join_announcement::JoinAnnouncementServiceImpl<
         teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl,
@@ -124,14 +144,12 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
     ChannelServiceType,
-    UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+    UserRolesAndPermissionsServiceImpl<MacroDB>,
     NotificationIngressType,
     teams::outbound::crm_enqueuer::SqsCrmEnqueuer,
     teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl,
     teams::outbound::team_analytics::AnalyticsClientTeamAnalytics,
-    teams::outbound::contacts_enqueuer::ContactsIngressEnqueuer<
-        SqsContactsIngress<SqsContactsQueue>,
-    >,
+    teams::outbound::contacts_enqueuer::ContactsIngressEnqueuer<GatedContactsIngress>,
     AuthenticationEventBroker,
     AiBillingServiceType,
     crate::outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter<
@@ -144,7 +162,7 @@ pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::
 
 pub(crate) type InviteRewardsType = crate::outbound::invite_rewards::BillingInviteRewards<
     ai_billing::outbound::RolesTeamsEntitlementSource<
-        UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+        UserRolesAndPermissionsServiceImpl<MacroDB>,
         teams::outbound::team_repo::TeamRepositoryImpl,
     >,
     ai_billing::outbound::PgCreditGrantRepo,
@@ -172,6 +190,57 @@ pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
 
 pub(crate) type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
 
+/// Buys and manages Macro computers on team subscriptions.
+pub(crate) type ComputerServiceType = hosted_runtimes::domain::service::ComputerService<
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+    crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
+    hosted_runtimes::domain::service::SystemClock,
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+>;
+
+/// The authentication service's Stripe inbox consumers.
+pub(crate) type StripeConsumersType = crate::outbound::stripe_consumers::StripeConsumers<
+    UserRolesAndPermissionsServiceImpl<MacroDB>,
+    TeamsServiceType,
+    AiBillingServiceType,
+    GtmInviteServiceType,
+    stripe_inbox::outbound::pg::PgInbox,
+    stripe_inbox::outbound::stripe_api::StripeApiReader,
+>;
+
+/// The Stripe event inbox the webhook stores into.
+pub(crate) type StripeInboxType = stripe_inbox::domain::service::InboxService<
+    stripe_inbox::outbound::pg::PgInbox,
+    stripe_inbox::outbound::stripe_api::StripeApiReader,
+    StripeConsumersType,
+>;
+
+/// Agent teammates on the team's Macro computers.
+pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentServiceImpl<
+    team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
+    team_agents::outbound::team_membership::TeamsMembership<TeamsServiceType>,
+    team_agents::outbound::agent_api_keys::UserApiKeys<
+        user_api_key::domain::service::UserApiKeyServiceImpl<
+            user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+        >,
+    >,
+    team_agents::outbound::agent_git_repos::AgentGitRepos,
+    team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers<
+        hosted_runtimes::outbound::pg::PgComputerRepo,
+        crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
+        hosted_runtimes::domain::service::SystemClock,
+        hosted_runtimes::outbound::pg::PgComputerRepo,
+        hosted_runtimes::domain::ports::NoComps,
+        hosted_runtimes::outbound::pg::PgComputerRepo,
+    >,
+    agent_credentials::rollout::PgAgentCreators,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
+    team_agents::outbound::setup_notices::IngressSetupNotices<
+        NotificationIngressType,
+        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
+    >,
+>;
+
 pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<
     favorites::outbound::pg_favorites_repo::PgFavoritesRepo,
 >;
@@ -183,7 +252,7 @@ pub(crate) type AgentApiKeysType = agent_api_keys::domain::AgentKeyService<
     agent_api_keys::outbound::KmsAgentKeyCipher<cursor_api_key::cipher::AwsKmsCiphertexts>,
     agent_api_keys::outbound::EntitlementKeyPlans<
         ai_billing::outbound::RolesTeamsEntitlementSource<
-            UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+            UserRolesAndPermissionsServiceImpl<MacroDB>,
             teams::outbound::team_repo::TeamRepositoryImpl,
         >,
     >,
@@ -192,6 +261,10 @@ pub(crate) type AgentApiKeysType = agent_api_keys::domain::AgentKeyService<
 pub(crate) type BotsServiceType = bots::domain::service::BotServiceImpl<
     bots::outbound::pg_bots_repo::PgBotsRepo,
     AuthenticationEventBroker,
+    harnesses::domain::service::HarnessServiceImpl<
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+        hosted_runtimes::outbound::pg::PgComputerAgents,
+    >,
 >;
 
 #[derive(Clone, FromRef)]
@@ -213,13 +286,8 @@ pub(crate) struct ApiContext {
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub subscription_status: Arc<SubscriptionStatusServiceType>,
-    pub subscription_plan: Arc<
-        crate::service::subscription_plan::PlanService<
-            crate::outbound::subscription_plan::StripePlanGateway<
-                teams::outbound::customer_repo::CustomerRepositoryImpl,
-            >,
-        >,
-    >,
+    pub subscription_plan:
+        Arc<crate::service::subscription_plan::PlanService<StripePlanGatewayType>>,
     pub subscription_checkout: Arc<
         crate::service::subscription_checkout::CheckoutService<
             crate::outbound::subscription_checkout::StripeCheckoutGateway<GtmInviteServiceType>,
@@ -234,6 +302,7 @@ pub(crate) struct ApiContext {
         crate::outbound::user_deletion::UserDeletionAdapter<
             TeamsServiceType,
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
+            GatedContactsIngress,
         >,
     >,
     pub email_service_client: Arc<email::outbound::EmailServiceHttpClient>,
@@ -247,8 +316,7 @@ pub(crate) struct ApiContext {
     pub token_context: MacroApiTokenContext,
     pub internal_api_key: InternalApiKey,
     pub stripe_webhook_secret: LocalOrRemoteSecret<StripeWebhookSecretKey>,
-    pub user_roles_and_permissions_service:
-        Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
+    pub user_roles_and_permissions_service: Arc<UserRolesAndPermissionsServiceImpl<MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub domain_notice_service: Arc<DomainNoticeServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
@@ -263,13 +331,25 @@ pub(crate) struct ApiContext {
     pub user_language_service: Arc<UserLanguageServiceType>,
     pub system_status_service: Arc<SystemStatusServiceType>,
     pub rate_limit_service: RateLimiter,
+    /// Publishes user profile events such as `user.picture_changed`.
+    pub event_broker: AuthenticationEventBroker,
     /// The stripe price ids for each paid plan's seat
     pub stripe_prices: crate::api::user::stripe::StripePrices,
+    /// The Stripe prices Macro computers bill at.
+    pub computer_prices: crate::domain::computer_billing::ComputerPrices,
+    /// Buys and manages Macro computers; also runs their billing effects.
+    pub computer_service: Arc<ComputerServiceType>,
+    /// Stores verified Stripe events for the inbox's consumers to apply.
+    pub stripe_inbox: Arc<StripeInboxType>,
+    /// Invites and removes agent teammates, and issues their enrollments.
+    pub team_agents_service: Arc<TeamAgentsServiceType>,
     /// AI allowances, credits, and overage
     pub ai_billing_service: Arc<AiBillingServiceType>,
     pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,
     /// Whether Gmail link consent requests the Google Calendar scope.
     pub calendar_scope_enabled: bool,
+    /// Google's OAuth authorization endpoint, where a Gmail link sends the browser.
+    pub google_authorization_url: url::Url,
     /// Signs and verifies the `state` on account-link OAuth round trips.
     pub account_link_state_key: AccountLinkStateKey,
 }

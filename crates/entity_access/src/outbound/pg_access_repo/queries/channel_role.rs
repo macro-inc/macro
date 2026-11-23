@@ -78,7 +78,7 @@ async fn fetch_channel_role_row(
 /// - Organization channels: default to Member only if user's org matches
 /// - Team channels: matching team members receive ViewOnly
 /// - Private/DM: require explicit participation
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, user_id))]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_channel_role(
     pool: &PgPool,
@@ -126,7 +126,7 @@ pub async fn get_channel_role(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_channel_access(
     pool: &PgPool,
     channel_id: &Uuid,

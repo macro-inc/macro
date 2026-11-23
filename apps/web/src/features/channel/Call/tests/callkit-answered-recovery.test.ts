@@ -26,12 +26,12 @@ vi.mock('@core/auth/push-registration-lifecycle', () => ({
 }));
 vi.mock('@tauri-apps/plugin-os', () => ({ version: () => '16' }));
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLKIT: true }));
-vi.mock('@core/context/channels', () => ({ useChannelsContext: vi.fn() }));
+vi.mock('@core/context/channels', () => ({ useChannelDirectory: vi.fn() }));
 vi.mock('@core/util/platform', () => ({
   isTauri: () => true,
   isPlatform: (platform: string) => platform === 'android',
 }));
-vi.mock('@queries/auth', () => ({ useUserNamesQuery: vi.fn() }));
+vi.mock('@queries/auth', () => ({ useUserNames: vi.fn() }));
 vi.mock('@queries/call/call', () => ({
   invalidateActiveCallQueries: async () => {},
 }));
@@ -111,7 +111,14 @@ describe('native answered-call recovery', () => {
       answer('channel-1', nativeMedia);
       await settle();
       const navigation = nativeMedia ? bridge.open : bridge.join;
-      expect(navigation).toHaveBeenCalledExactlyOnceWith('channel-1');
+      if (nativeMedia) {
+        expect(navigation).toHaveBeenCalledExactlyOnceWith('channel-1');
+      } else {
+        expect(navigation).toHaveBeenCalledExactlyOnceWith('channel-1', {
+          kind: 'join',
+          callId: undefined,
+        });
+      }
       expect(bridge.pending).toBeNull();
       await vi.advanceTimersByTimeAsync(3000);
       resume();
@@ -190,6 +197,9 @@ describe('native answered-call recovery', () => {
     };
     resume();
     await settle();
-    expect(bridge.join).toHaveBeenCalledExactlyOnceWith('channel-2');
+    expect(bridge.join).toHaveBeenCalledExactlyOnceWith('channel-2', {
+      kind: 'join',
+      callId: 'call-2',
+    });
   });
 });

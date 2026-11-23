@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentMetadataAppearance } from './documentMetadataAppearance';
 import type { DocumentMetadataBranchedFromId } from './documentMetadataBranchedFromId';
 import type { DocumentMetadataBranchedFromVersionId } from './documentMetadataBranchedFromVersionId';
 import type { DocumentMetadataCreatedAt } from './documentMetadataCreatedAt';
@@ -18,6 +19,7 @@ import type { DocumentMetadataSubType } from './documentMetadataSubType';
 import type { DocumentMetadataUpdatedAt } from './documentMetadataUpdatedAt';
 
 export interface DocumentMetadata {
+  appearance?: DocumentMetadataAppearance;
   /** The id of the document this document branched from */
   branchedFromId?: DocumentMetadataBranchedFromId;
   /** The id of the version this document branched from

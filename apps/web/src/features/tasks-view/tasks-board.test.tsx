@@ -1,6 +1,9 @@
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
 vi.mock('@notifications/mark-row-seen', () => ({
   markRowNotificationsSeenOnOpen: vi.fn(),
 }));
@@ -65,7 +68,6 @@ vi.mock('./tasks-view-context', () => ({
       isLoadingMore: () => false,
     },
     openTask: mocks.openTask,
-    projectsEnabled: () => false,
     showTaskProject: () => false,
     calendar: () =>
       createDateBucketBoundaries(new Date('2026-10-01T12:00:00Z'), 'UTC'),

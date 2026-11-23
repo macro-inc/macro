@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO stripe_objects\n            (id, kind, customer_id, snapshot, deleted, source_event_id, observed_at)\n        VALUES ($1, ($2::text)::stripe_object_kind, $3, $4, $5, $6, $7)\n        ON CONFLICT (id) DO UPDATE SET\n            customer_id = EXCLUDED.customer_id,\n            snapshot = EXCLUDED.snapshot,\n            deleted = EXCLUDED.deleted,\n            source_event_id = EXCLUDED.source_event_id,\n            observed_at = EXCLUDED.observed_at,\n            updated_at = now()\n        WHERE stripe_objects.observed_at <= EXCLUDED.observed_at\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Bool",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d64940de70936a3d44910b0c0ab11a048342b0eef2e99901a124b4b0c3168b10"
+}

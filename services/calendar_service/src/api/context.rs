@@ -10,9 +10,9 @@ use macro_authorization::{
 
 use crate::calendar_backfill::CalendarEventBroker;
 use crate::calendar_backfill_adapters::RedisCalendarRequestGate;
-use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use crate::calendar_tokens::CalendarTokenProviderAdapter;
 use crate::config::Config;
+use calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh;
 
 /// JWT-validating authorization service used by the mutation routes.
 pub type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
@@ -21,7 +21,7 @@ pub type CalendarGrantService = CalendarService<PgCalendarRepository>;
 /// Team-sharing policy service with viewer refresh notifications.
 pub type CalendarTeamSvc = calendar_events::domain::team::CalendarTeamServiceImpl<
     calendar_events::outbound::pg_team::PgCalendarTeamRepository,
-    ConnectionGatewayCalendarRefresh,
+    GatewayCalendarRefresh,
 >;
 /// Booking policy backed by calendar services and the team directory.
 pub type SchedulingService = calendar_scheduling::domain::service::Service<
@@ -44,12 +44,14 @@ pub type CalendarMutationSvc = CalendarMutationServiceImpl<
     >,
     CalendarTokenProviderAdapter,
     CalendarEventBroker,
-    ConnectionGatewayCalendarRefresh,
+    GatewayCalendarRefresh,
 >;
 
 /// Shared HTTP application state for the calendar service.
 #[derive(Clone)]
 pub struct ApiContext {
+    /// Signed invocation validation and propagation.
+    pub correlation: agent_correlation::inbound::CorrelationState,
     /// Resolved service configuration.
     pub config: Arc<Config>,
     /// Authorization state for authenticated mutation routes.

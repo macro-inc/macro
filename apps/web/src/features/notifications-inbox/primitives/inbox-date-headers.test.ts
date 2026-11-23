@@ -5,6 +5,7 @@ import {
   createInboxListItems,
   dateHeaderLabel,
   type InboxListItem,
+  inboxSectionEnds,
   isInboxNotification,
 } from './inbox-date-headers';
 
@@ -13,6 +14,7 @@ const NOW = new Date(2026, 8, 14, 20, 0);
 const row = (id: string, latestAt: Date): NotificationInboxRow => ({
   id,
   type: 'task',
+  alsoListedAs: [],
   revision: `rev-${id}`,
   latestAt: latestAt.getTime(),
   actions: [],
@@ -21,7 +23,6 @@ const row = (id: string, latestAt: Date): NotificationInboxRow => ({
   content: {
     entity: { type: 'document', id, name: 'Plan' } as never,
     notifications: [],
-    entityAt: () => ({}) as never,
   },
 });
 
@@ -91,6 +92,32 @@ describe('createInboxListItems', () => {
 
       setNotifications(['newer', 'a1']);
       expect(place()).toBe(before);
+      dispose();
+    });
+  });
+
+  it('ends each section at its last row or unfolded notification', () => {
+    createRoot((dispose) => {
+      const items = createInboxListItems(
+        () => [
+          row('a', todayAt(19, 58)),
+          stack('b', todayAt(19, 57), ['b1', 'b2']),
+          row('c', todayAt(19, 30)),
+          row('d', todayAt(19, 20)),
+        ],
+        (id) => id === 'b'
+      );
+      expect(shape(items())).toEqual([
+        'Last few minutes',
+        'a',
+        'b',
+        'b/b1',
+        'b/b2',
+        'Last hour',
+        'c',
+        'd',
+      ]);
+      expect([...inboxSectionEnds(items())]).toEqual(['b/b2', 'd']);
       dispose();
     });
   });

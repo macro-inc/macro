@@ -24,11 +24,17 @@ import {
   type Query,
   type QueryStore,
 } from '@app/features/next-soup/filters/filter-store/query-store';
+import { useFeaturedDocuments } from '@app/features/next-soup/queries/featured-documents';
 import {
   getViewPreset,
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { createSearchState } from '@app/features/next-soup/soup-view/create-search-state';
+import {
+  featuredDocumentIds,
+  featureSearchResults,
+  withFeaturedDocumentData,
+} from '@app/features/next-soup/soup-view/featured-search-results';
 import {
   createTagFilter,
   type TagFilter,
@@ -62,6 +68,7 @@ import {
   NATIVE_OFFLINE_ERROR_MESSAGE,
   nativeNetworkStatus,
 } from '@core/mobile/native-network-status';
+import { arrayEquals } from '@core/util/compareUtils';
 import {
   type EntityData,
   getPropertyOptionLabel,
@@ -74,7 +81,6 @@ import {
   localDraftEntities,
   localDraftMatchesFilters,
 } from '@queries/email/local-draft-source';
-import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
   GroupMeta as ApiGroupMeta,
@@ -85,6 +91,7 @@ import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   type Accessor,
@@ -104,6 +111,7 @@ import {
 import { unwrap } from 'solid-js/store';
 import { applyDocumentTabScope } from './document-tab-scope';
 import { resolveInitialViewFilters } from './initial-view-filters';
+import { searchAwaitsInput } from './search-awaits-input';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -809,6 +817,17 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     setSearchText,
   });
 
+  // Search lists nothing until there is something to search for.
+  const searchAwaitingInput = () =>
+    activeListView() === 'search' &&
+    searchAwaitsInput({
+      text: searchText(),
+      state: queryFilters.state,
+      activeFilterIds: soup.predicates.activeIds(),
+      assigneeCount: assigneeFilter().length,
+      preset: activePreset(),
+    });
+
   const initialize = (options: SoupViewInitializeOptions = {}) => {
     initializing = true;
     try {
@@ -929,7 +948,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       // after a tab switch.
       const emailImportance = queryFilters.state.include.emailImportance;
       return {
-        enabled: enabled() && !search.isSearching(),
+        enabled: enabled() && !search.isSearching() && !searchAwaitingInput(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
@@ -942,8 +961,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   // Reading `.data` on a cold TanStack query suspends the nearest <Suspense>.
   // Read loading first so REST fallback leaves the view shell rendered.
+  // A disabled query's data read suspends too, so Search skips it while it
+  // waits for input.
   const itemsQueryData = () =>
-    itemsQuery.isLoading ? undefined : itemsQuery.data;
+    itemsQuery.isLoading || searchAwaitingInput() ? undefined : itemsQuery.data;
   const itemsQueryHasData = () =>
     itemsQueryData() !== undefined && !itemsQuery.isPlaceholderData;
   const itemsQueryError = () =>
@@ -964,6 +985,12 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const itemsSource = () => soupItemsSource;
 
+  const featuredDocuments = ENABLE_FEATURED_SEARCH_RESULTS
+    ? useFeaturedDocuments(() =>
+        featuredDocumentIds(search.localFuzzyResults())
+      )
+    : () => [];
+
   const localDrafts = createLocalDraftSource(
     () => itemsQuery.transport === 'graphql'
   );
@@ -981,6 +1008,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       const searching = search.isSearching();
 
       if (!searching) {
+        if (searchAwaitingInput()) return [];
         const data = itemsSource().data();
         const extras = [
           ...(config().additionalEntities?.() ?? []),
@@ -1019,7 +1047,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         ];
       }
 
-      const local = search.localFuzzyResults();
+      const local = withFeaturedDocumentData(
+        search.localFuzzyResults(),
+        featuredDocuments()
+      );
       const service = search.serviceSearchResults();
 
       const needle = search.searchText().toLowerCase();
@@ -1123,26 +1154,19 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     return soup.positions.apply(transformed);
   };
 
-  const entities = () => {
-    const base = baseEntities();
-    if (!ENABLE_FEATURED_SEARCH_RESULTS || !search.isSearching()) return base;
-
-    const featuredIds = search.featuredIds();
-    if (featuredIds.length === 0) return base;
-
-    const entityMap = new Map(base.map((e) => [e.id, e]));
-    const featuredIdSet = new Set(featuredIds);
-    const featured: SoupEntity[] = [];
-
-    for (const id of featuredIds) {
-      const e = entityMap.get(id);
-      if (e) featured.push(e);
+  const featuredSearch = createLazyMemo(() =>
+    ENABLE_FEATURED_SEARCH_RESULTS && search.isSearching()
+      ? featureSearchResults(baseEntities(), search.featuredIds())
+      : undefined
+  );
+  const entities = () => featuredSearch()?.entities ?? baseEntities();
+  const featuredIds = createMemo(
+    () => featuredSearch()?.featuredIds ?? [],
+    [],
+    {
+      equals: arrayEquals,
     }
-
-    const rest = base.filter((e) => !featuredIdSet.has(e.id));
-
-    return [...featured, ...rest];
-  };
+  );
 
   const groupQueries = createGroupedSoupQueries({
     groupedPaging: () => itemsQuery.groupedPaging,
@@ -1162,7 +1186,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       const view = activeListView();
       const emailImportance = queryFilters.state.include.emailImportance;
       return {
-        enabled: enabled() && !search.isSearching(),
+        enabled: enabled() && !search.isSearching() && !searchAwaitingInput(),
         meta: {
           itemFilter: createSoupViewItemFilter(itemFilterSnapshot(view)),
           insertFilter: emailImportanceInsertFilter(emailImportance),
@@ -1234,6 +1258,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   };
 
   const builtRows = createMemo((): SoupRow[] => {
+    if (searchAwaitingInput()) return [];
     const field = groupByField();
     const groups = itemsSource().data()?.groups;
 
@@ -1554,7 +1579,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         void queryClient
           .invalidateQueries({ queryKey: soupKeys._def })
           .catch(() => undefined);
-        void invalidateUserNotifications().catch(() => undefined);
 
         // Only the visible list decides the outcome. It throws on refetch
         // failure, so pull-to-refresh can tell "nothing came back" apart from
@@ -1579,7 +1603,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     setSearchText: search.setSearchText,
     searchPaused: sourceSearchPaused,
     setSearchPaused,
-    featuredIds: search.featuredIds,
+    featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
     queryFilters,

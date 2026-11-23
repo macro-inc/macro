@@ -38,6 +38,8 @@ use tower::ServiceExt;
 
 const DEFAULT_BEARER_TOKEN: &str = "macro|bot-admin@example.com";
 const INVALID_BEARER_TOKEN: &str = "invalid";
+const AGENT_BEARER_PREFIX: &str = "agent:";
+const ROUTINE_BEARER_PREFIX: &str = "routine:";
 
 #[derive(Clone, Copy)]
 enum TestBotMode {
@@ -57,6 +59,7 @@ struct TestBotService {
     list_channel_bots_calls: Arc<AtomicUsize>,
     owner_profiles: Vec<BotOwnerProfile>,
     owner_profile_calls: Arc<AtomicUsize>,
+    mint_calls: Arc<AtomicUsize>,
 }
 
 impl TestBotService {
@@ -90,6 +93,7 @@ impl TestBotService {
             list_channel_bots_calls: Arc::new(AtomicUsize::new(0)),
             owner_profiles: Vec::new(),
             owner_profile_calls: Arc::new(AtomicUsize::new(0)),
+            mint_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -251,10 +255,23 @@ impl BotService for TestBotService {
     async fn create_token(
         &self,
         _caller: MacroUserIdStr<'static>,
-        _bot_id: BotId,
-        _req: CreateBotTokenRequest,
+        bot_id: BotId,
+        req: CreateBotTokenRequest,
     ) -> Result<CreateBotTokenResponse, BotError> {
-        unimplemented!()
+        self.mint_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(CreateBotTokenResponse {
+            token: BotToken {
+                id: Uuid::nil(),
+                bot_id,
+                token_prefix: "mbot_test".to_owned(),
+                label: req.label,
+                last_used_at: None,
+                expires_at: None,
+                revoked_at: None,
+                created_at: chrono::DateTime::UNIX_EPOCH,
+            },
+            bearer_token: "mbot_test_secret".to_owned(),
+        })
     }
 
     async fn list_tokens(
@@ -427,12 +444,22 @@ impl JwtValidator for FakeJwtValidator {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
 
+        // A prefix stands for a Macro API JWT signed for an agent or a
+        // routine run.
+        let agent = jwt.strip_prefix(AGENT_BEARER_PREFIX);
+        let routine = jwt.strip_prefix(ROUTINE_BEARER_PREFIX);
+        let user_id = agent.or(routine).unwrap_or(jwt);
         Ok(macro_authorization::ValidatedCredential {
-            origin: macro_authorization::CredentialOrigin::Session,
+            origin: if user_id == jwt {
+                macro_authorization::CredentialOrigin::Session
+            } else {
+                macro_authorization::CredentialOrigin::MacroApiJwt
+            },
             identity: ValidatedIdentity {
-                agent_id: None,
+                agent_id: agent.map(|_| bot_id::MACRO_AI_BOT_ID),
                 agent_via: None,
-                user_id: jwt.to_string(),
+                routine_id: routine.map(|_| Uuid::nil()),
+                user_id: user_id.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
                 permissions: None,
@@ -521,7 +548,11 @@ fn router(service: TestBotService, role: EntityParticipantRole) -> Router {
 }
 
 fn real_router(pool: PgPool, user_id: &str) -> Router {
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bot_service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    );
     let access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(pool));
     let bearer_token = user_id.to_string();
     bots_router(BotsRouterState::new(
@@ -965,7 +996,11 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
     insert_user(&pool, CHANNEL_ADMIN_ID).await?;
     insert_private_channel_with_admin(&pool, channel_id, CHANNEL_ADMIN_ID).await?;
 
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bot_service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    );
     let bot = bot_service
         .create_bot(
             macro_user_id(BOT_OWNER_ID),
@@ -1065,7 +1100,11 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
     insert_user(&pool, ADMIN_USER_ID).await?;
     insert_private_channel_with_admin(&pool, channel_id, ADMIN_USER_ID).await?;
 
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bot_service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    );
     let bot = bot_service
         .create_bot(
             macro_user_id(ADMIN_USER_ID),
@@ -1229,4 +1268,157 @@ async fn bot_owner_can_create_and_patch_has_agent_via_http(pool: PgPool) -> anyh
     assert!(!read_bot(disable_response).await.has_agent);
 
     Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patching_an_agent_changes_only_the_fields_sent(pool: PgPool) -> anyhow::Result<()> {
+    const OWNER_ID: &str = "macro|agent-owner@example.com";
+    insert_user(&pool, OWNER_ID).await?;
+    let router = real_router(pool, OWNER_ID);
+
+    let created = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/agents")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "name": "Web maintainer",
+                        "handle": "web-maintainer",
+                        "harness": "in-memory",
+                        "instructions": "Owns acme/web.",
+                        "channel_scope": "all",
+                        "default_model": "claude-sonnet",
+                        "is_coding": true,
+                        "auto_accept_permissions": true,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created: serde_json::Value =
+        serde_json::from_slice(&axum::body::to_bytes(created.into_body(), 1 << 20).await?)?;
+    let agent_id = created["bot"]["id"].as_str().unwrap().to_string();
+
+    let patched = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/agents/{agent_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({"instructions": "Ship small diffs."}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), StatusCode::OK);
+    let patched: serde_json::Value =
+        serde_json::from_slice(&axum::body::to_bytes(patched.into_body(), 1 << 20).await?)?;
+    assert_eq!(patched["instructions"], "Ship small diffs.");
+    assert_eq!(patched["default_model"], "claude-sonnet");
+    assert_eq!(patched["harness"], "in-memory");
+    assert_eq!(patched["is_coding"], true);
+    assert_eq!(patched["auto_accept_permissions"], true);
+    assert_eq!(patched["channel_scope"], "all");
+    assert_eq!(patched["bot"]["name"], "Web maintainer");
+
+    let flat_channels = router
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/agents/{agent_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({"channel_ids": [Uuid::new_v4()]}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(flat_channels.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    Ok(())
+}
+
+fn mint_request(bot_id: BotId, bearer: &str) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri(format!("/bots/{bot_id}/tokens"))
+        .header(header::AUTHORIZATION, format!("Bearer {bearer}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(r#"{"label": "github-webhook"}"#))
+        .unwrap()
+}
+
+async fn response_json(response: axum::response::Response) -> serde_json::Value {
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn a_person_mints_a_bot_token_and_sees_its_secret() {
+    let service = TestBotService::new(TestBotMode::Ok);
+    let mints = service.mint_calls.clone();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+
+    let response = router_without_credentials(service, EntityParticipantRole::Owner)
+        .oneshot(mint_request(bot_id, DEFAULT_BEARER_TOKEN))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(
+        response_json(response).await["bearer_token"],
+        "mbot_test_secret"
+    );
+    assert_eq!(mints.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn an_agents_program_cannot_mint_a_bot_token() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let agent_bearer = format!("{AGENT_BEARER_PREFIX}{DEFAULT_BEARER_TOKEN}");
+    let mut code_mode = mint_request(bot_id, DEFAULT_BEARER_TOKEN);
+    code_mode.headers_mut().insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    let routine_bearer = format!("{ROUTINE_BEARER_PREFIX}{DEFAULT_BEARER_TOKEN}");
+    let runs = [
+        (
+            "an agent-attributed token",
+            mint_request(bot_id, &agent_bearer),
+        ),
+        ("the code-mode runtime", code_mode),
+        (
+            "an owner-identity routine run",
+            mint_request(bot_id, &routine_bearer),
+        ),
+    ];
+    for (run, request) in runs {
+        let service = TestBotService::new(TestBotMode::Ok);
+        let mints = service.mint_calls.clone();
+        let response = router_without_credentials(service, EntityParticipantRole::Owner)
+            .oneshot(request)
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{run}");
+        let body = response_json(response).await;
+        assert!(
+            body["message"].as_str().unwrap().contains("botCredential"),
+            "{run}: {body}"
+        );
+        assert_eq!(mints.load(Ordering::SeqCst), 0, "{run}");
+    }
 }

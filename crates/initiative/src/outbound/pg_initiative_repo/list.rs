@@ -23,6 +23,7 @@ pub(super) async fn list_accessible(
         )
         SELECT
             i.id,
+            i.appearance AS "appearance: sqlx::types::Json<model_entity::EntityAppearance>",
             i.name,
             i.updated_at
         FROM initiative i
@@ -55,6 +56,7 @@ pub(super) async fn list_accessible(
     let initiatives = rows
         .into_iter()
         .map(|row| InitiativeSummary {
+            appearance: row.appearance.map(|value| value.0),
             id: InitiativeId::from_uuid(row.id),
             name: row.name,
             updated_at: row.updated_at,

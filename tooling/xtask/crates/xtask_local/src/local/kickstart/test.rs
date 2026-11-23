@@ -40,9 +40,7 @@ fn google_idp_requires_a_real_client_secret() {
 #[test]
 fn kickstart_without_google_has_no_idp_requests() {
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -65,11 +63,12 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
     let google = GoogleIdp {
         client_id: "abc.apps.googleusercontent.com".into(),
         client_secret: "GOCSPX-real".into(),
+        authorization_endpoint: "http://localhost:8480/o/oauth2/v2/auth".into(),
+        token_endpoint: "http://gmail-emulator:8080/token".into(),
+        userinfo_endpoint: "http://gmail-emulator:8080/v1/userinfo".into(),
     };
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         Some(&google),
@@ -112,6 +111,24 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
 
     let plain = &requests[google_idp]["body"]["identityProvider"];
     assert_eq!(plain["name"], "google");
+    assert_eq!(
+        plain["oauth2"]["authorization_endpoint"],
+        "http://localhost:8480/o/oauth2/v2/auth?prompt=consent&access_type=offline"
+    );
+    assert_eq!(
+        plain["oauth2"]["token_endpoint"],
+        "http://gmail-emulator:8080/token"
+    );
+
+    // The browser-facing endpoint names an instance port, so it stays out of
+    // the snapshot key; the in-network ones are the same for every instance.
+    let keyed = without_instance_urls(doc.clone());
+    let keyed_plain = &keyed["requests"][google_idp]["body"]["identityProvider"]["oauth2"];
+    assert!(keyed_plain.get("authorization_endpoint").is_none());
+    assert_eq!(
+        keyed_plain["token_endpoint"],
+        "http://gmail-emulator:8080/token"
+    );
     assert_eq!(plain["oauth2"]["scope"], "openid profile email");
     assert!(plain["lambdaConfiguration"].is_null());
 }
@@ -119,9 +136,7 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
 #[test]
 fn kickstart_adopts_the_default_tenant() {
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -199,9 +214,7 @@ fn the_github_idp_id_follows_the_env_the_service_reads() {
     assert_eq!(github.idp_id, "c8014fe7-aeb4-4898-a460-4047e0fdf6d8");
 
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -228,9 +241,7 @@ fn the_github_idp_is_created_under_both_the_name_and_the_id_the_service_uses() {
         idp_id: identity::GITHUB_IDP_ID.to_string(),
     };
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -266,9 +277,7 @@ fn the_github_idp_is_created_under_both_the_name_and_the_id_the_service_uses() {
 #[test]
 fn kickstart_without_github_creates_no_github_idp() {
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -288,9 +297,11 @@ fn kickstart_without_github_creates_no_github_idp() {
 
 fn authorized_redirects(frontend_port: u16, auth_port: u16, proxy_port: u16) -> Vec<String> {
     let doc = build(
-        frontend_port,
-        auth_port,
-        &[format!("https://localhost:{proxy_port}")],
+        redirect_urls(
+            frontend_port,
+            auth_port,
+            &[format!("https://localhost:{proxy_port}")],
+        ),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -337,12 +348,14 @@ fn agent_oauth_redirects_follow_the_instance_proxy_port() {
 #[test]
 fn agent_oauth_redirects_authorize_the_machine_hostname_and_loopback() {
     let doc = build(
-        3000,
-        8080,
-        &[
-            "https://localhost:8090".to_string(),
-            "https://devbox.example:8090".to_string(),
-        ],
+        redirect_urls(
+            3000,
+            8080,
+            &[
+                "https://localhost:8090".to_string(),
+                "https://devbox.example:8090".to_string(),
+            ],
+        ),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -365,4 +378,46 @@ fn agent_oauth_redirects_authorize_the_machine_hostname_and_loopback() {
         "https://devbox.example:8090/cognition/mcp/servers/auth/callback"
     )));
     assert!(redirects.contains(&json!("https://devbox.example:8090/mcp/oauth/callback")));
+}
+
+#[test]
+fn the_microsoft_idp_discovers_its_endpoints_and_refuses_unverified_domains() {
+    let mut doc = build(
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
+        "function populate() {}",
+        "function reconcile() {}",
+        None,
+        None,
+    );
+    let before = doc["requests"].as_array().unwrap().len();
+    let microsoft = MicrosoftIdp {
+        client_id: "local-microsoft-client".into(),
+        client_secret: "local-microsoft-client-secret".into(),
+        issuer: "http://outlook-emulator:8080/common/v2.0".into(),
+    };
+
+    add_microsoft_idp(
+        &mut doc,
+        &microsoft,
+        "function reconcile() { /* microsoft */ }",
+    );
+
+    let requests = doc["requests"].as_array().unwrap();
+    assert_eq!(requests.len(), before + 2);
+    let lambda = &requests[before]["body"]["lambda"];
+    assert_eq!(lambda["type"], "OpenIDReconcile");
+    let provider = &requests[before + 1]["body"]["identityProvider"];
+    assert_eq!(provider["name"], "microsoft");
+    assert_eq!(provider["lambdaConfiguration"]["reconcileId"], lambda["id"]);
+    // Endpoints come from the issuer, so FusionAuth verifies the ID token
+    // the lambda reads `xms_edov` from.
+    let oauth2 = &provider["oauth2"];
+    assert_eq!(oauth2["issuer"], "http://outlook-emulator:8080/common/v2.0");
+    assert!(oauth2.get("authorization_endpoint").is_none());
+    assert_eq!(oauth2["emailVerifiedClaim"], "xms_edov");
+    // The issuer is the same for every instance, so the snapshot key keeps it.
+    assert_eq!(
+        without_instance_urls(doc.clone()),
+        without_instance_urls(doc)
+    );
 }

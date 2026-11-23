@@ -1,8 +1,10 @@
 //! Thin guest HTTP adapters; the call and message domains own authorization.
 use super::axum_router::MessageHttpError;
+use super::axum_router::ReactionInput;
+use crate::domain::models::Message;
 use crate::domain::ports::MessageError;
 use crate::domain::service::guest_chat::{
-    GuestChatApi, GuestChatMessage, GuestChatPage, GuestChatPost,
+    GuestChatApi, GuestChatMessage, GuestChatPage, GuestChatPatch, GuestChatPost, GuestChatThread,
 };
 use axum::{
     Json, RequestPartsExt, Router,
@@ -60,6 +62,16 @@ where
 {
     Router::new()
         .route("/{call_id}", get(read).post(post))
+        .route("/{call_id}/thread", get(read_thread))
+        .route("/{call_id}/messages", axum::routing::post(post_message))
+        .route(
+            "/{call_id}/messages/{message_id}",
+            axum::routing::patch(patch_message).delete(delete_message),
+        )
+        .route(
+            "/{call_id}/messages/{message_id}/reactions",
+            axum::routing::post(react_message),
+        )
         .layer(axum::middleware::from_fn_with_state(limiter, limit::<R>))
         .with_state(service)
 }
@@ -94,4 +106,79 @@ pub async fn post(
     Json(input): Json<GuestChatPost>,
 ) -> Result<Json<GuestChatMessage>, MessageHttpError> {
     Ok(Json(service.post(call_id, bearer(&headers)?, input).await?))
+}
+
+/// Read the shared call thread with identities redacted.
+#[utoipa::path(get, operation_id = "guest_call_chat_read_thread", path = "/call/guest-chat/{call_id}/thread", params(("call_id" = Uuid, Path)), responses((status = 200, body = GuestChatThread), (status = 403)))]
+pub async fn read_thread(
+    State(service): State<Arc<dyn GuestChatApi>>,
+    Path(call_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Result<Json<GuestChatThread>, MessageHttpError> {
+    Ok(Json(service.read_thread(call_id, bearer(&headers)?).await?))
+}
+
+/// Post a guest message to the shared call thread.
+#[utoipa::path(post, operation_id = "guest_call_chat_post_message", path = "/call/guest-chat/{call_id}/messages", params(("call_id" = Uuid, Path)), request_body = GuestChatPost, responses((status = 200, body = Message), (status = 403)))]
+pub async fn post_message(
+    State(service): State<Arc<dyn GuestChatApi>>,
+    Path(call_id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(input): Json<GuestChatPost>,
+) -> Result<Json<Message>, MessageHttpError> {
+    Ok(Json(
+        service
+            .post_message(call_id, bearer(&headers)?, input)
+            .await?,
+    ))
+}
+
+/// Edit a message owned by this guest.
+#[utoipa::path(patch, operation_id = "guest_call_chat_patch_message", path = "/call/guest-chat/{call_id}/messages/{message_id}", params(("call_id" = Uuid, Path), ("message_id" = Uuid, Path)), request_body = GuestChatPatch, responses((status = 200, body = Message), (status = 403)))]
+pub async fn patch_message(
+    State(service): State<Arc<dyn GuestChatApi>>,
+    Path((call_id, message_id)): Path<(Uuid, Uuid)>,
+    headers: HeaderMap,
+    Json(input): Json<GuestChatPatch>,
+) -> Result<Json<Message>, MessageHttpError> {
+    Ok(Json(
+        service
+            .patch_message(call_id, bearer(&headers)?, message_id, input)
+            .await?,
+    ))
+}
+
+/// Delete a message owned by this guest.
+#[utoipa::path(delete, operation_id = "guest_call_chat_delete_message", path = "/call/guest-chat/{call_id}/messages/{message_id}", params(("call_id" = Uuid, Path), ("message_id" = Uuid, Path)), responses((status = 204), (status = 403)))]
+pub async fn delete_message(
+    State(service): State<Arc<dyn GuestChatApi>>,
+    Path((call_id, message_id)): Path<(Uuid, Uuid)>,
+    headers: HeaderMap,
+) -> Result<axum::http::StatusCode, MessageHttpError> {
+    service
+        .delete_message(call_id, bearer(&headers)?, message_id)
+        .await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+/// Add or remove this guest's reaction.
+#[utoipa::path(post, operation_id = "guest_call_chat_react_message", path = "/call/guest-chat/{call_id}/messages/{message_id}/reactions", params(("call_id" = Uuid, Path), ("message_id" = Uuid, Path)), request_body = ReactionInput, responses((status = 200, body = Message), (status = 403)))]
+pub async fn react_message(
+    State(service): State<Arc<dyn GuestChatApi>>,
+    Path((call_id, message_id)): Path<(Uuid, Uuid)>,
+    headers: HeaderMap,
+    Json(input): Json<ReactionInput>,
+) -> Result<Json<Message>, MessageHttpError> {
+    Ok(Json(
+        service
+            .react_message(
+                call_id,
+                bearer(&headers)?,
+                message_id,
+                input.emoji,
+                input.add,
+                input.nonce,
+            )
+            .await?,
+    ))
 }

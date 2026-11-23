@@ -19,29 +19,82 @@ pub struct MacroUserAuthentication {
     pub agent_id: Option<BotId>,
     /// Signed label of the client the user drives `agent_id` through.
     pub agent_via: Option<String>,
+    /// Signed routine whose run this credential acts for, which may carry no
+    /// `agent_id` (a routine code step running as its owner).
+    pub routine_id: Option<Uuid>,
     /// The user's parsed Macro identifier.
     pub macro_user_id: MacroUserIdStr<'static>,
     /// The authenticated user context.
     pub user_context: UserContext,
 }
 
+impl MacroUserAuthentication {
+    /// Whether a person is acting through their own session, rather than an API
+    /// token or an agent acting for them.
+    #[must_use]
+    pub fn is_human_session(&self) -> bool {
+        self.origin == CredentialOrigin::Session && self.agent_id.is_none()
+    }
+
+    /// Who the signed claims say this credential acts for: the person, or a
+    /// program running with their access.
+    #[must_use]
+    pub fn attribution(&self) -> CredentialAttribution {
+        match (self.agent_id, self.routine_id) {
+            (Some(_), _) => CredentialAttribution::Agent,
+            (None, Some(_)) => CredentialAttribution::Routine,
+            (None, None) => CredentialAttribution::Person,
+        }
+    }
+}
+
+/// Whose program, if any, a user credential was signed for. Routes where only
+/// a person may decide refuse every variant but `Person` (`is_program_run`);
+/// routes that ask a program to confirm refuse `Agent` (`is_agent_run`), never
+/// a signed `Routine`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CredentialAttribution {
+    /// No signed program attribution.
+    Person,
+    /// Signed for an agent (`agent_id`).
+    Agent,
+    /// Signed for a routine's run (`routine_id`) with no agent, such as a
+    /// routine code step running as its owner.
+    Routine,
+}
+
 /// The kind of credential that authenticated a user, set where the credential
 /// is verified. Policies that need a person's own session match on it rather
 /// than on request hints.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CredentialOrigin {
     /// A personal session JWT.
     Session,
     /// A verified Macro API JWT (SDK, MCP), with or without agent attribution.
     MacroApiJwt,
+    /// A verified Macro API JWT that signs an agent session's scope
+    /// (`agent_scope`): a code-mode run held to that scope, which may not
+    /// create credentials or change who controls the account.
+    ScopedMacroApiJwt,
     /// A user API key.
     UserApiKey,
+    /// A manager's credential for this account, held by another account.
+    AccountManager(AccountManagerCredential),
     /// The acting user of a verified bot credential.
     Bot,
     /// The acting user of a verified harness credential.
     Harness,
     /// The acting user claimed by a verified internal service caller.
     Internal,
+}
+
+/// Who holds an account manager credential, and through which grant.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AccountManagerCredential {
+    /// The grant that issued the credential.
+    pub grant_id: Uuid,
+    /// The agent account holding the credential.
+    pub manager_user_id: MacroUserIdStr<'static>,
 }
 
 /// The access scope selected for a bot-authorized request.
@@ -177,7 +230,7 @@ pub enum BotAuthorizationOwner {
 
 /// Ownership facts for a harness whose token has been validated.
 ///
-/// Unlike bots, a harness always has a user or team owner; there are no
+/// Unlike bots, a harness always has one person as its owner; there are no
 /// system harnesses.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HarnessAuthorizationOwner {
@@ -185,11 +238,6 @@ pub enum HarnessAuthorizationOwner {
     User {
         /// The owning Macro user identifier.
         user_id: String,
-    },
-    /// A harness owned by a team.
-    Team {
-        /// The owning team identifier.
-        team_id: Uuid,
     },
 }
 
@@ -239,6 +287,17 @@ pub struct ResolvedApiKeyUser {
     pub fusion_user_id: String,
     /// The user's organization, when present.
     pub organization_id: Option<i32>,
+    /// Set when the key is an account manager's credential, not the user's own.
+    pub account_manager: Option<AccountManagerCredential>,
+}
+
+/// A user API key's owner, and the manager holding the key when it isn't theirs.
+#[derive(Clone, Debug)]
+pub struct AuthorizedUserApiKey {
+    /// The account the key acts as.
+    pub user_context: UserContext,
+    /// Set when the key is an account manager's credential, not the user's own.
+    pub account_manager: Option<AccountManagerCredential>,
 }
 
 /// Unverified acting-user claims presented by a bot.
@@ -282,6 +341,8 @@ pub struct ValidatedIdentity {
     pub agent_id: Option<BotId>,
     /// Client label signed with `agent_id`, such as "Claude Code".
     pub agent_via: Option<String>,
+    /// Routine attribution from a cryptographically verified Macro API token.
+    pub routine_id: Option<Uuid>,
     /// The user's Macro identifier.
     pub user_id: String,
     /// The user's FusionAuth or root identifier.
@@ -309,6 +370,7 @@ impl ValidatedCredential {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: context.user_id,
                 fusion_user_id: context.fusion_user_id,
                 organization_id: context.organization_id,

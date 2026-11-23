@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO stripe_event_cursor (consumer, ordering_key, state, next_attempt_at, generation)\n            SELECT wake.consumer::stripe_consumer, $2, 'dirty', wake.due_at, 1\n            FROM UNNEST($1::text[], $3::timestamptz[]) AS wake(consumer, due_at)\n            ON CONFLICT (consumer, ordering_key) DO UPDATE SET\n                generation = stripe_event_cursor.generation + 1,\n                state = CASE\n                    WHEN stripe_event_cursor.state = 'idle'\n                        OR stripe_event_cursor.dead_cause = 'retries_exhausted'\n                        THEN 'dirty'::stripe_cursor_state\n                    ELSE stripe_event_cursor.state\n                END,\n                next_attempt_at = CASE\n                    WHEN stripe_event_cursor.state = 'idle'\n                        OR stripe_event_cursor.dead_cause = 'retries_exhausted'\n                        THEN EXCLUDED.next_attempt_at\n                    WHEN stripe_event_cursor.state = 'dirty'\n                        THEN LEAST(stripe_event_cursor.next_attempt_at, EXCLUDED.next_attempt_at)\n                    ELSE stripe_event_cursor.next_attempt_at\n                END,\n                attempts = CASE WHEN stripe_event_cursor.dead_cause = 'retries_exhausted'\n                    THEN 0 ELSE stripe_event_cursor.attempts END,\n                dead_event_id = CASE WHEN stripe_event_cursor.dead_cause = 'retries_exhausted'\n                    THEN NULL ELSE stripe_event_cursor.dead_event_id END,\n                dead_cause = CASE WHEN stripe_event_cursor.dead_cause = 'retries_exhausted'\n                    THEN NULL ELSE stripe_event_cursor.dead_cause END,\n                updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3249f285e003a316d9937b584b9ed8b9c263b54eac51eccc28e4589d6f49cc8c"
+}

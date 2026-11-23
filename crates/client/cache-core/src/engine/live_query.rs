@@ -8,7 +8,10 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, sync::Arc};
 
-const VIEW_CAPACITY: usize = 32;
+// Every tab of a browser profile shares one engine, and a channel pane alone
+// registers more than 32 views. A set of readers larger than this bound reads
+// in rotation after each write, so every read misses and rebuilds its view.
+const VIEW_CAPACITY: usize = 256;
 const JOURNAL_CAPACITY: usize = 128;
 
 pub(super) type RowDependencies = BTreeMap<EntityKey<'static>, BTreeSet<EntityKey<'static>>>;

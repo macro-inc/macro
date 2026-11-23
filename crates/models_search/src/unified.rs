@@ -9,7 +9,7 @@ use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
 use crate::{
-    MatchType, SearchOn, call_record::SimpleCallRecordSearchResponseBaseItem,
+    MatchType, SearchOn, TermMatching, call_record::SimpleCallRecordSearchResponseBaseItem,
     channel::SimpleChannelSearchReponseBaseItem, chat::SimpleChatSearchResponseBaseItem,
     document::SimpleDocumentSearchResponseBaseItem, email::SimpleEmailSearchResponseBaseItem,
     project::SimpleProjectSearchResponseBaseItem,
@@ -87,7 +87,7 @@ pub fn entity_filters_from_include(
 // TODO: query, match_type are common to all requests. consolidate.
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchRequest {
-    /// The search query string. Must be at least 3 characters.
+    /// The search query string. Must not be empty; one character is enough.
     pub query: String,
 
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.
@@ -114,6 +114,13 @@ pub struct UnifiedSearchRequest {
     /// their calendars.
     #[serde(default)]
     pub calendar_event_scope: CalendarEventSearchScope,
+
+    /// How a query of several terms matches document content. Defaults to
+    /// `all`, the strict AND that AI tools and the SDK rely on; the web
+    /// app's Search view asks for `dynamic`.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub term_matching: TermMatching,
 
     #[schemars(skip)]
     pub collapse: Option<bool>,
@@ -222,7 +229,10 @@ impl From<EntityFilters> for SearchEntityFilters {
         let should_include_emails = !contains_nil_uuid(&email_filters.email_thread_ids);
         let should_include_channels = !contains_nil_uuid(&channel_filters.channel_ids);
         let should_include_projects = !contains_nil_uuid(&project_filters.project_ids);
-        let should_include_call_records = !contains_nil_uuid(&call_filters.channel_ids);
+        // Either id list holding the nil id excludes calls; the web app's shared
+        // filters mark calls with `call_ids`, older callers with `channel_ids`.
+        let should_include_call_records = !contains_nil_uuid(&call_filters.channel_ids)
+            && !contains_nil_uuid(&call_filters.call_ids);
         let should_include_calendar_events =
             !contains_nil_uuid(&calendar_event_filters.calendar_event_ids);
 
@@ -233,6 +243,7 @@ impl From<EntityFilters> for SearchEntityFilters {
         strip_nil_uuids(&mut channel_filters.channel_ids);
         strip_nil_uuids(&mut project_filters.project_ids);
         strip_nil_uuids(&mut call_filters.channel_ids);
+        strip_nil_uuids(&mut call_filters.call_ids);
         strip_nil_uuids(&mut calendar_event_filters.calendar_event_ids);
 
         document_filters.file_types = expand_file_types_for_search(document_filters.file_types);

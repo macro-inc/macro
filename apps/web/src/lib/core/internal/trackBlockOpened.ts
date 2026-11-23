@@ -36,6 +36,8 @@ function isSoupEntityTag(
       'crm_contact',
       'crm_pipeline',
       'initiative',
+      'harness',
+      'team',
       () => false
     )
     .with('document', 'chat', 'project', 'channel', 'call', () => true)
@@ -44,10 +46,11 @@ function isSoupEntityTag(
 
 // Item types we want recorded in UserHistory on open. CRM types aren't
 // CloudStorageItemType (they're not stored in document_storage), but the
-// /history endpoint accepts any item_type as text and the soup's
-// `viewed_updated` sort joins UserHistory generically — so writing
+// /history endpoint takes any entity type it can check view access for, and
+// the soup's `viewed_updated` sort joins UserHistory generically — so writing
 // these rows is what surfaces recently-opened companies/contacts in
-// Quick Access and the @ mention menu.
+// Quick Access and the @ mention menu. Soup reads a Tasks project's viewed
+// time from `initiative` rows the same way.
 //
 // Foreign entities (GitHub PRs) are intentionally omitted: they are not
 // documents, and posting `/history/document/{id}` 401s because ACL looks
@@ -59,7 +62,8 @@ function shouldTrackInUserHistory(
     isCloudStorageItem(itemType) ||
     itemType === 'agent_session' ||
     itemType === 'crm_company' ||
-    itemType === 'crm_contact'
+    itemType === 'crm_contact' ||
+    itemType === 'initiative'
   );
 }
 

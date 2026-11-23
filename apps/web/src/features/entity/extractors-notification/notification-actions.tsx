@@ -49,6 +49,8 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
 
         const showToast = () => {
           toastId = toast.success('Marked as done', {
+            dismissStyle: 'icon',
+            actionLayout: 'inline',
             actions: [
               {
                 label: 'Undo',

@@ -25,6 +25,9 @@ test('admin Team excludes removed rows and refreshes after navigating away to hi
   ).toHaveCount(0);
   await page.getByRole('searchbox', { name: 'Search team' }).fill('removed');
   await expect(page.getByText('No matching contacts.')).toBeVisible();
+  // The server's answer for the search keeps the same empty state.
+  await expect(page.getByLabel('Team reads')).toHaveText('2');
+  await expect(page.getByText('No matching contacts.')).toBeVisible();
   await page.getByRole('searchbox', { name: 'Search team' }).fill('');
   await page.screenshot({ path: info.outputPath('team-before.png') });
   await visible.click();
@@ -37,7 +40,9 @@ test('admin Team excludes removed rows and refreshes after navigating away to hi
   await page.getByRole('button', { name: 'Company Team', exact: true }).click();
   await expect(page.getByText('No contacts yet')).toBeVisible();
   await expect(visible).toHaveCount(0);
-  await expect(page.getByLabel('Company reads')).toHaveText('2');
+  // Only the Team list reads again; the company itself is unchanged.
+  await expect(page.getByLabel('Team reads')).toHaveText('3');
+  await expect(page.getByLabel('Company reads')).toHaveText('1');
   await page.screenshot({ path: info.outputPath('team-removed.png') });
   await page.getByRole('button', { name: 'Open contact directly' }).click();
   await confirmVisibility(page, 'Restore');
@@ -45,7 +50,8 @@ test('admin Team excludes removed rows and refreshes after navigating away to hi
   await page.getByRole('button', { name: 'Company Team', exact: true }).click();
   await expect(visible).toBeVisible();
   await expect(page.getByLabel('Successful writes')).toHaveText('2');
-  await expect(page.getByLabel('Company reads')).toHaveText('3');
+  await expect(page.getByLabel('Team reads')).toHaveText('4');
+  await expect(page.getByLabel('Company reads')).toHaveText('1');
   await page.screenshot({ path: info.outputPath('team-restored.png') });
 });
 
@@ -110,4 +116,32 @@ test('unfiled contact keeps its identity through removal and restoration', async
   await expect(
     page.getByRole('button', { name: /Unfiled person/ })
   ).toHaveCount(0);
+});
+
+test('Team loads further pages as it scrolls, in the server order', async ({
+  page,
+}) => {
+  await page.goto('/?many');
+  const people = page.getByRole('button', { name: /^Person \d{3}/ });
+  await expect(people.first()).toBeVisible();
+  await expect(page.getByLabel('Team reads')).toHaveText('1');
+  await expect(people).toHaveCount(50);
+  for (const reads of ['2', '3']) {
+    await people.last().scrollIntoViewIfNeeded();
+    await expect(page.getByLabel('Team reads')).toHaveText(reads);
+  }
+  await expect(people).toHaveCount(120);
+  const names = await people.evaluateAll((rows) =>
+    rows.map((row) => row.textContent?.match(/Person \d{3}/)?.[0])
+  );
+  expect(names).toEqual(
+    Array.from(
+      { length: 120 },
+      (_, index) => `Person ${String(index + 1).padStart(3, '0')}`
+    )
+  );
+  await page.getByRole('searchbox', { name: 'Search team' }).fill('person 11');
+  await expect(people).toHaveCount(10);
+  await expect(page.getByLabel('Team reads')).toHaveText('4');
+  await expect(people).toHaveCount(10);
 });

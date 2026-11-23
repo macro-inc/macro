@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                   SELECT 1 FROM suggestion_generation_session\n                   WHERE session_id = $1 AND cleanup = ANY($2)) AS \"undeleted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "undeleted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d18502c2001b20d23716cf18efb48d82ea0c4d20559c20e4fd10e3a88e32bc7e"
+}

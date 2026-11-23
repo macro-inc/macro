@@ -29,15 +29,19 @@ use crate::domain::ports::{
 impl From<CallError> for EntityMutationErrorCode {
     fn from(error: CallError) -> Self {
         match error {
-            error @ CallError::NotFound(_) => Self::not_found(rootcause::report!(error)),
+            error @ (CallError::NotFound(_) | CallError::Ended) => {
+                Self::not_found(rootcause::report!(error))
+            }
             error @ (CallError::Auth | CallError::NotInCall) => {
                 Self::forbidden(rootcause::report!(error))
             }
             error @ CallError::InvalidRequest(_) => Self::invalid(rootcause::report!(error)),
             error @ CallError::Forbidden(_) => Self::forbidden(rootcause::report!(error)),
-            error @ (CallError::AlreadyInCall(_) | CallError::Conflict(_)) => {
-                Self::conflict(rootcause::report!(error))
-            }
+            error @ (CallError::AlreadyInCall(_)
+            | CallError::InOtherCall
+            | CallError::AlreadyConnected
+            | CallError::RateLimited
+            | CallError::Conflict(_)) => Self::conflict(rootcause::report!(error)),
             error @ CallError::Internal(_) => Self::internal(rootcause::report!(error)),
         }
     }

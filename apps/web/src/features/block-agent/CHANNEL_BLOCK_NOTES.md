@@ -69,7 +69,7 @@ export type ChannelHandle = {
 ### Consumed (global, cache-backed — Channel does NOT own these)
 | Hook | Source | Backing |
 |---|---|---|
-| `useChannelName` / `useChannelType` / `useChannelActivity` | `lib/core/context/channels.ts:68–81` | `ChannelsContextProvider` — app-level provider over `useListChannelsQuery` + `useChannelsActivityQuery` (whole channel list, memoized `byId` maps). Per-channel hooks are just memos over it. |
+| `useChannelName` / `useChannelType` / `useChannel` | `lib/core/context/channels.ts` | `ChannelDirectoryProvider` in `Root` — the channel directory (`lib/queries/channel/directory.ts`): the soup channel records the backfill lane caches, or the same query paged into memory without the cache. Per-channel hooks are memos over its `lookup`, `undefined` while a cold directory is still pending. |
 | `useUserId` | `@core/context/user` | app-level |
 | `useChannelParticipants` | `features/channel/use-channel-participants.ts` | thin memo over `useChannelParticipantsQuery` → `{ users, ids }` accessors |
 | `useSplitPanel` / `useSplitLayout` | `@components/app/split-layout` | split-layout contexts (insets, popoverSplit, openWithSplit) |
@@ -212,7 +212,9 @@ and each `*InTargetCaches` helper applies the change to all three cache families
   the initial offset seeds the latest range even when data arrives asynchronously.
 - **Following**: core end anchoring handles measured streaming growth and
   `followOnAppend` follows new keys only near the end (50px). No one-second agent
-  settle loop or independent growth observer is needed.
+  settle loop or independent growth observer is needed. With `holdOnDisclosure`
+  (the agent transcript), pressing an `[aria-expanded]` control in a row stops
+  following until the reader scrolls back to the end or navigates.
 - **Mobile**: numeric `insets` participate in measurements and navigation; viewport
   and floating-inset changes preserve the pin only when previously near the end.
   Short lists bottom-align within these insets.
@@ -295,8 +297,9 @@ messages in a `Scroll` (component/Block.tsx), `AgentInput` with an unwired `onSe
 7. **Input**: reuse `ChannelInput` or keep `AgentInput` but adopt
    the `InputSnapshot`/`InputHandle` contract, `persistenceKey` draft persistence
    (`makeInputValuePersistenceKey`-style, keyed by session id), and the send/restore flow.
-8. **WS routing**: nothing new needed — `SyncProvider` already routes `agent_session_log`
-   frames; subscribe through `agent-session-stream.ts` rather than adding a new socket path.
+8. **Live rows**: nothing new needed — an open `AgentSession` follows its log over the
+   GraphQL `agentSessionLogAppended` subscription (`lib/queries/agent-session/log.ts`);
+   the gateway's `agent_session_log` event only marks unopened sessions as active.
 
 ### Do NOT copy
 

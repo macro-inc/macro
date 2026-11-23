@@ -25,6 +25,17 @@ use uuid::Uuid;
 
 use crate::domain::model::{CrmError, CrmPermissionRole};
 
+/// Current CRM access, read without a permission cache from the primary database.
+/// Contribution consent is deliberately outside this contract.
+pub trait CrmMemberAccess: Send + Sync {
+    /// Whether this current team member may use CRM records.
+    fn member_has_crm_access(
+        &self,
+        team_id: Uuid,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, CrmError>> + Send;
+}
+
 #[cfg(test)]
 mod test;
 
@@ -221,6 +232,30 @@ impl<T: RequiredPermission> CrmTeamReceipt<T> {
         let team_id =
             Uuid::parse_str(&receipt.entity().entity_id).map_err(|_| CrmError::InvalidTeamId)?;
         Ok(Self { receipt, team_id })
+    }
+
+    /// Revalidate member access before a team-scoped CRM operation. Team bots
+    /// retain their verified team scope; user-scoped bots follow their actor.
+    pub async fn check_access(&self, repository: &impl CrmMemberAccess) -> Result<(), CrmError> {
+        use entity_access::domain::models::{BotReceiptScope, EntityAccessAuth};
+        let user = match self.receipt.auth() {
+            EntityAccessAuth::Authenticated(user) => user,
+            EntityAccessAuth::Bot(bot) => match bot.scope() {
+                BotReceiptScope::User { acting_user } => acting_user,
+                BotReceiptScope::Team { team_id } if *team_id == self.team_id => return Ok(()),
+                _ => return Err(CrmError::AccessDenied),
+            },
+            EntityAccessAuth::Internal => return Ok(()),
+            EntityAccessAuth::Unauthenticated => return Err(CrmError::AccessDenied),
+        };
+        if repository
+            .member_has_crm_access(self.team_id, user.as_ref())
+            .await?
+        {
+            Ok(())
+        } else {
+            Err(CrmError::AccessDenied)
+        }
     }
 
     /// The team whose records the call addresses.

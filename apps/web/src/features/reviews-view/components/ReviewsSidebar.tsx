@@ -1,10 +1,11 @@
 import {
   CollapsibleSection,
   SearchBar,
-  useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
 import { ViewCreateMenu } from '@app/features/command/view-create-menu';
+import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { PrOriginIcon } from '@block-pr/component/PrLinks';
@@ -15,11 +16,15 @@ import {
   prForeignEntityQueryOptions,
 } from '@block-pr/data/queries';
 import { prDisplayName } from '@block-pr/util/prKey';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { githubLabelColor } from '@entity/components/GithubLabelPill';
 import type { GithubPullRequestLabel } from '@entity/types/entity';
+import BrowserTabIcon from '@icon/system/regular/arrow-square-out.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
@@ -84,6 +89,7 @@ function ReviewFavoriteRow(props: {
             />
           </ViewSidebar.Icon>
           <span class="truncate">{name()}</span>
+          <FavoriteUnreadIndicator favorite={props.favorite} />
         </ViewSidebar.Item>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
@@ -97,6 +103,17 @@ function ReviewFavoriteRow(props: {
                 props.onOpenReview(props.favorite.entityId, true);
             }}
           />
+          <Show when={canOpenInNewTab()}>
+            <MenuItem
+              icon={BrowserTabIcon}
+              text={t('entityActions.openInNewTab')}
+              onClick={() =>
+                openInNewTab(() =>
+                  props.onOpenReview(props.favorite.entityId, false)
+                )
+              }
+            />
+          </Show>
           <MenuItem
             icon={StarIcon}
             text={t('entityActions.removeFromFavorites')}
@@ -140,11 +157,18 @@ function ReviewFavorites(props: {
 
   return (
     <Show when={pullRequests().length > 0}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Favorites</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+      <CollapsibleSection.Root
+        sectionId="favorites"
+        sectionLabel="Favorites"
+        open={open()}
+        onOpenChange={setOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Favorites</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label="Favorite pull requests">
             <For each={pullRequests()}>
@@ -180,11 +204,18 @@ function ReviewLabels(props: {
 
   return (
     <Show when={props.labels.length > 0}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Labels</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+      <CollapsibleSection.Root
+        sectionId="labels"
+        sectionLabel="Labels"
+        open={open()}
+        onOpenChange={setOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Labels</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label="Pull request labels">
             <For each={props.labels}>
@@ -227,11 +258,18 @@ function ReviewAgents(props: {
 
   return (
     <Show when={props.tools.length > 0}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Agents</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+      <CollapsibleSection.Root
+        sectionId="agents"
+        sectionLabel="Agents"
+        open={open()}
+        onOpenChange={setOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Agents</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label="Pull request agents">
             <For each={props.tools}>
@@ -281,30 +319,9 @@ export function ReviewsSidebar(props: {
   onOpenReview: (id: string, newSplit: boolean) => void;
   activeForeignEntityId?: string;
 }) {
-  const panel = useSplitPanelOrThrow();
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: panel.isPanelActive,
-    ids: () => [...REVIEWS_SCOPES],
-    activeId: () => props.scope,
-    setActiveId: props.onScopeChange,
-  });
-
   return (
-    <ViewSidebar.Root aria-label="Reviews navigation">
-      <ViewSidebar.Header
-        searchLabel="Search reviews"
-        search={() => (
-          <SearchBar
-            label="Search reviews"
-            placeholder="Search reviews"
-            autocomplete="off"
-            value={props.search}
-            onValueChange={props.onSearchChange}
-            onEscape={() => props.onSearchChange('')}
-          />
-        )}
-      >
+    <ViewSidebar.Root reorderId="reviews" aria-label="Reviews navigation">
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Reviews</ViewSidebar.Title>
@@ -337,24 +354,31 @@ export function ReviewsSidebar(props: {
         </ViewSidebar.Primary>
       </Show>
       <ViewSidebar.Content>
-        <ViewSidebar.Nav aria-label="Pull request views">
-          <For each={REVIEWS_SCOPES}>
-            {(scope) => {
-              const Icon = SCOPE_ITEMS[scope].icon;
-              return (
-                <ViewSidebar.Item
-                  active={props.scope === scope}
-                  onClick={() => props.onScopeChange(scope)}
-                >
-                  <ViewSidebar.Icon>
-                    <Icon class="size-4" />
-                  </ViewSidebar.Icon>
-                  <span class="truncate">{SCOPE_ITEMS[scope].label}</span>
-                </ViewSidebar.Item>
-              );
-            }}
-          </For>
-        </ViewSidebar.Nav>
+        <SidebarRoutineSuggestions surface="reviews" />
+        <ViewSidebar.Section
+          id="views"
+          label={t('viewMenus.reviewViews')}
+          headerless
+        >
+          <ViewSidebar.Nav aria-label="Pull request views">
+            <For each={REVIEWS_SCOPES}>
+              {(scope) => {
+                const Icon = SCOPE_ITEMS[scope].icon;
+                return (
+                  <ViewSidebar.Item
+                    active={props.scope === scope}
+                    onClick={() => props.onScopeChange(scope)}
+                  >
+                    <ViewSidebar.Icon>
+                      <Icon class="size-4" />
+                    </ViewSidebar.Icon>
+                    <span class="truncate">{SCOPE_ITEMS[scope].label}</span>
+                  </ViewSidebar.Item>
+                );
+              }}
+            </For>
+          </ViewSidebar.Nav>
+        </ViewSidebar.Section>
         <ReviewFavorites
           onOpenReview={props.onOpenReview}
           activeForeignEntityId={props.activeForeignEntityId}

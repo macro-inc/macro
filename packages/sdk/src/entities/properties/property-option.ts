@@ -11,6 +11,8 @@ export type { UpdatePropertyOptionRequest };
  * A selectable option on a select-type property definition. There is no
  * single-option GET, so instances are only built from a seed record — via
  * {@link PropertyDefinition.options} or {@link PropertyDefinition.addOption}.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
  */
 export class PropertyOption {
   private constructor(
@@ -55,7 +57,12 @@ export class PropertyOption {
     return this.record.updated_at;
   }
 
-  /** Update this option's label, color, or display order. */
+  /**
+   * Update this option's label, color, or display order.
+   *
+   * @write
+   * @idempotent
+   */
   async update(updates: UpdatePropertyOptionRequest): Promise<this> {
     this.record = unwrap(
       await this.client.properties.updatePropertyOption({
@@ -66,7 +73,12 @@ export class PropertyOption {
     return this;
   }
 
-  /** Delete this option from its property definition. */
+  /**
+   * Delete this option from its property definition.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     unwrap(
       await this.client.properties.deletePropertyOption({

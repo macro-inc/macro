@@ -25,7 +25,7 @@ use crm::domain::{
 };
 use either::Either;
 use email::domain::{
-    models::{GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
+    models::{EmailErr, GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
     ports::EmailPreviewServiceReadOnly,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -912,13 +912,28 @@ where
         let foreign_entity_source_ids =
             legs_request.build_foreign_entity_source_ids(team_receipt.as_ref());
         let metadata_source_ids = foreign_entity_source_ids.clone();
-        let crm = team_receipt.clone().filter(|receipt| {
+        let mut crm = team_receipt.clone().filter(|receipt| {
             CrmTeamReceipt::from_team_receipt(receipt.clone())
                 .inspect_err(|error| {
                     tracing::warn!(error = ?error, "team receipt is not a CRM receipt; skipping CRM attention feed candidates");
                 })
                 .is_ok()
         });
+        if crm.is_some()
+            && req
+                .types
+                .iter()
+                .any(|kind| matches!(kind, EntityType::CrmCompany | EntityType::CrmContact))
+        {
+            let allowed = self
+                .crm_service
+                .current_member_access(req.user.as_ref())
+                .await
+                .map_err(|_| SoupErr::CrmErr)?;
+            if !allowed.is_some_and(|(_, allowed)| allowed) {
+                crm = None;
+            }
+        }
         let legs = NotifiedHydrationLegs {
             link_ids: legs_request.link_ids.clone(),
             comms: legs_request.build_comms_request(),
@@ -963,6 +978,7 @@ where
                     hydratable,
                     crm: legs.crm.is_some(),
                     only: req.only.as_deref(),
+                    assume_attention: req.assume_attention,
                 })
                 .await
                 .map_err(anyhow::Error::from)?;
@@ -1061,12 +1077,14 @@ where
         let mut crm_contact_ids = Vec::new();
         for entity in entities {
             match entity.entity_type {
-                // Calendar events and agent sessions ride the main by-ids
-                // query in both soup types.
+                // Calendar events, agent sessions, runtimes and teams ride the
+                // main by-ids query in both soup types.
                 EntityType::Document
                 | EntityType::Chat
                 | EntityType::CalendarEvent
                 | EntityType::AgentSession
+                | EntityType::Harness
+                | EntityType::Team
                 | EntityType::Initiative => main_entities.push(entity.copied()),
                 // Same split as the touched feed: the expanded by-ids query
                 // omits project rows, so they hydrate unexpanded separately.
@@ -1299,7 +1317,18 @@ where
             return Ok(Either::Left(None.into_iter()));
         };
 
-        let email_response = self.email_service.get_email_thread_previews(req).await?;
+        let email_response = match self.email_service.get_email_thread_previews(req).await {
+            Ok(response) => response,
+            // An archived company, or one whose domains have left the team's
+            // CRM, still opens with its email list. Email authorizes only
+            // the team-wide widening, so its threads are left out of the page
+            // and every other source keeps its results.
+            Err(err @ (EmailErr::CrmDomainNotFound(_) | EmailErr::CrmDomainNotPermitted(_))) => {
+                tracing::warn!(error = %err, "CRM domain scope rejected; omitting email threads");
+                return Ok(Either::Left(None.into_iter()));
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         let mut frecency_scores: Vec<Option<AggregateFrecency>> =
             Vec::with_capacity(email_response.items.len());
@@ -1467,7 +1496,10 @@ where
         Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
     }
 
-    #[tracing::instrument(err, skip(self, source_ids, query, github_pull_request_filter))]
+    #[tracing::instrument(
+        err,
+        skip(self, requesting_user, source_ids, query, github_pull_request_filter)
+    )]
     async fn handle_foreign_entity_request(
         &self,
         requesting_user: Option<String>,
@@ -1690,6 +1722,31 @@ where
         })
     }
 
+    /// Grouped items for the request, without entity properties.
+    async fn grouped_items(
+        &self,
+        mut req: GroupedSortRequest<'_>,
+    ) -> Result<T::GroupedItems, SoupErr> {
+        let user_id = req.user_id.clone();
+        if let Some(entities) = self
+            .favorite_entities(&user_id, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req
+                .cursor
+                .map_filter(|ast| favorites::apply(ast, &entities));
+        }
+        // Grouped queries carry no team receipt, so associations resolve
+        // under the viewer's own CRM teams.
+        if let Some(resolved) = self
+            .resolve_crm_associations(&user_id, None, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req.cursor.map_filter(|ast| resolved.apply(ast));
+        }
+        self.handle_grouped_soup_request(req).await
+    }
+
     async fn populate_grouped_items(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -1876,7 +1933,11 @@ where
                     .map(SoupCandidate::from_projection_hydration)
                     .paginate(limit.into(), |item: &SoupCandidate| CursorVal {
                         sort_type: sort,
-                        last_val: sort.position(item.sort_key, item.item.updated_at()),
+                        last_val: sort.position(
+                            item.sort_key,
+                            item.item.name(),
+                            item.item.updated_at(),
+                        ),
                     })
                     .filter_on(entity_filter)
                     .into_page();
@@ -2198,30 +2259,29 @@ where
         self.populate_properties_output(user_id, output).await
     }
 
-    #[tracing::instrument(err, skip(self, req))]
+    #[tracing::instrument(err, skip(self, req), fields(with_properties = tracing::field::Empty))]
     async fn get_user_soup_grouped(
         &self,
-        mut req: GroupedSortRequest<'_>,
+        req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        tracing::Span::current().record("with_properties", true);
         let user_id = req.user_id.clone();
-        if let Some(entities) = self
-            .favorite_entities(&user_id, Some(req.cursor.filter()))
-            .await?
-        {
-            req.cursor = req
-                .cursor
-                .map_filter(|ast| favorites::apply(ast, &entities));
-        }
-        // Grouped queries carry no team receipt, so associations resolve
-        // under the viewer's own CRM teams.
-        if let Some(resolved) = self
-            .resolve_crm_associations(&user_id, None, Some(req.cursor.filter()))
-            .await?
-        {
-            req.cursor = req.cursor.map_filter(|ast| resolved.apply(ast));
-        }
-        let items = self.handle_grouped_soup_request(req).await?;
+        let items = self.grouped_items(req).await?;
         self.populate_grouped_items(user_id, items).await
+    }
+
+    #[tracing::instrument(
+        name = "get_user_soup_grouped",
+        err,
+        skip(self, req),
+        fields(with_properties = tracing::field::Empty)
+    )]
+    async fn get_user_soup_grouped_without_properties(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo> + Send, SoupErr> {
+        tracing::Span::current().record("with_properties", false);
+        self.grouped_items(req).await
     }
 
     async fn caller_tag_sets<'a>(
@@ -2241,5 +2301,18 @@ where
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Result<AttentionSoupPage, SoupErr> {
         self.handle_attention_request(req, team_receipt).await
+    }
+
+    async fn get_attention_unread_entities(
+        &self,
+        user: MacroUserIdStr<'static>,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> Result<Vec<Entity<'static>>, SoupErr> {
+        Ok(self
+            .soup_storage
+            .attention_unread_entities(user.copied(), &types, limit)
+            .await
+            .map_err(anyhow::Error::from)?)
     }
 }

@@ -11,8 +11,8 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    AnyPrincipal, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState,
+    AnyPrincipal, CredentialOrigin, MacroAuthorization, MacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -246,6 +246,7 @@ where
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    ensure_policy_fits_parent(&path, &input)?;
     input.attribution = sender_attribution(&user.authorization);
     Ok(Json(
         state
@@ -258,10 +259,35 @@ where
     ))
 }
 
+/// A caller may quiet only a channel message. Discussion delivery on other
+/// parents also grants mentioned people access, which a quieter policy would
+/// skip, so they take only the default.
+fn ensure_policy_fits_parent(
+    path: &ParentPath,
+    input: &PostMessage,
+) -> Result<(), MessageHttpError> {
+    let is_channel = matches!(
+        MessageParent::parse(&path.parent_type, &path.parent_id),
+        Ok(MessageParent::Channel(_))
+    );
+    if is_channel || input.notification_policy == PostMessageNotificationPolicy::Default {
+        return Ok(());
+    }
+    Err(MessageError::Invalid("notification_policy applies only to channel messages").into())
+}
+
 /// How a new message's signed agent attribution labels it: with the client a
 /// user drives the agent through, when the credential names one.
 /// Only a user credential carries one; it is set only alongside `agent_id`.
-fn sender_attribution(principal: &MacroAuthorization) -> MessageAttribution {
+pub fn sender_attribution(principal: &MacroAuthorization) -> MessageAttribution {
+    if let MacroAuthorization::User(user) = principal
+        && let CredentialOrigin::AccountManager(credential) = &user.origin
+    {
+        return MessageAttribution::AccountManager {
+            manager_user_id: credential.manager_user_id.as_ref().to_owned(),
+        };
+    }
+
     let via = match principal {
         MacroAuthorization::User(user) => user.agent_via.as_ref(),
         MacroAuthorization::Bot(_)
@@ -529,3 +555,6 @@ where
             .await?,
     ))
 }
+
+#[cfg(test)]
+mod test;

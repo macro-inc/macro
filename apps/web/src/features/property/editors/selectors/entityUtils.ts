@@ -1,3 +1,4 @@
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import {
   type Bucket,
   type EntityItem,
@@ -5,8 +6,14 @@ import {
   type UserItem,
   useQuickAccess,
 } from '@core/context/quickAccess';
+import { BUCKET_COMBINATIONS } from '@core/context/quickAccess/types';
 import type { IUser } from '@core/user';
-import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
+import {
+  createFreshSearch,
+  type FreshSortConfig,
+  NAME_MATCH_RANKING,
+  type TimestampedItem,
+} from '@core/util/freshSort';
 import type {
   ChannelEntity,
   ChatEntity,
@@ -19,8 +26,8 @@ import type {
   ProjectEntity,
   TaskEntity,
 } from '@entity';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { Accessor } from 'solid-js';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { type Accessor, createMemo, untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 
 export type EntityTypeItemMap = {
@@ -64,32 +71,88 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
 }
 
 /**
+ * The kinds the entity selector can search and pick: those with a source.
+ * Email threads come from their own search rather than Quick Access.
+ */
+export const PICKABLE_ENTITY_TYPES: readonly EntityType[] = Object.values(
+  EntityType
+).filter((type) => entityTypeToBuckets(type).length > 0);
+
+/** Whether a selector limited to `allowed` (unset: any kind) offers `type`. */
+export function allowsEntityType(
+  allowed: EntityType | EntityType[] | null | undefined,
+  type: EntityType
+): boolean {
+  if (!allowed) return true;
+  return Array.isArray(allowed) ? allowed.includes(type) : allowed === type;
+}
+
+/**
  * Hook to get QuickAccessItems for a given EntityType.
  * Returns items from the appropriate buckets based on entity type.
  */
 export function useQuickAccessEntities<T extends EntityType>(
-  entityType: Accessor<T | T[] | null | undefined>
-): { items: Accessor<EntityTypeItemMap[T][]>; isLoading: Accessor<boolean> } {
+  entityType: Accessor<T | T[] | null | undefined>,
+  searchTerm: Accessor<string> = () => '',
+  enabled: Accessor<boolean> = () => true,
+  excludedPeople?: Accessor<ReadonlySet<string>>,
+  readsCache?: Accessor<boolean>
+) {
   const quickAccess = useQuickAccess();
 
-  const buckets = () => {
-    const entityType_ = entityType();
-    if (!entityType_) return null;
-    if (Array.isArray(entityType_))
-      return entityType_.flatMap(entityTypeToBuckets);
-    return entityTypeToBuckets(entityType_);
-  };
-  const items = (): EntityTypeItemMap[T][] => {
+  const buckets = createMemo(
+    () => {
+      const entityType_ = entityType();
+      if (!entityType_) return null;
+      if (Array.isArray(entityType_))
+        return entityType_.flatMap(entityTypeToBuckets);
+      return entityTypeToBuckets(entityType_);
+    },
+    undefined,
+    {
+      equals: (previous, next) =>
+        previous === next ||
+        (!!previous &&
+          !!next &&
+          previous.length === next.length &&
+          previous.every((bucket, index) => bucket === next[index])),
+    }
+  );
+  const list = createMemo(() => {
     const b = buckets();
-    if (b === null) {
-      return quickAccess.useList().items() as EntityTypeItemMap[T][];
-    }
-    if (b.length === 0) {
-      return [];
-    }
-    return quickAccess.useList(...b).items() as EntityTypeItemMap[T][];
+    if (b?.length === 0) return;
+    // Factory setup may read query state. Only a bucket change should replace
+    // its owner; pagination/loading must not recreate the list at page one.
+    return untrack(() =>
+      quickAccess.useList({
+        buckets: b ?? BUCKET_COMBINATIONS.all,
+        searchTerm,
+        enabled,
+        peopleMode: 'property',
+        excludedPeople,
+        readsCache,
+      })
+    );
+  });
+  const items = (): EntityTypeItemMap[T][] =>
+    (list()?.items() ?? []) as EntityTypeItemMap[T][];
+  return {
+    items,
+    isLoading: () => enabled() && (list()?.isLoading() ?? false),
+    isLoadingMore: () => enabled() && (list()?.isLoadingMore() ?? false),
+    hasMore: () => enabled() && (list()?.hasMore() ?? false),
+    error: () => (enabled() ? list()?.error() : undefined),
+    windowKey: () => (enabled() ? list()?.windowKey?.() : undefined),
+    loadMore: async () => {
+      if (enabled()) await list()?.loadMore();
+    },
+    // A list without its own retry reads its next page again.
+    retry: async () => {
+      const current = list();
+      if (!enabled() || !current) return;
+      await (current.retry ? current.retry() : current.loadMore());
+    },
   };
-  return { items, isLoading: quickAccess.isLoading };
 }
 
 /** Combined entity type for unified handling across entity selectors */
@@ -145,6 +208,10 @@ export function getEntitySearchText(entity: CombinedEntity): string {
   if (entity.data.type === 'crm_contact') {
     return `${entity.data.name} | ${entity.data.email}`;
   }
+  if (entity.data.type === 'crm_company') {
+    const domains = entity.data.domains.map(({ domain }) => domain).join(' ');
+    return domains ? `${entity.data.name} | ${domains}` : entity.data.name;
+  }
 
   return entity.data.name ?? '';
 }
@@ -179,6 +246,8 @@ export function getEntityType(entity: CombinedEntity): EntityType | undefined {
           'channel_thread',
           'database',
           'form',
+          'harness',
+          'team',
           'routine',
           'foreign'
         ),
@@ -247,6 +316,27 @@ export function createEntitySearchConfig<T extends CombinedEntity>(
     brevityWeight: 0.1,
     boostFn,
   };
+}
+
+/**
+ * Searches an explicit people-and-agents roster (assignees) by name match, as
+ * the @ menu does, so `rankAgentsAfterPeople` can tell how well each row matches.
+ */
+export function createRosterSearch(
+  currentUserDomain: Accessor<string | undefined>,
+  currentUserId: Accessor<string | undefined>
+) {
+  return createFreshSearch<CombinedEntity>({
+    config: {
+      ...createEntitySearchConfig(currentUserDomain, currentUserId),
+      ...NAME_MATCH_RANKING,
+    },
+    getName: getEntitySearchText,
+    getDisplayName: getEntityName,
+    isPersonItem: (entity) =>
+      entity.kind === 'user' && !isBotPrincipalId(entity.id),
+    getTimestamp: getEntityTimestampedItem,
+  });
 }
 
 /**

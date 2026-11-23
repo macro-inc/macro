@@ -155,6 +155,7 @@ fn topic_events(
         ),
         (
             PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+                inherited_from_project: None,
                 entity_property_id: uuid(ENTITY_PROPERTY_ID),
                 entity_id: ENTITY_ID.to_string(),
                 entity_type: EntityType::Document,

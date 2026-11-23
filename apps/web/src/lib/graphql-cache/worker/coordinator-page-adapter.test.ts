@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  type CompiledEngine,
+  forgetCompiledEngine,
+  prefetchCompiledEngine,
+} from './compiled-engine';
+import {
   createCacheCoordinatorPageAdapter,
   type DedicatedWorkerLike,
   type SharedWorkerLike,
@@ -367,7 +372,25 @@ describe('CacheCoordinatorPageAdapter', () => {
     });
 
     expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
-      'another app version holds the database'
+      'another app version holds the database',
+      false
+    );
+  });
+
+  it('relays that a newer build took the database over', async () => {
+    const onCacheUnavailable = vi.fn();
+    const port = await registeredAdapter({ onCacheUnavailable });
+
+    port.receive({
+      ...version,
+      kind: 'cache-unavailable',
+      reason: 'a newer version of the app took over the local cache',
+      superseded: true,
+    });
+
+    expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
+      'a newer version of the app took over the local cache',
+      true
     );
   });
 
@@ -1312,5 +1335,144 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
+  });
+
+  describe('compiling the engine ahead of the election', () => {
+    const EMPTY_WASM = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0, 0, 0]);
+    const compiled = async (): Promise<CompiledEngine> => ({
+      assetUrl: 'https://app.test/engine-a.wasm',
+      module: await WebAssembly.compile(EMPTY_WASM),
+    });
+
+    afterEach(() => forgetCompiledEngine());
+
+    /** What the page offered each engine worker on its exchange port. */
+    function offers(): unknown[] {
+      const offered: unknown[] = [];
+      vi.spyOn(FakeTransferPort.prototype, 'postMessage').mockImplementation(
+        (message?: unknown) => {
+          offered.push(message);
+        }
+      );
+      return offered;
+    }
+
+    async function registered(
+      events: string[],
+      compileEngine: () => Promise<CompiledEngine>,
+      acknowledgement: { ownerElsewhere?: true } = {}
+    ) {
+      const port = new FakeCoordinatorPort();
+      const adapter = createCacheCoordinatorPageAdapter({
+        scope: 'scope',
+        tabId: 'tab-a',
+        lockManager: heldLockManager(events),
+        createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+        createDedicatedWorker: () => new FakeWorker(),
+        compileEngine,
+      });
+      const started = adapter.start();
+      await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+      port.receive({
+        ...version,
+        kind: 'registered',
+        tabId: 'tab-a',
+        ...acknowledgement,
+      });
+      await started;
+      return { adapter, port };
+    }
+
+    it('starts the compile before the liveness lock and offers it to the elected worker', async () => {
+      const events: string[] = [];
+      const offered = offers();
+      const { adapter, port } = await registered(events, async () => {
+        events.push('compile');
+        return compiled();
+      });
+      expect(events.slice(0, 2)).toEqual([
+        'compile',
+        'lock:graphql-cache-tab:scope:tab-a',
+      ]);
+
+      port.receive(election(1));
+      await vi.waitFor(() => expect(offered).toHaveLength(1));
+      expect(offered[0]).toMatchObject({
+        assetUrl: 'https://app.test/engine-a.wasm',
+      });
+      await adapter.dispose({ graceful: false });
+    });
+
+    it("forgets the compile once another page's engine is ready", async () => {
+      const offered = offers();
+      const { adapter, port } = await registered([], compiled);
+      port.receive({
+        ...version,
+        kind: 'cache-read-availability',
+        ownerEpoch: 1,
+        state: 'ready',
+      });
+
+      // Elected later, this page's worker compiles for itself.
+      port.receive(election(2));
+      await vi.waitFor(() => expect(offered).toHaveLength(1));
+      expect(offered[0]).toBeNull();
+      await adapter.dispose({ graceful: false });
+    });
+
+    it('forgets the compile when it joins while another visible tab owns the cache', async () => {
+      const offered = offers();
+      const { adapter, port } = await registered([], compiled, {
+        ownerElsewhere: true,
+      });
+
+      // Elected later, this page's worker compiles for itself.
+      port.receive(election(1));
+      await vi.waitFor(() => expect(offered).toHaveLength(1));
+      expect(offered[0]).toBeNull();
+      await adapter.dispose({ graceful: false });
+    });
+
+    it('forgets the compile when the page leaves before it is elected', async () => {
+      const compile = vi.fn(compiled);
+      const { adapter } = await registered([], compile);
+      await adapter.dispose({ graceful: false });
+      // A compile ahead still held would make the next one a no-op.
+      prefetchCompiledEngine(compile);
+      expect(compile).toHaveBeenCalledTimes(2);
+    });
+
+    it("forgets the compile once another page's engine replaces the last one", async () => {
+      const offered = offers();
+      const { adapter, port } = await registered([], compiled);
+      port.receive({
+        ...version,
+        kind: 'engine-replaced',
+        ownerEpoch: 2,
+        openOutcome: 'opened-existing',
+      });
+
+      port.receive(election(3));
+      await vi.waitFor(() => expect(offered).toHaveLength(1));
+      expect(offered[0]).toBeNull();
+      await adapter.dispose({ graceful: false });
+    });
+
+    it('keeps the compile while its own engine opens', async () => {
+      const offered = offers();
+      const { adapter, port } = await registered([], compiled);
+      port.receive({
+        ...version,
+        kind: 'cache-read-availability',
+        ownerEpoch: 1,
+        state: 'waiting',
+      });
+      port.receive(election(1));
+      await vi.waitFor(() => expect(offered).toHaveLength(1));
+      expect(offered[0]).toMatchObject({
+        assetUrl: 'https://app.test/engine-a.wasm',
+      });
+      await adapter.dispose({ graceful: false });
+    });
   });
 });

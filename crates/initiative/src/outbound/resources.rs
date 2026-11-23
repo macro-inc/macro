@@ -235,6 +235,39 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
             }
         })
     }
+    fn view_documents(
+        &self,
+        auth: EntityAccessAuth,
+        ids: Vec<String>,
+    ) -> ResourceFuture<'_, Vec<EntityAccessReceipt<ViewAccessLevel>>> {
+        Box::pin(async move {
+            // A signed-in user's documents share one access lookup. Other scopes keep
+            // their own checks, one document at a time.
+            let EntityAccessAuth::Authenticated(user) = &auth else {
+                let mut visible = Vec::new();
+                for id in ids {
+                    let entity = Entity {
+                        entity_id: id,
+                        entity_type: EntityType::Document,
+                    };
+                    if let Some(receipt) = self.view(auth.clone(), entity).await? {
+                        visible.push(receipt);
+                    }
+                }
+                return Ok(visible);
+            };
+            let receipts = self
+                .access
+                .generate_document_view_access_receipts(user, &ids)
+                .await
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?;
+            // A repeated id keeps every occurrence, as checking each in turn would.
+            Ok(ids
+                .iter()
+                .filter_map(|id| receipts.get(id).cloned())
+                .collect())
+        })
+    }
     fn properties(
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
@@ -245,6 +278,7 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                 SystemPropertyKey::PRIORITY_UUID,
                 SystemPropertyKey::ASSIGNEES_UUID,
                 SystemPropertyKey::DUE_DATE_UUID,
+                SystemPropertyKey::START_DATE_UUID,
             ];
             let mut output = HashMap::new();
             for batch in receipts.chunks(100) {
@@ -280,8 +314,12 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                                     refs.into_iter().map(|entity| entity.entity_id).collect()
                             }
                             (Some(SystemPropertyKey::DueDate), Some(PropertyValue::Date(date))) => {
-                                snapshot.due_date = Some(date)
+                                snapshot.due_date = Some(date.at())
                             }
+                            (
+                                Some(SystemPropertyKey::StartDate),
+                                Some(PropertyValue::Date(date)),
+                            ) => snapshot.start_date = Some(date.at()),
                             _ => (),
                         }
                     }

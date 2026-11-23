@@ -1,3 +1,4 @@
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -18,6 +19,7 @@ import {
 import { mapGraphqlProperties } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ProjectRow, ProjectsSource } from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
 import { projectProperties } from './project-properties';
@@ -101,6 +103,7 @@ export function projectSoupRows(
         project: {
           id: item.id,
           name: item.displayName ?? 'Untitled project',
+          appearance: readEntityAppearance(item.appearance),
           updatedAt: item.metadata.updatedAt ?? '',
           createdAt: item.metadata.createdAt ?? undefined,
           taskCount: item.taskCount,
@@ -121,6 +124,7 @@ export function createProjectSoupSource(
   filters: Accessor<ProjectFilters>,
   enabled: Accessor<boolean>
 ): ProjectsSource {
+  const pendingAppearance = usePendingEntityAppearance();
   const input = createMemo(() => projectSoupInput(filters()));
   const client = createMemo(soupClient);
   const query = createUrqlInfiniteQuery<
@@ -147,7 +151,8 @@ export function createProjectSoupSource(
             }
           : initial,
       }),
-      getNextPageParam: (page) => page.user.soup.nextCursor,
+      // A failed read omits `soup` (see `rows`); keep its GraphQL error.
+      getNextPageParam: (page) => page.user.soup?.nextCursor,
     };
   });
   const refresh = async () => {
@@ -187,10 +192,27 @@ export function createProjectSoupSource(
       if (!enabled() || query.isPending || accessLost()) return undefined;
       // urql exposes a plain store, so failed background reads may retain the
       // last authorized pages without triggering a Solid resource suspension.
-      const data = query.data;
-      return data
-        ? projectSoupRows(data.pages.flatMap((page) => page.user.soup.items))
-        : undefined;
+      // An errored field is omitted rather than nulled, so a page from a
+      // failed read can lack `soup` despite its generated type. A failed
+      // first page leaves the list unloaded; a failed later page keeps the
+      // rows before it, with the error shown beside them.
+      const pages = query.data?.pages;
+      if (!pages) return undefined;
+      const failed = pages.findIndex((page) => !page.user.soup);
+      if (failed === 0) return undefined;
+      const loaded = failed === -1 ? pages : pages.slice(0, failed);
+      return projectSoupRows(
+        loaded.flatMap((page) => page.user.soup.items)
+      ).map((row) => {
+        const appearance = pendingAppearance(
+          'initiative',
+          row.project.id,
+          Boolean(query.error)
+        );
+        return appearance
+          ? { ...row, project: { ...row.project, appearance } }
+          : row;
+      });
     },
     loading: () => enabled() && query.isPending,
     error: () => {

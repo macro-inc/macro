@@ -207,8 +207,7 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
     if (
       entity.type !== 'document' &&
       entity.type !== 'email' &&
-      entity.type !== 'call' &&
-      entity.type !== 'database'
+      entity.type !== 'call'
     )
       return false;
     const itemParams: CrmItemParams = {

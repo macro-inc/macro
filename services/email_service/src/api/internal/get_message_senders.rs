@@ -5,8 +5,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email::domain::message_reads::SummaryReadError;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use models_email::service::message::{MessageSendersRequest, MessageSendersResponse};
+use models_email::service::message::MessageSendersRequest;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
@@ -45,16 +46,15 @@ pub async fn handler(
     _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(req_body): Json<MessageSendersRequest>,
 ) -> Result<Response, GetMessageSendersError> {
-    let link = email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, &req_body.user_id)
-        .await?
-        .ok_or(GetMessageSendersError::LinkNotFound(req_body.user_id))?;
-
-    let sender_map = email_db_client::messages::get::get_message_sender_and_pretty_sender(
-        &ctx.db,
-        &[link.id],
-        &req_body.message_ids,
-    )
-    .await?;
-
-    Ok((StatusCode::OK, Json(MessageSendersResponse { sender_map })).into_response())
+    let response = ctx
+        .message_reads
+        .senders(req_body)
+        .await
+        .map_err(|error| match error {
+            SummaryReadError::LinkNotFound(user) => GetMessageSendersError::LinkNotFound(user),
+            SummaryReadError::Query(error) => {
+                GetMessageSendersError::QueryError(error.into_inner())
+            }
+        })?;
+    Ok((StatusCode::OK, Json(response)).into_response())
 }

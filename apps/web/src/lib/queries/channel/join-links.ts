@@ -1,12 +1,20 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { ChannelJoinCodeResponse } from '@service-storage/generated/schemas/channelJoinCodeResponse';
 import { useMutation } from '@tanstack/solid-query';
+import {
+  assertQueryAccount,
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+} from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
 import { soupKeys } from '../soup/keys';
-import { channelKeys } from './keys';
+import { refreshChannelDirectory } from './directory';
 
 export type GetChannelJoinLinkArgs = {
   channelId: string;
@@ -64,21 +72,27 @@ type JoinChannelByCodeCallbacks = MutationCallbacks<
 >;
 
 export function joinChannelByCodeMutationOptions(
-  callbacks?: JoinChannelByCodeCallbacks
+  callbacks?: JoinChannelByCodeCallbacks,
+  account = currentQueryAccount()
 ) {
   return {
     gcTime: 0,
-    mutationFn: async ({ joinCode }: JoinChannelByCodeArgs) => {
+    meta: { queryAccount: account },
+    mutationFn: async (
+      { joinCode }: JoinChannelByCodeArgs,
+      context: import('@tanstack/solid-query').MutationFunctionContext
+    ) => {
+      assertQueryAccount(mutationQueryAccount(context));
       await throwOnErr(() =>
         storageServiceClient.joinChannelByCode({ join_code: joinCode })
       );
     },
     ...withCallbacks<void, Error, JoinChannelByCodeArgs, undefined>(
       {
-        onSuccess() {
-          queryClient.invalidateQueries({
-            queryKey: channelKeys.listChannels.queryKey,
-          });
+        onSuccess(_data, _variables, _result, context) {
+          const owner = mutationQueryAccount(context);
+          if (!isCurrentQueryAccount(owner)) return;
+          fireAndForget(refreshChannelDirectory(), 'channel-list');
         },
         onError(error) {
           console.error('failed to join channel by code', error);
@@ -94,7 +108,10 @@ export function joinChannelByCodeMutationOptions(
 export function useJoinChannelByCodeMutation(
   callbacks?: JoinChannelByCodeCallbacks
 ) {
-  return useMutation(() => joinChannelByCodeMutationOptions(callbacks));
+  const account = useQueryAccount();
+  return useMutation(() =>
+    joinChannelByCodeMutationOptions(callbacks, account())
+  );
 }
 
 export type JoinChannelArgs = {
@@ -108,20 +125,31 @@ type JoinChannelCallbacks = MutationCallbacks<
   undefined
 >;
 
-export function joinChannelMutationOptions(callbacks?: JoinChannelCallbacks) {
+export function joinChannelMutationOptions(
+  callbacks?: JoinChannelCallbacks,
+  account = currentQueryAccount()
+) {
   return {
     gcTime: 0,
-    mutationFn: async ({ channelId }: JoinChannelArgs) => {
+    meta: { queryAccount: account },
+    mutationFn: async (
+      { channelId }: JoinChannelArgs,
+      context: import('@tanstack/solid-query').MutationFunctionContext
+    ) => {
+      assertQueryAccount(mutationQueryAccount(context));
       await throwOnErr(() =>
         storageServiceClient.joinChannel({ channel_id: channelId })
       );
     },
     ...withCallbacks<void, Error, JoinChannelArgs, undefined>(
       {
-        onSuccess() {
-          queryClient.invalidateQueries({
-            queryKey: channelKeys.listChannels.queryKey,
-          });
+        onSuccess(_data, variables, _result, context) {
+          const owner = mutationQueryAccount(context);
+          if (!isCurrentQueryAccount(owner)) return;
+          fireAndForget(
+            refreshChannelDirectory([variables.channelId]),
+            'channel-list'
+          );
           // Refetch soup so the joined channel's is_participant flips and its
           // Join affordance disappears.
           queryClient.invalidateQueries({
@@ -146,5 +174,6 @@ export function joinChannelMutationOptions(callbacks?: JoinChannelCallbacks) {
  * channel of their team, surfaced in the Channels → Teams tab).
  */
 export function useJoinChannelMutation(callbacks?: JoinChannelCallbacks) {
-  return useMutation(() => joinChannelMutationOptions(callbacks));
+  const account = useQueryAccount();
+  return useMutation(() => joinChannelMutationOptions(callbacks, account()));
 }

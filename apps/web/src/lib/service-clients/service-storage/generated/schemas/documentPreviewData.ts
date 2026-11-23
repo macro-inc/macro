@@ -4,11 +4,13 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentPreviewDataAppearance } from './documentPreviewDataAppearance';
 import type { DocumentPreviewDataFileType } from './documentPreviewDataFileType';
 import type { DocumentPreviewDataSubTypeProperty } from './documentPreviewDataSubTypeProperty';
 import type { DocumentPreviewDataUpdatedAt } from './documentPreviewDataUpdatedAt';
 
 export interface DocumentPreviewData {
+  appearance?: DocumentPreviewDataAppearance;
   /** The document id */
   document_id: string;
   /** The name of the document */

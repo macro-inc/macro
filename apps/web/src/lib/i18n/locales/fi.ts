@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Projekti',
     newProject: 'Uusi projekti',
     contentAlreadyOpen: 'Sisältö on jo auki',
-    unableToOpenConversation: 'Keskustelua ei voitu avata. Yritä uudelleen.',
     mobileSearchPlaceholder: 'Hae…',
     closeSearch: 'Sulje haku',
     searchFullTextFor: 'Hae koko tekstistä ”{{query}}”',
@@ -104,7 +103,6 @@ export default {
     close: 'Sulje',
     delete: 'Poista',
     rename: 'Nimeä uudelleen',
-    more: 'Lisää',
     search: 'Hae',
     settings: 'Asetukset',
   },
@@ -520,6 +518,10 @@ export default {
       other: '{{count}} kohdetta poistettu',
     },
     toastDeleteFailed: 'Poisto epäonnistui',
+    toastPropertySet: {
+      one: '{{property}} asetettu',
+      other: '{{property}} asetettu {{count}} kohteelle',
+    },
     toastAddedToFavorites: 'Lisätty suosikkeihin',
     toastAddedCountToFavorites: {
       one: '{{count}} kohde lisätty suosikkeihin',
@@ -591,10 +593,6 @@ export default {
       other: '{{accepted}}/{{count}} kohdetta merkitty keskeneräisiksi',
     },
     toastMarkNotDoneFailed: 'Keskeneräiseksi merkitseminen epäonnistui',
-    toastThreadStaysDone:
-      'Tässä ketjussa ei ole vastaanotettuja viestejä, joten se pysyy valmiina',
-    toastThreadsStayDone:
-      'Näissä ketjuissa ei ole vastaanotettuja viestejä, joten ne pysyvät valmiina',
     toastCountNotRestored: {
       one: '{{count}} kohdetta ei voitu palauttaa.',
       other: '{{count}} kohdetta ei voitu palauttaa.',
@@ -694,8 +692,6 @@ export default {
     create: 'Luo',
     getMobileApp: 'Hanki mobiilisovellus',
     signedInAs: 'Kirjautuneena: {{name}}',
-    commandMenu: 'Komentovalikko',
-    searchEverything: 'Hae kaikkialta',
     customizeSidebar: 'Mukauta sivupalkkia',
     customizeSidebarDescription:
       'Valitse, mitkä sovellukset näkyvät sivupalkissa, ja muuta järjestystä vetämällä. Etusivu on aina ensimmäisenä.',
@@ -763,7 +759,7 @@ export default {
     tabMobileApp: 'Mobiilisovellus',
     tabTags: 'Tunnisteet',
     tabIntegrations: 'Integraatiot',
-    tabRuntimes: 'Suoritusympäristöt',
+    tabRuntimes: 'Koneet',
     tabMcpServer: 'MCP-palvelin',
     tabApiKeys: 'API-avaimet',
     tabBots: 'Botit',
@@ -781,7 +777,6 @@ export default {
       'Asetuksia ei löytynyt. Kokeile hakusanoja ”allekirjoitus”, ”teema” tai ”kalenteri”.',
     backToSettings: 'Takaisin asetuksiin',
     closeSettings: 'Sulje asetukset',
-    goToTab: 'Siirry asetusvälilehteen {{number}}',
     editProfile: 'Muokkaa profiilia',
     logOut: 'Kirjaudu ulos',
     yourAccount: 'Oma tili',

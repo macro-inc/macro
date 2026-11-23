@@ -1,4 +1,5 @@
 import { batch, createEffect, on } from 'solid-js';
+import { WEBSITE_LIGHT_MODE_ENABLED } from '../../../features/setup/sitePalette';
 import { DEFAULT_DARK_THEME } from '../constants/themeConstants';
 import { themeReactive } from '../signals/themeReactive';
 import {
@@ -22,6 +23,7 @@ export function exportTheme() {
 }
 
 export function systemThemeEffect() {
+  if (!WEBSITE_LIGHT_MODE_ENABLED) return;
   createEffect(
     on(
       [themeShouldMatchSystem, systemMode, darkModeTheme, lightModeTheme],
@@ -38,6 +40,7 @@ export function systemThemeEffect() {
 }
 
 export function applyTheme(id: string): void {
+  if (!WEBSITE_LIGHT_MODE_ENABLED) id = DEFAULT_DARK_THEME;
   let theme = themes().find((t) => t.id === id);
   if (!theme) {
     console.error(`theme not found: ${id}`);

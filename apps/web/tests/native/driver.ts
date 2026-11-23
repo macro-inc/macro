@@ -34,7 +34,10 @@ export async function checkpoints(browser: Browser) {
       Object.keys(localStorage)
         .filter(
           (key) =>
-            key.startsWith('graphql-soup-backfill:') && key.includes(userId)
+            key.startsWith('graphql-soup-backfill:') &&
+            key.includes(userId) &&
+            // A lane's `:failed` marker holds a bare storage generation.
+            !key.endsWith(':failed')
         )
         .map((key) => ({
           key,
@@ -134,19 +137,86 @@ export async function nativeHttpReachable(browser: Browser, origin: string) {
   }, origin);
 }
 
+/** Noise is an Inbox view radio in the list header; All is the All mail sidebar row. */
 export async function selectTab(browser: Browser, label: 'Noise' | 'All') {
-  const tab = browser.$(
-    `//nav[@aria-label="Email tabs"]//button[.//span[normalize-space(.)="${label}"]]`
-  );
+  const tab =
+    label === 'Noise'
+      ? browser.$(
+          '//*[@role="radiogroup"][@aria-label="Inbox view"]//label[normalize-space(.)="Noise"]'
+        )
+      : browser.$(
+          '//nav[@aria-label="Email library"]//button[.//span[normalize-space(.)="All mail"]]'
+        );
+  const selected =
+    label === 'Noise' ? browser.$('//input[@name and @value="noise"]') : tab;
   // WebKitWebDriver's pointer clicks can hit the adjacent row in this Tauri
-  // window. Activate the labeled button's real UI handler, not query/cache state.
+  // window. Activate the labeled control's real UI handler, not query/cache state.
   await tab.waitForDisplayed({ timeout: 5000 });
   await tab.execute((element) => element.click());
   await browser.waitUntil(
-    async () => (await tab.getAttribute('aria-current')) === 'page',
+    async () =>
+      label === 'Noise'
+        ? (await selected.getAttribute('data-checked')) !== null
+        : (await selected.getAttribute('aria-current')) === 'page',
     {
       timeout: 5000,
       timeoutMsg: `${label} tab did not become selected`,
     }
   );
+}
+
+/** The account initials on the rail's Settings button, once they read `expected`. */
+export async function expectAccountInitials(
+  browser: Browser,
+  expected: string
+) {
+  const avatar = browser.$('[data-sidebar-next-item="settings"]');
+  await avatar.waitForExist({ timeout: 30_000 });
+  let shown = '';
+  try {
+    await browser.waitUntil(
+      async () => {
+        shown = (await avatar.getText()).trim();
+        return shown === expected;
+      },
+      { timeout: 30_000 }
+    );
+  } catch {
+    throw new Error(
+      `Account initials: expected ${JSON.stringify(expected)}, got ${JSON.stringify(shown)}`
+    );
+  }
+}
+
+/**
+ * The Email list header's controls that the pane cuts off: each must lie
+ * inside its top bar and be the element at its own center, so a control laid
+ * out past the bar's edge, or clipped by the scrolling actions row, is listed.
+ */
+export async function clippedEmailHeaderControls(browser: Browser) {
+  return browser.execute(() => {
+    const search = document.querySelector('[aria-label="Search email"]');
+    const bar = search?.closest('[data-view-shell-top-bar]');
+    if (!bar) return ['no Email list header with Search email'];
+    const edge = bar.getBoundingClientRect();
+    return [...bar.querySelectorAll('button, label')]
+      .map((control) => ({ control, box: control.getBoundingClientRect() }))
+      .filter(({ box }) => box.width > 0 && box.height > 0)
+      .filter(({ control, box }) => {
+        const hit = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2
+        );
+        return (
+          box.left < edge.left ||
+          box.right > edge.right ||
+          !hit ||
+          !control.contains(hit)
+        );
+      })
+      .map(
+        ({ control, box }) =>
+          `${control.getAttribute('aria-label') ?? control.textContent?.trim()} at ${Math.round(box.left)}..${Math.round(box.right)} in a header ending at ${Math.round(edge.right)}`
+      );
+  });
 }

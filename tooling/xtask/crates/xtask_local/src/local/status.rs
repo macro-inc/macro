@@ -2,7 +2,6 @@
 //! list with live TCP probes plus per-container states. Read-only: nothing is
 //! built, started, or regenerated.
 
-use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -13,8 +12,7 @@ use super::{docker, summary};
 
 /// Whether something on the host is accepting connections on `port`.
 fn listening(port: u16) -> bool {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok()
+    xtask_ports::probe::accepting(port, Duration::from_millis(250))
 }
 
 /// Print endpoints (with reachability) and container states for `instance`.

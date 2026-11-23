@@ -14,8 +14,19 @@ Apply MacroDB migrations `20260918164303_calendar_scheduling.sql` and
 updated calendar service with its existing `CALENDAR_SYNC_ENABLED` setting enabled.
 The migration uses PostgreSQL multiranges (PostgreSQL 14+) and `btree_gist` for
 atomic host conflict exclusion. Each host needs a connected, writable primary
-calendar with calendar sync ready. All connected calendars are checked for busy
-time. Invitations and Google Meet links use the existing calendar mutation service.
+calendar whose grant works, and every calendar that counts toward their busy time
+must be current (`macro_services/sync_health.rs`, over
+`CalendarSyncHealthReader`): a calendar failing transiently still offers time
+around its stored events for 45 minutes after its next sync was due (its last
+successful sync; for a calendar Macro syncs daily, such as holidays from Google
+or an Outlook mailbox's own read-only calendars, a day after it), while a
+permanent or reauthorization failure, a calendar or inbox still on its first
+sync, or a failure past that window refuses availability. A calendar with Busy
+off never blocks booking, whatever its sync state. Busy time comes from every connected calendar
+the host has not turned off (the Busy switch in Settings → Calendar, stored in
+`calendar_availability_preferences` and read in process, never through the
+calendar service's HTTP listing), plus meetings the host is in on any calendar
+(`calendar_events::domain::labels::attends_meeting`). Invitations and Google Meet links use the existing calendar mutation service.
 Deployed invitations include the private cancellation/rescheduling URL.
 
 The web entry points are Settings → Calendar, the calendar header shortcuts,
@@ -64,10 +75,24 @@ A booking holds its host reservations before calling the provider. An uncertain
 provider write leaves the booking `failed` (or `processing` after a process crash),
 with reservations retained to avoid duplicate meetings. Durable operation intents, stable
 provider creation IDs, pinned calendars, and version-fenced retries recover these states after
-five minutes. The calendar-service worker runs every 15 seconds; repeated failures back off and
-emit operator-attention errors. Keyed deletion works even after local calendar projection
+five minutes. The calendar-service worker runs every 15 seconds and failures back off to an hour.
+A refusal decided before anything reaches the provider (no writable calendar, a read-only calendar,
+an event the host can no longer see) abandons the operation at once; any other failure is retried
+hourly until the meeting's start time has passed, then abandoned. An abandoned booking stays
+`failed` with its reservations and is never retried again; its booking carries `abandonedAt`, so
+the booker's receipt and the host's dialog offer Cancel instead of saying it is retrying. A create
+refused on its first attempt never reached the calendar, so cancelling it releases them without a
+calendar change. Any other abandoned booking releases them once the calendar accepts the
+cancellation; a calendar that refuses that too keeps them, as lost access always has, and both
+views say the cancellation did not reach the host's calendar. A move the calendar refuses on its
+first attempt returns the booking to its original time and status and releases the new interval;
+one refused after an earlier attempt that left no recorded outcome, or that keeps failing until its
+new start, stays failed at the requested time with both intervals held. Keyed deletion works even after local calendar projection
 retirement. Completion-persistence failures still return the durable private receipt. Rescheduling reserves the old and new intervals until the provider
-accepts the update, then releases the old interval. Calendar projections without a
+accepts the update, then releases the old interval. A booking link's daily limit likewise
+counts a move whose first attempt is still waiting on the calendar on both days, so a
+refusal that returns it cannot leave its original day over the limit. Replacement times for a
+reschedule skip a day already at the limit, without counting the booking being moved. Calendar projections without a
 source time zone for all-day events conservatively block all possible UTC offsets.
 
 This change does not include payments, workflow automation, routing forms, advanced
@@ -91,6 +116,9 @@ Missing or blank confirmation is rejected before calling the scheduling service.
 As with confirmed email/calendar tools, the quote is not verified against conversation
 history. There is no booking review card, elicitation, or deferred user-tool result.
 The agent discovers internal identities through tools instead of asking users for IDs.
+Code mode reaches the same workflows through `macro.calendar.booking` in the SDK, over
+`GET/POST /scheduling/links` and `PUT /scheduling/links/{id}`; the HTTP writes take the
+same required `userConfirmation`.
 
 The scheduling service owns authorization and validates the complete draft. Edits
 replace only the chosen event type; changed hours use a separate schedule to

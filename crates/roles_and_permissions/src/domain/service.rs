@@ -1,55 +1,47 @@
 //! Contains the service logic for roles and permissions
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::{
     model::{ProductTier, RoleId, SubscriptionStatus, UserRolesAndPermissionsError},
-    port::{UserRepository, UserRolesAndPermissionsRepository, UserRolesAndPermissionsService},
+    port::{UserRolesAndPermissionsRepository, UserRolesAndPermissionsService},
 };
 
 #[cfg(test)]
 mod test;
 
-/// Implementation of the UserRolesAndPermissionsService using a UserRolesAndPermissionsRepository and a UserRepository
+/// Implementation of the UserRolesAndPermissionsService using a UserRolesAndPermissionsRepository
 #[derive(Debug, Clone)]
-pub struct UserRolesAndPermissionsServiceImpl<URPR, UR>
+pub struct UserRolesAndPermissionsServiceImpl<URPR>
 where
     URPR: UserRolesAndPermissionsRepository,
-    UR: UserRepository,
 {
     /// The underlying user roles and permissions repository
     user_roles_and_permissions_repository: URPR,
-    /// The underlying user repository
-    user_repository: UR,
 }
 
-impl<URPR, UR> UserRolesAndPermissionsServiceImpl<URPR, UR>
+impl<URPR> UserRolesAndPermissionsServiceImpl<URPR>
 where
     URPR: UserRolesAndPermissionsRepository,
-    UR: UserRepository,
 {
     /// Creates a new UserRolesAndPermissionsService
-    pub fn new(user_roles_and_permissions_repository: URPR, user_repository: UR) -> Self {
+    pub fn new(user_roles_and_permissions_repository: URPR) -> Self {
         Self {
             user_roles_and_permissions_repository,
-            user_repository,
         }
     }
 }
 
-impl<URPR, UR> UserRolesAndPermissionsService for UserRolesAndPermissionsServiceImpl<URPR, UR>
+impl<URPR> UserRolesAndPermissionsService for UserRolesAndPermissionsServiceImpl<URPR>
 where
     URPR: UserRolesAndPermissionsRepository,
-    UR: UserRepository,
 {
     /// Given a user id and a subscription status, update the user's roles accordingly
     async fn update_user_roles_and_permissions_for_subscription(
         &self,
-        email: Email<Lowercase<'_>>,
+        user_id: &MacroUserIdStr<'_>,
         subscription_status: SubscriptionStatus,
         product_tier: ProductTier,
     ) -> Result<(), UserRolesAndPermissionsError> {
-        let user_id = self.user_repository.get_user_id_by_email(&email).await?;
-
         let sub_role = product_tier.role();
 
         let roles = [RoleId::ProfessionalSubscriber, sub_role.clone()];
@@ -57,7 +49,7 @@ where
         match subscription_status {
             SubscriptionStatus::Active => {
                 self.user_roles_and_permissions_repository
-                    .add_roles_to_user(&user_id, &roles)
+                    .add_roles_to_user(user_id, &roles)
                     .await?;
                 // A plan change (Premium <-> Max) arrives as an activation of the
                 // new tier; drop the other tier roles so exactly one tier remains.
@@ -67,7 +59,7 @@ where
                     .filter(|role| *role != sub_role)
                     .collect();
                 self.user_roles_and_permissions_repository
-                    .remove_roles_from_user(&user_id, &other_tiers)
+                    .remove_roles_from_user(user_id, &other_tiers)
                     .await
             }
             SubscriptionStatus::Canceled
@@ -76,7 +68,7 @@ where
             | SubscriptionStatus::Paused
             | SubscriptionStatus::Unpaid => {
                 self.user_roles_and_permissions_repository
-                    .remove_roles_from_user(&user_id, &roles)
+                    .remove_roles_from_user(user_id, &roles)
                     .await
             }
             _ => Err(UserRolesAndPermissionsError::InvalidSubscriptionStatus(

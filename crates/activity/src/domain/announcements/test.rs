@@ -272,6 +272,32 @@ async fn bot_subject_rows_reach_the_entity_audience_only() {
 }
 
 #[tokio::test]
+async fn correlated_bot_row_reaches_session_stream_without_entity_audience() {
+    let correlation_id = Uuid::new_v4();
+    let bot = Actor::new_from_bot(bot_id::BotId::new_from_uuid(Uuid::from_u128(42)));
+    let broker = RecordingPublisher::default();
+    let publisher = ActivityAnnouncements::new(
+        broker.clone(),
+        FakeAudience {
+            by_entity: HashMap::new(),
+        },
+    );
+
+    publisher
+        .publish_recorded(&[
+            edited(0, bot, "private-doc").with_agent_correlation(Some(correlation_id))
+        ])
+        .await;
+
+    let events = broker.recorded_events();
+    assert_eq!(events.len(), 1);
+    let ActivityTopicEvent::SessionRecorded { activities } = &events[0].1 else {
+        panic!("expected session delivery");
+    };
+    assert_eq!(activities[0].agent_correlation_id, Some(correlation_id));
+}
+
+#[tokio::test]
 async fn expansion_failure_degrades_to_subject_only_delivery() {
     let teo = user("teo");
     let broker = RecordingPublisher::default();

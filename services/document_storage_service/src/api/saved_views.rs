@@ -17,7 +17,10 @@ use uuid::Uuid;
 
 use crate::api::ApiContext;
 use crate::api::context::AuthorizationService;
-use crate::service::saved_views::service;
+
+pub mod definitions;
+#[cfg(test)]
+mod test;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
@@ -26,6 +29,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/{saved_view_id}", delete(delete_view_handler))
         .route("/{saved_view_id}", patch(patch_view_handler))
         .route("/exclude_default", post(exclude_default_view_handler))
+        .nest("/definitions", definitions::router())
 }
 
 #[derive(Debug, Error)]
@@ -108,7 +112,8 @@ async fn get_views_handler(
 ) -> Result<(StatusCode, Json<ViewsResponse>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
 
-    let views = service(ctx.db.clone())
+    let views = ctx
+        .saved_views
         .legacy_list(user.authorization.user.macro_user_id.as_ref())
         .await?;
     let excluded_default_views = pg_view_storage
@@ -139,7 +144,8 @@ async fn create_view_handler(
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(create_view_request): Json<CreateViewRequest>,
 ) -> Result<(StatusCode, Json<View>), SavedViewErr> {
-    let new_view = service(ctx.db.clone())
+    let new_view = ctx
+        .saved_views
         .legacy_create(
             user.authorization.user.macro_user_id.as_ref(),
             create_view_request.name,
@@ -174,7 +180,7 @@ async fn delete_view_handler(
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(SavedViewParams { saved_view_id: id }): Path<SavedViewParams>,
 ) -> Result<StatusCode, SavedViewErr> {
-    service(ctx.db.clone())
+    ctx.saved_views
         .legacy_delete(user.authorization.user.macro_user_id.as_ref(), id)
         .await?;
 
@@ -201,7 +207,7 @@ async fn patch_view_handler(
     Path(SavedViewParams { saved_view_id: id }): Path<SavedViewParams>,
     Json(patch): Json<ViewPatch>,
 ) -> Result<StatusCode, SavedViewErr> {
-    service(ctx.db.clone())
+    ctx.saved_views
         .legacy_patch(
             user.authorization.user.macro_user_id.as_ref(),
             id,

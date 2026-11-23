@@ -1,6 +1,11 @@
 //! Pipeline policy and access boundaries, exercised through real domain services.
 #![cfg(feature = "outbound")]
 
+#[path = "pipelines/commercial.rs"]
+mod commercial;
+#[path = "pipelines/entries.rs"]
+mod entries;
+
 use crm::domain::{auth::CrmTeamReceipt, model::CrmError, pipelines::*, stages::*};
 use crm::outbound::pipelines::PgPipelineRepo;
 use databases::domain::models::DatabaseError;
@@ -180,11 +185,20 @@ async fn fixture(pool: &PgPool) -> (Service, Arc<DatabaseService>, Arc<Access>, 
     (svc, db, a, team, company)
 }
 async fn create(s: &Service, team: Uuid, record_type: PipelineRecordType) -> Pipeline {
+    create_by(s, team, OWNER, record_type).await
+}
+/// A private pipeline `actor` creates in `team`.
+async fn create_by(
+    s: &Service,
+    team: Uuid,
+    actor: &str,
+    record_type: PipelineRecordType,
+) -> Pipeline {
     s.create(
-        team_receipt(team, OWNER),
+        team_receipt(team, actor),
         CreatePipeline {
             name: "  Renewals  ".into(),
-            record_type,
+            record_type: Some(record_type),
             sharing: PipelineSharing::Private,
         },
     )
@@ -193,7 +207,7 @@ async fn create(s: &Service, team: Uuid, record_type: PipelineRecordType) -> Pip
     .pipeline
 }
 fn insert(p: &Pipeline, entity: Uuid) -> DatabaseOp {
-    serde_json::from_value(json!({"kind":"rows", "table":p.table_id, "change":{"kind":"insert", "rows":[[{"column":p.primary_column_id, "value":{"type":"entities","value":[{"entityType":p.record_type.as_str().to_uppercase(),"entityId":entity.to_string()}]}}]]}})).unwrap()
+    serde_json::from_value(json!({"kind":"rows", "table":p.table_id, "change":{"kind":"insert", "rows":[[{"column":p.primary_column_id, "value":{"type":"entities","value":[{"entityType":p.record_type.unwrap().as_str().to_uppercase(),"entityId":entity.to_string()}]}}]]}})).unwrap()
 }
 async fn write(
     s: &Service,
@@ -201,8 +215,18 @@ async fn write(
     p: &Pipeline,
     ops: Vec<DatabaseOp>,
 ) -> Result<Vec<OpResult>, PipelineError> {
+    write_by(s, a, p, OWNER, ops).await
+}
+/// Apply `ops` to `p` as `actor`.
+async fn write_by(
+    s: &Service,
+    a: &Access,
+    p: &Pipeline,
+    actor: &str,
+    ops: Vec<DatabaseOp>,
+) -> Result<Vec<OpResult>, PipelineError> {
     s.apply_ops(
-        access(a, p.id, EntityType::CrmPipeline, OWNER).await,
+        access(a, p.id, EntityType::CrmPipeline, actor).await,
         None,
         ops.into(),
     )
@@ -231,14 +255,21 @@ async fn private_defaults_team_sharing_and_revocation_cover_database_and_rows(po
         .table(access(&a, p.id, EntityType::CrmPipeline, OWNER).await)
         .await
         .unwrap();
-    assert_eq!(detail.columns.len(), 4);
+    assert_eq!(detail.columns.len(), 6);
     let columns = &detail.columns;
     assert_eq!(
         columns
             .iter()
             .map(|c| c.definition.definition.display_name.as_str())
             .collect::<Vec<_>>(),
-        vec!["Company", "Stage", "Owner", "Revenue"]
+        vec![
+            "Company",
+            "Stage",
+            "Outcome",
+            "Owner",
+            "Revenue",
+            "Revenue currency"
+        ]
     );
     let stage = &columns[1].definition;
     assert_eq!(
@@ -458,6 +489,89 @@ async fn primary_record_is_required_and_protected_but_can_repeat(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn generic_pipeline_holds_free_form_rows_without_record_references(pool: PgPool) {
+    let (s, _db, a, team, company) = fixture(&pool).await;
+    let p = s
+        .create(
+            team_receipt(team, OWNER),
+            CreatePipeline {
+                name: "Launch".into(),
+                record_type: None,
+                sharing: PipelineSharing::Private,
+            },
+        )
+        .await
+        .unwrap()
+        .pipeline;
+    assert_eq!(p.record_type, None);
+
+    let view = access(&a, p.id, EntityType::CrmPipeline, OWNER).await;
+    let table = s.table(view.clone()).await.unwrap();
+    let names: Vec<&str> = table.columns.iter().map(|column| column.name()).collect();
+    assert_eq!(names, ["Name"]);
+    assert_eq!(table.columns[0].column.id, p.primary_column_id);
+
+    // No company or contact is needed: a row may even start empty.
+    let blank = serde_json::from_value(
+        json!({"kind":"rows","table":p.table_id,"change":{"kind":"insert","rows":[[]]}}),
+    )
+    .unwrap();
+    let blank_row = inserted(&write(&s, &a, &p, vec![blank]).await.unwrap());
+    let named = serde_json::from_value(json!({"kind":"rows","table":p.table_id,"change":{"kind":"insert","rows":[[{"column":p.primary_column_id,"value":{"type":"text","value":"Launch site"}}]]}})).unwrap();
+    let named_row = inserted(&write(&s, &a, &p, vec![named]).await.unwrap());
+    let rows = s.rows(view.clone(), None).await.unwrap().rows;
+    assert_eq!(
+        rows.iter().map(|row| row.row_id).collect::<Vec<_>>(),
+        [blank_row, named_row]
+    );
+
+    // It shows in navigation, and never as a place a CRM record is tracked.
+    let listed = s.list(team_receipt(team, OWNER)).await.unwrap();
+    assert!(listed.iter().any(|entry| entry.pipeline.id == p.id));
+    let owner = MacroUserIdStr::try_from(OWNER.to_string()).unwrap();
+    assert!(
+        s.entries(&owner, PipelineRecordType::Company, &[company])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        s.record_rows(view.clone(), &[company])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // Name is an ordinary column: it can change type and be deleted.
+    let empty = s
+        .create(
+            team_receipt(team, OWNER),
+            CreatePipeline {
+                name: "Numbers".into(),
+                record_type: None,
+                sharing: PipelineSharing::Private,
+            },
+        )
+        .await
+        .unwrap()
+        .pipeline;
+    let retype = serde_json::from_value(json!({"kind":"column","table":empty.table_id,"column":empty.primary_column_id,"change":{"kind":"change_type","to":{"type":"number"}}})).unwrap();
+    write(&s, &a, &empty, vec![retype]).await.unwrap();
+    let delete_name = serde_json::from_value(
+        json!({"kind":"column","table":p.table_id,"column":p.primary_column_id,"change":{"kind":"delete"}}),
+    )
+    .unwrap();
+    write(&s, &a, &p, vec![delete_name]).await.unwrap();
+    assert_eq!(s.get(view.clone()).await.unwrap().pipeline.id, p.id);
+    assert!(s.table(view.clone()).await.unwrap().columns.is_empty());
+    let row = serde_json::from_value(
+        json!({"kind":"rows","table":p.table_id,"change":{"kind":"insert","rows":[[]]}}),
+    )
+    .unwrap();
+    write(&s, &a, &p, vec![row]).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn references_can_cross_teams_only_when_the_editor_has_record_access(pool: PgPool) {
     let (s, _, a, team, _) = fixture(&pool).await;
     let other_team = Uuid::now_v7();
@@ -635,34 +749,33 @@ async fn contact_pipelines_and_lifecycle_preserve_crm_records(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn disabled_crm_cannot_create_pipeline_storage(pool: PgPool) {
+async fn pipeline_storage_is_available_without_email_consent(pool: PgPool) {
     let (s, _, _, team, _) = fixture(&pool).await;
-    sqlx::query!(
-        r#"UPDATE team_crm_settings SET crm_enabled=false WHERE team_id=$1"#,
-        team
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    assert!(
+        !sqlx::query_scalar!(
+            "SELECT crm_enabled FROM team_crm_settings WHERE team_id=$1",
+            team
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    );
     let result = s
         .create(
             team_receipt(team, OWNER),
             CreatePipeline {
                 name: "Sales".into(),
-                record_type: PipelineRecordType::Company,
+                record_type: Some(PipelineRecordType::Company),
                 sharing: PipelineSharing::Team,
             },
         )
         .await;
-    assert!(matches!(
-        result,
-        Err(PipelineError::Crm(CrmError::CrmDisabledForTeam))
-    ));
+    assert!(result.is_ok());
     let count: i64 = sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM databases"#)
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(count, 0);
+    assert_eq!(count, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -749,6 +862,7 @@ async fn http_creation_listing_schema_and_records_use_pipeline_access(pool: PgPo
                 identity: ValidatedIdentity {
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     user_id: if jwt == "owner" { OWNER } else { OUTSIDER }.into(),
                     fusion_user_id: "test-fusion-user".into(),
                     organization_id: None,
@@ -988,179 +1102,6 @@ async fn queried_rows_filter_and_sort_before_paging_and_retain_hidden_records(po
     assert_eq!(retained.rows[0].row_id, hidden);
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn entries_list_referencing_rows_from_visible_live_pipelines(pool: PgPool) {
-    use databases::domain::storage::DatabaseStorageService;
-    use models_properties::service::property_value::PropertyValue;
-    let (s, db, a, team, company) = fixture(&pool).await;
-    // Source ids are cached per user across this binary's parallel tests, so
-    // a teammate shared with other tests could see another test's teams.
-    let teammate = format!("macro|entries-{}@macro.com", Uuid::now_v7());
-    let teammate_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1,$2,$2,$2)",
-        teammate_id,
-        teammate
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!(
-        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1,$1,$2)"#,
-        teammate,
-        teammate_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!(
-        r#"INSERT INTO team_user (team_id,user_id,team_role) VALUES ($1,$2,'member')"#,
-        team,
-        teammate
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let other = Uuid::now_v7();
-    sqlx::query!("INSERT INTO crm_companies (id, team_id, first_interaction, last_interaction) VALUES ($1, $2, now(), now())", other, team).execute(&pool).await.unwrap();
-    let private = create(&s, team, PipelineRecordType::Company).await;
-    let shared = create(&s, team, PipelineRecordType::Company).await;
-    s.share(
-        access(&a, shared.id, EntityType::CrmPipeline, OWNER).await,
-        PipelineSharing::Team,
-    )
-    .await
-    .unwrap();
-    let trashed = create(&s, team, PipelineRecordType::Company).await;
-    let revenue = s
-        .table(access(&a, private.id, EntityType::CrmPipeline, OWNER).await)
-        .await
-        .unwrap()
-        .columns
-        .into_iter()
-        .find(|column| column.definition.definition.display_name == "Revenue")
-        .unwrap()
-        .column
-        .id;
-    let row = |p: &Pipeline, entity: Uuid, amount: f64| {
-        json!([
-            {"column": p.primary_column_id, "value": {"type":"entities", "value":[{"entityType":"COMPANY", "entityId":entity.to_string()}]}},
-            {"column": revenue, "value": {"type":"number", "value":amount}}
-        ])
-    };
-    let insert_rows = |p: &Pipeline, rows: Vec<serde_json::Value>| -> DatabaseOp {
-        serde_json::from_value(
-            json!({"kind":"rows", "table":p.table_id, "change":{"kind":"insert", "rows":rows}}),
-        )
-        .unwrap()
-    };
-    let private_rows = write(
-        &s,
-        &a,
-        &private,
-        vec![insert_rows(
-            &private,
-            vec![
-                row(&private, company, 1.0),
-                row(&private, other, 2.0),
-                row(&private, company, 3.0),
-            ],
-        )],
-    )
-    .await
-    .unwrap();
-    let shared_row = inserted(
-        &write(&s, &a, &shared, vec![insert(&shared, company)])
-            .await
-            .unwrap(),
-    );
-    write(&s, &a, &trashed, vec![insert(&trashed, company)])
-        .await
-        .unwrap();
-    s.set_trashed(
-        access(&a, trashed.id, EntityType::CrmPipeline, OWNER).await,
-        true,
-    )
-    .await
-    .unwrap();
-
-    let owner = s
-        .entries(&user(OWNER), PipelineRecordType::Company, &[company])
-        .await
-        .unwrap();
-    let mut pipelines = owner
-        .iter()
-        .map(|e| e.pipeline.pipeline.id)
-        .collect::<Vec<_>>();
-    pipelines.dedup();
-    assert_eq!(pipelines.len(), 2);
-    assert!(pipelines.contains(&private.id) && pipelines.contains(&shared.id));
-    let private_entries = owner
-        .iter()
-        .filter(|e| e.pipeline.pipeline.id == private.id)
-        .collect::<Vec<_>>();
-    // Both of the company's rows, in the pipeline's row order, with their cells.
-    assert_eq!(
-        private_entries
-            .iter()
-            .map(|e| e.cells.get(&revenue).cloned())
-            .collect::<Vec<_>>(),
-        vec![Some(PropertyValue::Num(1.0)), Some(PropertyValue::Num(3.0))]
-    );
-    assert!(private_entries.iter().all(|e| e.record_id == company
-        && e.pipeline.grant == AccessLevel::Owner
-        && e.columns.len() == 4
-        && e.cells.contains_key(&private.primary_column_id)));
-    match &private_rows[0] {
-        OpResult::Rows {
-            change: RowsResult::Inserted { rows },
-            ..
-        } => assert_eq!(private_entries[0].row_id, rows[0]),
-        other => panic!("{other:?}"),
-    }
-
-    // Storage reads only the asked-for rows of the named table.
-    let cells = db
-        .storage_row_cells(
-            private.database_id,
-            private.table_id,
-            &[private_entries[1].row_id, shared_row],
-        )
-        .await
-        .unwrap();
-    assert_eq!(cells.len(), 1);
-    assert_eq!(cells[0].row_id, private_entries[1].row_id);
-    assert_eq!(cells[0].cells[&revenue], PropertyValue::Num(3.0));
-
-    // A batch answers each record; another record type matches nothing.
-    let both = s
-        .entries(&user(OWNER), PipelineRecordType::Company, &[company, other])
-        .await
-        .unwrap();
-    assert_eq!(both.iter().filter(|e| e.record_id == other).count(), 1);
-    assert!(
-        s.entries(&user(OWNER), PipelineRecordType::Contact, &[company])
-            .await
-            .unwrap()
-            .is_empty()
-    );
-
-    // Teammates see only shared pipelines; outsiders see nothing.
-    let member = s
-        .entries(&user(&teammate), PipelineRecordType::Company, &[company])
-        .await
-        .unwrap();
-    assert_eq!(member.len(), 1);
-    assert_eq!(member[0].pipeline.pipeline.id, shared.id);
-    assert_eq!(member[0].pipeline.grant, AccessLevel::Edit);
-    assert!(
-        s.entries(&user(OUTSIDER), PipelineRecordType::Company, &[company])
-            .await
-            .unwrap()
-            .is_empty()
-    );
-}
-
 /// A user no other test shares, so cached source ids cannot leak across tests.
 async fn fresh_user(pool: &PgPool, team: Option<Uuid>) -> String {
     let id = format!("macro|sharing-{}@macro.com", Uuid::now_v7());
@@ -1255,7 +1196,7 @@ async fn editors_share_with_people_and_only_the_owner_changes_team_access(pool: 
             team_receipt(team, &owner),
             CreatePipeline {
                 name: "Renewals".into(),
-                record_type: PipelineRecordType::Company,
+                record_type: Some(PipelineRecordType::Company),
                 sharing: PipelineSharing::Private,
             },
         )
@@ -1503,3 +1444,6 @@ async fn board_positions_survive_reads_and_stay_with_the_authorized_pipeline(poo
         Err(PipelineError::NotFound)
     ));
 }
+
+#[path = "pipelines/member_access.rs"]
+mod member_access;

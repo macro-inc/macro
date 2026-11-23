@@ -10,6 +10,7 @@ export type MeetingCredentials = {
   token: string;
   participantId: string;
   shareToken: string | null;
+  started: boolean;
 };
 
 /** Live waiting-room capture tracks; whoever holds them must stop them. */

@@ -24,6 +24,7 @@ let client: QueryClient;
 
 function roster(ids: string[]): TeamWithMembers {
   return {
+    crm_member_access: {},
     team: {
       id: 'team-1',
       name: 'Design team',

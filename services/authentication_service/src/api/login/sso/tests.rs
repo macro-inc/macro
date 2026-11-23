@@ -53,6 +53,14 @@ fn untrusted_original_urls_are_rejected() {
 }
 
 #[test]
+fn microsoft_sign_in_asks_for_the_account_picker() {
+    assert_eq!(sign_in_prompt("microsoft"), Some("select_account"));
+    assert_eq!(sign_in_prompt("google"), None);
+    assert_eq!(sign_in_prompt("google_gmail"), None);
+    assert_eq!(sign_in_prompt("github"), None);
+}
+
+#[test]
 fn redacted_url_strips_credentials_query_and_fragment_but_keeps_path() {
     let url =
         Url::parse("https://alice:secret@evil.example.com/app/login?token=abc123#access_token=xyz")

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Finish connecting to Macro</title>
+    <style>
+      {% include "broker_page.css" %}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Finish connecting on your other machine</h1>
+      <p>
+        If the app is asking you to paste a URL, such as
+        <code>claude mcp login --no-browser</code>, paste this:
+      </p>
+      <pre class="copy">{{ url }}</pre>
+      <p>Otherwise, run this on the machine where the app is running, while it waits:</p>
+      <pre class="copy">curl '{{ url }}'</pre>
+      <p class="warning">
+        This link is how the app gets access to your Macro account. Use it only
+        in an app you just started connecting yourself, and never give it to
+        anyone else. It expires in 5 minutes.
+      </p>
+    </main>
+  </body>
+</html>

@@ -6,7 +6,6 @@ use std::pin::Pin;
 use super::Client;
 use crate::error::AnthropicError;
 use crate::types::request::CreateMessageRequestBody;
-use crate::types::request::transform_request_web_fetch;
 use crate::types::response::{MessageResponse, StreamEvent};
 
 pub type MessageCompletionResponseStream =
@@ -31,7 +30,6 @@ impl<'c> Chat<'c> {
         I: Into<CreateMessageRequestBody>,
     {
         let request = request.into();
-        let request = transform_request_web_fetch(request);
         self.inner.post("/v1/messages", request).await
     }
 
@@ -41,7 +39,6 @@ impl<'c> Chat<'c> {
     {
         let mut request = request.into();
         request.stream = Some(true);
-        let request = transform_request_web_fetch(request);
         self.create_stream_unchecked(request).await
     }
 

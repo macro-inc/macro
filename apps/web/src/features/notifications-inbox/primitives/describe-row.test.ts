@@ -6,7 +6,9 @@ import {
   describeInboxCard,
   describeInboxRow,
   describeStackItem,
+  groupChatId,
   inboxCardKind,
+  isGroupChatRow,
 } from './describe-row';
 
 const taskAssigned = {
@@ -37,6 +39,7 @@ const row = (
 ): NotificationInboxRow => ({
   id: 'row',
   type: 'task',
+  alsoListedAs: [],
   revision: 'rev',
   latestAt: 1,
   actor,
@@ -46,7 +49,6 @@ const row = (
   content: {
     entity: { type: 'task', id: 'task-a', name: 'Task' } as never,
     notifications: [notification],
-    entityAt: () => ({}) as never,
   },
 });
 
@@ -83,6 +85,65 @@ describe('describeInboxRow', () => {
     expect(action({ kind: 'other' })).toBe('assigned you a task');
   });
 
+  it('says a runtime request asks to use the machine', () => {
+    const request = {
+      id: 'n-3',
+      entity_type: 'harness',
+      entity_id: '0198a4cc-e138-7670-a308-a6b766602712',
+      sender_id: 'macro|ana@example.com',
+      notification_metadata: {
+        tag: 'entity_access_requested',
+        content: {
+          requestId: 'r-1',
+          revision: 1,
+          entityName: 'Render box',
+          accessLevel: 'edit',
+        },
+      },
+    } as unknown as UnifiedNotification;
+    expect(
+      describeInboxRow(
+        row({ kind: 'user', id: 'macro|ana@example.com' }, request),
+        names
+      )
+    ).toEqual({ action: 'Ana requested to use', subject: 'Render box' });
+  });
+
+  it('says who removed runtime access and which agents stopped', () => {
+    const removal = (agents: string[]) =>
+      ({
+        id: 'n-4',
+        entity_type: 'harness',
+        entity_id: '0198a4cc-e138-7670-a308-a6b766602712',
+        sender_id: 'macro|ana@example.com',
+        notification_metadata: {
+          tag: 'runtime_access_removed',
+          content: {
+            runtimeName: 'Render box',
+            agents: agents.map((name, index) => ({
+              botId: `b-${index}`,
+              name,
+            })),
+          },
+        },
+      }) as unknown as UnifiedNotification;
+    const describe = (agents: string[]) =>
+      describeInboxRow(
+        row({ kind: 'user', id: 'macro|ana@example.com' }, removal(agents)),
+        names
+      );
+    expect(describe(['Scout'])).toEqual({
+      action: 'Ana removed your access to Render box',
+      subject: 'Scout has stopped.',
+    });
+    expect(describe(['Scout', 'Atlas']).subject).toBe(
+      'Scout and Atlas have stopped.'
+    );
+    expect(describe(['Scout', 'Atlas', 'Iris']).subject).toBe(
+      'Scout and 2 others have stopped.'
+    );
+  });
+
   it('names an outside sender from the notification', () => {
     expect(describeInboxRow(row(undefined, email), names)).toEqual({
       action: 'Dana sent you an email',
@@ -113,6 +174,7 @@ const stack = (
 ): NotificationInboxRow => ({
   id: 'stack',
   type,
+  alsoListedAs: [],
   threadId,
   revision: 'rev',
   latestAt: 1,
@@ -122,7 +184,6 @@ const stack = (
   content: {
     entity: { type: 'channel', id: 'entity', name: 'The entity' } as never,
     notifications,
-    entityAt: () => ({}) as never,
   },
 });
 
@@ -248,10 +309,206 @@ describe('describeInboxCard', () => {
       what: 'Can we ship Friday?',
       body: 'Ana: On it',
     });
-    expect(itemsOf(row).map((item) => item.by)).toEqual([
-      'Ana replied',
-      'Leo reacted',
+    expect(itemsOf(row)).toMatchObject([
+      { by: 'Ana replied', text: 'On it' },
+      { by: 'Leo', text: 'Reacted +1 to: Can we ship Friday?' },
     ]);
+  });
+
+  it('lays out a reaction as who reacted, the reaction and message, then where', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('1', 'channel_message_reaction', 'Leo', {
+          ...channel,
+          messageId: 'root',
+          messageContent: 'Can we ship Friday?',
+          emoji: '🧑🏽‍💻',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Leo',
+      what: 'Reacted 🧑🏽‍💻 to: Can we ship Friday?',
+      body: '#launch',
+    });
+  });
+
+  it('names no place for a reaction in a direct message', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('1', 'channel_message_reaction', 'Leo', {
+          channelType: 'directMessage',
+          channelName: 'Leo',
+          messageId: 'root',
+          messageContent: 'Lunch?',
+          emoji: '❤️',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Leo',
+      what: 'Reacted ❤️ to: Lunch?',
+      body: undefined,
+    });
+  });
+
+  it('gathers reactions to one message into one line of every emoji', () => {
+    const reaction = (id: string, by: string, emoji: string) =>
+      sent(id, 'channel_message_reaction', by, {
+        ...channel,
+        messageId: 'root',
+        messageContent: 'Can we ship Friday?',
+        emoji,
+      });
+    const card = describeInboxCard(
+      stack(
+        'channel_thread',
+        [
+          reaction('3', 'Ana', '🎉'),
+          reaction('2', 'Leo', '👍'),
+          reaction('1', 'Sam', '🎉'),
+        ],
+        'root'
+      ),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Ana, Leo and Sam',
+      what: 'Reacted 🎉 👍 to: Can we ship Friday?',
+      body: '#launch',
+    });
+  });
+
+  it('shows the newest of reactions to several messages, in the same layout', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('2', 'channel_message_reaction', 'Ana', {
+          ...channel,
+          messageId: 'second',
+          messageContent: 'Design review moved to 3pm',
+          emoji: '👀',
+        }),
+        sent('1', 'channel_message_reaction', 'Leo', {
+          ...channel,
+          messageId: 'first',
+          messageContent: 'Can we ship Friday?',
+          emoji: '🎉',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Ana',
+      what: 'Reacted 👀 to: Design review moved to 3pm',
+      body: '#launch',
+    });
+  });
+
+  it('speaks only for the newest reaction when older notifications are not loaded', () => {
+    const reaction = (id: string, by: string, emoji: string) =>
+      sent(id, 'channel_message_reaction', by, {
+        ...channel,
+        messageId: 'root',
+        messageContent: 'Can we ship Friday?',
+        emoji,
+      });
+    const row = stack(
+      'channel_thread',
+      [reaction('3', 'Ana', '🎉'), reaction('2', 'Leo', '👍')],
+      'root'
+    );
+    // An older reply sits beyond the loaded notifications.
+    const card = describeInboxCard({ ...row, count: 3 }, people);
+    expect(card).toEqual({
+      who: 'Ana',
+      what: 'Reacted 🎉 to: Can we ship Friday?',
+      body: '#launch',
+    });
+  });
+
+  it('names someone for a reaction without a sender', () => {
+    const row = stack('channel_messages', [
+      sent('1', 'channel_message_reaction', null as never, {
+        ...channel,
+        messageId: 'root',
+        messageContent: 'Can we ship Friday?',
+        emoji: '👍',
+      }),
+    ]);
+    expect(itemsOf(row).map((item) => item.by)).toEqual(['Someone']);
+    expect(describeInboxCard(row, people).who).toBe('Someone');
+  });
+
+  it('shows the newest reaction of a row that mixes it with messages', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('2', 'channel_message_reaction', 'Ana', {
+          ...channel,
+          messageId: 'first',
+          messageContent: 'Release branch is cut',
+          emoji: '🎉',
+        }),
+        sent('1', 'channel_message_send', 'Leo', {
+          ...channel,
+          messageId: 'second',
+          messageContent: 'Anyone around?',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Ana',
+      what: 'Reacted 🎉 to: Release branch is cut',
+      body: '#launch',
+    });
+  });
+
+  it('keeps a mention row about the mention when a reaction is newest', () => {
+    const card = describeInboxCard(
+      stack(
+        'channel_mention',
+        [
+          sent('2', 'channel_message_reaction', 'Ana', {
+            ...channel,
+            messageId: 'reply',
+            messageContent: 'My reply',
+            emoji: '👀',
+          }),
+          sent('1', 'channel_mention', 'Leo', {
+            ...channel,
+            messageId: 'root',
+            messageContent: 'Can you check this?',
+          }),
+        ],
+        'root'
+      ),
+      people
+    );
+    expect(card.what).toBe('Can you check this?');
+  });
+
+  it('never credits an older reactor with the newest reaction', () => {
+    const row = stack('channel_messages', [
+      sent('2', 'channel_message_reaction', null as never, {
+        ...channel,
+        messageId: 'second',
+        messageContent: 'Design review moved to 3pm',
+        emoji: '👀',
+      }),
+      sent('1', 'channel_message_reaction', 'Leo', {
+        ...channel,
+        messageId: 'first',
+        messageContent: 'Can we ship Friday?',
+        emoji: '🎉',
+      }),
+    ]);
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'Someone',
+      what: 'Reacted 👀 to: Design review moved to 3pm',
+      body: '#launch',
+    });
   });
 
   it('skips the middle line when no notification carries the root', () => {
@@ -297,6 +554,64 @@ describe('describeInboxCard', () => {
       body: 'Sam: Message 0',
     });
     expect(itemsOf(row).map((item) => item.text)).toContain('Message 3');
+  });
+
+  it('shows a group chat stack the chat and who wrote its newest line', () => {
+    const row = stack(
+      'channel_messages',
+      ['Sam', 'Noor', 'Mara'].map((sender, index) =>
+        sent(String(index), 'channel_message_send', sender, {
+          channelType: 'private',
+          // Named for its sender, so it lists the reader and not the sender.
+          channelName: 'Ana, Leo, Mara, Noor, Reader',
+          messageContent: `Message ${index}`,
+        })
+      )
+    );
+    row.content.entity = {
+      type: 'channel',
+      id: 'entity',
+      name: 'Ana, Leo, Mara, Noor, Sam',
+    } as never;
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'Ana, Leo and 3 others',
+      what: undefined,
+      body: 'Sam: Message 0',
+    });
+    expect(isGroupChatRow(row)).toBe(true);
+  });
+
+  it('shows a named group chat its name, even for one message', () => {
+    const row = stack('channel_messages', [
+      sent('1', 'channel_message_send', 'Sam', {
+        channelType: 'private',
+        channelName: 'remote',
+        messageContent: 'Working from home',
+      }),
+    ]);
+    row.content.entity = {
+      type: 'channel',
+      id: 'entity',
+      name: 'remote',
+    } as never;
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'remote',
+      what: undefined,
+      body: 'Sam: Working from home',
+    });
+    expect(groupChatId(row)).toBe('entity');
+  });
+
+  it('keeps a reaction in a group chat about the person', () => {
+    const row = stack('channel_messages', [
+      sent('1', 'channel_message_reaction', 'Sam', {
+        channelType: 'private',
+        channelName: 'remote',
+        messageContent: 'Working from home',
+      }),
+    ]);
+    expect(isGroupChatRow(row)).toBe(false);
+    expect(groupChatId(row)).toBeUndefined();
   });
 
   it('shows a direct message stack the person and the newest message', () => {
@@ -391,6 +706,124 @@ describe('describeInboxCard', () => {
       names
     );
     expect(card).toEqual({ who: 'Task' });
+  });
+});
+
+describe('a ping', () => {
+  const ping = (id: string, sender = 'Scout') =>
+    sent(id, 'ping', sender, { body: 'All 3 services are live.' });
+
+  const on = (
+    entity: Record<string, unknown>,
+    row: NotificationInboxRow
+  ): NotificationInboxRow => ({
+    ...row,
+    content: { ...row.content, entity: entity as never },
+  });
+
+  const task = { type: 'task', id: 'task-a', name: 'Ship the inbox' };
+
+  it('says who pinged you, what about, and what they wrote', () => {
+    expect(
+      describeInboxCard(
+        on(task, stack('discussion_messages', [ping('1')])),
+        people
+      )
+    ).toEqual({
+      who: 'Scout pinged you',
+      what: 'Ship the inbox',
+      body: 'All 3 services are live.',
+    });
+  });
+
+  it('names its entity on every row it joins', () => {
+    const rows = [
+      ['email', { type: 'email', id: 'thread-a', name: 'Quarterly numbers' }],
+      ['calendar_event', { type: 'calendar_event', id: 'e', name: 'Standup' }],
+      ['agent', { type: 'agent_session', id: 's', name: 'Inbox triage' }],
+      ['channel_thread', { type: 'channel', id: 'c', name: 'Dana' }],
+    ] as const;
+    for (const [type, entity] of rows) {
+      expect(
+        describeInboxCard(on(entity, stack(type, [ping('1')])), people)
+      ).toEqual({
+        who: 'Scout pinged you',
+        what: entity.name,
+        body: 'All 3 services are live.',
+      });
+    }
+  });
+
+  it('names a channel the way its messages do', () => {
+    const general = {
+      type: 'channel',
+      id: 'c',
+      name: 'launch',
+      channelType: 'public',
+    };
+    expect(
+      describeInboxCard(
+        on(general, stack('channel_messages', [ping('1')])),
+        people
+      ).what
+    ).toBe('#launch');
+  });
+
+  it('says you pinged yourself when nobody is named as its sender', () => {
+    // A ping people send themselves from a script has no sender and no agent.
+    const own = {
+      ...ping('1'),
+      sender_id: null,
+    } as unknown as UnifiedNotification;
+    const row = on(task, stack('discussion_messages', [own]));
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'You pinged yourself',
+      what: 'Ship the inbox',
+      body: 'All 3 services are live.',
+    });
+    expect(describeInboxRow(row, people).action).toBe('You pinged yourself');
+    expect(itemsOf(row)[0].by).toBe('You pinged yourself');
+  });
+
+  it('keeps its verb when a stack holds nothing but pings', () => {
+    const row = on(
+      task,
+      stack('discussion_messages', [ping('1'), ping('2', 'Builder')])
+    );
+    expect(describeInboxCard(row, people).who).toBe(
+      'Scout and Builder pinged you'
+    );
+  });
+
+  it('on top of a stack names its people and says who wrote it', () => {
+    const comment = sent('2', 'commented_on_document', 'Sam', {
+      documentName: 'Ship the inbox',
+      text: 'Looks good',
+    });
+    const row = on(task, stack('discussion_messages', [ping('1'), comment]));
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'Scout and Sam',
+      what: 'Ship the inbox',
+      body: 'Scout: All 3 services are live.',
+    });
+    expect(itemsOf(row).map(({ by, text }) => ({ by, text }))).toEqual([
+      {
+        by: 'Scout pinged you',
+        text: 'All 3 services are live.',
+      },
+      { by: 'Sam commented', text: 'Looks good' },
+    ]);
+  });
+
+  it('makes the row it tops a ping, but leaves a mention a mention', () => {
+    expect(inboxCardKind(stack('discussion_messages', [ping('1')]))).toBe(
+      'ping'
+    );
+    expect(inboxCardKind(stack('channel_thread', [ping('1')]))).toBe('ping');
+    expect(inboxCardKind(stack('email', [ping('1')]))).toBe('ping');
+    expect(inboxCardKind(stack('channel_mention', [ping('1')]))).toBe(
+      'mention'
+    );
   });
 });
 

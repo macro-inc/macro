@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
@@ -8,11 +7,7 @@ import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import WideStar from '@icon/system/regular/sparkle.svg';
 import Terminal from '@icon/system/regular/terminal.svg?component-solid';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueueDocumentWakeup,
-  isWakeableDocument,
-} from '@queries/preview';
+import { enqueueDocumentWakeup, isWakeableDocument } from '@queries/preview';
 import { CommandMenuListItem, Hotkey } from '@ui';
 import { createEffect, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -138,10 +133,7 @@ function CommandDisplay(props: { item: CommandMenuItem }) {
 }
 
 function EntityDisplay(props: { entity: EntityData }) {
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
-
   createEffect(() => {
-    if (!bulkWakeupEnabled().enabled) return;
     if (!isWakeableDocument(props.entity)) return;
 
     enqueueDocumentWakeup(props.entity);
@@ -186,7 +178,12 @@ function UserDisplay(props: { item: UserItem }) {
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
       <div class="size-5 mobile:scale-150 flex items-center justify-center shrink-0">
-        <UserIcon id={props.item.id} size="sm" isDeleted={false} />
+        <UserIcon
+          id={props.item.id}
+          name={props.item.data.name}
+          size="sm"
+          isDeleted={false}
+        />
       </div>
       <span class="truncate">
         <Show when={showEmail()} fallback={email()}>

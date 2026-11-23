@@ -331,6 +331,7 @@ where
                 DatabaseError::NotFound | DatabaseError::Unauthorized => SqlError::NotFound,
                 // Refusals of a write: a listing returning one is a broken service.
                 other @ (DatabaseError::InvalidSchemaOperation(_)
+                | DatabaseError::InvalidAppearance(_)
                 | DatabaseError::InvalidSharing(_)
                 | DatabaseError::VersionConflict
                 | DatabaseError::RowInUse

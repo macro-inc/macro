@@ -2,6 +2,7 @@ import type {
   ApiEntityFilterAst,
   SoupApiItem,
 } from '../../../generated/storage/types.gen';
+import type { AgentSession } from '../agent-sessions/agent-session';
 import type { CalendarEvent } from '../calendar/event';
 import type { CallRecord } from '../calls/call-record';
 import type { Channel } from '../channels/channel';
@@ -14,6 +15,7 @@ import type { Project } from '../projects/project';
 
 /** Workspace types supported by the browsing API. Tasks are documents. */
 export type WorkspaceType =
+  | 'agent_session'
   | 'calendar_event'
   | 'document'
   | 'ai_chat'
@@ -46,6 +48,7 @@ export type WorkspaceFilters = Pick<
   | 'callf'
   | 'fef'
   | 'calf'
+  | 'asf'
   | 'propf'
 >;
 
@@ -127,6 +130,11 @@ export type WorkspaceItem =
         | 'conferenceUrl'
         | 'conferenceProvider'
         | 'time'
+      >)
+  | (Entry<'agentSession', 'agent_session', AgentSession> &
+      Pick<
+        Extract<SoupApiItem, { tag: 'agentSession' }>['data'],
+        'name' | 'archivedAt' | 'pullRequestUrl' | 'repoUrl'
       >)
   | (Entry<'foreignEntity', 'foreign_entity', ForeignEntity> &
       Pick<

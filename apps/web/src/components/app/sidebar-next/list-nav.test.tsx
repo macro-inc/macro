@@ -40,8 +40,10 @@ vi.mock('@app/signal/splitLayout', () => ({
     returnFocus: vi.fn(),
   }),
 }));
-vi.mock('@components/app/app-sidebar/sidebar', () => ({
+vi.mock('@components/app/app-sidebar/go-to-leader', () => ({
   isGoToLeaderActive: () => mocks.goToLeaderActive(),
+}));
+vi.mock('@components/app/app-sidebar/sidebar', () => ({
   navigateToSidebarView: mocks.navigate,
   sidebarContent: (id: string) => ({ type: 'component', id }),
   SidebarOpenInSplitMenu: (props: ParentProps) => props.children,

@@ -222,7 +222,7 @@ Required for anything people act on; Recent is built from activity.
   `crates/<kind>/src/domain/activity.rs` with an exhaustive match. Shared actions
   use `CommonAction`; new `Action` variants go in
   `crates/activity/src/domain/models.rs` (codec and `ActionTag`),
-  `crates/activity/src/inbound/toolset/read_activity.rs`, and
+  `crates/activity/src/domain/activity_range.rs` (`ToolActivityAction`), and
   `crates/graphql_activity/src/objects.rs`.
 - Register the topic in `services/document_storage_service/src/service/activity.rs`
   (`declare_topics!` and an `ingest` arm). Hard deletes return `Ingest::Purge`.
@@ -239,8 +239,8 @@ Required for anything people act on; Recent is built from activity.
 Choose one shape.
 
 **Soup kind** (initiatives, agent sessions, database rows). GraphQL Soup is the
-target, but REST Soup still serves users behind `enable-graphql-soup`, so the
-kind must work on both; a kind that only worked on one path showed empty lists
+target, but REST Soup still serves queries GraphQL cannot translate (such as
+`notified_at` sorting), so the kind must work on both; a kind that only worked on one path showed empty lists
 on the other.
 
 - **Model:** `crates/models_soup/src/<kind>.rs` and a `SoupItem` variant in
@@ -289,7 +289,7 @@ appear in Home or Recent; say so in the PR.
   `impl_common_interface_edges!`; re-export in `lib.rs`. Add the filter input to
   `crates/graphql_soup_filter_input`, edges to `crates/complete_graph/src/edges.rs`,
   and the possible-types assertion (and count) in
-  `crates/client/cache-core/src/meta/test.rs`.
+  `crates/client/cache-schema/src/test.rs`.
 - **Kind crate (optional):** `crates/graphql_<kind>` with `context`, `inputs`,
   `loaders`, `mutation`, `objects`, `query`, copied from `crates/graphql_initiative`.
   Compose it in `crates/complete_graph/src/schema.rs`; viewer-scoped reads go under
@@ -376,7 +376,7 @@ Follow the [create-ai-tool skill](../../.agents/skills/create-ai-tool/SKILL.md)
 and `crates/ai_toolset/TOOL_DESIGN.md`. A new kind adds a whole toolset, which
 the skill doesn't cover:
 
-- Register it in `crates/ai_tools/src/lib.rs` (`subagent_toolset()` or the
+- Register it in `crates/ai_tools/src/lib.rs` (`base_toolset()` or the
   host-specific branches of `tools_for`), eager or deferred.
 - Give its context to every place `ToolServiceContext` is built:
   `crates/ai_tools/src/build_context.rs`,
@@ -391,11 +391,12 @@ the skill doesn't cover:
   routing sentence.
 - Web: a renderer in `apps/web/src/lib/core/component/AI/component/tool/` with
   `handler.tsx`, and wording in `apps/web/src/features/block-agent/state/tool-approval-wording.ts`.
-- Regenerate: `cd apps/web && bun run gen-tools` and
-  `cd apps/docs && bun run generate:tools` (never hand-edit the MCP tool pages).
+- Regenerate: `cd apps/web && bun run gen-tools`.
 - Gemini drops records (`additionalProperties`): use key/value pair lists. It
   rejects a `$ref` loop of required fields, and so does schema generation:
-  recurse through an optional field or a list that may be empty.
+  recurse through an optional field or a list that may be empty. It also
+  rejects an input schema nested more than 30 levels deep, counting each
+  object and array, and so does schema generation.
 
 ## 14. SDK
 
@@ -467,8 +468,11 @@ so grep for the sibling kind.
   `features/command/Launcher.tsx`, and `create.<kind>` tokens in
   `lib/core/hotkey/tokens.ts`. Quick Access and Cmd+K are separate
   registrations; CRM contacts reached one weeks before the other.
-- **Sharing:** `features/sharing/global-share-modal/shareable-entity.ts`,
-  `GlobalShareModal.tsx`, `lib/core/component/TopBar/ShareButton.tsx`, and
+- **Sharing:** `features/sharing/global-share-modal/shareable-entity.ts` and
+  `GlobalShareModal.tsx`; `features/sharing/share-delivery/core/share-item.ts`
+  (`ShareKind`, `KIND_POLICY`) and `share-delivery/queries/channel-access.ts`
+  (`CHANNEL_GRANT_CLIENTS`) for the send policy and channel grant request;
+  `lib/core/component/TopBar/ShareButton.tsx` for per-kind copy; and
   `linkShare.ts` if team-shareable.
 - **Optional by capability:** properties (`features/property/utils/entityConversion.ts`,
   `editors/selectors/entityUtils.ts`, `hooks/usePropertyEntityDisplay.tsx`),
@@ -492,7 +496,7 @@ cargo x deps --check && cargo x kafka-topics --check
 cd apps/web && bun run gen-api -- --check && bun run check
 cd packages/sdk && just check && just coverage
 just check full
-just run_local                          # or just stack up
+just run_local                          # no terminal needed
 ```
 
 In the browser (the `browser-verifier` subagent): create the entity, share it with

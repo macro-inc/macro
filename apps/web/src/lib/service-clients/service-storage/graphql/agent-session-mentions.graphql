@@ -9,6 +9,7 @@ query AgentSessionMentions($input: SoupInput!) {
           name
           ownerId
           botId
+          harness
           bot { id name avatarUrl }
           status
           createdAt

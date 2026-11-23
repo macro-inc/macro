@@ -17,7 +17,7 @@ fn omitted_token_prices_cannot_silently_reprice_usage_to_zero() {
     ] {
         assert_eq!(
             pricing(body),
-            Err("provide both token prices or an audio price")
+            Err("provide both token prices, an audio price, or a credit price")
         );
     }
 }
@@ -66,7 +66,7 @@ fn mixed_billing_units_are_rejected() {
                 "price_per_mil_out": output,
                 "price_per_audio_minute": 0.006,
             })),
-            Err("choose token pricing or audio pricing")
+            Err("choose token, audio, or credit pricing")
         );
     }
 }
@@ -112,6 +112,48 @@ fn cache_rates_cannot_accompany_audio_pricing() {
             "price_per_audio_minute": 0.006,
             "price_per_mil_cache_read": 0.5,
         })),
-        Err("choose token pricing or audio pricing")
+        Err("choose token, audio, or credit pricing")
     );
+}
+
+#[test]
+fn credit_prices_allow_omitted_or_zero_token_fields() {
+    for body in [
+        json!({"model": "tavily", "price_per_provider_credit": 0.008}),
+        json!({
+            "model": "tavily",
+            "price_per_mil_in": 0.0,
+            "price_per_mil_out": 0.0,
+            "price_per_provider_credit": 0.008,
+        }),
+    ] {
+        assert_eq!(
+            pricing(body),
+            Ok(ModelPricing::ProviderCredits { per_credit: 0.008 })
+        );
+    }
+}
+
+#[test]
+fn credit_prices_cannot_accompany_token_or_audio_pricing() {
+    for body in [
+        json!({
+            "model": "tavily",
+            "price_per_mil_in": 1.0,
+            "price_per_mil_out": 2.0,
+            "price_per_provider_credit": 0.008,
+        }),
+        json!({
+            "model": "tavily",
+            "price_per_mil_cache_read": 0.5,
+            "price_per_provider_credit": 0.008,
+        }),
+        json!({
+            "model": "tavily",
+            "price_per_audio_minute": 0.006,
+            "price_per_provider_credit": 0.008,
+        }),
+    ] {
+        assert_eq!(pricing(body), Err("choose token, audio, or credit pricing"));
+    }
 }

@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { QueryKey } from '@tanstack/query-core';
+import { hashKey, type QueryKey } from '@tanstack/query-core';
 import { RecoverableIDB } from '../../persistence/recoverable-idb';
 
 export type PersistedQueryEntry = Readonly<{
@@ -15,6 +15,8 @@ export type PerQueryPersistence = {
   get: (queryHash: string) => Promise<PersistedQueryEntry | undefined>;
   set: (entry: PersistedQueryEntry) => void;
   remove: (queryHash: string) => void;
+  /** Delete every stored entry `keep` rejects. */
+  prune: (keep: (entry: PersistedQueryEntry) => boolean) => Promise<void>;
   flush: (options?: { throwOnError?: boolean }) => Promise<void>;
 };
 
@@ -22,6 +24,19 @@ export type ClearablePerQueryPersistence = PerQueryPersistence & {
   /** Clear durable entries and fence pending/in-flight writes. */
   clear: () => Promise<void>;
 };
+
+/** A query key prefix of strings only, at least one. Its stored keys are
+ * exactly the hashes that extend its own hash, which an object segment does
+ * not promise: `["a", {x: 1}]` matches `["a", {x: 1, y: 2}]` but the two hash
+ * apart. */
+export type StringKeyPrefix = readonly [string, ...string[]];
+
+export type PrefixClearablePerQueryPersistence =
+  ClearablePerQueryPersistence & {
+    /** Delete every stored entry whose query key starts with one of
+     * `prefixes`, by key range: no stored entry is read. */
+    removeKeyPrefixes: (prefixes: readonly StringKeyPrefix[]) => Promise<void>;
+  };
 
 type PerQueryPersistenceOptions = Readonly<{
   dbName: string;
@@ -58,9 +73,22 @@ async function withStore<T>(
   });
 }
 
+/** The stored keys (query hashes) of a key equal to `prefix` and of the keys
+ * that extend it: the hash of a longer key is the prefix's hash with its
+ * closing bracket replaced by a comma and the rest. */
+function keyPrefixRanges(prefix: StringKeyPrefix): IDBKeyRange[] {
+  const exact = hashKey(prefix);
+  const open = exact.slice(0, -1);
+  return [
+    IDBKeyRange.only(exact),
+    // ',' is followed by '-', so this covers every string `open + ','` starts.
+    IDBKeyRange.bound(`${open},`, `${open}-`, false, true),
+  ];
+}
+
 export function createPerQueryIDBStore(
   options: PerQueryPersistenceOptions
-): ClearablePerQueryPersistence {
+): PrefixClearablePerQueryPersistence {
   const { dbName } = options;
   const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
 
@@ -157,6 +185,45 @@ export function createPerQueryIDBStore(
       pendingPuts.delete(queryHash);
       pendingDeletes.add(queryHash);
       scheduleFlush();
+    },
+
+    prune: (keep) => {
+      const currentGeneration = generation;
+      return enqueueWrite(async () => {
+        const tx = await database(dbName).transaction(STORE_NAME, 'readwrite');
+        if (generation !== currentGeneration) return;
+        const cursorRequest = tx.objectStore(STORE_NAME).openCursor();
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+          if (!keep(cursor.value as PersistedQueryEntry)) cursor.delete();
+          cursor.continue();
+        };
+
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+        });
+      });
+    },
+
+    removeKeyPrefixes: (prefixes) => {
+      const currentGeneration = generation;
+      return enqueueWrite(async () => {
+        const tx = await database(dbName).transaction(STORE_NAME, 'readwrite');
+        if (generation !== currentGeneration) return;
+        const store = tx.objectStore(STORE_NAME);
+        for (const range of prefixes.flatMap(keyPrefixRanges)) {
+          store.delete(range);
+        }
+
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+        });
+      });
     },
 
     flush: async (options) => {

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO password_totp_enrollments(team_id,item_id,key_id,state,cleanup_after) VALUES($1,$2,$3,'pending',now()+interval '180 seconds') ON CONFLICT(team_id,key_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b0dd7fc242579d38463be1d7aa1be0da162b318ab436b3f81915d157a811d6bc"
+}

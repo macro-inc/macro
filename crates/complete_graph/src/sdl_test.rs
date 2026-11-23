@@ -24,6 +24,23 @@ fn email_senders_are_embedded_and_legacy_participants_remain_available() {
 }
 
 #[test]
+fn channel_agent_dm_persona_is_embedded() {
+    let sdl = crate::build_schema().sdl();
+    let agent_dm = sdl
+        .split_once("type GraphqlSoupChannelAgentDm {")
+        .expect("channel agent DM type")
+        .1
+        .split_once('}')
+        .expect("end of channel agent DM type")
+        .0;
+    assert!(agent_dm.lines().any(|line| line.trim() == "botId: ID!"));
+    assert!(
+        !agent_dm.lines().any(|line| line.trim().starts_with("id:")),
+        "the persona is embedded in its channel, not normalized by bot ID"
+    );
+}
+
+#[test]
 fn soup_response_schema_exposes_frontend_fields() {
     let sdl = crate::build_schema().sdl();
 
@@ -36,6 +53,9 @@ fn soup_response_schema_exposes_frontend_fields() {
         "participants: [GraphqlSoupChannelParticipant!]!",
         "latestMessage: GraphqlSoupChannelMessagePreview",
         "latestNonThreadMessage: GraphqlSoupChannelMessagePreview",
+        "autoJoinTeam: Boolean!",
+        "agentDm: GraphqlSoupChannelAgentDm",
+        "type GraphqlSoupChannelAgentDm {",
         "input EmailThreadInput {",
         "threadId: ID!",
         "emailLabels: [GraphqlSoupEmailLabel!]!",
@@ -474,7 +494,11 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
     };
     assert_sdl_line(
         object("GraphqlUser"),
-        "initiative(initiativeId: ID!): GraphqlSoupInitiative!",
+        "initiative(initiativeId: ID!): GraphqlSoupInitiative! @deprecated(reason: \"Use visibleInitiative, which answers a missing or hidden project with null instead of NOT_FOUND. Remove after 2026-12-31.\")",
+    );
+    assert_sdl_line(
+        object("GraphqlUser"),
+        "visibleInitiative(initiativeId: ID!): GraphqlSoupInitiative",
     );
     assert!(!object("SoupQueryRoot").contains("initiative"));
     for field in [
@@ -637,6 +661,15 @@ fn crm_associations_scope_soup_and_compose_in_document_trees() {
     let association = block("input GraphqlCrmAssociation @oneOf {");
     assert_sdl_line(&association, "company: ID");
     assert_sdl_line(&association, "contact: ID");
+}
+
+#[test]
+fn active_notification_ids_hang_off_the_authenticated_user() {
+    let sdl = crate::build_schema().sdl();
+    assert_sdl_line(
+        &sdl,
+        "activeNotificationIds(eventTypes: [String!]!, limit: Int): [ID!]!",
+    );
 }
 
 #[test]
@@ -840,6 +873,84 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
 }
 
 #[test]
+fn contacts_reads_have_viewer_scoped_entity_keys() {
+    use apollo_compiler::schema::ExtendedType;
+    let sdl = crate::build_schema().sdl();
+    let schema = apollo_compiler::Schema::parse_and_validate(&sdl, "schema.graphql").unwrap();
+    let ExtendedType::Object(contact) = &schema.types["GraphqlContact"] else {
+        panic!("contact object")
+    };
+    assert_eq!(contact.fields["id"].ty.to_string(), "ID!");
+    assert_eq!(contact.fields["userId"].ty.to_string(), "ID!");
+    assert_eq!(contact.fields["name"].ty.to_string(), "String");
+    let ExtendedType::Object(viewer) = &schema.types["GraphqlUser"] else {
+        panic!("viewer object")
+    };
+    let field = &viewer.fields["contacts"];
+    assert_eq!(field.ty.to_string(), "GraphqlContactPage!");
+    assert!(
+        field
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "matching"
+                && argument.ty.to_string() == "GraphqlContactMatching")
+    );
+    let ExtendedType::Enum(matching) = &schema.types["GraphqlContactMatching"] else {
+        panic!("matching enum")
+    };
+    for name in ["EXACT", "FIRST_NAME", "ANY_NAME"] {
+        assert!(matching.values.contains_key(name));
+    }
+    assert!(
+        field
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "limit" && argument.ty.to_string() == "Int")
+    );
+    assert!(
+        field
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "after" && argument.ty.to_string() == "String")
+    );
+    let ExtendedType::Object(root) = &schema.types["SoupQueryRoot"] else {
+        panic!("query root")
+    };
+    assert!(!root.fields.contains_key("contacts"));
+    assert!(!root.fields.contains_key("contactsByUserIds"));
+    assert!(!root.fields.contains_key("contactsByEmails"));
+    assert_eq!(
+        viewer.fields["contactsByUserIds"].ty.to_string(),
+        "[GraphqlContact!]!"
+    );
+    assert_eq!(
+        viewer.fields["contactsByEmails"].ty.to_string(),
+        "[GraphqlContact!]!"
+    );
+    let named = &viewer.fields["contactsNamedBy"];
+    assert_eq!(named.ty.to_string(), "[GraphqlContact!]!");
+    assert!(
+        named
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "search" && argument.ty.to_string() == "String!")
+    );
+    assert!(
+        named
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "limit" && argument.ty.to_string() == "Int")
+    );
+    assert!(!root.fields.contains_key("contactsNamedBy"));
+    assert!(
+        field
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "search" && argument.ty.to_string() == "String")
+    );
+}
+
+#[test]
 fn calendar_reads_hang_off_the_authenticated_user() {
     use apollo_compiler::schema::ExtendedType;
 
@@ -912,6 +1023,63 @@ fn sdl_matches_committed_schema_graphql() {
     );
 }
 
+#[test]
+fn time_tracking_hangs_off_documents_and_the_authenticated_user() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "timeTracking: GraphqlTimeTracking!",
+        "runningTimer: GraphqlRunningTimer",
+        "timeEntries(limit: Int, after: String): GraphqlTimeEntryPage!",
+        "logTime(input: LogTimeInput!): LogTimePayload!",
+        "updateTimeEntry(input: UpdateTimeEntryInput!): UpdateTimeEntryPayload!",
+        "deleteTimeEntry(input: DeleteTimeEntryInput!): DeleteTimeEntryPayload!",
+        "startTimer(input: StartTimerInput!): StartTimerPayload!",
+        "stopTimer(input: StopTimerInput!): StopTimerPayload!",
+        "discardTimer(timerId: ID!): DiscardTimerPayload!",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    let object = |name: &str| match schema.types.get(name) {
+        Some(ExtendedType::Object(object)) => object.clone(),
+        _ => panic!("{name} must be an object"),
+    };
+    for entity in [
+        "GraphqlTimeEntry",
+        "GraphqlRunningTimer",
+        "GraphqlTimeTracking",
+    ] {
+        assert_eq!(
+            object(entity).fields["id"].ty.to_string(),
+            "ID!",
+            "{entity}"
+        );
+    }
+    // A page is embedded in its task, per its arguments; it has no identity.
+    assert!(!object("GraphqlTimeEntryPage").fields.contains_key("id"));
+    // Entries belong to documents, not to every Soup entity.
+    assert!(
+        object("GraphqlSoupDocument")
+            .fields
+            .contains_key("timeEntries")
+    );
+    assert!(
+        !object("GraphqlSoupChannel")
+            .fields
+            .contains_key("timeEntries")
+    );
+    let ExtendedType::Interface(entity) = schema.types.get("GraphqlSoupEntity").expect("entity")
+    else {
+        panic!("GraphqlSoupEntity must be an interface");
+    };
+    assert!(!entity.fields.contains_key("timeEntries"));
+    assert!(!object("SoupQueryRoot").fields.contains_key("timeTracking"));
+}
+
 fn assert_sdl_line(sdl: &str, expected: &str) {
     assert!(
         sdl.lines().any(|line| line.trim() == expected),
@@ -937,6 +1105,7 @@ fn saved_view_contract_is_composed_under_authenticated_user_and_mutations() {
         "createSavedView(input: CreateSavedViewInput!): GraphqlSavedView!",
         "updateSavedView(input: UpdateSavedViewInput!): GraphqlSavedView!",
         "deleteSavedView(input: DeleteSavedViewInput!): ID!",
+        "reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!",
         "expectedRevision: Int!",
         "sharing: SavedViewSharingInput",
         "sharedTeamId: ID",

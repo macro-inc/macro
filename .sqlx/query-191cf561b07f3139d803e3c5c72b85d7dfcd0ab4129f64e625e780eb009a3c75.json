@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units) VALUES ($1, 'expiry-host', 3, 9)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "191cf561b07f3139d803e3c5c72b85d7dfcd0ab4129f64e625e780eb009a3c75"
+}

@@ -72,6 +72,7 @@ function ChannelEditHarness(props: {
     isEditing,
     onOpenFindBar: vi.fn(),
     onGoToBottom: vi.fn(),
+    onEscapeToList: () => false,
   });
 
   return (

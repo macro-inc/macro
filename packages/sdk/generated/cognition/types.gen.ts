@@ -10,15 +10,42 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
- * Request body for adding a new MCP server.
+ * A privacy-reviewed activity report; period_end is inclusive.
+ */
+export type Activity = {
+    content: string;
+    granularity: Granularity;
+    periodEnd: string;
+    periodStart: string;
+};
+
+/**
+ * Error body for activity reads.
+ */
+export type ActivityErrorBody = {
+    /**
+     * Error description.
+     */
+    error: string;
+};
+
+/**
+ * Activity reports for one user, ordered by period.
+ */
+export type ActivityReports = {
+    reports: Array<Activity>;
+};
+
+/**
+ * Adding a server by URL.
  */
 export type AddServerRequest = {
     /**
-     * Human-readable name for the server.
+     * Its display name; its tools are listed under it.
      */
-    server_name: string;
+    name: string;
     /**
-     * The MCP server's streamable HTTP URL.
+     * The server's streamable HTTP URL.
      */
     url: string;
 };
@@ -27,7 +54,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'agent_activity_summary' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search' | 'non_billable_agent_session';
 
 /**
  * A structured part within an assistant message.
@@ -174,6 +201,78 @@ export type CallToolResponse = {
      * The tool execution result.
      */
     result: unknown;
+};
+
+/**
+ * One connectable app.
+ */
+export type CatalogApp = {
+    /**
+     * The directory's categories for it.
+     */
+    categories: Array<string>;
+    /**
+     * One line on what connecting it enables.
+     */
+    description?: string | null;
+    /**
+     * Its icon.
+     */
+    iconUrl?: string | null;
+    /**
+     * Its connector key, `app/{slug}`.
+     */
+    key: string;
+    /**
+     * The display name.
+     */
+    name: string;
+    orgSetup?: null | CatalogOrgSetup;
+    /**
+     * Its canonical slug.
+     */
+    slug: string;
+};
+
+/**
+ * Setup an admin of the user's organization must do at the vendor.
+ */
+export type CatalogOrgSetup = {
+    /**
+     * The URL the admin adds, when a step adds one.
+     */
+    allowlistUrl?: string | null;
+    /**
+     * Connecting fails until this is done. Otherwise it works with less
+     * access.
+     */
+    required: boolean;
+    /**
+     * Where the admin does it.
+     */
+    settingsUrl: string;
+    /**
+     * The steps, in order.
+     */
+    steps: Array<string>;
+    /**
+     * One sentence on what the admin does and what happens without it.
+     */
+    summary: string;
+};
+
+/**
+ * A page of the catalog, most popular first.
+ */
+export type CatalogPage = {
+    /**
+     * The apps, in display order.
+     */
+    apps: Array<CatalogApp>;
+    /**
+     * The cursor for the next page; absent on the last.
+     */
+    nextCursor?: string | null;
 };
 
 /**
@@ -404,6 +503,11 @@ export type CompleteOnboardingRequest = {
 };
 
 /**
+ * How much a model may think before it gives a structured answer.
+ */
+export type CompletionThinking = 'default' | 'low';
+
+/**
  * User and feature attribution for one invocation.
  */
 export type CompletionUsage = {
@@ -426,47 +530,114 @@ export type CompletionUsage = {
 };
 
 /**
- * One of the user's MCP server connections, as the setup page sees it.
+ * What the user must do next to connect. It never says whose flow it is.
+ */
+export type ConnectStep = {
+    type: 'openUrl';
+    /**
+     * The page.
+     */
+    url: string;
+} | {
+    /**
+     * RFC 3339 expiry of the token.
+     */
+    expiresAt: string;
+    /**
+     * A page that opens the same flow in a browser tab.
+     */
+    link: string;
+    /**
+     * The token the dialog opens with.
+     */
+    token: string;
+    type: 'embeddedDialog';
+};
+
+/**
+ * One of the user's usable connections, an app or a server added by URL,
+ * as the setup page sees it.
  */
 export type ConnectedServer = {
     /**
-     * Whether the user has completed OAuth against it.
+     * Whether it is usable; always true, since only usable connections are
+     * listed.
      */
     authenticated: boolean;
     /**
-     * The server's display name.
+     * The display name.
      */
     name: string;
     /**
-     * The server URL.
+     * The app's slug, or the server's URL.
      */
     url: string;
 };
 
 /**
- * Setup an admin of the user's organization must do at the vendor.
+ * One app or server and where the user stands with it. It never says
+ * which provider holds the connection.
  */
-export type ConnectorOrgSetupResponse = {
+export type Connector = {
     /**
-     * The URL the admin adds, when a step adds one.
+     * Whether its connection provides the app's REST API.
      */
-    allowlist_url?: string | null;
+    api: boolean;
     /**
-     * Connecting fails until this is done.
+     * Whether the user can connect it from here.
      */
-    required: boolean;
+    connectable: boolean;
     /**
-     * Where the admin does it.
+     * Whether Macro can import from it through its connection.
      */
-    settings_url: string;
+    importAvailable: boolean;
     /**
-     * The steps, in order.
+     * The stable key, also its path under `/connectors/`.
      */
-    steps: Array<string>;
+    key: string;
     /**
-     * One sentence on what the admin does and what happens without it.
+     * Whether its connection provides MCP tools.
      */
-    summary: string;
+    mcp: boolean;
+    /**
+     * The display name.
+     */
+    name: string;
+    /**
+     * Where the user stands with it.
+     */
+    status: ConnectorStatus;
+    /**
+     * What the key names.
+     */
+    target: ConnectorTarget;
+};
+
+/**
+ * Which kind of connector a key names.
+ */
+export type ConnectorKind = 'app' | 'server';
+
+/**
+ * Where a user stands with an app or server.
+ */
+export type ConnectorStatus = 'connected' | 'disabled' | 'needsReauth' | 'notConnected';
+
+/**
+ * What a key names, for display.
+ */
+export type ConnectorTarget = {
+    /**
+     * Its canonical slug.
+     */
+    slug: string;
+    type: 'app';
+} | {
+    type: 'server';
+    /**
+     * Its normalized URL.
+     */
+    url: string;
 };
 
 export type ConversationRecord = {
@@ -645,7 +816,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * Error response body.
@@ -669,9 +840,12 @@ export type ErrorResponse = {
 };
 
 /**
- * How long a projection remains active without being requested.
+ * A private explicit memory document and its optimistic concurrency token.
  */
-export type Expiry = 'day' | 'week' | 'month';
+export type ExplicitMemory = {
+    content: string;
+    revision: number;
+};
 
 /**
  * Recorded invocations and total for one feature.
@@ -848,6 +1022,11 @@ export type GetChatsForAttachmentResponse = {
 };
 
 /**
+ * Fixed calendar granularity, always in UTC, with Monday-start weeks.
+ */
+export type Granularity = 'day' | 'week' | 'month' | 'summary';
+
+/**
  * HTTP request payload for sending a chat message.
  * Unlike the WebSocket payload, this does not include stream_id as it's generated server-side.
  */
@@ -880,6 +1059,16 @@ export type HttpSendChatMessageRequest = {
      * Which toolset to use. Defaults to `all`
      */
     toolset?: ToolSet;
+};
+
+/**
+ * The caller's ledger rows.
+ */
+export type ImportEntitiesResponse = {
+    /**
+     * The caller's own rows and their team's imported rows, newest first.
+     */
+    entities: Array<ImportEntity>;
 };
 
 /**
@@ -972,6 +1161,35 @@ export type ImportEntity = {
 export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
 
 /**
+ * Body for importing one Notion page.
+ */
+export type ImportNotionPageRequest = {
+    /**
+     * The Notion page URL or 32-character page id.
+     */
+    page: string;
+};
+
+/**
+ * The outcome of importing a Notion page, with its ledger row.
+ */
+export type ImportNotionPageResponse = {
+    /**
+     * The row behind the outcome; `entity_id` is the document once imported.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: ImportNotionPageResult;
+};
+
+/**
+ * What importing one Notion page did.
+ */
+export type ImportNotionPageResult = 'imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
+
+/**
  * Discovery-run state for one user × source.
  */
 export type ImportRun = {
@@ -984,6 +1202,10 @@ export type ImportRun = {
      * presented while it is still `running`; rows staged after that take it.
      */
     review_id?: string | null;
+    /**
+     * The agent session presenting that review.
+     */
+    review_session_id?: string | null;
     scanned?: null | ScanCounts;
     /**
      * The source this run discovered from.
@@ -1083,6 +1305,23 @@ export type LinkShare = 'PUBLIC' | 'TEAM';
 
 export type MacroUserIdStr = string;
 
+/**
+ * An edit to one one-based line. A revision is required to prevent replay
+ * or concurrent edits from inserting twice or deleting a different line.
+ */
+export type MemoryEdit = {
+    action: 'insert';
+    content: string;
+    line: number;
+} | {
+    action: 'replace';
+    content: string;
+    line: number;
+} | {
+    action: 'delete';
+    line: number;
+};
+
 export type MemoryErrorBody = {
     /**
      * Error description.
@@ -1109,7 +1348,7 @@ export type MessageWithAttachments = {
 /**
  * The requested inference speed. Standard is backward compatible with old clients.
  */
-export type ModelSpeed = 'standard' | 'fast' | 'ultrafast';
+export type ModelSpeed = 'standard' | 'priority' | 'fast' | 'ultrafast';
 
 export type NewAttachment = {
     attachment_id: string;
@@ -1434,7 +1673,7 @@ export type OnboardingRow = {
  */
 export type OnboardingState = {
     /**
-     * The user's MCP server connections.
+     * The user's usable connections.
      */
     connected_servers: Array<ConnectedServer>;
     /**
@@ -1472,217 +1711,35 @@ export type PatchChatRequest = {
 };
 
 /**
- * One connectable app in the catalog.
- */
-export type PipedreamCatalogEntryResponse = {
-    /**
-     * Pipedream app name slug — pass this to the connect flow.
-     */
-    app_slug: string;
-    /**
-     * Categories assigned by Pipedream.
-     */
-    categories?: Array<string>;
-    /**
-     * One-line description of the app.
-     */
-    description?: string | null;
-    /**
-     * Human-readable name to display.
-     */
-    display_name: string;
-    /**
-     * URL of the app's icon, when available.
-     */
-    icon_url?: string | null;
-    org_setup?: null | ConnectorOrgSetupResponse;
-};
-
-/**
- * A page of the connector catalog.
- */
-export type PipedreamCatalogResponse = {
-    /**
-     * Cursor for the next page. Absent on the last page.
-     */
-    next_cursor?: string | null;
-    /**
-     * Catalog entries in display order (most popular first).
-     */
-    servers: Array<PipedreamCatalogEntryResponse>;
-};
-
-/**
- * Request body for completing a Pipedream connect flow.
- */
-export type PipedreamCompleteRequest = {
-    /**
-     * The connected-account ID reported by the Connect UI on success.
-     */
-    account_id: string;
-    /**
-     * Optional display name for the connector. Defaults to the app's name
-     * for new connections; existing connections keep their name.
-     */
-    server_name?: string | null;
-};
-
-/**
- * Request body for recording a finished Macro Connect flow.
- */
-export type PipedreamConnectCompleteRequest = {
-    /**
-     * The app that was connected, by Pipedream slug.
-     */
-    app_slug: string;
-    /**
-     * Optional display name for the connector, as for completion.
-     */
-    server_name?: string | null;
-};
-
-/**
- * A connected MCP app as returned by the API.
- */
-export type PipedreamConnectionResponse = {
-    /**
-     * Pipedream app name slug, e.g. `linear`.
-     */
-    app_slug: string;
-    /**
-     * Whether the connector is enabled for tool use.
-     */
-    enabled: boolean;
-    /**
-     * The backend holding the grant.
-     */
-    provider: PipedreamProviderResponse;
-    /**
-     * Human-readable display name.
-     */
-    server_name: string;
-};
-
-/**
- * A catalog app that connects through its own MCP server instead of
- * Pipedream.
- */
-export type PipedreamOverlayResponse = {
-    /**
-     * Pipedream app name slug, as it appears in the catalog.
-     */
-    app_slug: string;
-    /**
-     * The MCP server to authorize with the native MCP OAuth flow.
-     */
-    server_url: string;
-};
-
-/**
- * Which backend a connection or connect flow uses.
- */
-export type PipedreamProviderResponse = 'pipedream' | 'connect';
-
-/**
- * Request body for recovering a connect flow whose result the Connect UI
- * never reported.
- */
-export type PipedreamRecoverRequest = {
-    /**
-     * The Pipedream app the flow was connecting, by name slug.
-     */
-    app_slug: string;
-    /**
-     * Optional display name for the connector, as for completion.
-     */
-    server_name?: string | null;
-};
-
-/**
- * Request body for starting a connect flow.
- */
-export type PipedreamTokenRequest = {
-    /**
-     * The app to connect, by Pipedream slug. With it, an app Macro Connect
-     * serves can answer with a Connect URL instead of a Pipedream token.
-     */
-    app_slug?: string | null;
-};
-
-/**
- * Response from starting a connect flow: a Pipedream Connect token, or for
- * `provider = connect` a Macro Connect URL.
- */
-export type PipedreamTokenResponse = {
-    /**
-     * Shareable link that opens the same connect flow in a browser tab.
-     * Pipedream only.
-     */
-    connect_link_url?: string | null;
-    /**
-     * URL to open in a popup or browser tab for Macro Connect's consent
-     * flow; once it finishes, call `/pipedream/mcp/connect/complete`.
-     * Connect only.
-     */
-    connect_url?: string | null;
-    /**
-     * RFC 3339 expiry of the token. Pipedream only.
-     */
-    expires_at?: string | null;
-    /**
-     * The backend this flow connects through.
-     */
-    provider: PipedreamProviderResponse;
-    /**
-     * Short-lived token to open the Pipedream Connect UI with. Pipedream only.
-     */
-    token?: string | null;
-};
-
-/**
- * Request body for updating a connected app.
- */
-export type PipedreamUpdateRequest = {
-    /**
-     * The app slug to update.
-     */
-    app_slug: string;
-    /**
-     * Enable or disable the connector.
-     */
-    enabled?: boolean | null;
-    /**
-     * New display name for the connector.
-     */
-    server_name?: string | null;
-};
-
-/**
  * Rates applied to an invocation and its resolved dollar cost.
  */
 export type Price = {
     /**
-     * Price per audio minute (USD), absent for token billing.
+     * Price per audio minute (USD), absent for token and credit billing.
      */
     price_per_audio_minute?: number | null;
     /**
      * Price per million cache-read input tokens (USD), absent when the model
-     * has no published rate and for audio billing.
+     * has no published rate and for audio and credit billing.
      */
     price_per_million_cache_read?: number | null;
     /**
      * Price per million cache-write input tokens (USD), absent when the model
-     * has no published rate and for audio billing.
+     * has no published rate and for audio and credit billing.
      */
     price_per_million_cache_write?: number | null;
     /**
-     * Price per million input tokens (USD); zero for audio billing.
+     * Price per million input tokens (USD); zero for audio and credit billing.
      */
     price_per_million_in: number;
     /**
-     * Price per million output tokens (USD); zero for audio billing.
+     * Price per million output tokens (USD); zero for audio and credit billing.
      */
     price_per_million_out: number;
+    /**
+     * Price per vendor credit (USD), absent for token and audio billing.
+     */
+    price_per_provider_credit?: number | null;
     /**
      * Total cost (USD).
      */
@@ -1690,45 +1747,18 @@ export type Price = {
 };
 
 /**
- * The current state of a user's projection instance.
+ * Response from [`ReadActivity`].
  */
-export type ProjectionStateResponse = {
+export type ReadActivityResponse = {
     /**
-     * The cached result, if any. JSON-encoded when the projection defines an
-     * `output_schema`.
+     * Matching activity events, newest first.
      */
-    data?: string | null;
+    activities: Array<ToolActivityEvent>;
     /**
-     * The most recent materialization error, if any.
+     * Whether more than 100 events matched the requested range.
      */
-    error?: string | null;
-    /**
-     * When the result was generated.
-     */
-    generated_at?: string | null;
-    /**
-     * The projection id.
-     */
-    id: string;
-    /**
-     * When the result becomes stale.
-     */
-    stale_at?: string | null;
-    /**
-     * The materialization status.
-     */
-    status: ProjectionStatus;
+    truncated: boolean;
 };
-
-/**
- * The materialization status of a user's projection instance.
- */
-export type ProjectionStatus = 'loading' | 'cold' | 'ready' | 'refreshing' | 'error';
-
-/**
- * How frequently an active projection is regenerated.
- */
-export type RefreshCadence = 'high' | 'medium' | 'low';
 
 /**
  * Request body for rejecting a pending tool call.
@@ -1846,28 +1876,6 @@ export type SendChatMessageResponse = {
 };
 
 /**
- * An MCP server record as returned by the API.
- */
-export type ServerResponse = {
-    /**
-     * Whether the server has valid stored credentials.
-     */
-    authenticated: boolean;
-    /**
-     * Whether the server is enabled for tool use.
-     */
-    enabled: boolean;
-    /**
-     * Human-readable server name.
-     */
-    server_name: string;
-    /**
-     * The MCP server URL.
-     */
-    url: string;
-};
-
-/**
  * Request body for [`set_pricing_handler`].
  */
 export type SetPricingRequest = {
@@ -1897,6 +1905,10 @@ export type SetPricingRequest = {
      * New price per million output tokens (USD). Required for token pricing.
      */
     price_per_mil_out?: number | null;
+    /**
+     * Price per vendor credit (USD), or null unless the model bills in credits.
+     */
+    price_per_provider_credit?: number | null;
 };
 
 export type SharePermissionV2 = {
@@ -1915,6 +1927,84 @@ export type SharePermissionV2 = {
      */
     owner: string;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * A skill's complete instructions.
+ */
+export type SkillContentResponse = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * The skill's full markdown instructions.
+     */
+    content: string;
+    /**
+     * The skill's id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+};
+
+/**
+ * Machine-readable failure of a skill request.
+ */
+export type SkillErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without backend diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * One skill the caller can read.
+ */
+export type SkillListing = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * When to use the skill, when it says.
+     */
+    description?: string | null;
+    /**
+     * The skill document's id, or a built-in skill's well-known id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+    /**
+     * When the skill document was last updated; built-in skills have none.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * How search terms are matched against skill names.
+ */
+export type SkillsMatchType = 'partial' | 'exact';
+
+/**
+ * The skills matching a listing or search, most recently updated first,
+ * built-in skills last.
+ */
+export type SkillsResponse = {
+    /**
+     * The matching skills.
+     */
+    skills: Array<SkillListing>;
 };
 
 /**
@@ -1963,30 +2053,6 @@ export type SlackParticipant = {
      * Display name or Slack handle.
      */
     name: string;
-};
-
-/**
- * Request body for starting an OAuth authorization flow.
- */
-export type StartAuthRequest = {
-    /**
-     * Human-readable name for the server.
-     */
-    server_name: string;
-    /**
-     * The MCP server URL to authorize against.
-     */
-    server_url: string;
-};
-
-/**
- * Response from starting an OAuth authorization flow.
- */
-export type StartAuthResponse = {
-    /**
-     * The OAuth authorization URL to redirect the user to.
-     */
-    authorization_url: string;
 };
 
 /**
@@ -2062,6 +2128,11 @@ export type StructuredCompletionRequest = {
     model: string;
     output_schema: DynamicSchema;
     prompt: string;
+    /**
+     * How much the model may think first; `low` answers faster. Applies to
+     * completions without tools.
+     */
+    thinking?: CompletionThinking;
     toolset?: ToolSet;
 };
 
@@ -2082,9 +2153,112 @@ export type StructuredToolActivity = {
 };
 
 /**
- * The kind of entity a projection is materialized for.
+ * One activity action returned to the AI.
  */
-export type TargetType = 'user' | 'team';
+export type ToolActivityAction = {
+    type: 'created';
+} | {
+    type: 'edited';
+} | {
+    type: 'opened';
+} | {
+    type: 'deleted';
+} | {
+    type: 'messaged';
+} | {
+    type: 'sent';
+} | {
+    type: 'responded';
+} | {
+    /**
+     * The previous value, when known.
+     */
+    from?: unknown;
+    /**
+     * Previous select/tag option ids resolved to display labels.
+     */
+    from_labels?: Array<string> | null;
+    /**
+     * The property definition id.
+     */
+    property: string;
+    /**
+     * The property definition's human-readable display name, when it is
+     * still visible to the caller.
+     */
+    property_name?: string | null;
+    /**
+     * The property's canonical data type, including `tag` for tag sets.
+     */
+    property_type?: string | null;
+    /**
+     * The new value, or `None` when cleared.
+     */
+    to?: unknown;
+    /**
+     * New select/tag option ids resolved to display labels.
+     */
+    to_labels?: Array<string> | null;
+    type: 'propertyChanged';
+} | {
+    /**
+     * The added principal.
+     */
+    participant: string;
+    type: 'participantAdded';
+} | {
+    /**
+     * The removed principal.
+     */
+    participant: string;
+    type: 'participantRemoved';
+} | {
+    /**
+     * The started call's id.
+     */
+    call_id: string;
+    type: 'callStarted';
+} | {
+    type: 'taskAdded';
+} | {
+    type: 'taskRemoved';
+} | {
+    /**
+     * The stored payload, verbatim.
+     */
+    payload?: unknown;
+    /**
+     * The stored action tag.
+     */
+    tag: string;
+    type: 'unknown';
+};
+
+/**
+ * One activity event returned by [`ReadActivity`].
+ */
+export type ToolActivityEvent = {
+    /**
+     * What the principal did.
+     */
+    action: ToolActivityAction;
+    /**
+     * The principal that mechanically performed the action.
+     */
+    actorId: string;
+    /**
+     * The entity acted on.
+     */
+    entityId: string;
+    /**
+     * The kind of entity acted on.
+     */
+    entityType: string;
+    /**
+     * When the action occurred.
+     */
+    occurredAt: string;
+};
 
 export type ToolOutcome = {
     changes: DatabaseChange;
@@ -2103,6 +2277,62 @@ export type ToolSet = {
     type: 'databases_read_only';
 };
 
+/**
+ * Body for tracking one external item in the ledger.
+ */
+export type TrackImportEntityRequest = {
+    /**
+     * The Macro entity created from the item; required when `status` is
+     * `imported`.
+     */
+    entityId?: string | null;
+    /**
+     * Stable id of the item in its source: a Linear identifier such as
+     * `ENG-142`, a Notion page URL or id, or a Slack channel id.
+     */
+    foreignId: string;
+    /**
+     * Per-source metadata. Linear: `{identifier, title, …}`; Notion:
+     * `{title, url?, summary?}`; Slack: `{name, …}`.
+     */
+    metadata: {
+        [key: string]: unknown;
+    };
+    /**
+     * The external system the item comes from.
+     */
+    source: ImportSource;
+    /**
+     * `staged` to propose the item, `imported` to record an entity already
+     * created from it.
+     */
+    status: TrackImportStatus;
+};
+
+/**
+ * The outcome of tracking an item, with its ledger row.
+ */
+export type TrackImportEntityResponse = {
+    /**
+     * The row behind the outcome.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: TrackImportOutcome;
+};
+
+/**
+ * What tracking an item did.
+ */
+export type TrackImportOutcome = 'staged' | 'recorded_imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
+
+/**
+ * Whether a tracked item is a candidate or an import already made.
+ */
+export type TrackImportStatus = 'staged' | 'imported';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -2116,25 +2346,35 @@ export type UpdateChannelSharePermission = {
     operation: UpdateOperation;
 };
 
-export type UpdateOperation = 'add' | 'remove' | 'replace';
-
 /**
- * Request body for updating an MCP server.
+ * Changing a connection. Each field present is applied.
  */
-export type UpdateServerRequest = {
+export type UpdateConnectorRequest = {
     /**
-     * Enable or disable the server.
+     * Turn it on or off.
      */
     enabled?: boolean | null;
     /**
-     * New name for the server.
+     * A new display name.
      */
-    server_name?: string | null;
-    /**
-     * The server URL to update.
-     */
-    url: string;
+    name?: string | null;
 };
+
+/**
+ * One explicit memory edit at the revision it was based on.
+ */
+export type UpdateExplicitMemoryRequest = {
+    /**
+     * The one-based line edit to apply.
+     */
+    edit: MemoryEdit;
+    /**
+     * The revision returned by the last read or successful edit.
+     */
+    revision: number;
+};
+
+export type UpdateOperation = 'add' | 'remove' | 'replace';
 
 export type UpdateSharePermissionRequestV2 = {
     /**
@@ -2183,70 +2423,19 @@ export type UpdateToolResponseRequest = {
 };
 
 /**
- * Request body for getting or creating an ai projection. The concrete target
- * id is resolved from the authenticated user, so only the target type is sent.
- */
-export type UpsertProjectionRequest = {
-    /**
-     * When `true` and generation is needed (cold instance or `regenerate`),
-     * the server generates inline and responds with the finished result
-     * instead of returning immediately and pushing an update through the
-     * connection gateway.
-     */
-    await?: boolean;
-    /**
-     * How long the projection remains active without being requested.
-     */
-    expiry: Expiry;
-    /**
-     * The frontend-defined projection id (e.g. `notification_important_widget`).
-     */
-    id: string;
-    /**
-     * Optional `provider/model` id used for generation (e.g.
-     * `cerebras/llama-3.3-70b`). The default model is used when absent.
-     */
-    model?: string | null;
-    /**
-     * Optional JSON schema the generated result must conform to. When set,
-     * `data` holds the JSON serialization of a conforming value. Enforcement
-     * is prompted (non-strict), so it works across providers.
-     */
-    output_schema?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * The prompt used to materialize the projection.
-     */
-    prompt: string;
-    /**
-     * How frequently the projection should be regenerated.
-     */
-    refresh_cadence: RefreshCadence;
-    /**
-     * When `true`, regenerate even if a cached result exists.
-     */
-    regenerate?: boolean;
-    /**
-     * Whether the projection is materialized for the requesting user or their team.
-     */
-    target_type: TargetType;
-};
-
-/**
  * Measured usage for one invocation.
  */
 export type Usage = {
     /**
-     * Audio duration in seconds, absent for token billing.
+     * Audio duration in seconds, absent for token and credit billing.
      */
     audio_seconds?: number | null;
     /**
-     * Input tokens read from a prompt cache; zero for audio billing.
+     * Input tokens read from a prompt cache; zero for audio and credit billing.
      */
     cache_read_input_tokens: number;
     /**
-     * Input tokens written to a prompt cache; zero for audio billing.
+     * Input tokens written to a prompt cache; zero for audio and credit billing.
      */
     cache_write_input_tokens: number;
     /**
@@ -2254,7 +2443,7 @@ export type Usage = {
      */
     created_at: string;
     /**
-     * Uncached input tokens; zero for audio billing.
+     * Uncached input tokens; zero for audio and credit billing.
      */
     input_tokens: number;
     /**
@@ -2262,10 +2451,14 @@ export type Usage = {
      */
     model: string;
     /**
-     * Output tokens; zero for audio billing.
+     * Output tokens; zero for audio and credit billing.
      */
     output_tokens: number;
     price?: null | Price;
+    /**
+     * Vendor credits consumed, absent for token and audio billing.
+     */
+    provider_credits?: number | null;
 };
 
 /**
@@ -2351,9 +2544,169 @@ export type WebCitation = {
     url: string;
 };
 
+/**
+ * Machine-readable failure of a web request.
+ */
+export type WebErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without provider diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * Read one public web page.
+ */
+export type WebFetch = {
+    /**
+     * Most characters of page text to return, 1 to 100,000 (default 20,000).
+     */
+    maxChars?: number | null;
+    /**
+     * The `http` or `https` URL of the page.
+     */
+    url: string;
+};
+
+/**
+ * The text of a fetched page.
+ */
+export type WebFetchResponse = {
+    /**
+     * The page text as Markdown, cut to `maxChars`.
+     */
+    content: string;
+    /**
+     * The page title, when the provider reports one.
+     */
+    title?: string | null;
+    /**
+     * Whether `content` was cut to `maxChars`.
+     */
+    truncated: boolean;
+    /**
+     * The URL that was read.
+     */
+    url: string;
+};
+
+/**
+ * Search the public web.
+ */
+export type WebSearch = {
+    /**
+     * Only return pages from these domains, e.g. `["docs.rs", "github.com"]`.
+     */
+    domains?: Array<string> | null;
+    /**
+     * Never return pages from these domains.
+     */
+    excludeDomains?: Array<string> | null;
+    /**
+     * Also return each page's text as Markdown (up to 8,000 characters per result).
+     */
+    includeContent?: boolean | null;
+    /**
+     * How many results to return, 1 to 20 (default 5).
+     */
+    maxResults?: number | null;
+    /**
+     * What to search for, in natural language or keywords (at most 400 characters).
+     */
+    query: string;
+    /**
+     * Only return pages published on or after this date (`YYYY-MM-DD`).
+     */
+    since?: string | null;
+    topic?: null | WebSearchTopic;
+};
+
+/**
+ * The pages a search found, best match first.
+ */
+export type WebSearchResponse = {
+    /**
+     * Results, best match first. Empty when nothing matched.
+     */
+    results: Array<WebSearchResult>;
+};
+
+/**
+ * One page a search found.
+ */
+export type WebSearchResult = {
+    /**
+     * The page text as Markdown, when `includeContent` was set.
+     */
+    content?: string | null;
+    /**
+     * When the page was published, as the search provider reports it.
+     */
+    publishedAt?: string | null;
+    /**
+     * The part of the page most relevant to the query.
+     */
+    snippet: string;
+    /**
+     * The page title.
+     */
+    title: string;
+    /**
+     * The page URL; cite it when you use the result.
+     */
+    url: string;
+};
+
+/**
+ * The kind of results a search favours.
+ */
+export type WebSearchTopic = 'general' | 'news';
+
 export type WithChatId = {
     chat_id: string;
 };
+
+export type ReadMyActivityData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive start, RFC 3339.
+         */
+        from: string;
+        /**
+         * Exclusive end, RFC 3339; must be after `from`.
+         */
+        to: string;
+    };
+    url: '/activity';
+};
+
+export type ReadMyActivityErrors = {
+    /**
+     * `from` is not before `to`
+     */
+    400: ActivityErrorBody;
+    /**
+     * Internal server error
+     */
+    500: ActivityErrorBody;
+};
+
+export type ReadMyActivityError = ReadMyActivityErrors[keyof ReadMyActivityErrors];
+
+export type ReadMyActivityResponses = {
+    /**
+     * Activity in the range
+     */
+    200: ReadActivityResponse;
+};
+
+export type ReadMyActivityResponse = ReadMyActivityResponses[keyof ReadMyActivityResponses];
 
 export type SetPricingHandlerData = {
     body: SetPricingRequest;
@@ -2419,27 +2772,6 @@ export type GetUsageHandlerResponses = {
 
 export type GetUsageHandlerResponse = GetUsageHandlerResponses[keyof GetUsageHandlerResponses];
 
-export type UpsertAiProjectionData = {
-    body: UpsertProjectionRequest;
-    path?: never;
-    query?: never;
-    url: '/ai-projections';
-};
-
-export type UpsertAiProjectionErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpsertAiProjectionError = UpsertAiProjectionErrors[keyof UpsertAiProjectionErrors];
-
-export type UpsertAiProjectionResponses = {
-    200: ProjectionStateResponse;
-};
-
-export type UpsertAiProjectionResponse = UpsertAiProjectionResponses[keyof UpsertAiProjectionResponses];
-
 export type GetChatsForAttachmentHandlerData = {
     body?: never;
     path: {
@@ -2465,6 +2797,46 @@ export type GetChatsForAttachmentHandlerResponses = {
 };
 
 export type GetChatsForAttachmentHandlerResponse = GetChatsForAttachmentHandlerResponses[keyof GetChatsForAttachmentHandlerResponses];
+
+export type CreateConfirmedCalendarEventData = {
+    /**
+     * CreateConfirmedCalendarEvent arguments: CreateCalendarEvent's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/calendar/events/create-confirmed';
+};
+
+export type CreateConfirmedCalendarEventErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not created: a blank confirmation, a calendar the user cannot write, or a provider failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type CreateConfirmedCalendarEventError = CreateConfirmedCalendarEventErrors[keyof CreateConfirmedCalendarEventErrors];
+
+export type CreateConfirmedCalendarEventResponses = {
+    /**
+     * ToolCalendarEvent
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type CreateConfirmedCalendarEventResponse = CreateConfirmedCalendarEventResponses[keyof CreateConfirmedCalendarEventResponses];
 
 export type DeleteChatData = {
     body?: never;
@@ -2868,6 +3240,207 @@ export type GetCitationHandlerResponses = {
 
 export type GetCitationHandlerResponse = GetCitationHandlerResponses[keyof GetCitationHandlerResponses];
 
+export type ListConnectorsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/connectors';
+};
+
+export type ListConnectorsErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type ListConnectorsError = ListConnectorsErrors[keyof ListConnectorsErrors];
+
+export type ListConnectorsResponses = {
+    200: Array<Connector>;
+};
+
+export type ListConnectorsResponse = ListConnectorsResponses[keyof ListConnectorsResponses];
+
+export type AddConnectorServerData = {
+    body: AddServerRequest;
+    path?: never;
+    query?: never;
+    url: '/connectors';
+};
+
+export type AddConnectorServerErrors = {
+    400: ErrorResponse;
+    401: string;
+    500: ErrorResponse;
+};
+
+export type AddConnectorServerError = AddConnectorServerErrors[keyof AddConnectorServerErrors];
+
+export type AddConnectorServerResponses = {
+    201: Connector;
+};
+
+export type AddConnectorServerResponse = AddConnectorServerResponses[keyof AddConnectorServerResponses];
+
+export type BrowseConnectorCatalogData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter apps by name; omit to browse.
+         */
+        search?: string;
+        /**
+         * The cursor from the previous page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1 to 50 (default 20).
+         */
+        limit?: number;
+    };
+    url: '/connectors/catalog';
+};
+
+export type BrowseConnectorCatalogErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type BrowseConnectorCatalogError = BrowseConnectorCatalogErrors[keyof BrowseConnectorCatalogErrors];
+
+export type BrowseConnectorCatalogResponses = {
+    200: CatalogPage;
+};
+
+export type BrowseConnectorCatalogResponse = BrowseConnectorCatalogResponses[keyof BrowseConnectorCatalogResponses];
+
+export type RemoveConnectorData = {
+    body?: never;
+    path: {
+        /**
+         * `app` or `server`.
+         */
+        kind: ConnectorKind;
+        /**
+         * The app's slug, or the server's URL in unpadded base64url.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/connectors/{kind}/{id}';
+};
+
+export type RemoveConnectorErrors = {
+    400: ErrorResponse;
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveConnectorError = RemoveConnectorErrors[keyof RemoveConnectorErrors];
+
+export type RemoveConnectorResponses = {
+    204: void;
+};
+
+export type RemoveConnectorResponse = RemoveConnectorResponses[keyof RemoveConnectorResponses];
+
+export type UpdateConnectorData = {
+    body: UpdateConnectorRequest;
+    path: {
+        /**
+         * `app` or `server`.
+         */
+        kind: ConnectorKind;
+        /**
+         * The app's slug, or the server's URL in unpadded base64url.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/connectors/{kind}/{id}';
+};
+
+export type UpdateConnectorErrors = {
+    400: ErrorResponse;
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateConnectorError = UpdateConnectorErrors[keyof UpdateConnectorErrors];
+
+export type UpdateConnectorResponses = {
+    204: void;
+};
+
+export type UpdateConnectorResponse = UpdateConnectorResponses[keyof UpdateConnectorResponses];
+
+export type CompleteConnectorConnectData = {
+    body?: never;
+    path: {
+        /**
+         * `app` or `server`.
+         */
+        kind: ConnectorKind;
+        /**
+         * The app's slug, or the server's URL in unpadded base64url.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/connectors/{kind}/{id}/complete';
+};
+
+export type CompleteConnectorConnectErrors = {
+    400: ErrorResponse;
+    401: string;
+    /**
+     * Not connected yet; poll again while the connect page is open
+     */
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CompleteConnectorConnectError = CompleteConnectorConnectErrors[keyof CompleteConnectorConnectErrors];
+
+export type CompleteConnectorConnectResponses = {
+    200: Connector;
+};
+
+export type CompleteConnectorConnectResponse = CompleteConnectorConnectResponses[keyof CompleteConnectorConnectResponses];
+
+export type StartConnectorConnectData = {
+    body?: never;
+    path: {
+        /**
+         * `app` or `server`.
+         */
+        kind: ConnectorKind;
+        /**
+         * The app's slug, or the server's URL in unpadded base64url.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/connectors/{kind}/{id}/connect';
+};
+
+export type StartConnectorConnectErrors = {
+    400: ErrorResponse;
+    401: string;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type StartConnectorConnectError = StartConnectorConnectErrors[keyof StartConnectorConnectErrors];
+
+export type StartConnectorConnectResponses = {
+    200: ConnectStep;
+};
+
+export type StartConnectorConnectResponse = StartConnectorConnectResponses[keyof StartConnectorConnectResponses];
+
 export type GenerateDatabaseQueryData = {
     body: DatabaseQueryRequest;
     path?: never;
@@ -2948,6 +3521,46 @@ export type DecisionsResponses = {
 
 export type DecisionsResponse = DecisionsResponses[keyof DecisionsResponses];
 
+export type SendConfirmedEmailData = {
+    /**
+     * SendConfirmedEmail arguments: SendEmail's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/email/send-confirmed';
+};
+
+export type SendConfirmedEmailErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type SendConfirmedEmailError = SendConfirmedEmailErrors[keyof SendConfirmedEmailErrors];
+
+export type SendConfirmedEmailResponses = {
+    /**
+     * SendEmailResponse
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type SendConfirmedEmailResponse = SendConfirmedEmailResponses[keyof SendConfirmedEmailResponses];
+
 export type HealthHandlerData = {
     body?: never;
     path?: never;
@@ -3017,6 +3630,99 @@ export type GenerateImageResponses = {
 
 export type GenerateImageResponse2 = GenerateImageResponses[keyof GenerateImageResponses];
 
+export type ListImportEntitiesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows from this source.
+         */
+        source?: ImportSource;
+        /**
+         * Only rows in this status.
+         */
+        status?: ImportStatus;
+    };
+    url: '/import/entities';
+};
+
+export type ListImportEntitiesErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ListImportEntitiesResponses = {
+    200: ImportEntitiesResponse;
+};
+
+export type ListImportEntitiesResponse = ListImportEntitiesResponses[keyof ListImportEntitiesResponses];
+
+export type TrackImportEntityData = {
+    body: TrackImportEntityRequest;
+    path?: never;
+    query?: never;
+    url: '/import/entities';
+};
+
+export type TrackImportEntityErrors = {
+    /**
+     * Invalid item or metadata
+     */
+    400: unknown;
+    /**
+     * The import service refused the item
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type TrackImportEntityResponses = {
+    200: TrackImportEntityResponse;
+};
+
+export type TrackImportEntityResponse2 = TrackImportEntityResponses[keyof TrackImportEntityResponses];
+
+export type DeclineImportEntityData = {
+    body?: never;
+    path: {
+        /**
+         * Ledger row id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/import/entities/{id}';
+};
+
+export type DeclineImportEntityErrors = {
+    /**
+     * No such row belongs to the caller
+     */
+    404: unknown;
+    /**
+     * Only staged rows can be declined
+     */
+    409: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DeclineImportEntityResponses = {
+    /**
+     * Declined
+     */
+    204: void;
+};
+
+export type DeclineImportEntityResponse = DeclineImportEntityResponses[keyof DeclineImportEntityResponses];
+
 export type NotionReportHandlerData = {
     body?: never;
     path?: never;
@@ -3059,6 +3765,34 @@ export type CancelNotionHandlerResponses = {
 };
 
 export type CancelNotionHandlerResponse = CancelNotionHandlerResponses[keyof CancelNotionHandlerResponses];
+
+export type ImportNotionPageData = {
+    body: ImportNotionPageRequest;
+    path?: never;
+    query?: never;
+    url: '/import/notion/pages';
+};
+
+export type ImportNotionPageErrors = {
+    /**
+     * No page given
+     */
+    400: unknown;
+    /**
+     * Not a page that can be imported, or Notion is not connected
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ImportNotionPageResponses = {
+    200: ImportNotionPageResponse;
+};
+
+export type ImportNotionPageResponse2 = ImportNotionPageResponses[keyof ImportNotionPageResponses];
 
 export type RunImportHandlerData = {
     body: RunImportRequest;
@@ -3168,167 +3902,60 @@ export type CancelWorkspaceHandlerResponses = {
 
 export type CancelWorkspaceHandlerResponse = CancelWorkspaceHandlerResponses[keyof CancelWorkspaceHandlerResponses];
 
-export type DeleteMcpServerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * The server URL to delete.
-         */
-        url: string;
-    };
-    url: '/mcp/servers';
-};
-
-export type DeleteMcpServerErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type DeleteMcpServerError = DeleteMcpServerErrors[keyof DeleteMcpServerErrors];
-
-export type DeleteMcpServerResponses = {
-    204: void;
-};
-
-export type DeleteMcpServerResponse = DeleteMcpServerResponses[keyof DeleteMcpServerResponses];
-
-export type ListMcpServersData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/mcp/servers';
-};
-
-export type ListMcpServersErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type ListMcpServersError = ListMcpServersErrors[keyof ListMcpServersErrors];
-
-export type ListMcpServersResponses = {
-    200: Array<ServerResponse>;
-};
-
-export type ListMcpServersResponse = ListMcpServersResponses[keyof ListMcpServersResponses];
-
-export type AddMcpServerData = {
-    body: AddServerRequest;
-    path?: never;
-    query?: never;
-    url: '/mcp/servers';
-};
-
-export type AddMcpServerErrors = {
-    400: ErrorResponse;
-    401: string;
-    500: ErrorResponse;
-};
-
-export type AddMcpServerError = AddMcpServerErrors[keyof AddMcpServerErrors];
-
-export type AddMcpServerResponses = {
-    201: ServerResponse;
-};
-
-export type AddMcpServerResponse = AddMcpServerResponses[keyof AddMcpServerResponses];
-
-export type UpdateMcpServerData = {
-    body: UpdateServerRequest;
-    path?: never;
-    query?: never;
-    url: '/mcp/servers';
-};
-
-export type UpdateMcpServerErrors = {
-    401: string;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpdateMcpServerError = UpdateMcpServerErrors[keyof UpdateMcpServerErrors];
-
-export type UpdateMcpServerResponses = {
-    200: ServerResponse;
-};
-
-export type UpdateMcpServerResponse = UpdateMcpServerResponses[keyof UpdateMcpServerResponses];
-
-export type McpAuthCallbackData = {
+export type ConnectorOauthCallbackData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Authorization code from the OAuth provider. Present on success.
+         * The authorization code, on success.
          */
         code?: string;
         /**
-         * CSRF state parameter.
+         * The one-time state the flow started with.
          */
         state?: string;
         /**
-         * OAuth error code from the provider, e.g. `access_denied`. Present on failure.
+         * The provider's error code, e.g. `access_denied`, on failure.
          */
         error?: string;
         /**
-         * Human-readable error description from the provider.
+         * The provider's description of the error.
          */
         error_description?: string;
     };
     url: '/mcp/servers/auth/callback';
 };
 
-export type McpAuthCallbackErrors = {
+export type ConnectorOauthCallbackErrors = {
     /**
-     * Provider rejected authorization, or the callback was malformed
+     * The provider refused, or the redirect was malformed
      */
     400: ErrorResponse;
     500: ErrorResponse;
 };
 
-export type McpAuthCallbackError = McpAuthCallbackErrors[keyof McpAuthCallbackErrors];
+export type ConnectorOauthCallbackError = ConnectorOauthCallbackErrors[keyof ConnectorOauthCallbackErrors];
 
-export type McpAuthCallbackResponses = {
+export type ConnectorOauthCallbackResponses = {
     /**
-     * OAuth flow completed successfully
+     * Signed in
      */
     200: unknown;
 };
 
-export type McpOauthClientMetadataData = {
+export type ConnectorOauthClientMetadataData = {
     body?: never;
     path?: never;
     query?: never;
     url: '/mcp/servers/auth/client-metadata';
 };
 
-export type McpOauthClientMetadataResponses = {
+export type ConnectorOauthClientMetadataResponses = {
     /**
-     * Macro OAuth client metadata document
+     * Macro's OAuth client metadata document
      */
     200: unknown;
 };
-
-export type StartMcpAuthData = {
-    body: StartAuthRequest;
-    path?: never;
-    query?: never;
-    url: '/mcp/servers/auth/start';
-};
-
-export type StartMcpAuthErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type StartMcpAuthError = StartMcpAuthErrors[keyof StartMcpAuthErrors];
-
-export type StartMcpAuthResponses = {
-    200: StartAuthResponse;
-};
-
-export type StartMcpAuthResponse = StartMcpAuthResponses[keyof StartMcpAuthResponses];
 
 export type GetMemoryHandlerData = {
     body?: never;
@@ -3358,6 +3985,118 @@ export type GetMemoryHandlerResponses = {
 };
 
 export type GetMemoryHandlerResponse = GetMemoryHandlerResponses[keyof GetMemoryHandlerResponses];
+
+export type GetUserActivityData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * A `macro|` user id; omit for the caller.
+         */
+        user?: string;
+        /**
+         * Inclusive first UTC date.
+         */
+        start: string;
+        /**
+         * Inclusive last UTC date, at most 366 days after `start`.
+         */
+        end: string;
+    };
+    url: '/memory/activity';
+};
+
+export type GetUserActivityErrors = {
+    /**
+     * Invalid user id or date range
+     */
+    400: MemoryErrorBody;
+    /**
+     * The user is not the caller or a current teammate
+     */
+    403: MemoryErrorBody;
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type GetUserActivityError = GetUserActivityErrors[keyof GetUserActivityErrors];
+
+export type GetUserActivityResponses = {
+    /**
+     * Activity reports in the range
+     */
+    200: ActivityReports;
+};
+
+export type GetUserActivityResponse = GetUserActivityResponses[keyof GetUserActivityResponses];
+
+export type ReadExplicitMemoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/memory/explicit';
+};
+
+export type ReadExplicitMemoryErrors = {
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type ReadExplicitMemoryError = ReadExplicitMemoryErrors[keyof ReadExplicitMemoryErrors];
+
+export type ReadExplicitMemoryResponses = {
+    /**
+     * The caller's explicit memory
+     */
+    200: ExplicitMemory;
+};
+
+export type ReadExplicitMemoryResponse = ReadExplicitMemoryResponses[keyof ReadExplicitMemoryResponses];
+
+export type EditExplicitMemoryData = {
+    body: UpdateExplicitMemoryRequest;
+    path?: never;
+    query?: never;
+    url: '/memory/explicit';
+};
+
+export type EditExplicitMemoryErrors = {
+    /**
+     * Invalid line or content
+     */
+    400: MemoryErrorBody;
+    /**
+     * The revision is stale
+     */
+    409: MemoryErrorBody;
+    /**
+     * Rejected by privacy review
+     */
+    422: MemoryErrorBody;
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+    /**
+     * Privacy review is unavailable; nothing was saved
+     */
+    503: MemoryErrorBody;
+};
+
+export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];
+
+export type EditExplicitMemoryResponses = {
+    /**
+     * The edited explicit memory
+     */
+    200: ExplicitMemory;
+};
+
+export type EditExplicitMemoryResponse = EditExplicitMemoryResponses[keyof EditExplicitMemoryResponses];
 
 export type GetStateHandler2Data = {
     body?: never;
@@ -3460,215 +4199,6 @@ export type DismissPromptHandlerResponses = {
 
 export type DismissPromptHandlerResponse = DismissPromptHandlerResponses[keyof DismissPromptHandlerResponses];
 
-export type BrowsePipedreamMcpCatalogData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Search query to filter apps by name. Omit to browse.
-         */
-        search?: string;
-        /**
-         * Opaque pagination cursor from a previous response.
-         */
-        cursor?: string;
-        /**
-         * Page size (default 20, max 50).
-         */
-        limit?: number;
-    };
-    url: '/pipedream/mcp/catalog';
-};
-
-export type BrowsePipedreamMcpCatalogErrors = {
-    401: string;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type BrowsePipedreamMcpCatalogError = BrowsePipedreamMcpCatalogErrors[keyof BrowsePipedreamMcpCatalogErrors];
-
-export type BrowsePipedreamMcpCatalogResponses = {
-    200: PipedreamCatalogResponse;
-};
-
-export type BrowsePipedreamMcpCatalogResponse = BrowsePipedreamMcpCatalogResponses[keyof BrowsePipedreamMcpCatalogResponses];
-
-export type CompletePipedreamMcpConnectionData = {
-    body: PipedreamCompleteRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/complete';
-};
-
-export type CompletePipedreamMcpConnectionErrors = {
-    401: string;
-    404: ErrorResponse;
-    409: ErrorResponse;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type CompletePipedreamMcpConnectionError = CompletePipedreamMcpConnectionErrors[keyof CompletePipedreamMcpConnectionErrors];
-
-export type CompletePipedreamMcpConnectionResponses = {
-    200: PipedreamConnectionResponse;
-};
-
-export type CompletePipedreamMcpConnectionResponse = CompletePipedreamMcpConnectionResponses[keyof CompletePipedreamMcpConnectionResponses];
-
-export type CompletePipedreamMcpConnectData = {
-    body: PipedreamConnectCompleteRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/connect/complete';
-};
-
-export type CompletePipedreamMcpConnectErrors = {
-    401: string;
-    404: ErrorResponse;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type CompletePipedreamMcpConnectError = CompletePipedreamMcpConnectErrors[keyof CompletePipedreamMcpConnectErrors];
-
-export type CompletePipedreamMcpConnectResponses = {
-    200: PipedreamConnectionResponse;
-};
-
-export type CompletePipedreamMcpConnectResponse = CompletePipedreamMcpConnectResponses[keyof CompletePipedreamMcpConnectResponses];
-
-export type DeletePipedreamMcpConnectionData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * The app slug to disconnect.
-         */
-        app_slug: string;
-    };
-    url: '/pipedream/mcp/connections';
-};
-
-export type DeletePipedreamMcpConnectionErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type DeletePipedreamMcpConnectionError = DeletePipedreamMcpConnectionErrors[keyof DeletePipedreamMcpConnectionErrors];
-
-export type DeletePipedreamMcpConnectionResponses = {
-    204: void;
-};
-
-export type DeletePipedreamMcpConnectionResponse = DeletePipedreamMcpConnectionResponses[keyof DeletePipedreamMcpConnectionResponses];
-
-export type ListPipedreamMcpConnectionsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/connections';
-};
-
-export type ListPipedreamMcpConnectionsErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type ListPipedreamMcpConnectionsError = ListPipedreamMcpConnectionsErrors[keyof ListPipedreamMcpConnectionsErrors];
-
-export type ListPipedreamMcpConnectionsResponses = {
-    200: Array<PipedreamConnectionResponse>;
-};
-
-export type ListPipedreamMcpConnectionsResponse = ListPipedreamMcpConnectionsResponses[keyof ListPipedreamMcpConnectionsResponses];
-
-export type UpdatePipedreamMcpConnectionData = {
-    body: PipedreamUpdateRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/connections';
-};
-
-export type UpdatePipedreamMcpConnectionErrors = {
-    401: string;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpdatePipedreamMcpConnectionError = UpdatePipedreamMcpConnectionErrors[keyof UpdatePipedreamMcpConnectionErrors];
-
-export type UpdatePipedreamMcpConnectionResponses = {
-    200: PipedreamConnectionResponse;
-};
-
-export type UpdatePipedreamMcpConnectionResponse = UpdatePipedreamMcpConnectionResponses[keyof UpdatePipedreamMcpConnectionResponses];
-
-export type ListPipedreamMcpOverlaysData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/overlays';
-};
-
-export type ListPipedreamMcpOverlaysErrors = {
-    401: string;
-    500: ErrorResponse;
-};
-
-export type ListPipedreamMcpOverlaysError = ListPipedreamMcpOverlaysErrors[keyof ListPipedreamMcpOverlaysErrors];
-
-export type ListPipedreamMcpOverlaysResponses = {
-    200: Array<PipedreamOverlayResponse>;
-};
-
-export type ListPipedreamMcpOverlaysResponse = ListPipedreamMcpOverlaysResponses[keyof ListPipedreamMcpOverlaysResponses];
-
-export type RecoverPipedreamMcpConnectionData = {
-    body: PipedreamRecoverRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/recover';
-};
-
-export type RecoverPipedreamMcpConnectionErrors = {
-    401: string;
-    404: ErrorResponse;
-    409: ErrorResponse;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type RecoverPipedreamMcpConnectionError = RecoverPipedreamMcpConnectionErrors[keyof RecoverPipedreamMcpConnectionErrors];
-
-export type RecoverPipedreamMcpConnectionResponses = {
-    200: PipedreamConnectionResponse;
-};
-
-export type RecoverPipedreamMcpConnectionResponse = RecoverPipedreamMcpConnectionResponses[keyof RecoverPipedreamMcpConnectionResponses];
-
-export type CreatePipedreamMcpTokenData = {
-    body?: null | PipedreamTokenRequest;
-    path?: never;
-    query?: never;
-    url: '/pipedream/mcp/token';
-};
-
-export type CreatePipedreamMcpTokenErrors = {
-    401: string;
-    500: ErrorResponse;
-    501: ErrorResponse;
-};
-
-export type CreatePipedreamMcpTokenError = CreatePipedreamMcpTokenErrors[keyof CreatePipedreamMcpTokenErrors];
-
-export type CreatePipedreamMcpTokenResponses = {
-    200: PipedreamTokenResponse;
-};
-
-export type CreatePipedreamMcpTokenResponse = CreatePipedreamMcpTokenResponses[keyof CreatePipedreamMcpTokenResponses];
-
 export type GetBatchPreviewData = {
     body: GetBatchPreviewRequest;
     path?: never;
@@ -3688,6 +4218,95 @@ export type GetBatchPreviewResponses = {
 };
 
 export type GetBatchPreviewResponse2 = GetBatchPreviewResponses[keyof GetBatchPreviewResponses];
+
+export type ListSkillsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Words from the skill's name, matched as one adjacent phrase. Omit to
+         * list the 100 most recently updated skills.
+         */
+        query?: string;
+        /**
+         * How `query` is matched; `partial` when omitted.
+         */
+        matchType?: SkillsMatchType;
+    };
+    url: '/skills';
+};
+
+export type ListSkillsErrors = {
+    /**
+     * Blank query
+     */
+    400: SkillErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Listing failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Search failed
+     */
+    502: SkillErrorBody;
+};
+
+export type ListSkillsError = ListSkillsErrors[keyof ListSkillsErrors];
+
+export type ListSkillsResponses = {
+    /**
+     * Matching skills, most recently updated first
+     */
+    200: SkillsResponse;
+};
+
+export type ListSkillsResponse = ListSkillsResponses[keyof ListSkillsResponses];
+
+export type ReadSkillData = {
+    body?: never;
+    path: {
+        /**
+         * The skill's id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/skills/{id}';
+};
+
+export type ReadSkillErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * No skill the caller can view has this id
+     */
+    404: SkillErrorBody;
+    /**
+     * Reading failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Access check unavailable
+     */
+    503: SkillErrorBody;
+};
+
+export type ReadSkillError = ReadSkillErrors[keyof ReadSkillErrors];
+
+export type ReadSkillResponses = {
+    /**
+     * The skill's instructions
+     */
+    200: SkillContentResponse;
+};
+
+export type ReadSkillResponse = ReadSkillResponses[keyof ReadSkillResponses];
 
 export type SendChatMessageData = {
     body: HttpSendChatMessageRequest;
@@ -3803,3 +4422,105 @@ export type StructuredCompletionResponses = {
 };
 
 export type StructuredCompletionResponse2 = StructuredCompletionResponses[keyof StructuredCompletionResponses];
+
+export type FetchWebPageData = {
+    body: WebFetch;
+    path?: never;
+    query?: never;
+    url: '/web/fetch';
+};
+
+export type FetchWebPageErrors = {
+    /**
+     * Invalid URL or length
+     */
+    400: WebErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: WebErrorBody;
+    /**
+     * Web fetch is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
+     * The page could not be read
+     */
+    422: WebErrorBody;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * The fetch provider failed
+     */
+    502: WebErrorBody;
+    /**
+     * Web fetch busy, or usage validation unavailable
+     */
+    503: WebErrorBody;
+};
+
+export type FetchWebPageError = FetchWebPageErrors[keyof FetchWebPageErrors];
+
+export type FetchWebPageResponses = {
+    /**
+     * The page text
+     */
+    200: WebFetchResponse;
+};
+
+export type FetchWebPageResponse = FetchWebPageResponses[keyof FetchWebPageResponses];
+
+export type SearchWebData = {
+    body: WebSearch;
+    path?: never;
+    query?: never;
+    url: '/web/search';
+};
+
+export type SearchWebErrors = {
+    /**
+     * Invalid query or filters
+     */
+    400: WebErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: WebErrorBody;
+    /**
+     * Web search is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * The search provider failed
+     */
+    502: WebErrorBody;
+    /**
+     * Web search busy, or usage validation unavailable
+     */
+    503: WebErrorBody;
+};
+
+export type SearchWebError = SearchWebErrors[keyof SearchWebErrors];
+
+export type SearchWebResponses = {
+    /**
+     * Results, best match first
+     */
+    200: WebSearchResponse;
+};
+
+export type SearchWebResponse = SearchWebResponses[keyof SearchWebResponses];

@@ -8,6 +8,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
 import { getDefaultTimezone } from '@core/util/cron';
@@ -17,6 +18,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { Telemetry } from '@macro-inc/observability';
 import type {
   ActionTrigger,
+  RoutineTask,
   RoutineTemplate,
   TemplateVariable,
 } from '@service-scheduled-action/generated/schemas';
@@ -32,7 +34,9 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { StepsOutline } from './components/routine-steps-outline';
 import { TemplateCard } from './components/template-card';
+import { programSteps } from './core/routine-steps';
 import { describeTrigger } from './core/routine-triggers';
 import type { Activator } from './core/template';
 import {
@@ -49,11 +53,28 @@ import {
 } from './queries/templates';
 import { RoutinePromptEditor } from './routine-prompt-editor';
 import { ActivateTemplateDialog } from './views/activate-template-dialog';
+import { MobileRoutineTemplateHeader } from './views/mobile/routine-template-header';
 import { RoutineTemplateView } from './views/routine-template-view';
 import { ShareRoutineDialog } from './views/share-template-dialog';
 
 function triggerLines(trigger: ActionTrigger): string[] {
   return (parseRoutineTriggers(trigger) ?? []).map(describeTrigger);
+}
+
+/**
+ * What a template's routine does: its steps for a routine with steps, else
+ * its instructions, read-only.
+ */
+function TemplateWork(props: { task: RoutineTask; prompt: string }) {
+  const steps = () => programSteps(props.task);
+  return (
+    <Show
+      when={steps()?.some((step) => step.kind !== 'agent') && steps()}
+      fallback={<ReadOnlyInstructions prompt={props.prompt} />}
+    >
+      {(program) => <StepsOutline steps={program()} />}
+    </Show>
+  );
 }
 
 function ReadOnlyInstructions(props: { prompt: string }) {
@@ -153,7 +174,12 @@ function ActivateTemplate(
         getDisplayName(tryMacroId(props.template.author)) || 'its author'
       }
       triggers={triggerLines(props.template.trigger)}
-      instructions={<ReadOnlyInstructions prompt={activation.prompt()} />}
+      instructions={
+        <TemplateWork
+          task={activation.request()?.task ?? props.template.task}
+          prompt={activation.prompt()}
+        />
+      }
       references={activation.references()}
       choices={activation.choices()}
       onChoose={activation.choose}
@@ -227,6 +253,7 @@ function EnabledRoutineTemplatePage(props: {
   const owner = getOwner();
   const layout = useSplitLayout();
   const userId = useUserId();
+  const mobile = isTouchDevice;
   const query = useRoutineTemplateQuery(() => props.scheduleId);
   const template = () => (query.isSuccess ? query.data : undefined);
   const access = useReferenceAccess(() =>
@@ -265,20 +292,34 @@ function EnabledRoutineTemplatePage(props: {
             access,
           });
           return (
-            <RoutineTemplateView
-              template={current()}
-              authorName={
-                getDisplayName(tryMacroId(current().author)) || 'Someone'
-              }
-              canActivate={current().author !== userId()}
-              triggers={triggerLines(current().trigger)}
-              references={activation.references()}
-              instructions={
-                <ReadOnlyInstructions prompt={templatePrompt(current())} />
-              }
-              onActivate={() => openActivation(current())}
-              onBack={props.onBack}
-            />
+            <>
+              <Show when={mobile()}>
+                <MobileRoutineTemplateHeader
+                  name={current().name}
+                  canActivate={current().author !== userId()}
+                  onActivate={() => openActivation(current())}
+                  onBack={props.onBack}
+                />
+              </Show>
+              <RoutineTemplateView
+                mobile={mobile()}
+                template={current()}
+                authorName={
+                  getDisplayName(tryMacroId(current().author)) || 'Someone'
+                }
+                canActivate={current().author !== userId()}
+                triggers={triggerLines(current().trigger)}
+                references={activation.references()}
+                instructions={
+                  <TemplateWork
+                    task={current().task}
+                    prompt={templatePrompt(current())}
+                  />
+                }
+                onActivate={() => openActivation(current())}
+                onBack={props.onBack}
+              />
+            </>
           );
         }}
       </Match>

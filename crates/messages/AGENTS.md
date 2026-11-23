@@ -70,12 +70,27 @@ the post as that client's ("Claude Code · Agent · from <user>"). It is a displ
 label only. Over HTTP the label comes only from the signed `agent_via` claim of
 a code-mode token, never from the request body.
 
+A channel post's `notification_policy` is part of the request: any caller may
+quiet its own post, since every policy only narrows who is notified. `Silent`
+notifies no one, mentions and first-message invites included, while delivery,
+realtime, search, mention events and agent triggers still run. Other parents
+accept only `Default` over HTTP, because their discussion delivery also grants
+mentioned people access. `attribution` stays server-set.
+
 New posts use the message sender receipt to retain signed code-mode agent
 attribution. All other operations use the caller receipt so attribution cannot
 grant users another agent invocation's edit, deletion, or reaction authority.
+The AI tools follow the same rule: `EditComment`, `DeleteComment` and the
+channel message tools change a message as their bot only when
+`Message::posted_by_bot_for` says the bot posted it for the caller
+(`triggered_by`); every other message is changed with the caller's receipt.
 
 ## Gotchas
 
+- `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
+  they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
+- A call chat's first message is a normal `MessageKind::Message` root; deleting it tombstones only
+  that message and keeps the thread and replies available for later posts.
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check

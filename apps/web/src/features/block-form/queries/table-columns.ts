@@ -63,6 +63,7 @@ export function toFormColumn(column: ColumnDetail): FormColumn | undefined {
     name:
       column.column.display_name ?? column.definition.definition.display_name,
     kind,
+    percentage: column.column.config?.kind === 'percentage',
     options: column.definition.property_options.map((option) => ({
       id: option.id,
       label: String(option.value.value),

@@ -1,0 +1,1136 @@
+id	break
+AC-001	The recipient field's suggestion list returns no options while text is typed in RecipientSelector.tsx, so searching by typing finds nobody.
+AC-002	a comma or semicolon typed after an address does not turn it into a recipient
+AC-003	The recipient input's keydown handler in RecipientSelector.tsx swallows Enter before Kobalte sees it, so a typed address is never committed as a chip.
+AC-004	pressing Tab in the recipient suggestions does not add the highlighted person
+AC-005	The Kobalte combobox's onChange in RecipientSelector.tsx drops any change that adds a recipient, so picking a suggestion adds no chip.
+AC-006	a recipient chip's X does not remove the recipient
+AC-007	Kobalte's removeOnBackspace is switched off on the recipient combobox in RecipientSelector.tsx, so Backspace in an empty field no longer removes the last chip.
+AC-008	pressing PageDown, or ArrowDown on the last suggestion, does not bring the next people
+AC-009	pressing Escape in the recipient suggestions clears the typed text instead of only closing them
+AC-010	The drop handler of a dragged recipient chip in compose-recipients.tsx returns before calling onRecipientDrop, so a chip dropped on another field stays where it was.
+AC-011	The desktop Cc button's onClick in compose-layout.tsx (the new-email composer's recipient actions) returns without revealing the Cc field, so clicking Cc opens no Cc row.
+AC-012	The desktop Bcc button's onClick in compose-layout.tsx (the new-email composer's recipient actions) returns without revealing the Bcc field, so clicking Bcc opens no Bcc row.
+AC-013	on a phone, tapping a new email's Cc/Bcc, From row does not unfold the Cc, Bcc and From fields
+AC-014	Main activates the recipient row when the folded summary gets focus, removing the button before its click can focus the input. The phone test fails at the To focus assertion and, with the fix, adds a second address and checks both recipients in the sent copy.
+AC-015	pressing Shift+Cmd+O does not move the cursor back to To
+AC-016	pressing Shift+Cmd+S does not move the cursor to the Subject
+AC-017	pressing Shift+Cmd+M does not move the cursor into the message
+AC-018	The subject input's onInput in compose-subject-field.tsx resets the field to its stored value instead of saving what was typed.
+AC-019	pressing Escape in a new email's Subject does not take the cursor out of it
+AC-020	The desktop From selector's onSelect in compose-layout.tsx returns without calling onSelectInbox, so picking another inbox leaves the sender unchanged.
+AC-021	the Retry inbox change of a failed inbox switch does not change the inbox the email is sent from
+AC-022	A capture-phase beforeinput listener on the compose body's wrapper in compose-body.tsx cancels every edit, so typing into the message body inserts nothing.
+AC-023	mentioning a person in a new email does not add them to Cc
+AC-024	The toolbar Attach button's file-picker onSelect in compose-toolbar.tsx drops the picked files instead of passing them to onAddAttachments.
+AC-025	on a phone, a file picked from a new email's header Attach is not attached
+AC-026	The compose body's fileFolderDrop onDrop in compose-body.tsx returns before inserting or attaching anything, so files dropped on the message body are ignored.
+AC-027	a picture or file pasted into a new email is not added to it
+AC-028	The toolbar Insert image button in compose-toolbar.tsx asks the media plugin for a video instead of an image, so a picked picture is never inserted.
+AC-029	The new-message attachment pill's remove handler in compose-body.tsx returns without calling onRemoveAttachment, so Remove leaves the file on the draft.
+AC-030	clicking an attached picture's chip in the composer does not open the picture
+AC-031	The toolbar Format button's onClick in compose-toolbar.tsx returns without toggling the ribbon signal, so the format ribbon never opens.
+AC-032	The ribbon's Bold button in FormatButtons.tsx returns without dispatching the bold format, so text typed after it stays plain.
+AC-033	The ribbon's Italic button in FormatButtons.tsx returns without dispatching the italic format, so text typed after it stays upright.
+AC-034	The cmd+shift+x shortcut's key test in keyboardShortcutsPlugin.ts never matches, so the editor no longer strikes text through from the keyboard.
+AC-035	The cmd+e shortcut's key test in keyboardShortcutsPlugin.ts never matches, so the editor no longer formats inline code from the keyboard.
+AC-036	The cmd+shift+8 entry of the email list and quote shortcuts in keyboardShortcutsPlugin.ts never matches, so the key no longer starts a bulleted list.
+AC-037	The cmd+shift+7 entry of the email list and quote shortcuts in keyboardShortcutsPlugin.ts never matches, so the key no longer starts a numbered list.
+AC-038	The ribbon's Checklist button in FormatButtons.tsx returns without transforming the block, so the line stays a paragraph with no checkbox.
+AC-039	The cmd+shift+9 entry of the email list and quote shortcuts in keyboardShortcutsPlugin.ts never matches, so the key no longer makes a blockquote.
+AC-040	The cmd+shift+h shortcut's key test in keyboardShortcutsPlugin.ts never matches, so the editor no longer highlights text from the keyboard.
+AC-041	the floating format menu's Bold and other text styles do not change the selected text
+AC-042	The links plugin's TextNode transform in linksPlugin.ts returns before matching, so a URL typed into the body no longer turns into a link.
+AC-043	in a reply, a colon offers no emoji, [] makes no checkbox and ``` makes no code block
+AC-044	The draft toolbar's Create event button in compose-toolbar.tsx returns without calling createEvent, so no event composer opens from the draft.
+AC-045	a preset of the send-time picker, such as Tomorrow, does not set the send time
+AC-046	Choosing a result of the send-time search in the composer's clock picker is ignored: the picker combobox's onChange drops options of type 'option' in date-selector.tsx (the calendar, the time field and Clear still go through).
+AC-047	a custom date and time picked in the send-time picker do not set the send time
+AC-048	the schedule bar's Clear send time keeps the chosen send time
+AC-049	The composer toolbar's SendButton onClick in compose-toolbar.tsx returns without calling onSend, so the button labelled Schedule send (or Send email) does nothing; cmd+enter still sends.
+AC-050	Update schedule (the button, or cmd+enter) on a scheduled email with a proposed new time does nothing: the schedule's submit returns early for the 'update' action in email-send-schedule.ts (a first Schedule send still works).
+AC-051	the schedule bar's Cancel change keeps the newly picked send time of a scheduled email
+AC-052	The schedule bar's Cancel (aria-label Cancel scheduled send) on a confirmed schedule does nothing: its action in email-schedule-summary.tsx returns without calling onCancelSchedule.
+AC-053	The schedule bar's Restore draft (aria-label Restore failed scheduled draft) on a failed scheduled send does nothing: its action in email-schedule-summary.tsx returns without calling onCancelSchedule.
+AC-054	the schedule bar's Check status does not refresh the state of an unconfirmed delivery
+AC-055	the Email scheduled notice's Undo does not take the schedule back
+AC-056	the View message of the Email scheduled and Email rescheduled notices does not open the message
+AC-057	The same break as AC-049: the one SendButton in compose-toolbar.tsx is labelled Send email or Schedule send by the schedule state, and its onClick returns without calling onSend under either id.
+AC-058	on a phone, the header's Send does not send a new email
+AC-059	The Undo action on the "Sending…" toast of a queued send does nothing: its onClick in queued-send-notice.ts returns before calling undo.
+AC-060	The composer toolbar's trash button in compose-toolbar.tsx returns without calling onDelete, so Delete draft leaves the draft open.
+AC-061	on a phone, Save Draft in the Draft options sheet does not leave the composer
+AC-062	on a phone, Delete Draft in the Draft options sheet does not delete the draft
+AC-063	Retry in "Unable to load this draft" does nothing
+AC-064	The sync banner's Retry button in draft-sync-status.tsx no longer calls onRetry (Reload still calls onReload), so pressing Retry leaves the refused draft unsaved.
+AC-065	Reload in the draft banner does not reload
+AC-066	the Draft could not be synced banner's Keep editing does not save the draft again
+AC-068	The signature preview's expand toggle in signature-preview.tsx returns without flipping its expanded state, so the signature never unfolds.
+AC-069	The signature preview's remove button in signature-preview.tsx returns without calling onDismiss, so the signature stays on the message.
+AC-070	The Macro watermark button's click handler in macro-signature-button.tsx returns without calling onUpgrade, so pressing the watermark opens no upgrade prompt.
+AC-071	The oversize-attachment offer in attachment-links.ts treats Share link as a cancel, so nothing is uploaded and no link is put into the body.
+AC-072	a file added while offline is attached anyway after the You're offline notice
+AC-073	clicking a reply's one-line recipient summary does not open its recipient fields
+AC-074	the Cc button of a reply's open recipient fields does not show the Cc field
+AC-075	the Bcc button of a reply's open recipient fields does not show the Bcc field
+AC-076	on a phone, the caret beside a reply's To does not show or hide Cc and Bcc
+AC-077	The reply envelope's recipient fields in reply-envelope.tsx drop every selection change instead of calling setRecipients, so a reply's To, Cc and Bcc cannot be changed.
+AC-078	a recipient chip dragged between the rows of a reply does not move
+AC-079	an inbox picked in a reply's From menu does not become the sender
+AC-080	a subject typed in the phone reply's Subject: field is not the subject the reply is sent with
+AC-081	A capture-phase beforeinput listener on the desktop reply editor's scroll box in reply-input.tsx cancels every edit, so typing into a reply inserts nothing.
+AC-082	The reply editor's onUserMention in reply-input.tsx returns without calling handleUserMention, so mentioning a person in a reply no longer copies them.
+AC-083	a document mentioned in a reply is not made viewable through its link
+AC-084	a file picked from a reply's paperclip, or its phone header's Attach, is not attached
+AC-085	a file dropped on a reply is not attached
+AC-086	a file pasted into a reply is not attached
+AC-087	The reply composer's attachment pill onRemove in reply-input.tsx returns before calling handleRemoveAttachment, so Remove leaves the file on the reply or forward.
+AC-088	The reply composer's attachment pill onClick in reply-input.tsx is wrapped so the click returns without opening the attachment viewer.
+AC-089	The "Show forwarded message" / "Show quoted text" pill's onClick in reply-input.tsx returns before un-collapsing the quote, so the folded original stays hidden.
+AC-090	The quoted-text toggle button's onChange in reply-input.tsx returns without calling toggleQuotedText, so the original is never added to the reply.
+AC-091	The desktop reply composer's Send button in reply-input.tsx returns without calling sendEmail, so pressing Send email on a reply or forward sends nothing; cmd+enter still sends.
+AC-092	The reply's shift+cmd+enter (Send and mark done) hotkey handler in reply-input.tsx consumes the key without calling sendEmail, so the shortcut sends nothing.
+AC-093	The reply footer's trash button gets an empty click handler in place of deleteDraftAndReset in reply-input.tsx.
+AC-094	The reply's Escape hotkey handler (Close reply) consumes the key and does nothing under the guard, in reply-input.tsx.
+AC-095	The empty reply's ArrowUp hotkey (Select last message) consumes the key without leaving to the last message, in reply-input.tsx.
+AC-096	on a phone, going back from a written reply opens no Draft options sheet
+AC-097	a reply's Create event button opens no event
+AC-098	a send time picked from a reply's clock does not schedule the reply
+AC-099	the Cancel and Restore draft of the bar under a scheduled reply do not take the schedule back
+AC-100	scrolling inside a long reply does not make its box taller
+AC-101	The forward notice's Open in Outlook link points at about:blank instead of the attachment's reference_url in reply-input.tsx.
+AC-102	Retry in "Unable to load local draft" does nothing
+AC-103	a reply's Don't include signature keeps the signature
+AC-104	The Cancel button of a queued-sends row does nothing while the send is locked: its onClick in queued-send-status.tsx returns before cancel() (the same button as Restore draft on a cancelled send still works).
+AC-105	the Queued email sends panel's Restore draft does not bring back a send another device cancelled
+AC-106	the Queued email sends panel's Check status does not resume a send held until its inbox is reconnected
+AC-107	Clicking View saved message on a failed send's row does not open the disclosure: the summary's click is prevented in queued-send-status.tsx.
+AC-108	the Queued email sends panel's Cancel and restore does not cancel a send queued on another device
+AC-109	the Queued email sends panel's Check status does not refresh a send queued on another device
+AC-110	Load more sends in the Queued email sends panel loads nothing
+AC-112	The mailto interceptor is never registered with openExternalUrl at startup, so a mailto link in a message does not reach the in-app composer, in mailtoComposerHandler.ts.
+AC-113	The reply composer in reply-composer.ts applies only the Reply/Reply all/Forward request it was opened with; later requests from the message header to an open composer are dropped.
+AC-300	pressing E in the Create menu opens no new email
+AC-301	pressing Shift+E in the Create menu opens no new email in a split
+AC-302	pressing Shift+Cmd+C in a new email does not show or focus the Cc field
+AC-303	pressing Shift+Cmd+B in a new email does not show or focus the Bcc field
+AC-304	a file picked after pressing Shift+Cmd+U in a new email is not attached
+AC-305	pressing Shift+Cmd+period, Shift+Cmd+comma or Shift+Cmd+D does not discard a new email
+AC-306	pressing Cmd+Enter does not send a new email
+AC-307	pressing b in a new email, outside the text, opens no event
+AC-308	pressing Shift+Cmd+C in a reply does not move the cursor to the Cc field
+AC-309	pressing Shift+Cmd+B in a reply does not move the cursor to the Bcc field
+AC-310	a file picked after pressing Shift+Cmd+U in a reply is not attached
+AC-311	The reply composer's cmd+enter hotkey handler in reply-input.tsx swallows the key without sending.
+AC-312	pressing Shift+Cmd+period, Shift+Cmd+comma or Shift+Cmd+D does not discard a reply
+AC-313	The From menu's alias items in from-inbox-selector.tsx do nothing when chosen, so the sender stays the inbox's own address.
+AC-314	on a phone, tapping a new email's folded Subject does not open it for typing
+AC-315	on a phone, a tap beside the Draft options sheet does not close it
+AC-316	on a phone, Back on an untouched new email does not close the composer
+AC-320	clicking a cloud attachment's chip in the composer does not open the file's page
+AC-321	The Connect Gmail button of the composer's no-account banner in EmailPermissionsBanner.tsx returns from its click handler without starting the inbox link.
+AC-400	the Draft could not be synced banner's Retry discard does not throw the draft away
+AC-401	Cancel in the "Sign out and remove local drafts?" dialog no longer stops sign-out: logout.ts does not return when the dialog is cancelled, so Cancel signs the user out like Sign out.
+AC-402	the Reload draft offered after Use mailbox version does not load the mailbox's copy
+AC-403	pressing Ctrl+J in the open send-time picker does not move down its options
+AC-500	A send made offline is never followed after the network returns: announceQueuedSend in queued-send-notice.ts does not watch the attempt when it was queued offline, so its delivery is never reported (online sends are still followed).
+AC-501	The outbox dispatcher in email-send-dispatcher.ts skips any send whose submission started before this page load, so an unsettled send is never resumed after a reload (it is never asked about or retried); sends started in this page still go out.
+AC-910	The /app/mail/new route view in EmailComposeRouteView.tsx renders nothing in place of the composer, so loading the address opens no new message.
+AC-911	The new-email composer's body change handler (onContentChange in email-composer.ts) no longer schedules a draft save, so text typed in the body is not saved by itself.
+AC-912	The compose route in email-compose.tsx ignores the draft named in its URL (s0.email-compose.draft) when it mounts, so a reload opens an empty composer instead of the saved draft; a new composer, which has no draft id, is unaffected.
+AC-913	A Drafts row opens a standalone draft in the ordinary thread view instead of the composer: the Match in email-thread.tsx that renders EmailComposeView for a draft that replies to nothing is switched off.
+AC-914	A send the provider rejects is not reported to the composer: the 'failed' progress handler of announceQueuedSend in queued-send-notice.ts returns at once (no failure toast, Undo not withdrawn).
+AC-915	Cancelling a rejected Outlook schedule in scheduled.rs leaves the rejected operation active and the composer locked. scheduled-failure.spec.ts checks an edit saves to the same unscheduled draft and survives reopening.
+AC-916	The Retry send button of the message-operation notice does nothing: its onClick in message-operation-recovery.tsx returns for the 'retry_send' action (Check again and the other resolutions still work).
+AC-917	scrolling the recipient suggestions to their end does not read the next people into the list
+AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open
+AL-002	A press on a desktop sidebar tab returns before setTab in EmailSidebar.tsx, so the sidebar's Favorites (and other tabs) no longer switch the list. Run on touch as well: the sidebar sheet lists the same `Tab` rows, and with setTab skipped the sheet still closes but All leaves Noise open, so the header never names All.
+AL-003	The header's Inbox view tabs (Signal / Noise) ignore a change instead of calling setTab in EmailHeader.tsx.
+AL-004	The touch header's Inbox pills (the PillTabs onChange in email-view.tsx) return before setTab, so a tap on Noise leaves Signal open.
+AL-006	the number keys do not switch tabs
+AL-007	pressing Tab or Shift+Tab does not move between the Inbox tabs
+AL-008	pressing Escape does not go back to the Signal tab
+AL-009	The list's z hotkey handler in use-email-view-hotkeys.ts consumes the key and returns before calling undo.undo.
+AL-010	The desktop sidebar's New email button (SidebarCreateButton under ViewSidebar.Primary in EmailSidebar.tsx) no longer calls composeEmail; the touch sidebar's button is unchanged.
+AL-011	the header's New email opens no new email
+AL-012	The email list header's search field (ListHeaderSearch in EmailHeader.tsx) drops every change in its onValueChange, so text typed into "Search email" never becomes the list's search.
+AL-015	The email search hotkey (run in use-email-search-hotkeys.ts) returns at once, so pressing Cmd/Ctrl+F no longer focuses the list's search field.
+AL-017	Escape in the list header's search field (onEscape in list-search-keys.ts) returns before handing the keyboard to the list, so the focus is not in the list afterwards. Also run with onEscape clearing the search instead of keeping it: the typed query is gone once the field is left.
+AL-018	The desktop Filter email menu in EmailControls.tsx drops its request to open instead of passing it to the header's filterOpen signal, so the button opens nothing.
+AL-019	pressing f does not open the filter menu
+AL-020	The desktop Filter email menu in EmailControls.tsx ignores a choice in its Read status group instead of calling filters.setSelected; other groups still apply.
+AL-021	a Done choice in the filter menu does not narrow the list (the same wiring serves AL-023, AL-024, AL-410)
+AL-022	Picking Starred under Has fails to narrow the list to starred threads, or Calendar invite drops invitations that arrive as calendar parts without file attachments in Inbox or Focus.
+AL-023	The Attachments choice in the filter menu does not narrow the list: the facet writer in use-email-filters.tsx, the one AL-021 goes through, drops the choice when the facet is attachments.
+AL-024	The same break as AL-021: the Tags choice is written by the facet writer in use-email-filters.tsx, which drops it, so the list is not narrowed.
+AL-025	picking a person in the filter menu does not narrow the list to that person's threads
+AL-026	picking an importance in the filter menu does not narrow the list
+AL-027	picking a Latest activity range does not narrow the list to recent threads
+AL-028	The Inboxes group of the Filters menu (its write in use-email-filters.tsx) writes no inbox filter, so checking an inbox there changes nothing.
+AL-029	the filter menu's Clear filters leaves the filters on
+AL-030	the phone's Open email filters opens no drawer
+AL-031	a facet checkbox in the phone's filter drawer filters nothing
+AL-032	the phone filter drawer's Clear all leaves the filters on
+AL-033	The Clear filters button on the filtered empty list in EmailEmptyState.tsx gets a handler that does nothing instead of clearFilters.
+AL-034	The "Sort Focus" menu in EmailControls.tsx ignores the order picked instead of calling setFocusSort.
+AL-035	The header's reading pane button in EmailControls.tsx calls a setReadingPane that does nothing, so the button no longer turns the pane on; the reading-pane hotkey is left alone.
+AL-036	pressing Shift+V does not hide or show the reading pane
+AL-037	a list width dragged at the divider is shown but not kept
+AL-038	The sidebar account menu's radio group (InboxAccountGroup in EmailInboxSelector.tsx) no longer selects the inbox picked; its All inboxes entry still works.
+AL-039	The sidebar account menu's radio group (InboxAccountGroup in EmailInboxSelector.tsx) ignores All inboxes; picking one inbox still works.
+AL-040	an alias picked in the inbox menu or the phone drawer does not narrow the list to the mail sent to that address
+AL-042	an inbox picked in the header menu does not narrow the list to that inbox
+AL-043	an inbox checkbox in the phone drawer does not narrow the list to that inbox
+AL-044	The sidebar's "Connect another account" button (InboxAccountGroup in EmailInboxSelector.tsx) loses its onClick, so it never starts the sign-in with the provider.
+AL-045	The "Connect email" button of the empty mail view (EmailEmptyState.tsx) no longer starts the add-inbox flow.
+AL-047	the link on the caught-up Focus tab does not open the rest of the inbox
+AL-048	The list's Move down (j, ArrowDown) and Move up (k, ArrowUp) hotkey handlers in use-list-interactions.ts consume the key and return before moving the cursor.
+AL-049	pressing End, Shift+G or Cmd+Down does not move the cursor to the last row
+AL-050	A plain click on an email row returns before list.activate.key in EmailList.tsx, so clicking a row no longer opens its thread (Enter still does).
+AL-051	The list's row activation in EmailList.tsx no longer reads Shift on the click as a request for a new split, so Shift+click opens the thread in place.
+AL-052	The email row's Select item checkbox handler in EmailList.tsx does nothing instead of calling listInteractions.selection.set.
+AL-053	pressing Cmd+A selects nothing
+AL-054	pressing Shift+Arrow does not extend the selection
+AL-055	pressing Escape does not clear the selection
+AL-056	the selection toolbar's X leaves the rows selected (the same wiring serves AL-407)
+AL-057	The mail list in EmailList.tsx no longer loads its next page when the cursor nears the end (onNavigate) or the list is scrolled to it (onScroll's checkNearEnd); the Load More button still loads it.
+AL-058	The phone list's PullToRefresh in EmailList.tsx is given a refresh that does nothing instead of pullRefresh.
+AL-059	The failed list's Try again button in EmailList.tsx gets no click handler, so it no longer calls source.refresh().
+AL-060	The row's star button (Star email / Unstar email) in EmailRowActions.tsx gets no click handler instead of props.onStar.
+AL-061	The extra favorite hotkey (s, which the mail list and an open thread pass) is not registered in use-entity-action-hotkeys.ts, so s no longer stars the row; opt+f is left alone.
+AL-062	the row's Archive button does not mark the thread done
+AL-063	The row's archive button in EmailList.tsx does nothing on a done row (Unarchive email) instead of running mark-not-done; Archive email on other rows still works.
+AL-064	The mark-done hotkey (e) handler in use-entity-action-hotkeys.ts consumes the key and returns before running the mark-done action.
+AL-065	pressing Shift+E does not bring a done thread back to the inbox
+AL-066	The mark-unread hotkey (u) handler in use-entity-action-hotkeys.ts consumes the key and returns before running the mark-unread action.
+AL-067	The mark-read hotkey (Shift+U) handler in use-entity-action-hotkeys.ts consumes the key and returns before running the mark-read action.
+AL-068	The email-selection Trash hotkey (#, Delete, Backspace) registration in use-entity-action-hotkeys.ts consumes the key instead of calling runDelete; the non-email delete registration is left alone.
+AL-069	the discard keys on a draft row do not discard the draft
+AL-070	The mail list's Shift+M binding (extraMuteHotkey in EmailList.tsx) is not registered, so Shift+M no longer mutes the row.
+AL-071	The list's h hotkey handler (Remind me in use-entity-action-hotkeys.ts) returns before opening the reminder menu.
+AL-072	The copy-link hotkey (Mod+Shift+C) handler in use-entity-action-hotkeys.ts consumes the key and returns before running the copy-link action.
+AL-073	The list's t hotkey handler (Assign tags in use-entity-action-hotkeys.ts) returns before opening the tag picker.
+AL-075	picking Share in the command menu opens no Share dialog
+AL-076	The email list's Cmd+K handler in use-email-list-hotkeys.ts ignores the selection and opens the general command menu instead of the menu for the selected threads.
+AL-077	the row's lightning button opens no command menu
+AL-078	the row menu's Mark Done does not mark the thread done
+AL-079	the row menu's Mark Read does not mark the thread read
+AL-080	the row menu's Favorite does not favorite the thread
+AL-082	the row menu's Remind me opens no reminder form
+AL-083	The tag submenu (EntityTagSubmenu.tsx) refuses to open when the row menu opens it (createSoupEntityActions.ts passes this row's id as its break name), so the row menu's Add tag shows no tag picker. AL-615 goes through the same open handler, switched on by the title menu's id.
+AL-084	The row menu's "Copy Link" item in createSoupEntityActions.ts no longer calls the copy-link action and reports nothing copied, so choosing it copies nothing and shows no check.
+AL-085	the row menu's Share opens no Share dialog
+AL-086	The row menu's "Sender → Signal" item in createSoupEntityActions.ts no longer calls the mark-sender-signal action, or the sender filter write in thread.ts does not refresh GraphQL Soup membership and the thread stays in the open Noise list.
+AL-087	The row menu's "Sender → Noise" item in createSoupEntityActions.ts no longer calls the mark-sender-noise action, so choosing it does nothing.
+AL-088	The row menu's "Block Sender" item in createSoupEntityActions.ts no longer calls the block-sender action, so choosing it does nothing.
+AL-089	the row menu's Delete does not move the thread to Trash
+AL-090	The row menu's "Open in new split" item in createSoupEntityActions.ts no longer calls openEntity('split'), so choosing it opens no split.
+AL-091	the row menu's Move to folder opens no folder picker
+AL-092	the selection toolbar's Actions opens no list of actions
+AL-093	The row's restore button in EmailRowActions.tsx (labelled Not spam in Spam and Restore in Trash) no longer calls restore().run() on click.
+AL-094	The same break as AL-093: the row's restore button in EmailRowActions.tsx is one button whose label is Restore in Trash and Not spam in Spam, and its click no longer calls restore().run().
+AL-096	The phone list's swipe-left handler (onSwipeLeft on SwipableRowProvider in EmailList.tsx) returns before running the row's Mark done action.
+AL-097	a swipe to the right on a row opens no Remind me menu
+AL-098	The reminder clock on a mail row (EmailRowSchedule in email-row-schedule.tsx) no longer calls edit, so clicking it opens no reminder menu.
+AL-099	The mail rows' tag chips in EmailList.tsx get an onFilterByTag that does nothing, so their Filter button no longer calls filterByTag.
+AL-100	Hovering a sender or recipient name opens no person card: EmailUserTooltip in email-user-tooltip.tsx passes disabled to its HoverCard, so the full name and address never show.
+AL-101	The tutorial row's button (TutorialRowView in TutorialEntries.tsx) loses its onClick, so it no longer opens the video; the pill and sidebar entries are unchanged.
+AL-102	The tutorial row's Dismiss button (TutorialRowView in TutorialEntries.tsx) gets a handler that does nothing instead of onDismiss.
+AL-103	The ? hotkey's handler in GlobalHotkeys.tsx returns before toggling the keyboard shortcuts sheet.
+AL-104	the breadcrumb name at the list opens no menu of views
+AL-105	The email saved-view row (EmailSavedViewRow in email-saved-views.tsx) no longer calls selectSavedView when clicked. The touch sidebar sheet lists the same rows: with the same break a tapped view closes the sheet but does not open.
+AL-106	The Saved views header's "New saved view" button in email-saved-views.tsx no longer opens the empty builder; the empty state's "Create view" button is untouched. The sheet's New saved view is that same header button, and with the break it opens no builder there either.
+AL-107	the changed view's Save view opens no dialog to name the view
+AL-108	the changed view's Revert keeps the changed filters
+AL-109	The saved-view builder's Name field in saved-view-dialog.tsx ignores what is typed into it, so the view is saved under the name the builder opened with.
+AL-110	The saved-view builder's submit (SavedViewDialog in saved-view-dialogs.tsx) no longer calls save, so "Save view", "Save changes" and "Duplicate" save nothing and leave the dialog open.
+AL-111	The email saved-view menu's "Edit" entry (EmailSavedViewMenuItems in email-saved-views.tsx) returns without opening the builder.
+AL-112	The email saved-view menu's "Duplicate" entry (EmailSavedViewMenuItems in email-saved-views.tsx) returns without opening the builder named "<name> (copy)".
+AL-113	The delete confirmation's "Delete view" button (DeleteSavedViewDialog in saved-view-dialogs.tsx) no longer calls the delete mutation; the menu entry that opens the confirmation is untouched.
+AL-114	The desktop saved-views list in email-saved-views.tsx ignores a dropped drag, so dragging a row past another no longer reorders; nothing else in the list changes.
+AL-115	Main before this fix enables drag on the navigation sheet's saved-view rows, removing Move up and Move down. The phone and tablet tests fail at Move up and, with the fix, check both moves against the stored order and the order after reload.
+AL-116	Save changes on an edited saved view saves nothing
+AL-117	Reset on an edited saved view keeps the edits
+AL-118	Reload saved view after a refused save reloads nothing
+AL-119	Return to Email on a missing saved view goes nowhere
+AL-120	Retry loading views asks for nothing
+AL-122	the open thread's Back does not return to the list
+AL-123	Escape in an inline thread is swallowed: the escape hotkey EmailDetailView.tsx registers returns true before unwinding the thread or going back to the list.
+AL-124	j / ArrowRight and k / ArrowLeft in an open thread do nothing: the keyDownHandlers in use-list-navigation-hotkeys.ts still report the key handled but no longer call navigation.next() or previous().
+AL-125	the open thread's Previous item and Next item arrows do not move to another thread
+AL-126	the open thread's envelope button does not mark it unread
+AL-127	the open thread's check button does not mark it done
+AL-128	The thread header's "Remind me" bell in email-reminder-status.tsx no longer runs the create-reminder action, so clicking it opens no menu.
+AL-129	The header "Ask Macro" button (AskMacroButton in ChatWithAgentButton.tsx, which the email thread header renders) no longer calls openChatWithAgent.
+AL-130	The email thread header's "Create task" button in email-thread-parts.tsx no longer calls onCreateTask, so it opens no task composer.
+AL-131	The header "Share" button of ShareTrigger in ShareButton.tsx (which the email thread header renders) no longer opens the Share dialog on click; the cmd+s hotkey and the request-driven open are untouched.
+AL-132	The side panel's "Show details" / "Hide details" button in SidePanel.tsx (the one the email thread header renders) no longer toggles the panel.
+AL-133	The thread's r hotkey is swallowed without opening a reply: its keyDownHandler in emailHotkeys.ts returns true without calling replyToFocusedMessage.
+AL-134	pressing Enter in an open thread with no message focused does not reply to all
+AL-135	pressing f in an open thread does not forward the message
+AL-136	The thread's b hotkey is swallowed without opening the event composer: its keyDownHandler in emailHotkeys.ts is replaced by one that only returns true.
+AL-137	e in an inline thread is swallowed without marking it done: the thread's e handler in emailHotkeys.ts, and the list's e handler in use-entity-action-hotkeys.ts that shares the split's hotkey scope and the markDone token (whichever registered last answers), return true without archiving.
+AL-138	pressing Shift+E in an open done thread does not bring it back to the inbox
+AL-139	Resetting the open thread's local read toggle on its own unread write leaves the envelope offering Mark as unread after u has made the thread unread at the provider.
+AL-140	Swallowing Shift+U in the open thread leaves it unread at the provider and produces no read notice.
+AL-141	The thread's ArrowUp/p and ArrowDown/n hotkeys are swallowed without moving between messages: their keyDownHandlers in emailHotkeys.ts return true without calling the navigation.
+AL-142	The thread's o hotkey is swallowed without opening or closing the focused message: its keyDownHandler in emailHotkeys.ts returns true without calling expandFocusedMessage.
+AL-143	pressing Shift+O in an open thread does not open its hidden messages
+AL-144	pressing s in an open thread does not star or unstar it
+AL-145	pressing # in an open thread does not move it to Trash
+AL-146	pressing h in an open thread opens no reminder form
+AL-147	picking Block sender from Cmd+K in an open thread does not block the sender
+AL-148	The desktop title menu trigger in SplitFileMenu.tsx ignores the request to open, so clicking ⋯ after the thread's subject opens no menu.
+AL-149	The title menu's Share (the share tool in useEmailThreadTools.tsx) no longer calls openShare, so choosing it opens no Share dialog.
+AL-150	the title menu's Mark Done does not mark the thread done
+AL-151	the title menu's Mark Unread does not mark the thread unread
+AL-153	the title menu's Create task opens no task composer
+AL-154	the title menu's Create event opens no event composer
+AL-155	The title menu's Move to folder (the moveToFolder tool in useEmailThreadTools.tsx) no longer calls moveToFolder, so choosing it opens no folder picker.
+AL-156	The "Download .eml" entry of the thread title menu in useEmailThreadTools.tsx no longer calls downloadEml, so choosing it saves nothing.
+AL-157	the title menu's Delete does not move the thread to Trash
+AL-158	the title menu's Sender to Signal does not move the sender to Signal
+AL-159	the title menu's Sender to Noise does not move the sender to Noise
+AL-160	the title menu's Block Sender does not block the sender
+AL-161	The title menu's Remind me (reminderOp in SplitFileMenu.tsx) closes the menu without opening the reminder form.
+AL-163	The "+N more" / "Show less" button under the subject does nothing: its onClick in email-participants.tsx leaves the expanded signal as it was.
+AL-164	Clicking an open message's header no longer collapses it: handleHeaderClick in email-message-top-bar.tsx still swallows the click but skips setExpandedBodyId(id, false).
+AL-165	a message header's caret does not show or hide who the message is from and to in full
+AL-166	Clicking the "Show N hidden messages" chip does nothing: its onClick in message-list.tsx no longer calls onOpenMiddle.
+AL-167	The "Show quoted text" button under a message body does nothing: its onClick in email-message-body.tsx sets showFullHTML to false.
+AL-168	A message header's Reply button does nothing: its onClick in message-actions.tsx no longer calls onReply('reply').
+AL-169	A message header's Reply all button does nothing: its onClick in message-actions.tsx no longer calls onReply('reply-all').
+AL-170	A message header's Forward button does nothing: its onClick in message-actions.tsx no longer calls onReply('forward').
+AL-171	the Reply... box under a thread opens no reply
+AL-172	The touch dock's Reply pill does nothing: its onClick in bottom-reply-buttons.tsx no longer calls open('reply'), so the full-screen composer never opens.
+AL-173	on a phone, the dock's Next email arrow does not move to the next email
+AL-174	on a phone, the dock's check does not mark the thread done or not done
+AL-175	on a phone, tapping the Draft row under a message does not open the draft reply
+AL-176	a click on a received file's chip opens nothing
+AL-177	The Download button on a received file's chip does nothing: its onClick in attachment-pill.tsx no longer calls onDownload.
+AL-178	The invitation card's Your response tabs answer nothing: their onChange in calendar-invite-card.tsx no longer calls respond, so Yes stays unchecked and no RSVP is sent.
+AL-179	The invitation card's Join button opens nothing: its onClick in calendar-invite-card.tsx no longer calls openExternal with the meeting link.
+AL-180	The invitation card's Open in calendar button does nothing: its onClick in calendar-invite-card.tsx returns before calling openCalendar.
+AL-182	the invitation card's Connect calendar starts no calendar connection
+AL-183	Add to calendar on a shared event in an email adds nothing: the onAdd that calendar-invitation.tsx gives AddToCalendarButton no longer calls the copy mutation (the calendar view's own Add to calendar is untouched).
+AL-184	the invitation card's Retry calendar does not load the calendar again
+AL-185	The invitation card's "+N more" / "Show fewer" guest button does nothing: its onClick in calendar-invite-card.tsx leaves attendeesExpanded as it was.
+AL-186	Clicking an option in the Remind me menu's list in email-reminder-form.tsx no longer selects it, so a preset cannot be saved by pointer.
+AL-187	The Remind me menu's condition tabs in email-reminder-form.tsx ignore a change, so "Regardless" cannot be chosen.
+AL-188	The Remind me menu's "Remove reminder" button in email-reminder-form.tsx no longer calls onRemove, so it removes nothing.
+AL-189	The Remind me form's Cancel button (email-reminder-form.tsx) no longer calls onOpenChange(false), so the form stays open.
+AL-190	a confirmed Keep Macro version or Use mailbox version does not settle a conflicting draft
+AL-191	the Retry under Unable to load this email does not load the thread again
+AL-192	A link to a message opens its thread without going to that message: EmailDetailRouteView in EmailDetailView.tsx drops the message id the router maps from email_message_id, so the thread opens with only its latest message unfolded.
+AL-193	A value picked in the property editor opened from a side panel's Add property (the editor has the section's add handler) is not saved in PropertyEditorModal.tsx; the editor opened any other way still saves.
+AL-194	Opening a thread no longer marks it read: EmailThreadLoadGate.tsx stops mounting EmailReadMarker, and markRowNotificationsSeenOnOpen in mark-row-seen.ts skips its markEmailThreadSeen for an opened email row.
+AL-195	The desktop Share form's "Share" button in ForwardToChannel.tsx no longer calls handleSubmit, so clicking it shares with nobody; cmd+enter is untouched.
+AL-196	the open thread's Copy Share Link copies nothing
+AL-197	The `m` (move to folder) hotkey's keyDownHandler in use-entity-action-hotkeys.ts claims the key and returns without starting the move action, so pressing m on a list row opens no folder picker; folders.spec.ts and journey-mail-day.spec.ts mark the same hotkey.
+AL-400	pressing g then e from another view does not open Email
+AL-402	pressing Cmd+K with nothing selected opens no command menu
+AL-403	a Cmd+click or Ctrl+click on a row opens it instead of selecting it
+AL-404	a Shift+click on a row checkbox does not select the range up to it
+AL-405	on a touch screen, tapping another row while one is selected does not add it to the selection
+AL-406	the toolbar's Restore and Not spam do not bring the selected threads back (the same wiring serves F-076, F-078, F-082)
+AL-407	clearing from the selection toolbar leaves the rows selected
+AL-408	The folder (project) name on an email row in EmailList.tsx returns before openEntity, so clicking it no longer opens the folder.
+AL-409	The sidebar toggle's onClick in ViewShell.tsx (ViewSidebarToggle) returns before collapsing when it is the "Hide navigation" button; "Show navigation" still works.
+AL-410	The same break as AL-021: the Focus choice is written by the facet writer in use-email-filters.tsx, which drops it, so the Focus tab keeps listing every thread.
+AL-411	a right-click on a row opens no menu
+AL-412	The list's keyboard navigation in EmailList.tsx no longer opens the row under the cursor in the reading pane (followInPane); an action's move still follows.
+AL-413	pressing Enter or clicking the row the reading pane shows does not move the focus into the pane
+AL-414	The Undo button in the Moved to Trash notice (make-delete-action.ts) dismisses the notice and returns before handle.undo().
+AL-501	The Copy subject button after a thread's subject copies nothing: handleCopy in copy-subject-button.tsx returns false instead of calling onCopy.
+AL-502	scrolling to the top of a long thread does not load its older messages
+AL-504	pressing Enter on the hidden messages chip does not show the hidden messages
+AL-505	Clicking a collapsed message row no longer opens it: the card's onClick in message-card.tsx skips onActivate (Enter on the focused card still opens it).
+AL-506	pressing Enter on a collapsed message does not open it
+AL-507	Clicking a cloud-reference attachment chip opens nothing: the reference_url branch of openAttachment in attachment-action-adapter.ts returns without calling window.open.
+AL-508	clicking a calendar file's chip does not download the file
+AL-509	Clicking the .ics chip on a message with an invitation card opens no preview: openAttachment in email-message.tsx takes its calendar-file branch and returns before setting calendarFile.
+AL-510	the event preview's Download .ics downloads nothing
+AL-511	The calendar file preview's Close button does nothing: its onClick in calendar-file-preview.tsx no longer calls onClose (Escape still closes).
+AL-513	a link in an invitation's description does not open
+AL-514	an invitation's View original email does not show the original message
+AL-515	on a phone, tapping the subject in a thread's header opens no menu of actions
+AL-516	on a phone, the header's Info button opens no item details
+AL-600	The email row's lightning button "Open command menu" in EmailList.tsx no longer calls CommandState.openForEntityAction, so it opens nothing.
+AL-601	an action picked in the command menu does not run (the same wiring serves AL-608, AL-611)
+AL-603	The row menu's "Copy ID" item in createSoupEntityActions.ts no longer calls the copy-ID action and reports nothing copied, so choosing it copies nothing and shows no check.
+AL-604	The desktop row context menu in SoupEntityContextMenu.tsx renders no items (its content Show gets no entity), so a right-click on a row opens an empty menu.
+AL-605	a long press on a row on a phone opens no actions drawer
+AL-608	The same break as AL-601: Favorite picked in the command menu goes through the menu's one run handler in CommandMenu.tsx, which does not run it.
+AL-611	The same break as AL-601: Delete picked in the command menu goes through the menu's one run handler in CommandMenu.tsx, which does not run it.
+AL-612	The Cmd+S hotkey of the thread's Share button (ShareButton.tsx) returns before opening the dialog, so pressing Cmd+S in an open thread opens no Share dialog.
+AL-613	the title menu's Favorite does not favorite the thread
+AL-615	The tag submenu (EntityTagSubmenu.tsx) refuses to open when the title menu opens it (SplitFileMenu.tsx passes this row's id as its break name), so the title menu's Add tag shows no tag picker. AL-083 goes through the same open handler, switched on by the row menu's id.
+AL-616	The title menu's Copy Link (copyLinkOp in SplitFileMenu.tsx) returns false without calling the copy-link action, so it copies nothing.
+AL-617	The title menu's Copy ID (copyEntityIdOp in SplitFileMenu.tsx) returns false without calling the copy-ID action, so it copies nothing.
+AL-619	The "Remove access" button of a person's roster row in DirectAccessView.tsx no longer calls setGrant(user, null), or the thread sharing permissions read omits the granted conversation so the owner cannot see or remove it.
+AL-621	Enter in the Remind me input in email-reminder-form.tsx no longer selects the highlighted time, so a typed reminder cannot be saved from the keyboard.
+AL-622	The Remind me form's Retry button (email-reminder-form.tsx) no longer calls onRetry, so the reminder is not read again in the quiet between the form's own reads.
+AL-700	Load more views loads nothing
+AL-701	the Saved views header does not fold the section
+AL-704	a tag picked in the view builder is not added to the view
+AL-705	Advanced settings in the view builder shows nothing
+AL-706	Cancel in the view builder leaves it open
+AL-707	The open view's header menu (EmailSavedViewMenu in email-saved-views.tsx) is held closed, so its "Saved view actions" button opens nothing; the sidebar row's menu and right-click menu are untouched.
+AL-708	Duplicate in the notice of a saved view that could not be saved opens no dialog
+AL-900	The same break as AL-170: Forward on a message with attachment chips is the same message header Forward button in message-actions.tsx, whose onClick no longer calls onReply('forward'), so no forward composer with the file opens.
+AL-901	The same break as AL-171 (ways-send.md): the test replies on the shared thread through the desktop "Reply..." box in bottom-reply-buttons.tsx, whose onClick is replaced by one that does nothing, so no reply editor opens.
+AL-902	Clicking a row in the Shared view opens nothing: EmailList.tsx's onActivate returns before opening the thread while the Shared tab is active (rows of other tabs still open).
+AL-903	Request access on a thread taken back sends no request
+AL-904	The Undo button of the "Sender block queued" toast in thread.ts returns before calling emailClient.unblockSender, so the sender stays blocked.
+AL-905	The "Grant access" button of a permission request in PermissionRequestsView.tsx no longer calls resolve with the chosen level.
+AL-910	opening a thread from its address loads no thread
+AL-911	The touch header's Show sidebar pill (ViewSidebarToggle in ViewNavigationControls.tsx) returns before expanding when the aside is a sheet, so no sheet opens; the desktop's Show navigation is untouched.
+AL-912	The Sent go-to link's handler in GoToHotkeys (sidebar.tsx) returns before navigating, so g then s leaves Email on the tab it was on. The AL-400 test goes to Sent the same way before it leaves for Tasks, so it fails at that step too.
+AL-913	The thread's Space and Shift+Space hotkeys are swallowed without paging: their keyDownHandlers in emailHotkeys.ts return true without calling pageDown or pageUp, so the open thread stays where it opened.
+AX-001	Connect on the Google Workspace row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('GMAIL') in Email.tsx.
+AX-002	Connect on the Outlook row of Settings › Email does nothing: its onClick no longer calls onConnectEmail('OUTLOOK') in Email.tsx.
+AX-003	Enable on the disabled primary inbox row does nothing: the button in DisabledPrimaryRow no longer calls props.onEnable in Email.tsx.
+AX-004	Reconnect on the primary inbox row of Settings › Email does nothing: the onReconnect handler EmailCard passes to that row no longer starts the add-inbox flow in Email.tsx.
+AX-005	Enable calendar on an inbox row of Settings › Email does nothing: its onClick no longer calls props.onEnableCalendar in Email.tsx.
+AX-006	The Turn off calendar button of an inbox row does nothing: its onClick no longer calls props.onTurnOffCalendar, so the confirmation dialog never opens (Email.tsx).
+AX-007	Turn off in the Turn off calendar dialog does nothing: its onClick no longer calls confirm in TurnOffCalendarDialog.tsx.
+AX-008	the Cancel button of Turn off calendar leaves the dialog open
+AX-009	Force sync on an inbox row of Settings › Email does nothing: its onClick no longer calls props.onResync in Email.tsx.
+AX-010	Remove on an inbox row of Settings › Email does nothing: its onClick no longer calls props.onRemove, so the Remove inbox dialog never opens (Email.tsx).
+AX-011	Remove in the Remove inbox dialog only closes the dialog: its onClick no longer runs handleRemoveInbox in Email.tsx.
+AX-012	the Cancel button of Remove inbox leaves the dialog open
+AX-013	Try again under "Couldn't load accounts" in Settings › Email does nothing: a spread after its onClick replaces the refetch with a no-op in email-settings.tsx.
+AX-014	The read receipts switch of an inbox takes no input: its ToggleSwitch is disabled in email-settings.tsx.
+AX-015	the Manage notifications button does not open the notification settings
+AX-016	the Manage calendars button does not open the calendar settings
+AX-017	words typed into the signature editor never reach the signature, so it cannot be saved (the same wiring serves AX-018, AX-202)
+AX-018	the signature toolbar's buttons, such as Bold and Link, do nothing
+AX-020	The Preview / Rich text / HTML tabs of the signature editor no longer switch views in signature-workspace.tsx.
+AX-021	Typing in the signature's HTML textarea no longer updates the draft in signature-workspace.tsx.
+AX-022	answering Continue to rich text does not switch the signature to rich text
+AX-023	answering Use pasted signature keeps the old signature
+AX-024	The "Save signature" button does nothing in signature-form.tsx.
+AX-025	The "Clear signature" button does nothing in signature-form.tsx.
+AX-026	The "Import from Gmail" button of an inbox's signature does nothing in signature-form.tsx.
+AX-027	The "Add to replies & forwards" switch of a signature no longer saves its change in signature-form.tsx.
+AX-028	The Gmail button of the "Connect email" provider chooser does nothing in ProviderDialog.tsx.
+AX-029	The Outlook / Microsoft 365 button of the "Connect email" provider chooser does nothing in ProviderDialog.tsx.
+AX-030	The Cancel button of the "Connect email" provider chooser does nothing in ProviderDialog.tsx.
+AX-031	The consent callback's success branch in EmailAuth.tsx returns after init without announcing the inbox or restoring the layout.
+AX-032	The cancelled-consent branch of the consent callback in EmailAuth.tsx returns without announcing it or navigating back.
+AX-033	the Back to app button under Finishing account connection goes nowhere
+AX-034	The "Copy admin approval link" button does nothing in AdminConsentRequiredDialog.tsx.
+AX-035	the Connect a different account button of Admin approval required closes it without offering the account chooser
+AX-036	The consent callback in EmailAuth.tsx ignores the return with email_link_notice=admin_consent_granted.
+AX-037	The "Share inbox" button of the "Share this inbox?" dialog does nothing in ShareInboxConflictDialog.tsx.
+AX-038	The Cancel button of the "Share this inbox?" dialog does nothing in ShareInboxConflictDialog.tsx.
+AX-039	Reconnect on the reconnect prompt does nothing: its action's onClick returns at once in GmailReauthenticationPrompt.tsx.
+AX-041	the Try again button of the Email access required prompt closes it without opening the account chooser
+AX-042	The onboarding email step's onConnectWork handler in email-step.tsx returns without starting the work inbox connection, so "Connect work email" does nothing.
+AX-043	The onboarding step's "Continue with Microsoft" button in google-accounts-step.tsx no longer calls onConnectMicrosoft, so the Outlook work inbox connection never starts.
+AX-044	no Try again is offered when the connected accounts fail to load during onboarding
+AX-048	picking Email in the Create menu opens no new message
+AX-049	The universal input's Save as draft button (ComposerFooter in universal-composer.tsx) no longer calls saveEmailDraft, so it saves nothing.
+AX-050	The universal input's primary button (ComposerFooter in universal-composer.tsx) does nothing for an email, so Send email sends nothing.
+AX-051	the universal input's Connect Google starts no connection when no inbox is connected
+AX-052	The review composer's subject setter in DraftComposer.tsx ignores typed subject edits, so the drafted email is sent with its original subject. The field keeps the typed text, so the first assertion that can see the edit is the subject of the sent message at the provider, right after the send; the test fails there.
+AX-054	The review composer's onSend wiring in DraftComposer.tsx no longer calls handleSend, so "Send email" (and Cmd+Enter) on the review card does nothing.
+AX-056	The row click and content-hit click handlers of an email row in the Search list (soup-view.tsx) return before opening the entity, so a search result opens no thread.
+AX-057	The click handler of a desktop Home row (HomeListEntity in HomeList.tsx) no longer activates an email row, so clicking a thread on Home does not open it.
+AX-058	The click handler of a Notifications row (NotificationRow in notifications-view.tsx) no longer activates a row about an email, so a mail notification opens no thread.
+AX-059	clicking the mention of an email thread does not open the thread
+AX-060	The two "New email" buttons of a contact's Emails section (section action and empty state, contact-emails-section.tsx) no longer call openEmailComposer.
+AX-061	the calendar setup status's Grant access, Turn on, Reconnect and Connect calendar start no connection
+AX-063	The onChange of the "New email" switch in Settings, Notifications (Notifications.tsx) no longer calls toggleType, so the switch cannot be turned on or off.
+AX-201	dragging a signature picture's resize handle does not change its width
+AX-202	pasting an address over selected words in the signature pastes plain text instead of making a link
+AX-203	the Cancel button of the Convert to rich text question leaves it open
+AX-204	a signature with its own layout pasted into an empty editor is dropped
+AX-205	the Cancel button of the Replace with pasted signature question leaves it open
+AX-206	a provider picked in the Add inbox dialog starts no sign-in
+AX-207	cancelling the Add inbox dialog leaves the chooser open
+AX-208	Maybe later on the reconnect prompt no longer puts it away: the prompt's dismiss button is relabelled and an inert "Maybe later" action takes its name in GmailReauthenticationPrompt.tsx.
+AX-210	the Maybe later button of the Email access required prompt leaves it on screen
+AX-212	the Connect personal email button starts no account sign-in
+AX-213	the Continue button on the onboarding email steps does not move on
+AX-214	the Skip for now button on the onboarding email step does not move on
+AX-215	answering Sign out in the remove-local-drafts question keeps the user signed in
+AX-216	The desktop Cancel button of the shared ConfirmDialog (ConfirmDialog.tsx) does nothing while the dialog is the "Sign out and remove local drafts?" question, so Cancel no longer closes the sign-out dialog.
+AX-302	The app layout no longer registers the mailto interceptor (registerMailtoComposerHandler in Layout.tsx), so a mailto link opens a browser window instead of the in-app composer.
+AX-304	on a phone, the Mail page's create button opens no new message
+AX-305	picking Email as the universal input's content type does not switch it to an email
+AX-306	the universal input's email ignores the From picked, the Cc/Bcc button and the recipients typed
+AX-314	Home's registration of the entity action hotkeys in HomeList.tsx is switched off, so e no longer marks the focused Home row done (the row's context menu "Mark done" is the other way in and is not reached).
+AX-315	The desktop "Filter Home" dropdown in HomeFilters.tsx drops every change to its Type group, so "Select only Email" no longer filters Home.
+AX-316	Connect email under Welcome home opens no chooser
+AX-319	The text paste plugin (textPastePlugin.ts) treats a pasted link that resolves to an email thread as plain text, so it is pasted as a bare address instead of becoming a mention.
+AX-320	The onChange of the "Email importance" (Signal / All) tabs of a contact's Emails section in contact-emails-section.tsx no longer sets the view.
+AX-321	The onChange of the "Email inboxes" (Team / Me) tabs of a contact's Emails section in contact-emails-section.tsx no longer sets the view.
+AX-322	The submit handler of the team's domain blocklist form in email-privacy.tsx no longer calls add, so a typed domain is not excluded.
+AX-324	The router middleware (app-middleware.ts) no longer redirects a direct /app/email/<thread-id> link to the thread's /app/mail/<thread-id> route, so the link does not open the thread there.
+AX-326	The click handler of the "Used N tools" toggle in ToolGroup.tsx no longer opens the tool group.
+AX-327	The Integrations page's host for the provider rows' Manage button (onOpenEmailSettings in IntegrationsPage.tsx) no longer opens Settings › Email.
+F-001	the return from consent never sets up the inbox
+F-002	Outlook in the connect dialog starts nothing
+F-003	Copy admin approval link copies nothing
+F-004	a second connected inbox is missing from the inbox picker and the list of inboxes
+F-005	Share inbox closes the dialog and shares nothing
+F-006	a cancelled or failed connection says nothing
+F-007	Reconnect on the prompt starts nothing
+F-008	Enable on a disabled inbox does nothing
+F-009	removing an inbox removes nothing
+F-010	Connect work email in onboarding starts nothing
+F-014	no reconnect prompt is raised for an inbox that lost its access
+F-015	the From menu lists the inboxes without their aliases
+F-016	the service counts mail held before connecting as imported without storing it
+F-017	the service fetches a new message and does not store it
+F-018	new mail does not reach the open list until a reload
+F-019	the service does not apply a change made in the provider's client
+F-020	the email service's thread reads (messages_by_thread_id_paginated in crates/email, get_paginated_parsed_messages_by_thread_id in email_db_client) leave out a message missing at the provider only when it is a draft, as main had them, so an Outlook message deleted at the provider stays in its thread after the service marks it provider_missing
+F-021	the Drafts tab lists no drafts
+F-022	the service does not store mail sent from the provider's client
+F-023	Force sync starts nothing
+F-025	the service files each message under a conversation of its own
+F-027	the service ignores how the provider classified the mail
+F-029	the Noise tab is never selected
+F-030	a tab other than the provider views is never selected
+F-031	the Trash and Spam tabs are never selected
+F-032	the Shared view lists nothing
+F-033	the inbox filter keeps every inbox
+F-034	the Read filter filters nothing
+F-035	picking an order in the Focus tab's Sort Focus menu does nothing
+F-036	the next page of a long list never loads
+F-037	pulling the list down refreshes nothing
+F-038	j and k do not move the cursor
+F-039	a row's checkbox selects nothing
+F-040	the reading pane never opens
+F-041	a row shows another subject
+F-042	use-navigation-unread.ts counts no rows for the Mail entry, so the Mail badge never lights however much new mail is unread.
+F-043	Try again on a failed list does nothing
+F-044	undo of Done does nothing
+F-045	saving a new view from the builder fails
+F-046	clicking a saved view opens nothing
+F-047	saving the edit of a saved view fails
+F-048	deleting a saved view does nothing
+F-049	dropping a saved view moves nothing
+F-050	typing in the list's search searches nothing
+F-051	the global Search leaves mail out of its results
+F-052	a search hit opens the thread at its latest message
+F-053	a click on a row opens nothing
+F-054	Shift+click opens the thread in place, not in a new split
+F-055	a link to a message does not open the thread at that message
+F-056	an opened message shows no body
+F-058	a message's header does not collapse it
+F-059	Show quoted text does not unfold the quote
+F-060	the hidden-messages chip shows nothing
+F-061	j and k in an open thread do not move to the next thread
+F-062	the arrow keys do not move between the messages of a thread
+F-063	the more-people control does not list the other recipients
+F-064	Download as .eml saves no file
+F-065	Copy Link copies nothing
+F-066	a sent message does not say whether it was opened
+F-067	the read receipts switch changes nothing
+F-068	mark as read does nothing
+F-069	mark as unread does nothing
+F-070	opening a thread does not mark it read
+F-071	Done does nothing
+F-072	marking a done thread not done does nothing
+F-073	starring does nothing
+F-074	unstarring a row does nothing
+F-075	Trash does nothing
+F-076	restoring from Trash does nothing
+F-078	Not spam sends nothing, so the thread stays in Spam (Gmail) or Junk Email (Outlook)
+F-079	muting a thread from the list does nothing
+F-080	Block Sender does not block the sender
+F-081	Sender to Noise does not move the sender
+F-082	bulk Done does nothing
+F-083	Undo in the Trash notice does not restore the thread
+F-084	a tag picked for a thread is not saved
+F-085	the tag chip of a row does not filter the list
+F-087	moving to a folder moves nothing
+F-088	a property set in the side panel is not saved
+F-090	a reminder preset picked for a thread sets nothing
+F-091	Remove reminder removes nothing
+F-092	the Reminders tab does not list a thread with a reminder
+F-093	the open app ignores a reminder that came due: the thread does not return to Home
+F-094	a reminder cancelled by a reply stays in the Reminders tab
+F-095	New email opens no composer
+F-096	a mailto link opens no new email
+F-097	an added recipient is not added
+F-098	a recipient dragged to Cc stays in To
+F-099	Cc is not added
+F-100	the inbox chosen in From is ignored
+F-101	the typed subject is dropped
+F-102	the typed body is not sent
+F-103	formatting shortcuts and the format ribbon format nothing
+F-104	a typed address is not sent as a link
+F-105	an inserted picture is not sent
+F-106	a person mentioned in a reply is not added to Cc
+F-107	the signature cannot be left out
+F-108	Reply opens nothing
+F-109	Reply all writes to the sender alone
+F-110	Forward opens nothing
+F-111	the quoted or forwarded original cannot be shown in the editor
+F-112	an open reply does not become a forward
+F-113	the phone composer never opens
+F-114	the event composer opened from a draft or a thread comes without the email's people as guests
+F-115	typing saves no draft
+F-116	a saved draft cannot be read back into the composer
+F-117	Escape throws a reply away
+F-118	a reload does not reopen the draft
+F-119	discarding a draft does nothing
+F-120	Retry on a refused draft save does nothing
+F-121	Log out does not ask about drafts only this device holds
+F-122	a picked file is dropped
+F-123	Remove on an attachment pill removes nothing
+F-124	a forward leaves out the files of the message
+F-125	Share link uploads nothing
+F-126	a calendar file opens nothing
+F-127	Download saves nothing
+F-129	a cloud attachment does not open at the provider
+F-131	Send on a new message does nothing
+F-132	Send on a reply does nothing
+F-133	send and mark done does not mark the thread done
+F-134	Undo send does nothing
+F-135	a failed send does not offer what was written
+F-136	the draft of a cancelled send is never given back: restoreCancelledEmailSend in send-queue.ts returns at once, so a refused reply cancelled from its row leaves the composer empty, and a send cancelled from the panel (Cancel, then Restore draft after another device's Cancel and restore) keeps its row
+F-137	a retried send is submitted again without asking what became of the first
+F-138	choosing an alias in From keeps the main address
+F-139	a send made offline is not queued on the device
+F-140	a send the provider rejects is not reported
+F-141	a thread shared with edit access offers no reply
+F-142	Schedule send does nothing
+F-143	Update schedule does nothing
+F-144	Cancel scheduled send does nothing
+F-145	the Scheduled tab lists nothing
+F-146	the service never sends a scheduled message that is due
+F-147	Restore draft and Retry send on a failed scheduled send do nothing
+F-148	Save signature does nothing
+F-149	the signature preview renders nothing
+F-150	Clear signature clears nothing
+F-151	Import from Gmail brings nothing over
+F-152	the replies-and-forwards signature switch saves nothing
+F-153	an invitation shows no event card
+F-154	choosing an answer on an invitation in a thread does nothing
+F-155	Join on an invitation opens the app's own page instead of the meeting link, and Open in calendar does not open the calendar
+F-156	Add to calendar on a shared event in a thread does nothing
+F-157	turning the calendar off never asks the service
+F-158	sharing a thread with someone grants nothing
+F-159	a shared thread gets the controls of an own thread
+F-160	Grant access does nothing
+F-161	a new-mail notification shows nothing of the mail
+F-162	the New email switch saves nothing
+F-163	a notification row opens nothing
+F-164	Mark done on Home does nothing
+F-165	New email on a contact's record does nothing, or sending from a manual contact's record creates a second team contact for the same address or changes the original contact's ID or Company
+F-166	The universal input builds its email (emailMessage in actions.ts) with an empty body, so the saved draft and the sent message lose their text: the send test fails at the provider's copy, the draft test at the opened draft's text.
+F-167	Create task on a thread opens no task composer, and Ask Macro opens a conversation without the thread attached
+F-168	the card of an email the assistant drafted sends the assistant's subject, not the one the user typed
+F-174	the refusal of a third inbox is not told
+F-177	Escape does not go back to the list
+F-178	Copy subject copies nothing
+F-179	a right-click on a row opens no menu
+F-180	Settings does not list a sender block that waits for the mailbox
+F-181	Hide navigation leaves the sidebar in place
+F-182	a folder name on a row opens nothing
+F-183	the tutorial row opens no video
+F-184	the question-mark key opens no shortcuts sheet
+F-185	an attachment pill of a forward opens no preview
+F-186	the watermark opens no upgrade prompt
+F-187	Copy ID copies nothing
+F-188	the thread offers no details panel
+F-189	Try again in the accounts settings does nothing
+F-190	the steps a program of the assistant took are not listed in the conversation
+F-191	a pasted thread link stays a plain link
+F-192	adding a domain to a CRM blacklist in Settings does nothing
+F-196	unblocking a sender does nothing
+STC-001	not shown as the row says (Loading draft…): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx, src/features/email-compose/views/reply-input.tsx
+STC-002	not shown as the row says (Unable to load this draft. Retry): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx
+STC-003	not shown as the row says (Unable to load local draft. Retry): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
+STC-005	not shown as the row says (Macro users or email addresses): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
+STC-006	not shown as the row says (From control reads Select sending inbox): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx
+STC-007	not shown as the row says (Use `@` to reference files): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
+STC-008	not shown as the row says (Reply — @mention to share or cc people / Forward — @mention to share or cc people): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
+STC-009	not shown as the row says (Subject:): its rendering is switched off or changed in src/features/email-compose/views/reply-envelope.tsx
+STC-010	not shown as the row says (Drop file(s) to attach): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
+STC-011	not shown as the row says (<filename> — upload unfinished): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
+STC-012	not shown as the row says (toast: Unable to open this attachment): its rendering is switched off or changed in src/features/email-compose/components/attachment-viewer.tsx
+STC-013	not shown as the row says (Please select at least one recipient): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
+STC-014	not shown as the row says (Please enter a message): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
+STC-015	not shown as the row says (Please enter a subject): its rendering is switched off or changed in src/features/email-compose/views/compose-subject.tsx
+STC-016	not shown as the row says (Unable to find linked email account. Select a sending inbox.): its rendering is switched off or changed in src/features/email-compose/views/compose-layout.tsx
+STC-017	The subject-length hint in subject-limit.ts says "Subject is too long." instead of naming the subject's length and Outlook's limit.
+STC-018	The reply composer's notice for a person mentioned in the body, "<email> added to CC", reads "<email> copied" instead, in reply-composer.ts (the reply editor's handleUserMention; the new-message composer's toast in editor-adapter.ts is left alone).
+STC-019	The notice after a file is made public for recipients, "Recipients can now view this file", reads "File shared" instead, in make-attachment-public.ts.
+STC-020	the title of the notice of a mentioned document that could not be made viewable is changed in src/features/email-compose/make-attachment-public.ts
+STC-021	The oversize offer dialog's title reads "Attachments too large" instead of "Attachments exceed N MB" in attachment-links.ts.
+STC-022	not shown as the row says (You're offline — Attachments can't be added while you're offline. Reconnect and try again.): its rendering is switched off or changed in src/features/email-compose/primitives/attachment-persistence.ts
+STC-023	The forward's cloud-attachment notice loses its opening words "Linked cloud attachments are available in the original Outlook" in reply-input.tsx.
+STC-024	The Undo toast of an online send reads "Delivering…" instead of "Sending…" in queued-send-notice.ts (offerUndo, both the first offer and the one renewed on acceptance).
+STC-025	The toast for a delivered send reads "Message delivered" instead of "Email sent" in queued-send-notice.ts.
+STC-026	The persistent toast of a failed send is titled "Email not delivered" instead of "Email failed to send" in queued-send-notice.ts.
+STC-027	not shown as the row says (toast: Delivery unconfirmed — Check your sent mail. We will not resend automatically.): its rendering is switched off or changed in src/features/email-compose/primitives/queued-send-notice.ts
+STC-028	A confirmed cancellation reopens its composer and shows Send cancelled even when the browser cannot read the send status. Renaming the success notice also fails the regular Undo tests.
+STC-029	not shown as the row says (toast: Cancellation pending — Waiting for confirmation): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
+STC-030	not shown as the row says (toast: Too late to undo — Delivery has already started): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
+STC-032	The browser refuses the journal write for the cancellation request. Undo reports failure and the service still has the accepted send attempt.
+STC-033	not shown as the row says (toast: Failed to send email — Reconnect to send this email.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-034	not shown as the row says (toast: Failed to send email — Wait for images and videos to finish uploading, or remove them.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-035	not shown as the row says (toast: Failed to send email — Draft not saved): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-036	not shown as the row says (toast: Failed to send email — Attachment not uploaded): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-037	not shown as the row says (toast: Failed to send email (no subtext)): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-038	not shown as the row says (toast: Loading email sender addresses...): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-039	not shown as the row says (toast: Email failed to send. No recipients provided): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-040	the text of "Loading email accounts..." is changed in src/features/email-compose/primitives/reply-composer.ts
+STC-041	the text of "Could not load email accounts" is changed in src/features/email-compose/primitives/reply-composer.ts
+STC-042	the text of "No email account connected" is changed in src/features/email-compose/primitives/reply-composer.ts
+STC-044	not shown as the row says (toast: Failed to restore thread to inbox): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts, src/features/email-compose/primitives/reply-composer.ts
+STC-045	not shown as the row says (send button disabled, tooltip: Queued to send. Cancel the send before editing.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-047	The other browser keeps a deleted draft editable or sendable, or fails to show why the draft is unavailable.
+STC-048	not shown as the row says (send button tooltip while busy: Scheduling email… / Updating schedule… / Cancelling schedule… / Sending… / Uploading files to share…): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-049	not shown as the row says (primary button label: Send email / Schedule send / Update schedule): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-050	not shown as the row says (clock button: tooltip Schedule send time, aria-label Choose send time): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-051	The locked clock button's aria-label reads "Send time" instead of "Send time cannot be changed during delivery or recovery." in email-date-selector.tsx.
+STC-052	not shown as the row says (open picker: input placeholder Select date, preset options, Custom date... (Pick from calendar), hint Use queries like 3d, 1w, feb 17, or tomorrow): its rendering is switched off or changed in src/features/email-compose/components/date-selector.tsx
+STC-053	not shown as the row says (Scheduled send: <MMM d at h:mm a ZONE> with Cancel): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-054	not shown as the row says (Scheduled for <time> with Cancel): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-055	not shown as the row says (Scheduled for <time> — Update to <time>; original remains active until Update succeeds — Cancel change): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-056	not shown as the row says (Sending — Delivery has started. Cancellation is no longer available. — Check status): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-057	The schedule bar of a failed scheduled send is labelled "Delivery paused" instead of "Send failed before delivery" in email-schedule-summary.tsx.
+STC-058	not shown as the row says (Cancelling… (bar action, disabled)): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-059	The success toast of Schedule send is titled "Email held" instead of "Email scheduled" in email-send-schedule.ts.
+STC-061	not shown as the row says (toast: That send time has passed. Choose a future time.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-062	not shown as the row says (toast: Failed to schedule email): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-063	not shown as the row says (toast: Failed to schedule email (or Failed to update schedule) — Draft is not ready to schedule. Resolve any save or connection errors and try again): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-064	not shown as the row says (toast: Email scheduled, but unable to mark thread done): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-065	Undo of an initial schedule shows Schedule cancelled. The reply test also checks that attempted typing while locked leaves the original text, and Undo makes that text editable without a kept-reply notice.
+STC-066	not shown as the row says (toast: Schedule cancelled, but the draft could not be reopened. Check Drafts.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-067	not shown as the row says (toast: This email was already sent and can no longer be unscheduled.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-068	not shown as the row says (toast: Failed to undo scheduled send): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-069	not shown as the row says (toast: Failed to cancel schedule): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-070	The toast after cancelling a schedule in the composer reads "Schedule updated." instead of "Schedule cancelled. This email is editable again." in email-send-schedule.ts.
+STC-071	not shown as the row says (toast: Could not check delivery status. Try again when you have service.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-072	not shown as the row says (toast: Email scheduled for <time>. Cancel the schedule to edit.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-073	not shown as the row says (toast: Cancel the schedule before deleting this draft.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-074	not shown as the row says (toast: This email was scheduled in another tab. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-075	not shown as the row says (toast: Scheduled email sent): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-076	not shown as the row says (toast: This scheduled email was sent. Your composer has been updated.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-persistence.ts
+STC-077	On main, durable Undo skips the mounted reply's notice when the send journal has restored the first draft. The test holds the newer reply's first save until cancellation, then asserts the notice, both saved drafts, and the newer reply after reload.
+STC-078	not shown as the row says (toast: <reason> with action Retry inbox change (Could not change inbox. Retry the same inbox to recover. when there is no reason)): its rendering is switched off or changed in src/lib/queries/email/draft.ts
+STC-079	not shown as the row says (toast: Retry the previous inbox change before choosing another inbox.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
+STC-080	A reply opened on another device keeps showing the deleted draft's file or omits the reattachment warning after its pending save commits a replacement without that file.
+STC-081	not shown as the row says (Saved on this device; waiting to sync — Changes stay on this device until you are back online.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-082	The sync banner's detail for a draft the server refused, "The server could not save this draft.", is replaced by "Save refused." in draft-sync-status.ts.
+STC-083	not shown as the row says (Changes could not be saved on this device — Keep this editor open until saving succeeds. (Retry)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-084	not shown as the row says (Draft could not be synced — Discard could not be confirmed. (Retry discard / Keep editing)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-085	not shown as the row says (Draft synchronization unavailable (Saved on this device; waiting to sync when a local copy exists) — Queued changes are preserved. Update or reload Macro to recover local storage. (Reload)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-086	not shown as the row says (Unable to read local draft status. — Retry to check the saved draft. (Retry)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-088	not shown as the row says (persistent toast: Draft could not be saved on this device — <error>): its rendering is switched off or changed in src/features/email-compose/primitives/draft-save-notice.ts
+STC-089	not shown as the row says (Draft could not be saved on this device — … This draft changed while saving. Reopen it to use the latest version.): its rendering is switched off or changed in src/lib/queries/email/local-draft-store.ts
+STC-090	not shown as the row says (toast: Failed to save draft): its rendering is switched off or changed in src/lib/queries/email/draft-queue.ts
+STC-091	not shown as the row says (Draft options sheet: Delete Draft / Save Draft): its rendering is switched off or changed in src/features/email-compose/components/draft-back-menu.tsx
+STC-092	The signature bar's button in signature-preview.tsx reads "Your signature" instead of "Signature".
+STC-093	The watermark button in macro-signature-button.tsx reads "Macro" instead of "-- Sent with Macro".
+STC-094	The collapsed reply envelope's summary says "Writing to <name>" instead of "Replying to <name>" / "Forwarding <name>" in reply-envelope.tsx.
+STC-095	The folded-original pill in reply-input.tsx says "Unfold forwarded message" instead of "Show forwarded message".
+STC-096	not shown as the row says (trash tooltip: Discard / Delete draft): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
+STC-097	not shown as the row says (recipient summary: <name>, <name> & N more…): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
+STC-098	not shown as the row says (Cc/Bcc, From: <address> (or Select sending inbox)): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
+STC-099	the label "Queued on this device" is changed in src/features/email-compose/queued-send-status.tsx
+STC-101	not shown as the row says (Send cancelled (Restore draft)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-102	not shown as the row says (Cancellation pending (Cancel disabled)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-103	not shown as the row says (Delivery unconfirmed. Your email may already have been sent. Check your sent mail. We will not resend automatically. (Check status, no Cancel)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-104	The queued-sends row of a send that failed on this device reads "Send needs review. Cancel to recover this draft." instead of "Send needs attention. Cancel to recover this draft." in queued-send-status.tsx.
+STC-105	The queued-sends panel labels a send the server reports FAILED "Send failed. Cancel to recover this draft." instead of "Send failed before delivery. Cancel to recover this draft." in queued-send-status.tsx (this device's row and another device's row).
+STC-106	not shown as the row says (Delivery unconfirmed. Check sent mail; we will not resend automatically. (Check status)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-107	not shown as the row says (alert under a row: the failure's message (else Unable to cancel the send / Unable to check send status / Could not update delivery status)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-108	not shown as the row says ((No subject) as the row title): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-109	The sign-out dialog's warning for drafts held only on this device is shortened to "<n> draft(s) are not synced." in logout.ts.
+STC-110	The composer's no-account banner text "No email account connected." becomes "No account." in EmailPermissionsBanner.tsx.
+STC-111	not shown as the row says (notice above the composer: the operation description with its resolution buttons, or The mailbox version is ready. Reload the draft to continue editing. with Reload draft): its rendering is switched off or changed in src/features/email-message/core/message-operation.ts, src/features/email-message/views/message-operation-recovery.tsx
+STC-113	The toast for an attachment upload the storage refused, "Failed to save attachments", reads "Upload failed" instead, in src/lib/queries/email/attachment.ts.
+STC-306	not shown as the row says (From shows the address as plain text, no dropdown): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx
+STC-307	The From menu in from-inbox-selector.tsx lists only its first sender, leaving out the other inboxes and their aliases.
+STC-308	not shown as the row says (Cc:, Bcc: and From: rows fold back into the combined row): its rendering is switched off or changed in src/features/email-compose/views/compose-layout.tsx
+STC-309	not shown as the row says (subject shown as one truncated line): its rendering is switched off or changed in src/features/email-compose/components/compose-subject-field.tsx
+STC-310	The Create event button in create-event-button.tsx no longer shows itself as suggested: its data-suggested attribute and accent colours are dropped when the draft proposes a meeting.
+STC-311	The signature preview in signature-preview.tsx starts expanded instead of collapsed to its bar.
+STC-312	the phone reply's Send stays enabled with an empty body (src/features/email-compose/views/reply-input.tsx)
+STC-313	not shown as the row says (suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matching options.): its rendering is switched off or changed in src/lib/core/component/RecipientSourceControls.tsx
+STC-315	not shown as the row says (Drop file(s) to attach): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
+STC-316	not shown as the row says (no trash button in the toolbar): its rendering is switched off or changed in src/features/email-compose/views/compose-toolbar.tsx
+STC-400	not shown as the row says (loading toast: Cancelling send…): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
+STC-401	not shown as the row says (toast: Delivery unconfirmed; check your sent mail. We will not resend automatically.): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
+STC-402	The toast of a send made offline reads "Email saved" instead of "Email queued to send" in queued-send-notice.ts.
+STC-403	not shown as the row says (toast: Failed to send email — Files are still uploading): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-404	The success toast of Update schedule ("Email rescheduled") is not raised at all: email-send-schedule.ts skips notices.feedback.success for the 'update' action (a first Schedule send still shows "Email scheduled").
+STC-405	not shown as the row says (toast: Failed to update schedule): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-406	not shown as the row says (toast: This email is scheduled for <time>. Choose a new time to update it, or cancel the schedule to edit.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-407	not shown as the row says (toast: These attachments exceed the destination inbox’s size limit.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
+STC-408	not shown as the row says (toast: Reconnect and let the draft finish saving before changing inboxes.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
+STC-409	A pending reply save commits before the deletion read returns, and the composer omits the notice or fails to preserve the newer text in exactly one replacement draft.
+STC-411	not shown as the row says (toast: This email was already sent. Your newer text was kept as a new draft and was not sent.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-412	not shown as the row says (toast: This draft is no longer available.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-413	not shown as the row says (toast: Draft could not be synced): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-415	not shown as the row says (No dates match "<query>"): its rendering is switched off or changed in src/features/email-compose/components/date-selector.tsx
+STC-416	not shown as the row says (clock button accented, aria-label Send time set to <date>. Open to change it.): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-417	not shown as the row says (clock button aria-label Scheduled for <date>. Open to propose a new time. (phones: … or cancel the schedule.)): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-418	not shown as the row says (clock button aria-label Proposed send time <date>. The email remains scheduled for <date> until you choose Update schedule.): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-419	not shown as the row says (Scheduled: <date> row, footer Cancel the schedule before editing the message. with Cancel schedule): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-420	not shown as the row says (Proposed: <date> row with Discard proposed time, footer The original schedule stays active until Update schedule succeeds.): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-421	not shown as the row says (Cancelling schedule… (footer button, disabled)): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-422	not shown as the row says (Clear time button at the top of the picker): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-423	not shown as the row says (Delivery unconfirmed — This email may already have been sent. Check Sent. We will not resend automatically. — Check status): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-424	not shown as the row says (Checking server acceptance): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-426	The open View saved message disclosure of a failed send shows the recipients but an empty body: the pre that holds the body text renders nothing in queued-send-status.tsx.
+STC-427	not shown as the row says (Load more sends button): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-428	not shown as the row says (Reconnect your email account, then check status to resume. (Cancel, Check status)): its rendering is switched off or changed in src/lib/queries/email/email-send-dispatcher.ts
+STC-429	not shown as the row says (Scheduled · <time> with Cancel and restore): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-430	not shown as the row says (A saved email needs recovery. Its contents are preserved on this device. Contact support before clearing storage.): its rendering is switched off or changed in src/lib/queries/email/send-intent.ts
+STC-431	not shown as the row says (Could not refresh server delivery status. Previously confirmed sends are preserved.): its rendering is switched off or changed in src/lib/queries/email/server-sends.ts
+STC-432	not shown as the row says (dialog body: Pending sends remain saved for this account and resume when you sign in again. Sends already accepted by the server may still be delivered; signing out does not cancel them.): its rendering is switched off or changed in src/lib/core/auth/logout.ts
+STC-433	not shown as the row says (dialog body: Draft storage could not be checked. Signing out removes unsubmitted drafts and their pending attachments. …): its rendering is switched off or changed in src/lib/core/auth/logout.ts
+STC-434	not shown as the row says (Saved on this device; waiting to sync — Changes stay on this device until draft synchronization resumes. (Retry while unavailable)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-435	not shown as the row says (the banner's detail line replaced by the failed action's error): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-914	A send cancelled back into a draft is not reopened in its composer: compose-adapter.ts no longer forwards draft-restoration events to the thread view and the reply composer, so the cancelled reply's editor never comes back (the status row still goes away).
+STC-915	The Sent tab's query in email-query.ts (buildEmailQuery) asks only for the nil thread id, so the delivered scheduled message is not listed in Sent.
+STC-932	Each recipient field's chip row in RecipientSelector.tsx keeps rendering every recipient it ever held, keyed by address, so a recipient taken out keeps its chip.
+STC-933	The Cc and Bcc rows of the composer in compose-recipients.tsx are handed no selected recipients to show, so they show no chips for the people added to them.
+STC-934	The editor theme's check-list class in LexicalMarkdown/theme.ts is replaced by "hidden", so a checklist typed in the composer is not drawn.
+STC-935	The editor theme's link class in LexicalMarkdown/theme.ts is replaced by "hidden", so a link in the composer body is not drawn.
+STC-936	The editor's image decorator in MarkdownImage.tsx keeps a loaded image invisible, so an inserted picture does not show in the body.
+STC-937	A reply switched to a forward keeps the reply's editor label "Reply — @mention to share or cc people" instead of "Forward — ..." in reply-input.tsx.
+STC-938	not shown as the row says (result: the draft is saved: Drafts lists it with its text): its rendering is switched off or changed in src/features/email-compose/components/draft-back-menu.tsx
+STC-939	The From control in from-inbox-selector.tsx shows the inbox's own address instead of the chosen alias.
+STC-956	The same break as STC-971: thread subjects in the lists read "[No subject]" (displaySubject in subject-text.ts); the test sees Sent list the sent message only by the row named after its subject, so the listing goes through that same render site.
+STC-957	The thread's message list in message-list.tsx hides every message after the first, so the sent reply does not show as the thread's last message.
+STC-958	A typed address's chip in RecipientSelector.tsx is labelled "recipient" instead of the address.
+STC-959	The new message's attachment pills in compose-body.tsx read "Attachment" instead of the file's name, for a file still local and for one uploaded.
+STC-960	not shown as the row says (result: From shows the chosen address): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx
+STC-961	A composer that opens an existing draft shows no body in email-composer.ts: initialHtml returns nothing and the restore of the local working copy does not write its text into the editor; a new composer is unaffected.
+STC-970	The new message's body editor in compose-body.tsx shows every full stop typed into it as a comma.
+STC-971	displaySubject in subject-text.ts shows every thread's subject as "[No subject]", so the sent message is not listed under the subject typed.
+STC-972	The new-email composer in email-compose.tsx keeps showing the signature bar after Don't include signature, though the signature is left out.
+STC-973	The phone reply composer in reply-input.tsx no longer renders its header bar with Go Back and Send.
+STC-974	A composer opened on a draft with saved text is not editable in compose-body.tsx (the editor's editable accessor is false when initialHtml is set), so what is typed after reopening from Drafts is not kept; a new composer has no initialHtml and is unaffected.
+STC-975	Send and mark done sends the reply and marks the thread done but does not open the next thread: reply-composer.ts passes navigate false to onMarkDone, so archiveThread runs instead of archiveThreadAndAdvance.
+STC-976	The Queued email sends panel stays on screen with nothing pending: its Show in queued-send-status.tsx renders even when no send needs a notice.
+STC-977	The same break as STC-105: the queued-sends panel labels the FAILED send "Send failed. Cancel to recover this draft." in queued-send-status.tsx; the assertion at this mark that the rejected message is kept as not sent reads that same label, so the row goes through the same render site.
+STC-978	The new message's pill row in compose-body.tsx keeps rendering every attachment it ever listed, so a removed file's pill stays on screen while the draft drops it.
+STC-979	The composer's attachment media viewer never opens its dialog, though the picture is loaded, in attachment-viewer.tsx.
+STC-980	The reply editor in reply-input.tsx keeps its quote-collapsed class after the original is unfolded, so the quoted or forwarded message stays hidden in the editor.
+STC-981	The signature paywall's description in PaywallState.tsx reads "Upgrade to Pro." instead of saying it removes the Macro signature.
+STC-982	The composer's notice for a provider-rejected send (SEND_REJECTED) reads "This send needs attention." instead of "Your mail provider rejected this send…" in message-operation.ts.
+STC-983	Main projects the outbox-reserved working copy under its client draft ID while the thread lists the sent reply under a different server ID. After reload and a send-status check, the thread shows one sent reply and the test fails because one reply editor remains open.
+STL-001	not shown as the row says (spinner aria-label "Loading email" (lazy list fallback)): its rendering is switched off or changed in src/features/email-view/email-view.tsx
+STL-002	not shown as the row says (list loading spinner aria-label "Loading email"): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-003	The failed list's message "Email couldn’t be loaded." is emptied in EmailList.tsx; its Try again button stays.
+STL-004	not shown as the row says (Connect your email + button "Connect email"): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-007	The no-match state's title (No results for "<query>") is emptied in EmailEmptyState.tsx.
+STL-008	The filtered empty list's title "No email matching the filters" is emptied in EmailEmptyState.tsx.
+STL-009	not shown as the row says (Inbox zero): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-010	the empty list's title "No noise" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-011	the empty list's title "No favorite emails" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-012	the empty list's title "No sent email" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-013	The empty Scheduled tab's title "No scheduled email" reads "Nothing here" in EmailEmptyState.tsx.
+STL-014	The empty Reminders tab's title "No email reminders" reads "Nothing here" in EmailEmptyState.tsx.
+STL-015	not shown as the row says (No calendar email): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-016	the empty list's title "No drafts" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-017	the empty list's title "No shared email" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-018	the empty list's title "No archived email" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-019	not shown as the row says (You're caught up + "See the rest of your inbox"): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-020	The empty Spam list's title "No spam" is replaced by "Nothing here" in EmailEmptyState.tsx.
+STL-021	the empty list's title "Trash is empty" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-022	not shown as the row says (No email yet): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-023	The mail list's `showsTutorial` condition is made false on the Signal tab in EmailList.tsx, so the "Learn how to use Macro Mail" row is not rendered above the list.
+STL-024	not shown as the row says ("Load More" row; "Loading..." with aria-busy while a page loads): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-025	The inbox selector in the Email sidebar (InboxAccountGroup in EmailInboxSelector.tsx) labels one chosen inbox "1 inbox" instead of its address.
+STL-026	The reading pane button's aria-label when the pane is on is "Reading pane" instead of "Hide reading pane" in EmailControls.tsx.
+STL-027	The filter button's active-count badge is not rendered in EmailControls.tsx.
+STL-028	not shown as the row says (No conversation selected ("Pick one from the list, or move with j and k")): its rendering is switched off or changed in src/features/email-view/components/EmailReader.tsx
+STL-029	not shown as the row says (row Draft badge): its rendering is switched off or changed in src/features/entity/composed/list-entity/email.tsx
+STL-030	not shown as the row says (paperclip aria-label "Has attachments"): its rendering is switched off or changed in src/features/entity/extractors/entity-timestamp.tsx
+STL-031	not shown as the row says (Scheduled badge with send time): its rendering is switched off or changed in src/features/entity/components/Badges.tsx
+STL-032	The reminder clock on a mail row loses its "Returning: <time> if no reply" name (aria-label "Reminder") in reminder-schedule-indicator.tsx.
+STL-033	not shown as the row says (Focus pills: Reply needed / Follow up / Calendar change / Customer / Teammate / Contact): its rendering is switched off or changed in src/features/email-view/focus-reason.ts
+STL-034	not shown as the row says (Due today / Due tomorrow / Due <weekday> / Due <date> / Overdue): its rendering is switched off or changed in src/features/email-view/focus-due.ts
+STL-035	not shown as the row says (score meter with rising/falling marker): its rendering is switched off or changed in src/features/email-view/components/EmailFocusBadges.tsx
+STL-036	The row's star button for an unstarred thread is labelled "Favorite email" instead of "Star email" in EmailRowActions.tsx.
+STL-037	The row's archive button on a done thread is labelled "Move to inbox" instead of "Unarchive email" in EmailRowActions.tsx.
+STL-038	not shown as the row says (restore button label "Not spam" (Spam) / "Restore" (Trash)): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-039	The mark-done toast (with its Undo) reads "Done" instead of "Marked N items as done" in make-mark-done-action.ts.
+STL-040	not shown as the row says (toast "Failed to mark as done"): its rendering is switched off or changed in src/features/next-soup/actions/make-mark-done-action.ts
+STL-041	not shown as the row says (alert "Some changes could not be saved. Undo will reverse the accepted changes."): its rendering is switched off or changed in src/features/next-soup/actions/make-mark-done-action.ts
+STL-042	The single-thread "Marked as not done" toast reads "Unarchived" instead, on both of its paths in make-mark-not-done-action.ts.
+STL-043	The single-thread "Marked as unread" toast reads "Unread" instead in make-mark-unread-action.ts.
+STL-044	The single-thread "Marked as read" toast reads "Read" instead in make-mark-unread-action.ts.
+STL-045	The single-thread "Moved to Trash" toast reads "Trashed" instead in make-delete-action.ts.
+STL-046	not shown as the row says (toast "Failed to move to Trash"): its rendering is switched off or changed in src/features/next-soup/actions/make-delete-action.ts
+STL-047	The Trash/Spam folder restore toast reads "Restoring" instead of "Restore requested" in EmailList.tsx.
+STL-048	The star/unstar toast reads "Starred" instead of "Added to favorites" / "Removed from favorites" in make-favorite-action.ts.
+STL-049	The mute/unmute success toast reads "Notifications changed" instead of "Muted notifications" / "Unmuted notifications" in make-mute-action.ts.
+STL-050	The block-sender toast in thread.ts is titled "Sender blocked" instead of "Sender block queued".
+STL-051	The sender-filter toast in thread.ts reads "Sender moved to <label>" instead of "Sender marked as <label>".
+STL-052	The copy-link toast for an entity reads "Copied" instead of "Link copied to clipboard" in make-copy-link-action.ts.
+STL-053	not shown as the row says (toast "Draft discarded" / "Failed to discard draft"): its rendering is switched off or changed in src/features/next-soup/actions/make-discard-draft-action.ts
+STL-054	not shown as the row says (toast "Failed to undo"): its rendering is switched off or changed in src/features/email-view/use-email-view-hotkeys.ts
+STL-055	not shown as the row says (status "Loading views…"): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-056	not shown as the row says (empty state "Your go-to views", "Save a set of senders, subjects, or filters to triage first." + "Create view"): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-057	not shown as the row says ("Retry loading views" button (no error text)): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-058	The email saved-view row in email-saved-views.tsx no longer adds "unread mail" to its accessible name when the view has unread mail.
+STL-059	not shown as the row says (toast with the server message or "Could not reorder views"; the order goes back): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-060	not shown as the row says (toast with the reason the current filters cannot be saved; no dialog): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-061	not shown as the row says ("Save changes" and "Reset" shown while the view has edits): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-062	not shown as the row says (save-error alert with "Duplicate"; "Reload saved view" too on a conflict): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-063	not shown as the row says (alert "This saved view is unavailable or you no longer have access." + "Return to Email"): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-064	not shown as the row says (alert "Some saved settings were skipped." with "Skipped settings: <names>"): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-065	The email view in email-view.tsx keeps the list placeholder up after a saved view has loaded, so its mail never replaces the placeholder.
+STL-066	The saved-view delete confirmation's title in saved-view-dialog.tsx drops the quotes around the view's name.
+STL-067	not shown as the row says (thread loading; "Unable to load this email" with Retry (not-found suppressed for a local draft)): its rendering is switched off or changed in src/features/block-email/component/EmailThreadLoadGate.tsx
+STL-068	not shown as the row says ("Loading messages" over the reply area of the last message): its rendering is switched off or changed in src/features/email-thread/views/message-container.tsx
+STL-069	The hidden-messages chip loses its leading "Show " and reads "2 hidden messages": the chip text in message-list.tsx is changed.
+STL-071	not shown as the row says ("Draft" preview row with the draft text / "No text yet"): its rendering is switched off or changed in src/features/email-thread/views/message-container.tsx, src/features/email-thread/components/draft-reply-preview.tsx
+STL-072	not shown as the row says (unread toggle label "Mark as read" (accent closed envelope) / "Mark as unread"): its rendering is switched off or changed in src/features/block-email/views/email-thread-parts.tsx
+STL-073	not shown as the row says (done toggle label "Mark as not done" / "Mark done"): its rendering is switched off or changed in src/features/block-email/views/email-thread-parts.tsx
+STL-074	not shown as the row says (toast "Marked as done" / "Marked as not done" with Undo; "Failed to undo"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
+STL-075	not shown as the row says (toast "Failed to mark as done" / "Failed to mark as not done"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
+STL-076	switching off the unread notices in thread-read-adapter.ts leaves the reading pane silent. Per-call callbacks leave Mail silent after the thread closes. Treating admission as success shows a notice while the unread write is held behind the opening read and misses an eventual refusal.
+STL-077	suppressing either mark-as-read notice in thread-read-adapter.ts leaves the reading pane silent after successfully marking read or after the write is refused
+STL-078	not shown as the row says (toast "Moved to Trash" + Undo; Undo shows "Restored from Trash" or "Failed to restore from Trash"): its rendering is switched off or changed in src/features/block-email/component/useEmailThreadTools.tsx
+STL-080	The pending-operation notice above an Outlook thread loses "Waiting for mailbox confirmation.": that text in MailboxOperationsNotice in email-thread-operations.tsx is emptied.
+STL-081	not shown as the row says ("<action>: Could not apply this change. Try the action again."): its rendering is switched off or changed in src/features/email-thread/email-thread-operations.tsx
+STL-082	The pending-operation notice names a pending unread mark "Unread" instead of "Mark as unread": actionDescription in email-thread-operations.tsx returns the wrong operation name.
+STL-083	The recovery panel's action button labels (Retry send) are emptied in message-operation-recovery.tsx.
+STL-084	not shown as the row says ("The mailbox version is ready. Reload the draft to continue" with "Reload draft"): its rendering is switched off or changed in src/features/email-message/views/message-operation-recovery.tsx
+STL-085	not shown as the row says (resolve error text (alert)): its rendering is switched off or changed in src/features/email-message/views/message-operation-recovery.tsx
+STL-086	The recovery panel's description paragraph (why the provider rejected the send) is emptied in message-operation-recovery.tsx.
+STL-087	not shown as the row says (details rows From / To / Cc / Bcc with the full date): its rendering is switched off or changed in src/features/email-message/components/email-message-top-bar.tsx
+STL-088	The read receipt label in the message header is emptied once the receipt counts an open, in email-message-top-bar.tsx.
+STL-089	not shown as the row says (caret tooltip "Collapse Message Header" / "Expand Message Header"): its rendering is switched off or changed in src/features/email-message/components/email-message-top-bar.tsx
+STL-090	The "Show quoted text" toggle under a reply with a hidden quote and signature is not rendered, in email-message-body.tsx.
+STL-091	The "+N more" label on the collapsed participants list is emptied in email-participants.tsx.
+STL-092	not shown as the row says (toast "Download failed"): its rendering is switched off or changed in src/features/email-message/attachment-action-adapter.ts
+STL-093	not shown as the row says (toast "Attachment unavailable"): its rendering is switched off or changed in src/features/email-message/attachment-action-adapter.ts
+STL-094	A failed .eml download in eml-download-adapter.ts no longer raises its "Failed to download email. Please try again." toast.
+STL-095	The invitation card's RSVP control never marks the saved response as selected, in calendar-invite-card.tsx.
+STL-096	The invitation card's status line shown without a calendar ("Connect a calendar to respond from Macro.") is emptied in calendar-invite-card.tsx.
+STL-097	not shown as the row says (notice "Calendar unavailable. Showing saved invitation details." / "…last-known details and response." with "Retry calendar"): its rendering is switched off or changed in src/features/email-thread/calendar-invitation.tsx
+STL-098	The invitation card's expanded guest list toggle label "Show fewer" is emptied in calendar-invite-card.tsx.
+STL-099	The "Added to your calendar" toast after Add to calendar succeeds is not raised, in calendar-invitation.tsx.
+STL-101	The Remind me menu's options in email-reminder-form.tsx render without their labels ("Tomorrow", "Next week", the typed time), showing only the time.
+STL-102	The Remind me menu's default condition tab in email-reminder-form.tsx is labelled "No reply" instead of "If no reply".
+STL-103	The error after a refused reminder (email-reminder-composer.tsx) is empty instead of "The reminder was not set. The conversation has been restored.", so no alert is shown.
+STL-104	The header bell in email-reminder-status.tsx keeps the label "Remind me" when a reminder is pending instead of "Reminder set for <time>".
+STL-105	The same break as STX-318: the deep-link target loader in thread-navigation.ts no longer expands the linked message, so the message a link points at stays folded.
+STL-106	The desktop "Reply..." box under the last message loses its text once the thread holds more than one message, in bottom-reply-buttons.tsx.
+STL-107	not shown as the row says (Reply all pill only when it reaches more than Reply; Forward owner only): its rendering is switched off or changed in src/features/email-thread/views/bottom-reply-buttons.tsx
+STL-108	not shown as the row says ("Copy subject" button revealed on hovering the title; absent for an empty subject): its rendering is switched off or changed in src/features/email-thread/components/email-thread-title.tsx, src/features/email-thread/components/copy-subject-button.tsx
+STL-109	The email side panel footer in EmailSidePanelSections.tsx gets no updated date, so its "Last updated" row is not shown.
+STL-110	not shown as the row says (drawer trigger "Open email filters", sheet "Email filters", section label "Filters" ("Inboxes" on Scheduled)): its rendering is switched off or changed in src/features/email-view/components/EmailFilterDrawer.tsx
+STL-112	The email list in EmailList.tsx does not render its selection toolbar ("<n> selected" with Actions and Clear) when rows are selected.
+STL-113	The single-thread move toast's title is "Moved" instead of "Moved to folder" in moved-to-folder-toast.ts.
+STL-401	not shown as the row says (date group headers between rows (sticky on Focus sorted by Most recent)): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-402	not shown as the row says (selection toolbar with the selected rows; extra "Not spam" / "Restore" button in Spam / Trash (disabled while a restore is pending)): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-403	The row shown in the reading pane is no longer passed `current` (so loses aria-current="true") in EmailList.tsx.
+STL-404	not shown as the row says (queued-send status above the Drafts list): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-405	not shown as the row says (active filter count on the drawer trigger): its rendering is switched off or changed in src/features/email-view/components/EmailFilterDrawer.tsx
+STL-406	All mail's title no longer names the selected tags (`tagViewTitle` returns nothing) in email-view-context.tsx, so the header keeps the tab's title.
+STL-408	The toast after Undo in the "Moved to Trash" notice reads "Restored" instead of "Restored from Trash" in make-delete-action.ts.
+STL-500	The short date in an open message's header row is emptied in email-message-top-bar.tsx.
+STL-501	The snippet of a collapsed message row is squeezed into a zero-height box so it does not show, in collapsed-message.tsx.
+STL-503	The "Unable to copy subject" notice is not shown when the clipboard refuses the write, in email-thread.tsx.
+STL-505	not shown as the row says (toast "Attachment upload is unfinished. Retry the upload or remove the file."): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-506	not shown as the row says (toast "Failed to save attachments"): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-507	not shown as the row says (toast "Failed to remove draft attachment"): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-508	not shown as the row says (toast "Failed to add forwarded attachments"): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-509	not shown as the row says (toast "Failed to remove forwarded attachment"): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-510	not shown as the row says (Reply all hidden when it reaches no one new; Forward hidden for a non-owner): its rendering is switched off or changed in src/features/email-thread/views/message-container.tsx
+STL-511	not shown as the row says (previous / next arrows disabled at the ends of the list; done toggle hidden on a done thread that cannot be marked not done): its rendering is switched off or changed in src/features/email-thread/views/bottom-reply-buttons.tsx
+STL-512	The row of chips for a received message's attachments is not rendered, in email-message.tsx.
+STL-513	The calendar file dialog renders its title but not the event details in its body, in calendar-file-preview.tsx.
+STL-514	The invitation card loses its region label "Calendar invitation: <title>", in calendar-invite-card.tsx.
+STL-515	not shown as the row says (eyebrow "Cancelled" with the schedule struck through): its rendering is switched off or changed in src/features/email-message/components/calendar-invite-card.tsx
+STL-516	not shown as the row says (scheduling notice "<name> accepted / declined / responded maybe to / proposed a new time for <title>" with the comment): its rendering is switched off or changed in src/features/email-message/components/calendar-invite-card.tsx
+STL-517	The "Responding as" prefix before the responding address on the invitation card is dropped, in calendar-invite-card.tsx.
+STL-520	not shown as the row says (confirmation prompt with checkbox "I understand this may send a duplicate email." / "I have reviewed the original copy…"): its rendering is switched off or changed in src/features/email-message/views/message-operation-recovery.tsx
+STL-521	not shown as the row says (header with Back, the subject and Info only): its rendering is switched off or changed in src/features/block-email/views/mobile/email-thread.tsx
+STL-522	The shared event card with only Outlook calendars shows a disabled Add to calendar button instead of explaining the writable Google calendar requirement, in AddToCalendarButton.tsx.
+STL-600	not shown as the row says (toast "Failed to block sender" / "Failed to unblock sender"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
+STL-601	not shown as the row says (toast "Failed to mark sender as <label>" / "Failed to undo"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
+STL-602	The row menu's sender moves in createSoupEntityActions.ts ignore the row's Signal/Noise bucket, so both "Sender → Signal" and "Sender → Noise" are offered whatever tab the row is in.
+STL-603	The row menu's "Open in new split" item in createSoupEntityActions.ts is never disabled, even when the layout has no room for another split.
+STL-604	The row menu's copy items (CopyMenuItem in ContextMenu.tsx) never pass the copied state to CopyFeedback, so after Copy Link the item's icon does not turn to a check. Copy ID renders through the same CopyMenuItem.
+STL-606	The command menu's entity-action mode in CommandMenu.tsx shows the general search placeholder instead of "Search actions...".
+STL-607	Restore and Not spam stay enabled while a restore is pending (src/features/email-view/components/EmailList.tsx)
+STL-608	The thread header's reminder bell in useEmailThreadTools.tsx is shown on a thread the viewer does not own.
+STL-611	not shown as the row says (thread closes back to the list): its rendering is switched off or changed in src/features/email-view/components/EmailDetailView.tsx
+STL-614	not shown as the row says ("Previous item" / "Next item" disabled at the ends of the list): its rendering is switched off or changed in src/components/app/split-layout/components/SplitHeader.tsx
+STL-615	not shown as the row says (toast "Link copied to clipboard." / "Could not copy link"): its rendering is switched off or changed in src/lib/core/util/useCopyLink.ts
+STL-616	not shown as the row says (toast "Failed to move to Trash"): its rendering is switched off or changed in src/features/block-email/component/useEmailThreadTools.tsx
+STL-617	Removing the title-menu Delete navigation leaves the trashed thread's messages open. Desktop Mail and the phone's Mail and Search cases each return to the list that opened the thread. Search restores its query and results.
+STL-618	The thread title menu's "Delete" entry in useEmailThreadTools.tsx is offered on a thread the viewer does not own.
+STL-619	not shown as the row says (menu shows as a bottom sheet without hotkey hints): its rendering is switched off or changed in src/components/app/split-layout/components/SplitFileMenu.tsx
+STL-620	not shown as the row says (References section with a count, only when the thread has any): its rendering is switched off or changed in src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx
+STL-621	not shown as the row says (Tags and Properties read-only for a viewer who is not the owner): its rendering is switched off or changed in src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx
+STL-622	The desktop Share dialog's roster heading in ShareButton.tsx reads "People <noun>" instead of "People with access to this <noun>".
+STL-623	The desktop Share dialog in ShareButton.tsx shows its "Copy Link" button for an item that is shared through the share form, so an email thread's dialog offers a link.
+STL-624	The Remind me menu of a thread with a reminder in email-reminder-form.tsx reads "Returns <time>" instead of "Scheduled for <time>".
+STL-625	The Remind me form's empty state (email-reminder-form.tsx) reads "No time yet." instead of "Enter a future time, like in 2 hours or tomorrow 9am.", and the reason for text that is no time (reminder-phrase.ts) reads "Not a time." instead of "Couldn’t read that as a time. Try in 2 hours or next friday at 3."
+STL-626	The Remind me form's status (email-reminder-form.tsx) stays empty instead of reading "Saving…" while the reminder saves.
+STL-627	The alert after a save that could not be confirmed (email-reminder-composer.tsx) reads "Something went wrong." instead of "Couldn’t confirm the change. Your time is still here; retrying this request is safe."
+STL-628	The Remind me form (email-reminder-composer.tsx) shows no "Couldn’t load this email reminder." alert when the reminder fails to load.
+STL-700	not shown as the row says (toast with the reason the edits cannot be saved): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-701	The email saved-view row in email-saved-views.tsx is never marked selected, so the open view's row has no aria-current="page".
+STL-702	The desktop saved-views list in email-saved-views.tsx keeps showing its rows in the order they first loaded, ignoring both the pending move and the reordered list the server returns.
+STL-703	not shown as the row says ("Load more views" button, disabled while loading more): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-705	The saved-view builder's default title in saved-view-dialogs.tsx reads "View builder" instead of "Save view" or "Edit “<name>”".
+STL-706	not shown as the row says (submit disabled with an empty name or a definition that does not decode; "Saving…" while pending): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
+STL-707	not shown as the row says (alert with the save error inside the dialog): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
+STL-708	not shown as the row says (Advanced settings start open when the view sets one; Inboxes shown with two or more inboxes; Tags shown when tags exist): its rendering is switched off or changed in src/features/email-view/components/EmailSavedViewFields.tsx
+STL-709	not shown as the row says (alert with the delete error inside the confirmation): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
+STL-710	Deleting the open saved view in email-saved-views.tsx no longer calls leaveSavedView, so the list does not return to the tab it was opened from.
+STL-711	Passing Move up and Move down to the draggable desktop rows breaks the desktop assertion. Main before the touch fix also makes the sheet rows draggable, breaking the phone assertion for Move down. With the fix, phone row menus show just the move toward the other row.
+STL-712	The email list header in EmailHeader.tsx no longer shows the open saved view's "Saved view actions" menu beside its name.
+STL-713	not shown as the row says ("Save changes" disabled while saving or when the view has skipped settings): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-900	The open list's live updates are cut off: graphql-soup-websocket.ts no longer subscribes to SoupUpdates and use-notification-updates.ts no longer refetches the thread of a new_email notification.
+STL-901	The Archived tab's slice in email-query.ts asks for threads that are not done, so a thread archived in the provider's client is not listed there.
+STL-902	The Gmail inbox sync's delete_message (crates/email/src/domain/mailbox/inbox_sync/delete_message.rs) returns Ok before deleting anything, so a message deleted at Gmail stays in its thread in the service.
+STL-903	A draft's row in the mail list shows no snippet (the draft's text is emptied) in list-entity/email.tsx.
+STL-904	The Sent tab asks the service for the drafts view instead of the sent view (`emailViewForTab` in email-query.ts), so sent mail, such as mail sent from the provider's client, is not listed in Sent.
+STL-905	The thread's messages are sorted newest first instead of oldest first, in selectThreadMessages in thread-messages.ts.
+STL-906	The message body wrapper (HTML, plain text or Macro body) gets the hidden class, so no body shows, in email-message-body.tsx.
+STL-907	The email renderer gets no image proxy URL, so remote pictures are requested directly, in rendering-adapter.ts.
+STL-908	The Reminders tab's list query in email-collection.ts never goes stale or polls, so a reminder cancelled by a reply stays listed when the tab is reopened.
+STL-913	A downloaded attachment is saved without its first byte, in downloadEmailAttachment in attachment-action-adapter.ts.
+STL-922	The Inbox view tabs show Signal as selected while Noise is open in EmailHeader.tsx.
+STL-923	The same break as STL-904: the Sent tab asks the service for the drafts view instead of the sent view (`emailViewForTab` in email-query.ts), and the Sent tab across every linked inbox is chosen through that one mapping.
+STL-924	The mail list's row selection in use-email-query.ts drops every row on the Trash tab, so Trash does not list the trashed thread.
+STL-925	The Shared tab's slice in email-query.ts asks for the user's own mail (shared excluded) instead of the threads shared with them, so Shared does not list the thread another person shared.
+STL-926	The Focus list's Importance order (`selectFocusEmails` in use-focus-email-source.ts) sorts by recency instead, so picking Importance leaves the list newest first.
+STL-927	The mail list (`listEntities` in use-email-query.ts) keeps showing only the threads of its first render, so a refresh does not bring the mail that arrived since into the list.
+STL-928	Keyboard stops on a message in the thread's navigation cannot be applied, so the arrow keys no longer move focus between messages, in thread-navigation.ts.
+STL-929	List rows show the Unread mark whatever the thread's read state, so an opened thread's row keeps it, in ListEntity.tsx.
+STL-930	The mail list keeps showing rows that leave its query: the list publication in use-email-query.ts carries rows the query no longer returns while the list stays the same, so threads marked done stay in the list.
+STL-931	The desktop composer's Subject input in compose-subject-field.tsx shows "Untitled" when the subject is empty, so New email no longer opens a composer that shows empty.
+STL-940	The thread's message list in message-list.tsx leaves out every message sent from one of the viewer's own inboxes, so a reply sent on a thread someone else shared does not show in that thread.
+STL-941	The invitation card's Join link gets "#broken" appended to the meeting URL, in calendar-invite-card.tsx.
+STL-942	the text shown once access is requested is changed in src/features/access-requests/views/RequestAccessView.tsx
+STL-943	The Share dialog's pending-requests heading in PermissionRequestsView.tsx reads "Requests (n)" instead of "Permission requests (n)".
+STL-944	A person's roster row in DirectAccessView.tsx shows Edit as their access level whatever access they were granted.
+STL-945	The Source pill in SourceLinkPill.tsx (the task composer's link to the thread it came from) is labelled with the bare name instead of "Open source <name>".
+STL-946	The docked sidebar panel in ViewShell.tsx stays aria-hidden once it has been shown and then collapsed, so the Email sidebar does not come back when Show navigation is pressed.
+STL-947	The Open button of the "Moved to folder" notice dismisses the notice without opening the folder (the `openFolder` call is skipped in moved-to-folder-toast.ts).
+STL-948	The copy-ID action in make-copy-entity-id-action.ts writes the entity's ID without its last character to the clipboard, while the item still shows it was copied.
+STL-951	The open thread's message body renders nothing (an empty first Match) in email-message-body.tsx.
+STL-952	The email detail's list navigation opens nothing when it steps to the next or previous thread, in use-email-detail-list-navigation.ts.
+STL-953	The same break as STL-930: the threads marked done stay in the list they were marked done in, because the list publication in use-email-query.ts keeps rows that leave the list's query.
+STL-954	Mark not done in make-mark-not-done-action.ts shows its "Marked as not done" notice and returns before the unarchive (no request, no optimistic update), so the thread stays out of the Inbox list.
+STL-955	The mail list's rows (`entities` in use-email-query.ts) put a row that once left the list at the bottom when it comes back, so Undo does not put the row back where it was.
+STL-962	A saved reply draft on the thread's last message no longer reopens its editor after a reload: the effect in thread-reply-area.ts that opens the bottom reply for a draft and the draft check in message-container.tsx are both skipped.
+STL-965	The wide mail row (`EmailWideContent` in list-entity/email.tsx) leaves out the thread's subject between the sender and the snippet.
+STL-966	The email list column is rendered only the first time the view has no thread open, so it does not come back when a thread is closed, in email-view.tsx.
+STL-967	The mail list's data source input (`listInput.inboxIds`) ignores the chosen inboxes in email-view-context.tsx, so the list keeps every inbox's threads.
+STL-968	The list of files (the final row filter in drive-data-source.ts) drops email threads, so a folder does not list the thread moved into it.
+STL-969	Discarding a draft in email-composer.ts (`deleteDraftAndReset`) no longer calls the host's goBack, so the composer stays open after its draft is discarded.
+STL-971	The reply composer's attachment row leaves out the pills of forwarded attachments, in reply-input.tsx.
+STL-972	The Favorites tab's client filter in use-email-query.ts drops every row, so the starred thread is not listed.
+STL-973	EmailSnippet in list-entity/email.tsx renders nothing, so no mail row (wide, narrow or inbox layout) shows its snippet text; the drafts-only STL-903 break on the same component's fallback line is a separate break.
+STL-974	The tutorial video dialog's play pill loses its aria-label "Play <title>, <length>" in TutorialVideoDialog.tsx.
+STL-975	The tutorial's dismissal is no longer written to localStorage in create-tutorial-state.ts, so a dismissed row returns after a reload.
+STL-976	The keyboard shortcuts sheet's "This view" section is titled "View" instead in KeyboardShortcutsDialog.tsx, so no region of that name lists the view's shortcuts.
+STL-977	Opening a thread from the list ignores the request for a new split, so Shift+click opens it in place, in EmailList.tsx.
+STL-978	Copy subject writes the subject with " (copy)" appended to the clipboard, in email-thread.tsx.
+STL-979	The mail list's rows (`rawEntities` in use-email-query.ts) are cut to the first page of 100, so the threads of the next page never join the list after it loads.
+STL-980	The email side panel footer in EmailSidePanelSections.tsx gets no created date, so its "Created" row is not shown.
+STL-981	The .eml download in eml-download-adapter.ts saves an empty file under the right name instead of the message source the service returned.
+STL-982	A row's tag chips in EntityRowTags.tsx keep every tag the row has shown, so a tag taken off still shows as a chip.
+STL-983	A side panel property row's single-value pill in EntityPropertiesSection.tsx always shows the empty label ("No priority") instead of the saved value.
+STL-984	The mail list's inbox scope in email-query.ts asks for no inbox when none is chosen, so All inboxes lists none of the connected inbox's mail.
+STL-985	The Noise tab's slice in email-query.ts asks for important mail (the Signal slice), so mail the provider set aside is not listed under Noise.
+STL-986	The Reminders row's clock label in email-row-schedule.tsx keeps the first schedule it showed for the thread, so it does not name the time the reminder was moved to.
+STL-987	The mail list's rows while searching (`rawEntities` in use-email-query.ts) leave out what the search service found, so the list shows none of the threads the search matched.
+STL-988	The event composer opened from a thread with b gets an empty subject instead of the thread's title, in EmailThreadHostView.tsx.
+STL-989	The touch list header in email-view.tsx shows an empty name outside the Inbox, so it does not name All once All is open.
+STL-990	The Mail first-page reconciliation in mail/reconciliation.rs (soup_filter_cache_adapter) skips every thread with a queued write, so a thread trashed while its mark read is on its way stays in the list.
+STL-991	The mutation queue runner in mutation-queue-runner.ts never releases the lease a reloaded page left on the queue head, so Mark done after a reload that cut off a mark read waits behind it and the provider keeps the thread in the inbox.
+STL-996	The shared-thread response omits the reader’s synced reply draft. On reload the editor is missing even though the service holds the reply in the reader’s Drafts.
+STX-001	the text of "Loading accounts…" in the Read receipts list is changed in src/features/settings/email-settings.tsx
+STX-002	The Read receipts section's load error says "Accounts unavailable" instead of "Couldn't load accounts" in email-settings.tsx.
+STX-003	not shown as the row says ("Loading signatures…" / "Loading signature…"): its rendering is switched off or changed in src/features/settings/email-settings.tsx
+STX-004	not shown as the row says ("Couldn't load signatures" + Try again): its rendering is switched off or changed in src/features/settings/email-settings.tsx
+STX-005	not shown as the row says ("Connect an email account above to add a signature."): its rendering is switched off or changed in src/features/settings/email-settings.tsx
+STX-006	not shown as the row says ("Connect an email account above to use read receipts."): its rendering is switched off or changed in src/features/settings/email-settings.tsx
+STX-007	The sync status of an inbox that lost its access reads "Needs reconnect" instead of "Reconnect to resume sync" in syncStatusLabel in Email.tsx.
+STX-008	not shown as the row says (Backfill progress bar "Backfilling…", "N of M threads", "~Xm left"): its rendering is switched off or changed in src/features/settings/Email.tsx
+STX-009	The chip of the primary inbox row in Settings › Email reads "Main" instead of "Primary" in InboxRow in Email.tsx.
+STX-010	not shown as the row says (Toast "Inbox removed" / "Failed to remove inbox. Please try again."): its rendering is switched off or changed in src/features/settings/Email.tsx
+STX-011	The notice after Force sync reads "Re-sync queued" instead of "Re-sync started" in handleResyncInbox in Email.tsx.
+STX-012	not shown as the row says (Toast "New Outlook connections are temporarily unavailable."): its rendering is switched off or changed in src/features/settings/Email.tsx
+STX-013	not shown as the row says (Toast "Failed to update read receipts."): its rendering is switched off or changed in src/features/settings/email-settings.tsx
+STX-014	The notice after turning a calendar off reads "Calendar off" instead of "Calendar turned off" in TurnOffCalendarDialog.tsx.
+STX-015	The signature save and clear toasts ("Signature saved" / "Signature removed") both read "Signature updated" in SignatureSection.tsx.
+STX-016	The import toast "Signature imported from Gmail" reads "Gmail signature copied" in SignatureSection.tsx.
+STX-018	not shown as the row says (Touch layout: preview only ("No signature saved." when empty) with "Update your signature on desktop."; no tabs, Save or Import): its rendering is switched off or changed in src/features/settings/components/signature-workspace.tsx
+STX-019	The Settings › Email operation line's "Waiting for mailbox confirmation." is shortened to "Pending." in InboxSettingsOperations.tsx.
+STX-020	The success toast "Account connected" reads "Inbox added" in link-outcome.ts.
+STX-021	The already-connected toast reads "<address> was added" instead of "<address> is already connected" in link-outcome.ts.
+STX-022	announceConsentCancelled in link-outcome.ts returns before raising the "Account not connected" toast.
+STX-023	The web connect path in email-link/index.ts says "Could not start the connection" instead of "Failed to start inbox connection" when the connection cannot start.
+STX-024	The toast for an inbox refused by the plan, "A professional subscription is required to add another inbox.", reads "Upgrade to add another inbox." in EmailAuth.tsx.
+STX-025	not shown as the row says (Multi-inbox paywall): its rendering is switched off or changed in src/lib/core/email-link/index.ts
+STX-026	The "Admin approval required" dialog's explanation reads "An administrator must approve this account." in AdminConsentRequiredDialog.tsx.
+STX-027	The toast after an administrator's approval reads "Tenant approved" instead of "Approved. Try connecting again." in EmailAuth.tsx.
+STX-028	The reconnect prompt's text reads "Sync paused for <address>." instead of "Sync stopped for <address>. Reconnect to restore … sync." in GmailReauthenticationPrompt.tsx.
+STX-030	not shown as the row says (Persistent toast "Email access required": "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected."): its rendering is switched off or changed in src/features/auth/EmailAuth.tsx
+STX-031	The sign-out dialog's title "Sign out and remove local drafts?" is shortened to "Sign out?" in logout.ts.
+STX-032	The rail item in sidebar-next/list-nav.tsx never sets data-unread on the Mail entry, so unread mail shows no mark on the Mail navigation item.
+STX-033	not shown as the row says (Validation line: "Choose Email", "Connect or choose an email account", "Choose a specific recipient for …", "Add a subject", "Attached context is supported for AI. Remove it or choose AI."; buttons disabled): its rendering is switched off or changed in src/features/universal-input/core/input.ts, src/features/universal-input/views/universal-composer.tsx, src/features/universal-input/actions.ts
+STX-200	not shown as the row says (Connect rows hidden once an inbox is connected without enable-multi-inbox; Outlook row hidden when not offered): its rendering is switched off or changed in src/features/settings/Email.tsx
+STX-201	not shown as the row says (Force sync button disabled while the inbox is syncing): its rendering is switched off or changed in src/features/settings/Email.tsx
+STX-202	not shown as the row says (toast: "Inbox synced"): its rendering is switched off or changed in src/lib/queries/email/sync.ts
+STX-203	not shown as the row says (toast: "Inbox sync failed"): its rendering is switched off or changed in src/lib/queries/email/sync.ts
+STX-204	not shown as the row says (Dialog "Remove inbox": own inbox text vs shared "Remove access to … The inbox and its data stay with its owner."): its rendering is switched off or changed in src/features/settings/Email.tsx
+STX-205	not shown as the row says (Button "Turning off…" with status "Turning off calendar and removing synced events…"): its rendering is switched off or changed in src/features/calendar/components/TurnOffCalendarDialog.tsx
+STX-206	not shown as the row says (Inline error "Failed to save signature. Please try again." / "Unable to save images. Add accessible image URLs in HTML, or use the image button in Rich text."; button "Saving…"): its rendering is switched off or changed in src/features/settings/components/signature-form.tsx, src/features/settings/SignatureSection.tsx
+STX-207	The signature's Preview tab always shows its empty-state text instead of the rendered signature in signature-workspace.tsx.
+STX-208	not shown as the row says (Shared inbox description "Shared inbox. Automatically added to new emails anyone sends from this account."): its rendering is switched off or changed in src/features/settings/components/signature-form.tsx
+STX-209	The provider chooser in ProviderDialog.tsx no longer renders its "Outlook / Microsoft 365" button.
+STX-211	not shown as the row says ("Finishing account connection…" with "Back to app"): its rendering is switched off or changed in src/features/auth/EmailAuth.tsx
+STX-212	not shown as the row says (Toast "Failed to connect email" with "Select email permissions on sign-in to enable"; other failures toast the error message): its rendering is switched off or changed in src/features/auth/EmailAuth.tsx
+STX-213	The share confirmation's title "Share this inbox?" reads "Inbox already connected" in ShareInboxConflictDialog.tsx.
+STX-214	The onboarding step's connected line "Work email connected" reads "Work inbox linked" in google-accounts-step.tsx.
+STX-300	The composer skips putting the initialTo addresses into To (email-composer.ts), so a composer opened from a mailto link has an empty To field.
+STX-301	not shown as the row says ("Connect Google to send email and create calendar events. Then return here to compose."): its rendering is switched off or changed in src/features/universal-input/views/universal-composer.tsx
+STX-302	the text of the notice of a consent screen that cannot open is changed in src/features/universal-input/actions.ts
+STX-303	The pending labels of the universal input's buttons are switched off in universal-composer.tsx, so Save as draft and Send email keep their names while the save or send is pending.
+STX-311	not shown as the row says (Empty Home "Welcome home": "… Connect email to include your inbox, too." with "Connect email"): its rendering is switched off or changed in src/features/home/components/HomeEmptyState.tsx
+STX-312	The same break as STX-971: the unread dot of a Home row in HomeListEntity.tsx loses its "Unread" label; the returned reminder shows as a notification on its Home row only through that dot, the one line that renders it for every row.
+STX-313	The kind badge on the sender avatar of a Notifications row (inbox-sender-avatar.tsx) loses its "Email" label for email notifications.
+STX-314	not shown as the row says (Email entries in the mention menu / quick access: cached threads by subject and sender, unsynced local drafts, "No Subject" fallback): its rendering is switched off or changed in src/features/command/queries/entity-search.ts, src/lib/core/context/quickAccess/QuickAccessSource.tsx
+STX-315	The title of the empty Emails section of a contact record in contact-emails-section.tsx is emptied, so "No emails with this contact yet." no longer shows.
+STX-316	not shown as the row says (Setup status "Connect your calendar" / "Enable calendar" / "Calendar is off" / "Reconnect calendar": overlay on an empty grid, pill when events show): its rendering is switched off or changed in src/features/calendar-view/components/SetupStatus.tsx
+STX-317	The "Email" section of Settings > Keyboard shortcuts (Shortcuts.tsx) is retitled "Mail", so the page no longer shows an "Email" shortcuts section.
+STX-318	The deep-link target loader in thread-navigation.ts no longer expands the linked message, so a link to a message opens the thread with that message still folded.
+STX-920	The sync status of an inbox row in Settings › Email stays on "Reconnect to resume sync" whatever the inbox's state in Email.tsx.
+STX-921	The Email settings page (settings/Email.tsx) keeps drawing the disabled primary row ("Primary", "Disabled", "Sync disabled", Enable) even once the primary inbox is enabled again.
+STX-943	The "New email" switch in Settings, Notifications (Notifications.tsx) always renders checked, whatever the service keeps, so it never shows the chosen setting.
+STX-944	The preview of a notification row in notifications-view.tsx returns before it selects an email row, so the click on the notification opens no thread.
+STX-949	An email mention chip in DocumentMention.tsx renders collapsed, its icon without the thread's subject, so a pasted thread link becomes a chip that does not name the thread.
+STX-950	The list of excluded domains in email-privacy.tsx renders no rows, so a blocked domain never shows in the CRM settings' blocklist.
+STX-963	A removed inbox's row stays in Settings › Email: the remove mutation keeps it in the cached links (link.ts) and the link_removed event no longer refetches them (sync.ts).
+STX-964	The read receipts switch of an inbox always shows on, whatever the inbox's setting, in email-settings.tsx.
+STX-965	The inbox picker's option rows (InboxOptionLabel in EmailInboxSelector.tsx) render no address, so neither inbox is listed by name in the menu.
+STX-966	The "Add to replies & forwards" switch always shows off in signature-form.tsx, whatever the saved setting.
+STX-967	The account row's "Shared" chip reads "Team" in settings/Email.tsx.
+STX-968	The title extractor for email entities in entity-title.tsx returns an empty string, so an email result in Search shows no subject.
+STX-969	The thread title heading in email-thread-title.tsx renders an empty subject, so the opened thread shows no "Timetable" heading.
+STX-970	The rows of a CRM record list in record-item-list.tsx skip email threads, so a contact's Emails section no longer shows the threads exchanged with the contact.
+STX-971	The unread dot of a Home row in HomeListEntity.tsx loses its "Unread" label, so an unread thread on Home shows no labelled unread mark.
+STX-972	The Type selection is dropped where the Home work feed takes its scope (home-work-feed.ts), where the Home query compiles its facets (home-query.ts) and where rows are admitted (home-admission.ts), so Home still lists documents and channels after "Select only Email".
+STX-973	The desktop Home view in home-view.tsx hides its list pane while a preview is open, so an opened thread no longer shows beside the Home list.
+STX-974	The Home list's rows in HomeList.tsx keep every email row that has left the source, so a thread marked done stays listed on Home.
+STX-975	The activity row of a program step in CodeExecutionToolCall.tsx shows an empty title instead of the operation's label.
+STX-976	The review composer's disabled accessor in DraftComposer.tsx always returns false, so the fields of a sent review card stay editable.
+STX-977	The open of an email result in actions.ts returns without navigating, so once the save or send finishes the universal input closes and opens neither the draft nor the sent thread.
+STL-523	The shared-event card has no syncing notice at the add control while the first calendar list is still empty, in calendar-invitation.tsx.
+STL-524	The create-event composer shows an empty calendar picker and can submit without a destination while the first calendar list is still empty, in event-form-parts.tsx and event-form-state.ts.

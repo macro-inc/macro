@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM stripe_audit_mismatch WHERE found_at < $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "15e9c8123612668d795ae3989f2d8f6e72c29a5816f341b9cf4ccadb43c4128f"
+}

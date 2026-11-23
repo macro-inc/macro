@@ -1,6 +1,8 @@
 #![deny(missing_docs)]
 //! FusionAuth API client library.
 
+use macro_service_urls::{GoogleOauthRevokeUrl, GoogleOauthTokenUrl};
+
 /// Apple identity provider login.
 pub mod apple;
 /// FusionAuth error types.
@@ -95,6 +97,10 @@ pub struct FusionAuthClient {
     google_client_id: String,
     /// The client secret for Google identity provider
     google_client_secret: String,
+    /// Google's OAuth token endpoint.
+    google_token_url: String,
+    /// Google's OAuth token revocation endpoint.
+    google_revoke_url: String,
     /// Optional Microsoft OAuth credentials.
     microsoft_credentials: Option<microsoft::MicrosoftOAuthCredentials>,
 }
@@ -124,8 +130,19 @@ impl FusionAuthClient {
             unauth_client,
             google_client_id,
             google_client_secret,
+            google_token_url: GoogleOauthTokenUrl::unwrap_new().to_string(),
+            google_revoke_url: GoogleOauthRevokeUrl::unwrap_new().to_string(),
             microsoft_credentials: None,
         }
+    }
+
+    /// Sets the Google OAuth token and revocation endpoints, in place of
+    /// the ones `GoogleOauthTokenUrl` and `GoogleOauthRevokeUrl` name. For
+    /// tests that run against `crates/gmail_emulator`.
+    pub fn with_google_oauth_urls(mut self, token_url: String, revoke_url: String) -> Self {
+        self.google_token_url = token_url;
+        self.google_revoke_url = revoke_url;
+        self
     }
 
     /// Sets the browser-reachable FusionAuth base URL used to construct OAuth
@@ -153,7 +170,25 @@ impl FusionAuthClient {
     where
         T: serde::Serialize + std::fmt::Debug + 'static,
     {
-        self.oauth2_authorize_url(Some(idp_id), login_hint, state)
+        self.oauth2_authorize_url(Some(idp_id), login_hint, None, state)
+    }
+
+    /// As [`Self::construct_oauth2_authorize_url`], with an OpenID Connect
+    /// `prompt` (such as `select_account`) that FusionAuth passes on to the
+    /// identity provider. Use it for an identity provider that discovers its
+    /// endpoints from an issuer, whose authorize URL can't carry the prompt.
+    #[tracing::instrument(skip(self, state), level = tracing::Level::TRACE)]
+    pub fn construct_oauth2_authorize_url_with_prompt<T>(
+        &self,
+        idp_id: &str,
+        login_hint: Option<&str>,
+        prompt: &str,
+        state: Option<T>,
+    ) -> anyhow::Result<String>
+    where
+        T: serde::Serialize + std::fmt::Debug + 'static,
+    {
+        self.oauth2_authorize_url(Some(idp_id), login_hint, Some(prompt), state)
     }
 
     /// The authorize URL with no identity provider picked, which lands on
@@ -162,13 +197,14 @@ impl FusionAuthClient {
     where
         T: serde::Serialize + std::fmt::Debug + 'static,
     {
-        self.oauth2_authorize_url(None, None, state)
+        self.oauth2_authorize_url(None, None, None, state)
     }
 
     fn oauth2_authorize_url<T>(
         &self,
         idp_id: Option<&str>,
         login_hint: Option<&str>,
+        prompt: Option<&str>,
         state: Option<T>,
     ) -> anyhow::Result<String>
     where
@@ -197,6 +233,10 @@ impl FusionAuthClient {
 
         if let Some(login_hint) = login_hint {
             url.query_pairs_mut().append_pair("login_hint", login_hint);
+        }
+
+        if let Some(prompt) = prompt {
+            url.query_pairs_mut().append_pair("prompt", prompt);
         }
 
         Ok(url.to_string())

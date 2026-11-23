@@ -1,8 +1,94 @@
 use axum::http::{StatusCode, header::LOCATION};
+use fusionauth::FusionAuthClient;
+use serde_json::json;
 use url::Url;
 use uuid::Uuid;
+use wiremock::matchers::{body_json, method, path, query_param};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::{build_callback_redirect, build_return_redirect};
+use super::{build_callback_redirect, build_return_redirect, replace_identity_provider_grant};
+
+#[tokio::test]
+async fn reconnect_replaces_the_matching_grant_despite_email_capitalization() {
+    let server = MockServer::start().await;
+    let client = FusionAuthClient::new(
+        "api-key".into(),
+        "application-id".into(),
+        "client-secret".into(),
+        server.uri(),
+        "http://localhost/callback".into(),
+        "google-client-id".into(),
+        "google-client-secret".into(),
+    );
+    Mock::given(method("GET"))
+        .and(path("/api/identity-provider/link"))
+        .and(query_param("userId", "owner"))
+        .and(query_param("identityProviderId", "gmail-idp"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "identityProviderLinks": [{
+                "displayName": "another@example.com",
+                "identityProviderId": "gmail-idp",
+                "identityProviderName": "google_gmail",
+                "identityProviderType": "OpenIDConnect",
+                "identityProviderUserId": "another-google-identity",
+                "insertInstant": 0, "lastLoginInstant": 0,
+                "tenantId": "tenant", "userId": "owner", "token": "another-grant"
+            }, {
+                "displayName": "Inbox@Example.com",
+                "identityProviderId": "gmail-idp",
+                "identityProviderName": "google_gmail",
+                "identityProviderType": "OpenIDConnect",
+                "identityProviderUserId": "matching-google-identity",
+                "insertInstant": 0, "lastLoginInstant": 0,
+                "tenantId": "tenant", "userId": "owner", "token": "stale-grant"
+            }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/user/owner"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "user": {"id": "owner", "email": "inbox@example.com", "active": true}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/identity-provider/link"))
+        .and(query_param("userId", "owner"))
+        .and(query_param("identityProviderId", "gmail-idp"))
+        .and(query_param(
+            "identityProviderUserId",
+            "matching-google-identity",
+        ))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/identity-provider/link"))
+        .and(body_json(json!({"identityProviderLink": {
+            "displayName": "inbox@example.com",
+            "identityProviderId": "gmail-idp",
+            "identityProviderUserId": "matching-google-identity",
+            "userId": "owner", "token": "fresh-grant"
+        }})))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    replace_identity_provider_grant(
+        &client,
+        "gmail-idp",
+        "owner",
+        "inbox@example.com",
+        "fresh-grant",
+    )
+    .await
+    .expect("reconnect should replace the existing grant for the same email");
+}
 
 #[test]
 fn callback_redirect_appends_link_identifiers_and_preserves_query_parameters() {

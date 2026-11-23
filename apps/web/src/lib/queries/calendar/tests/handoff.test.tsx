@@ -28,6 +28,9 @@ let cacheHost: Accessor<CacheHost | undefined>;
 let client: QueryClient;
 let dispose: (() => void) | undefined;
 
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'user-1',
+}));
 vi.mock('../graphql/flag', () => ({
   useGraphqlCalendarHost: () => () => cacheHost(),
   markCalendarCacheUnsupported: vi.fn(),
@@ -329,7 +332,7 @@ describe('calendar query transport handoff', () => {
         from === 'GraphQL' ? cached.host : undefined
       );
       cacheHost = host;
-      const keys = calendarKeys.visibleCalendars;
+      const keys = calendarKeys.visibleCalendars('user-1');
       const calendars = [mapVisibleCalendar(calendar)];
       client.setQueryData(
         from === 'GraphQL' ? keys._ctx.graphql.queryKey : keys.queryKey,

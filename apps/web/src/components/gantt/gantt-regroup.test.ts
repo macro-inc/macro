@@ -1,14 +1,27 @@
 import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { createComponent } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { GanttCreation } from './create-gantt-creation';
 import { Gantt } from './gantt';
 import { useGantt } from './gantt-context';
 import { ganttDateFromDay, toGanttDay } from './gantt-date';
 import type { GanttGroupMove } from './gantt-group-drag';
 
+// Bars watch their label's size, which jsdom cannot measure.
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 

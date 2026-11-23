@@ -36,6 +36,7 @@ async fn insert_statuses(pool: &PgPool, guests: &Guests, statuses: &[&str]) -> V
                             }]
                         })
                         .collect(),
+                    ids: None,
                 },
             }]
             .into(),

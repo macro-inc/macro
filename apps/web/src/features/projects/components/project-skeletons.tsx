@@ -22,7 +22,7 @@ export function ProjectContentSkeleton(props: { section: ProjectSection }) {
         when={props.section === 'overview'}
         fallback={<ProjectTasksSkeleton />}
       >
-        <div class="px-6 pb-8 pt-12 touch:pt-6">
+        <div class="px-6 pb-8 pt-12 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)]">
           <div class="mx-auto max-w-3xl">
             <ListSkeleton.Bar class="h-8 w-72 max-w-full rounded-lg" />
             <div class="mb-6 mt-3 flex flex-wrap items-center gap-2">
@@ -56,12 +56,12 @@ export function ProjectContentSkeleton(props: { section: ProjectSection }) {
 
 function ProjectTasksSkeleton() {
   return (
-    <div class="space-y-6 px-4 py-2">
+    <div class="space-y-6 px-4 py-2 touch:pt-[calc(var(--mobile-content-inset-top,0px)+0.5rem)]">
       <div class="flex h-8 items-center gap-3 overflow-x-auto scrollbar-hidden">
         <ListSkeleton.Bar class="size-8 shrink-0 rounded-full" />
         <div class="ml-auto flex shrink-0 gap-2">
-          <ListSkeleton.Bar class="h-8 w-32" />
-          <ListSkeleton.Bar class="h-8 w-24" />
+          <ListSkeleton.Bar class="h-8 w-32 mobile:w-8 mobile:rounded-full" />
+          <ListSkeleton.Bar class="h-8 w-24 touch:hidden" />
         </div>
       </div>
       <ListSkeleton.Bar class="h-7 w-full rounded-lg" />

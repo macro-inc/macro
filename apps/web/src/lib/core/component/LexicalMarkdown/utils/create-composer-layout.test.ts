@@ -5,6 +5,7 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $isParagraphNode,
   createEditor,
 } from 'lexical';
 import { createEffect, createRoot, createSignal } from 'solid-js';
@@ -43,13 +44,13 @@ beforeEach(() => {
   Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
     configurable: true,
     value: vi.fn(function (this: Range) {
-      const probe = this.commonAncestorContainer as HTMLElement;
-      const width = probe.getBoundingClientRect().width;
-      const lines = Math.max(
-        1,
-        Math.ceil(((probe.textContent?.length ?? 0) * 10) / width)
-      );
-      return new DOMRect(0, 0, width, lines * 20);
+      const ancestor = this.commonAncestorContainer;
+      const box =
+        ancestor instanceof HTMLElement ? ancestor : ancestor.parentElement;
+      const width = box?.getBoundingClientRect().width ?? 0;
+      const textWidth = this.toString().length * 10;
+      const lines = Math.max(1, Math.ceil(textWidth / width));
+      return new DOMRect(0, 0, Math.min(textWidth, width), lines * 20);
     }),
   });
 });
@@ -84,6 +85,8 @@ function setup(initialText = '', initialQuote = false) {
   setText(initialText, initialQuote);
   let containerWidth = 400;
   let controlsWidth = 80;
+  // Extra inset on the live editor alone, as while its padding transitions.
+  let liveInset = 0;
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
     function (this: HTMLElement) {
       if (this.hasAttribute('data-composer-compact'))
@@ -92,10 +95,11 @@ function setup(initialText = '', initialQuote = false) {
         this.closest('[data-composer-compact]')?.getAttribute(
           'data-composer-compact'
         ) === 'true';
+      const live = !this.closest('[aria-hidden="true"]');
       return new DOMRect(
         0,
         0,
-        containerWidth - (compact ? controlsWidth : 0),
+        containerWidth - (compact ? controlsWidth : 0) - (live ? liveInset : 0),
         20
       );
     }
@@ -119,6 +123,7 @@ function setup(initialText = '', initialQuote = false) {
     cleanups.push(() => editor.setRootElement(null));
     return {
       ...layout,
+      editor,
       setText,
       setMode,
       compactStates,
@@ -129,6 +134,9 @@ function setup(initialText = '', initialQuote = false) {
         controlsWidth = width;
         // A control change need not resize an already-expanded container.
         container.append(document.createElement('button'));
+      },
+      setLiveInset: (width: number) => {
+        liveInset = width;
       },
       resize: (width: number) => {
         containerWidth = width;
@@ -294,5 +302,126 @@ describe('composer layout', () => {
     input.setMode('auto');
     await flushMeasurements();
     expect(input.isCompact()).toBe(false);
+  });
+
+  it('reads the live compact layout without copying the composer', async () => {
+    const input = setup('short');
+    await flushMeasurements();
+    const clone = vi.spyOn(input.container, 'cloneNode');
+
+    input.setText('a'.repeat(20));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(true);
+    input.setText('a'.repeat(33));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(false);
+    input.setText('a'.repeat(20));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(true);
+    // Edits that keep the layout read the live lines. Each switch is checked
+    // against a copy, and the expanded layout copies once to learn the
+    // compact line's room.
+    expect(clone).toHaveBeenCalledTimes(3);
+    input.setText('a'.repeat(25));
+    input.setText('a'.repeat(30));
+    await flushMeasurements();
+    expect(clone).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not measure when only the caret moves', async () => {
+    const input = setup('a'.repeat(20));
+    await flushMeasurements();
+    const measure = vi.mocked(Range.prototype.getBoundingClientRect);
+    measure.mockClear();
+
+    input.editor.update(() => $getRoot().selectStart(), { discrete: true });
+    input.editor.update(() => $getRoot().selectEnd(), { discrete: true });
+    await flushMeasurements();
+    expect(measure).not.toHaveBeenCalled();
+    expect(input.isCompact()).toBe(true);
+  });
+
+  it('compares edits of a one-line expanded draft with the compact line it probed', async () => {
+    const input = setup();
+    input.setMode('expanded');
+    input.setText('a'.repeat(20));
+    await flushMeasurements();
+    expect(input.hasMultilineContent()).toBe(false);
+    const clone = vi.spyOn(input.container, 'cloneNode');
+
+    // 10px per character: the compact line holds 32, the expanded one 40.
+    for (const [length, wraps] of [
+      [25, false],
+      [31, false],
+      [35, true],
+      [39, true],
+      [45, true],
+      [28, false],
+    ] as const) {
+      input.setText('a'.repeat(length));
+      await flushMeasurements();
+      expect(input.hasMultilineContent()).toBe(wraps);
+    }
+    // Only the two edits that change the answer check it against a copy.
+    expect(clone).toHaveBeenCalledTimes(2);
+
+    input.setMode('auto');
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(true);
+  });
+
+  it('probes again once the controls beside the text change', async () => {
+    const input = setup();
+    input.setMode('expanded');
+    input.setText('a'.repeat(30));
+    await flushMeasurements();
+    expect(input.hasMultilineContent()).toBe(false);
+
+    input.setControlsWidth(120);
+    input.setText('a'.repeat(30));
+    await flushMeasurements();
+    expect(input.hasMultilineContent()).toBe(true);
+  });
+
+  it('does not switch on lines read while the live insets are still moving', async () => {
+    const input = setup('a'.repeat(30));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(true);
+
+    // Mid-transition the live line is 30px short of the compact layout's.
+    input.setLiveInset(30);
+    input.setText('a'.repeat(31));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(true);
+    expect(input.compactStates).not.toContain(false);
+
+    input.setLiveInset(0);
+    input.setText('a'.repeat(33));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(false);
+  });
+
+  it('probes again when the paragraph is indented or outdented', async () => {
+    const input = setup();
+    input.setMode('expanded');
+    input.setText('a'.repeat(20));
+    await flushMeasurements();
+    const clone = vi.spyOn(input.container, 'cloneNode');
+
+    const setIndent = (indent: number) =>
+      input.editor.update(
+        () => {
+          const paragraph = $getRoot().getFirstChild();
+          if ($isParagraphNode(paragraph)) paragraph.setIndent(indent);
+        },
+        { discrete: true }
+      );
+    // The indent narrows the paragraph's room, so the cached room is stale.
+    setIndent(1);
+    await flushMeasurements();
+    expect(clone).toHaveBeenCalledTimes(1);
+    setIndent(0);
+    await flushMeasurements();
+    expect(clone).toHaveBeenCalledTimes(2);
   });
 });

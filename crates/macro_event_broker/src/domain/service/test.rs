@@ -6,6 +6,9 @@ use std::sync::{
 use std::time::Duration;
 
 use macro_event_topics::{MacroExampleTopic, Topic};
+use opentelemetry::metrics::MeterProvider as _;
+use opentelemetry_sdk::metrics::data::{AggregatedMetrics, MetricData};
+use opentelemetry_sdk::metrics::{InMemoryMetricExporter, SdkMeterProvider};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 use tokio_util::task::TaskTracker;
@@ -23,6 +26,7 @@ use crate::outbound::spawner::GlobalSpawner;
 struct Published {
     topic: String,
     key: String,
+    event_type: Option<String>,
     payload: Vec<u8>,
 }
 
@@ -33,10 +37,16 @@ struct RecordingPublisher {
 }
 
 impl EventPublisher for RecordingPublisher {
-    async fn publish<T: Topic>(&self, key: &str, payload: &[u8]) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(
+        &self,
+        key: &str,
+        event_type: Option<&str>,
+        payload: &[u8],
+    ) -> Result<(), EventBrokerError> {
         self.calls.lock().unwrap().push(Published {
             topic: T::TOPIC_STR.to_string(),
             key: key.to_string(),
+            event_type: event_type.map(str::to_owned),
             payload: payload.to_vec(),
         });
         Ok(())
@@ -63,7 +73,12 @@ struct PendingPublisher {
 }
 
 impl EventPublisher for PendingPublisher {
-    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(
+        &self,
+        _key: &str,
+        _event_type: Option<&str>,
+        _payload: &[u8],
+    ) -> Result<(), EventBrokerError> {
         self.started.store(true, Ordering::SeqCst);
         pending().await
     }
@@ -75,7 +90,12 @@ struct GatedPublisher {
 }
 
 impl EventPublisher for GatedPublisher {
-    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(
+        &self,
+        _key: &str,
+        _event_type: Option<&str>,
+        _payload: &[u8],
+    ) -> Result<(), EventBrokerError> {
         self.started.store(true, Ordering::SeqCst);
         self.release.notified().await;
         Ok(())
@@ -98,7 +118,12 @@ struct HangingPublisher {
 }
 
 impl EventPublisher for HangingPublisher {
-    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(
+        &self,
+        _key: &str,
+        _event_type: Option<&str>,
+        _payload: &[u8],
+    ) -> Result<(), EventBrokerError> {
         self.started.store(true, Ordering::SeqCst);
         let _drop_guard = PublishDropGuard {
             dropped: Arc::clone(&self.dropped),
@@ -112,7 +137,12 @@ struct FailingPublisher {
 }
 
 impl EventPublisher for FailingPublisher {
-    async fn publish<T: Topic>(&self, _key: &str, _payload: &[u8]) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(
+        &self,
+        _key: &str,
+        _event_type: Option<&str>,
+        _payload: &[u8],
+    ) -> Result<(), EventBrokerError> {
         self.attempted.store(true, Ordering::SeqCst);
         Err(EventBrokerError::Publish("test failure".to_string()))
     }
@@ -224,7 +254,9 @@ fn example_event() -> ExampleMacroEvent {
 
 #[tokio::test]
 async fn consumer_service_receives_and_decodes_typed_event() {
-    let event = example_event();
+    let correlation_id = Uuid::from_u128(42);
+    let mut event = example_event();
+    event.event.agent_correlation_id = Some(correlation_id);
     let consumer = TestEventConsumer {
         topic: MacroExampleTopic::TOPIC_STR,
         key: "msg-123",
@@ -234,6 +266,7 @@ async fn consumer_service_receives_and_decodes_typed_event() {
 
     let message = service.recv().await.expect("message is received");
     let decoded = message.decode_payload().expect("associated topic decodes");
+    assert_eq!(decoded.agent_correlation_id(), Some(correlation_id));
     let DeclaredMacroEvent::ExampleMacroEvent(decoded) = decoded;
     assert_eq!(decoded.key(), "msg-123");
     assert_eq!(decoded.event(), event.event());
@@ -301,6 +334,7 @@ async fn dispatch_serializes_and_routes() {
     let call = &calls[0];
     assert_eq!(call.topic, MacroExampleTopic::TOPIC_STR);
     assert_eq!(call.key, "msg-123");
+    assert_eq!(call.event_type.as_deref(), Some("example.created"));
     assert_eq!(call.payload, expected_payload);
 }
 
@@ -499,4 +533,204 @@ async fn serialization_failure_does_not_invoke_spawner_or_publisher() {
     assert!(matches!(error, EventBrokerError::Serialization(_)));
     assert_eq!(spawn_count.load(Ordering::SeqCst), 0);
     assert!(service.publisher.calls.lock().unwrap().is_empty());
+}
+
+/// A meter provider whose exports `publish_counts` reads back.
+fn recording_meter() -> (SdkMeterProvider, InMemoryMetricExporter) {
+    let exporter = InMemoryMetricExporter::default();
+    let provider = SdkMeterProvider::builder()
+        .with_periodic_exporter(exporter.clone())
+        .build();
+    (provider, exporter)
+}
+
+/// The `event_broker.publishes` points last exported, as sorted
+/// `(topic, event_type, outcome, count)` rows.
+fn publish_counts(
+    provider: &SdkMeterProvider,
+    exporter: &InMemoryMetricExporter,
+) -> Vec<(String, Option<String>, String, u64)> {
+    provider.force_flush().expect("metrics flush");
+    let exported = exporter.get_finished_metrics().expect("exported metrics");
+    let Some(metric) = exported
+        .iter()
+        .rev()
+        .flat_map(|resource| resource.scope_metrics())
+        .flat_map(|scope| scope.metrics())
+        .find(|metric| metric.name() == PUBLISHES)
+    else {
+        return Vec::new();
+    };
+    let AggregatedMetrics::U64(MetricData::Sum(sum)) = metric.data() else {
+        panic!("a u64 counter; got {:?}", metric.data());
+    };
+    let mut rows: Vec<_> = sum
+        .data_points()
+        .map(|point| {
+            let tag = |name: &str| {
+                point
+                    .attributes()
+                    .find(|attribute| attribute.key.as_str() == name)
+                    .map(|attribute| attribute.value.to_string())
+            };
+            (
+                tag("topic").expect("topic tag"),
+                tag("event_type"),
+                tag("outcome").expect("outcome tag"),
+                point.value(),
+            )
+        })
+        .collect();
+    rows.sort();
+    rows
+}
+
+#[tokio::test]
+async fn publishes_are_counted_by_topic_event_type_and_outcome() {
+    let (provider, exporter) = recording_meter();
+    let meter = provider.meter("test");
+    let published =
+        MacroEventBrokerService::with_meter(RecordingPublisher::default(), GlobalSpawner, &meter);
+    let failing = MacroEventBrokerService::with_meter(
+        FailingPublisher {
+            attempted: Arc::new(AtomicBool::new(false)),
+        },
+        GlobalSpawner,
+        &meter,
+    );
+
+    for _ in 0..2 {
+        published
+            .send_event(&example_event())
+            .expect("dispatch")
+            .await
+            .expect("publish task")
+            .expect("publish");
+    }
+    failing
+        .send_event(&example_event())
+        .expect("dispatch")
+        .await
+        .expect("publish task")
+        .expect_err("publisher fails");
+    published
+        .send_event(&unserializable_event())
+        .expect_err("serialization fails");
+
+    let topic = MacroExampleTopic::TOPIC_STR.to_owned();
+    assert_eq!(
+        publish_counts(&provider, &exporter),
+        vec![
+            (topic.clone(), None, "unserializable".to_owned(), 1),
+            (
+                topic.clone(),
+                Some("example.created".to_owned()),
+                "failed".to_owned(),
+                1
+            ),
+            (
+                topic,
+                Some("example.created".to_owned()),
+                "published".to_owned(),
+                2
+            ),
+        ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_publish_past_its_timeout_is_counted_timed_out() {
+    let (provider, exporter) = recording_meter();
+    let service = MacroEventBrokerService::with_meter(
+        PendingPublisher {
+            started: Arc::new(AtomicBool::new(false)),
+        },
+        GlobalSpawner,
+        &provider.meter("test"),
+    );
+
+    let result = service
+        .send_event(&example_event())
+        .expect("dispatch")
+        .await
+        .expect("publish task");
+
+    assert!(matches!(
+        result,
+        Err(EventBrokerError::PublishTimeout { .. })
+    ));
+    assert_eq!(
+        publish_counts(&provider, &exporter),
+        vec![(
+            MacroExampleTopic::TOPIC_STR.to_owned(),
+            Some("example.created".to_owned()),
+            "timed_out".to_owned(),
+            1
+        )]
+    );
+}
+
+#[test]
+fn wire_event_type_reads_the_envelope_tag() {
+    let payload = serde_json::to_vec(example_event().event()).expect("event serializes");
+
+    assert_eq!(
+        wire_event_type(&payload).as_deref(),
+        Some("example.created")
+    );
+    assert_eq!(wire_event_type(b"{\"metadata\":{}}"), None);
+    assert_eq!(wire_event_type(b"not json"), None);
+}
+
+#[tokio::test]
+async fn an_aborted_publish_is_counted_cancelled() {
+    let (provider, exporter) = recording_meter();
+    let started = Arc::new(AtomicBool::new(false));
+    let service = MacroEventBrokerService::with_meter(
+        PendingPublisher {
+            started: Arc::clone(&started),
+        },
+        GlobalSpawner,
+        &provider.meter("test"),
+    );
+
+    let handle = service.send_event(&example_event()).expect("dispatch");
+    tokio::task::yield_now().await;
+    assert!(started.load(Ordering::SeqCst), "the publish is under way");
+    handle.abort();
+    assert!(handle.await.expect_err("aborted").is_cancelled());
+
+    assert_eq!(
+        publish_counts(&provider, &exporter),
+        vec![(
+            MacroExampleTopic::TOPIC_STR.to_owned(),
+            Some("example.created".to_owned()),
+            "cancelled".to_owned(),
+            1
+        )]
+    );
+}
+
+#[tokio::test]
+async fn a_publish_aborted_before_it_starts_is_counted_cancelled() {
+    let (provider, exporter) = recording_meter();
+    let service = MacroEventBrokerService::with_meter(
+        PendingPublisher {
+            started: Arc::new(AtomicBool::new(false)),
+        },
+        GlobalSpawner,
+        &provider.meter("test"),
+    );
+
+    let handle = service.send_event(&example_event()).expect("dispatch");
+    handle.abort();
+    let _ = handle.await;
+
+    assert_eq!(
+        publish_counts(&provider, &exporter)
+            .into_iter()
+            .map(|(_, _, outcome, count)| (outcome, count))
+            .collect::<Vec<_>>(),
+        [("cancelled".to_owned(), 1)]
+    );
 }

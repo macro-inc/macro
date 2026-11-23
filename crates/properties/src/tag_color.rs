@@ -1,8 +1,8 @@
 //! The fixed tag color palette the AI may choose from, and that new options
 //! take their colors from by position.
 //!
-//! Mirrors the frontend-owned palette in
-//! `apps/web/src/features/property/tags/tagColors.ts` — keep the hex values in
+//! Mirrors the shared frontend palette in
+//! `apps/web/src/lib/core/constant/color-palette.ts` — keep the hex values in
 //! sync. Exposing the colors as an enum keeps the AI from inventing colors the
 //! tag picker can't render.
 

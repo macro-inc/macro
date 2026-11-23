@@ -1,6 +1,6 @@
 /* Customers board: crm/views/company-board columns and cards. */
 .sample-company-titlebar { display: flex; align-items: center; gap: 12px; height: 48px; flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--color-edge-muted); }
-.sample-company-titlebar h1 { display: flex; align-items: center; min-width: 0; height: 28px; padding: 0 4px; font-size: 14px; font-weight: 600; letter-spacing: -0.03em; }
+.sample-company-titlebar h1 { display: flex; align-items: center; min-width: 0; height: 28px; padding: 0 4px; font-size: 14px; font-weight: 500; letter-spacing: -0.03em; }
 .sample-company-search { padding: 12px 16px 0; }
 .sample-company-board .sample-company-column { gap: 8px; padding: 0 8px 8px; }
 .sample-company-board .sample-company-column h3 { padding: 10px 4px; }
@@ -15,7 +15,7 @@ button.sample-company-row:hover { background: var(--color-list-hover, var(--colo
 .sample-company-row[data-header] > span:last-child, .sample-company-row-time { text-align: right; }
 .sample-company-row-indicator { display: grid; place-items: center; }
 .sample-company-row-content { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 500; }
-.sample-company-row-domain { flex-shrink: 2; font-size: 12px; font-weight: 400; color: var(--color-ink-extra-muted); }
+.sample-company-row-domain { flex-shrink: 2; font-size: 12px; font-weight: 370; color: var(--color-ink-extra-muted); }
 .sample-company-row-value { display: flex; align-items: center; gap: 6px; min-width: 0; padding-left: 8px; font-size: 12px; }
 .sample-company-row-time { font-size: 12px; font-weight: 300; color: var(--color-ink-extra-muted); }
 .sample-company-row[data-unread=true] { animation: sample-company-row-in 400ms ease-out both; }
@@ -30,7 +30,7 @@ button.sample-company-row:hover { background: var(--color-list-hover, var(--colo
 .sample-company-record { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .sample-company-topbar { display: flex; align-items: center; gap: 12px; height: 48px; flex-shrink: 0; min-width: 0; padding: 0 16px; border-bottom: 1px solid var(--color-edge-muted); }
 .sample-company-crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; flex-shrink: 1; font-size: 14px; }
-.sample-crumb { display: flex; align-items: center; gap: 6px; height: 28px; min-width: 0; padding: 0 4px; font-weight: 600; letter-spacing: -0.03em; color: var(--color-ink); }
+.sample-crumb { display: flex; align-items: center; gap: 6px; height: 28px; min-width: 0; padding: 0 4px; font-weight: 500; letter-spacing: -0.03em; color: var(--color-ink); }
 .sample-crumb-root { flex-shrink: 0; color: var(--color-ink-muted); }
 .sample-crumb-root:hover { color: var(--color-ink); }
 .sample-company-tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
@@ -39,8 +39,8 @@ button.sample-company-row:hover { background: var(--color-list-hover, var(--colo
 .sample-company-body { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .sample-company-scroll { padding: 48px 24px 0; }
 .sample-company-overview { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 768px; min-width: 0; margin: 0 auto; }
-.sample-company-overview h1 .sample-inline-input[aria-label="Company name"] { font-size: 24px; line-height: 32px; font-weight: 600; }
-.sample-company-overview [aria-label="Company details"] [data-slot=badge] { gap: 4px; font-weight: 400; }
+.sample-company-overview h1 .sample-inline-input[aria-label="Company name"] { font-size: 24px; line-height: 32px; font-weight: 500; }
+.sample-company-overview [aria-label="Company details"] [data-slot=badge] { gap: 4px; font-weight: 370; }
 
 /* EntityConversation: roots and inline replies on the channel message rows. */
 .sample-company-discussion { margin-top: 12px; padding-bottom: 48px; }
@@ -81,7 +81,7 @@ button.sample-record-row:hover, div.sample-record-row:hover { background: var(--
 .sample-record-people { display: inline-flex; flex-shrink: 0; }
 .sample-record-people > * { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--color-panel); object-fit: cover; }
 .sample-record-people > * + * { margin-left: -6px; }
-.sample-record-people > span { display: grid; place-items: center; background: var(--color-surface-2); color: var(--color-ink-muted); font-size: 8px; font-weight: 600; }
+.sample-record-people > span { display: grid; place-items: center; background: var(--color-surface-2); color: var(--color-ink-muted); font-size: 8px; font-weight: 500; }
 .sample-record-task { display: grid; grid-template-columns: 16px minmax(0, 1fr) 96px 96px; align-items: center; gap: 8px; min-height: 44px; padding: 2px 16px; border-radius: 12px; font-size: 14px; }
 .sample-record-task:hover { background: var(--color-list-hover, var(--color-hover)); }
 .sample-record-task-priority, .sample-record-task-owner { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--color-ink-muted); }
@@ -89,6 +89,11 @@ button.sample-record-row:hover, div.sample-record-row:hover { background: var(--
 /* A details panel that is open keeps the record readable beside it. */
 @container sample-main (min-width: 641px) {
   .sample-company-record[data-panel-open=true] .sample-company-scroll { padding-right: 344px; }
+}
+
+/* A narrower record bar drops the list's name, so the tabs and the record's own name fit. */
+@container sample-main (max-width: 820px) {
+  .sample-crumb-root, .sample-crumb-separator { display: none; }
 }
 
 /* The app's compact record bar: icon tabs, and the panel as a bottom sheet. */

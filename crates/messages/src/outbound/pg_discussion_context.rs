@@ -257,7 +257,7 @@ impl DiscussionContextReader for PgDiscussionContext {
         if context.is_task {
             context.assignees = sqlx::query_scalar!(r#"SELECT ref->>'entity_id' AS "user_id!"
                 FROM entity_properties p CROSS JOIN LATERAL jsonb_array_elements(p.values->'value') ref
-                WHERE p.entity_type = 'DOCUMENT' AND p.entity_id = $1 AND p.property_definition_id = $2
+                WHERE p.entity_type = 'TASK' AND p.entity_id = $1 AND p.property_definition_id = $2
                     AND p.values->>'type' = 'EntityReference' AND ref->>'entity_type' = 'USER'"#,
                 parent.entity_id(), system_properties::SystemPropertyKey::Assignees.uuid())
                 .fetch_all(&self.0).await?;

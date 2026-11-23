@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Prosjekt',
     newProject: 'Nytt prosjekt',
     contentAlreadyOpen: 'Innholdet er allerede åpent',
-    unableToOpenConversation: 'Kan ikke åpne samtalen. Prøv igjen.',
     mobileSearchPlaceholder: 'Søk…',
     closeSearch: 'Lukk søk',
     searchFullTextFor: 'Søk i fulltekst etter «{{query}}»',
@@ -104,7 +103,6 @@ export default {
     close: 'Lukk',
     delete: 'Slett',
     rename: 'Gi nytt navn',
-    more: 'Mer',
     search: 'Søk',
     settings: 'Innstillinger',
   },
@@ -518,6 +516,10 @@ export default {
       other: 'Slettet {{count}} elementer',
     },
     toastDeleteFailed: 'Kunne ikke slette',
+    toastPropertySet: {
+      one: '{{property}} angitt',
+      other: '{{property}} angitt for {{count}} elementer',
+    },
     toastAddedToFavorites: 'Lagt til i favoritter',
     toastAddedCountToFavorites: {
       one: 'La til {{count}} element i favoritter',
@@ -589,10 +591,6 @@ export default {
       other: 'Merket {{accepted}} av {{count}} elementer som ikke ferdige',
     },
     toastMarkNotDoneFailed: 'Kunne ikke merke som ikke ferdig',
-    toastThreadStaysDone:
-      'Denne tråden har ingen mottatte meldinger, så den forblir ferdig',
-    toastThreadsStayDone:
-      'Disse trådene har ingen mottatte meldinger, så de forblir ferdige',
     toastCountNotRestored: {
       one: '{{count}} kunne ikke gjenopprettes.',
       other: '{{count}} kunne ikke gjenopprettes.',
@@ -692,8 +690,6 @@ export default {
     create: 'Opprett',
     getMobileApp: 'Last ned mobilappen',
     signedInAs: 'Logget på som {{name}}',
-    commandMenu: 'Kommandomeny',
-    searchEverything: 'Søk i alt',
     customizeSidebar: 'Tilpass sidefeltet',
     customizeSidebarDescription:
       'Velg hvilke apper som vises i sidefeltet, og dra for å endre rekkefølgen. Hjem er alltid først.',
@@ -760,7 +756,7 @@ export default {
     tabMobileApp: 'Mobilapp',
     tabTags: 'Etiketter',
     tabIntegrations: 'Integrasjoner',
-    tabRuntimes: 'Kjøremiljøer',
+    tabRuntimes: 'Maskiner',
     tabMcpServer: 'MCP-server',
     tabApiKeys: 'API-nøkler',
     tabBots: 'Boter',
@@ -778,7 +774,6 @@ export default {
       'Fant ingen innstillinger. Prøv «signatur», «tema» eller «kalender».',
     backToSettings: 'Tilbake til innstillinger',
     closeSettings: 'Lukk innstillinger',
-    goToTab: 'Gå til innstillingsfane {{number}}',
     editProfile: 'Rediger profil',
     logOut: 'Logg ut',
     yourAccount: 'Din konto',

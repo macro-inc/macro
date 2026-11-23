@@ -1,3 +1,6 @@
+#[cfg(feature = "outbound")]
+mod crm_contact_access;
+
 use entity_access::domain::models::TeamRole;
 use std::sync::{Arc, Mutex};
 
@@ -231,6 +234,7 @@ impl JwtValidator for FakeJwtValidator {
                 identity: ValidatedIdentity {
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     user_id: VALID_USER_ID.to_string(),
                     fusion_user_id: "fusion-valid-user".to_string(),
                     organization_id: Some(ORGANIZATION_ID),
@@ -901,6 +905,29 @@ async fn creating_a_managed_team_definition_is_forbidden() {
         .await
         .expect("request should complete");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn creating_a_definition_under_a_built_in_name_is_a_conflict_that_names_it() {
+    // The service's repository has no expectations: the name is refused first.
+    let router = managed_router(
+        no_op_properties_service(),
+        FakeEntityAccessService::on_team(Uuid::from_u128(0x7EA3)),
+    );
+    let body = serde_json::json!({
+        "scope": "user",
+        "display_name": "contacts",
+        "data_type": { "type": "entity", "specific_type": null, "multi": true },
+    });
+    let response = router
+        .oneshot(json_request("POST", "/definitions", body))
+        .await
+        .expect("request should complete");
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        response_body(response).await,
+        "\"Contacts\" is a built-in property, so another property can't use its name"
+    );
 }
 
 #[tokio::test]

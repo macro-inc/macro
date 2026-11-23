@@ -4,6 +4,7 @@ export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 export { UnreadIndicator } from './components/UnreadIndicator';
 export { InlineEntity } from './composed/InlineEntity';
 export {
+  type EmailRowStyle,
   ListEntity,
   ListLayoutProvider,
   MaybeEntityRow,
@@ -14,6 +15,7 @@ export {
   ListEntityMetadataQueryProvider,
   ListEntityNoopMetadataProvider,
 } from './composed/list-entity/list-entity-metadata-provider';
+export { KnownFoldersProvider } from './context/known-folders';
 export {
   EntitySelectionToolbar,
   type EntitySelectionToolbarProps,
@@ -41,7 +43,7 @@ export {
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
 export { createUpdateFileTypeMutation } from './queries/file-type';
-export { emailQueryKeyExcludesDone, queryKeys } from './queries/key';
+export { queryKeys } from './queries/key';
 export {
   createBulkRenameDssEntityMutation,
   createRenameDssEntityMutation,
@@ -64,6 +66,7 @@ export {
   EntityDragSelectionContext,
 } from './utils/draggable';
 export { unreadFilterFn } from './utils/filter';
+export type { KnownFolder } from './utils/folder-path';
 export {
   filterNotDoneNotifications,
   filterValidNotifications,
@@ -78,6 +81,7 @@ export {
   getTaskPriorityOptionId,
   getTaskReferencedEntityIds,
   getTaskStatusOptionId,
+  taskCustomPropertyReferences,
 } from './utils/task-properties';
 export {
   formatDateAndTime,

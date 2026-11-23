@@ -8,3 +8,5 @@ pub mod models;
 pub mod ports;
 /// Core update service and background worker.
 pub mod service;
+/// How startup chose the bundle a launch serves.
+pub mod startup;

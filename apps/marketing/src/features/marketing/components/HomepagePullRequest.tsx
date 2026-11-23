@@ -1,6 +1,7 @@
-import GitMerge from '@phosphor/git-merge.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
 import { Button } from '@ui/components/Button';
-import { createSignal, lazy, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, lazy, Show, Suspense } from 'solid-js';
+import { createVisible } from '../../../app/utils/utilVisible';
 import { DEPLOY_RESULT, DEPLOY_SESSION_ID } from '../core/deploy-agent-demo';
 import { DemoAgentChip } from './DemoAgentChip';
 import { PrStatusIcon } from './DemoPrDocument';
@@ -13,6 +14,12 @@ export default function HomepagePullRequest() {
   const [view, setView] = createSignal<'trace' | 'pr'>();
   const [merged, setMerged] = createSignal(false);
   let host!: HTMLDivElement;
+  let card!: HTMLDivElement;
+  const visible = createVisible(() => card, '0px');
+  const [revealed, setRevealed] = createSignal(false);
+  createEffect(() => {
+    if (visible()) setRevealed(true);
+  });
   let opener: HTMLElement | undefined;
   const open = (next: 'trace' | 'pr', trigger?: HTMLElement) => {
     opener =
@@ -65,10 +72,16 @@ export default function HomepagePullRequest() {
             text: 'On it. I’ll work on your branch, fix the failures, and run the tests.',
             reply: (
               <>
-                <div class="homepage-agent-chip">
+                <div
+                  ref={card}
+                  class="homepage-agent-chip homepage-enter"
+                  data-reveal={revealed() ? 'visible' : 'waiting'}
+                  onFocusIn={() => setRevealed(true)}
+                >
                   <DemoAgentChip
                     agentSessionId={DEPLOY_SESSION_ID}
                     requester="Teo"
+                    showRequest={false}
                     request="@Cursor, investigate the failures and build the fix on this branch."
                     markdown={DEPLOY_RESULT}
                     pullRequest={prLink(true)}

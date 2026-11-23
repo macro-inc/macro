@@ -60,3 +60,19 @@ fn attributed_lifecycle_changes_record_one_stable_row() {
         assert_eq!(rows[0].action.to_columns().0, action);
     }
 }
+
+#[test]
+fn appearance_events_do_not_ingest_history() {
+    let event = InitiativeTopicEvent::AppearanceChanged {
+        change: InitiativeChange {
+            initiative_id: id(1),
+            attribution: actor(),
+            occurred_at: time(),
+        },
+        appearance: activity::AppearanceChange {
+            from: None,
+            to: None,
+        },
+    };
+    assert_eq!(event.ingest(uuid::Uuid::now_v7()), Ingest::Ignore);
+}

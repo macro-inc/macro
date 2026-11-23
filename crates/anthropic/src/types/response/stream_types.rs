@@ -1,8 +1,6 @@
 use crate::prelude::ServerToolUse;
 
 use super::code_execution::{BashCodeExecutionResponse, TextEditorCodeExecutionResponse};
-use super::web_fetch::WebFetchResponse;
-use super::web_search::WebSearchResponse;
 
 use super::{MessageResponse, Usage};
 use serde::{Deserialize, Serialize};
@@ -70,8 +68,6 @@ pub enum ContentDeltaEvent {
     CitationsDelta {
         citation: Citation,
     },
-    WebSearchToolResult(WebSearchResponse),
-    WebFetchToolResult(WebFetchResponse),
     BashCodeExecutionToolResult(BashCodeExecutionResponse),
     TextEditorCodeExecutionToolResult(TextEditorCodeExecutionResponse),
 }
@@ -213,11 +209,7 @@ mod test {
             serde_json::from_str::<StreamEvent>(&serde_json::to_string(&start()).expect("str"))
                 .expect("deserialize_start");
         assert!(
-            if let StreamEvent::MessageStart { .. } = de {
-                true
-            } else {
-                false
-            },
+            matches!(de, StreamEvent::MessageStart { .. }),
             "deserialize start"
         );
     }
@@ -239,11 +231,7 @@ mod test {
         )
         .expect("deserialize_content_block_start_text");
         assert!(
-            if let StreamEvent::ContentBlockStart { .. } = de {
-                true
-            } else {
-                false
-            },
+            matches!(de, StreamEvent::ContentBlockStart { .. }),
             "deserialize content_block_start_text"
         );
     }
@@ -271,11 +259,7 @@ mod test {
         )
         .expect("deserialize_content_block_start_tool_use");
         assert!(
-            if let StreamEvent::ContentBlockStart { .. } = de {
-                true
-            } else {
-                false
-            },
+            matches!(de, StreamEvent::ContentBlockStart { .. }),
             "deserialize content_block_start_tool_use"
         );
     }
@@ -299,11 +283,7 @@ mod test {
         )
         .expect("deserialize_content_block_delta_text");
         assert!(
-            if let StreamEvent::ContentBlockDelta { .. } = de {
-                true
-            } else {
-                false
-            },
+            matches!(de, StreamEvent::ContentBlockDelta { .. }),
             "deserialize content_block_delta_text"
         );
     }
@@ -327,11 +307,7 @@ mod test {
         )
         .expect("deserialize_content_block_delta_json");
         assert!(
-            if let StreamEvent::ContentBlockDelta { .. } = de {
-                true
-            } else {
-                false
-            },
+            matches!(de, StreamEvent::ContentBlockDelta { .. }),
             "deserialize content_block_delta_json"
         );
     }
@@ -350,11 +326,7 @@ mod test {
         )
         .expect("deserialize_content_block_stop");
         assert!(
-            if let StreamEvent::ContentBlockStop { .. } = de {
-                true
-            } else {
-                false
-            },
+            matches!(de, StreamEvent::ContentBlockStop { .. }),
             "deserialize content_block_stop"
         );
     }
@@ -395,11 +367,7 @@ mod test {
         )
         .expect("deserialize_message_delta");
         assert!(
-            if let StreamEvent::MessageDelta { .. } = de {
-                true
-            } else {
-                false
-            },
+            matches!(de, StreamEvent::MessageDelta { .. }),
             "deserialize message_delta"
         );
     }
@@ -417,11 +385,7 @@ mod test {
         )
         .expect("deserialize_message_stop");
         assert!(
-            if let StreamEvent::MessageStop = de {
-                true
-            } else {
-                false
-            },
+            matches!(de, StreamEvent::MessageStop),
             "deserialize message_stop"
         );
     }
@@ -436,13 +400,6 @@ mod test {
     fn test_de_ping() {
         let de = serde_json::from_str::<StreamEvent>(&serde_json::to_string(&ping()).expect("str"))
             .expect("deserialize_ping");
-        assert!(
-            if let StreamEvent::Ping = de {
-                true
-            } else {
-                false
-            },
-            "deserialize ping"
-        );
+        assert!(matches!(de, StreamEvent::Ping), "deserialize ping");
     }
 }

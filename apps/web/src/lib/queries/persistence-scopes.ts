@@ -1,23 +1,54 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { isTauri } from '@core/util/platform';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { authKeys } from './auth/keys';
 import { hasCachedUserIdentity } from './auth/user-info-cache';
+import { calendarKeys } from './calendar/keys';
 import { channelKeys } from './channel/keys';
 import { createPersistenceKey, type PersistScope } from './persistence';
-import { createPerQueryIDBStore } from './persistence/per-query-idb';
+import {
+  createPerQueryIDBStore,
+  type StringKeyPrefix,
+} from './persistence/per-query-idb';
 import { soupKeys } from './soup/keys';
 
-const persistedChannelQueryPrefixes = [
-  channelKeys.mentions._def,
-  channelKeys.activity.queryKey,
-  channelKeys.listChannels.queryKey,
-] as const;
+/**
+ * The REST channel list and channel activity reads earlier versions saved in
+ * the channel store, under the account and before keys named one. No query
+ * asks for them now, so nothing would ever expire them.
+ */
+const RETIRED_CHANNEL_QUERY_PREFIXES: readonly StringKeyPrefix[] = [
+  ['channel', 'activity'],
+  ['channel', 'listChannels'],
+];
 
 export function shouldPersistChannelQuery(queryKey: QueryKey): boolean {
-  return persistedChannelQueryPrefixes.some((prefix) =>
-    partialMatchKey(queryKey, prefix)
+  if (partialMatchKey(queryKey, channelKeys.mentions._def)) return true;
+  // Legacy unscoped payloads and disabled (unknown-account) queries cannot
+  // establish ownership, so neither is eligible for persistence.
+  const prefix = channelKeys.directory._def;
+  return (
+    partialMatchKey(queryKey, prefix) &&
+    queryKey.length === prefix.length + 1 &&
+    typeof queryKey[prefix.length] === 'string' &&
+    queryKey[prefix.length] !== ''
+  );
+}
+
+export function shouldPersistCalendarQuery(queryKey: QueryKey): boolean {
+  // Both keys name their account next; a read without one has no owner to
+  // restore it for.
+  return [
+    calendarKeys.occurrences._def,
+    calendarKeys.visibleCalendars._def,
+  ].some(
+    (prefix) =>
+      partialMatchKey(queryKey, prefix) &&
+      typeof queryKey[prefix.length] === 'string' &&
+      queryKey[prefix.length] !== ''
   );
 }
 
@@ -28,25 +59,30 @@ export function createQueryPersistenceScopes(
   const accountScope = getOrCreateCacheScope();
   const scopedKey = (name: string) =>
     createPersistenceKey(`${name}-${accountScope}`, 1);
+  const channels = createPerQueryIDBStore({ dbName: scopedKey('channels') });
+  // By key range, so a launch with nothing left to delete reads no entry and
+  // the restores queued behind it barely wait.
+  fireAndForget(
+    channels.removeKeyPrefixes(RETIRED_CHANNEL_QUERY_PREFIXES),
+    'query-persistence'
+  );
+
   return [
     {
-      store: createPerQueryIDBStore({
-        dbName: scopedKey('channels'),
-      }),
+      store: channels,
       maxAge: { value: 7, unit: 'd' },
       buster,
       shouldPersist: shouldPersistChannelQuery,
       shouldRestore: hasLoginCookie,
     },
     {
-      store: createPerQueryIDBStore({
-        dbName: scopedKey('email-threads'),
-      }),
+      // Email thread messages are no longer persisted. The scope stays listed
+      // so logout still wipes what earlier versions saved here.
+      store: createPerQueryIDBStore({ dbName: scopedKey('email-threads') }),
       maxAge: { value: 7, unit: 'd' },
       buster,
-      shouldPersist: (queryKey) =>
-        partialMatchKey(queryKey, ['email', 'threadMessages']),
-      shouldRestore: hasLoginCookie,
+      shouldPersist: () => false,
+      shouldRestore: () => false,
     },
     ...(isNativeMobilePlatform()
       ? [
@@ -60,6 +96,25 @@ export function createQueryPersistenceScopes(
               partialMatchKey(queryKey, soupKeys.astItems._def),
             shouldRestore: hasLoginCookie,
           } satisfies PersistScope,
+          {
+            // A cold start draws the periods seen last, in their calendar
+            // colors, before the cache engine can answer its first read.
+            store: createPerQueryIDBStore({
+              dbName: scopedKey('calendar'),
+            }),
+            maxAge: { value: 7, unit: 'd' },
+            buster,
+            shouldPersist: shouldPersistCalendarQuery,
+            shouldRestore: hasLoginCookie,
+            // Range keys move with the date: no later session asks again.
+            outlivesQuery: true,
+          } satisfies PersistScope,
+        ]
+      : []),
+    // Native apps relaunch offline: without a restored identity every
+    // account-gated view waits on a fetch that cannot succeed.
+    ...(isTauri()
+      ? [
           {
             store: createPerQueryIDBStore({
               dbName: scopedKey('user-info'),

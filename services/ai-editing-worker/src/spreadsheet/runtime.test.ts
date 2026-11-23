@@ -270,7 +270,7 @@ describe('deterministic spreadsheet worker runtime', () => {
       storage.commit(revision(), new Uint8Array([1, 2]), signal())
     ).rejects.toMatchObject({ status: 409 });
     expect(fetcher.mock.calls[0][0]).toBe(
-      'https://sync.example/document/document-id/state'
+      'https://sync.example/document/document-id/state?shallow=true'
     );
     expect(fetcher.mock.calls[1][0]).toBe(
       'https://sync.example/document/document-id/update'
@@ -321,6 +321,44 @@ describe('deterministic spreadsheet worker runtime', () => {
               sheetId: 'sheet1',
               range: 'A1',
               style: { value: 'smuggled' },
+            },
+          ],
+        },
+      }).success
+    ).toBe(false);
+    expect(
+      spreadsheetBodySchema.safeParse({
+        ...base,
+        request: {
+          action: 'edit',
+          expectedRevision: 'v',
+          operations: [
+            {
+              type: 'set_cells',
+              sheetId: 'sheet1',
+              cells: [
+                { address: 'A1', value: 'Item' },
+                { address: 'B1', value: 42 },
+                { address: 'C1', value: true },
+                { address: 'D1', value: '=B1*2' },
+                { address: 'E1', value: null },
+              ],
+            },
+          ],
+        },
+      }).success
+    ).toBe(true);
+    expect(
+      spreadsheetBodySchema.safeParse({
+        ...base,
+        request: {
+          action: 'edit',
+          expectedRevision: 'v',
+          operations: [
+            {
+              type: 'set_cells',
+              sheetId: 'sheet1',
+              cells: [{ address: 'A1', value: { formula: '=1' } }],
             },
           ],
         },

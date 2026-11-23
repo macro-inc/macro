@@ -1,4 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   EntityIcon as CoreEntityIcon,
@@ -6,10 +6,8 @@ import {
 } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import ProjectIcon from '@icon/system/regular/cube.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -83,12 +81,8 @@ export function usePropertyEntityDisplay(
   // emission replaces. Only a real change may rebuild or re-run the reads below.
   const entityId = createMemo(entityIdSource);
   const entityType = createMemo(entityTypeSource);
-  const projectsFlag = createMemo(() =>
-    entityType() === 'INITIATIVE' ? useFeatureFlag(enableProjects) : undefined
-  );
-  // Until Projects is enabled, a project stays the generic "Project" label.
   const projectSource = createMemo(() => {
-    if (!projectsFlag()?.().enabled) return;
+    if (entityType() !== 'INITIATIVE') return;
     return untrack(() => {
       const userId = useUserId();
       return useProjectIdentityQuery(entityId, userId);
@@ -168,7 +162,20 @@ export function usePropertyEntityDisplay(
     match(entityType())
       .when(
         (type) => type === 'INITIATIVE' && projectSource(),
-        () => <ProjectIcon class="size-4" />
+        () => {
+          const source = projectSource();
+          return (
+            <CoreEntityIcon
+              targetType="initiative"
+              size="xs"
+              appearance={
+                source && !source.isPending && !source.isError
+                  ? source.data?.appearance
+                  : undefined
+              }
+            />
+          );
+        }
       )
       .with('USER', () => (
         <UserIcon id={entityId()} size="sm" photoUrl={user.photoUrl()} />
@@ -194,6 +201,9 @@ export function usePropertyEntityDisplay(
         return (
           <CoreEntityIcon
             targetType={blockName}
+            appearance={
+              supportsEntityAppearance(item) ? item.appearance : undefined
+            }
             size={options?.iconSize ?? 'xs'}
           />
         );

@@ -19,6 +19,7 @@ async fn notifications_resolve_the_stored_type_and_preserve_attribution() {
             .publish_sync_content_updated(
                 "doc-1",
                 vec![crate::domain::events::DocumentSyncEditor {
+                    agent_correlation_id: None,
                     actor: activity::Actor::try_from(actor.to_owned()).unwrap(),
                     on_behalf_of: Some(
                         macro_user_id::user_id::MacroUserIdStr::try_from(user.to_owned()).unwrap(),
@@ -82,6 +83,7 @@ async fn a_batch_of_editors_still_publishes_only_one_search_event() {
     let editors = ["macro|alice@example.com", "macro|bob@example.com"]
         .into_iter()
         .map(|actor| crate::domain::events::DocumentSyncEditor {
+            agent_correlation_id: None,
             actor: activity::Actor::try_from(actor.to_owned()).unwrap(),
             on_behalf_of: None,
         })

@@ -95,7 +95,8 @@ pub struct Params {
     limit: Option<u16>,
     /// Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
     /// Missing definitions, unsupported types, and mismatched values sort as missing.
-    /// Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+    /// `name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.
+    /// Flat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.
     /// Defaults to viewed_at.
     #[serde(default)]
     sort_method: Option<SoupApiSort>,
@@ -159,6 +160,11 @@ pub enum SoupApiSort {
     /// Flat reads omit calendar events, email, channels, calls, companies, and agent sessions.
     /// Grouped reads retain calendar events.
     Property,
+    /// Sort by the item's own name, case-insensitively in ICU root collation
+    /// order, with unnamed items last, then newest update and ID. Database
+    /// rows have no name here and always sort last. Omits the same sources a
+    /// flat property sort does.
+    Name,
 }
 
 impl SoupApiSort {
@@ -178,6 +184,10 @@ impl SoupApiSort {
                     property_definition_id: property.ok_or(SoupHandlerErr::Expand)?,
                     direction,
                 },
+                filters,
+            )),
+            Self::Name => SoupQuery::Property(models_pagination::Query::Sort(
+                DynamicSort::name(direction),
                 filters,
             )),
             Self::ViewedAt => SoupQuery::new_sort_simple(SimpleSortMethod::ViewedAt, filters),
@@ -209,6 +219,9 @@ pub enum GroupedSoupSort {
     /// Missing definitions and unsupported types use update-time ordering.
     /// Email, channels, calls, companies, and agent sessions never appear.
     Property,
+    /// Sort each bin by the item's own name, case-insensitively in ICU root
+    /// collation order, with unnamed items last, then newest update and ID.
+    Name,
 }
 
 impl GroupedSoupSort {
@@ -225,6 +238,11 @@ impl GroupedSoupSort {
         }
         if property.is_some() {
             return Err(SoupHandlerErr::Expand);
+        }
+        if matches!(self, Self::Name) {
+            return Ok(DynamicSort::name(
+                direction.map(Into::into).unwrap_or_default(),
+            ));
         }
         self.into_model().map(Into::into)
     }
@@ -922,6 +940,9 @@ impl From<SoupErr> for SoupHandlerErr {
             SoupErr::CrmTeamRequired => SoupHandlerErr::CrmScopeForbidden,
             SoupErr::CrmAdminRequired => SoupHandlerErr::CrmAdminRequired,
             SoupErr::CrmRecordNotFound => SoupHandlerErr::CrmRecordNotFound,
+            SoupErr::EmailErr(error @ EmailErr::EmailRuleLimitExceeded(_)) => {
+                SoupHandlerErr::EmailErr(error)
+            }
             SoupErr::TouchedUnsupportedFilter(kind) => {
                 SoupHandlerErr::TouchedUnsupportedFilter(kind)
             }
@@ -947,12 +968,19 @@ impl IntoResponse for SoupHandlerErr {
                 StatusCode::FORBIDDEN
             }
             SoupHandlerErr::CrmRecordNotFound => StatusCode::NOT_FOUND,
+            SoupHandlerErr::EmailErr(EmailErr::EmailRuleLimitExceeded(_)) => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        let message = match &self {
+            SoupHandlerErr::EmailErr(EmailErr::EmailRuleLimitExceeded(limit)) => limit.to_string(),
+            _ => self.to_string(),
         };
         (
             status_code,
             Json(ErrorResponse {
-                message: self.to_string().into(),
+                message: message.into(),
             }),
         )
             .into_response()
@@ -995,6 +1023,7 @@ where
             (status = 200, body=SoupPage),
             (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
+            (status = 503, description = "Selected email rules exceeded a resource limit", body=ErrorResponse),
     )
 )]
 pub async fn get_soup_handler<T, U, EAS, Auth>(
@@ -1074,6 +1103,7 @@ type SoupCursor<R> = Either5<
             (status = 200, body=SoupPage),
             (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
+            (status = 503, description = "Selected email rules exceeded a resource limit", body=ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
@@ -1142,6 +1172,7 @@ pub struct PostSoupAstRequest {
         (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
         (status = 404, description = "The CRM record named by `crma` or a document `crm` literal is not visible to the caller", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
+        (status = 503, description = "Selected email rules exceeded a resource limit", body=ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
@@ -1241,7 +1272,6 @@ enum GroupedSoupRequestMode {
 pub async fn post_grouped_soup_ast_handler<T, U, EAS, Auth>(
     State(service): State<SoupRouterState<T, U, EAS, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    _team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, EAS, Auth>,
     Query(GroupedSoupCursorParams { cursor }): Query<GroupedSoupCursorParams>,
     Json(request): Json<PostGroupedSoupAstRequest>,
 ) -> Result<Json<GroupedSoupPage>, SoupHandlerErr>
@@ -1305,8 +1335,9 @@ pub struct ApiEntityFilterAst {
     pub favorites_only: Option<bool>,
     /// Restrict every entity type to items associated with this CRM record
     /// (wire key `crma`): its Companies or Contacts property names the
-    /// record, or it references the record. A company also matches through
-    /// its contacts. Unknown or inaccessible records answer 404; requests
+    /// record, or it references the record. A task also matches when one of
+    /// its custom entity properties names the record. A company also matches
+    /// through its contacts. Unknown or inaccessible records answer 404; requests
     /// require expanded queries sorted by a timestamp or selected numeric property.
     #[serde(default, rename = "crma", skip_serializing_if = "Option::is_none")]
     pub crm_association: Option<item_filters::ast::crm_association::CrmAssociation>,

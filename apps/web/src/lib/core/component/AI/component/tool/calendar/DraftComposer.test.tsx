@@ -1,10 +1,19 @@
 import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, For, type JSX } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { For, type JSX } from 'solid-js';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   calendars: [] as VisibleCalendar[],
@@ -15,11 +24,7 @@ const mocks = vi.hoisted(() => ({
   refetchLinks: vi.fn(),
   startAddInbox: vi.fn(),
   execute: vi.fn(),
-  quickCalls: () => ({ loading: false, enabled: true }),
   guestInvites: (): boolean => true,
-}));
-vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
-  useQuickCallsFlag: () => () => mocks.quickCalls(),
 }));
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarGuestInvitesFlag: () => () => mocks.guestInvites(),
@@ -45,7 +50,6 @@ vi.mock('@core/email-link', () => ({
   useAddInboxFlow: () => mocks.startAddInbox,
 }));
 vi.mock('@core/user', () => ({
-  useContacts: () => () => [],
   recipientEntityMapper: () => (value: unknown) => value,
 }));
 vi.mock('@ui', () => ({
@@ -73,6 +77,7 @@ vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
       <output aria-label="Macro calls enabled">
         {String(props.macroCallsEnabled)}
       </output>
+      <output aria-label="Time format">{props.timeFormat}</output>
       <output aria-label="Conference">
         {props.controller.state().conference}
       </output>
@@ -168,7 +173,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.execute.mockResolvedValue(true);
   mocks.startAddInbox.mockResolvedValue(undefined);
-  mocks.quickCalls = () => ({ loading: false, enabled: true });
   mocks.guestInvites = () => true;
   mocks.calendarError = false;
   mocks.linksError = false;
@@ -286,19 +290,6 @@ describe('AI calendar draft account selection', () => {
 });
 
 describe('AI calendar draft Macro calls', () => {
-  it('offers Macro calls under the quick-calls flag', () => {
-    const [flag, setFlag] = createSignal({ loading: false, enabled: false });
-    mocks.quickCalls = flag;
-    showDraft();
-    expect(screen.getByLabelText('Macro calls enabled').textContent).toBe(
-      'false'
-    );
-    setFlag({ loading: false, enabled: true });
-    expect(screen.getByLabelText('Macro calls enabled').textContent).toBe(
-      'true'
-    );
-  });
-
   it('opens on the conferencing the agent drafted', () => {
     showDraft(undefined, { addMacroCall: true });
     expect(screen.getByLabelText('Conference').textContent).toBe('macro');
@@ -346,6 +337,16 @@ describe('AI calendar draft guest permissions', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
     expect(mocks.execute).toHaveBeenCalledOnce();
     expect(mocks.execute.mock.calls[0][0].guestPolicy).toBeUndefined();
+  });
+});
+
+describe('AI calendar draft time format', () => {
+  it('shows the times on the calendar’s clock', () => {
+    const [, setPreferences] = useCalendarPreferences();
+    setPreferences('timeFormat', '24-hour');
+    onTestFinished(() => setPreferences('timeFormat', '12-hour'));
+    showDraft();
+    expect(screen.getByLabelText('Time format').textContent).toBe('24-hour');
   });
 });
 

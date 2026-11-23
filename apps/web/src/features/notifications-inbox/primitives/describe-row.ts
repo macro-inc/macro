@@ -1,9 +1,20 @@
+import { groupChatName } from '@channel/group-chat-name';
+import {
+  type ChannelPlaceContent,
+  channelPlace,
+} from '@notifications/channel-place';
 import {
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,
+  pingedBy,
+  pingPlace,
+  reactionText,
 } from '@notifications/notification-metadata';
-import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
+import {
+  getNotificationSenderFallbackName,
+  UNKNOWN_SENDER_NAME,
+} from '@notifications/notification-sender';
 import type { UnifiedNotification } from '@notifications/types';
 import { match, P } from 'ts-pattern';
 import type {
@@ -65,21 +76,41 @@ function actorName(
 const join = (...parts: (string | undefined)[]) =>
   parts.filter((part) => part !== undefined && part !== '').join(' ');
 
-type ChannelContent = { channelType?: string; channelName?: string };
+/**
+ * Whether a row is messages in a group chat: a private channel, named or not.
+ * Its card speaks for the chat, not for the people who wrote in it. A reaction
+ * or an invite is still about the person who made it.
+ */
+export function isGroupChatRow(row: NotificationInboxRow) {
+  if (row.type !== 'channel_messages') return false;
+  const metadata = row.content.notifications[0]?.notification_metadata;
+  if (metadata?.tag !== 'channel_message_send') return false;
+  return metadata.content.channelType === 'private';
+}
 
-/** Where a channel event happened; a DM says nothing, a channel names itself. */
-const channelPlace = (content: ChannelContent) => {
-  if (content.channelType === 'directMessage' || !content.channelName) return;
-  return content.channelType === 'public' || content.channelType === 'team'
-    ? `#${content.channelName}`
-    : content.channelName;
+/** The channel a group chat row is for, which it shows instead of a sender. */
+export function groupChatId(row: NotificationInboxRow) {
+  const entity = row.content.entity;
+  return isGroupChatRow(row) && entity.type === 'channel'
+    ? entity.id
+    : undefined;
+}
+
+/**
+ * The name a group chat row shows. The row's channel is named for the reader;
+ * the notification's copy is named for its sender, so it lists the reader too.
+ */
+const groupChatRowName = (row: NotificationInboxRow, place: string) => {
+  const entity = row.content.entity;
+  const name = entity.type === 'channel' && entity.name ? entity.name : place;
+  return groupChatName(name);
 };
 
 /** Channel verbs drop their preposition in a DM, which needs no place. */
 function channelAction(
   actor: string | undefined,
   notification: UnifiedNotification,
-  content: ChannelContent
+  content: ChannelPlaceContent
 ) {
   const place = channelPlace(content);
   if (place) return join(actor, getNotificationAction(notification), place);
@@ -150,7 +181,12 @@ function describeNotification(
       subject: metadata.content.taskName ?? entityName,
     }))
     .with({ tag: 'entity_access_requested' }, (metadata) => ({
-      action: join(actor, `requested ${metadata.content.accessLevel} access`),
+      action: join(
+        actor,
+        latest.entity_type === 'harness'
+          ? 'requested to use'
+          : `requested ${metadata.content.accessLevel} access`
+      ),
       subject: metadata.content.entityName || entityName,
     }))
     .with({ tag: 'entity_access_granted' }, (metadata) => ({
@@ -169,8 +205,16 @@ function describeNotification(
       action: join(actor, 'asked to join'),
       subject: target ?? entityName,
     }))
+    .with({ tag: 'password_access_requested' }, (metadata) => ({
+      action: join(actor, 'requested access to'),
+      subject: metadata.content.itemName,
+    }))
     .with({ tag: 'ai_response' }, () => ({
       action: 'Macro responded',
+      subject: content ?? entityName,
+    }))
+    .with({ tag: 'ping' }, () => ({
+      action: pingedBy(actor),
       subject: content ?? entityName,
     }))
     .with(
@@ -303,6 +347,44 @@ const spokenText = (notification: UnifiedNotification) =>
     )
     .otherwise(() => getNotificationContent(notification));
 
+/**
+ * A row of reactions, laid out as Slack's Activity lays out a reaction: who
+ * reacted, "Reacted 👍 🎉 to: …", then where. Reactions to one message gather
+ * everyone and every emoji; any other row whose newest notification is a
+ * reaction (reactions to several messages, or mixed with messages) shows that
+ * newest reaction, as its badge does, and the stack lists the rest.
+ */
+function reactionCard(
+  row: NotificationInboxRow,
+  who: string,
+  latestSender: string | undefined
+) {
+  // A mention row stays about the mention, as its badge does.
+  if (row.type !== 'channel_messages' && row.type !== 'channel_thread') return;
+  const newest = row.content.notifications[0]?.notification_metadata;
+  if (newest?.tag !== 'channel_message_reaction') return;
+  const latest = newest.content;
+  const reactions = row.content.notifications.flatMap(
+    ({ notification_metadata: metadata }) =>
+      metadata.tag === 'channel_message_reaction' ? [metadata.content] : []
+  );
+  // A row loads only its newest notifications; older ones it can't see may be
+  // messages, so a part-loaded row speaks only for its newest reaction.
+  const oneMessage =
+    row.count === reactions.length &&
+    reactions.length === row.content.notifications.length &&
+    reactions.every(({ messageId }) => messageId === latest.messageId);
+  const emoji = oneMessage
+    ? [...new Set(reactions.map((reaction) => reaction.emoji))].join(' ')
+    : latest.emoji;
+  return {
+    // The newest reaction speaks for itself, never through an older reactor.
+    who: (oneMessage ? who : latestSender) || UNKNOWN_SENDER_NAME,
+    what: reactionText({ emoji, messageContent: latest.messageContent }),
+    body: channelPlace(latest),
+  };
+}
+
 /** Drops a line that repeats one above it, and never leaves the first empty. */
 const withoutRepeats = (
   card: { who: string; what?: string; body?: string },
@@ -345,7 +427,7 @@ export function describeInboxCard(
     spoken && sender && new Set(senders).size > 1
       ? `${sender}: ${spoken}`
       : spoken;
-  const place = channelPlace(metadata.content as ChannelContent);
+  const place = channelPlace(metadata.content as ChannelPlaceContent);
   const target = getNotificationTargetName(latest);
   const inPlace = (text: string) => (place ? `${text} in ${place}` : text);
   // A message says itself, and its badge says when it is a mention.
@@ -355,6 +437,26 @@ export function describeInboxCard(
       ? who
       : join(who, stackVerb(latest));
 
+  // A ping is its sender's own words about the row's entity, whichever row it
+  // joined: the entity is the middle line. A stack that mixes pings with
+  // other things names only its people, since no one verb fits them all.
+  const reaction = reactionCard(row, who, sender);
+  if (reaction) return withoutRepeats(reaction, entityName);
+
+  if (metadata.tag === 'ping') {
+    const onlyPings = row.content.notifications.every(
+      (notification) => notification.notification_metadata.tag === 'ping'
+    );
+    return withoutRepeats(
+      {
+        who: onlyPings || !who ? pingedBy(who || undefined) : who,
+        what: pingPlace(row.content.entity),
+        body,
+      },
+      entityName
+    );
+  }
+
   const card = match(row.type)
     .with('channel_thread', 'channel_mention', () =>
       isStack
@@ -362,6 +464,13 @@ export function describeInboxCard(
         : { who: inPlace(channelDeed()), body }
     )
     .with('channel_messages', () => {
+      // A group chat leads with itself, and its newest line says who wrote it.
+      if (isGroupChatRow(row)) {
+        return {
+          who: groupChatRowName(row, place ?? entityName),
+          body: spoken && sender ? `${sender}: ${spoken}` : spoken,
+        };
+      }
       if (isStack) {
         return place ? { who, what: place, body } : { who, body };
       }
@@ -412,6 +521,7 @@ export function describeInboxCard(
       'calendar_join_request',
       'access_requested',
       'access_granted',
+      'access_removed',
       () => ({ who: single.action, what: single.subject })
     )
     .with('other', () => ({ who: single.action, body: single.subject }))
@@ -422,16 +532,22 @@ export function describeInboxCard(
 
 /**
  * The kind of notification a row is. A stack's newest notification decides,
- * except that a mention stays one: it is why the row is there.
+ * so a ping on top makes any row a ping, except that a mention stays one: it
+ * is why the row is there.
  */
 export function inboxCardKind(row: NotificationInboxRow): InboxCardKind {
   const metadata = row.content.notifications[0]?.notification_metadata;
   const isDirect =
-    (metadata?.content as ChannelContent | undefined)?.channelType ===
+    (metadata?.content as ChannelPlaceContent | undefined)?.channelType ===
     'directMessage';
+  const isPing = metadata?.tag === 'ping';
   return match(row.type)
     .returnType<InboxCardKind>()
     .with('channel_mention', 'discussion_mention', () => 'mention')
+    .when(
+      () => isPing,
+      () => 'ping'
+    )
     .with('channel_thread', () =>
       metadata?.tag === 'channel_message_reaction' ? 'reaction' : 'reply'
     )
@@ -447,7 +563,12 @@ export function inboxCardKind(row: NotificationInboxRow): InboxCardKind {
     .with('task', () => 'task')
     .with('pull_request', () => 'pull_request')
     .with('calendar_event', 'calendar_join_request', () => 'event')
-    .with('access_requested', 'access_granted', () => 'access')
+    .with(
+      'access_requested',
+      'access_granted',
+      'access_removed',
+      () => 'access'
+    )
     .with('other', () =>
       metadata?.tag === 'invite_to_team' ? 'invite' : 'other'
     )
@@ -463,7 +584,11 @@ export function describeStackItem(
   const sender = senderOf(row, notification, names);
   return {
     id: notification.id,
-    by: join(sender, stackVerb(notification)),
+    by: match(notification.notification_metadata.tag)
+      .with('ping', () => pingedBy(sender))
+      // Its text already says "Reacted 👍 to: …".
+      .with('channel_message_reaction', () => sender ?? UNKNOWN_SENDER_NAME)
+      .otherwise(() => join(sender, stackVerb(notification))),
     text: describeNotification(row, notification, sender).subject,
     at: new Date(notification.created_at),
   };

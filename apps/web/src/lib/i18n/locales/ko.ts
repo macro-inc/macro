@@ -53,7 +53,6 @@ export default {
     projectBadge: '프로젝트',
     newProject: '새 프로젝트',
     contentAlreadyOpen: '이미 열려 있는 콘텐츠',
-    unableToOpenConversation: '대화를 열 수 없습니다. 다시 시도해 주세요.',
     mobileSearchPlaceholder: '검색…',
     closeSearch: '검색 닫기',
     searchFullTextFor: '“{{query}}” 전체 텍스트 검색',
@@ -104,7 +103,6 @@ export default {
     close: '닫기',
     delete: '삭제',
     rename: '이름 바꾸기',
-    more: '더보기',
     search: '검색',
     settings: '설정',
   },
@@ -508,6 +506,9 @@ export default {
       other: '항목 {{count}}개를 삭제했습니다',
     },
     toastDeleteFailed: '삭제하지 못했습니다',
+    toastPropertySet: {
+      other: '{{property}}: 항목 {{count}}개에 설정했습니다',
+    },
     toastAddedToFavorites: '즐겨찾기에 추가했습니다',
     toastAddedCountToFavorites: {
       other: '항목 {{count}}개를 즐겨찾기에 추가했습니다',
@@ -566,10 +567,6 @@ export default {
       other: '항목 {{count}}개 중 {{accepted}}개를 미완료로 표시했습니다',
     },
     toastMarkNotDoneFailed: '미완료로 표시하지 못했습니다',
-    toastThreadStaysDone:
-      '이 스레드에는 받은 메시지가 없어 완료 상태로 유지됩니다',
-    toastThreadsStayDone:
-      '이 스레드들에는 받은 메시지가 없어 완료 상태로 유지됩니다',
     toastCountNotRestored: {
       other: '{{count}}개를 복원하지 못했습니다.',
     },
@@ -663,8 +660,6 @@ export default {
     create: '만들기',
     getMobileApp: '모바일 앱 받기',
     signedInAs: '{{name}}(으)로 로그인됨',
-    commandMenu: '명령 메뉴',
-    searchEverything: '모든 항목 검색',
     customizeSidebar: '사이드바 맞춤 설정',
     customizeSidebarDescription:
       '사이드바에 표시할 앱을 선택하고 드래그해 순서를 바꾸세요. 홈은 항상 맨 위에 표시됩니다.',
@@ -731,7 +726,7 @@ export default {
     tabMobileApp: '모바일 앱',
     tabTags: '태그',
     tabIntegrations: '통합',
-    tabRuntimes: '런타임',
+    tabRuntimes: '머신',
     tabMcpServer: 'MCP 서버',
     tabApiKeys: 'API 키',
     tabBots: '봇',
@@ -748,7 +743,6 @@ export default {
       '설정을 찾을 수 없습니다. “서명”, “테마”, “캘린더”로 검색해 보세요.',
     backToSettings: '설정으로 돌아가기',
     closeSettings: '설정 닫기',
-    goToTab: '설정 탭 {{number}}(으)로 이동',
     editProfile: '프로필 편집',
     logOut: '로그아웃',
     yourAccount: '내 계정',

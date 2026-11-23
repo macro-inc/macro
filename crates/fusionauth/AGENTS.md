@@ -24,8 +24,14 @@ passwordless/password flows against the FusionAuth HTTP API.
 
 ## Boundaries
 
-- Depends on: `upstream_error` for outage classification; otherwise a plain
-  HTTP client crate.
+- Depends on: `upstream_error` for outage classification, and
+  `macro_service_urls` for Google's OAuth token and revocation endpoints
+  (overridable, so a local stack can use `crates/gmail_emulator`); otherwise a
+  plain HTTP client crate.
+- Microsoft's login and Graph hosts come from `macro_service_urls`
+  (`MicrosoftLoginUrl`, `MicrosoftLoginPageUrl`, `MicrosoftGraphUrl`), so a
+  local stack can use `crates/outlook_emulator`. ID tokens are still only
+  accepted from Microsoft's issuer, which the emulator's tokens carry.
 - Used by: `authentication_service`, `mcp_auth_proxy`, `mcp_service`,
   `tooling/seed_cli`, `github` (for linking).
 
@@ -48,6 +54,16 @@ passwordless/password flows against the FusionAuth HTTP API.
   the body). They turn outages, throttling, timeouts, and undecodable bodies
   into `Upstream` (502/503 via `crates/upstream_error`); a hand-written
   `Generic` becomes a 500.
+- `#[tracing::instrument]` records every argument it does not skip as a span
+  field, and span fields reach the logs. Skip codes, tokens, and other
+  credentials by name.
+- The OAuth2 token endpoint (`src/oauth.rs`) turns an RFC 6749 error body on
+  400/401 into `OAuth2TokenRefused`; callers check `is_invalid_grant()` to tell
+  a dead code or refresh token from an outage. A dead refresh token is
+  `invalid_grant`, but a dead code is `invalid_request` with the reason
+  `auth_code_not_found`.
+- `DELETE /api/jwt/refresh` takes its token as a JSON body; a form body is
+  refused with `[InvalidContentType]`.
 - Calls to Google or Microsoft name the provider:
   `FusionAuthClientError::provider_transport("Google", e)`.
 - Link lookup and unlink map HTTP 400 `userId` / `[invalid]userId` errors to

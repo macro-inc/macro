@@ -10,6 +10,10 @@ import { Hono } from 'hono';
 import * as z from 'zod';
 import { type Bindings, getEnv } from '../env';
 import {
+  type ProviderModel,
+  reportingAccountFailures,
+} from '../provider-account';
+import {
   type EditMode,
   type Model,
   type Provider,
@@ -49,7 +53,7 @@ const PROVIDERS = {
   Provider,
   {
     key: keyof Bindings;
-    create: (opts: { apiKey: string }) => (modelId: string) => LanguageModel;
+    create: (opts: { apiKey: string }) => (modelId: string) => ProviderModel;
   }
 >;
 
@@ -134,7 +138,7 @@ export function buildModels(
     if (!apiKey) {
       throw new Error(`provider "${provider}" requested but ${key} is not set`);
     }
-    return create({ apiKey })(model);
+    return reportingAccountFailures(provider, create({ apiKey })(model));
   };
   const resolveModel = (specs: Model[]): LanguageModel => {
     const resolved = specs.map(resolveOne);

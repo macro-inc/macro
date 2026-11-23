@@ -16,12 +16,22 @@ mod test;
 pub struct CrmSearchRepositoryImpl {
     /// Pool connected to macrodb.
     pool: PgPool,
+    access_pool: PgPool,
 }
 
 impl CrmSearchRepositoryImpl {
     /// Creates a new CrmSearchRepositoryImpl.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            access_pool: pool.clone(),
+            pool,
+        }
+    }
+
+    /// Keep data reads on their existing pool while checking access on primary.
+    pub fn with_access_pool(mut self, primary: PgPool) -> Self {
+        self.access_pool = primary;
+        self
     }
 }
 
@@ -55,7 +65,7 @@ fn escape_like(term: &str) -> String {
 }
 
 impl CrmSearchRepository for CrmSearchRepositoryImpl {
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, term), fields(term_len = term.len()), err)]
     async fn search_company_names(
         &self,
         team_id: &Uuid,
@@ -237,5 +247,15 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
         }
 
         Ok(result)
+    }
+}
+
+impl crate::domain::auth::CrmMemberAccess for CrmSearchRepositoryImpl {
+    async fn member_has_crm_access(
+        &self,
+        team_id: Uuid,
+        user_id: &str,
+    ) -> Result<bool, crate::domain::model::CrmError> {
+        super::member_access::member_has_crm_access(&self.access_pool, team_id, user_id).await
     }
 }

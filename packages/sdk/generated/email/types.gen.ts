@@ -179,6 +179,12 @@ export type ApiDraftInput = {
      * Generation from the last loaded draft; legacy clients begin at zero.
      */
     draft_generation?: number;
+    /**
+     * The address to send from: the selected inbox's own address or one of
+     * its verified Gmail send-as aliases, which sends under the alias's
+     * display name. Omit it to send from the inbox's own address.
+     */
+    from?: string | null;
     headers_json?: null | Value;
     /**
      * Per-message override for whether to include the signature on send:
@@ -936,7 +942,7 @@ export type CalendarMutationApiError = {
 /**
  * Machine-readable failure category for calendar mutations.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required';
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required' | 'confirmation_required';
 
 /**
  * A materialized recurrence instance optimized for range queries.
@@ -1177,7 +1183,7 @@ export type ForwardCalendarEventError = {
 /**
  * Why a forward was not sent.
  */
-export type ForwardCalendarEventErrorCode = 'not_found' | 'invalid_recipients' | 'inbox_unavailable' | 'send_failed';
+export type ForwardCalendarEventErrorCode = 'not_found' | 'invalid_recipients' | 'inbox_unavailable' | 'send_failed' | 'confirmation_required';
 
 /**
  * One person a forwarded invitation goes to.
@@ -1291,6 +1297,38 @@ export type GuestPolicy = {
      * Whether guests may see the guest list.
      */
     canSeeOtherGuests: boolean;
+};
+
+/**
+ * Body of every `409 Conflict` from `/email/init`; `code` says which conflict it
+ * is. Clients offer to share the inbox only for a `SHARED_INBOX_CONFLICT`.
+ */
+export type InitConflictResponse = {
+    code: 'SHARED_INBOX_CONFLICT';
+    /**
+     * The mailbox address that is already connected.
+     */
+    email_address: string;
+    /**
+     * The existing link that would be shared if the caller confirms.
+     */
+    existing_link_id: string;
+    /**
+     * The email of the macro user who first connected the mailbox.
+     */
+    existing_owner_email: string;
+} | {
+    code: 'INBOX_IDENTITY_CONFLICT';
+    /**
+     * Human-readable explanation.
+     */
+    message: string;
+} | {
+    code: 'INBOX_CHANGED';
+    /**
+     * Human-readable explanation.
+     */
+    message: string;
 };
 
 /**
@@ -1814,31 +1852,12 @@ export type Settings = {
 };
 
 /**
- * Returned with a `409 Conflict` when a connect targets an external mailbox another
- * macro user has already connected. The client surfaces a confirmation; on confirm it
- * retries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
- */
-export type SharedInboxConflictResponse = {
-    /**
-     * The mailbox address that is already connected.
-     */
-    email_address: string;
-    /**
-     * The existing link that would be shared if the caller confirms.
-     */
-    existing_link_id: string;
-    /**
-     * The email of the macro user who first connected the mailbox.
-     */
-    existing_owner_email: string;
-};
-
-/**
  * Coarse sync state for an inbox, used to render a one-line hint in the
  * multi-inbox settings list. Derived from the link's `is_sync_active` flag, its
- * reauth health, and its most recent backfill job.
+ * reauth health, whether the provider serves its mailbox, and its most recent
+ * backfill job.
  */
-export type SyncStatus = 'SYNCING' | 'UP_TO_DATE' | 'ERROR' | 'NEEDS_REAUTH' | 'INACTIVE';
+export type SyncStatus = 'SYNCING' | 'UP_TO_DATE' | 'ERROR' | 'NEEDS_REAUTH' | 'MAILBOX_UNAVAILABLE' | 'INACTIVE';
 
 export type Thread = {
     created_at: string;
@@ -2036,6 +2055,12 @@ export type UpsertScheduledRequest = {
      * The time to send the message (ISO 8601 format).
      */
     send_time: string;
+    /**
+     * The user's own reply approving this send, quoted verbatim. Required
+     * from an agent's program, which is refused without it; ignored for a
+     * person in the app, whose Send Later is their confirmation.
+     */
+    user_confirmation?: string | null;
 };
 
 export type UpsertScheduledResponse = {
@@ -2245,7 +2270,7 @@ export type ForwardCalendarEventErrors = {
      */
     401: unknown;
     /**
-     * The inbox holding the copy cannot send for the viewer
+     * The inbox holding the copy cannot send for the viewer, or an agent's program asked to forward
      */
     403: ForwardCalendarEventError;
     /**
@@ -2847,7 +2872,7 @@ export type InitUserErrors = {
     400: InitErrorCodeResponse;
     401: ErrorResponse;
     402: ErrorResponse;
-    409: SharedInboxConflictResponse;
+    409: InitConflictResponse;
     429: ErrorResponse;
     500: ErrorResponse;
 };
@@ -3063,6 +3088,10 @@ export type SendMessageData = {
 
 export type SendMessageErrors = {
     400: ErrorResponse;
+    /**
+     * An agent's program asked to send; it must go through a review or a confirmed send
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
 };

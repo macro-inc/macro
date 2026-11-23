@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT team_id FROM team_user\n                   WHERE user_id = $1 AND (crm_access OR team_role <> 'member')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "02e9f0d2bd0a0f5d72ab93c896b5a22df7fa4ada26e7615f938858a5fc99dc8b"
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Sign in to Macro</title>
+    <style>
+      {% include "broker_page.css" %}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Sign in to Macro</h1>
+      <form method="get" action="authorize">
+        {% for (name, value) in params %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}" />
+        {% endfor %}
+        <div class="stack">
+          <button class="approve" type="submit" name="sign_in" value="google">Continue with Google</button>
+          <button class="deny" type="submit" name="sign_in" value="email">Continue with email</button>
+          <button class="deny" type="submit" name="sign_in" value="login">Continue with a password</button>
+        </div>
+        {% if offers_manual_delivery %}
+        <label class="option">
+          <input type="checkbox" name="delivery" value="manual" />
+          <span>
+            The app I'm connecting runs on another machine, such as over SSH or
+            in a container. Give me a link to finish there.
+          </span>
+        </label>
+        {% endif %}
+      </form>
+    </main>
+  </body>
+</html>

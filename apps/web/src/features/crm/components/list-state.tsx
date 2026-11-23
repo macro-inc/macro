@@ -1,10 +1,11 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateCompaniesGraphic from '@design/empty-state-companies.svg';
 import EmptyStateNoAccessGraphic from '@design/empty-state-no-access.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
-import { EmptyStatePanel } from '@ui';
+import { Button, EmptyStatePanel } from '@ui';
 import { type Component, For, type JSX } from 'solid-js';
 
 /** Presentational states for CRM lists; the caller owns the query and actions. */
@@ -61,10 +62,10 @@ export function CrmListError(props: {
       centered
       topSpacerClass="grow-[0.5] basis-0 mobile:basis-0"
       graphic={EmptyStateNoAccessGraphic}
-      description="Please try again to reload this view."
-      title={props.title ?? "Couldn't load this list."}
+      description={t('crm.listReloadHelp')}
+      title={props.title ?? t('crm.listLoadFailed')}
       primaryAction={{
-        label: 'Try again',
+        label: t('crm.tryAgain'),
         onClick: () => fireAndForget(props.onRetry(), 'crm'),
       }}
     />
@@ -99,5 +100,24 @@ export function CrmListSkeleton(props: { label?: string; count?: number }) {
         )}
       </For>
     </ListSkeleton.Root>
+  );
+}
+
+/** A failed request, kept distinct from an empty list, with a retry. */
+export function CrmListRetry(props: {
+  message: string;
+  onRetry: () => Promise<unknown>;
+}) {
+  return (
+    <div class="flex items-center justify-center gap-2 p-3 text-center text-xs text-ink-muted">
+      <span>{props.message}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => fireAndForget(props.onRetry(), 'crm')}
+      >
+        Retry
+      </Button>
+    </div>
   );
 }

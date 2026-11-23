@@ -7,6 +7,7 @@ import { useInputCommands } from './context';
 false && fileFolderDrop;
 
 type DropZoneProps = ParentProps & {
+  enabled?: boolean;
   onDragStart?: (valid: boolean) => void;
   onDragEnd?: () => void;
 };
@@ -17,17 +18,21 @@ export function DropZone(props: DropZoneProps) {
   return (
     <div
       class="contents"
-      use:fileFolderDrop={{
-        onDragStart: (valid) => props.onDragStart?.(valid),
-        onDragEnd: () => props.onDragEnd?.(),
-        onDrop: (files, folders) => {
-          handleFileFolderDrop(files, folders, (entries) =>
-            commands.attachFiles(entries.map((e) => e.file))
-          ).catch((error) =>
-            Telemetry.error(error, { surface: 'channel-input' })
-          );
-        },
-      }}
+      use:fileFolderDrop={
+        props.enabled === false
+          ? undefined
+          : {
+              onDragStart: (valid) => props.onDragStart?.(valid),
+              onDragEnd: () => props.onDragEnd?.(),
+              onDrop: (files, folders) => {
+                handleFileFolderDrop(files, folders, (entries) =>
+                  commands.attachFiles(entries.map((e) => e.file))
+                ).catch((error) =>
+                  Telemetry.error(error, { surface: 'channel-input' })
+                );
+              },
+            }
+      }
     >
       {props.children}
     </div>

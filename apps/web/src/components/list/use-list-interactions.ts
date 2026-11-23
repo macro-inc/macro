@@ -1,6 +1,7 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
 import { isScopeInActiveBranch } from '@core/hotkey/utils';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { ListController } from './create-list-controller';
@@ -321,7 +322,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   }).withGroup(group);
 
   registerHotkey({
-    hotkey: ['shift+arrowdown', 'shift+j'],
+    hotkey: ['shift+arrowdown'],
     scopeId: options.scopeId,
     description: 'Extend selection down',
     condition: () => canHandle(options.conditions?.extendSelection),
@@ -333,7 +334,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   }).withGroup(group);
 
   registerHotkey({
-    hotkey: ['shift+arrowup', 'shift+k'],
+    hotkey: ['shift+arrowup'],
     scopeId: options.scopeId,
     description: 'Extend selection up',
     condition: () => canHandle(options.conditions?.extendSelection),
@@ -423,6 +424,8 @@ export function useListInteractions<TItem, TMetadata = unknown>(
       return true;
     },
     registrationType: 'add',
+    // A selection is the innermost level: it clears before a search does.
+    handlerPriority: HOTKEY_PRIORITY_HIGH,
   }).withGroup(group);
 
   onCleanup(() => group.dispose());

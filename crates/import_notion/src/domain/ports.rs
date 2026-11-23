@@ -6,7 +6,7 @@ use std::time::Duration;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::model::{
-    NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged, SearchHit,
+    NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged, RowsPage, SearchHit,
     SearchObject,
 };
 
@@ -76,12 +76,13 @@ pub trait NotionApi: Send + Sync + 'static {
         database: &NotionId,
     ) -> impl Future<Output = Result<Vec<NotionId>, NotionError>> + Send;
 
-    /// One page of a data source's rows, oldest first.
+    /// One page of a data source's rows, oldest first, saying whether more
+    /// follow or Notion's result cap cut the rest off.
     fn query_data_source(
         &self,
         id: &NotionId,
         cursor: Option<String>,
-    ) -> impl Future<Output = Result<Paged<NotionPage>, NotionError>> + Send;
+    ) -> impl Future<Output = Result<RowsPage, NotionError>> + Send;
 
     /// One page of workspace members.
     fn users(

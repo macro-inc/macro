@@ -6,36 +6,42 @@
  */
 import type { UsageAudioSeconds } from './usageAudioSeconds';
 import type { UsagePrice } from './usagePrice';
+import type { UsageProviderCredits } from './usageProviderCredits';
 
 /**
  * Measured usage for one invocation.
  */
 export interface Usage {
-  /** Audio duration in seconds, absent for token billing. */
+  /** Audio duration in seconds, absent for token and credit billing. */
   audio_seconds?: UsageAudioSeconds;
   /**
-   * Input tokens read from a prompt cache; zero for audio billing.
+   * Input tokens read from a prompt cache; zero for audio and credit billing.
    * @minimum 0
    */
   cache_read_input_tokens: number;
   /**
-   * Input tokens written to a prompt cache; zero for audio billing.
+   * Input tokens written to a prompt cache; zero for audio and credit billing.
    * @minimum 0
    */
   cache_write_input_tokens: number;
   /** Recording timestamp. */
   created_at: string;
   /**
-   * Uncached input tokens; zero for audio billing.
+   * Uncached input tokens; zero for audio and credit billing.
    * @minimum 0
    */
   input_tokens: number;
   /** Provider model identifier. */
   model: string;
   /**
-   * Output tokens; zero for audio billing.
+   * Output tokens; zero for audio and credit billing.
    * @minimum 0
    */
   output_tokens: number;
   price?: UsagePrice;
+  /**
+   * Vendor credits consumed, absent for token and audio billing.
+   * @minimum 0
+   */
+  provider_credits?: UsageProviderCredits;
 }

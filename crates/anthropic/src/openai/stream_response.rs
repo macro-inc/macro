@@ -3,7 +3,7 @@ use super::stream_extension::{ExtendedAnthropicStreamItem, ExtendedStream};
 use crate::client::chat::MessageCompletionResponseStream;
 use crate::error::AnthropicError;
 use crate::openai::stream_extension::AnthropicResponseExtension;
-use crate::prelude::{ServerToolUse, transform_request_web_fetch};
+use crate::prelude::ServerToolUse;
 use crate::types::response::{ContentDeltaEvent, StopReason, StreamEvent, Usage};
 use crate::{client::chat::Chat, prelude::CreateMessageRequestBody};
 use async_openai::error::{ApiError, OpenAIError};
@@ -207,12 +207,6 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             ContentDeltaEvent::ServerToolUse(server_tool) => {
                                 tool_state = ToolState::StreamingServerTool(server_tool.into())
                             }
-                            ContentDeltaEvent::WebSearchToolResult(web_search_response) => {
-                                yield Ok(AnthropicResponseExtension::WebSearchToolResponse(web_search_response).into());
-                            }
-                            ContentDeltaEvent::WebFetchToolResult(web_fetch_response) => {
-                                yield Ok(AnthropicResponseExtension::WebFetchToolResponse(web_fetch_response).into());
-                            }
                             ContentDeltaEvent::BashCodeExecutionToolResult(bash_response) => {
                                 yield Ok(AnthropicResponseExtension::BashCodeExecutionToolResponse(bash_response).into());
                             }
@@ -230,12 +224,6 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                                 yield Ok(
                                     AnthropicResponseExtension::Citation(citation).into()
                                 );
-                            }
-                            ContentDeltaEvent::WebSearchToolResult(web_search_response) => {
-                                yield Ok(AnthropicResponseExtension::WebSearchToolResponse(web_search_response).into());
-                            }
-                            ContentDeltaEvent::WebFetchToolResult(web_fetch_response) => {
-                                yield Ok(AnthropicResponseExtension::WebFetchToolResponse(web_fetch_response).into());
                             }
                             ContentDeltaEvent::BashCodeExecutionToolResult(bash_response) => {
                                 yield Ok(AnthropicResponseExtension::BashCodeExecutionToolResponse(bash_response).into());
@@ -385,7 +373,6 @@ impl<'c> Chat<'c> {
     {
         let mut request = request.into();
         request.stream = Some(true);
-        let request = transform_request_web_fetch(request);
         self.create_stream_openai_unchecked(request).await
     }
 
@@ -401,7 +388,6 @@ impl<'c> Chat<'c> {
         let mut request = request.into();
         request.stream = Some(true);
         let request = extensions.extend_request(request);
-        let request = transform_request_web_fetch(request);
         self.create_stream_extended_unchecked(request).await
     }
 

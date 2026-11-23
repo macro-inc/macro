@@ -53,12 +53,18 @@ it('keeps a refresh and retried request under the admitted action with synchrono
   expect(request).toHaveBeenCalledTimes(3);
   const spans = exporter.getFinishedSpans();
   const root = spans.find((span) => span.name === 'save.action')!;
+  const refresh = spans.find((span) => span.name === 'auth.refresh')!;
+  expect(refresh.parentSpanContext?.spanId).toBe(root.spanContext().spanId);
   const requests = spans.filter((span) => span.name.startsWith('http '));
   expect(requests).toHaveLength(3);
   for (const span of requests) {
-    expect(span.parentSpanContext?.spanId).toBe(root.spanContext().spanId);
+    const parent = span.name.endsWith('/jwt/refresh') ? refresh : root;
+    expect(span.parentSpanContext?.spanId).toBe(parent.spanContext().spanId);
     expect(span.spanContext().traceId).toBe(root.spanContext().traceId);
   }
+  expect(
+    requests.filter((span) => span.name.endsWith('/jwt/refresh'))
+  ).toHaveLength(1);
   const resources = request.mock.calls.filter(([url]) =>
     String(url).endsWith('/resource')
   );

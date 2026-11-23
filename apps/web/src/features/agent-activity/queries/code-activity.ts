@@ -1,4 +1,7 @@
-import { codeExecutionInput } from '@app/features/block-agent/state/code-execution';
+import {
+  codeExecutionId,
+  codeExecutionInput,
+} from '@app/features/block-agent/state/code-execution';
 import { isCodeExecution } from '@app/features/block-agent/state/tool-groups';
 import type { AgentActivityRow } from '@macro-inc/lexical-core';
 import { agentCodeExecutionQueryOptions } from '@queries/agent-session/code-execution';
@@ -8,10 +11,12 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { useQueries } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import { isUnnamedOutcome } from '../core/unnamed-outcomes';
 
 /**
  * Share the session view's observed SDK activity while an inline run is open.
  * Without a `segment` there is no run to look into, and `rows` stand as given.
+ * A program that failed or stopped without naming a step is left out.
  */
 export function createCodeActivityRows(
   sessionId: Accessor<string>,
@@ -31,7 +36,10 @@ export function createCodeActivityRows(
       )
         return [];
       const input = codeExecutionInput(part);
-      return input ? [{ ...input, id: part.id }] : [];
+      const executionId = codeExecutionId(part);
+      return input && executionId
+        ? [{ executionId, source: input.source, id: part.id }]
+        : [];
     });
   });
   const queries = useQueries(() => ({
@@ -61,6 +69,8 @@ export function createCodeActivityRows(
         }))
       );
     });
-    return rows().flatMap((row) => replacements.get(row.id) ?? [row]);
+    return rows().flatMap(
+      (row) => replacements.get(row.id) ?? (isUnnamedOutcome(row) ? [] : [row])
+    );
   };
 }

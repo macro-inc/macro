@@ -1,4 +1,5 @@
 import { ENABLE_MARKDOWN_SEARCH_TEXT } from '@core/constant/featureFlags';
+import { deepEqual } from '@core/util/compareUtils';
 import { $isCodeNode } from '@lexical/code';
 import {
   $createListItemNode,
@@ -20,6 +21,7 @@ import {
   mergeRegister,
 } from '@lexical/utils';
 import {
+  $isAccountManagerRequestNode,
   $isDocumentMentionNode,
   $isMentionNode,
   $isWatermarkNode,
@@ -50,6 +52,7 @@ import {
   $isLineBreakNode,
   $isParagraphNode,
   $isRangeSelection,
+  $isRootNode,
   $isRootOrShadowRoot,
   $isTextNode,
   $normalizeSelection__EXPERIMENTAL,
@@ -862,18 +865,30 @@ function cleanState(state: SerializedEditorState): SerializedEditorState {
   ]);
 }
 
+type LoroSyncOptions = {
+  /** The state stored in Loro now. */
+  stored?: SerializedEditorState;
+  /**
+   * Keys of the top-level blocks that changed since the last write, from
+   * `recordChangedBlocks`. Only these are compared with the stored state;
+   * without it every block is.
+   */
+  changedBlocks?: ReadonlySet<NodeKey>;
+};
+
+type SerializedBlock = SerializedLexicalNode & {
+  $?: Record<string, unknown>;
+};
+
 /**
  * Transform a serialized editor state into one that is safe to the LORO sync plugin.
  */
-export function loroSyncState(state: EditorState): SerializedEditorState {
-  let serializedState;
-  if (ENABLE_MARKDOWN_SEARCH_TEXT) {
-    serializedState = serializedSateWithSearchText(state);
-  } else {
-    serializedState = state.toJSON();
-  }
-  return transformSerializedEditorState(
-    stripDraftCommentMarks(serializedState),
+export function loroSyncState(
+  state: EditorState,
+  options: LoroSyncOptions = {}
+): SerializedEditorState {
+  const serializedState = transformSerializedEditorState(
+    stripDraftCommentMarks(state.toJSON()),
     [
       // completion nodes should not be saved.
       (node) => {
@@ -882,31 +897,134 @@ export function loroSyncState(state: EditorState): SerializedEditorState {
       },
     ]
   );
+  addDerivedFields(
+    state,
+    serializedState,
+    options,
+    ENABLE_MARKDOWN_SEARCH_TEXT
+  );
+  return serializedState;
 }
 
-function serializedSateWithSearchText(
-  state: EditorState
-): SerializedEditorState {
-  const nodeIdToSearchText = new Map<string, string>();
+/** Adds the top-level blocks an update changed to `changed`. */
+export function recordChangedBlocks(
+  state: EditorState,
+  dirtyElements: ReadonlyMap<NodeKey, unknown>,
+  dirtyLeaves: ReadonlySet<NodeKey>,
+  changed: Set<NodeKey>
+) {
+  const record = (key: NodeKey) => {
+    const parent = $getNodeByKey(key)?.getParent();
+    if (parent && $isRootNode(parent)) changed.add(key);
+  };
   state.read(() => {
-    const root = $getRoot();
-    const children = root.getChildren();
-    for (const child of children) {
-      if ($isElementNode(child)) {
-        const id = $getId(child);
-        if (id) nodeIdToSearchText.set(id, child.getTextContent());
+    for (const key of dirtyElements.keys()) record(key);
+    for (const key of dirtyLeaves) record(key);
+  });
+}
+
+// searchText and the document's version stamp are derived, so each is written
+// only with a real change: searchText with a change to its block, the stamp
+// with any change to the document. Otherwise the stored value stays, including
+// none: documents created through the API store neither, and writing one would
+// count as an edit by whoever had the document open. A stored searchText that no
+// longer matches its block is corrected when the block is next compared:
+// concurrent edits to one block merge its text but keep one peer's searchText.
+function addDerivedFields(
+  state: EditorState,
+  serialized: SerializedEditorState,
+  { stored, changedBlocks }: LoroSyncOptions,
+  withSearchText: boolean
+) {
+  const storedChildren = (stored?.root?.children ?? []) as SerializedBlock[];
+  const storedBlocks = new Map<string, SerializedBlock>();
+  for (const block of storedChildren) {
+    const id = block.$?.id;
+    if (typeof id === 'string') storedBlocks.set(id, block);
+  }
+
+  const compared = new Set<string>();
+  const texts = new Map<string, string>();
+  state.read(() => {
+    for (const child of $getRoot().getChildren()) {
+      const id = $getId(child);
+      if (!id) continue;
+      const unchanged =
+        changedBlocks !== undefined &&
+        !changedBlocks.has(child.getKey()) &&
+        storedBlocks.has(id);
+      if (unchanged) continue;
+      compared.add(id);
+      if (withSearchText && $isElementNode(child)) {
+        texts.set(id, child.getTextContent());
       }
     }
   });
-  const result = state.toJSON();
-  const root = result.root;
-  for (const child of root.children) {
-    const id = child.$?.id as string | undefined;
-    if (id && nodeIdToSearchText.has(id)) {
-      child.$!.searchText = nodeIdToSearchText.get(id)!;
+
+  const blocks = serialized.root.children as SerializedBlock[];
+  let changed = blocks.length !== storedChildren.length;
+  blocks.forEach((block, index) => {
+    const meta = block.$;
+    const id = meta?.id;
+    if (!meta || typeof id !== 'string') {
+      changed = true;
+      return;
     }
-  }
-  return result;
+    const prior = storedBlocks.get(id);
+    const blockChanged =
+      !prior || (compared.has(id) && !sameExceptSearchText(prior, block));
+    if (blockChanged || storedChildren[index]?.$?.id !== id) changed = true;
+    if (!withSearchText) return;
+    const { searchText: _derived, ...rest } = meta;
+    const text = texts.get(id);
+    const storedText = prior?.$?.searchText;
+    const searchText =
+      text !== undefined && (blockChanged || storedText !== undefined)
+        ? text
+        : storedText;
+    block.$ = searchText === undefined ? rest : { ...rest, searchText };
+  });
+
+  if (!stored || changed || !sameRootExceptVersion(stored, serialized)) return;
+  const { documentMetadata: _stamp, ...rest } = serialized.root.$ ?? {};
+  const storedMetadata = stored.root.$?.documentMetadata;
+  serialized.root.$ =
+    storedMetadata === undefined
+      ? rest
+      : { ...rest, documentMetadata: storedMetadata };
+}
+
+function sameExceptSearchText(a: SerializedBlock, b: SerializedBlock) {
+  const { $: aMeta, ...aContent } = a;
+  const { $: bMeta, ...bContent } = b;
+  const { searchText: _a, ...aRest } = aMeta ?? {};
+  const { searchText: _b, ...bRest } = bMeta ?? {};
+  return deepEqual(aRest, bRest) && deepEqual(aContent, bContent);
+}
+
+function sameRootExceptVersion(
+  a: SerializedEditorState,
+  b: SerializedEditorState
+) {
+  const { children: _a, $: aMeta, ...aRoot } = a.root;
+  const { children: _b, $: bMeta, ...bRoot } = b.root;
+  return (
+    deepEqual(aRoot, bRoot) &&
+    deepEqual(withoutVersion(aMeta), withoutVersion(bMeta))
+  );
+}
+
+// The editor reads missing metadata fields as null, so null and missing match.
+function withoutVersion(meta: Record<string, unknown> | undefined) {
+  const { documentMetadata, ...rest } = meta ?? {};
+  if (!documentMetadata || typeof documentMetadata !== 'object') return rest;
+  const metadata = Object.fromEntries(
+    Object.entries(documentMetadata).filter(
+      ([key, value]) => key !== 'version' && value !== null
+    )
+  );
+  if (Object.keys(metadata).length === 0) return rest;
+  return { ...rest, documentMetadata: metadata };
 }
 
 /**
@@ -914,7 +1032,8 @@ function serializedSateWithSearchText(
  * better plain text search.
  */
 export function getSaveState(state: EditorState): SerializedEditorState {
-  const serializedState = serializedSateWithSearchText(state);
+  const serializedState = state.toJSON();
+  addDerivedFields(state, serializedState, {}, true);
   return cleanState(serializedState);
 }
 
@@ -1205,6 +1324,17 @@ const $singleLineNode = (node: ElementNode): ElementNode | null => {
   return p;
 };
 
+/** A one-line preview has no room for a card with its own controls. */
+function $replaceAccountManagerCardsWithText(parent: ElementNode) {
+  for (const child of parent.getChildren()) {
+    if ($isAccountManagerRequestNode(child)) {
+      child.replace($createTextNode(child.getTextContent()));
+    } else if ($isElementNode(child)) {
+      $replaceAccountManagerCardsWithText(child);
+    }
+  }
+}
+
 export function forceSingleLine(editor: LexicalEditor) {
   editor.update(
     () => {
@@ -1225,6 +1355,7 @@ export function forceSingleLine(editor: LexicalEditor) {
       root.clear();
       if (firstChild) {
         root.append(firstChild);
+        $replaceAccountManagerCardsWithText(firstChild);
       } else {
         root.append($createParagraphNode().append($createTextNode('')));
       }
@@ -1273,6 +1404,20 @@ function _pendingEditorState(editor: LexicalEditor): Promise<EditorState> {
       resolve(editorState);
     });
   });
+}
+
+/**
+ * Focuses `editor` for a click on its container, unless focus is already inside
+ * the editor. A click in the text has already focused the editor and put the
+ * caret where it landed, and `editor.focus()` writes Lexical's stored selection
+ * back to the page. That selection is still the previous caret when the click
+ * arrives before Lexical reads the browser's selectionchange (a quick click, a
+ * trackpad or touch tap, or a busy main thread), so the click would be lost. A
+ * click beside the text, on the container's padding, still focuses the editor.
+ */
+export function focusEditorFromClick(editor: LexicalEditor): void {
+  if (editor.getRootElement()?.contains(document.activeElement)) return;
+  editor.focus();
 }
 
 /**

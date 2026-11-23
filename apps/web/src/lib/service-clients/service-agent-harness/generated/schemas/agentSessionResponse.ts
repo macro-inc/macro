@@ -18,6 +18,7 @@ import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadI
 import type { AgentSessionResponseThreadParent } from './agentSessionResponseThreadParent';
 import type { SandboxSize } from './sandboxSize';
 import type { SessionStatusDto } from './sessionStatusDto';
+import type { TriggerOrigin } from './triggerOrigin';
 
 /**
  * Response body describing an agent session.
@@ -52,6 +53,9 @@ at creation. Absent otherwise, so existing payloads are unchanged. */
   modifiedAt: string;
   /** User-facing session name. */
   name: string;
+  /** What opened the session: who or what started it, and what it is about.
+`unknown` when nothing recorded it. */
+  origin?: TriggerOrigin;
   /** The exact message that invoked the bot, if any. */
   originatingMessageId?: AgentSessionResponseOriginatingMessageId;
   /** The user who created and owns the session. */

@@ -1,10 +1,10 @@
 use super::*;
-use email_db_client::messages::scheduled::{
-    delivery::{
-        DeliveryClaim, begin_submission, claim_delivery, complete_delivery, pause_delivery,
-        release_preparation,
-    },
-    get::{get_and_start_processing_scheduled_message, get_scheduled_message},
+use crate::domain::scheduled_delivery::state::{
+    DeliveryClaim, begin_submission, claim_delivery, complete_delivery, pause_delivery,
+    release_preparation,
+};
+use email_db_client::messages::scheduled::get::{
+    get_and_start_processing_scheduled_message, get_scheduled_message,
 };
 
 fn identity() -> (Uuid, Uuid) {
@@ -36,7 +36,7 @@ async fn preserve_submission(pool: Pool<Postgres>, unconfirmed: bool) -> anyhow:
     );
     assert!(get_scheduled_message(&pool, link, message).await?.is_some());
     let mut tx = pool.begin().await?;
-    assert!(complete_delivery(&mut tx, &claim).await?);
+    assert!(complete_delivery(&mut *tx, &claim).await?);
     tx.commit().await?;
     Ok(())
 }

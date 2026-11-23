@@ -1,6 +1,8 @@
 //! Outbound adapters.
 
 #[cfg(feature = "outbound")]
+mod address_guard;
+#[cfg(feature = "outbound")]
 pub mod http_delivery;
 #[cfg(feature = "outbound")]
 pub mod http_validator;

@@ -14,9 +14,11 @@ export default {
   markUnread: 'Mark Unread',
   open: 'Open',
   openInNewSplit: 'Open in new split',
+  openInNewTab: 'Open in new tab',
   openInCurrentSplit: 'Open in current split',
   openFullscreen: 'Open fullscreen',
   rename: 'Rename',
+  askMacro: 'Ask Macro',
   setChannelPicture: 'Set channel picture',
   removeChannelPicture: 'Remove channel picture',
   favorite: 'Favorite',
@@ -36,7 +38,7 @@ export default {
   viewItemsWithTag: 'View all items with tag',
   editTag: 'Edit tag',
   removeTag: 'Remove tag',
-  snoozeNotifications: 'Snooze notifications…',
+  snoozeNotifications: 'Snooze notifications',
   muteNotifications: 'Mute notifications',
   unmuteNotifications: 'Unmute notifications',
   remindMe: 'Remind me',
@@ -46,6 +48,11 @@ export default {
   changeProject: 'Change project',
   openSourceNamed: 'Open source {{name}}',
   changeSource: 'Change source',
+  openEntityNamed: 'Open {{name}}',
+  changeEntity: 'Change {{property}}',
+  unlinkValue: 'Unlink',
+  unlinking: 'Unlinking…',
+  unpinProperty: 'Unpin property',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
@@ -63,6 +70,10 @@ export default {
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
   share: 'Share',
+  shareCommand: {
+    one: 'Share',
+    other: 'Share items',
+  },
   downloadDocx: 'Download',
   downloadEml: 'Download .eml',
   downloadEmlFailed: 'Failed to download email. Please try again.',
@@ -96,11 +107,20 @@ export default {
   projectActions: 'Project actions',
   propertyOption: '{{property}}: {{option}}',
   actions: 'Actions',
+  view: 'View',
   clear: 'Clear',
+  clearSelection: 'Clear selection',
   selectedCount: { other: '{{count}} selected' },
   undo: 'Undo',
 
   // Toasts.
+  toastOpenSplit: 'Open split',
+  toastFolderCreated: '{{name}} created',
+  toastFolderUploaded: '{{name}} uploaded',
+  toastFolderCreateFailed: 'Folder creation failed',
+  toastFolderCreateError: 'Could not create the folder. Please try again.',
+  toastFolderItemsSaveFailed:
+    'Folder created, but some items could not be saved. Retry to finish adding your tags and files.',
   toastChannelAccessRequestFailed: 'Could not send your request to join',
   toastChannelAccessWithdrawalFailed: 'Could not withdraw your request',
   toastChannelAccessResolveFailed: 'Could not answer this request',
@@ -131,6 +151,10 @@ export default {
     other: '{{count}} drafts discarded',
   },
   toastDiscardDraftFailed: 'Failed to discard draft',
+  toastPropertySet: {
+    one: '{{property}} set',
+    other: '{{property}} set on {{count}} items',
+  },
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',
@@ -172,6 +196,9 @@ export default {
     other: 'Unmuted {{succeeded}} of {{count}} items; {{failed}} failed',
   },
   toastUnmuteFailed: 'Failed to unmute notifications',
+  toastMentionsOnly: 'Notifying you for @mentions only',
+  toastAllMessages: 'Notifying you for all messages',
+  toastNotificationLevelFailed: 'Failed to update notifications',
   toastMarkedDone: 'Marked as done',
   toastMarkedDoneCount: {
     one: 'Marked {{count}} item as done',
@@ -185,6 +212,11 @@ export default {
     one: 'Marked {{completed}} of {{count}} item as done. Some changes could not be saved.',
     other:
       'Marked {{completed}} of {{count}} items as done. Some changes could not be saved.',
+  },
+  toastMarkedDoneNotificationsUnsaved: {
+    one: "Marked {{count}} item as done, but its notifications couldn't be cleared.",
+    other:
+      "Marked {{count}} items as done, but their notifications couldn't be cleared.",
   },
   toastMarkDoneUnsaved:
     'Some changes could not be saved. Undo will reverse the accepted changes.',
@@ -200,10 +232,6 @@ export default {
     other: 'Marked {{accepted}} of {{count}} items as not done',
   },
   toastMarkNotDoneFailed: 'Failed to mark as not done',
-  toastThreadStaysDone:
-    'This thread has no received messages, so it stays done',
-  toastThreadsStayDone:
-    'These threads have no received messages, so they stay done',
   toastCountNotRestored: { other: '{{count}} could not be restored.' },
   toastNotificationsNotRestored: 'Some notifications could not be restored.',
   toastWithWarnings: '{{message}}. {{warnings}}',
@@ -268,8 +296,19 @@ export default {
   folderDuplicateLimitHint:
     'Folders with more than 100 files, chats, and subfolders can’t be duplicated.',
   toastGithubLinkCopied: 'GitHub link copied to clipboard',
+  toastGithubLinkCopyFailed: 'Could not copy GitHub link',
   toastBranchNameCopied: 'Branch name copied to clipboard',
   download: 'Download',
+  print: 'Print',
+  downloadAsDocx: 'Download DOCX',
+  betaBadge: 'Beta',
+  folderActions: 'Folder actions',
+  downloadAsXlsx: 'Download as Excel (.xlsx)',
+  downloadAsCsv: 'Download as CSV',
+  chatAboutProject: 'Chat',
+  presentationActions: 'Presentation actions',
+  documentActions: 'Document actions',
+  agentActions: 'Agent actions',
   copyGithubLink: 'Copy GitHub Link',
   prMerge: 'Merge',
   prMerging: 'Merging…',
@@ -288,4 +327,38 @@ export default {
   toastPrConvertToDraftFailed: 'Failed to convert pull request to a draft',
   toastPrClosed: 'Closed {{name}}',
   toastPrCloseFailed: 'Failed to close pull request',
+  toastProjectActionLoadFailed: 'Could not open this project action',
+  toastProjectRenamed: 'Project renamed',
+  toastProjectsDeleted: {
+    one: 'Project deleted',
+    other: 'Deleted {{count}} projects',
+  },
+
+  // Confirming a project delete.
+  deleteProjectsTitle: {
+    one: 'Delete project?',
+    other: 'Delete {{count}} projects?',
+  },
+  deleteProjectsDescription: {
+    one: 'The project and its activity will be deleted. Its tasks will remain in your workspace.',
+    other:
+      'These projects and their activity will be deleted. Their tasks will remain in your workspace.',
+  },
+  deleteProjectsLabel: {
+    one: 'Delete project',
+    other: 'Delete {{count}} projects',
+  },
+  deleteProjectsFailed: 'Could not delete. Please try again.',
+  deleteProjectsPartlyFailed: {
+    one: 'Deleted {{deleted}} of {{count}}. The rest could not be deleted.',
+    other: 'Deleted {{deleted}} of {{count}}. The rest could not be deleted.',
+  },
+
+  // Markdown document layout.
+  turnOnWideMode: 'Turn on wide mode',
+  turnOffWideMode: 'Turn off wide mode',
+
+  // HTML files in the code block.
+  showHtmlCode: 'Show code',
+  showHtmlRendered: 'Show rendered',
 };

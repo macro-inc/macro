@@ -42,14 +42,11 @@ export function RuntimePairingPage(props: {
     props.initialCode || undefined
   );
   const [allowPermissionBypass, setAllowPermissionBypass] = createSignal(false);
-  const [permissionBypassEdited, setPermissionBypassEdited] =
-    createSignal(false);
   const [approved, setApproved] = createSignal(false);
   const [approveError, setApproveError] = createSignal<string>();
   const [name, setName] = createSignal('');
   const [nameEdited, setNameEdited] = createSignal(false);
   const [share, setShare] = createSignal<HarnessShare>('Private');
-  const [shareEdited, setShareEdited] = createSignal(false);
 
   const pairingQuery = useHarnessPairingQuery(committedCode);
   const approveMutation = useApproveHarnessPairingMutation();
@@ -64,20 +61,6 @@ export function RuntimePairingPage(props: {
     const pairing = pairingData();
     if (!pairing) return;
     if (!nameEdited()) setName(pairing.requested_name);
-    if (!permissionBypassEdited()) {
-      setAllowPermissionBypass(
-        pairing.requested_allow_permission_bypass === true
-      );
-    }
-    // The daemon's config may ask for a scope; preselect it, but the person
-    // approving keeps the final say.
-    if (
-      !shareEdited() &&
-      pairing.requested_scope === 'team' &&
-      canShareWithTeam()
-    ) {
-      setShare('Team');
-    }
   });
 
   const lookupError = () =>
@@ -99,9 +82,7 @@ export function RuntimePairingPage(props: {
     setNameEdited(false);
     setName('');
     setShare('Private');
-    setShareEdited(false);
     setAllowPermissionBypass(false);
-    setPermissionBypassEdited(false);
   };
 
   const canApprove = () =>
@@ -117,14 +98,12 @@ export function RuntimePairingPage(props: {
     try {
       await approveMutation.mutateAsync({
         code: pairing.code,
-        allowPermissionBypass:
-          pairing.requested_allow_permission_bypass !== false &&
-          allowPermissionBypass(),
+        allowPermissionBypass: allowPermissionBypass(),
         name: name().trim(),
         teamId: share() === 'Team' ? currentTeamId() : undefined,
       });
       setApproved(true);
-      toast.success('Runtime connected');
+      toast.success('Machine connected');
     } catch (error) {
       setApproveError(failureMessage(error, PAIRING_ERROR_FALLBACK));
     }
@@ -132,7 +111,7 @@ export function RuntimePairingPage(props: {
 
   return (
     <SettingsPage
-      title={approved() ? 'Runtime connected' : 'New runtime'}
+      title={approved() ? 'Machine connected' : 'New machine'}
       showTitleInSheet
       description="Connect an agent running on your own machine."
       actions={
@@ -147,12 +126,12 @@ export function RuntimePairingPage(props: {
         </Button>
       }
     >
-      <section aria-label="New runtime">
+      <section aria-label="New machine">
         <SettingsSurface class="@container p-6">
           <Switch>
             <Match when={approved()}>
               <p class="text-sm leading-5 text-ink-muted">
-                Runtime connected. macrod will finish pairing automatically.
+                Machine connected. macrod will finish pairing automatically.
               </p>
             </Match>
 
@@ -223,11 +202,8 @@ export function RuntimePairingPage(props: {
                       value="private"
                       checked={share() === 'Private'}
                       title="Private"
-                      description="Only you can run agents on this runtime."
-                      onChange={() => {
-                        setShareEdited(true);
-                        setShare('Private');
-                      }}
+                      description="Only you can run agents on this machine."
+                      onChange={() => setShare('Private')}
                     />
                     <ChoiceRow
                       name="harness-share"
@@ -236,27 +212,18 @@ export function RuntimePairingPage(props: {
                       title="Team"
                       description={
                         canShareWithTeam()
-                          ? 'Your team can run agents on this runtime.'
-                          : 'Create or join a team before sharing runtimes.'
+                          ? 'Your team can run agents on this machine.'
+                          : 'Create or join a team before sharing machines.'
                       }
                       disabled={!canShareWithTeam()}
-                      onChange={() => {
-                        setShareEdited(true);
-                        setShare('Team');
-                      }}
+                      onChange={() => setShare('Team')}
                     />
                   </fieldset>
                   <div class="flex flex-col gap-2">
                     <Checkbox
                       class="flex items-center gap-3 text-sm"
                       checked={allowPermissionBypass()}
-                      disabled={
-                        pairing().requested_allow_permission_bypass === false
-                      }
-                      onChange={(allowed) => {
-                        setPermissionBypassEdited(true);
-                        setAllowPermissionBypass(allowed);
-                      }}
+                      onChange={setAllowPermissionBypass}
                     >
                       <Checkbox.Control />
                       <Checkbox.Label>
@@ -264,15 +231,14 @@ export function RuntimePairingPage(props: {
                       </Checkbox.Label>
                     </Checkbox>
                     <p class="text-xs text-ink-muted">
-                      {pairing().requested_allow_permission_bypass === false
-                        ? 'This daemon requires permission prompts. Change its setting and pair again to allow bypass.'
-                        : 'When off, every agent on this runtime must ask for permission.'}
+                      When off, every agent on this machine must ask for
+                      permission. You can change this later in Machines.
                     </p>
                     <Show when={allowPermissionBypass()}>
                       <p class="text-xs text-negative" role="alert">
                         Agents can run commands and edit files on this machine
                         without approval. Only enable this if you trust everyone
-                        who can create agents on this runtime.
+                        who can create agents on this machine.
                       </p>
                     </Show>
                   </div>

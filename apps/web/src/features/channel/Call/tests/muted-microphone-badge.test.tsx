@@ -25,7 +25,7 @@ describe('MutedMicrophoneBadge', () => {
     });
     const icon = status.querySelector('svg');
 
-    expect(status.classList).toContain('pointer-events-none');
+    expect(status.getAttribute('data-call-microphone-off')).not.toBeNull();
     expect(icon).not.toBeNull();
     expect(icon?.getAttribute('aria-hidden')).toBe('true');
   });

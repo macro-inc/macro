@@ -115,12 +115,13 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
+    /// Set `action`'s state on the thread; the number of messages it changed.
     pub(crate) async fn change_thread_mailbox_state_impl(
         &self,
         actor: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
         action: MailboxAction,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         match action {
             MailboxAction::Read(true) => return self.mark_thread_seen_impl(actor, thread_id).await,
             MailboxAction::Read(false) => {
@@ -138,21 +139,84 @@ where
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
             .ok_or(EmailErr::ThreadNotFound)?;
         if link.provider == UserProvider::Outlook {
-            self.queue_outlook_action(&link, thread_id, actor, action)
-                .await?;
-            return Ok(());
+            return Ok(self
+                .queue_outlook_action(&link, thread_id, actor, action)
+                .await?
+                .successful_ids
+                .len());
         }
         let (provider_id, value) = match &action {
             MailboxAction::Flagged(value) => (system_labels::STARRED, *value),
             MailboxAction::Trashed(value) => (system_labels::TRASH, *value),
-            MailboxAction::Junk(value) => (system_labels::SPAM, *value),
+            MailboxAction::Junk(value) => {
+                return self
+                    .set_gmail_thread_junk(&link, thread_id, actor, *value)
+                    .await;
+            }
             MailboxAction::Category { name, present } => (name.as_str(), *present),
             _ => unreachable!("read and archive handled above"),
         };
         let label = self.link_label_by_provider_id(link.id, provider_id).await?;
-        self.update_thread_labels_with_actor(&link, thread_id, label.id, value, Some(actor))
+        Ok(self
+            .update_thread_labels_with_actor(&link, thread_id, label.id, value, Some(actor))
+            .await?
+            .successful_ids
+            .len())
+    }
+
+    /// Report spam and Not spam for a Gmail thread. Gmail's own buttons move
+    /// the conversation between the inbox and Spam, as the Outlook path moves
+    /// it to and from the Junk Email folder; the SPAM label alone would leave
+    /// reported mail in the inbox and bring rescued mail back archived. Each
+    /// label is its own write, and the one that keeps the thread where the
+    /// user can try again goes last: Report spam files the thread under Spam
+    /// before it leaves the inbox, Not spam puts it in the inbox before it
+    /// leaves Spam. The number of messages the SPAM write covers.
+    #[tracing::instrument(err, skip_all, fields(link_id = %link.id, %thread_id, junk = junk))]
+    async fn set_gmail_thread_junk(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        junk: bool,
+    ) -> Result<usize, EmailErr> {
+        let spam = self
+            .link_label_by_provider_id(link.id, system_labels::SPAM)
             .await?;
-        Ok(())
+        let messages = self
+            .email_repo
+            .mailbox_action_messages(link.id, thread_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+        let present = || messages.iter().filter(|message| message.is_present);
+        if junk {
+            let filed = self
+                .update_thread_labels_with_actor(
+                    link,
+                    thread_id,
+                    spam.id,
+                    true,
+                    Some(actor.clone()),
+                )
+                .await?;
+            if present().any(|message| message.in_inbox) {
+                self.set_thread_inbox(link, thread_id, actor, false).await?;
+            }
+            return Ok(filed.successful_ids.len());
+        }
+        // Only received mail that was in Spam goes back to the inbox: Not spam
+        // on a thread that is not spam leaves an archived thread archived, and
+        // the user's own sent mail in Spam, even addressed to themselves,
+        // only leaves Spam. (Move to inbox also takes a note to self.)
+        if present().any(|message| message.in_junk && !message.is_draft && !message.is_sent) {
+            self.set_thread_inbox(link, thread_id, actor.clone(), true)
+                .await?;
+        }
+        Ok(self
+            .update_thread_labels_with_actor(link, thread_id, spam.id, false, Some(actor))
+            .await?
+            .successful_ids
+            .len())
     }
 
     /// The email domain selects a bounded message set; persistence commits the
@@ -176,20 +240,19 @@ where
         if !targets.is_empty() {
             self.email_repo
                 .enqueue_mailbox_action(link.id, actor, &action, &targets)
-                .await
-                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+                .await?;
         }
         Ok(UpdateThreadLabelsResult {
             successful_ids: targets.iter().map(|t| t.message_id).collect(),
             failed_ids: vec![],
         })
     }
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id))]
     pub(crate) async fn mark_thread_seen_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         let link = self
             .email_repo
             .owned_link_for_thread(thread_id, macro_id.clone())
@@ -212,9 +275,11 @@ where
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
 
         if link.provider == UserProvider::Outlook {
-            self.queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(true))
-                .await?;
-            return Ok(());
+            return Ok(self
+                .queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(true))
+                .await?
+                .successful_ids
+                .len());
         }
 
         let message_ids: Vec<Uuid> = messages.iter().map(|message| message.db_id).collect();
@@ -236,20 +301,22 @@ where
                 .update_thread_read_status(thread_id, link.id, true)
                 .await
                 .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
-            return Ok(());
+            return Ok(0);
         };
 
-        self.update_thread_labels_impl(&link, thread_id, unread_label_id, false)
-            .await?;
-        Ok(())
+        Ok(self
+            .update_thread_labels_impl(&link, thread_id, unread_label_id, false)
+            .await?
+            .successful_ids
+            .len())
     }
 
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id))]
     pub(crate) async fn mark_thread_unread_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         let link = self
             .email_repo
             .owned_link_for_thread(thread_id, macro_id.clone())
@@ -260,27 +327,31 @@ where
         // Resolve from the authorized thread's inbox, never the caller's primary
         // inbox: multi-inbox users have a distinct UNREAD label for each link.
         if link.provider == UserProvider::Outlook {
-            self.queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(false))
-                .await?;
-            return Ok(());
+            return Ok(self
+                .queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(false))
+                .await?
+                .successful_ids
+                .len());
         }
         let unread_label = self
             .link_label_by_provider_id(link.id, system_labels::UNREAD)
             .await?;
 
-        self.update_thread_labels_impl(&link, thread_id, unread_label.id, true)
-            .await?;
-        Ok(())
+        Ok(self
+            .update_thread_labels_impl(&link, thread_id, unread_label.id, true)
+            .await?
+            .successful_ids
+            .len())
     }
 
     /// Resolve the owning inbox server-side, including delegated inboxes.
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, archived))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id, archived))]
     pub(crate) async fn set_thread_archived_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
         archived: bool,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         let link = self
             .email_repo
             .owned_link_for_thread(thread_id, macro_id.clone())
@@ -295,25 +366,30 @@ where
             .await
     }
 
-    /// Outlook folders have no INBOX label row; only Gmail stores one.
+    /// Outlook folders have no INBOX label row; only Gmail stores one. The
+    /// number of messages it moved.
     pub(super) async fn set_thread_inbox(
         &self,
         link: &Link,
         thread_id: Uuid,
         actor: macro_user_id::user_id::MacroUserIdStr<'static>,
         in_inbox: bool,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         if link.provider == UserProvider::Outlook {
-            self.queue_outlook_action(link, thread_id, actor, MailboxAction::Archived(!in_inbox))
-                .await?;
-            return Ok(());
+            return Ok(self
+                .queue_outlook_action(link, thread_id, actor, MailboxAction::Archived(!in_inbox))
+                .await?
+                .successful_ids
+                .len());
         }
         let label = self
             .link_label_by_provider_id(link.id, system_labels::INBOX)
             .await?;
-        self.update_thread_labels_with_actor(link, thread_id, label.id, in_inbox, Some(actor))
-            .await?;
-        Ok(())
+        Ok(self
+            .update_thread_labels_with_actor(link, thread_id, label.id, in_inbox, Some(actor))
+            .await?
+            .successful_ids
+            .len())
     }
 
     async fn link_label_by_provider_id(
@@ -387,7 +463,7 @@ where
         Err(EmailErr::ThreadHasNoInboundMessages)
     }
 
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, %label_id, add))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id, %label_id, add))]
     pub(crate) async fn update_thread_labels_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -418,7 +494,7 @@ where
             .await
     }
 
-    #[tracing::instrument(err, skip(self, link))]
+    #[tracing::instrument(err, skip(self, link, actor))]
     pub(super) async fn update_thread_labels_with_actor(
         &self,
         link: &Link,
@@ -477,8 +553,8 @@ where
     /// without failing the others.
     #[tracing::instrument(
         err,
-        skip(self, thread_ids),
-        fields(user_id = %macro_id, thread_count = thread_ids.len(), archived)
+        skip(self, macro_id, thread_ids),
+        fields(thread_count = thread_ids.len(), archived)
     )]
     pub(crate) async fn set_threads_archived_impl(
         &self,

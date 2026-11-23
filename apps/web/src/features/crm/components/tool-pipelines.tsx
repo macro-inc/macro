@@ -6,7 +6,8 @@ import { For, Show } from 'solid-js';
 
 type Pipeline = {
   name: string;
-  tracks: string;
+  /** Missing for a generic pipeline. */
+  tracks?: string | null;
   fields: { name: string; options?: string[] | null }[];
 };
 type TrackedRecord = {
@@ -14,37 +15,75 @@ type TrackedRecord = {
   name?: string | null;
   detail?: string | null;
 };
-type Entry = { record: TrackedRecord; fields: { [field: string]: unknown } };
+type Entry = {
+  /** Missing in a generic pipeline. */
+  record?: TrackedRecord | null;
+  fields: { [field: string]: unknown };
+  currencies?: Record<string, string> | null;
+};
 type UpdatedEntry = {
-  record: TrackedRecord;
-  changes: { field: string; before: unknown; after: unknown }[];
+  record?: TrackedRecord | null;
+  changes: {
+    field: string;
+    before: unknown;
+    after: unknown;
+    beforeCurrency?: string | null;
+    afterCurrency?: string | null;
+  }[];
 };
 
+const monetaryFormat = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 6,
+});
+
 /** A field value as one line: people by email, lists joined. */
-export function formatFieldValue(value: unknown): string {
+export function formatFieldValue(
+  value: unknown,
+  currency?: string | null
+): string {
   if (value === null || value === undefined) return 'empty';
-  if (Array.isArray(value)) return value.map(formatFieldValue).join(', ');
+  if (Array.isArray(value))
+    return value.map((item) => formatFieldValue(item)).join(', ');
   if (typeof value === 'string') return value.replace(/^macro\|/, '');
-  if (typeof value === 'number') return value.toLocaleString();
+  if (typeof value === 'number')
+    return currency
+      ? `${currency} ${monetaryFormat.format(value)}`
+      : value.toLocaleString();
   return String(value);
 }
 
-export function recordName(record: TrackedRecord) {
+export function recordName(record: TrackedRecord | null | undefined) {
+  if (!record) return 'Entry';
   return record.name ?? record.detail ?? record.id;
 }
 
-function entrySummary(entry: Entry) {
+/** A generic pipeline's entry reads by its first filled-in field. */
+function entryName(entry: Entry) {
+  if (entry.record) return recordName(entry.record);
+  const [first] = Object.values(entry.fields);
+  return first === undefined ? recordName(null) : formatFieldValue(first);
+}
+
+export function entrySummary(entry: Entry) {
   return Object.entries(entry.fields)
     .slice(0, 3)
-    .map(([name, value]) => `${name}: ${formatFieldValue(value)}`)
+    .map(([name, value]) => {
+      const currency =
+        entry.currencies && Object.hasOwn(entry.currencies, name)
+          ? entry.currencies[name]
+          : undefined;
+      return `${name}: ${formatFieldValue(value, currency)}`;
+    })
     .join(' · ');
 }
 
-function RecordIcon(props: { record: TrackedRecord }) {
-  const isContact = () => props.record.detail?.includes('@') === true;
+function RecordIcon(props: { record?: TrackedRecord | null }) {
+  const isContact = () => props.record?.detail?.includes('@') === true;
   return (
-    <Show when={isContact()} fallback={<Buildings class="size-4" />}>
-      <User class="size-4" />
+    <Show when={props.record} fallback={<Kanban class="size-4" />}>
+      <Show when={isContact()} fallback={<Buildings class="size-4" />}>
+        <User class="size-4" />
+      </Show>
     </Show>
   );
 }
@@ -77,7 +116,10 @@ export function PipelinesToolResponse(props: { pipelines: Pipeline[] }) {
                 subtitle={
                   pipeline.fields
                     .find((field) => field.name === 'Stage')
-                    ?.options?.join(' → ') ?? `Tracks ${pipeline.tracks}s`
+                    ?.options?.join(' → ') ??
+                  (pipeline.tracks
+                    ? `Tracks ${pipeline.tracks}s`
+                    : 'Generic pipeline')
                 }
               />
             </Tool.ListItem>
@@ -103,10 +145,7 @@ export function PipelineEntriesToolResponse(props: {
       <For each={props.entries}>
         {(entry) => (
           <Tool.ListItem icon={<RecordIcon record={entry.record} />}>
-            <Line
-              title={recordName(entry.record)}
-              subtitle={entrySummary(entry)}
-            />
+            <Line title={entryName(entry)} subtitle={entrySummary(entry)} />
           </Tool.ListItem>
         )}
       </For>
@@ -114,7 +153,7 @@ export function PipelineEntriesToolResponse(props: {
         {(entry) => (
           <Tool.ListItem icon={<RecordIcon record={entry.record} />}>
             <Line
-              title={recordName(entry.record)}
+              title={entryName(entry)}
               subtitle={[props.noted?.note, entrySummary(entry)]
                 .filter(Boolean)
                 .join(' · ')}
@@ -137,7 +176,7 @@ export function UpdatedEntriesToolResponse(props: { updated: UpdatedEntry[] }) {
               subtitle={entry.changes
                 .map(
                   (change) =>
-                    `${change.field}: ${formatFieldValue(change.before)} → ${formatFieldValue(change.after)}`
+                    `${change.field}: ${formatFieldValue(change.before, change.beforeCurrency)} → ${formatFieldValue(change.after, change.afterCurrency)}`
                 )
                 .join(' · ')}
             />

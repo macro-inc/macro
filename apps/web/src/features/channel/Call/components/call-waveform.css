@@ -1,0 +1,53 @@
+@property --call-waveform-activity {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.call-waveform {
+  --call-waveform-activity: 0;
+}
+
+.call-waveform [data-waveform-bar] {
+  --call-rest-scale: 0.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scaleY(var(--call-rest-scale));
+}
+
+.call-waveform :is([data-waveform-bar='1'], [data-waveform-bar='3']) {
+  --call-rest-scale: calc(3 / 14);
+}
+
+.call-waveform [data-waveform-bar='2'] {
+  --call-rest-scale: 0.15;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .call-waveform {
+    transition: --call-waveform-activity 180ms ease-out;
+  }
+
+  .call-waveform[data-speaking='true'] {
+    --call-waveform-activity: 1;
+  }
+
+  .call-waveform [data-waveform-bar] {
+    animation: call-waveform-live 1s ease-in-out infinite paused;
+    animation-delay: calc(var(--waveform-bar) * -200ms);
+  }
+
+  .call-waveform[data-speaking='true'] [data-waveform-bar] {
+    animation-play-state: running;
+  }
+}
+
+@keyframes call-waveform-live {
+  0%,
+  100% {
+    transform: scaleY(calc(var(--call-rest-scale) + (1 - var(--call-rest-scale)) * var(--call-waveform-activity)));
+  }
+  50% {
+    transform: scaleY(calc(var(--call-rest-scale) + (0.35 - var(--call-rest-scale)) * var(--call-waveform-activity)));
+  }
+}

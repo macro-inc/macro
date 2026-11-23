@@ -8,7 +8,7 @@ publish = false
 async-trait = { workspace = true }
 http = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
-pipedream_mcp = { path = "../pipedream_mcp" }
+connectors = { path = "../connectors" }
 rootcause = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -18,5 +18,5 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-anyhow = { workspace = true }
+connectors = { path = "../connectors", features = ["test-fakes"] }
 tokio = { workspace = true, features = ["test-util"] }

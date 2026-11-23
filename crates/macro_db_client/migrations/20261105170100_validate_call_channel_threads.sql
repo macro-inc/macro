@@ -1,0 +1,2 @@
+ALTER TABLE call_entities VALIDATE CONSTRAINT call_entities_discussion_check;
+ALTER TABLE comms_messages VALIDATE CONSTRAINT comms_messages_kind_check;

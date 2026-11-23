@@ -6,9 +6,21 @@ Opening **Reviews** from the mobile dock or its **More** drawer starts on **Pull
 requests** (the **All** scope). Explicit review-tab links keep their selected
 scope; desktop's default scope remains **Involves me**.
 
+The sidebar **Labels** section lists GitHub labels, not Macro tags. Keep this
+section separate from Macro tag lists. GitHub labels are also available in
+**Filter pull requests → Label** on desktop and **Open pull request filters →
+Label** on phones.
+
+For now, PR mentions (in messages, documents and Magic Chips) and an agent
+session's PR chip open the pull request on GitHub, not this view: a new tab on
+the web, the system browser in the desktop app. Reviews still opens it here.
+
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
-side panel below the top bar. An open PR has a split button in the top bar
+side panel below the top bar. The Checks summary names failed and pending checks
+before passes (`1 failed 2 pending 26 passed`), and failed checks list first. Failed
+means the conclusions the Reviews board's Failing column counts (`failure`,
+`timed_out`, `cancelled`, `action_required`, `startup_failure`). An open PR has a split button in the top bar
 beside **Changes** (`[data-pull-request-primary-action]` names its main action).
 For a draft the main action is **Ready for review**; otherwise it is **Merge**,
 disabled (with a tooltip) until every check has finished with a success, skipped,
@@ -22,6 +34,10 @@ a refusal appears as a toast with GitHub's reason, and a change refreshes the PR
 status in place. Without a linked GitHub account the toast points to Settings.
 Merged and closed PRs have no split button. PRs are not tasks and do not appear
 in the Tasks list. PRs cannot be favorited.
+**Ask Macro**, before Share, opens a new agent conversation whose unsent draft
+holds the PR chip with the PR's Macro id and GitHub URL; the agent reads the diff
+through the SDK's `githubPullRequests`. On touch screens the header's actions wrap
+onto their own row below the breadcrumb when it leaves no room for them.
 The **Share** button has a **Copy Share Link** button beside it, like other
 items. The "…" menu beside the PR title (in the Reviews breadcrumb, the standalone
 `/app/pr/<id>` page, and PR previews) holds the same changes as the split button,
@@ -72,8 +88,10 @@ and **Show file tree** above the diffs, as described in
 [AI Chat](ai-chat.md#reviewing-a-linked-github-pull-request).
 Spotlighting changes hides the left pane and its top bar; **Back to the split**
 restores the prior divider position and retains the draft, diff state, and scroll.
-At host widths of 720px or less, Changes opens full-width automatically without
-that width toggle; widening restores the requested wide layout and split ratio.
+A PR split 960px or narrower (the 560px its header needs plus the pane's 400px)
+opens Changes full-width over the PR instead of as a split inside the split,
+without that width toggle; widening restores the requested wide layout and split
+ratio. Beside the PR, dragging the divider stops at 560px for the PR.
 Narrow file trees start closed. **Show file tree** opens an animated drawer over the
 diffs without resizing them, including on phones. File selection, Escape, the
 backdrop, or **Hide file tree** closes the drawer and restores focus to its opener.
@@ -93,7 +111,8 @@ a PR opened from a list or agent session, a second split, breadcrumb return,
 side-panel toggle, and phone layout. If no GitHub data loads, the detail shows
 an error banner with a Retry button; pressing it refetches the PR in place.
 Description screenshots hosted on GitHub (including `blob/…?raw=true` links)
-render in the body; they must not show "This image could not be found."
+render in the body, in the browser and the desktop app; they must not show
+"This image could not be found."
 
 PR metadata changes should update an already loaded Reviews list row and the
 linked agent session's PR status without reloading the page. To verify, keep

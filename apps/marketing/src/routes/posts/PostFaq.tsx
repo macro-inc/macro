@@ -1,4 +1,4 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import type { JSX } from 'solid-js';
 
 export function PostFaqItem(props: {

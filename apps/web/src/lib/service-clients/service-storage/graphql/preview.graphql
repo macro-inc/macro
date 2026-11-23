@@ -77,6 +77,7 @@ fragment ItemPreviewFields on GraphqlSoupEntity {
 	id
 	displayName
 	... on GraphqlSoupDocument {
+        appearance
 		documentName: name
 		fileType
 		subType {
@@ -109,4 +110,5 @@ fragment ItemPreviewFields on GraphqlSoupEntity {
 		companyName: name
 		domains
 	}
+    ... on GraphqlSoupInitiative { appearance }
 }

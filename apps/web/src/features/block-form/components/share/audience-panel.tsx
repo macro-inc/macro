@@ -58,8 +58,8 @@ export function AudiencePanel(props: {
             return false;
           }
         }}
+        icon={<Copy class="size-4" />}
       >
-        <Copy class="size-4" />
         Copy form link
       </CopyButton>
     </section>

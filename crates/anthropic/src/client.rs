@@ -2,7 +2,7 @@ pub mod chat;
 use crate::error::AnthropicError;
 use crate::openai::request::AnthropicRequestExtension;
 use crate::prelude::ApiError;
-use crate::types::request::{CODE_EXECUTION_TOOL_HEADER, WEB_FETCH_TOOL_HEADER};
+use crate::types::request::CODE_EXECUTION_TOOL_HEADER;
 use crate::{config::Config, openai::request::AnthropicRequestExtensions};
 use futures::stream::{Stream, StreamExt};
 use reqwest::Client as RequestClient;
@@ -10,6 +10,9 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::pin::Pin;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio_util::io::StreamReader;
+
+/// Provider name in `ai provider account unavailable` logs.
+const PROVIDER: &str = "anthropic";
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -20,24 +23,16 @@ pub struct Client {
 impl Client {
     pub fn dangerously_try_from_env(extensions: Option<AnthropicRequestExtensions>) -> Self {
         let mut config = Config::dangrously_try_from_env();
-        if let Some(ref extensions) = extensions {
-            if extensions.0.contains(&AnthropicRequestExtension::FetchTool) {
-                tracing::debug!("Adding web_fetch beta header");
-                config.headers.append(
-                    WEB_FETCH_TOOL_HEADER.0.clone(),
-                    WEB_FETCH_TOOL_HEADER.1.clone(),
-                );
-            }
-            if extensions
+        if extensions.is_some_and(|extensions| {
+            extensions
                 .0
                 .contains(&AnthropicRequestExtension::CodeExecutionTool)
-            {
-                tracing::debug!("Adding code_execution beta header");
-                config.headers.append(
-                    CODE_EXECUTION_TOOL_HEADER.0.clone(),
-                    CODE_EXECUTION_TOOL_HEADER.1.clone(),
-                );
-            }
+        }) {
+            tracing::debug!("Adding code_execution beta header");
+            config.headers.append(
+                CODE_EXECUTION_TOOL_HEADER.0.clone(),
+                CODE_EXECUTION_TOOL_HEADER.1.clone(),
+            );
         }
         tracing::debug!("Anthropic client headers: {:?}", config.headers);
         Self::with_config(config)
@@ -92,6 +87,11 @@ impl Client {
         let body = response.text().await.map_err(AnthropicError::Reqwest)?;
 
         if !status.is_success() {
+            genai_telemetry::provider_account::report_provider_error(
+                PROVIDER,
+                Some(status.as_u16()),
+                &body,
+            );
             return match serde_json::from_str::<ApiError>(&body) {
                 Ok(api_error) => Err(AnthropicError::ApiError {
                     api_error,
@@ -140,15 +140,22 @@ impl Client {
 
             if !response.status().is_success() {
                 let code = response.status();
-                let err = match response.json::<serde_json::Value>().await {
+                let err = match response.text().await {
                     Err(e) => AnthropicError::Reqwest(e),
-                    Ok(json) => match serde_json::from_value::<ApiError>(json) {
-                        Ok(api_error) => AnthropicError::ApiError {
-                            api_error,
-                            status_code: code,
-                        },
-                        Err(e) => AnthropicError::JsonDeserialize(e),
-                    },
+                    Ok(body) => {
+                        genai_telemetry::provider_account::report_provider_error(
+                            PROVIDER,
+                            Some(code.as_u16()),
+                            &body,
+                        );
+                        match serde_json::from_str::<ApiError>(&body) {
+                            Ok(api_error) => AnthropicError::ApiError {
+                                api_error,
+                                status_code: code,
+                            },
+                            Err(e) => AnthropicError::JsonDeserialize(e),
+                        }
+                    }
                 };
                 let _ = tx.send(Err(err));
                 return;

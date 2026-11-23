@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { MachinesRequestBadge } from './components/machines-request-badge';
 import './MobileSettingsSheet.css';
 import { SearchBar } from '@app/components/view-shell';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -33,9 +34,13 @@ type MobileSettingsSheetProps = {
   page?: SettingsTab;
   groups: SettingsTabGroup[];
   searchGroups?: SettingsTabGroup[];
-  emailSignatures?: boolean;
+  emailRowStyle?: boolean;
   /** Whether search lists the Outlook connection; see `searchSettings`. */
   outlook?: boolean;
+  /** Whether search lists Macro computer settings; see `searchSettings`. */
+  macroComputers?: boolean;
+  /** Whether search lists the Agent pings setting; see `searchSettings`. */
+  agentNotifications?: boolean;
   name: string;
   email: string;
   avatar: JSX.Element;
@@ -51,8 +56,10 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
   const [selection, setSelection] = createSignal<SettingsSearchResult>();
   const results = createMemo(() =>
     searchSettings(props.searchGroups ?? props.groups, query(), {
-      emailSignatures: props.emailSignatures,
+      emailRowStyle: props.emailRowStyle,
       outlook: props.outlook,
+      macroComputers: props.macroComputers,
+      agentNotifications: props.agentNotifications,
     })
   );
   let mainScrollTop = 0;
@@ -204,6 +211,9 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                                     <span class="min-w-0 flex-1 text-left">
                                       {item.label}
                                     </span>
+                                    <Show when={item.tab === 'Harness'}>
+                                      <MachinesRequestBadge />
+                                    </Show>
                                     <CaretRightIcon class="size-4 shrink-0 text-ink-extra-muted" />
                                   </MobileDrawer.Item>
                                 </>

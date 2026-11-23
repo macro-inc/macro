@@ -4,17 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PipelineRecordType } from './pipelineRecordType';
+import type { CreatePipelineRecordType } from './createPipelineRecordType';
 import type { PipelineSharing } from './pipelineSharing';
 
 /**
- * Request to create an empty pipeline with the standard CRM columns.
+ * Request to create an empty pipeline: the standard CRM columns for a tracked
+record, or one Name column, like a new database, for a generic pipeline.
  */
 export interface CreatePipeline {
   /** Pipeline name. */
   name: string;
-  /** Company or contact entries. */
-  recordType: PipelineRecordType;
+  recordType?: CreatePipelineRecordType;
   /** Defaults to private. */
   sharing?: PipelineSharing;
 }

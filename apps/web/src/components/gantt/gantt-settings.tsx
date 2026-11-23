@@ -23,7 +23,6 @@ export function GanttSettings() {
       <Dropdown.Trigger
         variant="secondary"
         size="icon-md"
-        class="bg-surface shadow-sm"
         aria-label="Timeline settings"
         tooltip="Timeline settings"
       >

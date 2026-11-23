@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE hosted_runtime SET name = '' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40136efce925b1ee3e660a5f630495d6d7e0f9376ba5e7158f73b4bf2585b905"
+}

@@ -1,7 +1,9 @@
+import { t } from '@app/lib/i18n';
 import type { ReloadReason } from '@app/observability/generated/native-diagnostics';
 import { reloadApp } from '@app/observability/reload';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import MacroLogo from '@icon/macro-logo.svg';
 import { invoke } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
 import { deviceLooksOffline } from './connectivity';
@@ -66,7 +68,10 @@ const browserPage: ReloadPage = {
     toast.custom(
       {
         title: 'A new version of Macro is ready',
-        actions: [{ label: 'Reload', onClick: reload }],
+        icon: MacroLogo,
+        color: 'var(--color-accent)',
+        dismissLabel: t('common.maybeLater'),
+        actions: [{ label: 'Reload', variant: 'accent', onClick: reload }],
       },
       { persistent: true }
     );

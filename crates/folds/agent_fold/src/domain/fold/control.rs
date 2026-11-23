@@ -82,7 +82,7 @@ impl FoldState {
             // it is enough for the next agent part to open a new one after
             // this line. In-flight tool patches still find their parts by
             // session-wide tool id.
-            let _ = self.close_turn(None);
+            let _ = self.close_turn(None, None);
         }
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;

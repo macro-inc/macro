@@ -1,5 +1,8 @@
 use crate::domain::{
-    models::{BundleAction, DownloadBundleError, DownloadBundleRequest, Progress},
+    models::{
+        BundleAction, DownloadBundleError, DownloadBundleRequest, Progress,
+        SUPPORTED_MANIFEST_SCHEMA,
+    },
     ports::UpdateRepo,
 };
 use futures::TryStreamExt;
@@ -57,7 +60,12 @@ impl BundleClient {
                 "current_bundle_build",
                 &request.current_bundle_build.to_string(),
             )
-            .append_pair("native_build", &request.native_build.to_string());
+            .append_pair("native_build", &request.native_build.to_string())
+            .append_pair("manifest_schema", &SUPPORTED_MANIFEST_SCHEMA.to_string());
+        if let Some(git_sha) = &request.current_git_sha {
+            url.query_pairs_mut()
+                .append_pair("current_git_sha", git_sha);
+        }
         Ok(url)
     }
 

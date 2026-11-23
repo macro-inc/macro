@@ -1,6 +1,8 @@
 #![recursion_limit = "256"]
 mod api;
 mod config;
+mod domain;
+mod outbound;
 
 use std::sync::Arc;
 
@@ -29,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
     let authorization_service = MacroAuthorizationServiceImpl::new(
-        MacroAuthJwtValidator::new(jwt_args),
+        MacroAuthJwtValidator::new(jwt_args.clone()),
         InternalAuthConfig {
             api_key: config.internal_api_key.to_string(),
             default_user_id: None,
@@ -44,7 +46,12 @@ async fn main() -> anyhow::Result<()> {
     let state = api::context::ApiContext {
         authorization_state,
         environment: config.environment,
+        logo_service: domain::LogoService::new(outbound::FaviconProvider(
+            outbound::remote_image::build_http_client()
+                .context("failed to build favicon client")?,
+        )),
         http_client,
+        jwt_validation_args: jwt_args,
     };
 
     api::setup_and_serve(state, config.port).await?;

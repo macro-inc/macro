@@ -1,7 +1,10 @@
+import {
+  clearListSearch,
+  hasListSearch,
+} from '@app/components/view-shell/list-search-escape';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
-import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import {
   markChannelNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
@@ -27,11 +30,6 @@ import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import {
-  type TabbedListView,
-  useVisibleViewTabs,
-  VIEW_TAB_LISTS,
-} from './soup-view-tabs';
 
 const reportSoupViewError = (error: unknown) =>
   Telemetry.error(error, { surface: 'soup-view' });
@@ -39,14 +37,11 @@ const reportSoupViewError = (error: unknown) =>
 type UseSoupViewHotkeysOptions = {
   onOpenProject?: (id: string) => void;
   onOpenEntity?: (entity: EntityData, event?: KeyboardEvent) => boolean;
-  disableTabHotkeys?: boolean;
   scopeId: string;
   soup: SoupState;
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
   currentView: Accessor<ListView | undefined>;
-  activeTab: Accessor<string | undefined>;
-  applyTabPreset: (view: ListView, tabId: string) => void;
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
 };
 
@@ -68,13 +63,16 @@ function registerSplitEscapeHotkey(
     if (clearMultiCondition()) {
       return 'Clear multi selection';
     }
+    if (hasListSearch(scopeId)) {
+      return 'Clear search';
+    }
     if (closeSpotlightCondition()) {
       return 'Close spotlight';
     }
     return '';
   };
 
-  // escape - Multi-purpose: Clear selection / Close spotlight
+  // escape - Multi-purpose: Clear selection / Clear search / Close spotlight
   // Deliberately outside the group and kept past this view's unmount: the
   // soup selection and split spotlight it acts on live at the split-panel
   // level, so escape keeps working after a list entity is opened in place.
@@ -85,13 +83,20 @@ function registerSplitEscapeHotkey(
     scopeId,
     hotkeyToken: TOKENS.soup.dismiss,
     description: escapeDescription,
-    condition: () => clearMultiCondition() || closeSpotlightCondition(),
+    condition: () =>
+      clearMultiCondition() ||
+      hasListSearch(scopeId) ||
+      closeSpotlightCondition(),
     keyDownHandler: () => {
       if (clearMultiCondition()) {
         const length = selection.count();
         selection.clear();
-        return length > 1;
+        // One Escape steps back one level, so a search waits for the next.
+        if (length > 1 || hasListSearch(scopeId)) return true;
       }
+      // This override eclipses the header search field's own Escape whenever
+      // the field registered first, so the search is cleared from here.
+      if (clearListSearch(scopeId)) return true;
       if (closeSpotlightCondition()) {
         splitHandle.toggleSpotlight();
         return true;
@@ -109,8 +114,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     splitHandle,
     virtualizerHandle,
     currentView,
-    activeTab,
-    applyTabPreset,
     fetchNextGroupPage,
   } = options;
 
@@ -131,7 +134,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       if (next) {
         virtualizerHandle()?.scrollToIndex(next.index, { align: 'nearest' });
       }
-      return true;
+      // A search field reads an empty list from this and keeps the keys.
+      return Boolean(next);
     },
     hide: true,
   }).withGroup(group);
@@ -352,93 +356,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return true;
     },
     hide: true,
-  }).withGroup(group);
-
-  const isTabbedView = (v: string): v is TabbedListView => v in VIEW_TAB_LISTS;
-
-  const visibleViewTabs = useVisibleViewTabs();
-  const getTabKeys = () => {
-    if (options.disableTabHotkeys) return [];
-    const view = currentView();
-    if (!view || !isTabbedView(view)) return [];
-    return visibleViewTabs(view).map((t) => t.value);
-  };
-
-  const switchToTabIndex = (index: number) => {
-    const view = currentView();
-    if (!view) return false;
-    const tabKeys = getTabKeys();
-    if (index < 0 || index >= tabKeys.length) return false;
-    applyTabPreset(view, tabKeys[index]!);
-    return true;
-  };
-
-  // 1-9 number keys to jump to specific tabs
-  const tabNumberKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
-  for (let i = 0; i < tabNumberKeys.length; i++) {
-    const index = i;
-    const key = tabNumberKeys[i]!;
-    registerHotkey({
-      hotkey: key,
-      scopeId,
-      hotkeyToken: TOKENS.soup.tabs[key],
-      description: `Switch to tab ${key}`,
-      condition: () => getTabKeys().length > index,
-      keyDownHandler: () => switchToTabIndex(index),
-      hide: true,
-    }).withGroup(group);
-  }
-
-  // fall back to the view's default tab if the soup view active tab accessor
-  // returns undefined
-  const getCurrentTabIndex = () => {
-    const tabKeys = getTabKeys();
-    const current = activeTab();
-    if (current) {
-      const idx = tabKeys.indexOf(current);
-      if (idx !== -1) return idx;
-    }
-    const view = currentView();
-    if (!view) return 0;
-    const config = VIEW_TAB_PRESETS[view];
-    if (!config) return 0;
-    const defaultIdx = tabKeys.indexOf(config.default);
-    return defaultIdx !== -1 ? defaultIdx : 0;
-  };
-
-  // tab - Next tab
-  registerHotkey({
-    hotkey: ['tab'],
-    scopeId,
-    hotkeyToken: TOKENS.soup.tabs.next,
-    description: 'Next tab',
-    condition: () => getTabKeys().length > 1,
-    keyDownHandler: () => {
-      const view = currentView();
-      if (!view) return false;
-      const tabKeys = getTabKeys();
-      const nextIndex = (getCurrentTabIndex() + 1) % tabKeys.length;
-      applyTabPreset(view, tabKeys[nextIndex]!);
-      return true;
-    },
-  }).withGroup(group);
-
-  // shift+tab - Previous tab
-  registerHotkey({
-    hotkey: ['shift+tab'],
-    scopeId,
-    hotkeyToken: TOKENS.soup.tabs.prev,
-    description: 'Previous tab',
-    condition: () => getTabKeys().length > 1,
-    keyDownHandler: () => {
-      const view = currentView();
-      if (!view) return false;
-      const tabKeys = getTabKeys();
-      const prevIndex =
-        (getCurrentTabIndex() - 1 + tabKeys.length) % tabKeys.length;
-      applyTabPreset(view, tabKeys[prevIndex]!);
-      return true;
-    },
   }).withGroup(group);
 
   onCleanup(() => group.dispose());

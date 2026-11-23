@@ -67,6 +67,25 @@ export const getReplyAllRecipients = (
   return { to, cc, bcc: [] };
 };
 
+/**
+ * Whether Reply All reaches someone Reply does not: another To or Cc
+ * recipient besides the sender and the viewer. A reply to the viewer's own
+ * message already goes to everyone it went to.
+ */
+export const canReplyAll = (
+  message: EmailMessage,
+  ownAddresses: readonly string[]
+): boolean => {
+  const excluded = new Set(ownAddresses.map((email) => email.toLowerCase()));
+  const sender = message.from?.email.toLowerCase();
+  if (!sender || excluded.has(sender)) return false;
+
+  excluded.add(sender);
+  return [...message.to, ...(message.cc ?? [])].some(
+    (recipient) => !excluded.has(recipient.email.toLowerCase())
+  );
+};
+
 export const getReplyRecipientsFromParent = (
   replyingTo: EmailMessage | undefined,
   userEmail: string,

@@ -1,0 +1,29 @@
+---
+title: "Workspace events"
+icon: "bolt"
+description: "Run agents when something happens across your company's work."
+---
+
+Macro has the full company surface: email, team chat, docs, tasks, and calls. The [Company graph](/concepts/mentions) connects that work. The event system lets agents act when something changes in it.
+
+An email can start a task. A message can start an agent. A finished call can start the follow-up. The trigger and the work it starts live in the same workspace.
+
+## Start with an event
+
+Create a [routine](/product/routines#creating-a-routine), give the agent instructions, and choose **Add trigger**. Triggers include:
+
+- A new email arrives.
+- Someone sends a channel message or @mentions you.
+- A document is created or deleted.
+- A task is created, or its status, priority, or properties change.
+- A call starts or ends.
+
+Limit a trigger to particular items, or use the activity you can access. A routine can have several triggers; any one of them can start it. See the [trigger reference](/product/routines#triggers) for the available settings.
+
+## Keep the context and permissions
+
+A routine runs with its creator's permissions. A call-ended trigger includes the participants and transcript, so the agent can work from the conversation.
+
+Agent and bot changes do not fire triggers. Historical email imports do not start new-email routines.
+
+Open the routine's **Run History** to see what ran and open the agent conversation.

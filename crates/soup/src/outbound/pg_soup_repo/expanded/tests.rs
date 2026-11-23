@@ -5142,6 +5142,7 @@ async fn test_property_filter_multiple_options_or(db: Pool<Postgres>) -> anyhow:
         doc_ids.contains(&Uuid::parse_str("11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap()),
         "Doc B should match Priority = Low"
     );
+    assert_eq!(doc_ids.len(), 2, "no other document has either priority");
 
     Ok(())
 }
@@ -5557,6 +5558,7 @@ async fn projection_hydration_carries_viewer_relative_facts_from_flat_and_by_id_
             ),
             exclude_frecency: false,
         },
+        true,
     )
     .await?;
 
@@ -5703,6 +5705,7 @@ async fn projection_status_extraction_treats_non_array_values_as_empty(
             ),
             exclude_frecency: false,
         },
+        true,
     )
     .await?;
 

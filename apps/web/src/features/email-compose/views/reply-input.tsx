@@ -6,6 +6,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { keyboardShortcutsPlugin } from '@core/component/LexicalMarkdown/plugins/keyboard-shortcuts';
+import { $canOutdentSelection } from '@core/component/LexicalMarkdown/plugins/tab-indentation';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -19,12 +20,14 @@ import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { $getRoot } from 'lexical';
+import { $getRoot, COMMAND_PRIORITY_CRITICAL, KEY_TAB_COMMAND } from 'lexical';
 import {
   type Accessor,
+  children,
   createResource,
   createSignal,
   For,
+  type JSX,
   onMount,
   Show,
 } from 'solid-js';
@@ -43,7 +46,7 @@ import { MobileReplyToolbar } from '../components/mobile-reply-toolbar';
 import { SignaturePreview } from '../components/signature-preview';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import { getOrInitEmailFormContext } from '../context/email-form-context';
-import { decodeBase64Utf8 } from '../core/decode-base64';
+import { draftEditorHtml } from '../core/draft-editor-html';
 import { proposesMeeting } from '../core/meeting-intent';
 import { plainTextToHtml } from '../core/plain-text-to-html';
 import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
@@ -77,11 +80,14 @@ type ReplyInputViewProps = Omit<
   | 'hasPaidAccess'
   | 'recordMention'
   | 'focusAfterReplyRequest'
+  | 'initialSavedDraftId'
 > & {
   context: EmailComposeContext;
   onReloadDraft?: () => void;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   unframed?: boolean;
+  /** The host's own footer for the desktop reply's card, under the composer. */
+  footer?: JSX.Element;
   mobileCompose?: {
     portalMount: Accessor<HTMLDivElement | undefined>;
     onClose: () => void;
@@ -95,11 +101,18 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     () => read && initialId,
     async (id) => await read!(id)
   );
+  const initialSavedDraftId = () => {
+    const initial = saved();
+    return initial?.persistence === 'committed'
+      ? initial.draft?.db_id
+      : undefined;
+  };
   const restoredHtml = () => {
     const draft = saved()?.draft;
     if (!draft) return props.preloadedHtml;
-    if (draft.body_html_sanitized != null)
-      return decodeBase64Utf8(draft.body_html_sanitized);
+    // Saved HTML is authoritative even when empty: stale plain text must not
+    // refill a reply the user cleared.
+    if (draft.body_html_sanitized != null) return draftEditorHtml(draft) ?? '';
     return draft.body_text ? plainTextToHtml(draft.body_text) : '';
   };
   return (
@@ -121,6 +134,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         <LoadedReplyInputView
           {...props}
           draft={saved()?.draft ?? props.draft}
+          initialSavedDraftId={initialSavedDraftId()}
           localDraft={saved()?.local}
           localAttachments={saved()?.attachments}
           preloadedHtml={restoredHtml()}
@@ -130,8 +144,11 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   );
 }
 
-function LoadedReplyInputView(props: ReplyInputViewProps) {
+function LoadedReplyInputView(
+  props: ReplyInputViewProps & Pick<ReplyComposerOptions, 'initialSavedDraftId'>
+) {
   const composeContext = props.context;
+  const footer = children(() => props.footer);
   const ctx = props.session;
   const [isDragging, setIsDragging] = createSignal<boolean>();
   let composeContainerRef: HTMLDivElement | undefined;
@@ -157,6 +174,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
       replyingTo: props.replyingTo,
       isEditingExisting: props.isEditingExisting,
       draft: props.draft,
+      initialSavedDraftId: props.initialSavedDraftId,
       localDraft: props.localDraft,
       localAttachments: props.localAttachments,
       preloadedHtml: props.preloadedHtml,
@@ -221,10 +239,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     state.replyType() === 'forward' ? 'forwarded message' : 'quoted text';
   const quoteToggleLabel = () =>
     `${form.replyAppended() ? 'Hide' : 'Show'} ${quotedContent()}`;
-  const signatureHtml = () =>
-    composeContext.presentation.signaturesEnabled()
-      ? state.signatureHtml()
-      : undefined;
+  const signatureHtml = () => state.signatureHtml();
   const writtenText = createWrittenText(editor);
   const createEvent = () => {
     const recipients = form.recipients();
@@ -295,6 +310,16 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     .use(keyboardShortcutsPlugin({ shortcuts: EMAIL_FORMAT_SHORTCUTS }))
     .use(registerToggleAppendedThread)
     .onChange(state.onContentChange)
+    // Shift+Tab outdents while there is something to outdent, and otherwise
+    // keeps its default so focus moves back to the recipients. A plugin, not
+    // onTab, which would drop the builder's tab indentation.
+    .use((editor) =>
+      editor.registerCommand(
+        KEY_TAB_COMMAND,
+        (e) => e.shiftKey && !$canOutdentSelection(),
+        COMMAND_PRIORITY_CRITICAL
+      )
+    )
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
         if (editingDisabled()) return;
@@ -538,6 +563,8 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           props.unframed ? { 'background-color': 'transparent' } : undefined
         }
         hideBorder={props.unframed}
+        // Full-screen mobile compose scrolls the whole surface, not the body.
+        data-composer-scroll={isMobileCompose() ? '' : undefined}
         ref={(el) => {
           composeContainerRef = el;
           if (isMobileCompose()) setScrollContainer(el);
@@ -624,6 +651,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           fields={state.recipients}
           values={form.recipients}
           options={props.session.recipientOptions}
+          createRecipientSource={composeContext.createRecipientSource}
           inboxes={composeContext.accounts.inboxes}
           activeInboxId={activeInboxId}
           senderEmail={activeInboxEmail}
@@ -648,6 +676,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           )}
         >
           <div
+            data-composer-scroll={isMobileCompose() ? undefined : ''}
             ref={(el) => {
               if (!isMobileCompose()) setScrollContainer(el);
             }}
@@ -709,7 +738,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             <MarkdownShell
               config={editorConfig}
               class={cn(
-                'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible',
+                // shrink-0: the editor's min-h-8 otherwise lets this capped
+                // flex column squeeze its box below its text, and the
+                // watermark after the box is then drawn over the reply.
+                'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible shrink-0',
                 // Quoted thread collapses behind the "⋯" pill below
                 // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
                 // variants turn the underscore in .macro_quote into a space)
@@ -814,7 +846,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <AttachButton />
-                <Show when={composeContext.calendarEvents?.enabled()}>
+                <Show when={composeContext.calendarEvents}>
                   <CreateEventButton
                     suggested={proposesMeeting(writtenText())}
                     shortcut="b"
@@ -885,6 +917,12 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           onCheckStatus={checkScheduleStatus}
           class="-mx-4 -mb-4 mt-3 rounded-b-[26.25px] border-t border-edge-muted px-4 py-2 touch:rounded-b-lg mobile:rounded-none"
         />
+        {/* A send time takes the card's footer: the host's is hidden beside it. */}
+        <Show when={footer()}>
+          <div class="-mx-4 -mb-4 mt-3 border-t border-edge-muted [[data-testid=schedule-summary]+&]:hidden">
+            {footer()}
+          </div>
+        </Show>
       </Show>
     </>
   );

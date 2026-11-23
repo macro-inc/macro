@@ -1,4 +1,3 @@
-use anthropic::toolset::AnthropicToolContext;
 use axum::extract::FromRef;
 use bots::{
     domain::service::BotServiceImpl, inbound::toolset::BotToolContext,
@@ -29,6 +28,8 @@ use chat::outbound::postgres::PgChatRepo;
 pub use cognition::inbound::toolset::CognitionToolContext as ToolCognitionToolContext;
 use connection::domain::ports::ConnectionService;
 use connection_gateway_client::ConnectionGatewayClient;
+use contacts::domain::list_reads::{ContactListReads, FlaggedContactReads};
+use contacts::domain::list_writes::{ContactListWrites, ListWritesGate};
 use contacts::domain::service::{ContactsDomainService, SqsContactsIngress};
 use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::ingress::SqsContactsQueue;
@@ -169,26 +170,39 @@ impl MacroEventBroker for MaybeToolEventBroker {
 pub type ToolBotService = BotServiceImpl<
     PgBotsRepo,
     MaybeToolEventBroker,
-    crate::mcp_app_catalog::PipedreamMcpAppCatalog,
+    harnesses::domain::service::HarnessServiceImpl<
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+        hosted_runtimes::outbound::pg::PgComputerAgents,
+    >,
+    crate::mcp_app_catalog::ConnectorsAppCatalog<connectors::Connectors>,
 >;
 
 /// Bot-management AI tool context.
 pub type ToolBotToolContext = BotToolContext<ToolBotService, ToolEntityAccessService>;
 
 /// Build bot-management tools over the canonical Postgres repository and
-/// entity-access service.
+/// entity-access service. `connectors` confirms the apps an agent pins;
+/// without them every pin is refused.
 pub fn build_bot_tool_context(
     pool: sqlx::PgPool,
     event_broker: MaybeToolEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_storage_service_url: String,
-    pipedream: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    connectors: Option<connectors::Connectors>,
 ) -> ToolBotToolContext {
     BotToolContext {
         service: Arc::new(
-            BotServiceImpl::new(PgBotsRepo::new(pool), event_broker).with_mcp_apps(
-                crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(pipedream),
-            ),
+            BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                event_broker,
+                harnesses::domain::service::HarnessServiceImpl::new(
+                    harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
+                    hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
+                ),
+            )
+            .with_mcp_apps(crate::mcp_app_catalog::ConnectorsAppCatalog::new(
+                connectors,
+            )),
         ),
         entity_access_service,
         document_storage_service_url: document_storage_service_url
@@ -313,6 +327,11 @@ pub struct ChannelSideEffectClients {
     pub sqs: aws_sdk_sqs::Client,
     /// Broker publishing channel events to the `macro.channels` topic.
     pub macro_event_broker: ToolEventBroker,
+    /// The host's environment, which turns list-aware contact changes on in
+    /// a local stack.
+    pub environment: macro_env::Environment,
+    /// Reads `contacts-list-writes` elsewhere; `None` keeps those changes off.
+    pub feature_flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 }
 
 /// Build the channel AI tool context dispatching the same side effects as the
@@ -365,11 +384,14 @@ fn channel_event_dispatcher(
     pool: &sqlx::PgPool,
     clients: &ChannelSideEffectClients,
 ) -> ToolChannelEventDispatcher {
-    let contacts_ingress = Arc::new(SqsContactsIngress {
-        queue: SqsContactsQueue::new(
-            clients.sqs.clone(),
-            macro_queues::ContactsQueue::new().to_string(),
-        ),
+    let contacts_ingress = Arc::new(ListWritesGate {
+        inner: SqsContactsIngress {
+            queue: SqsContactsQueue::new(
+                clients.sqs.clone(),
+                macro_queues::ContactsQueue::new().to_string(),
+            ),
+        },
+        writes: ContactListWrites::new(clients.environment, clients.feature_flags.clone()),
     });
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
@@ -976,6 +998,45 @@ impl CallRtcClient for NoOpCallRtcClient {
         anyhow::bail!("call RTC client not configured")
     }
 
+    async fn list_live_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::models::LiveCallParticipant>>> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_bot_token(
+        &self,
+        _room_name: &str,
+        _bot_id: bot_id::BotId,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_bot(&self, _room_name: &str, _bot_id: bot_id::BotId) -> anyhow::Result<()> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_named_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _name: &str,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_program_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _program: &str,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn build_voip_push_payloads<'a>(
         &self,
         _request: call::domain::models::VoipPushPayloadRequest<'a>,
@@ -1400,10 +1461,14 @@ pub fn build_databases_tool_context(
     )
 }
 
-/// The contacts the SQL tools read `macro.people` from. Reads only, so
-/// nothing is ever invalidated through a notifier.
-pub type ToolContactsService =
-    ContactsDomainService<DbContactsRepository, Option<ConnectionGatewayNotifier>>;
+/// The contacts the SQL tools read `macro.people` from: the legacy graph or
+/// the list-aware tables, by the session user's `contacts-list-reads` flag.
+/// Reads only, so nothing is ever invalidated through a notifier.
+pub type ToolContactsService = FlaggedContactReads<
+    ContactsDomainService<DbContactsRepository, Option<ConnectionGatewayNotifier>>,
+    DbContactsRepository,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
+>;
 
 /// Type alias for the SQL tools' context: SQL over the same databases
 /// service the schema tools use, reading rows through Soup.
@@ -1424,20 +1489,26 @@ pub type ToolViewOnlyDatabasesSqlToolContext = DatabasesSqlToolContext<
 >;
 
 /// Build the SQL tools' context over the schema tools' databases service
-/// and entity access, and the host's Soup.
+/// and entity access, and the host's Soup. `flags` selects each user's
+/// `macro.people` reads; without a provider every user reads the legacy graph.
 pub fn build_databases_sql_tool_context(
     databases: &ToolDatabasesToolContext,
     soup_service: Arc<ToolSoupService>,
     pool: sqlx::PgPool,
+    flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 ) -> ToolDatabasesSqlToolContext {
     DatabasesSqlToolContext::new(DatabasesSql::new(
         databases.service.clone(),
         databases.entity_access_service.clone(),
         soup_service,
-        Arc::new(ContactsDomainService {
-            repository: DbContactsRepository::new(pool),
-            notifier: None,
-        }),
+        Arc::new(FlaggedContactReads::new(
+            Arc::new(ContactsDomainService {
+                repository: DbContactsRepository::new(pool.clone()),
+                notifier: None,
+            }),
+            Arc::new(DbContactsRepository::new(pool)),
+            ContactListReads::optional(flags),
+        )),
     ))
 }
 
@@ -1457,6 +1528,7 @@ pub type ToolProjectService = projects::domain::service::ProjectServiceImpl<
     projects::domain::ports::UnavailableShaCounterPort,
     ToolEntityAccessManagementService,
     projects::domain::ports::UnavailableProjectSearchIndexer,
+    projects::domain::ports::UnavailableFiledItemsUnfiler,
     ToolEventBroker,
 >;
 
@@ -1494,6 +1566,7 @@ pub fn build_project_tool_context(
             entity_access_management::outbound::PgRepository::new(pool),
         ),
         projects::domain::ports::UnavailableProjectSearchIndexer,
+        projects::domain::ports::UnavailableFiledItemsUnfiler,
         None,
         macro_event_broker,
     );
@@ -1585,6 +1658,36 @@ pub struct ToolEntityCreator {
     pub document_service: Arc<ToolDocumentService>,
 }
 
+/// Build imported metadata before any document creation side effect.
+fn imported_document_metadata(
+    name: &str,
+    visibility: import::domain::ports::ImportVisibility,
+) -> documents::domain::create::NewDocumentMetadataBuilder {
+    let metadata = documents::domain::create::NewDocumentMetadata::builder(name);
+    match imported_link_share(visibility) {
+        models_permissions::share_permission::InitialLinkShare::Exact(state) => {
+            metadata.initial_link_share(state)
+        }
+        models_permissions::share_permission::InitialLinkShare::EntityDefault => metadata,
+    }
+}
+
+/// Translate the reviewed import policy into an exact link override when needed.
+pub(crate) fn imported_link_share(
+    visibility: import::domain::ports::ImportVisibility,
+) -> models_permissions::share_permission::InitialLinkShare {
+    match visibility {
+        import::domain::ports::ImportVisibility::Personal => {
+            models_permissions::share_permission::InitialLinkShare::Exact(
+                models_permissions::share_permission::LinkShareState::Off,
+            )
+        }
+        import::domain::ports::ImportVisibility::Shared => {
+            models_permissions::share_permission::InitialLinkShare::EntityDefault
+        }
+    }
+}
+
 impl ToolEntityCreator {
     pub(crate) fn creation_principal(
         user: &MacroUserIdStr<'static>,
@@ -1624,9 +1727,10 @@ impl ToolEntityCreator {
         subtype: documents::domain::create::MarkdownSubtype,
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
-        let mut metadata = documents::domain::create::NewDocumentMetadata::builder(name);
+        let mut metadata = imported_document_metadata(name, visibility);
         if let Some(id) = id {
             metadata = metadata.id(id);
         }
@@ -1725,22 +1829,28 @@ impl ToolEntityCreator {
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
         share_with_team: bool,
-    ) -> anyhow::Result<String> {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         // Same team resolution as the CreateDocument tool, so imported tasks
         // number correctly within the user's team; the roster doubles as the
         // assignee-email lookup. A teamless user gets a private task.
         let (team_id, roster) = self.team_roster(user).await;
         let subtype = documents::domain::create::MarkdownSubtype::Task {
             property_values: None,
+            pinned_property_definition_ids: None,
             share_with_team: share_with_team && team_id.is_some(),
             team_id,
         };
         let task_id = self
-            .create_doc(user, id, name, content, subtype, folder, dates)
+            .create_doc(user, id, name, content, subtype, folder, dates, visibility)
             .await?;
-        self.apply_task_properties(user, &task_id, properties, &roster)
+        let notice = self
+            .apply_task_properties(user, &task_id, properties, &roster, visibility)
             .await;
-        Ok(task_id)
+        Ok(import::domain::ports::CreatedImportTask {
+            id: task_id,
+            notice,
+        })
     }
 
     /// Create an imported markdown document, in `folder` when given and with
@@ -1758,6 +1868,7 @@ impl ToolEntityCreator {
         properties: &import::domain::ports::ImportedDocumentProperties,
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         let document_id = self
             .create_doc(
@@ -1768,6 +1879,7 @@ impl ToolEntityCreator {
                 documents::domain::create::MarkdownSubtype::Note,
                 folder,
                 dates,
+                visibility,
             )
             .await?;
         let access = match self
@@ -1805,7 +1917,8 @@ impl ToolEntityCreator {
         task_id: &str,
         properties: &import::domain::ports::ImportedTaskProperties,
         roster: &[MacroUserIdStr<'static>],
-    ) {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> Option<import::domain::ports::TaskImportNoticeReason> {
         use models_properties::api::requests::SetPropertyValue;
         use system_properties::SystemPropertyKey;
 
@@ -1864,7 +1977,10 @@ impl ToolEntityCreator {
                             &principal,
                             task_id,
                             SystemPropertyKey::DueDate.uuid(),
-                            Some(SetPropertyValue::Date { value }),
+                            Some(SetPropertyValue::Date {
+                                value,
+                                has_time: false,
+                            }),
                         )
                         .await
                     {
@@ -1877,38 +1993,114 @@ impl ToolEntityCreator {
             }
         }
 
-        if let Some(email) = properties.assignee_email.as_deref() {
-            // Only assign teammates — an email with no roster match (an
-            // external collaborator, a bot) is silently skipped.
-            let Some(assignee) = roster
-                .iter()
-                .find(|member| member.email_str().eq_ignore_ascii_case(email))
-            else {
-                return;
-            };
-            let reference = models_properties::EntityReference::new(
-                assignee.as_ref().to_string(),
-                models_properties::EntityType::User,
-            );
-            if let Err(e) = self
-                .task_properties
-                .set_entity_property(
-                    &principal,
-                    task_id,
-                    SystemPropertyKey::Assignees.uuid(),
-                    Some(SetPropertyValue::MultiEntityReference {
-                        references: vec![reference],
-                    }),
-                )
-                .await
-            {
-                tracing::warn!(task_id, email, error = ?e, "failed to set imported task assignee");
+        match self
+            .apply_task_assignee(
+                user,
+                task_id,
+                properties.assignee_email.as_deref(),
+                roster,
+                visibility,
+            )
+            .await
+        {
+            Ok(notice) => notice,
+            Err(error) => {
+                tracing::warn!(task_id, error = ?error, "failed to set imported task assignee");
+                None
             }
         }
     }
+
+    /// Apply only the assignee, sharing the same visibility policy with strict retries.
+    pub(crate) async fn apply_task_assignee(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task_id: &str,
+        email: Option<&str>,
+        roster: &[MacroUserIdStr<'static>],
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<Option<import::domain::ports::TaskImportNoticeReason>> {
+        use models_properties::api::requests::SetPropertyValue;
+        use system_properties::SystemPropertyKey;
+        let Some(assignee) = email.and_then(|email| {
+            roster
+                .iter()
+                .find(|member| member.email_str().eq_ignore_ascii_case(email))
+        }) else {
+            return Ok(None);
+        };
+        if let Some(notice) = visibility.task_assignee_notice(user, assignee) {
+            return Ok(Some(notice));
+        }
+        let reference = models_properties::EntityReference::new(
+            assignee.as_ref().to_string(),
+            models_properties::EntityType::User,
+        );
+        self.task_properties
+            .set_entity_property(
+                &Self::creation_principal(user),
+                task_id,
+                SystemPropertyKey::Assignees.uuid(),
+                Some(SetPropertyValue::MultiEntityReference {
+                    references: vec![reference],
+                }),
+            )
+            .await?;
+        Ok(None)
+    }
+}
+
+/// The entity-access type an import from `source` is recorded as. Linear
+/// and Jira issues become tasks, which are documents.
+fn imported_entity_type(source: import::domain::models::ImportSource) -> model_entity::EntityType {
+    use import::domain::models::ImportSource;
+    match source {
+        ImportSource::Linear | ImportSource::Jira | ImportSource::Notion => {
+            model_entity::EntityType::Document
+        }
+        ImportSource::Slack => model_entity::EntityType::Channel,
+    }
+}
+
+/// Whether an access-check failure means the caller cannot see the entity,
+/// as opposed to the check itself failing. A malformed id names nothing the
+/// caller can see, so it is refused too.
+pub(crate) fn refuses_view(error: &entity_access::domain::models::AccessError) -> bool {
+    use entity_access::domain::models::AccessError;
+    matches!(
+        error,
+        AccessError::Unauthorized
+            | AccessError::UnauthorizedWithMessage(_)
+            | AccessError::NotFound(_)
+            | AccessError::BadRequest(_)
+    )
 }
 
 impl import::domain::ports::EntityCreator for ToolEntityCreator {
+    async fn can_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: import::domain::models::ImportSource,
+        entity_id: &str,
+    ) -> anyhow::Result<bool> {
+        match self
+            .entity_access_service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                user,
+                None,
+                entity_id,
+                imported_entity_type(source),
+            )
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(error) if refuses_view(&error) => Ok(false),
+            Err(error) => Err(anyhow::Error::new(error).context(format!(
+                "could not check access to imported entity {entity_id}"
+            ))),
+        }
+    }
+
     async fn create_task(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1927,8 +2119,10 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             // Single tracked tasks (Linear) are shared with the team, as
             // tasks the user makes are.
             true,
+            import::domain::ports::ImportVisibility::Shared,
         )
         .await
+        .map(|created| created.id)
     }
 
     async fn create_notion_document(
@@ -1947,6 +2141,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             properties,
             None,
             None,
+            import::domain::ports::ImportVisibility::Shared,
         )
         .await
     }
@@ -1971,63 +2166,47 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
     }
 }
 
-/// The connector backends (Pipedream, plus Macro Connect when configured):
-/// `None` on deployments where Pipedream isn't configured (its toolsets then
-/// come up empty).
-pub type ToolPipedreamConnection =
-    Option<std::sync::Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>;
-
-/// The MCP stack selector wired to the concrete DCS stores: the native
-/// server store and the Pipedream connection store. Picks which stack
-/// serves a user's tools (Pipedream connectors win; see `mcp_select`).
-pub type ToolMcpSelector = mcp_select::McpToolSelector<
-    mcp_client::outbound::NativeServerStore,
-    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    ToolPipedreamConnection,
->;
-
 /// Type alias for the import service implementation used by AI tools.
 pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::pg_import_repo::PgImportRepo,
-    ToolMcpSelector,
+    connectors::Connectors,
     ToolEntityCreator,
-    import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
-    import_notion::outbound::pipedream::PipedreamNotionConnections<
-        pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-        pipedream_mcp::outbound::dispatch::ConnectorBackends,
-    >,
+    import::outbound::mcp_slack_source::McpSlackSource<connectors::Connectors>,
+    import_notion::outbound::connected::ConnectedNotion<connectors::Connectors>,
 >;
-
-/// The custom MCP server tools, wired by hosts holding the MCP credentials
-/// key.
-pub type ToolMcpServerToolContext =
-    mcp_client::inbound::toolset::McpServerToolContext<mcp_client::outbound::NativeServerStore>;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
-pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+/// The acting user's own activity, as `GET /activity` serves it.
+pub type ToolActivityReadService = activity::ActivityReadService<
+    activity::domain::visible_reads::VisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
-        ToolEntityAccessService,
+        activity::outbound::entity_access_audience::EntityAccessActivityAudience<
+            ToolEntityAccessService,
+        >,
     >,
 >;
 
-pub fn build_activity_tool_context(
+pub fn build_activity_read_service(
     pool: sqlx::PgPool,
     properties: Arc<ToolPropertiesService>,
     entity_access_service: Arc<ToolEntityAccessService>,
-) -> ToolActivityToolContext {
-    activity::inbound::toolset::ActivityToolContext::new(
-        initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
-            entity_access_service.clone(),
-        ),
+) -> Arc<ToolActivityReadService> {
+    Arc::new(
+        activity::ActivityReadService::new(
+            activity::domain::visible_reads::VisibleActivityReads::new(
+                activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+                activity::outbound::entity_access_audience::EntityAccessActivityAudience::new(
+                    entity_access_service.clone(),
+                ),
+            ),
+        )
+        .with_metadata_resolver(ToolActivityMetadataResolver::new(
+            properties,
+            entity_access_service,
+        )),
     )
-    .with_metadata_resolver(ToolActivityMetadataResolver::new(
-        properties,
-        entity_access_service,
-    ))
 }
 
 pub use routines::inbound::RoutineToolContext;
@@ -2059,9 +2238,11 @@ pub struct ToolServiceContext {
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
-    pub activity_tool_context: ToolActivityToolContext,
+    #[from_ref(skip)]
+    pub activity_service: Arc<ToolActivityReadService>,
     #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
+    #[from_ref(skip)]
     pub image_generation_tool_context: ToolImageGenerationToolContext,
     /// Shared cognition-backed generation and decisions, attributed per request.
     pub cognition_tool_context: ToolCognitionToolContext,
@@ -2082,9 +2263,6 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
-    /// Custom MCP server tools. `unwired` in hosts without the MCP
-    /// credentials key — calls there fail with a clear error.
-    pub mcp_server_tool_context: ToolMcpServerToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.
@@ -2113,8 +2291,9 @@ pub struct ToolServiceContext {
     pub crm_transfer_tool_context: ToolCrmTransferToolContext,
     pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: RoutineToolContext,
+    /// The web search vendor behind `WebSearch` and `WebFetch`.
     #[from_ref(skip)]
-    pub anthropic_tool_context: AnthropicToolContext,
+    pub web_search_provider: Arc<dyn web_search::domain::ports::SearchProvider>,
     /// Shared admission for independently initiated AI work. Hosts must inject
     /// their configured service; request identity always comes from RequestContext.
     pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
@@ -2122,44 +2301,49 @@ pub struct ToolServiceContext {
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
     /// this context. Set per-session by the caller so AI calls made by tools
-    /// (e.g. subagents) are attributed to the feature that spawned them.
+    /// (e.g. GenerateObject) are attributed to the feature that spawned them.
     pub usage_context: ai_usage::UsageContext,
 }
 
-/// Pipedream discovery dependencies shared by chat tools.
-pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
-    pipedream_mcp::outbound::dispatch::ConnectorBackends,
-    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
+/// The connector tools (`DiscoverConnectors`, `ConnectMcpServer`) over the
+/// host's one connectors composition.
+pub type ToolConnectorToolContext = connectors::inbound::toolset::ConnectorToolContext<
+    connectors::Connectors,
+    connectors::composition::ConnectorCatalog,
 >;
 
-/// Wire connector discovery at the composition boundary.
-///
-/// `native_servers` answers for overlaid apps, which connect through the
-/// native MCP stack; `None` where that stack has no encryption key.
+/// The connector tools over `composed`, or unwired (every call fails with a
+/// clear error) on a host without connectors.
 pub fn build_connector_tool_context(
-    pool: sqlx::PgPool,
-    client: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
-    native_servers: Option<Arc<mcp_client::outbound::NativeServerStore>>,
+    composed: Option<&connectors::composition::Composed>,
 ) -> ToolConnectorToolContext {
-    pipedream_mcp::inbound::toolset::ConnectorToolContext {
-        service: Arc::new(
-            pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
-                client,
-                Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
-                Arc::new(mcp_select::NativeOverlayConnections::new(native_servers)),
-            ),
-        ),
+    match composed {
+        Some(composed) => {
+            ToolConnectorToolContext::wired(composed.connectors.clone(), composed.catalog.clone())
+        }
+        None => ToolConnectorToolContext::unwired(),
     }
 }
 
-impl FromRef<ToolServiceContext> for AnthropicToolContext {
+impl FromRef<ToolServiceContext> for web_search::inbound::toolset::WebToolContext {
     fn from_ref(context: &ToolServiceContext) -> Self {
-        let mut tools = context.anthropic_tool_context.clone();
-        tools.admission = context.admission.clone();
-        tools.recorder = context.recorder.clone();
-        tools.usage_context = context.usage_context.clone();
-        tools
+        Self {
+            service: Arc::new(web_search::domain::service::WebSearchService::new(
+                context.web_search_provider.clone(),
+                context.admission.clone(),
+                context.recorder.clone(),
+            )),
+            entity: context.usage_context.entity,
+        }
+    }
+}
+
+impl FromRef<ToolServiceContext> for ToolImageGenerationToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        context
+            .image_generation_tool_context
+            .clone()
+            .with_agent_session(context.usage_context.agent_session_id)
     }
 }
 
@@ -2277,3 +2461,6 @@ fn self_chat_id(ctx: &ToolServiceContext) -> Option<uuid::Uuid> {
         .then_some(ctx.usage_context.entity)
         .flatten()
 }
+
+#[cfg(test)]
+mod test;

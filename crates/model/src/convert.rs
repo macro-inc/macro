@@ -35,4 +35,15 @@ pub struct ConvertQueueMessage {
     /// The target file type. Falls back to the `to_key` extension.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to_file_type: Option<FileType>,
+    /// Whether a client job is tracking `job_id`, so the convert service
+    /// should report the conversion's outcome to the job update handler.
+    /// Producers that mint their own id must set this to `false`: the handler
+    /// rejects updates for unknown jobs, and Lambda retries each rejection.
+    /// Defaults to `true` for messages from producers that predate the field.
+    #[serde(default = "notify_job_default")]
+    pub notify_job: bool,
+}
+
+fn notify_job_default() -> bool {
+    true
 }

@@ -15,7 +15,9 @@ use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use super::candidate_gates::UUID_PATTERN;
-use super::expanded::dynamic::{NotificationPredicate, strip_notification_conjunction};
+use super::expanded::dynamic::{
+    NotificationPredicate, calendar_event_filter_is_impossible, strip_notification_conjunction,
+};
 use crate::domain::models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest};
 
 #[derive(FromRow)]
@@ -60,6 +62,10 @@ pub(super) async fn cursor_soup(
     let Some(parts) = cursor_parts(req.cursor) else {
         return Ok(Vec::new());
     };
+    // The nil event id is how clients leave events out of a page.
+    if calendar_event_filter_is_impossible(parts.filter.as_ref()) {
+        return Ok(Vec::new());
+    }
     if parts.property_filter.as_ref().is_some_and(|filter| {
         !properties_filter_can_apply_to(filter, &[PropertyEntityType::CalendarEvent])
     }) {

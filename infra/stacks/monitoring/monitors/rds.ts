@@ -147,15 +147,18 @@ adopted('rds-low-freeable-memory', {
   name: 'Low freeable memory for {{database_instance.name}}',
   type: 'query alert',
   query:
-    'avg(last_1h):avg:aws.rds.freeable_memory{environment:prod OR database_instance:macro-db-prod.ctkwyjgndnfr.us-east-1.rds.amazonaws.com} by {database_instance} < 2000000000',
-  // macrodb.ts and Grafana watch the same metric over a shorter window; this
-  // one only notifies.
-  message: `{{database_instance.name}} freeable memory is {{value}} bytes.
+    'avg(last_1h):avg:aws.rds.freeable_memory{environment:prod OR database_instance:macro-db-prod.ctkwyjgndnfr.us-east-1.rds.amazonaws.com} by {database_instance} < 250000000',
+  // One threshold covers instances from 2 GiB to 128 GiB, and CloudWatch has
+  // no total-memory metric to alert on a percentage, so the floor is set below
+  // the normal minimum of the smallest instance. macrodb.ts and Grafana watch
+  // macro-db-prod and its replica at their own baselines; this one only
+  // notifies.
+  message: `{{database_instance.name}} freeable memory is {{value}} bytes, averaged over an hour. A healthy 2 GiB instance keeps about 1 GB freeable, so this is memory pressure on any instance class. Check connection count and swap usage.
 
 ${notify({ pages: false })}`,
   monitorThresholds: {
-    critical: '2000000000',
-    warning: '3000000000',
+    critical: '250000000',
+    warning: '500000000',
   },
   onMissingData: 'default',
   notifyAudit: false,

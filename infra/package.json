@@ -9,8 +9,11 @@
     "preinstall": "node -e \"if (process.env.npm_execpath && !process.env.npm_execpath.includes('bun')) { console.error('Please use bun as the package manager'); process.exit(1); }\"",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "tsc --noEmit && tsc --noEmit --skipLibCheck --project stacks/web-app/tsconfig.json && bun run test:web-delivery",
-    "test:web-delivery": "bun test stacks/web-app/publication.test.ts && bun test stacks/web-app/app-route.test.ts && bun test stacks/website/app-cache.test.ts"
+    "check": "tsc --noEmit && tsc --noEmit --skipLibCheck --project stacks/web-app/tsconfig.json && bun run test:web-delivery && bun run test:observability && bun run test:openbao && bun run test:monitoring",
+    "test:web-delivery": "bun test stacks/web-app/publication.test.ts && bun test stacks/web-app/app-route.test.ts && bun test stacks/website/app-cache.test.ts",
+    "test:observability": "bun test stacks/observability/scripts/ci-report.test.ts stacks/observability/deploy",
+    "test:openbao": "python3 -m unittest discover -s openbao -p 'test_*.py' && python3 -m unittest discover -s local/openbao -p 'test_*.py'",
+    "test:monitoring": "bun test stacks/monitoring"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
@@ -26,6 +29,7 @@
     "@pulumi/awsx": "^3.1.0",
     "@pulumi/datadog": "^4.51.0",
     "@pulumi/docker-build": "^0.0.15",
+    "@pulumi/gcp": "^9.0.0",
     "@pulumi/pulumi": "^3.209.0",
     "@pulumi/tls": "*",
     "@pulumiverse/doppler": "^0.9.0",

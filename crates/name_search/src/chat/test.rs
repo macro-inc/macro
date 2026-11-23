@@ -726,3 +726,71 @@ async fn test_search_chat_names_tag_filter_match_all(pool: Pool<Postgres>) -> an
 
     Ok(())
 }
+
+/// Every field of the `search_chat_names` span, as recorded when it opens.
+#[derive(Clone, Default)]
+struct ChatSearchSpanFields(
+    std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<&'static str, String>>>,
+);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for ChatSearchSpanFields {
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        _id: &tracing::span::Id,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        if attrs.metadata().name() == "search_chat_names" {
+            attrs.record(&mut FieldValues(
+                &mut self.0.lock().expect("span fields lock poisoned"),
+            ));
+        }
+    }
+}
+
+struct FieldValues<'a>(&'a mut std::collections::BTreeMap<&'static str, String>);
+
+impl tracing::field::Visit for FieldValues<'_> {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0.insert(field.name(), format!("{value:?}"));
+    }
+}
+
+/// The chat name search span says how long the term is, never what it is.
+#[sqlx::test]
+async fn the_search_span_leaves_out_the_term() {
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let fields = ChatSearchSpanFields::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(fields.clone()));
+    tracing::callsite::rebuild_interest_cache();
+    let db = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://localhost/unused")
+        .expect("a lazy pool never connects");
+    let user_id = MacroUserId::parse_from_str("macro|user@example.com")
+        .map(|l| l.lowercase())
+        .unwrap();
+
+    let result = search_chat_names(
+        &db,
+        &user_id,
+        &[],
+        "severance offer".to_string(),
+        false,
+        &[],
+        false,
+        10,
+        Some(SearchMethodCursor::Thread {
+            thread_id: Uuid::nil(),
+            message_id: Uuid::nil(),
+        }),
+    )
+    .await;
+
+    assert!(matches!(result, Err(NameSearchError::IncompatibleCursor)));
+    let span = fields.0.lock().expect("span fields lock poisoned").clone();
+    assert_eq!(span["term_len"], "15");
+    assert!(!span.contains_key("term"));
+    assert!(span.values().all(|value| !value.contains("severance")));
+}

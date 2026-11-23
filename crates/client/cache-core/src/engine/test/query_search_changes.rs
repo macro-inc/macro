@@ -47,6 +47,52 @@ fn ordinary_queries_report_search_changes_but_page_only_writes_do_not() {
 }
 
 #[test]
+fn subscription_events_report_the_search_buckets_they_change() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let variables = serde_json::Map::new();
+        let subscription = "subscription SoupUpdates { soupUpdates { __typename ... on SoupUpdated { item { __typename id ... on GraphqlSoupDocument { name fileType } } } } }";
+        let event = |name: &str| {
+            json!({"soupUpdates": {"__typename": "SoupUpdated", "item": {
+                "__typename": "GraphqlSoupDocument", "id": "doc", "name": name, "fileType": "md"
+            }}})
+        };
+
+        let created = engine
+            .write_query(None, subscription, None, &variables, &event("Note"), None)
+            .await
+            .unwrap();
+        assert_eq!(
+            created.search_changed_buckets,
+            Some(BTreeSet::from(["note".into()]))
+        );
+
+        // The same event again changes nothing a search could list.
+        let repeated = engine
+            .write_query(None, subscription, None, &variables, &event("Note"), None)
+            .await
+            .unwrap();
+        assert_eq!(repeated.search_changed_buckets, Some(BTreeSet::new()));
+
+        let renamed = engine
+            .write_query(
+                None,
+                subscription,
+                None,
+                &variables,
+                &event("Renamed"),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            renamed.search_changed_buckets,
+            Some(BTreeSet::from(["note".into()]))
+        );
+    });
+}
+
+#[test]
 fn identity_resets_and_mutations_require_conservative_search_refreshes() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

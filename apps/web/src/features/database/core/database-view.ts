@@ -20,6 +20,12 @@ export type DatabaseViewColumn = {
   isMultiSelect: boolean;
   options: DatabaseOption[];
   writable: boolean;
+  /** A monetary value takes its denomination from this row column. */
+  currencyColumnId?: string;
+  /** Host-owned options cannot be added, renamed or deleted. */
+  fixedOptions?: boolean;
+  /** Value a new row starts with, also enforced by its host. */
+  defaultValue?: DatabaseCellValue;
   /** The preferred field for record titles and initial focus. */
   primary?: boolean;
   specificEntityType?: DatabaseEntityType | null;
@@ -33,6 +39,8 @@ export type DatabaseViewColumn = {
   sharedOutsideDatabase?: boolean;
   /** A derived column's formula: its cells are computed, and nothing writes them. */
   formula?: Formula;
+  /** A number shown as a percent: 0.25 displays as 25%. */
+  percentage?: boolean;
   /** A relationship points to rows in a table, independently of the property's scalar type. */
   relation?: {
     databaseId: string;

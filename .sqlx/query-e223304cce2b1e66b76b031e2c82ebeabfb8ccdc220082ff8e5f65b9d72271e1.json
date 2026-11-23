@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.name as \"name!\", p.user_id IS NOT NULL as \"is_participant!\", COUNT(*) OVER () as \"total_count!\"\n               FROM comms_channels c\n               LEFT JOIN comms_channel_participants p ON p.channel_id = c.id\n                   AND p.user_id = $1 AND p.left_at IS NULL\n               WHERE (p.user_id IS NOT NULL OR ($5 AND c.channel_type = 'team'\n                   AND c.team_id = $4 AND EXISTS (\n                       SELECT 1 FROM team_user tu WHERE tu.team_id = $4 AND tu.user_id = $1)))\n                   AND (($4::uuid IS NULL AND c.channel_type IN ('team', 'public', 'private'))\n                       OR (c.channel_type = 'team' AND c.team_id = $4))\n                   AND strpos(lower(c.name), lower($2)) > 0\n               ORDER BY lower(c.name), c.id\n               LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_participant!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "e223304cce2b1e66b76b031e2c82ebeabfb8ccdc220082ff8e5f65b9d72271e1"
+}

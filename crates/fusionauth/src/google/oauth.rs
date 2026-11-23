@@ -2,7 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use crate::{
     Result, UnauthedClient,
-    error::{FusionAuthClientError, GenericErrorResponse},
+    error::{FusionAuthClientError, GenericErrorResponse, GrantBlockReason},
 };
 use base64::{
     Engine,
@@ -39,27 +39,10 @@ pub struct GoogleTokenResponse {
 
 /// Google's name in error messages users see.
 const GOOGLE: &str = "Google";
-const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 
 /// Refreshes a Google OAuth2 access token using a refresh token.
 /// See https://developers.google.com/identity/protocols/oauth2/web-server#offline
 pub(crate) async fn refresh_google_token(
-    client: &UnauthedClient,
-    client_id: &str,
-    client_secret: &str,
-    refresh_token: &str,
-) -> Result<GoogleTokenResponse> {
-    refresh_google_token_at(
-        client,
-        GOOGLE_TOKEN_URL,
-        client_id,
-        client_secret,
-        refresh_token,
-    )
-    .await
-}
-
-async fn refresh_google_token_at(
     client: &UnauthedClient,
     token_url: &str,
     client_id: &str,
@@ -103,16 +86,25 @@ async fn refresh_google_token_at(
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
+
+            // If the user revoked Macro's access to their account, we get an invalid_grant error here
+            if error_text.contains("invalid_grant") {
+                tracing::warn!(status=?status, error=?error_text, "Google rejected the refresh token");
+                return Err(FusionAuthClientError::InvalidGrant);
+            }
+
+            if let Some(reason) =
+                grant_block_reason(&error_text).filter(|_| status.is_client_error())
+            {
+                tracing::warn!(status=?status, error=?error_text, "Google blocked the grant by policy");
+                return Err(FusionAuthClientError::GrantBlocked { reason });
+            }
+
             tracing::error!(
                 status=?status,
                 error=?error_text,
                 "failed to refresh Google access token"
             );
-
-            // If the user revoked Macro's access to their account, we get an invalid_grant error here
-            if error_text.contains("invalid_grant") {
-                return Err(FusionAuthClientError::InvalidGrant);
-            }
 
             if let Some(failure) = UpstreamFailure::from_status(status, &headers) {
                 return Err(FusionAuthClientError::Upstream {
@@ -131,6 +123,17 @@ async fn refresh_google_token_at(
     }
 }
 
+/// The reason in a Google OAuth error body, when it is a policy block.
+fn grant_block_reason(body: &str) -> Option<GrantBlockReason> {
+    #[derive(serde::Deserialize)]
+    struct OAuthError {
+        error: String,
+    }
+
+    let OAuthError { error } = serde_json::from_str(body).ok()?;
+    error.parse().ok()
+}
+
 #[derive(Debug, serde::Deserialize)]
 /// Response from exchanging a Google authorization code for tokens.
 pub struct GoogleExchangeTokenResponse {
@@ -147,12 +150,11 @@ pub struct GoogleExchangeTokenResponse {
     pub scope: String,
 }
 
-/// Google's token revocation endpoint. Revoking either token of a grant
-/// revokes the whole grant, so the next consent screen lists every scope again.
+/// Revokes the grant behind `token` (an access or refresh token) at Google's
+/// revocation `endpoint`. Revoking either token of a grant revokes the whole
+/// grant, so the next consent screen lists every scope again.
 /// See https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke
-pub(crate) const GOOGLE_REVOKE_URL: &str = "https://oauth2.googleapis.com/revoke";
-
-/// Revokes the grant behind `token` (an access or refresh token) at `endpoint`.
+///
 /// Google answers an unknown or already revoked token with 400 `invalid_token`,
 /// which counts as revoked so the call is safe to repeat.
 pub(crate) async fn revoke_token(
@@ -201,6 +203,7 @@ struct TokenExchangeRequest {
 /// Exchanges a Google authorization code for tokens.
 pub(crate) async fn exchange_code_for_tokens(
     client: &UnauthedClient,
+    token_url: &str,
     client_id: &str,
     client_secret: &str,
     redirect_uri: &str,
@@ -216,7 +219,7 @@ pub(crate) async fn exchange_code_for_tokens(
 
     let response = client
         .client()
-        .post("https://oauth2.googleapis.com/token")
+        .post(token_url)
         .form(&token_request)
         .timeout(Duration::from_secs(30))
         .send()

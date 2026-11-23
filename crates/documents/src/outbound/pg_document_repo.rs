@@ -82,24 +82,33 @@ impl<B: BotFacts + 'static> PgDocumentRepo<B> {
         create::find_live_email_document_id_by_sha(&mut conn, owner, sha).await
     }
 
+    /// `None` when the document went to the Trash after the lookup.
     async fn link_existing_email_document(
         &self,
         document_id: &str,
         email_attachment_id: uuid::Uuid,
-    ) -> Result<EmailImportRepoOutcome, DocumentError> {
+    ) -> Result<Option<EmailImportRepoOutcome>, DocumentError> {
         let mut transaction = self.pool.begin().await?;
-        match create::link_document_email(&mut transaction, document_id, email_attachment_id).await
+        match create::link_live_document_email(&mut transaction, document_id, email_attachment_id)
+            .await
         {
-            Ok(()) => {
+            Ok(true) => {
                 transaction.commit().await?;
-                self.reused_email_document(document_id.to_string()).await
+                self.reused_email_document(document_id.to_string())
+                    .await
+                    .map(Some)
+            }
+            Ok(false) => {
+                transaction.rollback().await?;
+                Ok(None)
             }
             Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
                 transaction.rollback().await?;
                 self.reused_linked_email_attachment(email_attachment_id)
                     .await
+                    .map(Some)
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(create::email_link_error(e)),
         }
     }
 }
@@ -129,6 +138,45 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
     type Err = sqlx::Error;
 
     #[tracing::instrument(err, skip(self))]
+    async fn set_appearance(
+        &self,
+        document_id: &str,
+        update: &activity::AppearanceUpdate,
+    ) -> Result<Option<model_entity::EntityAppearance>, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query!(
+            r#"SELECT appearance FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL FOR UPDATE"#,
+            document_id,
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        let previous: model_entity::EntityAppearance = row
+            .appearance
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+            .unwrap_or_default();
+        if previous == update.appearance {
+            return Ok(None);
+        }
+        sqlx::query!(
+            r#"UPDATE "Document" SET appearance = $2 WHERE id = $1"#,
+            document_id,
+            serde_json::to_value(&update.appearance)
+                .map_err(|e| sqlx::Error::Encode(Box::new(e)))?,
+        )
+        .execute(&mut *tx)
+        .await?;
+        if let Some(activity) =
+            update.activity(model_entity::EntityType::Document, document_id, &previous)
+        {
+            activity::outbound::pg_activity_repo::insert_activities(&mut *tx, &[activity]).await?;
+        }
+        tx.commit().await?;
+        Ok(Some(previous))
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_document_metadata(
         &self,
         document_id: &str,
@@ -137,6 +185,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             r#"
             SELECT
                 d.id as "document_id",
+                d.appearance,
                 d.owner as "owner",
                 COALESCE(db.id, di.id) as "document_version_id!",
                 d.name as "document_name",
@@ -217,6 +266,11 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         )
         .try_map(|row| {
             Ok(DocumentMetadata {
+                appearance: row
+                    .appearance
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
                 owner: Owner::from_principal_str(&row.owner)
@@ -268,6 +322,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             r#"
             SELECT
                 d.id as "document_id",
+                d.appearance,
                 d.owner,
                 d.name as "document_name",
                 d."branchedFromId" as "branched_from_id",
@@ -330,6 +385,8 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         Ok(row.map_or((None, None), |row| (row.first_name, row.last_name)))
     }
 
+    // pg_released_attachments::trash restates these writes, set-based, for
+    // email attachments whose mail is gone; change the two together.
     #[tracing::instrument(err, skip(self))]
     async fn soft_delete_document(&self, document_id: &str) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
@@ -534,7 +591,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         Ok(metadata)
     }
 
-    #[tracing::instrument(err, skip(self, args, share_permission))]
+    #[tracing::instrument(skip(self, args, share_permission))]
     async fn import_email_attachment_document(
         &self,
         args: ImportEmailAttachmentRepoArgs,
@@ -559,13 +616,16 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
 
         let owner = Owner::User(owner);
         let owner_principal = owner.principal_id();
+        // A document trashed after the lookup goes on to the locked path,
+        // which looks again and creates a new one if none is left.
         if let Some(existing_id) = self
             .find_reusable_email_document_by_sha(&owner_principal, &document.sha)
             .await?
-        {
-            return self
+            && let Some(outcome) = self
                 .link_existing_email_document(&existing_id, email_attachment_id)
-                .await;
+                .await?
+        {
+            return Ok(outcome);
         }
 
         let mut transaction = self.pool.begin().await?;
@@ -576,7 +636,8 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             &document.sha,
             email_attachment_id,
         )
-        .await?
+        .await
+        .map_err(create::email_link_error)?
         {
             transaction.commit().await?;
             return self.reused_email_document(existing_id).await;
@@ -604,7 +665,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
                     .reused_linked_email_attachment(email_attachment_id)
                     .await;
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(create::email_link_error(e)),
         }
 
         transaction.commit().await?;
@@ -646,6 +707,21 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             FileTypeUpdate::Clear => None,
         });
 
+        let document_uuid = macro_uuid::string_to_uuid(&args.document_id).ok();
+        if document_uuid.is_none()
+            && args.project_id.is_some()
+            && !agent_correlation::context::may_share()
+        {
+            let (owner, from) =
+                edit::get_document_owner_and_folder(&mut transaction, &args.document_id).await?;
+            entity_access_db_utils::project_grants::refuse_unregistered_filing(
+                &mut transaction,
+                &owner,
+                from.as_deref(),
+                args.project_id.as_deref(),
+            )
+            .await?;
+        }
         edit::update_document_metadata(
             &mut transaction,
             &args.document_id,
@@ -654,6 +730,15 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             file_type_db,
         )
         .await?;
+        if let Some(document_uuid) = document_uuid {
+            entity_access_db_utils::project_grants::refuse_filing_in(
+                &mut transaction,
+                &document_uuid,
+                model_entity::EntityType::Document,
+                args.project_id.as_deref(),
+            )
+            .await?;
+        }
 
         if let Some(ref share_permission) = args.share_permission {
             edit::update_share_permission(&mut transaction, &args.document_id, share_permission)
@@ -1099,6 +1184,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             r#"
             SELECT
                 d.id as "document_id",
+                d.appearance,
                 d.owner as "owner",
                 d.name as "document_name",
                 COALESCE(di.id, db.id) as "document_version_id!",
@@ -1178,6 +1264,11 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         )
         .try_map(|row| {
             Ok(DocumentMetadata {
+                appearance: row
+                    .appearance
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
                 owner: Owner::from_principal_str(&row.owner)
@@ -1331,5 +1422,16 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         copy::copy_pdf_parts(&mut transaction, new_document_id, original_document_id).await?;
         transaction.commit().await?;
         Ok(())
+    }
+}
+
+impl<B: BotFacts + 'static> crate::domain::ports::DocumentLifecycleReads for PgDocumentRepo<B> {
+    #[tracing::instrument(skip(self), err)]
+    async fn document_is_live(&self, id: uuid::Uuid) -> anyhow::Result<bool> {
+        match self.get_basic_document(&id.to_string()).await {
+            Ok(document) => Ok(document.deleted_at.is_none()),
+            Err(sqlx::Error::RowNotFound) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
     }
 }

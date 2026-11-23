@@ -128,6 +128,20 @@ describe('TypeDoc documentation packaging', () => {
     expect(entity?.index).not.toContain('Constructor');
   });
 
+  it('keeps lazy return types with generics and unions beside ordinary fields', () => {
+    const pages = fixturePages();
+    pages.set(
+      'src/entities/example/example/classes/Example.md',
+      EXAMPLE.replace(
+        '## Methods',
+        '| <a id="property-content"></a> `content` | `readonly` | () => `Promise`\\<`string` \\| `null`\\> | - | - |\n\n## Methods'
+      )
+    );
+    expect(pack(pages).entities[0]?.index).toContain(
+      'Fields: id, content(): Promise<string | null>'
+    );
+  });
+
   it('splits classes into methods and names links by the symbol to read', () => {
     const { symbols } = pack();
     expect(symbols['ExampleNamespace.create']).toContain(
@@ -148,18 +162,6 @@ describe('TypeDoc documentation packaging', () => {
     expect(symbols.Request).toBe('# Request\n`example.Child`');
     expect(symbols['example.Child']).toBe('# Child\n`Request`');
     expect(symbols['other.Child']).toBe('# Child\nAnother service');
-  });
-
-  it('omits legacy namespaces without removing adjacent current session methods', () => {
-    const pages = fixturePages();
-    pages.set(
-      'src/macro/classes/Macro.md',
-      '# Class: Macro\n\n## Methods\n\n### chats()\n[Chats](../../entities/chats/namespace/classes/Chats.md)\n\n### agentSessions()\n\nCurrent sessions\n\n### workspace()\n\nLegacy feed'
-    );
-    const { symbols } = pack(pages);
-    expect(symbols['Macro.agentSessions']).toContain('Current sessions');
-    expect(symbols['Macro.chats']).toBeUndefined();
-    expect(symbols['Macro.workspace']).toBeUndefined();
   });
 
   it('fails generation on a missing referenced contract or missing namespace', () => {
@@ -234,7 +236,11 @@ describe('TypeDoc documentation packaging', () => {
     );
     expect(guide('routines')).toContain('never sees this conversation');
     expect(guide('documents')).toContain('<m-document-mention>');
-    expect(guide('core')).toContain('macro.documents.search');
+    expect(guide('documents')).toContain('document.edit(instructions)');
+    expect(guide('search')).toContain('macro.search.all');
+    expect(guide('search')).toContain('macro.documents.search');
+    expect(guide('search')).toContain('macro.workspace.page');
+    expect(guide('core')).toBe('');
     expect(docs.symbols.DatabaseNamespace).toContain('## Agent guidance');
   });
 
@@ -245,42 +251,80 @@ describe('TypeDoc documentation packaging', () => {
       if (!found) throw new Error(`Missing ${name} docs`);
       return found.index;
     };
+    const messageIndex = entity('channels')
+      .split('### Message\n')[1]
+      ?.split('\n### ')[0];
+    expect(messageIndex).toContain('content(): Promise<string>');
+    expect(entity('email')).toContain('subject(): Promise<string | undefined>');
+    expect(entity('email')).toContain('body(): Promise<');
+    expect(entity('channels')).toContain('name(): Promise<string>');
     expect(entity('agentSessions')).toContain('### SessionReview');
     expect(entity('agentSessions')).toContain('`SessionReview.submitAll`');
     expect(docs.symbols.ReviewRecord_Serialize).toContain('presentedAt');
+    // An operation vocabulary too large to read at once lists its members,
+    // each read on its own.
+    expect(docs.symbols.EditOp).toContain('`EditOp.setText`');
+    expect(docs.symbols['EditOp.setTransform']).toContain('`flipH?`');
     expect(docs.symbols.SessionReview).not.toContain('property-parent');
     expect(docs.symbols.SessionReview).not.toContain('property-client');
     expect(docs.symbols.SessionReview).not.toContain('private constructor');
     expect(entity('documents')).toContain('`Document.content`');
     expect(entity('core')).toContain('### Macro');
     expect(docs.symbols.Macro).toContain('`agentSessions`');
-    expect(docs.symbols.Macro).not.toContain('property-chats');
-    expect(docs.symbols.Macro).not.toContain('property-workspace');
+    expect(docs.symbols.Macro).toContain('`search`');
+    expect(docs.symbols.Macro).toContain('`workspace`');
+    expect(docs.symbols.Macro).toContain('`chats`');
     expect(entity('routines')).toContain('`RoutineOptions`');
-    expect(entity('agents')).toContain('### HarnessNamespace');
+    expect(entity('harnesses')).toContain('### HarnessNamespace');
+    expect(entity('agents')).not.toContain('HarnessNamespace');
     expect(entity('apiKeys')).toContain('### UserApiKey');
     expect(entity('entityMentions')).toContain('EntityMentionNamespace');
     expect(entity('githubPullRequests')).toContain('PullRequestChangeset');
     expect(entity('core')).toContain('`SharePermissionOptions`');
-    expect(
-      docs.entities.some((doc) => ['chats', 'workspace'].includes(doc.name))
-    ).toBe(false);
-    expect(docs.entities.length).toBeLessThanOrEqual(32);
-    for (const doc of docs.entities)
-      expect(Buffer.byteLength(doc.index)).toBeLessThan(16 * 1024);
+    expect(entity('search')).toContain('### SearchNamespace (`macro.search`)');
+    expect(entity('search')).toContain('`SearchNamespace.all`');
+    expect(entity('workspace')).toContain(
+      '### WorkspaceNamespace (`macro.workspace`)'
+    );
+    expect(entity('chats')).toContain('### ChatNamespace (`macro.chats`)');
+    expect(entity('chats')).toContain('`Chat.history`');
+    expect(entity('core')).not.toContain('SearchNamespace');
+    expect(docs.symbols.SearchOptions).toContain('agentSessions');
+    expect(docs.symbols.WorkspaceType).toContain('agent_session');
+    // Jev routes the catalog 32 entities per call, so every SDK directory is
+    // its own entity, asked about with its own routing sentence.
+    expect(docs.entities.length).toBeGreaterThan(32);
+    expect(entity('unfurls')).toContain('### UnfurlNamespace');
+    expect(entity('web')).not.toContain('UnfurlNamespace');
+    expect(entity('pins')).toContain('### PinsNamespace');
+    expect(entity('favorites')).not.toContain('PinsNamespace');
+    expect(entity('images')).toContain('### ImagesNamespace');
+    expect(entity('me')).toContain('### MeNamespace');
     for (const reference of Object.values(docs.symbols)) {
       expect(Buffer.byteLength(reference)).toBeLessThan(16 * 1024);
       expect(reference).not.toContain('/home/');
     }
   });
+
+  it('keeps every entity index below 16 KiB', async () => {
+    const docs = JSON.parse(await readFile(artifact, 'utf8')) as SdkDocs;
+    for (const doc of docs.entities) {
+      const bytes = Buffer.byteLength(doc.index);
+      expect(
+        bytes,
+        `${doc.name}: ${16 * 1024 - bytes} bytes spare`
+      ).toBeLessThan(16 * 1024);
+    }
+  });
 });
 
-it('external chats and WhatsApp share the channels discovery topic without pairing methods', async () => {
+it('external chats and WhatsApp are their own entities without pairing methods', async () => {
   const docs = JSON.parse(await readFile(artifact, 'utf8')) as SdkDocs;
-  const channels = docs.entities.find((entry) => entry.name === 'channels');
-  expect(channels?.index).toContain('ExternalChatsNamespace');
-  expect(channels?.index).toContain('ExternalChat');
-  expect(channels?.index).toContain('WhatsAppNamespace');
-  expect(channels?.index).toContain('.chats`');
-  expect(channels?.index).not.toContain('whatsappConnect');
+  const index = (name: string) =>
+    docs.entities.find((entry) => entry.name === name)?.index;
+  expect(index('externalChat')).toContain('ExternalChatsNamespace');
+  expect(index('whatsapp')).toContain('WhatsAppNamespace');
+  expect(index('whatsapp')).toContain('.chats`');
+  expect(index('whatsapp')).not.toContain('whatsappConnect');
+  expect(index('channels')).not.toContain('WhatsAppNamespace');
 });

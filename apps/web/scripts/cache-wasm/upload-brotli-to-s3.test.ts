@@ -29,7 +29,7 @@ describe('cache WASM S3 upload', () => {
       /build-tauri:[\s\S]*package-dist --dist dist\n\s+bun scripts\/cache-wasm\/cli\.ts remove-sidecar --dist dist/
     );
     expect(webJustfile).toContain(
-      `zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br'`
+      `zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br' '*.map'`
     );
 
     const infrastructure = readFileSync(
@@ -37,7 +37,7 @@ describe('cache WASM S3 upload', () => {
       'utf8'
     );
     expect(infrastructure).toContain(
-      `find ${'${shellQuote(appArchiveOutputPath)}'} -type f -name 'cache_wasm_bg*.wasm.br' -delete`
+      `find ${'${shellQuote(appArchiveOutputPath)}'} -type f \\\\( -name 'cache_wasm_bg*.wasm.br' -o -name '*.map' \\\\) -delete`
     );
     expect(infrastructure).toContain(
       'publish-web-assets.sh assets ./output/app'

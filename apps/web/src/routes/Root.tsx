@@ -2,6 +2,7 @@ import { ROUTER_BASE } from '@app/constants/routerBase';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
+import { useRecordSuggestionsActivity } from '@app/features/suggestions/queries/use-record-suggestions-activity';
 import {
   AnalyticsContextProvider,
   useAnalytics,
@@ -19,7 +20,7 @@ import { dismissBootShell } from '@components/app/boot-shell';
 import { RootFrame } from '@components/app/Layout';
 import { useSessionWebsockets } from '@core/auth/session-websockets';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { UserContextProvider, useUserInfo } from '@core/context/user';
@@ -39,6 +40,7 @@ import { TauriRouteListener } from '@macro/tauri/TauriProvider';
 import { Telemetry } from '@macro-inc/observability';
 import { BrowserNotificationModal } from '@notifications';
 import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
+import { createAppChannelDirectory } from '@queries/channel/directory';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -188,6 +190,7 @@ const BOOT_SHELL_MAX_WAIT_MS = 8000;
  */
 function AppRouteFrame(props: RouteSectionProps) {
   useUserInfoSideEffects();
+  useRecordSuggestionsActivity();
   useSessionWebsockets();
   useNotificationCoverTimeout();
   onMount(() => {
@@ -234,7 +237,9 @@ export function Root() {
                   <IosPushNotificationModal />
                   <IpadUnsupportedDialog />
                   <GlobalShareInboxConflictDialog />
-                  <ChannelsContextProvider>
+                  <ChannelDirectoryProvider
+                    directory={createAppChannelDirectory()}
+                  >
                     <CallProvider>
                       <CallKitSync />
                       <CallStartedNotifier />
@@ -260,7 +265,7 @@ export function Root() {
                         <ToastRegion />
                       </QuickAccessProvider>
                     </CallProvider>
-                  </ChannelsContextProvider>
+                  </ChannelDirectoryProvider>
                 </EmailLinksContextProvider>
               </UserContextProvider>
             </EntityProvider>

@@ -23,6 +23,13 @@ impl ImportedCallRepository for FixedRepo {
     ) -> Result<Vec<ImportedCallPreview>, rootcause::Report> {
         Ok(vec![])
     }
+    async fn list_source_records(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _provider: CallProvider,
+    ) -> Result<Vec<ImportedCallRecord>, rootcause::Report> {
+        Ok(vec![])
+    }
     async fn read_owned(
         &self,
         _user: &MacroUserIdStr<'static>,

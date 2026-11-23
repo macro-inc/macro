@@ -5,7 +5,7 @@ use sqlx::types::Uuid;
 
 use crate::links::types::DbUserProvider;
 
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, email_address), err)]
 pub async fn fetch_history_id_for_link(
     pool: &PgPool,
     email_address: &str,

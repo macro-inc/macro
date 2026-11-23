@@ -6,6 +6,7 @@ import {
   CacheTelemetryRecorder,
   CacheTelemetryReporter,
   classifyCacheError,
+  describeCacheError,
   isCacheTelemetryObservation,
   isolateCacheTelemetry,
   operationCategoryForRequest,
@@ -81,6 +82,7 @@ describe('cache telemetry privacy contract', () => {
       resetAttempt: 'wipe-before-open',
       queueDepth: 3,
       oldestAgeMs: 42,
+      walFrames: 700,
       scope: 'private-scope',
       mutationId: 'private-mutation',
       query: 'mutation Private { private }',
@@ -95,11 +97,42 @@ describe('cache telemetry privacy contract', () => {
         resetAttempt: 'wipe-before-open',
         queueDepth: 3,
         oldestAgeMs: 42,
+        walFrames: 700,
       }),
     ]);
     expect(JSON.stringify(events)).not.toMatch(
       /private-scope|private-mutation|mutation Private/
     );
+  });
+
+  it('exports a slow request with its fixed kind and wait, and drops an unknown kind', () => {
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext('treatment'),
+      { emit: (event) => events.push(event) }
+    );
+    const slowRequest = {
+      name: 'graphql_cache.slow_request',
+      operationCategory: 'write',
+      requestKind: 'hydrate',
+      outcome: 'success',
+      errorCode: 'none',
+      queueWaitMs: 40,
+      durationMs: 1_200,
+      queueDepth: 2,
+    } as const;
+    expect(isCacheTelemetryObservation(slowRequest)).toBe(true);
+    reporter.emit(slowRequest);
+    reporter.emit({
+      ...slowRequest,
+      requestKind: 'query Private { private }',
+    } as unknown as CacheTelemetryObservation);
+
+    expect(events).toEqual([
+      expect.objectContaining(slowRequest),
+      expect.not.objectContaining({ requestKind: expect.anything() }),
+    ]);
+    expect(JSON.stringify(events)).not.toContain('Private');
   });
 
   it('rejects relay payloads with unknown fields or ad-hoc names', () => {
@@ -211,6 +244,36 @@ describe('cache telemetry sampling and failure isolation', () => {
       queryFingerprint: 'SELECT private-data',
     });
     expect(events[3]).not.toHaveProperty('queryFingerprint');
+  });
+
+  it('never samples or aggregates slow requests and drops an invalid queue wait', () => {
+    const events: CacheTelemetryObservation[] = [];
+    const recorder = new CacheTelemetryRecorder(
+      { emit: (event) => events.push(event) },
+      100,
+      50
+    );
+    const slowRequest = {
+      name: 'graphql_cache.slow_request',
+      operationCategory: 'read',
+      requestKind: 'read',
+      outcome: 'success',
+      errorCode: 'none',
+      durationMs: 3,
+      queueDepth: 1,
+    } as const;
+    for (const queueWaitMs of [1_500, 1_500, -1, Number.NaN, 7_200_000]) {
+      recorder.record({ ...slowRequest, queueWaitMs });
+    }
+    recorder.flush();
+
+    expect(events).toEqual([
+      { ...slowRequest, queueWaitMs: 1_500 },
+      { ...slowRequest, queueWaitMs: 1_500 },
+      slowRequest,
+      slowRequest,
+      { ...slowRequest, queueWaitMs: 3_600_000 },
+    ]);
   });
 
   it('uses weighted aggregates, independent event sampling, and unsampled errors', () => {
@@ -424,5 +487,77 @@ describe('cache telemetry sampling and failure isolation', () => {
       rolloutCohort: 'unknown',
     });
     expect(JSON.stringify(hostileContextEvents)).not.toContain('private');
+  });
+});
+
+describe('describeCacheError', () => {
+  it('names engine failures from fixed lists without exporting the message', () => {
+    const trap = new Error('unreachable executed in macro|user@example.com');
+    trap.name = 'RuntimeError';
+    expect(describeCacheError(trap)).toEqual({
+      errorCode: 'unknown',
+      errorName: 'RuntimeError',
+      errorDetail: 'unreachable',
+    });
+    expect(
+      describeCacheError(
+        'RangeError: WebAssembly.Memory(): could not allocate memory'
+      )
+    ).toEqual({
+      errorCode: 'unknown',
+      errorName: 'RangeError',
+      errorDetail: 'out-of-memory',
+    });
+    expect(
+      describeCacheError(
+        new DOMException('no space left', 'QuotaExceededError')
+      )
+    ).toMatchObject({
+      errorName: 'QuotaExceededError',
+      errorDetail: 'disk-full',
+    });
+  });
+
+  it('reduces unknown types and messages to other', () => {
+    const custom = new Error('/home/someone/private/path.db is busy');
+    custom.name = 'PathBusyError';
+    expect(describeCacheError(custom)).toEqual({
+      errorCode: 'unknown',
+      errorName: 'other',
+      errorDetail: 'other',
+    });
+    expect(describeCacheError(undefined)).toEqual({ errorCode: 'unknown' });
+  });
+
+  it('keeps the new fields inside the exported allowlist', () => {
+    expect(
+      isCacheTelemetryObservation({
+        name: 'graphql_cache.db_ready',
+        operationCategory: 'initialization',
+        outcome: 'error',
+        errorName: 'RuntimeError',
+        errorDetail: 'unreachable',
+      })
+    ).toBe(true);
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext(
+        'treatment',
+        'Mozilla/5.0 Firefox/151.0',
+        '1'
+      ),
+      { emit: (event) => events.push(event) }
+    );
+    const recorder = new CacheTelemetryRecorder(reporter);
+    recorder.record({
+      name: 'graphql_cache.db_ready',
+      operationCategory: 'initialization',
+      outcome: 'error',
+      errorName: 'secret message' as never,
+      errorDetail: 'secret message' as never,
+    });
+    recorder.flush();
+    expect(events.at(-1)).not.toHaveProperty('errorName');
+    expect(events.at(-1)).not.toHaveProperty('errorDetail');
   });
 });

@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { ChannelAccessRequestedMetadataRequesterName } from './channelAccessRequestedMetadataRequesterName';
 import type { MacroUserIdStr } from './macroUserIdStr';
 
 /**
@@ -16,4 +18,7 @@ export interface ChannelAccessRequestedMetadata {
   request_id: string;
   /** Person asking to join. */
   requester_id: MacroUserIdStr;
+  /** The requester's profile name when they asked, if they had one. Absent
+on events from before it was added. */
+  requester_name?: ChannelAccessRequestedMetadataRequesterName;
 }

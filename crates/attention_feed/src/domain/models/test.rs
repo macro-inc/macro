@@ -33,6 +33,7 @@ fn tokens_round_trip() {
         keys: vec![format!("document:{}", uuid(1))],
         notification_ids: vec![uuid(2)],
         archived_threads: vec![uuid(3)],
+        unseen_ids: vec![uuid(2)],
     };
     assert_eq!(DoneReceipt::decode(&receipt.encode()).unwrap(), receipt);
     assert_eq!(
@@ -58,6 +59,7 @@ fn tokens_keep_the_work_feed_wire_format() {
             keys: vec!["document:d".to_string()],
             notification_ids: Vec::new(),
             archived_threads: Vec::new(),
+            unseen_ids: Vec::new(),
         })
         .unwrap(),
         serde_json::json!({ "k": ["document:d"], "n": [], "e": [] })
@@ -69,6 +71,18 @@ fn garbage_tokens_are_rejected() {
     assert!(FeedRevision::decode("not base64!").is_err());
     assert!(FeedPosition::decode("e30").is_err());
     assert!(DoneReceipt::decode("").is_err());
+}
+
+#[test]
+fn an_undo_token_names_no_more_keys_than_its_operation_touches() {
+    let receipt = DoneReceipt {
+        keys: (1..=3).map(|id| format!("document:{}", uuid(id))).collect(),
+        ..DoneReceipt::default()
+    };
+    let token = receipt.encode();
+    assert_eq!(DoneReceipt::decode_at_most(&token, 3).unwrap(), receipt);
+    assert!(DoneReceipt::decode_at_most(&token, 2).is_err());
+    assert!(DoneReceipt::decode_at_most("", 3).is_err());
 }
 
 #[test]

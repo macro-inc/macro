@@ -269,7 +269,9 @@ where
     }
 }
 
-fn session_id<T: RequiredPermission>(access: &EntityAccessReceipt<T>) -> Result<AgentSessionId> {
+pub(super) fn session_id<T: RequiredPermission>(
+    access: &EntityAccessReceipt<T>,
+) -> Result<AgentSessionId> {
     if access.entity().entity_type != EntityType::AgentSession {
         return Err(AgentSessionError::Forbidden);
     }

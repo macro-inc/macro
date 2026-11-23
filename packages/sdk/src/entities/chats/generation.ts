@@ -26,7 +26,12 @@ export class ChatGeneration {
     return new ChatGeneration(client, chat, id, message);
   }
 
-  /** Request cancellation of this generation. */
+  /**
+   * Request cancellation of this generation.
+   *
+   * @destructive
+   * @idempotent
+   */
   async stop(): Promise<void> {
     unwrap(
       await this.client.cognition.stopChatStream({
@@ -74,7 +79,11 @@ export class ChatMessage extends MacroEntity<ChatMessageWithAttachments> {
   /** Role of the message author. */
   readonly role = this.field('role');
 
-  /** Reload after a running generation changes or finishes. */
+  /**
+   * Reload after a running generation changes or finishes.
+   *
+   * @readonly
+   */
   async refresh(): Promise<void> {
     this.detail.clear();
     await this.detail.get();

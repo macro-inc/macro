@@ -3,13 +3,22 @@ import type { MessageListItem, MessageThread } from '@service-storage/messages';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { type Accessor, createSignal, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { CallChatHistory } from './CallChatHistory';
+import { CallChatHistory, CallDiscussionHistory } from './CallChatHistory';
 
 const mocks = vi.hoisted(() => ({
   source: undefined as unknown,
   refresh: vi.fn(),
 }));
 vi.mock('./queries/use-call-chat', () => ({ useCallChat: () => mocks.source }));
+vi.mock('@tanstack/solid-query', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/solid-query')>()),
+  useQuery: () => ({
+    isSuccess: false,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+}));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({
@@ -104,4 +113,27 @@ it('distinguishes an empty chat from a failed request with retry', () => {
   expect(screen.getByRole('alert').textContent).toBe('Could not load chat.');
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(mocks.refresh).toHaveBeenCalledOnce();
+});
+
+it('preserves recording content when a channel discussion record refreshes', () => {
+  const [discussion, setDiscussion] = createSignal({
+    kind: 'channel_thread' as const,
+    channel_id: 'channel-id',
+    root_id: 'root-id',
+  });
+  let mounts = 0;
+  render(() => (
+    <CallDiscussionHistory
+      callId="call-id"
+      discussion={discussion()}
+      render={() => {
+        mounts += 1;
+        return <video aria-label="Recording" />;
+      }}
+    />
+  ));
+  const video = screen.getByLabelText('Recording');
+  setDiscussion({ ...discussion() });
+  expect(screen.getByLabelText('Recording')).toBe(video);
+  expect(mounts).toBe(1);
 });

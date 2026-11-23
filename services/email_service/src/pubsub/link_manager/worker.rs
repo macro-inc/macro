@@ -1,19 +1,19 @@
+use crate::composition::workers::{CrmServiceType, NotificationIngressType, PubSubEventBroker};
 use crate::outbound::email_api::GmailApi;
-use crate::pubsub::context::{CrmServiceType, NotificationIngressType, PubSubEventBroker};
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::link_manager::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
-use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use futures::StreamExt;
+use models_email::email::service::pubsub::{LinkManagerLane, LinkManagerMessage};
 use sqlx::PgPool;
 use sqs_client::SQS;
 use std::convert::Infallible;
 use std::future::Future;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::time::{Instant, MissedTickBehavior, interval_at};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
@@ -21,15 +21,38 @@ use tracing::Instrument;
 #[cfg(test)]
 mod test;
 
+/// Production composition; concrete adapters stay at the worker boundary.
+pub(crate) type LinkManager = email::domain::mailbox::link_manager::LinkManagerService<
+    crate::outbound::message_labels::gmail_ops::PgGmailOps,
+    Arc<crate::composition::InboxHealth>,
+    Arc<crate::composition::InboxLifecycle>,
+    crate::outbound::link_manager::ReauthNotifier,
+    PubSubEventBroker,
+    email::domain::mailbox::link_manager::deletion::LinkDeletionService<
+        crate::outbound::link_manager::PgLinkDeletion,
+        crate::outbound::link_manager::DeletionGmail,
+        crate::outbound::link_manager::DeletionAuth,
+        CrmServiceType,
+        email::domain::mailbox::link_manager::purge::LinkPurgeService<
+            email::outbound::mailbox_pg::PgMailboxSync,
+        >,
+        crate::outbound::link_manager::DeletionRefresh,
+        PubSubEventBroker,
+    >,
+>;
+
 /// How long each renewal hides a message being processed from other workers.
 const VISIBILITY_EXTENSION_SECONDS: i32 = 300;
 /// How often a message being processed renews its visibility. Several renewals fit in one
 /// extension, so a failed renewal doesn't expose the message.
 const VISIBILITY_RENEWAL_INTERVAL: Duration = Duration::from_secs(60);
 
-/// method that ingests sqs messages and calls the process function for each
-#[allow(clippy::too_many_arguments)]
-pub async fn run_worker(
+/// Builds the production context after the existing cancellable provider initialization.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the worker composition inputs"
+)]
+pub(crate) async fn context(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     email_api: GmailApi,
@@ -40,43 +63,9 @@ pub async fn run_worker(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
-    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
-) {
-    run_worker_with_cancellation(
-        worker,
-        db,
-        email_api,
-        auth_service_client,
-        redis_client,
-        sqs_client,
-        crm_service,
-        connection_gateway_client,
-        notification_ingress_service,
-        macro_event_broker,
-        contacts_ingress,
-        CancellationToken::new(),
-    )
-    .await;
-}
-
-/// Ingests SQS messages until cancellation is requested.
-///
-/// A batch already returned by SQS is fully processed before shutdown.
-#[allow(clippy::too_many_arguments)]
-pub async fn run_worker_with_cancellation(
-    worker: sqs_worker::SQSWorker,
-    db: PgPool,
-    email_api: GmailApi,
-    auth_service_client: AuthServiceClient,
-    redis_client: RedisClient,
-    sqs_client: SQS,
-    crm_service: CrmServiceType,
-    connection_gateway_client: ConnectionGatewayClient,
-    notification_ingress_service: Arc<NotificationIngressType>,
-    macro_event_broker: PubSubEventBroker,
-    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    contacts_ingress: Arc<crate::composition::ContactsProducer>,
     cancellation_token: CancellationToken,
-) {
+) -> Option<LinkManagerContext> {
     let outlook = loop {
         let result = async {
             let connection = redis_client
@@ -84,8 +73,9 @@ pub async fn run_worker_with_cancellation(
                 .get_multiplexed_async_connection()
                 .await?;
             Ok::<_, anyhow::Error>(email_api_client::OutlookApiClientRepository::with_gate(
-                Arc::new(crate::outbound::email_api::RedisMicrosoftRequestGate(
+                Arc::new(crate::outbound::email_api::RedisMicrosoftRequestGate::new(
                     connection,
+                    email_api_client::outbound::microsoft_gate::RequestBudget::Live,
                 )),
             )?)
         }
@@ -97,6 +87,10 @@ pub async fn run_worker_with_cancellation(
                 "Inbox lifecycle client initialization failed; retrying"
             ),
         }
+        #[expect(
+            clippy::question_mark,
+            reason = "preserves the original cancellation branch for the code-motion audit"
+        )]
         if run_until_cancelled(
             &cancellation_token,
             tokio::time::sleep(std::time::Duration::from_secs(2)),
@@ -104,35 +98,96 @@ pub async fn run_worker_with_cancellation(
         .await
         .is_none()
         {
-            return;
+            return None;
         }
     };
+    let inbox_lifecycle = Arc::new(crate::composition::inbox_lifecycle(
+        outlook,
+        db.clone(),
+        auth_service_client.clone(),
+        sqs_client.clone(),
+        connection_gateway_client.clone(),
+    ));
+    let inbox_health = Arc::new(crate::composition::inbox_health(
+        db.clone(),
+        email_api.clone(),
+        auth_service_client.clone(),
+        redis_client.clone(),
+        sqs_client.clone(),
+        macro_event_broker.clone(),
+        contacts_ingress.clone(),
+    ));
     let ctx = LinkManagerContext {
-        inbox_lifecycle: Arc::new(crate::composition::inbox_lifecycle(
-            outlook,
-            db.clone(),
-            auth_service_client.clone(),
-            sqs_client.clone(),
-            connection_gateway_client.clone(),
-        )),
-        inbox_health: Arc::new(crate::composition::inbox_health(
-            db.clone(),
-            email_api.clone(),
-            auth_service_client.clone(),
-            redis_client.clone(),
-            sqs_client.clone(),
-            macro_event_broker.clone(),
-            contacts_ingress,
-        )),
-        db,
         sqs_worker: worker.clone(),
+        service: Arc::new(email::domain::mailbox::link_manager::LinkManagerService {
+            repository: crate::outbound::message_labels::gmail_ops::PgGmailOps(db.clone()),
+            health: inbox_health,
+            lifecycle: inbox_lifecycle,
+            notifications: crate::outbound::link_manager::ReauthNotifier(
+                notification_ingress_service,
+            ),
+            broker: macro_event_broker.clone(),
+            deletion: email::domain::mailbox::link_manager::deletion::LinkDeletionService {
+                purge: email::domain::mailbox::link_manager::purge::LinkPurgeService {
+                    repository: email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                },
+                repository: crate::outbound::link_manager::PgLinkDeletion(db),
+                gmail: crate::outbound::link_manager::DeletionGmail {
+                    api: email_api,
+                    cache: redis_client,
+                },
+                auth: crate::outbound::link_manager::DeletionAuth(auth_service_client),
+                crm: crm_service,
+                refresh: crate::outbound::link_manager::DeletionRefresh {
+                    gateway: connection_gateway_client,
+                    contacts: contacts_ingress,
+                },
+                broker: macro_event_broker,
+            },
+        }),
+    };
+    Some(ctx)
+}
+
+/// Ingests one lane's SQS messages until cancellation is requested.
+///
+/// A batch already returned by SQS is fully processed before shutdown.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the worker composition inputs"
+)]
+pub async fn run_worker_with_cancellation(
+    lane: LinkManagerLane,
+    worker: sqs_worker::SQSWorker,
+    db: PgPool,
+    email_api: GmailApi,
+    auth_service_client: AuthServiceClient,
+    redis_client: RedisClient,
+    sqs_client: SQS,
+    crm_service: CrmServiceType,
+    connection_gateway_client: ConnectionGatewayClient,
+    notification_ingress_service: Arc<NotificationIngressType>,
+    macro_event_broker: PubSubEventBroker,
+    contacts_ingress: Arc<crate::composition::ContactsProducer>,
+    cancellation_token: CancellationToken,
+) {
+    let Some(ctx) = context(
+        worker.clone(),
+        db,
         email_api,
         auth_service_client,
         redis_client,
+        sqs_client,
         crm_service,
         connection_gateway_client,
         notification_ingress_service,
         macro_event_broker,
+        contacts_ingress,
+        cancellation_token.clone(),
+    )
+    .await
+    else {
+        return;
     };
     loop {
         let worker_result = tokio::spawn({
@@ -159,10 +214,8 @@ pub async fn run_worker_with_cancellation(
                                 .then(|message| {
                                     let ctx = ctx.clone();
                                     let worker = &worker;
-                                    let span = tracing::info_span!(
-                                        "email.link_manager.message",
-                                        message_id = message.message_id.as_deref(),
-                                    );
+                                    let (span, decoded) =
+                                        delivery_span(lane, message, SystemTime::now());
                                     async move {
                                         let result = while_renewing_visibility(
                                             || {
@@ -171,7 +224,7 @@ pub async fn run_worker_with_cancellation(
                                                     VISIBILITY_EXTENSION_SECONDS,
                                                 )
                                             },
-                                            process::process_message(ctx, message),
+                                            process::process_message(ctx, message, decoded),
                                         )
                                         .instrument(span)
                                         .await;
@@ -237,6 +290,37 @@ pub async fn run_worker_with_cancellation(
             return;
         }
     }
+}
+
+/// Opens the consume span of one delivery on `lane` and decodes it inside it.
+///
+/// The span records the lane, the message's kind (its `operation`) and how long
+/// it waited in the queue, counted from when SQS first accepted it, so a removal's
+/// wait behind other work reads straight off its span.
+fn delivery_span(
+    lane: LinkManagerLane,
+    message: &aws_sdk_sqs::types::Message,
+    now: SystemTime,
+) -> (tracing::Span, anyhow::Result<LinkManagerMessage>) {
+    let span = tracing::info_span!(
+        "email.link_manager.message",
+        message_id = message.message_id.as_deref(),
+        lane = %lane,
+        kind = tracing::field::Empty,
+        queue_wait_ms = tracing::field::Empty,
+    );
+    // Numeric, so the wait aggregates as a measure.
+    if let Some(wait) = sqs_worker::queue_wait(message, now) {
+        span.record(
+            "queue_wait_ms",
+            i64::try_from(wait.as_millis()).unwrap_or(i64::MAX),
+        );
+    }
+    let decoded = span.in_scope(|| process::extract_message(message));
+    if let Ok(decoded) = &decoded {
+        span.record("kind", <&'static str>::from(decoded));
+    }
+    (span, decoded)
 }
 
 /// Runs `work` while calling `renew` every [`VISIBILITY_RENEWAL_INTERVAL`], so a message

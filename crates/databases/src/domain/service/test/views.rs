@@ -97,6 +97,7 @@ async fn three_guests(seeded: &Seeded) -> [RowId; 3] {
                             ]
                         })
                         .collect(),
+                    ids: None,
                 },
             }]),
         )

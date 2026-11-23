@@ -81,9 +81,11 @@ export function MobileEventForm(
         <EventFormParts.CustomRecurrence />
 
         <MobileDrawer.Section class="mx-0">
-          <SheetRow label="Calendar">
-            <EventFormParts.CalendarPill />
-          </SheetRow>
+          <Show when={!form.calendarFirstSync()}>
+            <SheetRow label="Calendar">
+              <EventFormParts.CalendarPill />
+            </SheetRow>
+          </Show>
           <Show when={!form.isOutOfOffice()}>
             <SheetRow label="Guests">
               <EventFormParts.GuestsSheetPill />

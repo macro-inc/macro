@@ -12,9 +12,10 @@ export function createMultiSelectIntent() {
         event.target.closest('[data-multiselect-checkbox]');
       if (checkbox) setIntent('toggle');
       else if (event.shiftKey) setIntent('only');
-      else if (event instanceof KeyboardEvent && event.key === ' ')
-        setIntent('toggle');
-      else setIntent('add');
+      // Pointing and Space toggle in place; Enter is the one gesture that closes.
+      else if (event instanceof KeyboardEvent && event.key === 'Enter')
+        setIntent('add');
+      else setIntent('toggle');
     };
     element.addEventListener('pointerdown', capture, true);
     element.addEventListener('pointerup', capture, true);

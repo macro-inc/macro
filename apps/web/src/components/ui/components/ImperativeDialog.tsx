@@ -10,6 +10,7 @@ import {
   type Owner,
   onCleanup,
   runWithOwner,
+  Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -239,14 +240,16 @@ function DialogEntryRenderer(props: { entry: DialogEntry }) {
     props.entry.rootDisposer = disposeRoot;
 
     return (
-      <Dynamic
-        component={props.entry.component}
-        {...resolveProps(props.entry.props)}
-        open={props.entry.isOpen()}
-        onOpenChange={(open: boolean) => {
-          if (!open) finalizeDialog(props.entry.id, 'dismissed');
-        }}
-      />
+      <Suspense>
+        <Dynamic
+          component={props.entry.component}
+          {...resolveProps(props.entry.props)}
+          open={props.entry.isOpen()}
+          onOpenChange={(open: boolean) => {
+            if (!open) finalizeDialog(props.entry.id, 'dismissed');
+          }}
+        />
+      </Suspense>
     );
   }, props.entry.owner ?? hostOwner);
 

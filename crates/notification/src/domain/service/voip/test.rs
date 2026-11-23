@@ -121,8 +121,37 @@ impl NotificationRepository for MockRepo {
     async fn get_unsubscribed_users<'a>(
         &self,
         _: &str,
+        _: bool,
         _: &[MacroUserIdStr<'a>],
     ) -> Result<std::collections::HashSet<MacroUserIdStr<'static>>, Report> {
+        unimplemented!()
+    }
+    async fn get_channel_notification_settings<'a>(
+        &self,
+        _: uuid::Uuid,
+        _: &[MacroUserIdStr<'a>],
+    ) -> Result<
+        std::collections::HashMap<
+            MacroUserIdStr<'static>,
+            crate::domain::channel_settings::ChannelNotificationSettings,
+        >,
+        Report,
+    > {
+        unimplemented!()
+    }
+    async fn get_channel_section_settings<'a>(
+        &self,
+        _: &[macro_user_id::user_id::MacroUserIdStr<'a>],
+    ) -> Result<
+        std::collections::HashMap<
+            macro_user_id::user_id::MacroUserIdStr<'static>,
+            std::collections::BTreeMap<
+                crate::domain::section_settings::ChannelSection,
+                crate::domain::section_settings::SectionNotificationSettings,
+            >,
+        >,
+        Report,
+    > {
         unimplemented!()
     }
     async fn create_notification<'a, T: Serialize + Send + Sync>(
@@ -157,6 +186,14 @@ impl NotificationRepository for MockRepo {
         _: &MacroUserIdStr<'_>,
         _: &[uuid::Uuid],
         _: bool,
+    ) -> Result<Vec<crate::domain::models::UserNotificationRow<serde_json::Value>>, Report> {
+        unimplemented!()
+    }
+    async fn reopen_notifications(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: &[uuid::Uuid],
+        _: &[uuid::Uuid],
     ) -> Result<Vec<crate::domain::models::UserNotificationRow<serde_json::Value>>, Report> {
         unimplemented!()
     }

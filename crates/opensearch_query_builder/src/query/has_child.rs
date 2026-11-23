@@ -5,6 +5,9 @@ use serde_json::{Map, Value};
 
 use crate::{QueryType, ToOpenSearchJson};
 
+#[cfg(test)]
+mod test;
+
 /// `has_child` join query. Returns parent documents that have at least one
 /// child of `child_type` matching `query`.
 ///
@@ -46,6 +49,10 @@ pub struct InnerHits<'a> {
     pub highlight: Option<Value>,
     /// Optional size override (default 3 in OpenSearch).
     pub size: Option<u32>,
+    /// Fields of each child's `_source` to return. Unset returns the whole
+    /// document: the request-level `_source` does not reach inner hits.
+    #[serde(rename = "_source")]
+    pub source: Option<Cow<'a, [Cow<'a, str>]>>,
 }
 
 impl<'a> InnerHits<'a> {
@@ -55,6 +62,7 @@ impl<'a> InnerHits<'a> {
             name: None,
             highlight: None,
             size: None,
+            source: None,
         }
     }
 
@@ -77,12 +85,28 @@ impl<'a> InnerHits<'a> {
         self
     }
 
+    /// Return only these `_source` fields for each inner hit.
+    pub fn source_fields<I>(mut self, fields: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Into<Cow<'a, str>>,
+    {
+        self.source = Some(fields.into_iter().map(Into::into).collect());
+        self
+    }
+
     /// Convert to an owned version with 'static lifetime.
     pub fn to_owned(&self) -> InnerHits<'static> {
         InnerHits {
             name: self.name.as_ref().map(|n| Cow::Owned(n.to_string())),
             highlight: self.highlight.clone(),
             size: self.size,
+            source: self.source.as_ref().map(|fields| {
+                fields
+                    .iter()
+                    .map(|field| Cow::Owned(field.to_string()))
+                    .collect()
+            }),
         }
     }
 }
@@ -104,6 +128,13 @@ impl<'a> ToOpenSearchJson for InnerHits<'a> {
         }
         if let Some(size) = self.size {
             obj.insert("size".to_string(), Value::Number(size.into()));
+        }
+        if let Some(source) = &self.source {
+            let fields = source
+                .iter()
+                .map(|field| Value::String(field.to_string()))
+                .collect();
+            obj.insert("_source".to_string(), Value::Array(fields));
         }
         Value::Object(obj)
     }

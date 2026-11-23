@@ -46,6 +46,18 @@ pub(super) async fn edit_project(
         row.deleted_at,
     )?;
 
+    if args.update_parent
+        && let Ok(project_id) = uuid::Uuid::parse_str(&args.project_id)
+    {
+        entity_access_db_utils::project_grants::refuse_filing_in(
+            transaction,
+            &project_id,
+            model_entity::EntityType::Project,
+            args.parent_id.as_deref(),
+        )
+        .await?;
+    }
+
     if let Some(permission) = args.share_permission.as_ref() {
         share::edit_project_share_permission(transaction, &args.project_id, permission).await?;
     }

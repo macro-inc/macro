@@ -83,10 +83,25 @@ export function columnSchemaMessage(error: DatabaseOpsError): string {
     .otherwise(() => 'This column could not be updated. Try again.');
 }
 
-/** A type a column can become; a relation's rows live in this database. */
-export type DatabaseColumnKind =
-  | Exclude<OpColumnKind, { type: 'relation' }>
-  | { type: 'relation'; table: string };
+/** A type a column can become; a relation names its table's database, which may be another one. */
+export type DatabaseColumnKind = OpColumnKind;
+
+/** A table a relation column can point at. */
+export type DatabaseRelationTable = {
+  databaseId: string;
+  tableId: string;
+  name: string;
+};
+
+/** The tables a relation column can point at: the open database's, then those of every other database the viewer can reach. */
+export type DatabaseRelationTargets = {
+  here: DatabaseRelationTable[];
+  elsewhere: {
+    databaseId: string;
+    name: string;
+    tables: DatabaseRelationTable[];
+  }[];
+};
 
 /** A type change the server validates against every stored value. */
 export type DatabaseColumnTypeChange = {
@@ -140,21 +155,28 @@ type DatabaseColumnCastTarget = {
   isMultiSelect: boolean;
   specificEntityType?: DatabaseEntityType;
   relation: boolean;
+  percentage?: boolean;
 };
 
 /** How the dry run names a column kind. */
 export function castTargetOf(
   kind: DatabaseColumnKind
 ): DatabaseColumnCastTarget {
-  const plain = (dataType: DataType, isMultiSelect = false) => ({
+  const plain = (
+    dataType: DataType,
+    isMultiSelect = false,
+    percentage = false
+  ) => ({
     dataType,
     isMultiSelect,
     relation: false,
+    ...(percentage ? { percentage: true } : {}),
   });
   return match(kind)
     .returnType<DatabaseColumnCastTarget>()
     .with({ type: 'text' }, () => plain('STRING'))
     .with({ type: 'number' }, () => plain('NUMBER'))
+    .with({ type: 'percentage' }, () => plain('NUMBER', false, true))
     .with({ type: 'boolean' }, () => plain('BOOLEAN'))
     .with({ type: 'date' }, () => plain('DATE'))
     .with({ type: 'date_range' }, () => plain('DATE_RANGE'))
@@ -205,6 +227,7 @@ export function castFor(
       (wanted.relation ||
         (target.dataType === wanted.dataType &&
           target.isMultiSelect === wanted.isMultiSelect &&
-          target.specificEntityType === wanted.specificEntityType))
+          target.specificEntityType === wanted.specificEntityType &&
+          !!target.percentage === !!wanted.percentage))
   )?.cast;
 }

@@ -9,12 +9,12 @@
 //! # Architecture
 //!
 //! - **domain**: domain models, ports (traits), service implementation
-//! - **inbound**: adapters for incoming requests (AI toolset)
+//! - **inbound**: adapters for incoming requests (AI toolset, HTTP)
 //! - **outbound**: adapters for external dependencies (search service)
 
 pub mod domain;
 
-#[cfg(feature = "ai_tools")]
+#[cfg(any(feature = "ai_tools", feature = "axum"))]
 pub mod inbound;
 
 #[cfg(feature = "outbound")]

@@ -114,6 +114,19 @@ describe('session composer drafts', () => {
     });
   });
 
+  it('keeps seeded context for an existing session after a remount', () => {
+    withRoot(() => {
+      createSessionComposerDraft(
+        () => 'session-a',
+        () => 'Document context'
+      );
+    });
+    withRoot(() => {
+      const draft = createSessionComposerDraft(() => 'session-a');
+      expect(draft.draft()).toBe('Document context');
+    });
+  });
+
   it('prefers a saved draft over seeded context', () => {
     withRoot(() => {
       createSessionComposerDraft(() => 'session-a').setDraft('Already typed');

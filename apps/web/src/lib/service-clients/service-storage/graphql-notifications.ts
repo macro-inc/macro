@@ -1,10 +1,4 @@
 import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
-import { throwOnErr } from '@core/util/result';
-import { notificationServiceClient } from '../service-notification/client';
-import {
   type NotificationUpdateOperation,
   type SoupInput,
   SoupNotificationsDocument,
@@ -52,37 +46,10 @@ export async function fetchGraphqlEntityNotifications(
   return entity.notifications.map(mapGraphqlNotification);
 }
 
-/** Update user-owned notification statuses through the configured transport. */
+/** Update user-owned notification statuses through GraphQL. */
 export async function updateNotifications(
   args: GraphqlUpdateNotificationsArgs
 ): Promise<GraphqlUpdateNotificationsResult> {
-  if (!isFeatureEnabled(enableGraphqlSoup)) {
-    const request = { notificationIds: args.notificationIds };
-    switch (args.operation) {
-      case 'MARK_SEEN':
-        await throwOnErr(
-          async () =>
-            await notificationServiceClient.bulkMarkNotificationAsSeen(request)
-        );
-        break;
-      case 'MARK_DONE':
-        await throwOnErr(
-          async () =>
-            await notificationServiceClient.bulkMarkNotificationAsDone(request)
-        );
-        break;
-      case 'MARK_UNDONE':
-        await throwOnErr(
-          async () =>
-            await notificationServiceClient.bulkMarkNotificationAsUndone(
-              request
-            )
-        );
-        break;
-    }
-    return [];
-  }
-
   const result = await executeGraphqlUpdateNotifications(
     getGraphqlSoupClient(),
     args

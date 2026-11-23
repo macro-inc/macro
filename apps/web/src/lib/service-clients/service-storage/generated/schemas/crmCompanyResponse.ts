@@ -13,13 +13,14 @@ import type { CrmDomainResponse } from './crmDomainResponse';
 /**
  * A CRM company as returned by `GET /crm/companies/{company_id}`.
 Mirrors the soup-listed `crmCompany` shape (`name` / `description`
-resolved from the primary domain's `crm_domain_directory` entry) and
-embeds the company's contacts so the panel can render in a single
-request.
+resolved from the primary domain's `crm_domain_directory` entry). It
+embeds the company's contacts unless the caller asks it not to
+(`includeContacts=false`).
  */
 export interface CrmCompanyResponse {
   /** Contacts attached to this company. Hidden contacts are filtered
-out for non-admin viewers. */
+out for non-admin viewers. Empty when the request set
+`includeContacts=false`. */
   contacts: CrmContactResponse[];
   /** Earliest known interaction with this company. */
   createdAt: string;

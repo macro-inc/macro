@@ -9,6 +9,9 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
 use uuid::Uuid;
 
+/// The inbox the single-inbox tests' contacts belong to.
+const CONTACT_LINK: Uuid = Uuid::from_u128(1);
+
 fn complete(s: &str) -> Email {
     Email::Complete(EmailStr::parse_from_str(s).unwrap().into_owned())
 }
@@ -19,7 +22,7 @@ fn complete(s: &str) -> Email {
 fn resolved_with(emails: &[(&str, Uuid)]) -> ResolvedFilters {
     let mut r = ResolvedFilters::empty();
     for (e, id) in emails {
-        r = r.with_contact(e.to_lowercase(), *id);
+        r = r.with_contact(e.to_lowercase(), *id, CONTACT_LINK);
     }
     r
 }
@@ -30,7 +33,7 @@ fn resolved_with(emails: &[(&str, Uuid)]) -> ResolvedFilters {
 fn resolved_with_random_ids(emails: &[&str]) -> ResolvedFilters {
     let mut r = ResolvedFilters::empty();
     for e in emails {
-        r = r.with_contact(e.to_lowercase(), Uuid::new_v4());
+        r = r.with_contact(e.to_lowercase(), Uuid::new_v4(), CONTACT_LINK);
     }
     r
 }
@@ -644,6 +647,31 @@ fn test_build_query_single_link_fans_out_per_link() {
         !sql.contains("t.link_id = ANY("),
         "single-link owned scan must not use = ANY: {sql}"
     );
+}
+
+#[test]
+fn test_build_query_subject_binds_each_link_and_matches_facts_after_ordering() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Subject(
+        item_filters::ast::email::SubjectQuery::try_from("fyi".to_owned()).unwrap(),
+    ));
+    let sql = super::query::debug_build_query_sql_multi_link(&view, &expr);
+
+    // Each inbox is bound, so the planner reads that inbox's statistics.
+    assert!(!sql.contains("FROM unnest("), "{sql}");
+    assert_eq!(sql.matches("UNION ALL").count(), 1, "{sql}");
+    assert_eq!(sql.matches(") AS ordered").count(), 2, "{sql}");
+
+    // The ordered step matches subjects only; mailbox facts wait for the
+    // per-thread check that runs in that order until LIMIT.
+    let inner = sql
+        .split("(SELECT ordered.* FROM (")
+        .nth(1)
+        .and_then(|branch| branch.split(") AS ordered").next())
+        .unwrap();
+    assert!(inner.contains("sm.subject ILIKE"), "{inner}");
+    assert!(!inner.contains("email_message_mailbox_facts"), "{inner}");
+    assert!(!sql.contains("COALESCE(m.subject"), "{sql}");
 }
 
 #[test]
@@ -1447,8 +1475,8 @@ fn test_matching_threads_cte_body_and_of_conjuncts_uses_combined_predicate_form(
 fn test_matching_threads_cte_body_uses_normalized_visibility() {
     // Provider-neutral visibility applies to each address branch.
     let contact_id = Uuid::new_v4();
-    let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.com")));
-    let resolved = ResolvedFilters::empty().with_contact("a@b.com", contact_id);
+    let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.test")));
+    let resolved = ResolvedFilters::empty().with_contact("a@b.test", contact_id, CONTACT_LINK);
     let body = build_matching_threads_ctes(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
@@ -1473,8 +1501,8 @@ fn test_full_query_emits_matching_threads_cte_and_in_reference() {
     // WHERE no longer contains an inline matching subquery.
     let contact_id = Uuid::new_v4();
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
-    let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.com")));
-    let resolved = ResolvedFilters::empty().with_contact("a@b.com", contact_id);
+    let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.test")));
+    let resolved = ResolvedFilters::empty().with_contact("a@b.test", contact_id, CONTACT_LINK);
     let sql = super::query::debug_build_query_sql_with_resolved(&view, &expr, resolved);
 
     assert!(
@@ -1970,4 +1998,93 @@ fn test_build_query_shared_include_project_branch_keeps_owned() {
         !sql.contains("AND NOT (t.link_id = ANY("),
         "Shared=Include must not exclude owned threads from the project branch: {sql}"
     );
+}
+
+const PREVIEW_MESSAGE_SCAN: &str = "FROM email_messages m\n            WHERE m.thread_id = t.id";
+
+#[test]
+fn test_build_query_all_checks_mailbox_facts_once_per_message() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let sql = super::query::debug_build_query_sql_multi_link(&view, &expr);
+
+    assert!(
+        sql.contains("mf.is_present AND NOT mf.in_trash AND NOT mf.in_junk)"),
+        "All Mail's junk check must share the presence/trash probe: {sql}"
+    );
+    assert!(
+        !sql.contains("mf.id = m.id AND NOT mf.in_junk"),
+        "All Mail must not probe mailbox facts a second time for junk: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_single_link_picks_preview_in_candidates() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert_eq!(
+        sql.matches(PREVIEW_MESSAGE_SCAN).count(),
+        1,
+        "a single-link page must pick each preview once: {sql}"
+    );
+    let pick = sql.find(PREVIEW_MESSAGE_SCAN).unwrap();
+    let candidate_limit = sql.find(") AS per_link").unwrap();
+    assert!(
+        pick < candidate_limit,
+        "the preview must be picked inside the per-link scan: {sql}"
+    );
+    assert!(
+        !sql.contains("AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id"),
+        "the candidate pick replaces the message EXISTS: {sql}"
+    );
+    assert!(
+        sql.contains("SELECT t.subject, t.snippet, t.from_contact_id, t.from_name, t.is_draft")
+    );
+}
+
+#[test]
+fn test_build_query_keeps_preview_pick_after_limit_when_candidates_are_discarded() {
+    let all = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let trash = PreviewView::StandardLabel(PreviewViewStandardLabel::Trash);
+    let unfiltered = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let shared = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+
+    for (case, sql) in [
+        (
+            "multi-link",
+            super::query::debug_build_query_sql_multi_link(&all, &unfiltered),
+        ),
+        (
+            "team",
+            super::query::debug_build_query_sql_team_scoped(&all, &unfiltered),
+        ),
+        ("shared", super::query::debug_build_query_sql(&all, &shared)),
+        (
+            "folder",
+            super::query::debug_build_query_sql(&trash, &unfiltered),
+        ),
+        (
+            "viewed-updated sort",
+            super::query::debug_build_query_sql_with_sort(
+                &all,
+                &unfiltered,
+                models_pagination::SimpleSortMethod::ViewedUpdated,
+            ),
+        ),
+    ] {
+        assert!(
+            sql.contains("AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id"),
+            "{case}: candidates must still require a visible message: {sql}"
+        );
+        let pick = sql.rfind(PREVIEW_MESSAGE_SCAN).unwrap();
+        let step_two = sql.find("-- Step 2: For each thread").unwrap();
+        assert!(
+            step_two < pick,
+            "{case}: the preview must be picked after the candidate LIMIT: {sql}"
+        );
+    }
 }

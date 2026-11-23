@@ -5,6 +5,7 @@ use std::{marker::PhantomData, time::Duration};
 
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, Ungrouped};
 use rdkafka::{
+    TopicPartitionList,
     consumer::CommitMode,
     message::{BorrowedMessage, Message as _},
 };
@@ -74,6 +75,36 @@ impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
         mode: CommitMode,
     ) -> Result<(), rootcause::Report> {
         Ok(self.inner.commit_message(message, mode)?)
+    }
+
+    /// Commits each listed partition's offset, the next record the group reads.
+    pub fn commit_offsets(
+        &self,
+        offsets: &TopicPartitionList,
+        mode: CommitMode,
+    ) -> Result<(), rootcause::Report> {
+        Ok(self.inner.commit_offsets(offsets, mode)?)
+    }
+
+    /// The partitions currently assigned to this group member.
+    pub fn assignment(&self) -> Result<TopicPartitionList, rootcause::Report> {
+        Ok(self.inner.assignment()?)
+    }
+
+    /// Each assigned partition's next record to receive, from the client's
+    /// state; see [`KafkaEventConsumer::position`].
+    pub fn position(&self) -> Result<TopicPartitionList, rootcause::Report> {
+        Ok(self.inner.position()?)
+    }
+
+    /// A partition's watermarks as of the client's last fetch from it; see
+    /// [`KafkaEventConsumer::cached_watermarks`].
+    pub fn cached_watermarks(
+        &self,
+        topic: &str,
+        partition: i32,
+    ) -> Result<(i64, i64), rootcause::Report> {
+        Ok(self.inner.cached_watermarks(topic, partition)?)
     }
 }
 

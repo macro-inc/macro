@@ -107,7 +107,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn list_property_definitions_with_options(
         &self,
         team_id: Option<Uuid>,

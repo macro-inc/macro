@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_repos (agent_user_id, team_id, token_hash)\n               VALUES ($1, $2, $3) ON CONFLICT (agent_user_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8526480676333b836da43443a917355cd3d79656d4bb3381bf85433f99e0f81d"
+}

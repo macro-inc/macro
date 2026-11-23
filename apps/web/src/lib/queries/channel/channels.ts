@@ -3,91 +3,92 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/index';
-import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import {
   type MessageResponse,
   storageServiceClient,
 } from '@service-storage/client';
-import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type { CreateChannelRequest } from '@service-storage/generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from '@service-storage/generated/schemas/createChannelResponse';
 import type { PatchChannelRequest } from '@service-storage/generated/schemas/patchChannelRequest';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import {
+  assertQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+  type QueryAccount,
+} from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
+import {
+  assertContactCacheScope,
+  readContactCacheScope,
+} from '../contacts/cache-scope';
+import { createContactQueryEpoch } from '../contacts/query-epoch';
 import { invalidateChannelParticipants } from './channel-participants';
+import { refreshChannelDirectory } from './directory';
 import {
   type CachedGraphqlChannel,
   readCachedGraphqlChannels,
 } from './graphql';
 import { channelKeys } from './keys';
 
-const CHANNEL_LIST_PAGE_SIZE = 100;
-
-export async function fetchAllChannels(
-  signal?: AbortSignal
-): Promise<ApiChannelWithLatest[]> {
-  const channels: ApiChannelWithLatest[] = [];
-  let cursor: string | undefined;
-
-  do {
-    const page = await throwOnErr(() =>
-      storageServiceClient.getChannels({
-        cursor,
-        limit: CHANNEL_LIST_PAGE_SIZE,
-        signal,
-      })
-    );
-    channels.push(...page.items);
-    cursor = page.next_cursor ?? undefined;
-  } while (cursor);
-
-  return channels;
-}
-
-const listChannelsQueryOptions = queryOptions({
-  queryKey: channelKeys.listChannels.queryKey,
-  queryFn: ({ signal }) => fetchAllChannels(signal),
-});
-
-export function useListChannelsQuery(enabled: Accessor<boolean> = () => true) {
-  return useQuery(() => ({ ...listChannelsQueryOptions, enabled: enabled() }));
-}
-
-// The host is an app-level cache service, not component state; the key
-// already namespaces on its client id.
-function cachedGraphqlChannelsQueryOptions(cacheHost: CacheHost | undefined) {
-  return queryOptions({
-    queryKey: channelKeys.quickAccessGraphql(cacheHost?.clientId ?? 'disabled')
-      .queryKey,
-    queryFn: async (): Promise<CachedGraphqlChannel[]> => {
+// Resolved account/generation inputs, not component accessors, are retained.
+export function cachedGraphqlChannelsQueryOptions(
+  cacheHost: CacheHost | undefined,
+  account: QueryAccount | undefined,
+  generation: number
+) {
+  return {
+    queryKey: channelKeys.quickAccessGraphql(
+      cacheHost?.clientId ?? 'disabled',
+      account?.userId,
+      generation
+    ).queryKey,
+    queryFn: async ({
+      signal,
+    }: {
+      signal: AbortSignal;
+    }): Promise<CachedGraphqlChannel[]> => {
+      assertQueryAccount(account);
       if (!cacheHost) return [];
-      return await readCachedGraphqlChannels(cacheHost);
+      const scope = await readContactCacheScope(
+        cacheHost,
+        account.userId,
+        signal
+      );
+      if (!scope) return [];
+      const channels = await readCachedGraphqlChannels(cacheHost);
+      await assertContactCacheScope(cacheHost, account.userId, scope, signal);
+      assertQueryAccount(account);
+      return channels;
     },
-    enabled: cacheHost !== undefined,
+    enabled: !!account && cacheHost !== undefined,
     staleTime: Infinity,
-  });
+    gcTime: 0,
+    retry: false,
+  };
 }
 
 /** Reads the recent Quick Access channel list from the normalized GraphQL cache. */
 export function useCachedGraphqlChannelsQuery(
   cacheHost: Accessor<CacheHost | undefined>
 ) {
+  const account = useQueryAccount();
+  const scope = () => ({ userId: account()?.userId, host: cacheHost() });
+  const generation = createContactQueryEpoch(scope);
   return useQuery(() => {
     const host = cacheHost();
-    return cachedGraphqlChannelsQueryOptions(host?.disabled ? undefined : host);
-  });
-}
-
-export function invalidateListChannels() {
-  return queryClient.invalidateQueries({
-    queryKey: channelKeys.listChannels.queryKey,
+    return cachedGraphqlChannelsQueryOptions(
+      host?.disabled ? undefined : host,
+      account(),
+      generation.epoch()
+    );
   });
 }
 
 /**
- * Create a channel. Invalidates the channel list on settle.
+ * Create a channel. Refreshes the in-memory channel directory on settle.
  */
 export function useCreateChannelMutation(
   callbacks?: MutationCallbacks<
@@ -97,9 +98,12 @@ export function useCreateChannelMutation(
     undefined
   >
 ) {
+  const account = useQueryAccount();
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: async (vars: CreateChannelRequest) => {
+    meta: { queryAccount: account() },
+    mutationFn: async (vars: CreateChannelRequest, context) => {
+      assertQueryAccount(mutationQueryAccount(context));
       return await throwOnErr(async () =>
         storageServiceClient.createChannel(vars)
       );
@@ -120,8 +124,13 @@ export function useCreateChannelMutation(
             entityId: data.id,
           });
         },
-        onSettled: () =>
-          fireAndForget(invalidateListChannels(), 'channel-list'),
+        onSettled: (data, _error, _variables, _result, context) => {
+          if (isCurrentQueryAccount(mutationQueryAccount(context)))
+            fireAndForget(
+              refreshChannelDirectory(data ? [data.id] : []),
+              'channel-list'
+            );
+        },
       },
       callbacks
     ),
@@ -135,45 +144,25 @@ type PatchChannelCallbacks = MutationCallbacks<
   PatchChannelParams
 >;
 
-function updateCachedChannel(
-  channels: ApiChannelWithLatest[] | undefined,
-  vars: PatchChannelParams
-): ApiChannelWithLatest[] | undefined {
-  return channels?.map((channel) => {
-    if (channel.id !== vars.channelId) return channel;
-
-    return {
-      ...channel,
-      channel_type:
-        vars.convert_to_team_channel === true
-          ? ChannelType.team
-          : channel.channel_type,
-      auto_join_team:
-        typeof vars.auto_join_team === 'boolean'
-          ? vars.auto_join_team
-          : channel.auto_join_team,
-    };
-  });
-}
-
 /** Patch channel settings and refresh channel/participant state. */
 export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
+  const account = useQueryAccount();
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: async ({ channelId, ...request }: PatchChannelParams) =>
-      await throwOnErr(() =>
-        storageServiceClient.patchChannel({
-          channel_id: channelId,
-          ...request,
-        })
-      ),
+    meta: { queryAccount: account() },
+    mutationFn: async (
+      { channelId, ...request }: PatchChannelParams,
+      context
+    ) => {
+      assertQueryAccount(mutationQueryAccount(context));
+      return await throwOnErr(() =>
+        storageServiceClient.patchChannel({ channel_id: channelId, ...request })
+      );
+    },
     ...withCallbacks<MessageResponse, Error, PatchChannelParams>(
       {
-        onSuccess: async (_data, vars) => {
-          queryClient.setQueryData<ApiChannelWithLatest[]>(
-            channelKeys.listChannels.queryKey,
-            (channels) => updateCachedChannel(channels, vars)
-          );
+        onSuccess: async (_data, vars, _result, context) => {
+          if (!isCurrentQueryAccount(mutationQueryAccount(context))) return;
           if (typeof vars.auto_join_team === 'boolean') {
             await invalidateChannelParticipants(vars.channelId);
           }
@@ -189,8 +178,13 @@ export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
           console.error('failed to update channel settings', error);
           toast.failure('Failed to update channel settings');
         },
-        onSettled: () =>
-          fireAndForget(invalidateListChannels(), 'channel-list'),
+        onSettled: (_data, _error, variables, _result, context) => {
+          if (isCurrentQueryAccount(mutationQueryAccount(context)))
+            fireAndForget(
+              refreshChannelDirectory([variables.channelId]),
+              'channel-list'
+            );
+        },
       },
       callbacks
     ),

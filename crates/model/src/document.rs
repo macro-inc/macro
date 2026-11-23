@@ -169,6 +169,10 @@ pub struct BackfillSearchDocumentInformation {
 )]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMetadata {
+    /// Entity-owned presentation overrides; absent values use type defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[sqlx(json(nullable))]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// The document id
     pub document_id: String,
     /// The version of the document
@@ -247,6 +251,7 @@ impl DocumentMetadata {
         updated_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Self {
         Self {
+            appearance: None,
             document_id: document_id.to_string(),
             owner,
             document_name: document_name.to_string(),
@@ -289,6 +294,7 @@ impl DocumentMetadata {
         sub_type: Option<DocumentSubType>,
     ) -> Self {
         Self {
+            appearance: None,
             document_id: document_id.to_string(),
             owner,
             document_name: document_name.to_string(),
@@ -354,6 +360,9 @@ impl DocumentPreviewDataSubType {
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 pub struct DocumentPreviewData {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// The document id
     pub document_id: String,
     /// The file type of the document (e.g. pdf, docx)

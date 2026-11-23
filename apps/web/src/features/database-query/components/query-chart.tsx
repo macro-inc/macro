@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { chartModeLabel, type QueryChartData } from '../core/query-chart';
@@ -30,9 +31,10 @@ export function QueryChart(props: { data: QueryChartData }) {
       </Switch>
       <Show when={props.data.omitted > 0}>
         <p class="text-[11px] text-ink-muted">
-          {props.data.omitted === 1
-            ? `1 record without a ${props.data.config.x} isn’t shown.`
-            : `${props.data.omitted} records without a ${props.data.config.x} aren’t shown.`}
+          {t('databaseAnswers.chartOmitted', {
+            count: props.data.omitted,
+            column: props.data.config.x,
+          })}
         </p>
       </Show>
     </figure>

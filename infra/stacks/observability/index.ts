@@ -1,6 +1,8 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { createCiTelemetryRole } from './ci';
+import { backupStatements } from './host-policy';
+import { SOURCE_TAG_PREFIX, imageSourceKey } from './deploy/image-key';
 import { createNetwork } from './network';
 import { renderUserData } from './render';
 import {
@@ -25,22 +27,41 @@ const tags = { project: 'observability', environment: stack };
 const durable = { protect: true, retainOnDelete: true };
 const secretArn = config.require('secretArn');
 const alarmTopicArn = config.require('alarmTopicArn');
-// Built from this stack's pinned NixOS flake and published in Ohio.
-const amiId = config.require('amiId');
-if (!/^ami-[a-f0-9]+$/.test(amiId)) {
-  throw new Error('amiId must identify the reviewed observability NixOS image');
+// The AMI built from this checkout's image source, which the deploy workflow
+// tags once it passes its smoke boot. Source, not a committed ID, picks it:
+// reverting a commit redeploys the image it built. See README.
+if (config.get('amiId')) {
+  throw new Error(
+    'amiId is no longer read: the image is the one tagged for this source'
+  );
 }
+const imageKey = imageSourceKey(__dirname);
+const amiId = aws.ec2
+  .getAmiIdsOutput({
+    owners: ['self'],
+    filters: [
+      { name: 'tag-key', values: [`${SOURCE_TAG_PREFIX}${imageKey}`] },
+      { name: 'tag:project', values: ['observability'] },
+      { name: 'state', values: ['available'] },
+    ],
+  })
+  .ids.apply((ids) => {
+    if (ids.length !== 1) {
+      throw new Error(
+        `Expected one smoke-tested AMI for image source ${imageKey}, found ${ids.length}. ` +
+          'Run the Deploy Observability workflow (a dry run builds and tags it); see README "Deploying".'
+      );
+    }
+    return ids[0];
+  });
 // Validate operator input before registering any infrastructure resources.
 validateSettings({
   region,
-  grafanaHost,
   otlpHost,
   oncallHost,
   secretArn,
-  alarmTopicArn,
   volumeId: 'vol-0',
-  logsBucket: 'validate-logs',
-  tracesBucket: 'validate-traces',
+  backupBucket: 'validate-backup',
 });
 validateRegionalArn(alarmTopicArn, 'sns', region);
 const ciIngestSecretArn =
@@ -162,53 +183,21 @@ const ssm = new aws.iam.RolePolicyAttachment('observability-ssm', {
   role: role.name,
   policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
 });
+// GoAlert's nightly dumps, its secrets and the CloudWatch agent's metrics.
+// Loki and Tempo, which wrote the rest of these buckets, run in the cluster
+// now. A change here is outside what Deploy Observability applies (README,
+// "Deploying").
 const policy = new aws.iam.RolePolicy('observability-storage', {
   role: role.id,
-  policy: pulumi.all([logs.arn, traces.arn]).apply((arns) =>
+  policy: logs.arn.apply((arn) =>
     JSON.stringify({
       Version: '2012-10-17',
       Statement: [
-        {
-          Effect: 'Allow',
-          Action: [
-            's3:ListBucket',
-            's3:GetBucketLocation',
-            's3:ListBucketMultipartUploads',
-          ],
-          Resource: arns,
-        },
-        {
-          Effect: 'Allow',
-          Action: [
-            's3:GetObject',
-            's3:PutObject',
-            's3:DeleteObject',
-            's3:AbortMultipartUpload',
-            's3:ListMultipartUploadParts',
-          ],
-          Resource: arns.map((arn) => `${arn}/*`),
-        },
+        ...backupStatements(arn),
         {
           Effect: 'Allow',
           Action: ['secretsmanager:GetSecretValue'],
           Resource: secretArn,
-        },
-        {
-          Effect: 'Allow',
-          Action: [
-            'cloudwatch:ListMetrics',
-            'cloudwatch:GetMetricData',
-            'cloudwatch:GetMetricStatistics',
-          ],
-          Resource: '*',
-          Condition: {
-            StringEquals: { 'aws:RequestedRegion': ['us-east-1', 'us-east-2'] },
-          },
-        },
-        {
-          Effect: 'Allow',
-          Action: ['sns:Publish'],
-          Resource: alarmTopicArn,
         },
         {
           Effect: 'Allow',
@@ -279,18 +268,17 @@ const instance = new aws.ec2.Instance(
     },
     userDataReplaceOnChange: true,
     userDataBase64: pulumi
-      .all([data.id, logs.bucket, traces.bucket])
-      .apply(([volumeId, logsBucket, tracesBucket]) =>
+      .all([data.id, logs.bucket])
+      .apply(([volumeId, backupBucket]) =>
         renderUserData({
           region,
-          grafanaHost,
           otlpHost,
           oncallHost,
           secretArn,
-          alarmTopicArn,
           volumeId,
-          logsBucket,
-          tracesBucket,
+          // GoAlert's dumps have always gone under `goalert/` in the logs
+          // bucket; the cluster's Loki owns the rest of it.
+          backupBucket,
         })
       ),
     tags,
@@ -318,20 +306,6 @@ const alb = new aws.lb.LoadBalancer(
   },
   { dependsOn: vpc.publicReady }
 );
-const target = new aws.lb.TargetGroup('observability', {
-  port: 8080,
-  protocol: 'HTTP',
-  targetType: 'instance',
-  vpcId: vpc.vpcId,
-  healthCheck: { path: '/healthz', matcher: '200', interval: 30 },
-  deregistrationDelay: 30,
-  tags,
-});
-new aws.lb.TargetGroupAttachment('observability', {
-  targetGroupArn: target.arn,
-  targetId: instance.id,
-  port: 8080,
-});
 const listener = new aws.lb.Listener('observability-https', {
   loadBalancerArn: alb.arn,
   port: 443,
@@ -345,14 +319,10 @@ const listener = new aws.lb.Listener('observability-https', {
     },
   ],
 });
-new aws.lb.ListenerRule('observability-hosts', {
-  listenerArn: listener.arn,
-  priority: 1,
-  conditions: [{ hostHeader: { values: [grafanaHost, otlpHost] } }],
-  actions: [{ type: 'forward', targetGroupArn: target.arn }],
-});
-// Same nginx port, but its own health check so a GoAlert outage alarms
-// separately from Grafana.
+// Grafana and OTLP ingest are the observability cluster's
+// (infra/k8s/observability/aws adds their listener rules on this listener);
+// the host runs only GoAlert. A stack without a cluster, such as dev, answers
+// 404 on both names (README, "Dev stacks").
 const oncallTarget = new aws.lb.TargetGroup('observability-oncall', {
   port: 8080,
   protocol: 'HTTP',
@@ -437,14 +407,6 @@ new aws.cloudwatch.MetricAlarm('observability-instance', {
   dimensions: { InstanceId: instance.id },
   treatMissingData: 'breaching',
 });
-new aws.cloudwatch.MetricAlarm('observability-ui', {
-  ...alarm,
-  namespace: 'AWS/ApplicationELB',
-  metricName: 'UnHealthyHostCount',
-  threshold: 0,
-  dimensions: { LoadBalancer: alb.arnSuffix, TargetGroup: target.arnSuffix },
-  treatMissingData: 'breaching',
-});
 // Paging must not depend on GoAlert to report that GoAlert is down. On-call
 // phones subscribe to this topic by SMS directly (see README).
 new aws.cloudwatch.MetricAlarm('observability-goalert', {
@@ -487,6 +449,8 @@ export const grafanaUrl = `https://${grafanaHost}`;
 export const otlpHttpEndpoint = `https://${otlpHost}`;
 export const goalertUrl = `https://${oncallHost}`;
 export const instanceId = instance.id;
+export const imageId = amiId;
+export const imageSource = imageKey;
 export const dataVolumeId = data.id;
 export const logsBucket = logs.bucket;
 export const tracesBucket = traces.bucket;

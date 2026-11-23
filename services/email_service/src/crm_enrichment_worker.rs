@@ -2,7 +2,7 @@
 //! metadata resolver (manual, API, and agent company creation) or by a failed
 //! resolve.
 
-use crate::pubsub::context::CrmServiceType;
+use crate::composition::workers::CrmServiceType;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 

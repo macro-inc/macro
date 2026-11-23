@@ -1,7 +1,6 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use crate::outbound::google_identity_links::{RemoveIdentityLinkError, remove_identity_link};
 use fusionauth::FusionAuthClient;
-use fusionauth::error::FusionAuthClientError;
-use fusionauth::identity_provider::Link;
 
 use axum::{
     Json,
@@ -20,15 +19,6 @@ pub struct RemoveLinkQueryParams {
     pub fusionauth_user_id: String,
     pub linked_email: String,
     pub idp_name: String,
-}
-
-/// Selects the IdP link to remove by matching its display name against the linked email.
-///
-/// A FusionAuth user can hold several links to the same identity provider, one per email
-/// address (e.g. a primary inbox plus delegated/secondary inboxes), so the link must be
-/// selected by the linked email rather than derived from the owner's macro_id.
-fn find_idp_link(links: Vec<Link>, linked_email: &str) -> Option<Link> {
-    links.into_iter().find(|l| l.display_name == linked_email)
 }
 
 /// Removes a link for a user by the idp name
@@ -68,93 +58,22 @@ async fn remove_link(
     linked_email: &str,
     idp_name: &str,
 ) -> Result<Response, Response> {
-    let idp_id = auth_client
-        .get_identity_provider_id_by_name(idp_name)
+    remove_identity_link(auth_client, fusionauth_user_id, linked_email, idp_name)
         .await
-        .map_err(|e| match e {
-            FusionAuthClientError::NoIdentityProviderFound => {
-                tracing::warn!("no identity provider found for name {}", idp_name);
-                (
-                    StatusCode::NOT_FOUND,
-                    Json(ErrorResponse {
-                        message: "no identity provider found".into(),
-                    }),
-                )
-                    .into_response()
-            }
-            _ => {
-                tracing::error!(error=?e, "unable to get identity provider id by name");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "unable to get identity provider id by name".into(),
-                    }),
-                )
-                    .into_response()
-            }
-        })?;
-
-    tracing::trace!("removing link for idp id {}", idp_id);
-
-    let links = match auth_client
-        .get_links(fusionauth_user_id, Some(idp_id.clone()))
-        .await
-    {
-        Ok(links) => links,
-        // Deleting a FusionAuth user deletes its links with it.
-        Err(FusionAuthClientError::UserDoesNotExist) => Vec::new(),
-        Err(e) => {
-            tracing::error!(error=?e, "error fetching links for userid {} and idp id {}", fusionauth_user_id, idp_id.as_str());
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
+        .map_err(|error| {
+            let status = match error {
+                RemoveIdentityLinkError::NoIdentityProvider => StatusCode::NOT_FOUND,
+                RemoveIdentityLinkError::LookupProvider(_)
+                | RemoveIdentityLinkError::FetchLinks(_)
+                | RemoveIdentityLinkError::Unlink(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            (
+                status,
                 Json(ErrorResponse {
-                    message: "unable to fetch links".into(),
+                    message: error.to_string().into(),
                 }),
             )
-                .into_response());
-        }
-    };
-
-    // a fusionauth user can have multiple links to the same identity provider with different email
-    // addresses, but can only have one link with a given email
-    let Some(link) = find_idp_link(links, linked_email) else {
-        // the link is already gone; treat removal as an idempotent no-op so retries don't wedge
-        tracing::warn!(
-            "no {} link found for user id {}; treating remove as no-op",
-            idp_name,
-            fusionauth_user_id
-        );
-        return Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response());
-    };
-
-    auth_client
-        .unlink_user(fusionauth_user_id, &idp_id, &link.identity_provider_user_id)
-        .await
-        .map_err(|e| match e {
-            FusionAuthClientError::NoIdentityProviderFound => {
-                tracing::warn!(
-                    "no identity provider found for user id {}",
-                    fusionauth_user_id
-                );
-                (
-                    StatusCode::NOT_FOUND,
-                    Json(ErrorResponse {
-                        message: "no identity provider found".into(),
-                    }),
-                )
-                    .into_response()
-            }
-            _ => {
-                tracing::error!(error=?e, "unable to unlink user");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "unable to unlink user".into(),
-                    }),
-                )
-                    .into_response()
-            }
+                .into_response()
         })?;
-
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
 }

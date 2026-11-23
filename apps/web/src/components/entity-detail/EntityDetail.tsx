@@ -28,12 +28,14 @@ import type { MarkdownDocumentKind } from '@block-md/types';
 import {
   ChannelDetail,
   type ChannelDetailContext,
+  type ChannelDetailProps,
   ChannelDetailTopBar,
 } from '@channel/Channel/ChannelDetail';
 import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
+import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -43,11 +45,13 @@ import {
   createMemo,
   type JSX,
   Match,
+  Show,
   Suspense,
   Switch,
   untrack,
 } from 'solid-js';
 import type { EntityDetailTarget } from './entity-detail-target';
+import { FileSplitHeader } from './FileSplitHeader';
 
 // PDF.js and its viewer are only needed once a PDF is opened.
 const PdfDetail = lazyNamed(
@@ -72,6 +76,14 @@ export type EntityDetailProps = {
   target: EntityDetailTarget;
   previewHeaderLeading?: JSX.Element;
   navigationRequest?: number | string;
+  /** Composer focus and Esc for a conversation; see {@link ChannelDetailProps}. */
+  channel?: Pick<
+    ChannelDetailProps,
+    'autofocus' | 'composerFocusRequest' | 'onEscapeToList'
+  >;
+  /** The hosted file menu's Delete and Duplicate. */
+  onClose?: () => void;
+  onDuplicate?: (id: string, name: string) => void;
   children?: (context: EntityDetailContext) => JSX.Element;
 };
 
@@ -135,6 +147,34 @@ export function entityDetailBlockType(
   }
 }
 
+/**
+ * Whether the target's detail contributes a split header, so a touch host
+ * shows it in a `SplitHeaderScope` like the standalone view does. Add a type
+ * here once its detail renders its standalone header.
+ */
+export function entityDetailHostsSplitHeader(target: EntityDetailTarget) {
+  const blockType = entityDetailBlockType(target);
+  if (!blockType) return false;
+  return (
+    blockType === 'md' ||
+    blockType === 'task' ||
+    blockType === 'snippet' ||
+    blockType === 'skill' ||
+    FILE_DETAIL_BLOCK_TYPES.includes(blockType)
+  );
+}
+
+/** File details that render {@link FileSplitHeader} in a hosted header. */
+const FILE_DETAIL_BLOCK_TYPES: readonly (BlockName | BlockAlias)[] = [
+  'code',
+  'csv',
+  'canvas',
+  'image',
+  'video',
+  'pdf',
+  'unknown',
+];
+
 type ChannelDetailTarget = {
   channelId: string;
   target: ChannelTargetRequest | undefined;
@@ -170,6 +210,10 @@ export function EntityDetail(props: EntityDetailProps) {
   const documentTarget = () =>
     props.target.type === 'document' ? props.target : undefined;
   const blockType = () => entityDetailBlockType(props.target);
+  const fileBlockType = () => {
+    const type = blockType();
+    return type && FILE_DETAIL_BLOCK_TYPES.includes(type) ? type : undefined;
+  };
   // Resolved once per entry (untracked): a channel row's aim must not shift
   // and re-scroll when its notifications reconcile to read — PreviewPanel
   // applied the same rule by keying navigation on the explicit target only.
@@ -177,11 +221,30 @@ export function EntityDetail(props: EntityDetailProps) {
     const target = props.target;
     return untrack(() => channelDetailTarget(target));
   });
+  // A host showing hosted split headers gets each file's standalone header;
+  // Markdown documents render theirs inside MarkdownDetail.
+  const hostedHeader = useSplitHeaderScope();
   const renderChildren = (context: DocumentDetailContext) => (
-    <ResolvedEntityDetailChildren
-      render={props.children}
-      context={{ type: 'document', ...context }}
-    />
+    <>
+      <ResolvedEntityDetailChildren
+        render={props.children}
+        context={{ type: 'document', ...context }}
+      />
+      <Show when={hostedHeader && fileBlockType()}>
+        {(blockType) => (
+          <FileSplitHeader
+            blockType={blockType()}
+            documentMetadata={context.documentMetadata}
+            userAccessLevel={context.userAccessLevel}
+            fallbackName={documentTarget()?.fallbackName}
+            operations={context.operations}
+            download={context.download}
+            onClose={props.onClose}
+            onDuplicate={props.onDuplicate}
+          />
+        )}
+      </Show>
+    </>
   );
 
   return (
@@ -245,6 +308,9 @@ export function EntityDetail(props: EntityDetailProps) {
             target={channel().target}
             navigationRequest={props.navigationRequest}
             fallbackName={channel().fallbackName}
+            autofocus={props.channel?.autofocus}
+            composerFocusRequest={props.channel?.composerFocusRequest}
+            onEscapeToList={props.channel?.onEscapeToList}
           >
             {(context) => (
               <ResolvedEntityDetailChildren

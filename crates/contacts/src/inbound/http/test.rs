@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::messages::ContactsNodes;
 use axum::{
     body::Body,
     http::{Request, header},
@@ -49,6 +50,85 @@ impl ContactsService for MockService {
     async fn add_contact_nodes(&self, _nodes: ContactsNodes) -> Result<(), Report> {
         Ok(())
     }
+
+    async fn invite_contact(
+        &self,
+        _inviter: MacroUserIdStr<'static>,
+        _invitee: MacroUserIdStr<'static>,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+/// Echoes the limit it was given as that many people, so tests see the cap.
+impl PeopleSearchService for MockService {
+    async fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &PeopleSearchQuery,
+        limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        if query.searchable().is_none() {
+            return Ok(Vec::new());
+        }
+        Ok((0..limit.get())
+            .map(|index| {
+                let user_id =
+                    MacroUserIdStr::try_from(format!("macro|person{index}@example.com")).unwrap();
+                PersonMatch {
+                    contact: crate::domain::models::contact::Contact {
+                        id: crate::domain::models::contact::ContactId::for_viewer(
+                            &viewer, &user_id,
+                        ),
+                        user_id,
+                        name: (index == 0).then(|| "Person Zero".to_string()),
+                        lists: if index == 0 {
+                            vec![
+                                crate::domain::models::list::ContactList::Teammates,
+                                crate::domain::models::list::ContactList::Gmail,
+                            ]
+                        } else {
+                            Vec::new()
+                        },
+                    },
+                    is_teammate: index == 0,
+                    is_agent: index == 1,
+                }
+            })
+            .collect())
+    }
+}
+
+/// The first page holds one member named for the list, with that member as
+/// the cursor; a later page holds the member named by the cursor it was given,
+/// and ends the list. A page asked for more than 100 people fails.
+impl ContactListMembersService for MockService {
+    async fn list_members(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        list: ContactList,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<crate::domain::models::page::ContactIdPage, Report> {
+        use crate::domain::models::page::{ContactIdEntry, ContactIdPage};
+        if limit.get() > 100 {
+            return Err(rootcause::report!("page too large"));
+        }
+        let page = match after {
+            None => {
+                let member = format!("macro|{}@example.com", list.as_ref());
+                ContactIdPage {
+                    contacts: vec![ContactIdEntry::parse(member.clone()).unwrap()],
+                    next_cursor: ContactCursor::from_position(member),
+                }
+            }
+            Some(after) => ContactIdPage {
+                contacts: vec![ContactIdEntry::parse(after.position().to_owned()).unwrap()],
+                next_cursor: None,
+            },
+        };
+        Ok(page)
+    }
 }
 
 #[derive(Clone, Default)]
@@ -81,6 +161,7 @@ impl JwtValidator for FakeJwtValidator {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: user_id.to_string(),
                 fusion_user_id: "fusion-user-id".to_string(),
                 permissions: None,
@@ -270,4 +351,208 @@ async fn internal_request_without_an_identity_is_rejected() {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(validator.validation_count(), 0);
+}
+
+fn search_request(query_string: &str) -> Request<Body> {
+    Request::get(format!("/contacts/search?{query_string}"))
+        .header(header::AUTHORIZATION, "Bearer found")
+        .body(Body::empty())
+        .unwrap()
+}
+
+async fn search_body(response: axum::response::Response) -> serde_json::Value {
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn search_returns_ranked_people_with_the_default_limit() {
+    let (api, _) = build_test_router(false);
+
+    let response = api.oneshot(search_request("query=pe")).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = search_body(response).await;
+    let people = body["people"].as_array().unwrap();
+    assert_eq!(people.len(), 20);
+    assert_eq!(
+        people[0],
+        serde_json::json!({
+            "userId": "macro|person0@example.com",
+            "name": "Person Zero",
+            "isTeammate": true,
+            "isAgent": false,
+            "lists": ["teammates", "gmail"],
+        })
+    );
+    assert_eq!(
+        people[1],
+        serde_json::json!({
+            "userId": "macro|person1@example.com",
+            "name": null,
+            "isTeammate": false,
+            "isAgent": true,
+            "lists": [],
+        })
+    );
+}
+
+#[tokio::test]
+async fn search_caps_the_limit_at_fifty_and_rejects_zero() {
+    let (api, _) = build_test_router(false);
+    let response = api
+        .clone()
+        .oneshot(search_request("query=pe&limit=500"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        search_body(response).await["people"]
+            .as_array()
+            .unwrap()
+            .len(),
+        50
+    );
+
+    let response = api
+        .clone()
+        .oneshot(search_request("query=pe&limit=7"))
+        .await
+        .unwrap();
+    assert_eq!(
+        search_body(response).await["people"]
+            .as_array()
+            .unwrap()
+            .len(),
+        7
+    );
+
+    let response = api
+        .oneshot(search_request("query=pe&limit=0"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn search_with_a_blank_or_short_query_returns_nobody() {
+    let (api, _) = build_test_router(false);
+    for query_string in ["query=", "query=%20%20", "query=p"] {
+        let response = api
+            .clone()
+            .oneshot(search_request(query_string))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{query_string}");
+        assert_eq!(
+            search_body(response).await,
+            serde_json::json!({"people": []})
+        );
+    }
+}
+
+#[tokio::test]
+async fn search_rate_limit_is_enforced() {
+    let (api, validator) = build_test_router(true);
+
+    let response = api.oneshot(search_request("query=pe")).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(validator.validation_count(), 1);
+}
+
+#[tokio::test]
+async fn search_rejects_oversized_or_missing_queries_and_anonymous_callers() {
+    let (api, _) = build_test_router(false);
+    let long = "a".repeat(subsequence_match::MAX_QUERY_BYTES + 1);
+    let response = api
+        .clone()
+        .oneshot(search_request(&format!("query={long}")))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let response = api
+        .clone()
+        .oneshot(search_request("limit=5"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let anonymous = Request::get("/contacts/search?query=pe")
+        .body(Body::empty())
+        .unwrap();
+    let response = api.oneshot(anonymous).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+fn members_request(path_and_query: &str) -> Request<Body> {
+    Request::get(path_and_query)
+        .header(header::AUTHORIZATION, "Bearer found")
+        .body(Body::empty())
+        .unwrap()
+}
+
+#[tokio::test]
+async fn list_members_pages_through_an_opaque_cursor() {
+    let (api, _) = build_test_router(false);
+
+    let response = api
+        .clone()
+        .oneshot(members_request("/contacts/lists/invited/members"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = search_body(response).await;
+    assert_eq!(
+        body["members"],
+        serde_json::json!(["macro|invited@example.com"])
+    );
+    let cursor = body["nextCursor"].as_str().unwrap().to_owned();
+    assert!(!cursor.contains('@'), "the cursor is opaque: {cursor}");
+
+    let response = api
+        .oneshot(members_request(&format!(
+            "/contacts/lists/invited/members?limit=100&cursor={}",
+            urlencoding::encode(&cursor)
+        )))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = search_body(response).await;
+    assert_eq!(
+        body["members"],
+        serde_json::json!(["macro|invited@example.com"])
+    );
+    assert_eq!(body["nextCursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_members_rejects_bad_lists_limits_cursors_and_anonymous_callers() {
+    let (api, _) = build_test_router(false);
+    for path in [
+        "/contacts/lists/friends/members",
+        "/contacts/lists/teammates/members?limit=0",
+        "/contacts/lists/teammates/members?limit=501",
+        "/contacts/lists/teammates/members?cursor=not-base64!",
+    ] {
+        let response = api.clone().oneshot(members_request(path)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{path}");
+    }
+
+    let anonymous = Request::get("/contacts/lists/teammates/members")
+        .body(Body::empty())
+        .unwrap();
+    let response = api.clone().oneshot(anonymous).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn list_members_shares_the_search_rate_limit() {
+    let (api, _) = build_test_router(true);
+    let response = api
+        .oneshot(members_request("/contacts/lists/teammates/members"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
 }

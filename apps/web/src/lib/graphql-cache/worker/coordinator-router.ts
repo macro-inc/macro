@@ -7,6 +7,7 @@ import {
   type CacheResetReason,
   type CacheTelemetryRecorderLike,
   classifyCacheError,
+  describeCacheError,
   isolateCacheTelemetry,
   NOOP_CACHE_TELEMETRY,
   operationCategoryForRequest,
@@ -540,11 +541,16 @@ export class CoordinatorRouter {
     connection = { port, cancelLivenessWatch };
     this.tabs.set(message.tabId, connection);
     this.portTabs.set(port, message.tabId);
+    // Lets the tab drop an engine it compiled ahead for a worker it won't start.
+    const ownerElsewhere = this.coreValue.ownedByAnotherVisibleTab(
+      message.tabId
+    );
     this.postToTab(
       message.tabId,
       envelope<CoordinatorToTabEnvelope>({
         kind: 'registered',
         tabId: message.tabId,
+        ...(ownerElsewhere ? { ownerElsewhere: true } : {}),
       })
     );
     if (
@@ -1046,6 +1052,7 @@ export class CoordinatorRouter {
             envelope<CoordinatorToTabEnvelope>({
               kind: 'cache-unavailable',
               reason: action.reason,
+              ...(action.superseded ? { superseded: true as const } : {}),
             })
           );
           break;
@@ -1389,10 +1396,10 @@ export class CoordinatorRouter {
       operationCategory: 'lifecycle',
       outcome: 'abrupt',
       ownerEvent: 'abrupt-loss',
-      errorCode:
-        fatalCode === 'storage-reset-required'
-          ? 'storage-reset'
-          : classifyCacheError(reason),
+      ...describeCacheError(reason),
+      ...(fatalCode === 'storage-reset-required'
+        ? { errorCode: 'storage-reset' as const }
+        : {}),
     });
     for (const [routeId, timing] of this.routeStarted) {
       if (timing.ownerEpoch !== ownerEpoch) continue;
@@ -1493,7 +1500,7 @@ export class CoordinatorRouter {
         operationCategory: 'lifecycle',
         outcome: 'abrupt',
         ownerEvent: 'abrupt-loss',
-        errorCode: classifyCacheError(reason),
+        ...describeCacheError(reason),
       });
       for (const [routeId, timing] of this.routeStarted) {
         if (timing.ownerEpoch !== state.ownerEpoch) continue;

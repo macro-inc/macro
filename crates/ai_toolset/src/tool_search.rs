@@ -20,6 +20,41 @@ pub const SEARCH_TOOLS: &str = "SearchTools";
 /// The name of the tool that loads catalog tools by name.
 pub const LOAD_TOOLS: &str = "LoadTools";
 
+/// Match `query` against `catalog`, ranked by relevance.
+///
+/// The query is split into whitespace-separated terms; an item matches if
+/// **any** term is a case-insensitive substring of its name or description,
+/// ranked by how many distinct terms match (so "github list commits" surfaces
+/// the most relevant tools first), ties by name. An empty query matches
+/// everything. `text` reads an item's name and description.
+pub fn rank<'c, Item>(
+    catalog: &'c [Item],
+    query: &str,
+    text: impl Fn(&Item) -> (&str, &str),
+) -> Vec<&'c Item> {
+    let query = query.to_lowercase();
+    let terms: Vec<&str> = query.split_whitespace().collect();
+
+    let mut scored: Vec<(usize, &str, &Item)> = catalog
+        .iter()
+        .filter_map(|item| {
+            let (name, description) = text(item);
+            if terms.is_empty() {
+                return Some((0, name, item));
+            }
+            let haystack = format!("{} {}", name.to_lowercase(), description.to_lowercase());
+            let score = terms
+                .iter()
+                .filter(|term| haystack.contains(**term))
+                .count();
+            (score > 0).then_some((score, name, item))
+        })
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(b.1)));
+
+    scored.into_iter().map(|(_, _, item)| item).collect()
+}
+
 /// A tool that is loaded on demand via tool search rather than sent on every
 /// request. The catalog of these is returned by
 /// [`ToolSet::searchable_catalog`](crate::ToolSet::searchable_catalog) and read
@@ -93,6 +128,11 @@ pub struct SearchToolsResponse {
     /// Matches past the auto-load cap, ranked. Not callable yet — pass a name
     /// to `LoadTools` if one of these is the tool you need.
     pub additional_matches: Vec<ToolMatch>,
+    /// Tools matching the query that are already in the tool list, such as
+    /// `ExecuteCode`: they are never in the searchable catalog, so call them
+    /// directly. Names only; their descriptions are already in the tool list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub already_available: Vec<String>,
 }
 
 /// Response from [`LoadTools`]: which requested tools were loaded, and any names

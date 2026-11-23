@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE macro_user SET has_trialed = true\n            FROM \"User\" u\n            WHERE u.macro_user_id = macro_user.id AND u.id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a653492c501d1c36bdb1a45abcca66b3789f728bffe55249ffc378d02af1ece"
+}

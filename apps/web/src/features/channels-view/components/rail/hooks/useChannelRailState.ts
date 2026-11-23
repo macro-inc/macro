@@ -1,6 +1,10 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isMutedItem, muteItemForRef } from '@entity/utils/notification';
+import {
+  isMentionsOnlyItem,
+  isMutedItem,
+  muteItemForRef,
+} from '@entity/utils/notification';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
@@ -18,6 +22,23 @@ import {
 } from '../ChannelsRailContext';
 
 const LOAD_MORE_THRESHOLD = 300;
+
+/**
+ * Every section holding the channel is muted. With channel Notification
+ * Settings the row shows only mute; its settings get no indicator.
+ */
+function mutedBySections(
+  rail: ReturnType<typeof useChannelsRail>,
+  channelId: string
+): boolean {
+  const settings = rail.channelNotifications;
+  if (!settings.enabled()) return false;
+  // Until its record resolves, the channel's built-in section is unknown,
+  // and its other sections alone could read as all muted.
+  const channel = rail.channelById(channelId);
+  if (!channel) return false;
+  return settings.channel(channelId, channel.channelType).mutedBySections;
+}
 
 export function useChannelRailItemState(
   channelId: Accessor<string>,
@@ -38,11 +59,19 @@ export function useChannelRailItemState(
           ? rail.threadsChannelId() === id
           : rail.selectedChannel()?.id === id,
       focused: rail.list.focus.key() === rowId,
-      muted: isMutedItem(notificationSource.mutedEntities(), {
-        item_id: id,
-        item_type: 'channel',
-      }),
+      muted:
+        isMutedItem(notificationSource.mutedEntities(), {
+          item_id: id,
+          item_type: 'channel',
+        }) || mutedBySections(rail, id),
+      mentionsOnly:
+        !rail.channelNotifications.enabled() &&
+        isMentionsOnlyItem(notificationSource.mutedEntities(), {
+          item_id: id,
+          item_type: 'channel',
+        }),
       unread: rail.channelActivity.unreadChannelIds().has(id),
+      mentions: rail.channelActivity.mentionCount(id),
       callStatus: rail.channelActivity.callStatuses().get(id),
       incomingCallId: rail.channelActivity.incomingCallIds().get(id),
     };
@@ -68,8 +97,21 @@ export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
         rail.selectedChannel()?.id === current.entityId,
       focused: rail.list.focus.key() === rowId,
       muted:
+        (muteItem !== undefined &&
+          isMutedItem(notificationSource.mutedEntities(), muteItem)) ||
+        (current.entityType === 'channel' &&
+          mutedBySections(rail, current.entityId)),
+      mentionsOnly:
+        !rail.channelNotifications.enabled() &&
         muteItem !== undefined &&
-        isMutedItem(notificationSource.mutedEntities(), muteItem),
+        isMentionsOnlyItem(notificationSource.mutedEntities(), muteItem),
+      unread:
+        current.entityType === 'channel' &&
+        rail.channelActivity.unreadChannelIds().has(current.entityId),
+      mentions:
+        current.entityType === 'channel'
+          ? rail.channelActivity.mentionCount(current.entityId)
+          : 0,
     };
   });
 }

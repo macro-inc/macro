@@ -137,7 +137,11 @@ pub fn build_grouped_response(
         let timestamp = get_cursor_val(&grouped_item.item).last_val;
         let cursor_val = models_pagination::CursorVal {
             sort_type: sort_method,
-            last_val: sort_method.position(grouped_item.sort_key, timestamp),
+            last_val: sort_method.position(
+                grouped_item.sort_key,
+                grouped_item.item.name(),
+                timestamp,
+            ),
         };
 
         let entry = group_stats.entry(key.clone()).or_insert_with(|| {
@@ -264,4 +268,19 @@ pub struct ItemGroupingInfo<T = (), Bin = String> {
     pub document_server_facts: Option<SoupDocumentServerFacts>,
     /// The Soup item.
     pub item: SoupItem<T>,
+}
+
+impl<T, Bin> ItemGroupingInfo<T, Bin> {
+    /// The same placement with the item's extra fields replaced.
+    pub fn map_extra<U>(self, f: impl FnOnce(T) -> U) -> ItemGroupingInfo<U, Bin> {
+        ItemGroupingInfo {
+            key: self.key,
+            total_group_count: self.total_group_count,
+            index_in_group: self.index_in_group,
+            sort_key: self.sort_key,
+            display_order: self.display_order,
+            document_server_facts: self.document_server_facts,
+            item: self.item.map_extra(f),
+        }
+    }
 }

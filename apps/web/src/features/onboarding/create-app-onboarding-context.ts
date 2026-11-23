@@ -5,7 +5,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
-import { idToDisplayName, idToEmail } from '@core/user/util';
+import { idToDisplayName } from '@core/user/util';
+import { getDefaultTimezone } from '@core/util/cron';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -14,23 +15,20 @@ import {
   useAiBillingPlansQuery,
   useCreateBillingPortalMutation,
   useCreateCheckoutSessionMutation,
-  useGithubLinkStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
-import { useContactsQuery } from '@queries/contacts/contacts';
+import { type Connector, useConnectors } from '@queries/connectors';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { useGithubStarsQuery } from '@queries/github-stars';
 import { useGtmInviteOfferQuery } from '@queries/gtm-invite/links';
-import { useMcpServersQuery } from '@queries/mcp-servers';
 import {
   useCompleteOnboardingMutation,
   useOnboardingQuery,
 } from '@queries/onboarding';
-import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import {
   useJoinTeamMutation,
   useUserInvitesQuery,
@@ -45,6 +43,7 @@ import {
   userTeamsQueryOptions,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import { match } from 'ts-pattern';
 import { applyWorkspaceAccent } from './apply-workspace-accent';
 import type {
   OnboardingContext,
@@ -52,12 +51,31 @@ import type {
 } from './context/onboarding-context';
 import { onboardingCheckoutRequest } from './core/checkout';
 import {
+  type HeldApp,
   onboardingConnectedTools,
   onboardingToolState,
 } from './queries/connected-tools';
 import { loadableQuery } from './queries/loadable-query';
+import { createAppOutlookAvailability } from './queries/outlook-availability';
+import {
+  createAppRoutinesStep,
+  seedRoutineSuggestions,
+  startSuggestionGeneration,
+  useRoutineSuggestionsEnabled,
+  useSuggestionGenerationEnabled,
+} from './queries/routine-suggestions';
+import { useTeamContacts } from './queries/team-contacts';
 import { createOnboardingToolCatalog } from './queries/tool-catalog';
 import { createOnboardingToolConnect } from './queries/tool-connect';
+
+/** The apps among the user's connectors, with the server's status. */
+function heldApps(connectors: readonly Connector[]): HeldApp[] {
+  return connectors.flatMap((connector) =>
+    connector.target.type === 'app'
+      ? [{ slug: connector.target.slug, status: connector.status }]
+      : []
+  );
+}
 
 /** How often connected tools re-check while the user is on the tools step. */
 const CONNECTED_TOOLS_POLL_MS = 5_000;
@@ -160,6 +178,8 @@ export function createAppOnboardingContext(): OnboardingContext {
   const connectTool = createOnboardingToolConnect();
   const createInviteLink = useCreateTeamInviteLinkMutation();
   const sendReferrals = useSendReferralInvitesMutation();
+  const routineSuggestionsEnabled = useRoutineSuggestionsEnabled();
+  const suggestionGenerationEnabled = useSuggestionGenerationEnabled();
   // A team created on this step: its optimistic placeholder is in the teams
   // cache until creation settles, so the invite link waits for the real id.
   let createdTeam: Promise<string | undefined> | undefined;
@@ -218,54 +238,35 @@ export function createAppOnboardingContext(): OnboardingContext {
         refresh: async () => invalidateEmailLinks(),
       };
     },
-    connectInbox: () => startAddInbox(),
+    connectInbox: (provider) => {
+      if (!provider) return startAddInbox();
+      return match(provider)
+        .with('google', () => startAddInbox({ provider: 'GMAIL' }))
+        .with('microsoft', () =>
+          startAddInbox({ provider: 'OUTLOOK', scopes: 'gmail_and_calendar' })
+        )
+        .exhaustive();
+    },
+    createOutlookAvailability: createAppOutlookAvailability,
 
     createToolCatalog: createOnboardingToolCatalog,
     createConnectedTools: ({ poll }) => {
-      const connected = usePipedreamConnectionsQuery({
-        neverSuspend: true,
+      const connectors = useConnectors({
         refetchInterval: poll ? CONNECTED_TOOLS_POLL_MS : undefined,
       });
-      const native = useMcpServersQuery({
-        neverSuspend: true,
-        refetchInterval: poll ? CONNECTED_TOOLS_POLL_MS : undefined,
-      });
-      const github = useGithubLinkStatusQuery({
-        refetchInterval: poll ? CONNECTED_TOOLS_POLL_MS : undefined,
-        refetchOnMount: 'always',
-      });
-      const pdState = () =>
-        connected.isPlaceholderData
-          ? { t: 'loading' as const }
-          : loadableQuery(connected, (data) => data);
-      const nativeState = () =>
-        native.isPlaceholderData
-          ? { t: 'loading' as const }
-          : loadableQuery(native, (data) => data);
+      const apps = () => heldApps(connectors.list());
       return {
-        connected: () =>
-          onboardingConnectedTools(
-            new Set(
-              queryReadyGate(connected)
-                ? connected.data.filter((c) => c.enabled).map((c) => c.app_slug)
-                : []
-            ),
-            queryReadyGate(native) ? native.data : [],
-            queryReadyGate(github) && github.data.status === 'linked'
-          ),
+        connected: () => onboardingConnectedTools(apps()),
         state: (slug) =>
           onboardingToolState(
             slug,
-            pdState(),
-            nativeState(),
-            loadableQuery(github, (data) => data.status)
+            connectors.ready()
+              ? { t: 'ready', value: apps() }
+              : connectors.error()
+                ? { t: 'error' }
+                : { t: 'loading' }
           ),
-        retry: () => {
-          if (connected.isError)
-            fireAndForget(connected.refetch(), 'onboarding');
-          if (native.isError) fireAndForget(native.refetch(), 'onboarding');
-          if (github.isError) fireAndForget(github.refetch(), 'onboarding');
-        },
+        retry: connectors.retry,
       };
     },
     connectTool,
@@ -277,10 +278,10 @@ export function createAppOnboardingContext(): OnboardingContext {
       );
     },
 
-    createTeamDirectory: () => {
+    createTeamDirectory: (input) => {
       const teams = useUserTeamsQuery();
       const invites = useUserInvitesQuery();
-      const contacts = useContactsQuery();
+      const suggestions = useTeamContacts(input.domain, input.ownEmail);
       return {
         teams: () =>
           loadableQuery(teams, (data) =>
@@ -293,19 +294,20 @@ export function createAppOnboardingContext(): OnboardingContext {
               invitedBy: idToDisplayName(invite.invited_by),
             }))
           ),
-        contacts: () =>
-          loadableQuery(contacts, (data) => data.contacts.map(idToEmail)),
+        contacts: suggestions.contacts,
         retry: () => {
           fireAndForget(teams.refetch(), 'onboarding');
           fireAndForget(invites.refetch(), 'onboarding');
+          fireAndForget(suggestions.retry(), 'onboarding');
         },
       };
     },
-    createTeam: async ({ name, invites, allowDomainJoin }) => {
+    createTeam: async ({ name, invites, allowDomainJoin, notifyDomain }) => {
       const creation = createTeam.mutateAsync({
         name,
         invites: invites.map((email) => ({ email })),
         allowDomainJoin,
+        notifyDomain,
       });
       createdTeam = createdTeamId(creation);
       await creation;
@@ -406,6 +408,23 @@ export function createAppOnboardingContext(): OnboardingContext {
       await completeTutorial.mutateAsync();
       return { t: 'completed' };
     },
+    routineSuggestionsEnabled,
+    suggestionGenerationEnabled,
+    startSuggestionGeneration: () =>
+      fireAndForget(
+        Telemetry.span('onboarding.suggestions.generate', async (span) => {
+          await startSuggestionGeneration(getDefaultTimezone());
+          span.setAttr('routines.enabled', routineSuggestionsEnabled());
+          // Only the routines step reads the list this seeds.
+          if (!routineSuggestionsEnabled()) return;
+
+          const answer = await seedRoutineSuggestions();
+          span.setAttr('routines.status', answer.status);
+          span.setAttr('routines.suggestions', answer.suggestions.length);
+        }),
+        'onboarding.suggestions'
+      ),
+    createRoutinesStep: createAppRoutinesStep,
     repairTutorial: async () => {
       await completeTutorial.mutateAsync();
     },

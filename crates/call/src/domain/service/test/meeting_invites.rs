@@ -365,6 +365,8 @@ async fn successful_join_resolves_only_the_answering_users_meeting_ring() {
             .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
         repo.expect_find_active_call_for_user()
             .returning(|_| Box::pin(async { Ok(None) }));
+        repo.expect_set_participant_client()
+            .returning(|_, _, _| Box::pin(async { Ok(()) }));
         repo.expect_add_meeting_participant()
             .returning(move |call_id, actor| {
                 let participant = CallParticipant {

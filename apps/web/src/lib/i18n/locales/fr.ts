@@ -53,8 +53,6 @@ export default {
     projectBadge: 'Projet',
     newProject: 'Nouveau projet',
     contentAlreadyOpen: 'Contenu déjà ouvert',
-    unableToOpenConversation:
-      'Impossible d’ouvrir la conversation. Veuillez réessayer.',
     mobileSearchPlaceholder: 'Rechercher…',
     closeSearch: 'Fermer la recherche',
     searchFullTextFor: 'Recherche en texte intégral de « {{query}} »',
@@ -106,7 +104,6 @@ export default {
     close: 'Fermer',
     delete: 'Supprimer',
     rename: 'Renommer',
-    more: 'Plus',
     search: 'Rechercher',
     settings: 'Paramètres',
   },
@@ -531,6 +528,11 @@ export default {
       other: '{{count}} éléments supprimés',
     },
     toastDeleteFailed: 'Impossible de supprimer',
+    toastPropertySet: {
+      one: '{{property}} : valeur définie',
+      many: '{{property}} : valeur définie pour {{count}} d’éléments',
+      other: '{{property}} : valeur définie pour {{count}} éléments',
+    },
     toastAddedToFavorites: 'Ajouté aux favoris',
     toastAddedCountToFavorites: {
       one: '{{count}} élément ajouté aux favoris',
@@ -615,10 +617,6 @@ export default {
       other: '{{accepted}} sur {{count}} éléments marqués comme non terminés',
     },
     toastMarkNotDoneFailed: 'Impossible de marquer comme non terminé',
-    toastThreadStaysDone:
-      'Ce fil ne contient aucun message reçu, il reste donc terminé',
-    toastThreadsStayDone:
-      'Ces fils ne contiennent aucun message reçu, ils restent donc terminés',
     toastCountNotRestored: {
       one: '{{count}} élément n’a pas pu être restauré.',
       many: '{{count}} d’éléments n’ont pas pu être restaurés.',
@@ -725,8 +723,6 @@ export default {
     create: 'Créer',
     getMobileApp: 'Obtenir l’app mobile',
     signedInAs: 'Connecté en tant que {{name}}',
-    commandMenu: 'Menu des commandes',
-    searchEverything: 'Tout rechercher',
     customizeSidebar: 'Personnaliser la barre latérale',
     customizeSidebarDescription:
       'Choisissez les apps affichées dans la barre latérale et faites-les glisser pour les réorganiser. Accueil reste toujours en premier.',
@@ -795,7 +791,7 @@ export default {
     tabMobileApp: 'App mobile',
     tabTags: 'Tags',
     tabIntegrations: 'Intégrations',
-    tabRuntimes: 'Runtimes',
+    tabRuntimes: 'Machines',
     tabMcpServer: 'Serveur MCP',
     tabApiKeys: 'Clés API',
     tabBots: 'Bots',
@@ -814,7 +810,6 @@ export default {
       'Aucun paramètre trouvé. Essayez « signature », « thème » ou « agenda ».',
     backToSettings: 'Retour aux paramètres',
     closeSettings: 'Fermer les paramètres',
-    goToTab: 'Aller à l’onglet de paramètres {{number}}',
     editProfile: 'Modifier le profil',
     logOut: 'Se déconnecter',
     yourAccount: 'Votre compte',

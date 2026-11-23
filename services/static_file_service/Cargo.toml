@@ -22,6 +22,8 @@ local_auth = ["macro_authorization/local_auth"]
 tree_trace = []
 
 [dependencies]
+# The session scope a code-mode credential signs, checked before handlers.
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http"] }
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
@@ -51,10 +53,13 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tower-http = { workspace = true, features = ["limit", "timeout"] }
 tracing.workspace = true
-tracing-tree = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid.workspace = true
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+tower = { workspace = true, features = ["util"] }

@@ -11,6 +11,8 @@
 # violations are burned down.
 ruleDirs:
   - rules/ast-grep
+testConfigs:
+  - testDir: rules/ast-grep-tests
 # Native permission rules read Apple property lists, which parse as HTML.
 languageGlobs:
   html:

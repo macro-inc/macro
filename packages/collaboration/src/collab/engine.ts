@@ -206,11 +206,17 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.log('info', 'engine.stop: ok');
   }
 
-  public async syncStateToLoro(state: InferType<S>) {
+  public async syncStateToLoro(state: StateToSync<S>) {
     if (!this._isRunning) return;
 
     await this.syncLock.runExclusive(async () => {
-      const syncResult = await this.loroManager.syncToLoro(state);
+      // A builder runs here, under the lock remote updates also take, so the
+      // stored state it reads includes every earlier write and remote change.
+      const next =
+        typeof state === 'function'
+          ? state(this.loroManager.state?.state)
+          : state;
+      const syncResult = await this.loroManager.syncToLoro(next);
 
       if (syncResult.isErr()) {
         this.log('error', 'syncStateToLoro: failed, resetting engine', {
@@ -236,16 +242,23 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     }
     const generation = this.lifecycleGeneration;
 
-    await this.syncLock.runExclusive(async () => {
-      if (generation !== this.lifecycleGeneration) return;
+    const replaced = await this.syncLock.runExclusive(async () => {
+      if (generation !== this.lifecycleGeneration) return false;
       this.log('info', 'engine.reset: starting');
+      // The snapshot replaces this document, and this peer's unsent edits
+      // can't be merged into it locally afterwards; deliver them first so the
+      // server's snapshot holds them. Any the server doesn't acknowledge stay
+      // in the WAL for later delivery (the canvas replays them onto the
+      // replacement).
+      await this.flushUnsentEdits();
+      if (generation !== this.lifecycleGeneration) return false;
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
-      if (generation !== this.lifecycleGeneration) return;
+      if (generation !== this.lifecycleGeneration) return false;
       if (snapshot.isErr()) {
         this.log('error', 'engine.reset: failed to get snapshot', {
           err: String(snapshot.error),
         });
-        return;
+        return false;
       }
 
       const resetResult = await this.loroManager.reset(snapshot.value);
@@ -253,12 +266,30 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         this.log('error', 'engine.reset: loro manager reset failed', {
           err: JSON.stringify(resetResult.error),
         });
-        return;
+        return false;
       }
+      if (generation !== this.lifecycleGeneration) return false;
+      if (!wasRunning) return true;
+
+      // The binding still shows the replaced document, and local edits sync
+      // its whole state. Restart and hand it the new state under this lock,
+      // so nothing the restart triggers can write the stale one back first.
+      this.start();
+      const state = this.loroManager.state?.state;
+      if (state) this.bindings.onRemoteState(state);
+      return true;
     });
 
-    if (wasRunning && generation === this.lifecycleGeneration) {
+    if (!replaced && wasRunning && generation === this.lifecycleGeneration) {
       this.start();
+    }
+  }
+
+  private async flushUnsentEdits(): Promise<void> {
+    try {
+      await this.syncs.wal.flushPending();
+    } catch {
+      // The WAL reports its own failures.
     }
   }
 
@@ -490,6 +521,11 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   }
 }
 
+/** The state to write, or a function that builds it from the state stored now. */
+export type StateToSync<S extends GenericRootSchema> =
+  | InferType<S>
+  | ((stored: InferType<S> | undefined) => InferType<S>);
+
 export type ReactiveSyncEngine<S extends GenericRootSchema, D> = {
   isRunning: Accessor<boolean>;
   start: () => void;
@@ -497,7 +533,7 @@ export type ReactiveSyncEngine<S extends GenericRootSchema, D> = {
   reset: (
     snapshotThunk?: () => ResultAsync<Uint8Array, SyncError>
   ) => Promise<void>;
-  syncStateToLoro: (state: InferType<S>) => Promise<void>;
+  syncStateToLoro: (state: StateToSync<S>) => Promise<void>;
   syncAwarenessToLoro: (awareness: D) => void;
 };
 

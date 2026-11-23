@@ -92,6 +92,10 @@ export class WhatsAppChat extends MacroEntity<WhatsAppChatRecord> {
    * own external chat; its earlier messages are imported from the phone.
    * Adding it again returns the same chat. Only the owner sends in a direct
    * chat.
+   *
+   * @write
+   * @idempotent
+   * @openworld
    */
   async add(): Promise<ExternalChat> {
     const kind = await this.kind();
@@ -103,7 +107,11 @@ export class WhatsAppChat extends MacroEntity<WhatsAppChatRecord> {
     return ExternalChat.byId(this.client, result.chatId);
   }
 
-  /** Reload the chat's list entry. */
+  /**
+   * Reload the chat's list entry.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.clear();
     await this.detail.get();

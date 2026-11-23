@@ -28,6 +28,18 @@ const harness = vi.hoisted(() => ({
   get: vi.fn(),
   control: vi.fn(),
 }));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@core/constant/featureFlags')>();
+  return { ...actual, isFeatureEnabled: () => false };
+});
+const device = vi.hoisted(() => ({ nativeApp: false, touch: false }));
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => device.nativeApp,
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 const logSource = vi.hoisted(() => {
   class Unavailable extends Error {
     constructor(
@@ -49,14 +61,15 @@ const logSource = vi.hoisted(() => {
     forget: vi.fn(),
     watch: vi.fn(),
     stop: vi.fn(),
-    /** Whether the client can follow the log over GraphQL. */
-    following: false,
-    /** The follow the latest watch was opened with, when following. */
+    /**
+     * The follow the latest load's watch was opened with. A resync's
+     * network-only watch does not follow, so it leaves this alone.
+     */
     follow: undefined as Follow | undefined,
   };
   source.watch.mockImplementation(
     (_id: string, _policy?: string, follow?: Follow) => {
-      source.follow = follow;
+      if (follow) source.follow = follow;
       return {
         cached: source.cached(),
         cacheMiss: source.cacheMiss,
@@ -155,7 +168,6 @@ vi.mock('@queries/agent-session/queue-sync', () => ({
 vi.mock('@queries/agent-session/log', () => ({
   AgentSessionLogUnavailable: logSource.Unavailable,
   watchAgentSessionLog: logSource.watch,
-  canFollowAgentSessionLog: () => logSource.following,
   forgetAgentSessionLog: logSource.forget,
 }));
 
@@ -166,6 +178,7 @@ import {
 } from './AgentSession';
 import { forgetSessionCreated, markSessionCreated } from './recently-created';
 import { resetSessionTurns, sessionTurn } from './session-turn';
+import { holdMobile, MOBILE_DEVICES } from './tests/device';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
@@ -189,6 +202,12 @@ const logOf = (rows: AgentSessionLogEntryDto[]): LogSnapshot => ({
 /** Every input the worker saw, flattened across pushes. */
 const inputs = (): FoldInput[] =>
   fold.pushSession.mock.calls.flatMap((call) => call[1] as FoldInput[]);
+
+/** Rows the log subscription delivers to the open session, as one run. */
+function deliver(...rows: AgentSessionLogEntryDto[]) {
+  if (!logSource.follow) throw new Error('no watch is following the log');
+  logSource.follow.rows(rows);
+}
 
 /** Let awaited promises settle. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -224,7 +243,6 @@ beforeEach(() => {
   harness.get.mockResolvedValue(ok(session));
   logSource.cached.mockResolvedValue(undefined);
   logSource.fetched.mockResolvedValue(logOf([row(1)]));
-  logSource.following = false;
   logSource.follow = undefined;
   soupSocket.listeners.clear();
   logSource.forget.mockResolvedValue(undefined);
@@ -240,8 +258,14 @@ describe('AgentSession', () => {
     logSource.fetched.mockReturnValue(log.promise);
 
     const live = AgentSession.acquire(SESSION);
-    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
-    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
+    // The subscription is open before the query goes out.
+    expect(logSource.watch).toHaveBeenCalledWith(
+      SESSION,
+      'cache-and-network',
+      expect.objectContaining({ rows: expect.any(Function) })
+    );
+    deliver(row(2));
+    deliver(row(3));
     log.resolve(logOf([row(1), row(2)]));
     const record = await live.load();
 
@@ -266,11 +290,6 @@ describe('AgentSession', () => {
     log.resolve(logOf([row(1)]));
 
     await expect(loading).rejects.toBeInstanceOf(AgentSessionReleased);
-    expect(fold.pushSession).not.toHaveBeenCalled();
-  });
-
-  it('ignores rows for sessions nobody has open', () => {
-    AgentSession.ingest({ agentSessionId: 'other', entries: [row(1)] });
     expect(fold.pushSession).not.toHaveBeenCalled();
   });
 
@@ -305,12 +324,46 @@ describe('AgentSession', () => {
       type: 'prompt',
       prompt: 'hi',
       actionId,
+      clientId: expect.any(String),
     });
     // Same id back: nothing to reconcile.
     expect(inputs().filter((input) => input.kind === 'retracted')).toEqual([]);
     expect(events).toEqual([[speculated]]);
     live.release();
   });
+
+  it('sends the tab a prompt was typed in, and only with prompts', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({ type: 'prompt', prompt: 'open the plan' });
+    await live.issue({ type: 'stop' });
+
+    const [prompt, stop] = harness.control.mock.calls.map(
+      ([, request]) => request
+    );
+    expect(prompt.clientId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
+    expect(stop).not.toHaveProperty('clientId');
+    live.release();
+  });
+
+  it.each(MOBILE_DEVICES)(
+    'sends no tab with a prompt typed on $on',
+    async (mobile) => {
+      holdMobile(device, mobile);
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+
+      await live.issue({ type: 'prompt', prompt: 'open the plan' });
+
+      const [[, prompt]] = harness.control.mock.calls;
+      expect(prompt).toMatchObject({ type: 'prompt', prompt: 'open the plan' });
+      expect(prompt).not.toHaveProperty('clientId');
+      live.release();
+    }
+  );
 
   it('counts an accepted prompt as an agent AI message, and nothing else', async () => {
     harness.get.mockResolvedValue(ok({ ...session, botId: 'bot-id' }));
@@ -505,7 +558,7 @@ describe('AgentSession', () => {
     invalidate('another-session');
     expect(logSource.watch).toHaveBeenCalledTimes(1);
     invalidate();
-    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
+    deliver(row(3));
     expect(inputs().filter((input) => input.kind === 'confirmed')).toEqual([]);
     log.resolve(logOf([row(1), row(2)]));
     await vi.waitFor(() =>
@@ -551,12 +604,12 @@ describe('AgentSession', () => {
     const refresh = deferred<LogSnapshot>();
     logSource.fetched.mockReturnValueOnce(refresh.promise);
     invalidate();
-    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+    deliver(row(2));
     refresh.reject(new logSource.Unavailable(SESSION, 'failed'));
     await vi.waitFor(() =>
       expect(inputs().at(-1)).toEqual({ kind: 'confirmed', row: row(2) })
     );
-    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
+    deliver(row(3));
     await live.snapshot();
     expect(inputs().at(-1)).toEqual({ kind: 'confirmed', row: row(3) });
     live.release();
@@ -579,7 +632,7 @@ describe('AgentSession', () => {
         );
         invalidate();
         await vi.advanceTimersByTimeAsync(0);
-        AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+        deliver(row(2));
         await live.snapshot();
         expect(inputs().at(-1)).toEqual({ kind: 'confirmed', row: row(2) });
         expect(logSource.watch).toHaveBeenCalledTimes(2);
@@ -811,7 +864,7 @@ describe('AgentSession', () => {
     fold.pushSession.mockResolvedValueOnce([
       { kind: 'metadata', metadata: { turn: 'running' } },
     ]);
-    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+    deliver(row(2));
     await settle();
 
     await live.issue({ type: 'prompt', prompt: 'later' });
@@ -826,7 +879,7 @@ describe('AgentSession', () => {
     fold.pushSession.mockResolvedValueOnce([
       { kind: 'metadata', metadata: { turn: 'idle' } },
     ]);
-    AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+    deliver(row(2));
     await settle();
     expect(sessionTurn(SESSION)).toBe('idle');
     live.release();
@@ -1020,7 +1073,7 @@ describe('AgentSession', () => {
       // Delivered while the fetch is on the wire. The cached transcript is
       // on screen but frozen: folding this row onto it now could lose it to
       // the fetched snapshot's replace, so it waits behind that snapshot.
-      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
+      deliver(row(3));
       await settle();
       expect(inputs()).toEqual([{ kind: 'snapshot', rows: [row(1)] }]);
 
@@ -1068,46 +1121,20 @@ describe('AgentSession', () => {
     });
   });
 
-  describe('followed over GraphQL', () => {
-    beforeEach(() => {
-      logSource.following = true;
-    });
-
-    it('folds the rows the subscription delivers and ignores the gateway', async () => {
+  describe('the log subscription', () => {
+    it('folds a delivered run as one push once loaded', async () => {
       const live = AgentSession.acquire(SESSION);
       await live.load();
-      const follow = logSource.follow;
-      expect(follow).toBeDefined();
 
-      follow?.rows([row(2), row(3)]);
-      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(4)] });
+      deliver(row(2), row(3));
       await settle();
 
-      expect(inputs()).toEqual([
-        { kind: 'snapshot', rows: [row(1)] },
-        { kind: 'confirmed', row: row(2) },
-        { kind: 'confirmed', row: row(3) },
-      ]);
-      live.release();
-    });
-
-    it('holds rows delivered before the fetched log behind it', async () => {
-      const log = deferred<LogSnapshot>();
-      logSource.fetched.mockReturnValue(log.promise);
-      const live = AgentSession.acquire(SESSION);
-      // The subscription is open before the query goes out.
-      expect(logSource.watch).toHaveBeenCalledWith(
-        SESSION,
-        'cache-and-network',
-        expect.objectContaining({ rows: expect.any(Function) })
-      );
-      logSource.follow?.rows([row(2)]);
-      log.resolve(logOf([row(1)]));
-      await live.load();
-
-      expect(inputs()).toEqual([
-        { kind: 'snapshot', rows: [row(1)] },
-        { kind: 'confirmed', row: row(2) },
+      expect(fold.pushSession.mock.calls.map((call) => call[1])).toEqual([
+        [{ kind: 'snapshot', rows: [row(1)] }],
+        [
+          { kind: 'confirmed', row: row(2) },
+          { kind: 'confirmed', row: row(3) },
+        ],
       ]);
       live.release();
     });
@@ -1188,6 +1215,33 @@ describe('AgentSession', () => {
         'agent.session.load.cache_hit': false,
         'agent.session.load.cache_miss': 'network_first',
       });
+      live.release();
+    });
+
+    it('reports a second open of a loaded session as reused, fetching nothing', async () => {
+      const first = AgentSession.acquire(SESSION);
+      await first.load();
+      const second = AgentSession.acquire(SESSION);
+      await second.load();
+
+      expect(logSource.watch).toHaveBeenCalledOnce();
+      expect(harness.get).toHaveBeenCalledOnce();
+      expect(
+        loadSpans().map((span) => span.attributes['agent.session.load.outcome'])
+      ).toEqual(['loaded', 'reused']);
+      second.release();
+      first.release();
+    });
+
+    it('does not trace a hold as an open', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      const held = AgentSession.acquire(SESSION, 'hold');
+
+      expect(
+        loadSpans().map((span) => span.attributes['agent.session.load.outcome'])
+      ).toEqual(['loaded']);
+      held.release();
       live.release();
     });
 
@@ -1411,7 +1465,7 @@ describe('AgentSession', () => {
           },
         },
       ] satisfies FoldedStreamEvent[]);
-      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+      deliver(row(2));
       await settle();
       expect(span.ends).toBe(0);
       expect(span.attributes['agent.prompt.first_output_part']).toBe('thought');
@@ -1466,7 +1520,7 @@ describe('AgentSession', () => {
           },
         },
       ] satisfies FoldedStreamEvent[]);
-      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
+      deliver(row(3));
       await settle();
       expect(span.ends).toBe(0);
       expect(span.attributes['agent.prompt.first_text_rendered_at_ms']).toEqual(

@@ -5,6 +5,7 @@
 use super::{
     jid::{Jid, is_group_jid},
     models::*,
+    people::ChatRoster,
     ports::*,
     service::{chat_fallback_name, connected},
 };
@@ -15,7 +16,10 @@ use external_chat::domain::{
         AccountRef, ChatProvider, ExternalChatResult, Members, MutationTarget, SendIntent,
         SendingFacts, StoredSend,
     },
-    timeline::{ExternalChatMembers, ExternalChatParticipant, view::People},
+    timeline::{
+        ExternalChatMembers, ExternalChatParticipant,
+        view::{People, UNKNOWN_PERSON},
+    },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -122,15 +126,24 @@ impl ChatProvider for WhatsAppProvider {
         self.groups.communities(chats).await
     }
 
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>> {
+        self.groups.pictures(chats).await
+    }
+
     async fn members(&self, chat: &ChatRef) -> ExternalChatResult<Option<Members>> {
         Ok(self.groups.chat_roster(chat).await?.map(|roster| Members {
-            disappearing_seconds: roster.disappearing_seconds,
+            disappearing_seconds: roster.info.disappearing_seconds,
             members: members(&roster),
         }))
     }
 
-    async fn people(&self, chat: &ChatRef, ids: &[String]) -> ExternalChatResult<People> {
-        self.groups.people(chat, ids).await
+    async fn people(
+        &self,
+        chat: &ChatRef,
+        ids: &[String],
+        persons: &[Uuid],
+    ) -> ExternalChatResult<People> {
+        self.groups.people(chat, ids, persons).await
     }
 
     async fn request_refresh(&self, chat: &ChatRef, viewer: &str) -> ExternalChatResult<()> {
@@ -275,7 +288,8 @@ impl ChatProvider for WhatsAppProvider {
 }
 
 /// A group's roster as the chat's side panel shows it.
-fn members(info: &GroupInfo) -> ExternalChatMembers {
+fn members(roster: &ChatRoster) -> ExternalChatMembers {
+    let info = &roster.info;
     ExternalChatMembers {
         name: info.name.clone(),
         participants: info
@@ -285,7 +299,12 @@ fn members(info: &GroupInfo) -> ExternalChatMembers {
                 jid: participant.identity.jid.clone(),
                 alternate_jid: participant.identity.alternate_jid.clone(),
                 display_name: participant.identity.display_name.clone(),
+                name: participant
+                    .identity
+                    .label()
+                    .unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
                 admin: participant.admin,
+                picture_file_id: roster.picture(&participant.identity.jid),
             })
             .collect(),
         announce: info.announce,

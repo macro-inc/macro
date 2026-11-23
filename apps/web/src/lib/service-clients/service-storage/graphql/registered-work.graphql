@@ -1,0 +1,38 @@
+fragment RegisteredWorkEntryFields on GraphqlRegisteredWork {
+	id
+	accountId
+	registeredAt
+	session {
+		id
+		sessionName: name
+		turnState
+		pullRequestUrl
+	}
+}
+
+query RegisteredWork($accountIds: [ID!]!) {
+	user {
+		id
+		registeredWork(accountIds: $accountIds) {
+			...RegisteredWorkEntryFields
+		}
+	}
+}
+
+# Start this before fetching, and fetch again after an invalidation.
+subscription RegisteredWorkUpdates($accountIds: [ID!]!) {
+	registeredWorkUpdates(accountIds: $accountIds) {
+		__typename
+		... on GraphqlRegisteredWorkUpsert {
+			entry {
+				...RegisteredWorkEntryFields
+			}
+		}
+		... on GraphqlRegisteredWorkRemove {
+			registrationId: id
+		}
+		... on GraphqlRegisteredWorkInvalidate {
+			refresh
+		}
+	}
+}

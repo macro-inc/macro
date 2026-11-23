@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO macro_user (id, username, email, stripe_customer_id)\n        VALUES\n            ('00000000-0000-4000-8000-000000000001', 'buyer@example.com', 'buyer@example.com', 'stripe_buyer'),\n            ('00000000-0000-4000-8000-000000000002', 'teammate@example.com', 'teammate@example.com', 'stripe_teammate')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "fc731179bb5c7572d9118193dd72d124359cadfd56e622f3410eceb5049c4ce1"
+}

@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, user_id, scope, as_of, status, cursor, units, applied, restored,\n                revision, created_at\n            FROM notification_bulk_action\n            WHERE user_id = $1 AND status IN ('applying', 'undoing')\n            ORDER BY created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "scope",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "as_of",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "cursor",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "units",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "applied",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "restored",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "48314ac0fcd58189d323fd45599d4b772beba5ead12452718c8869674452760f"
+}

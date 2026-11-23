@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ReplayEnvelope = { seq: number; message: unknown };
 type ConnectArgs = {
   url: string;
-  onMessage: { onmessage?: (envelope: ReplayEnvelope) => void };
+  onMessage: { id: number; onmessage?: (envelope: ReplayEnvelope) => void };
   config?: { headers: [string, string][] };
 };
 
@@ -35,6 +35,7 @@ vi.mock('@macro-inc/observability', () => ({
 
 vi.mock('@tauri-apps/api/core', () => ({
   Channel: class {
+    id = 42;
     onmessage?: (envelope: ReplayEnvelope) => void;
   },
   invoke: vi.fn((command: string, args: unknown) => {
@@ -50,7 +51,10 @@ vi.mock('@tauri-apps/api/core', () => ({
   }),
 }));
 
-import { TauriWebSocketWrapper } from './tauri-websocket';
+import {
+  CHANNEL_STALL_GRACE_MS,
+  TauriWebSocketWrapper,
+} from './tauri-websocket';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -476,5 +480,94 @@ describe('TauriWebSocketWrapper incoming messages', () => {
     push({ type: 'Text', data: 'second' });
 
     expect(received).toEqual(['first', 'second']);
+  });
+});
+
+describe('TauriWebSocketWrapper channel lifetime', () => {
+  const unregisterCallback = vi.fn();
+
+  beforeEach(() => {
+    Reflect.set(window, '__TAURI_INTERNALS__', { unregisterCallback });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
+    vi.useRealTimers();
+  });
+
+  async function openSocket() {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    const listen = vi.spyOn(document, 'addEventListener');
+    const socket = new TauriWebSocketWrapper('wss://dss.test/ws');
+    const events = track(socket);
+    const received: unknown[] = [];
+    socket.onmessage = (event) => received.push(event.data);
+    plugin.connects[0].resolve(7);
+    await Promise.resolve();
+    // Only this socket's handler: sockets from earlier tests still listen.
+    const onVisible = listen.mock.calls.find(
+      ([event]) => event === 'visibilitychange'
+    )?.[1];
+    if (typeof onVisible !== 'function')
+      throw new Error('Missing resume listener');
+    const channel = plugin.connects[0].args.onMessage;
+    const live = (seq: number, data: string) =>
+      channel.onmessage?.({ seq, message: { type: 'Text', data } });
+    const resume = async (seqs: number[]) => {
+      vi.mocked(invoke).mockResolvedValueOnce({
+        messages: seqs.map((seq) => ({
+          seq,
+          message: { type: 'Text', data: `recovered ${seq}` },
+        })),
+        gap: false,
+      });
+      onVisible.call(document, new Event('visibilitychange'));
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+    return { socket, events, received, live, resume };
+  }
+
+  it('releases the native channel when the socket closes', async () => {
+    const { socket, received, live } = await openSocket();
+    socket.close();
+    await settle();
+
+    expect(unregisterCallback).toHaveBeenCalledWith(42);
+    live(1, 'after close');
+    expect(received).toEqual([]);
+  });
+
+  it('reconnects when the live channel never delivers recovered messages', async () => {
+    vi.useFakeTimers();
+    const { events, received, live, resume } = await openSocket();
+    live(1, 'live 1');
+    await resume([2, 3]);
+    expect(received).toEqual(['live 1', 'recovered 2', 'recovered 3']);
+
+    vi.advanceTimersByTime(CHANNEL_STALL_GRACE_MS);
+
+    expect(events).toEqual(['open', 'error', 'close:1006']);
+    expect(telemetry.setAttr).toHaveBeenCalledWith(
+      'websocket.operation',
+      'channel_stall'
+    );
+    expect(unregisterCallback).toHaveBeenCalledWith(42);
+  });
+
+  it('keeps the socket when the live channel catches up', async () => {
+    vi.useFakeTimers();
+    const { events, received, live, resume } = await openSocket();
+    await resume([1, 2]);
+    live(1, 'live 1');
+    live(2, 'live 2');
+    live(3, 'live 3');
+
+    vi.advanceTimersByTime(CHANNEL_STALL_GRACE_MS);
+
+    expect(events).toEqual(['open']);
+    expect(received).toEqual(['recovered 1', 'recovered 2', 'live 3']);
   });
 });

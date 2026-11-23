@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM notification_bulk_action\n            WHERE id IN (\n                SELECT id\n                FROM notification_bulk_action\n                WHERE finished_at IS NOT NULL AND finished_at < $1\n                ORDER BY finished_at\n                LIMIT $2\n                FOR UPDATE SKIP LOCKED\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "018975e2ca7f56284c56ff145409b1972d883284fd3083be8a342eb5da369237"
+}

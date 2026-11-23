@@ -9,7 +9,9 @@ use crate::constants::MACRO_INTERNAL_USER_ID_HEADER_KEY;
 use super::DocumentStorageServiceClient;
 
 impl DocumentStorageServiceClient {
-    #[tracing::instrument(skip(self))]
+    /// File and folder names are user data, and a large folder's list runs to
+    /// megabytes, so neither is recorded on the span.
+    #[tracing::instrument(skip(self, root_folder_name, content, folders), err)]
     pub async fn upload_unnested_folder(
         &self,
         user_id: String,

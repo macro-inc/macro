@@ -9,6 +9,7 @@ import {
 } from '@macro-inc/collaboration/websocket';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
 import { createCallback } from '@solid-primitives/rootless';
+import { createRoot } from 'solid-js';
 import { createSessionWebsocketTelemetry } from '../session-websocket-telemetry';
 import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage';
 import { instrumentGatewaySocket } from './presence-telemetry';
@@ -24,6 +25,8 @@ export type ConnectionGatewayWebsocket = Websocket<
 export type FromWebsocketMessage = {
   type: string;
   data: any;
+  /** W3C trace context of the request that sent the frame, when it had one. */
+  trace?: Record<string, string>;
 };
 
 export const connectionGatewaySessionTelemetry =
@@ -72,7 +75,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', handleVisibilityChange);
 }
 
-export const state = createWebsocketStateSignal(ws);
+export const state = createRoot(() => createWebsocketStateSignal(ws));
 // TODO: add type mapping on the websocket event
 export function createConnectionBlockWebsocketEffect(
   callback: (data: FromWebsocketMessage) => void

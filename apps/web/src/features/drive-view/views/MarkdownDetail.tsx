@@ -1,4 +1,6 @@
+import { markdownEntityFromMetadata } from '@app/features/entity-appearance/queries/document-appearance';
 import { FindAndReplace } from '@block-md/component/FindAndReplace';
+import { HostedMarkdownHeader } from '@block-md/component/HostedMarkdownHeader';
 import {
   MarkdownDocument,
   MarkdownDocumentContent,
@@ -13,20 +15,33 @@ import {
 } from '@block-md/queries/markdown-document';
 import { loadMarkdownCachedSnapshot } from '@block-md/queries/markdown-document-operations';
 import type { MarkdownDocumentKind } from '@block-md/types';
+import { MarkdownHeaderActions } from '@block-md/views/markdown-header-parts';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
+import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
+import type { DocumentEntity } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { DocumentNotificationReadMarker } from '@notifications';
 import { useItemRawName } from '@queries/preview';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { Button } from '@ui';
-import { createComputed, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createComputed,
+  ErrorBoundary,
+  type JSX,
+  Match,
+  type ParentProps,
+  Show,
+  Switch,
+} from 'solid-js';
 import { FileDetailLoadGate } from '../components/FileDetail';
 import type { FileDetailContext } from '../util/file-detail-context';
 
@@ -36,6 +51,9 @@ export type MarkdownDetailProps = {
   documentId: string;
   kind?: MarkdownDocumentKind;
   fallbackName?: string;
+  /** The title menu's Duplicate and Delete in a hosted header. */
+  onDuplicate?: (id: string, name: string) => void;
+  onDelete?: () => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 };
 
@@ -61,9 +79,6 @@ export function MarkdownDetailBodyState(props: {
         <Match when={props.error !== undefined}>
           <div class="flex max-w-xl flex-col items-center gap-3 px-6 text-center">
             <span>This {entityLabel()} couldn’t be displayed.</span>
-            <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
-              {String(props.error)}
-            </pre>
             <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
@@ -74,14 +89,47 @@ export function MarkdownDetailBodyState(props: {
   );
 }
 
+/**
+ * Shows a detail that threw while rendering as a plain message with Try
+ * again, and records the error on telemetry rather than on screen.
+ */
+export function DetailErrorBoundary(
+  props: ParentProps<{ entityType: string; entityId: string }>
+) {
+  return (
+    <ErrorBoundary
+      fallback={(error, reset) => {
+        Telemetry.error(error, {
+          surface: 'drive-detail',
+          'entity.type': props.entityType,
+          'entity.id': props.entityId,
+        });
+        return (
+          <MarkdownDetailBodyState
+            error={error}
+            actionLabel="Try again"
+            onAction={reset}
+          />
+        );
+      }}
+    >
+      {props.children}
+    </ErrorBoundary>
+  );
+}
+
 function MarkdownDetailContent(props: {
   documentId: string;
   kind: MarkdownDocumentKind;
   fallbackName: string;
   data: MarkdownDocumentData;
+  onDuplicate?: (id: string, name: string) => void;
+  onDelete?: () => void;
   children?: (context: MarkdownDetailContext) => JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
+  // A host that shows hosted headers gets the document's own, with its Info.
+  const hostedHeader = useSplitHeaderScope();
   const notificationSource = useGlobalNotificationSource();
   const orchestrator = useGlobalBlockOrchestrator();
   const state = createMarkdownDocumentState();
@@ -104,10 +152,20 @@ function MarkdownDetailContent(props: {
     });
   });
 
+  const documentEntity = (): DocumentEntity | undefined => {
+    const metadata = props.data.metadata;
+    if (
+      (props.kind !== 'document' && props.kind !== 'snippet') ||
+      metadata.documentId !== props.documentId
+    )
+      return;
+    return markdownEntityFromMetadata(metadata, persistedName());
+  };
   return (
     <MarkdownDocument
       documentId={props.documentId}
       kind={props.kind}
+      entity={documentEntity()}
       state={state}
       documentSource={{ type: 'sync', source: props.data.source }}
       permissions={props.data.permissions}
@@ -120,9 +178,18 @@ function MarkdownDetailContent(props: {
           documentMetadata: props.data.metadata,
           userAccessLevel: props.data.userAccessLevel,
         })}
+        <HostedMarkdownHeader
+          collaborationStatus={() => props.data.source.status()}
+          onDuplicate={props.onDuplicate}
+          onDelete={props.onDelete}
+        />
         <SidePanel.Layout headerToggle={false} floating>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />
+            {/* A hosted header lists its own actions. */}
+            <Show when={!hostedHeader}>
+              <MarkdownHeaderActions />
+            </Show>
           </Show>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
             <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
@@ -150,6 +217,7 @@ function MarkdownDetailContent(props: {
 export function MarkdownDetail(props: MarkdownDetailProps) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="md"
       label={props.kind === 'task' ? 'task' : 'document'}
@@ -167,6 +235,8 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
             )
           }
           data={data}
+          onDuplicate={props.onDuplicate}
+          onDelete={props.onDelete}
           children={props.children}
         />
       )}

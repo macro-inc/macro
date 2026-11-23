@@ -191,6 +191,7 @@ where
         action_id: AgentActionId,
         prompt: String,
         actor: Option<MacroUserIdStr<'static>>,
+        prompter: agent_session::domain::model::PrompterKind,
     ) -> agent_session::domain::error::Result<()> {
         self.execute(
             id,
@@ -198,6 +199,7 @@ where
                 action_id,
                 prompt,
                 actor,
+                prompter,
             },
         )
         .await
@@ -428,6 +430,29 @@ where
             });
         }
         Ok(self.permission_policy_for(bot).await)
+    }
+
+    /// Hand a live session its current permission policy before a turn, so a
+    /// withdrawn bypass applies from the next prompt rather than the next
+    /// attach. A session attached nowhere here takes it when it attaches.
+    pub(super) async fn refresh_permission_policy(&self, session_id: AgentSessionId) {
+        let refreshed = async {
+            let session = self.sessions.get_session(session_id).await?;
+            let policy = self
+                .permission_policy_for_session(session_id, session.bot_id)
+                .await?;
+            self.sessions
+                .set_permission_policy(session_id, policy)
+                .await
+        }
+        .await;
+        if let Err(error) = refreshed {
+            tracing::warn!(
+                error = ?error,
+                %session_id,
+                "could not refresh a session's permission policy; it keeps the one it has"
+            );
+        }
     }
 
     /// The MCP servers to advertise when reattaching to an existing container.

@@ -183,6 +183,13 @@ mod tests {
     }
 
     #[test]
+    fn code_mode_forbids_guessing_the_sdk() {
+        let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(code_mode.contains("Never guess a method"));
+        assert!(code_mode.contains("to find out whether it exists"));
+    }
+
+    #[test]
     fn code_mode_presents_views_unasked_and_mentions_leave_what_they_show_unmentioned() {
         let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
         assert!(
@@ -286,9 +293,18 @@ mod tests {
     #[test]
     fn mentions_prompt_writes_whole_days_as_local_dates_from_the_current_time() {
         let instructions = mentions::PROMPT.instructions.as_ref();
-        assert!(instructions.contains("bare local calendar date (`2025-12-01`)"));
+        assert!(instructions.contains("local calendar date (`2025-12-01`)"));
         assert!(instructions.contains("never midnight UTC"));
         assert!(instructions.contains("`<current_time>`"));
+    }
+
+    #[test]
+    fn mentions_prompt_shows_static_images_inline_never_as_document_mentions() {
+        let instructions = mentions::PROMPT.instructions.as_ref();
+        assert!(instructions.contains("a document mention of its id reads \"Deleted\""));
+        assert!(instructions.contains("<m-image>{\"url\":\"{url}\""));
+        assert!(instructions.contains("`image.toMarkdown()`"));
+        assert!(instructions.contains("\"blockName\":\"canvas\""));
     }
 
     #[test]

@@ -1,0 +1,30 @@
+{
+	"name": "starter-agent",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"start": "bun index.ts",
+		"typecheck": "tsc --noEmit -p .",
+		"test": "bun test --timeout 30000",
+		"check": "bun run typecheck && bun run test && biome format",
+		"format": "biome format --write",
+		"format:check": "biome format"
+	},
+	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "0.3.321",
+		"@livekit/agents": "1.9.5",
+		"@livekit/agents-plugin-deepgram": "1.9.5",
+		"@livekit/agents-plugin-inworld": "1.9.5",
+		"@livekit/rtc-node": "1.2.1",
+		"@macro-inc/sdk": "0.4.1",
+		"@muppet/lib": "link:@muppet/lib",
+		"typescript": "5.9.3",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.6.6",
+		"@biomejs/cli-linux-x64-musl": "2.6.6",
+		"@types/bun": "latest",
+		"temporal-spec": "^1.0.1"
+	}
+}

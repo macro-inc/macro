@@ -6,28 +6,32 @@ import { pressHandlers } from '@ui';
 import { children, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { SettingsSearchResult } from '../core/settings-search';
+import { MachinesRequestBadge } from './machines-request-badge';
 import { SettingsSearchResults } from './settings-search-results';
 
 /**
  * Settings' inner navigation, laid out like every other view's sidebar: a
- * title bar, a search field, the grouped section pills, and an optional
- * footer action pinned to the bottom.
+ * title bar, a search field, an optional action (inviting your team) above
+ * the grouped section pills, and the pills themselves.
  */
 export function SettingsSidebar(props: {
   groups: SettingsTabGroup[];
   results: SettingsSearchResult[];
   selectedResultId?: string;
   onSelectResult: (result: SettingsSearchResult) => void;
+  /** Off on touch, which searches from the dock as other sidebars do. */
+  searchable: boolean;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   isItemActive: (tab: SettingsTab) => boolean;
   onSelect: (tab: SettingsTab) => void;
-  footer?: JSX.Element;
+  action?: JSX.Element;
 }) {
-  const footer = children(() => props.footer);
+  const action = children(() => props.action);
   let root: HTMLDivElement | undefined;
   return (
     <ViewSidebar.Root
+      reorderId="settings"
       ref={root}
       aria-label={t('settingsNav.settingsNavigation')}
     >
@@ -38,29 +42,43 @@ export function SettingsSidebar(props: {
         </div>
       </ViewSidebar.Header>
 
-      <ViewSidebar.Primary>
-        <SearchBar
-          label={t('settingsNav.searchSettings')}
-          placeholder={t('settingsNav.searchSettings')}
-          autocomplete="off"
-          value={props.searchQuery}
-          onValueChange={props.onSearchQueryChange}
-          size="sm"
-          onEscape={() => props.onSearchQueryChange('')}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowDown') {
-              const first =
-                root?.querySelector<HTMLButtonElement>('nav button');
-              if (first) {
-                event.preventDefault();
-                first.focus();
+      <Show when={props.searchable}>
+        <ViewSidebar.Primary>
+          <SearchBar
+            label={t('settingsNav.searchSettings')}
+            placeholder={t('settingsNav.searchSettings')}
+            autocomplete="off"
+            value={props.searchQuery}
+            onValueChange={props.onSearchQueryChange}
+            size="sm"
+            onEscape={() => props.onSearchQueryChange('')}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                const first =
+                  root?.querySelector<HTMLButtonElement>('nav button');
+                if (first) {
+                  event.preventDefault();
+                  first.focus();
+                }
               }
-            }
-          }}
-        />
-      </ViewSidebar.Primary>
+            }}
+          />
+        </ViewSidebar.Primary>
+      </Show>
 
       <ViewSidebar.Content>
+        {/* Search results replace the pills, so they replace the action too. */}
+        <Show when={action() && !props.searchQuery.trim()}>
+          <ViewSidebar.Section
+            id="team-actions"
+            label={t('settingsNav.teamActions')}
+            pinned
+          >
+            <ViewSidebar.Nav aria-label={t('settingsNav.teamActions')}>
+              {action()}
+            </ViewSidebar.Nav>
+          </ViewSidebar.Section>
+        </Show>
         <Show
           when={!props.searchQuery.trim()}
           fallback={
@@ -81,10 +99,16 @@ export function SettingsSidebar(props: {
           >
             <For each={props.groups}>
               {(group) => (
-                <section class="flex min-w-0 flex-col gap-0.5">
-                  <h2 class="flex h-7 min-w-0 items-center px-(--sidebar-item-inset) text-xs font-medium text-ink/50">
-                    <span class="truncate">{group.label}</span>
-                  </h2>
+                <ViewSidebar.Section
+                  id={group.id}
+                  label={group.label}
+                  class="flex min-w-0 flex-col gap-0.5"
+                >
+                  <ViewSidebar.SectionHeader>
+                    <h2 class="flex h-7 min-w-0 items-center px-(--sidebar-item-inset) text-xs font-medium text-ink/50">
+                      <span class="truncate">{group.label}</span>
+                    </h2>
+                  </ViewSidebar.SectionHeader>
                   <ViewSidebar.Nav aria-label={group.label}>
                     <For each={group.items}>
                       {(item) => (
@@ -97,22 +121,19 @@ export function SettingsSidebar(props: {
                             <Dynamic component={item.icon} class="size-4" />
                           </ViewSidebar.Icon>
                           <span class="truncate">{item.label}</span>
+                          <Show when={item.tab === 'Harness'}>
+                            <MachinesRequestBadge />
+                          </Show>
                         </ViewSidebar.Item>
                       )}
                     </For>
                   </ViewSidebar.Nav>
-                </section>
+                </ViewSidebar.Section>
               )}
             </For>
           </Show>
         </Show>
       </ViewSidebar.Content>
-
-      <Show when={footer()}>
-        <ViewSidebar.Footer class="py-(--sidebar-gutter)">
-          {footer()}
-        </ViewSidebar.Footer>
-      </Show>
     </ViewSidebar.Root>
   );
 }

@@ -11,6 +11,7 @@
 mod aggregate;
 mod join;
 mod predicate;
+pub(crate) use predicate::normalized_like;
 mod sort;
 #[cfg(test)]
 mod test;

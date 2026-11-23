@@ -1,11 +1,14 @@
 //! Pipeline metadata and grants, composed with the database domain's writer.
 
+use crate::domain::pipeline_commercial::CommercialFields;
 use crate::domain::pipelines::requirements::StageRequirement;
 use crate::domain::pipelines::{
     Pipeline, PipelineBlueprint, PipelineRecordType, PipelineReference, PipelineRepo,
     PipelineSharing,
 };
+use chrono::{DateTime, Utc};
 use databases::domain::provisioning::DatabaseStorageProvisioner;
+use entity_access::domain::telemetry::span_count;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
 use models_databases::OptionId;
 use models_databases::{ColumnId, DatabaseId, RowId, TableId};
@@ -24,6 +27,55 @@ pub enum PipelineRepoError {
     /// Database provisioning failure.
     #[error("Database provisioning failed: {0}")]
     Database(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+/// A pipeline as `get_many` and `lock_live_many` read it.
+struct PipelineRow {
+    id: Uuid,
+    team_id: Uuid,
+    record_type: Option<String>,
+    database_id: Uuid,
+    table_id: Uuid,
+    name: String,
+    user_id: String,
+    created_at: DateTime<Utc>,
+    trashed_at: Option<DateTime<Utc>>,
+    primary_column_id: Uuid,
+    commercial_fields: sqlx::types::Json<CommercialFields>,
+    team_shared: bool,
+}
+
+impl TryFrom<PipelineRow> for Pipeline {
+    type Error = PipelineRepoError;
+
+    fn try_from(row: PipelineRow) -> Result<Self, Self::Error> {
+        let record_type = match row.record_type.as_deref() {
+            None => None,
+            Some("company") => Some(PipelineRecordType::Company),
+            Some("contact") => Some(PipelineRecordType::Contact),
+            Some(_) => {
+                return Err(sqlx::Error::Decode("Invalid pipeline record type".into()).into());
+            }
+        };
+        Ok(Pipeline {
+            commercial_fields: row.commercial_fields.0,
+            id: row.id,
+            team_id: row.team_id,
+            name: row.name,
+            user_id: row.user_id,
+            record_type,
+            database_id: DatabaseId::from_uuid(row.database_id),
+            table_id: TableId::from_uuid(row.table_id),
+            primary_column_id: ColumnId::from_uuid(row.primary_column_id),
+            created_at: row.created_at,
+            trashed_at: row.trashed_at,
+            sharing: if row.team_shared {
+                PipelineSharing::Team
+            } else {
+                PipelineSharing::Private
+            },
+        })
+    }
 }
 
 /// Owns only CRM metadata; database storage is accessed through its domain port.
@@ -53,9 +105,10 @@ where
             .await
             .map_err(|error| PipelineRepoError::Database(Box::new(error)))?;
         sqlx::query!(
-            "INSERT INTO crm_pipeline_entities (id, team_id, database_id, table_id, record_type, name, user_id, primary_column_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+            "INSERT INTO crm_pipeline_entities (id, team_id, database_id, table_id, record_type, name, user_id, primary_column_id, commercial_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
             blueprint.id, blueprint.team_id, blueprint.database.id.into_uuid(),
-            blueprint.database.table_id.into_uuid(), blueprint.record_type.as_str(), &blueprint.name, blueprint.creator.as_ref(), blueprint.primary_column_id.into_uuid(),
+            blueprint.database.table_id.into_uuid(), blueprint.record_type.map(PipelineRecordType::as_str), &blueprint.name, blueprint.creator.as_ref(), blueprint.primary_column_id.into_uuid(),
+            sqlx::types::Json(&blueprint.commercial_fields) as _,
         ).execute(&mut **transaction).await?;
         entity_access_db_utils::insert_entity_access_row(
             transaction,
@@ -87,19 +140,20 @@ where
     type Error = PipelineRepoError;
 
     async fn crm_enabled(&self, team: Uuid) -> Result<bool, Self::Error> {
-        Ok(sqlx::query_scalar!(
-            "SELECT crm_enabled FROM team_crm_settings WHERE team_id = $1",
-            team
+        Ok(
+            sqlx::query_scalar!(r#"SELECT TRUE AS "enabled!" FROM team WHERE id = $1"#, team)
+                .fetch_optional(&self.pool)
+                .await?
+                .unwrap_or(false),
         )
-        .fetch_optional(&self.pool)
-        .await?
-        .unwrap_or(false))
     }
 
     async fn get_many(&self, ids: &[Uuid]) -> Result<Vec<Pipeline>, Self::Error> {
-        let rows = sqlx::query!(
+        sqlx::query_as!(
+            PipelineRow,
             r#"SELECT p.id, p.team_id, p.record_type, p.database_id, p.table_id,
                       p.name, p.user_id, p.created_at, p.trashed_at, p.primary_column_id,
+                      p.commercial_fields AS "commercial_fields!: sqlx::types::Json<CommercialFields>",
                       EXISTS (SELECT 1 FROM entity_access ea WHERE ea.entity_id = p.id
                         AND ea.entity_type = 'crm_pipeline' AND ea.source_type = 'team'
                         AND ea.source_id = p.team_id::text) AS "team_shared!"
@@ -108,80 +162,106 @@ where
             ids,
         )
         .fetch_all(&self.pool)
-        .await?;
-        rows.into_iter()
-            .map(|row| {
-                let record_type = match row.record_type.as_str() {
-                    "company" => PipelineRecordType::Company,
-                    "contact" => PipelineRecordType::Contact,
-                    _ => {
-                        return Err(
-                            sqlx::Error::Decode("Invalid pipeline record type".into()).into()
-                        );
-                    }
-                };
-                Ok(Pipeline {
-                    id: row.id,
-                    team_id: row.team_id,
-                    name: row.name,
-                    user_id: row.user_id,
-                    record_type,
-                    database_id: DatabaseId::from_uuid(row.database_id),
-                    table_id: TableId::from_uuid(row.table_id),
-                    primary_column_id: ColumnId::from_uuid(row.primary_column_id),
-                    created_at: row.created_at,
-                    trashed_at: row.trashed_at,
-                    sharing: if row.team_shared {
-                        PipelineSharing::Team
-                    } else {
-                        PipelineSharing::Private
-                    },
-                })
-            })
-            .collect()
+        .await?
+        .into_iter()
+        .map(Pipeline::try_from)
+        .collect()
     }
 
+    #[tracing::instrument(skip_all, err, fields(records = span_count(records.len())))]
     async fn referencing_rows(
         &self,
-        pipelines: &[Uuid],
+        record_type: PipelineRecordType,
         records: &[Uuid],
+        pipeline: Option<Uuid>,
     ) -> Result<Vec<PipelineReference>, Self::Error> {
-        let records: Vec<String> = records.iter().map(Uuid::to_string).collect();
-        // Starts from each pipeline's primary column: entity_properties has no
-        // index on referenced ids, so this reads those pipelines' primary cells.
+        let mut records = records.to_vec();
+        records.sort_unstable();
+        records.dedup();
+        // Starts from the records' references, so this reads only the cells
+        // that hold one: the partial index needs the literal predicates on
+        // `ep`, and the row is joined by the guarded cast, not by `r.id::text`.
+        // The CTE stays materialized: a generic plan estimates one pipeline
+        // for `$2`/`$3` and would otherwise probe the references once per
+        // pipeline. Only a primary cell counts, so an entry's other reference
+        // columns, and other databases' rows, are left out.
         let rows = sqlx::query!(
-            r#"SELECT p.id AS "pipeline_id!", r.id AS "row_id!",
-                      reference.value ->> 'entity_id' AS "record_id!"
-               FROM crm_pipeline_entities p
-               JOIN database_columns c ON c.id = p.primary_column_id
-               JOIN entity_properties ep
-                 ON ep.property_definition_id = c.property_definition_id
-                AND ep.entity_type = 'DATABASE_ROW'
-               JOIN database_rows r ON r.id::text = ep.entity_id AND r.table_id = p.table_id
-               CROSS JOIN LATERAL jsonb_array_elements(ep.values -> 'value') AS reference(value)
-               WHERE p.id = ANY($1) AND p.trashed_at IS NULL
-                 AND reference.value ->> 'entity_id' = ANY($2)
-               ORDER BY p.id, r.position, r.id"#,
-            pipelines,
+            r#"WITH reference AS MATERIALIZED (
+                   SELECT record.id AS record_id, r.id AS row_id, r.table_id, r.position,
+                          ep.property_definition_id
+                   FROM UNNEST($1::uuid[]) AS record(id)
+                   JOIN entity_properties ep
+                     ON ep.entity_type = 'DATABASE_ROW'
+                    AND ep.values ->> 'type' = 'EntityReference'
+                    AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', record.id::text))
+                   -- A row cell's entity id is its row id's canonical text;
+                   -- anything else names no row, and must not abort the statement.
+                   JOIN database_rows r
+                     ON r.id = (CASE
+                         WHEN ep.entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                         THEN ep.entity_id
+                     END)::uuid
+               )
+               SELECT p.id AS "pipeline_id!", reference.row_id AS "row_id!",
+                      reference.record_id AS "record_id!"
+               FROM reference
+               JOIN crm_pipeline_entities p ON p.table_id = reference.table_id
+               JOIN database_columns c
+                 ON c.id = p.primary_column_id
+                AND c.property_definition_id = reference.property_definition_id
+               WHERE p.record_type = $2 AND p.trashed_at IS NULL
+                 AND ($3::uuid IS NULL OR p.id = $3)
+               ORDER BY p.id, reference.position, reference.row_id"#,
             &records,
+            record_type.as_str(),
+            pipeline,
         )
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter()
-            .map(|row| {
-                Ok(PipelineReference {
-                    pipeline_id: row.pipeline_id,
-                    row_id: RowId::from_uuid(row.row_id),
-                    record_id: row
-                        .record_id
-                        .parse()
-                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
-                })
+        Ok(rows
+            .into_iter()
+            .map(|row| PipelineReference {
+                pipeline_id: row.pipeline_id,
+                row_id: RowId::from_uuid(row.row_id),
+                record_id: row.record_id,
             })
-            .collect()
+            .collect())
     }
 
     type Guard = Transaction<'static, Postgres>;
+
+    #[tracing::instrument(skip_all, err, fields(pipelines = span_count(ids.len())))]
+    async fn lock_live_many(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<(Self::Guard, Vec<Pipeline>), Self::Error> {
+        let mut tx = self.pool.begin().await?;
+        // Readers queued behind a writer also need to release pool connections.
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
+        // Rows lock in id order, as the sort runs before the lock.
+        let pipelines = sqlx::query_as!(
+            PipelineRow,
+            r#"SELECT p.id, p.team_id, p.record_type, p.database_id, p.table_id,
+                      p.name, p.user_id, p.created_at, p.trashed_at, p.primary_column_id,
+                      p.commercial_fields AS "commercial_fields!: sqlx::types::Json<CommercialFields>",
+                      EXISTS (SELECT 1 FROM entity_access ea WHERE ea.entity_id = p.id
+                        AND ea.entity_type = 'crm_pipeline' AND ea.source_type = 'team'
+                        AND ea.source_id = p.team_id::text) AS "team_shared!"
+               FROM crm_pipeline_entities p
+               WHERE p.id = ANY($1) AND p.trashed_at IS NULL
+               ORDER BY p.id
+               FOR SHARE OF p"#,
+            ids,
+        )
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .map(Pipeline::try_from)
+        .collect::<Result<_, _>>()?;
+        Ok((tx, pipelines))
+    }
 
     async fn lock_live(&self, id: Uuid) -> Result<Option<Self::Guard>, Self::Error> {
         let mut tx = self.pool.begin().await?;
@@ -334,5 +414,15 @@ where
         .await?;
         transaction.commit().await?;
         Ok(true)
+    }
+}
+
+impl<Database: Send + Sync> crate::domain::auth::CrmMemberAccess for PgPipelineRepo<Database> {
+    async fn member_has_crm_access(
+        &self,
+        team_id: Uuid,
+        user_id: &str,
+    ) -> Result<bool, crate::domain::model::CrmError> {
+        super::member_access::member_has_crm_access(&self.pool, team_id, user_id).await
     }
 }

@@ -8,6 +8,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 pub mod context;
 mod health;
+mod logos;
 pub(crate) mod proxy;
 pub(crate) mod swagger;
 
@@ -44,6 +45,7 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
 
 fn app(state: ApiContext) -> Router {
     let cors = macro_cors::cors_layer();
+    let jwt_validation_args = state.jwt_validation_args.clone();
 
     let inner = api_router()
         .with_state(state)
@@ -57,8 +59,16 @@ fn app(state: ApiContext) -> Router {
             "/image-proxy/api-doc/openapi.json",
             swagger::ApiDoc::openapi(),
         ))
+        // Every route fetches what its caller names, which carries whatever
+        // the caller puts in it, so no scoped agent credential reaches one.
+        .layer(axum::middleware::from_fn_with_state(
+            jwt_validation_args,
+            agent_correlation::inbound::refuse_signed_scopes,
+        ))
 }
 
 fn api_router() -> Router<ApiContext> {
-    Router::new().nest("/proxy", proxy::router())
+    Router::new()
+        .nest("/proxy", proxy::router())
+        .merge(logos::router())
 }

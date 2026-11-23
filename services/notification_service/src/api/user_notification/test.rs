@@ -49,6 +49,28 @@ fn to_typed_row_channel_mention() {
 }
 
 #[test]
+fn to_typed_row_ping() {
+    let metadata = serde_json::json!({
+        "body": "All 3 services are live.",
+        "entityName": "Deploy plan",
+        "agent": { "id": "00000000-0000-0000-0000-00000000a2a2", "name": "Macro" }
+    });
+    let row = make_row("ping", metadata);
+    let typed = to_typed_row(row).expect("should deserialize ping");
+    match typed.notification_metadata {
+        NotifEvent::Ping(ref meta) => {
+            assert_eq!(meta.body, "All 3 services are live.");
+            assert_eq!(meta.entity_name.as_deref(), Some("Deploy plan"));
+            assert_eq!(
+                meta.agent.as_ref().map(|agent| agent.name.as_str()),
+                Some("Macro")
+            );
+        }
+        _ => panic!("expected Ping variant"),
+    }
+}
+
+#[test]
 fn to_typed_row_document_mention() {
     let metadata = serde_json::json!({
         "channelName": "general",
@@ -145,6 +167,36 @@ fn to_typed_row_channel_access_requested() {
     assert!(matches!(
         typed.notification_metadata,
         NotifEvent::ChannelAccessRequested(_)
+    ));
+}
+
+#[test]
+fn to_typed_row_runtime_access_removed() {
+    let metadata = serde_json::json!({
+        "runtimeName": "Studio Mac",
+        "agents": [{ "botId": "00000000-0000-0000-0000-000000000002", "name": "Scout" }]
+    });
+    let row = make_row("runtime_access_removed", metadata);
+    let typed = to_typed_row(row).expect("should deserialize runtime_access_removed");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::RuntimeAccessRemoved(_)
+    ));
+}
+
+#[test]
+fn to_typed_row_computer_setup() {
+    let metadata = serde_json::json!({
+        "computerId": "00000000-0000-0000-0000-000000000001",
+        "harnessId": null,
+        "computerName": "Build box",
+        "outcome": { "kind": "failed", "failureReason": "The computer kept crashing." }
+    });
+    let row = make_row("computer_setup", metadata);
+    let typed = to_typed_row(row).expect("should deserialize computer_setup");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::ComputerSetup(_)
     ));
 }
 

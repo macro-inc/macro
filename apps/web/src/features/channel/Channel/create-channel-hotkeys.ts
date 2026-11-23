@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { Telemetry } from '@macro-inc/observability';
@@ -22,6 +23,7 @@ type CreateChannelHotkeysOptions = {
   isEditing: Accessor<boolean>;
   onOpenFindBar: () => void;
   onGoToBottom: () => void;
+  onEscapeToList: () => boolean;
 };
 
 export function canReplyToSelectedMessageFromHotkey(input: {
@@ -211,6 +213,15 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
   });
 
   registerHotkey({
+    scopeId: messageListScope,
+    hotkey: 'escape',
+    description: () => t('commands.returnToList'),
+    registrationType: 'add',
+    condition: () => !hasSelection(),
+    keyDownHandler: options.onEscapeToList,
+  });
+
+  registerHotkey({
     scopeId: inputScope,
     hotkey: 'arrowup',
     hotkeyToken: TOKENS.channel.focusPreviousMessage,
@@ -243,6 +254,8 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
 
   return {
     messageListScopeId: messageListScope,
+    /** Steps focus out of the composer onto the conversation itself. */
+    focusMessageList: () => messageListEl?.focus({ preventScroll: true }),
     attachMessageListRef: (el: HTMLElement) => {
       messageListEl = el;
       attachMessageList(el);

@@ -6,6 +6,16 @@ The precise contract lives in `packages/spreadsheet/src/ai-types.ts` and is mirr
 by the Rust document tool types. This endpoint needs `SYNC_WS_BASE`; it does not
 call an LLM or require model API keys.
 
+`POST /spreadsheet/instructions` accepts `{ documentId, documentToken, instructions }`
+(an edit token) and runs one writer model (`writer.ts`, Sonnet with a Haiku
+fallback, `ANTHROPIC_API_KEY`) with `readCells`, `calculate`, `applyEdits` and
+`reportBlocked` tools over the same read, calculate and edit functions. A rejected
+batch goes back to the model; the first valid batch commits once against the
+revision the model read. It answers 200 with `outcome` (`edited`, `refused`, or
+`failed` with `conflict` and `mayHaveSaved`) and the `usage` DSS bills, whatever
+the outcome. DSS `POST /documents/{id}/spreadsheet/ai-edit` admits the caller and
+meters that usage.
+
 The worker loads a coherent Loro snapshot and revision using
 `GET /document/:id/state`. Reads and scratch calculations are pure.
 Edits operate on a disposable fork and send one delta with the caller's expected

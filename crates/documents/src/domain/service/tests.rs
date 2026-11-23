@@ -20,6 +20,7 @@ mod sync_content;
 
 fn make_test_metadata() -> DocumentMetadata {
     DocumentMetadata {
+        appearance: None,
         document_id: "doc-1".to_string(),
         document_version_id: 1,
         owner: Owner::from_principal_str("macro|user@user.com").unwrap(),
@@ -2335,6 +2336,7 @@ impl crate::domain::ports::markdown::MarkdownInitializationPort for RejectUnexpe
         &self,
         _: &str,
         _: &str,
+        _: crate::domain::ports::markdown::MarkdownInitializationOptions,
     ) -> Result<Vec<u8>, DocumentError> {
         panic!("failed repository creation must not initialize markdown");
     }
@@ -2384,6 +2386,7 @@ async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() 
         (
             MarkdownSubtype::Task {
                 property_values: None,
+                pinned_property_definition_ids: None,
                 share_with_team: false,
                 team_id: None,
             },
@@ -2880,6 +2883,7 @@ async fn default_task_properties_assign_the_acting_user_and_never_a_team_bot() {
                 project_id: None,
                 team_id: None,
                 property_values: None,
+                pinned_property_definition_ids: None,
                 share_with_team: false,
             },
         )
@@ -2900,6 +2904,61 @@ async fn default_task_properties_assign_the_acting_user_and_never_a_team_bot() {
             expected
         );
     }
+}
+
+#[tokio::test]
+async fn creation_assigns_empty_pinned_fields_without_clearing_provided_values() {
+    let task_properties = RecordingTaskPropertiesPort::default();
+    let service = DocumentServiceImpl::new(
+        make_mock_repo(),
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        TestUploadUrlPort,
+        task_properties.clone(),
+        TestConnectionService::default(),
+        TestEntityAccessManagementService::default(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    );
+    let provided = uuid::Uuid::now_v7();
+    let empty = uuid::Uuid::now_v7();
+    let principal = CreationPrincipal::User(test_user());
+    let value = SetPropertyValue::Number { value: 0.0 };
+    crate::domain::ports::DocumentService::handle_task_properties(
+        &service,
+        &principal,
+        "task-1",
+        &CreateTaskRequest {
+            task_name: "Template task".to_string(),
+            markdown: None,
+            project_id: None,
+            team_id: None,
+            property_values: Some(vec![PropertyInput {
+                property_id: provided.to_string(),
+                value: value.clone(),
+            }]),
+            pinned_property_definition_ids: Some(vec![
+                provided.to_string(),
+                empty.to_string(),
+                empty.to_string(),
+            ]),
+            share_with_team: false,
+        },
+    )
+    .await
+    .unwrap();
+    let writes = task_properties.writes.lock().unwrap().clone();
+    assert!(writes.iter().all(|(actor, _, _)| actor == &principal));
+    assert_eq!(
+        writes
+            .into_iter()
+            .map(|(_, id, value)| (id, value))
+            .collect::<Vec<_>>(),
+        vec![(provided, Some(value)), (empty, None)]
+    );
 }
 
 #[tokio::test]
@@ -3911,4 +3970,131 @@ async fn a_document_without_dates_marks_its_folder_updated_now() {
     )
     .await
     .unwrap();
+}
+
+#[tokio::test]
+async fn appearance_rejects_non_markdown_and_special_document_types() {
+    for (file_type, sub_type, deleted_at) in [
+        ("pdf", None, None),
+        ("md", Some(DocumentSubType::Task), None),
+        ("md", Some(DocumentSubType::Skill), None),
+        ("md", Some(DocumentSubType::InitiativeDescription), None),
+        ("md", None, Some(chrono::Utc::now())),
+    ] {
+        let mut repo = make_mock_repo();
+        let mut document = task_document_context("doc-1");
+        document.file_type = Some(file_type.into());
+        document.sub_type = sub_type;
+        document.deleted_at = deleted_at;
+        repo.expect_get_basic_document()
+            .return_once(move |_| Box::pin(async { Ok(document) }));
+        let service = make_test_service(repo);
+        assert!(matches!(
+            service
+                .set_appearance(
+                    edit_receipt("doc-1"),
+                    model_entity::EntityAppearance::default()
+                )
+                .await,
+            Err(DocumentError::BadRequest(_))
+        ));
+    }
+}
+
+#[tokio::test]
+async fn appearance_validates_before_persistence() {
+    let service = make_test_service(make_mock_repo());
+    let invalid = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "invalid-icon".into(),
+        }),
+        color: None,
+    };
+    assert!(matches!(
+        service.set_appearance(edit_receipt("doc-1"), invalid).await,
+        Err(DocumentError::BadRequest(_))
+    ));
+}
+
+#[tokio::test]
+async fn appearance_emits_history_only_for_changes() {
+    for sub_type in [None, Some(DocumentSubType::Snippet)] {
+        for changed in [false, true] {
+            let mut repo = make_mock_repo();
+            let mut document = task_document_context("doc-1");
+            document.sub_type = sub_type;
+            repo.expect_get_basic_document()
+                .return_once(move |_| Box::pin(async { Ok(document) }));
+            repo.expect_set_appearance()
+                .withf(|id, update| {
+                    id == "doc-1"
+                        && update.appearance.color == Some(model_entity::AppearanceColor::Blue)
+                        && update.attribution.is_some()
+                })
+                .return_once(move |_, _| {
+                    Box::pin(
+                        async move { Ok(changed.then(model_entity::EntityAppearance::default)) },
+                    )
+                });
+            let (service, broker) = make_test_service_with_event_broker(repo);
+            let appearance = model_entity::EntityAppearance {
+                icon: None,
+                color: Some(model_entity::AppearanceColor::Blue),
+            };
+            assert_eq!(
+                service
+                    .set_appearance(edit_receipt("doc-1"), appearance.clone())
+                    .await
+                    .unwrap(),
+                appearance
+            );
+            let published = broker.published();
+            let events = published.lock().unwrap();
+            assert_eq!(events.len(), usize::from(changed));
+            if changed {
+                assert_eq!(
+                    events[0].payload["metadata"]["appearance_change"][1]["color"],
+                    "blue"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn appearance_records_team_and_channel_bot_attribution() {
+    for scope in [
+        bot_receipt_scope(),
+        BotReceiptScope::Channel {
+            channel_id: Uuid::now_v7(),
+        },
+    ] {
+        let mut repo = make_mock_repo();
+        let mut document = task_document_context("doc-1");
+        document.sub_type = None;
+        repo.expect_get_basic_document()
+            .return_once(move |_| Box::pin(async { Ok(document) }));
+        repo.expect_set_appearance()
+            .withf(|_, update| {
+                update.attribution == Some(Attribution::direct(Actor::new_from_bot(bot_id())))
+            })
+            .return_once(|_, _| Box::pin(async { Ok(Some(Default::default())) }));
+        let service = make_test_service(repo);
+        let receipt = EntityAccessReceipt::dangerously_assert_bot(
+            bot_id().into_storage_id(),
+            scope,
+            "doc-1",
+            EntityType::Document,
+        );
+        service
+            .set_appearance(
+                receipt,
+                model_entity::EntityAppearance {
+                    icon: None,
+                    color: Some(model_entity::AppearanceColor::Blue),
+                },
+            )
+            .await
+            .unwrap();
+    }
 }

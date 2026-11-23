@@ -6,7 +6,11 @@ Ask Macro in the Drive header and standalone title menu attaches the canvas to t
 Documents owns `ReadCanvas` and `EditCanvas`, checked view/edit receipts, native
 file-type validation, scoped actor-bearing document tokens, AI admission and
 usage metering. Its existing tool context registers them for chat, agent
-sessions and MCP; the toolset framework is unchanged.
+sessions and MCP; the toolset framework is unchanged. The SDK reaches the same
+`CanvasService` over DSS (`POST /documents/{id}/canvas/scene`, `render`, `edits`,
+`ai-edit`) through `document.canvas()`; renders there are stored as the caller's
+static files rather than returned inline, and code mode hides every canvas tool:
+a program returns `images: [await canvas.render()]` to show the model a render.
 
 `POST /canvas` on the AI editing worker joins the initialized shared scene using
 the collaboration manager, sync engine and WAL. The model reads stable IDs,
@@ -37,11 +41,20 @@ model.
 
 ## Artifacts
 
-An `artifact` node holds a self-contained HTML document, running behind
-`enable-canvas-artifacts`. Graphics stores it as opaque content; the Canvas host
+An `artifact` node holds a self-contained HTML document. Graphics stores it as opaque content; the Canvas host
 runs it in an opaque-origin sandboxed iframe, without a separate domain. See the
 [Canvas Next README](../../apps/web/src/features/block-canvas/README.md#artifacts)
 for the security model and its limits.
+
+AI edits artifacts through the same CanvasEditor SDK, QuickJS validation and guarded
+commit as other items: `createArtifact`, `artifactSource`, `artifactEdit`,
+`defineStyle`, `defineComponent` and `presentOrder`. Macro's backend always sets the
+optional `artifacts` field on `POST /canvas`. Without it, the worker rejects
+those operations before committing, ReadCanvas omits source and guide, and renders
+show titles only. Generic operations such as move still work on existing artifacts.
+Tool schemas cannot vary per user, so their descriptions stay neutral and the SDK is
+documented in `artifactGuide`, which ReadCanvas returns only when on. A batch's
+library edits share one Loro commit with its scene change.
 
 ## Layers
 

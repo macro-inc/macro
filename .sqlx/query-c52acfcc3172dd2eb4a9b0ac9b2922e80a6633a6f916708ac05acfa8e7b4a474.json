@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET personal_root_folder_id = $2, personal_folder_ids = '{}'::jsonb\n            WHERE user_id = $1 AND source = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c52acfcc3172dd2eb4a9b0ac9b2922e80a6633a6f916708ac05acfa8e7b4a474"
+}

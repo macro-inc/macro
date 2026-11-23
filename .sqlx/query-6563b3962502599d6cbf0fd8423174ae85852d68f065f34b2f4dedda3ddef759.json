@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                h.name AS runtime_name,\n                NOT ac.is_coding AS \"resident!\",\n                agent_owner_can_run(ac.bot_id) AS \"agent_owner_may_use!\",\n                harness_can_run(ac.harness_id, $2) AS \"actor_may_use!\"\n            FROM agent_configs ac\n            JOIN harnesses h ON h.id = ac.harness_id\n            WHERE ac.bot_id = $1 AND h.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "runtime_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "resident!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "agent_owner_may_use!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "actor_may_use!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6563b3962502599d6cbf0fd8423174ae85852d68f065f34b2f4dedda3ddef759"
+}

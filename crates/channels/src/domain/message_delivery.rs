@@ -230,7 +230,7 @@ where
             .collect();
         if !pending.is_empty() {
             let pending_count = pending.len();
-            tokio::spawn(
+            tokio::spawn(agent_correlation::context::capture(
                 recheck_agent_creations(
                     self.creations.clone(),
                     self.permissions.clone(),
@@ -249,7 +249,7 @@ where
                     shared = tracing::field::Empty,
                     not_permitted = tracing::field::Empty,
                 )),
-            );
+            ));
         }
         if !created.is_empty() {
             let results = self
@@ -281,6 +281,7 @@ where
             .map_err(repo_error)?;
         Ok(ChannelMetadata {
             channel_type: info.channel_type,
+            named: info.named(),
             channel_name: info.name.unwrap_or_default(),
         })
     }
@@ -376,6 +377,11 @@ where
                 side_effect_error = Some(repo_error(error));
             }
         }
+        if matches!(event.change, MessageChange::CallRootPosted { .. })
+            && let Err(error) = self.repo.touch_channel_updated_at(channel_id).await
+        {
+            side_effect_error = Some(repo_error(error));
+        }
         // Notifications derive from a post, or from an edit that must notify like one.
         let posted = match &event.change {
             MessageChange::Posted {
@@ -434,6 +440,7 @@ where
             MessageChange::Edited { .. }
             | MessageChange::MessageDeleted { .. }
             | MessageChange::Typing { .. }
+            | MessageChange::CallRootPosted { .. }
             | MessageChange::ThreadUpdated { .. } => None,
         };
         if let Some((message, mentions, notification_policy)) = posted {

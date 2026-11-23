@@ -53,8 +53,6 @@ export default {
     projectBadge: 'Projeto',
     newProject: 'Novo projeto',
     contentAlreadyOpen: 'Conteúdo já aberto',
-    unableToOpenConversation:
-      'Não foi possível abrir a conversa. Tente novamente.',
     mobileSearchPlaceholder: 'Pesquisar…',
     closeSearch: 'Fechar pesquisa',
     searchFullTextFor: 'Pesquisar texto completo por «{{query}}»',
@@ -106,7 +104,6 @@ export default {
     close: 'Fechar',
     delete: 'Eliminar',
     rename: 'Mudar o nome',
-    more: 'Mais',
     search: 'Pesquisar',
     settings: 'Definições',
   },
@@ -530,6 +527,11 @@ export default {
       other: '{{count}} itens eliminados',
     },
     toastDeleteFailed: 'Não foi possível eliminar',
+    toastPropertySet: {
+      one: '{{property}}: valor definido',
+      many: '{{property}}: valor definido em {{count}} de itens',
+      other: '{{property}}: valor definido em {{count}} itens',
+    },
     toastAddedToFavorites: 'Adicionado aos favoritos',
     toastAddedCountToFavorites: {
       one: '{{count}} item adicionado aos favoritos',
@@ -614,10 +616,6 @@ export default {
       other: '{{accepted}} de {{count}} itens marcados como não concluídos',
     },
     toastMarkNotDoneFailed: 'Não foi possível marcar como não concluído',
-    toastThreadStaysDone:
-      'Esta conversa não tem mensagens recebidas, por isso continua concluída',
-    toastThreadsStayDone:
-      'Estas conversas não têm mensagens recebidas, por isso continuam concluídas',
     toastCountNotRestored: {
       one: 'Não foi possível restaurar {{count}} item.',
       many: 'Não foi possível restaurar {{count}} de itens.',
@@ -724,8 +722,6 @@ export default {
     create: 'Criar',
     getMobileApp: 'Obter a app para dispositivos móveis',
     signedInAs: 'Sessão iniciada como {{name}}',
-    commandMenu: 'Menu de comandos',
-    searchEverything: 'Pesquisar tudo',
     customizeSidebar: 'Personalizar barra lateral',
     customizeSidebarDescription:
       'Escolha as apps que aparecem na barra lateral e arraste para as reordenar. Início fica sempre em primeiro.',
@@ -793,7 +789,7 @@ export default {
     tabMobileApp: 'App móvel',
     tabTags: 'Etiquetas',
     tabIntegrations: 'Integrações',
-    tabRuntimes: 'Runtimes',
+    tabRuntimes: 'Máquinas',
     tabMcpServer: 'Servidor MCP',
     tabApiKeys: 'Chaves de API',
     tabBots: 'Bots',
@@ -812,7 +808,6 @@ export default {
       'Nenhuma definição encontrada. Experimente «assinatura», «tema» ou «calendário».',
     backToSettings: 'Voltar às definições',
     closeSettings: 'Fechar definições',
-    goToTab: 'Ir para o separador de definições {{number}}',
     editProfile: 'Editar perfil',
     logOut: 'Terminar sessão',
     yourAccount: 'A sua conta',
