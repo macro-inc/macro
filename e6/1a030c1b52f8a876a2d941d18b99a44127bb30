@@ -1,0 +1,25 @@
+packages/sdk/specs/agent-harness.json
+  s_aa9038102244a3::t_c34f8bce485d81 10747
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_aa9038102244a3::t_c34f8bce485d81 3887,3891
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceScopeOneOfThree.ts
+  s_aa9038102244a3::t_848a491a326df8 16,18
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_aa9038102244a3::t_6eff4e46a088b2 10747
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e61a030c1b52f8a876a2d941d18b99a44127bb30",
+  "prompts": {},
+  "sessions": {
+    "s_aa9038102244a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8722afde-2cce-4eb5-b137-43e8230dc6d1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
