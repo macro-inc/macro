@@ -155,6 +155,67 @@ describe('calendar color saves over REST', () => {
   });
 });
 
+describe('overlapping calendar color saves', () => {
+  it("restore a failed calendar while another calendar's save is still pending", async () => {
+    testQueryClient.setQueryData(listKey, [
+      calendar('primary', '#ed6a86'),
+      calendar('work', null),
+    ]);
+    const primaryResponse = Promise.withResolvers<unknown>();
+    const workResponse = Promise.withResolvers<unknown>();
+    const primarySent = Promise.withResolvers<void>();
+    setCalendarColor.mockImplementation((calendarId: string) => {
+      if (calendarId === 'work') return workResponse.promise;
+      primarySent.resolve();
+      return primaryResponse.promise;
+    });
+    const mutation = renderHook(() => useSetCalendarColorMutation());
+
+    const primary = mutation.mutateAsync({
+      userId,
+      calendarId: 'primary',
+      color: '#5c8aee',
+    });
+    const work = mutation.mutateAsync({
+      userId,
+      calendarId: 'work',
+      color: '#8bbf96',
+    });
+    await primarySent.promise;
+    primaryResponse.resolve(
+      err([{ code: 'HTTP_ERROR' as const, message: 'no' }])
+    );
+    await expect(primary).rejects.toThrow();
+
+    expect(customColors(listKey)).toEqual([
+      ['primary', '#ed6a86'],
+      ['work', '#8bbf96'],
+    ]);
+    workResponse.resolve(ok({}));
+    await work;
+  });
+});
+
+describe('a save that leaves the cache for REST', () => {
+  it('rereads the list it did not patch', async () => {
+    // The cache answers when the save starts and has stopped when it sends.
+    graphqlHost.mockReturnValueOnce({}).mockReturnValue(undefined);
+    setCalendarColor.mockResolvedValue(ok({}));
+    testQueryClient.setQueryData(listKey, [calendar('primary', null)]);
+    const mutation = renderHook(() => useSetCalendarColorMutation());
+
+    await mutation.mutateAsync({
+      userId,
+      calendarId: 'primary',
+      color: '#5c8aee',
+    });
+
+    expect(executeGraphqlSetCalendarColor).not.toHaveBeenCalled();
+    expect(setCalendarColor).toHaveBeenCalledOnce();
+    expect(testQueryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
+  });
+});
+
 describe('calendar color saves through the cache', () => {
   it('leaves the lists to the cache, which shows the color on the calendar record', async () => {
     graphqlHost.mockReturnValue({});

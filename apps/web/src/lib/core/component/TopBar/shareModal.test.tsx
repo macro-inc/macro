@@ -52,6 +52,9 @@ vi.mock('@app/lib/i18n/use-interface-language-sync', () => ({
 vi.mock('@app/lib/queries/calendar/graphql/use-calendar-cache', () => ({
   useCalendarCache: () => {},
 }));
+vi.mock('@app/features/calendar/hooks/use-calendar-color', () => ({
+  useUploadBrowserCalendarColors: () => {},
+}));
 vi.mock('@app/lib/queries/invalidate-on-reconnect', () => ({
   useInvalidateQueriesOnReconnect: () => {},
 }));

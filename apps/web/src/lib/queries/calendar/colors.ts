@@ -39,10 +39,13 @@ function withCustomColor(
   );
 }
 
-export async function saveCalendarColor(
+type CalendarColorTransport = 'graphql' | 'rest';
+
+/** Saves the color and reports the transport that carried it. */
+async function saveCalendarColor(
   change: CalendarColorChange
-): Promise<void> {
-  await Telemetry.span('calendar.set_color', async (span) => {
+): Promise<CalendarColorTransport> {
+  return Telemetry.span('calendar.set_color', async (span) => {
     const host = answeringGraphqlCalendarHost();
     span.setAttr('calendar.calendar_id', change.calendarId);
     span.setAttr('calendar.color.cleared', change.color === null);
@@ -51,7 +54,7 @@ export async function saveCalendarColor(
       if (host) {
         const outcome = await executeGraphqlSetCalendarColor(change);
         span.setAttr('calendar.color.outcome', outcome.kind);
-        return;
+        return 'graphql';
       }
       await throwOnErr(() =>
         emailClient.setCalendarColor(change.calendarId, {
@@ -59,6 +62,7 @@ export async function saveCalendarColor(
         })
       );
       span.setAttr('calendar.color.outcome', 'committed');
+      return 'rest';
     } catch (error) {
       span.setAttr('calendar.color.outcome', 'failed');
       span.error('Calendar color save failed');
@@ -66,6 +70,24 @@ export async function saveCalendarColor(
     }
   });
 }
+
+function calendarIdOf(variables: unknown) {
+  return typeof variables === 'object' &&
+    variables !== null &&
+    'calendarId' in variables
+    ? variables.calendarId
+    : undefined;
+}
+
+/**
+ * Only the last pending save of one calendar restores it; an earlier one
+ * would overwrite the newer choice. Saves of other calendars don't count.
+ */
+const isLastPendingSaveOf = (calendarId: string) =>
+  queryClient.isMutating({
+    mutationKey: CALENDAR_COLOR_MUTATION_KEY,
+    predicate: (mutation) => calendarIdOf(mutation.state.variables) === calendarId,
+  }) === 1;
 
 const calendarColorMutationOptions = {
   mutationKey: CALENDAR_COLOR_MUTATION_KEY,
@@ -95,21 +117,25 @@ const calendarColorMutationOptions = {
     change: CalendarColorChange,
     snapshot: CalendarColorSnapshot | undefined
   ) => {
-    if (!snapshot?.patched || !isLastPendingSave(CALENDAR_COLOR_MUTATION_KEY))
-      return;
+    if (!snapshot?.patched || !isLastPendingSaveOf(change.calendarId)) return;
     queryClient.setQueriesData<VisibleCalendar[]>(
       visibleCalendarsOf(change.userId),
       (calendars) =>
         withCustomColor(calendars, change.calendarId, snapshot.previous)
     );
   },
+  // The cache keeps a GraphQL save current. A list a REST save patched, or
+  // one it reached without patching (the cache stopped answering between the
+  // patch and the send), is reread once no color save is pending, so a read
+  // started before another save's write cannot bring its old color back.
   onSettled: (
-    _data: unknown,
+    transport: CalendarColorTransport | undefined,
     _error: unknown,
     change: CalendarColorChange,
     snapshot: CalendarColorSnapshot | undefined
   ) =>
-    snapshot?.patched && isLastPendingSave(CALENDAR_COLOR_MUTATION_KEY)
+    (snapshot?.patched || transport === 'rest') &&
+    isLastPendingSave(CALENDAR_COLOR_MUTATION_KEY)
       ? queryClient.invalidateQueries(visibleCalendarsOf(change.userId))
       : undefined,
 };

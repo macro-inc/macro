@@ -79,9 +79,12 @@ test.describe("a calendar's color in the sidebar", () => {
     await page
       .getByRole('button', { name: 'Color for Work (viewer@example.com)' })
       .click();
+    const saved = page.waitForResponse('**/calendar/calendars/*/color');
     await page.getByRole('button', { name: 'Iris' }).click();
 
     await expect(event).toHaveCSS('--event-calendar-color', '#9382e8');
+    // The grid recolors before the save reaches the server.
+    await saved;
     expect(server.colorWrites).toEqual([
       { calendarId: 'calendar-1', color: '#9382e8' },
     ]);
@@ -107,6 +110,11 @@ test.describe("a calendar's color in the sidebar", () => {
     await page.getByRole('button', { name: 'Sage' }).click();
     await expect(event).toHaveCSS('--event-calendar-color', '#8bbf96');
 
+    const reset = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/color') &&
+        response.request().postDataJSON()?.color === null
+    );
     await page
       .getByRole('button', {
         name: 'Reset Color for Work (viewer@example.com)',
@@ -114,6 +122,7 @@ test.describe("a calendar's color in the sidebar", () => {
       .click();
 
     await expect(event).toHaveCSS('--event-calendar-color', '#9fe1e7');
+    await reset;
     expect(server.colorWrites.at(-1)).toEqual({
       calendarId: 'calendar-1',
       color: null,

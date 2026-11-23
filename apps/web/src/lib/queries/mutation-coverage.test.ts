@@ -46,6 +46,7 @@ const policies = {
   DeleteCalendarEvent: 'custom: event and occurrence removal',
   RespondToCalendarEvent: 'custom: attendee response',
   InviteCalendarEventGuests: 'custom: added attendees',
+  SetCalendarColor: "custom: the calendar's own color on its record",
   MarkWorkFeedItemsDone:
     'custom: feed rows stay hidden until the server removes them',
   CreateInitiative: 'authoritative: server assigns the project ID',
