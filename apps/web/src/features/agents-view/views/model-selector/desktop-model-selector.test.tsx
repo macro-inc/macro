@@ -49,6 +49,9 @@ describe('desktop model card', () => {
     const content = name.parentElement?.parentElement;
     expect(content?.parentElement).toBe(card);
     expect(content?.className).not.toMatch(/m-2|bg-ink\/8|rounded-/);
+    expect(content?.classList.contains('px-2')).toBe(true);
+    expect(content?.classList.contains('py-2')).toBe(true);
+    expect(name.classList.contains('rounded-full')).toBe(true);
     fireEvent.click(await screen.findByRole('button', { name: 'GPT-6.1 Sol' }));
     const search = await screen.findByRole('textbox');
     await waitFor(() => expect(document.activeElement).toBe(search));

@@ -9,7 +9,7 @@ import { ModelSelectionList } from './model-selection-list';
 
 afterEach(cleanup);
 
-function setup() {
+function setup(mobile = false) {
   const choose = vi.fn();
   const nav = createModelSelectorNavigation();
   nav.setPage('list');
@@ -28,7 +28,12 @@ function setup() {
   };
   render(() => (
     <UnifiedModelSelectorRoot state={state}>
-      <ModelSelectionList navigation={nav} onBack={nav.back} onPick={vi.fn()} />
+      <ModelSelectionList
+        navigation={nav}
+        mobile={mobile}
+        onBack={nav.back}
+        onPick={vi.fn()}
+      />
     </UnifiedModelSelectorRoot>
   ));
   return { choose, nav };
@@ -56,14 +61,20 @@ describe('model selection list', () => {
     expect(screen.getByRole('button', { name: 'DeepSeek Flash' })).toBeTruthy();
   });
 
-  it('opens the agents page from the text-only See all action', () => {
-    const { nav } = setup();
-    const seeAll = screen.getByRole('button', { name: 'See all' });
-    expect(seeAll.classList.contains('text-link')).toBe(true);
-    expect(seeAll.classList.contains('bg-transparent')).toBe(true);
-    expect(seeAll.querySelector('svg')).toBeNull();
-    fireEvent.click(seeAll);
-    expect(nav.page()).toBe('agents');
-    expect(screen.getByRole('button', { name: 'Agents' })).toBeTruthy();
-  });
+  it.each([false, true])(
+    'opens the agents page from the See all link with a trailing arrow (mobile: %s)',
+    (mobile) => {
+      const { nav } = setup(mobile);
+      const seeAll = screen.getByRole('button', { name: 'See all' });
+      expect(seeAll.classList.contains('text-link')).toBe(true);
+      expect(seeAll.classList.contains('bg-transparent')).toBe(true);
+      const arrow = seeAll.querySelector('svg');
+      expect(arrow).not.toBeNull();
+      expect(arrow).toBe(seeAll.lastElementChild);
+      expect(arrow?.getAttribute('aria-hidden')).toBe('true');
+      fireEvent.click(seeAll);
+      expect(nav.page()).toBe('agents');
+      expect(screen.getByRole('button', { name: 'Agents' })).toBeTruthy();
+    }
+  );
 });

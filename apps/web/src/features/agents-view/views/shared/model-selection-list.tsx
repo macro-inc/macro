@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { matchesModelQuery } from '@core/component/AI/component/input/modelCatalog';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
@@ -243,6 +244,7 @@ export function ModelSelectionList(props: {
                   }}
                 >
                   {t('agentControls.seeAll')}
+                  <ArrowRight aria-hidden="true" class="size-3.5 shrink-0" />
                 </Button>
               </Show>
             </div>

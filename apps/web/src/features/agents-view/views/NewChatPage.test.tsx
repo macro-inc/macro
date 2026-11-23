@@ -441,6 +441,9 @@ describe('agent-led new conversation', () => {
     const content = name.parentElement?.parentElement;
     expect(content?.parentElement).toBe(card);
     expect(content?.className).not.toMatch(/m-2|bg-ink\/8|rounded-/);
+    expect(content?.classList.contains('px-3')).toBe(true);
+    expect(content?.classList.contains('py-2')).toBe(true);
+    expect(name.classList.contains('rounded-full')).toBe(true);
     fireEvent.click(name);
     expect(
       await screen.findByRole('textbox', { name: 'Search agents and models' })

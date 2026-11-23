@@ -18,11 +18,11 @@ export function ModelSelectorCard(props: {
     state.model?.toLowerCase() !== 'auto';
   return (
     <div
-      class="flex flex-col"
+      class="flex flex-col py-2"
       classList={{
-        'gap-2.5 px-3 pt-2.5 pb-3.5': !props.mobile && controls(),
-        'px-3 py-2': !props.mobile && !controls(),
-        'gap-3.5 px-1.5 pt-1.5 pb-4': Boolean(props.mobile),
+        'px-2': !props.mobile,
+        'gap-2.5': !props.mobile && controls(),
+        'gap-3.5 px-3': Boolean(props.mobile),
       }}
     >
       <div
@@ -34,10 +34,10 @@ export function ModelSelectorCard(props: {
           appearance="bare"
           onClick={props.onSelect}
           class={cn(
-            'min-w-0 not-touch:hover:bg-ink/12 active:bg-ink/12 text-ink font-medium',
+            'min-w-0 rounded-full not-touch:hover:bg-ink/12 active:bg-ink/12 text-ink font-medium',
             props.mobile
-              ? 'h-11 min-h-11 rounded-[14px] pl-2.5 pr-3 gap-2.5 text-base leading-[22px]'
-              : '-ml-1.5 h-7 min-h-7 rounded-md px-1.5 gap-2 text-sm'
+              ? 'h-11 min-h-11 pl-2.5 pr-3 gap-2.5 text-base leading-[22px]'
+              : 'h-7 min-h-7 px-1.5 gap-2 text-sm'
           )}
         >
           <ModelSelectorIdentity mobile={props.mobile} />
