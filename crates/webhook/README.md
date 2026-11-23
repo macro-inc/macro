@@ -430,9 +430,9 @@ encrypts the secret before calling it.
   webhooks again. The webhook
   worker tells the two message kinds apart by shape. Each POST is a Standard
   Webhooks signed `{eventId, name, timestamp, data, cursor: null}` with
-  `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. A body
-  over 256 KiB (ChatGPT's limit) is dropped with a warning, for every
-  profile. Attempts follow the
+  `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. A `chatgpt`
+  body over 256 KiB (ChatGPT's limit) is dropped with a warning; `mcp`
+  bodies have no cap here. Attempts follow the
   webhook retry schedule, counted by SQS's receive count (5 attempts; a later receipt is acknowledged
   without a POST). A receipt that fails inside this service (the database or
   KMS) counts too, since nothing is stored per delivery: an outage longer than
@@ -453,7 +453,10 @@ encrypts the secret before calling it.
   (`SECRET_ROTATION_WINDOW`), and deliveries in that window carry both
   signatures (space-separated in `webhook-signature`), so a receiver still
   holding the old secret accepts them. A stored secret that cannot be
-  decrypted is replaced without overlap.
+  decrypted fails the refresh, which the client retries. Which secret is
+  kept depends on the row as read, so the upsert writes only over a row
+  that still holds the secret it read (`read_secret`); after a concurrent
+  refresh it reads the row again (up to three times).
 - **Delivery profiles.** `delivery_profile` says whose conventions a row's
   deliveries follow; the subscribe body names it (`profile`, left out for
   the default). `mcp`, the default, follows the MCP Events specification:
@@ -461,9 +464,12 @@ encrypts the secret before calling it.
   `chatgpt` is set by the MCP server for ChatGPT, whose integration follows
   an earlier draft: `eventId` equals `webhook-id` (the event's own id stays
   in `data.event_id`), and `data` names no person: every `macro|<email>`
-  user id and email address in its string values becomes `me` (the
-  subscriber) or `someone` (`McpEventOccurrence::new`, `without_people`),
-  as ChatGPT's tools never show people's emails.
+  user id and email address in its keys and string values becomes `me` (the
+  subscriber) or `someone`, and so does a `<who>_name` beside a user id
+  in `<who>_id` (`requester_name`) (`McpEventOccurrence::new`,
+  `without_people`), as ChatGPT's tools never show people's emails. The
+  subscribe result names the profile stored, so a caller can tell storage
+  that predates profiles (and ignored it) from one that stored it.
 - **Stream mode.** `events/stream` stores nothing here: the MCP server reads
   this service's live event stream (`GET /webhook/events/stream`, scope
   `user`) as the subscriber, one connection per `stream_groups` entry, and
@@ -484,6 +490,20 @@ encrypts the secret before calling it.
   queues nothing. Rolling this service back loses MCP deliveries queued while
   old and new tasks overlap, including ones the remaining new tasks publish
   during it; ordinary webhook messages are unaffected.
+- **ChatGPT rollout and rollback.** Roll out this service (with the
+  migration), then the MCP server, then `mcp-chatgpt-worker`. Each hop
+  refuses an answer from a server too old to know the profile: the MCP
+  server checks the profile the subscribe result names, and the Worker
+  checks the `com.macro/eventsProfile` the MCP server puts in `_meta`, so
+  a version skew fails ChatGPT's subscribe instead of storing a row that
+  delivers unredacted. A worker from before profiles reads every row as
+  `mcp`, so before rolling this service back past this change, remove the
+  ChatGPT rows first (`DELETE FROM mcp_event_subscription WHERE
+  delivery_profile = 'chatgpt'`; their queued deliveries then find no row
+  and are dropped, and ChatGPT's next refresh fails until the roll forward).
+  Rolling back only the MCP server or the Worker leaves stored rows
+  delivering correctly and makes ChatGPT's refreshes fail, so its
+  subscriptions lapse at `refreshBefore`.
 
 ## Operations
 

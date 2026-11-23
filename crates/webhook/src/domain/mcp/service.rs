@@ -8,8 +8,9 @@ mod test;
 use super::live_subscribers::McpLiveSubscribers;
 use super::models::{
     MAX_ARGUMENTS_BYTES, MAX_DELIVERY_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome,
-    McpEventOccurrence, McpEventQueueMessage, McpEventSubscription, McpPreviousSecret,
-    McpSubscribeRequest, McpSubscribeResult, McpSubscriptionKey, SECRET_ROTATION_WINDOW,
+    McpDeliveryProfile, McpEventOccurrence, McpEventQueueMessage, McpEventSubscription,
+    McpPreviousSecret, McpSubscribeRequest, McpSubscribeResult, McpSubscriptionKey,
+    SECRET_ROTATION_WINDOW,
 };
 use super::ports::{
     McpEndpointClient, McpEndpointVerifyError, McpEventDeliveryService, McpEventEnqueuer,
@@ -37,6 +38,10 @@ pub const AUDIENCE_CHUNK: usize = 100;
 pub const SWEEP_BATCH: u32 = 500;
 /// Most queue sends in flight for one event's fan-out.
 const MAX_CONCURRENT_ENQUEUES: usize = 16;
+
+/// Most times a subscribe re-reads its row after a concurrent refresh of it
+/// changed the row first.
+const STORE_ATTEMPTS: usize = 3;
 
 /// Most sweep statements in one round; the next round continues.
 pub const SWEEP_MAX_BATCHES: u32 = 20;
@@ -99,31 +104,34 @@ where
     /// The secret deliveries are also signed with after `row` is refreshed
     /// with `secret`: its current one when the refresh replaces it, else any
     /// earlier replaced one whose window is still open. A stored secret that
-    /// cannot be opened is replaced without overlap: deliveries are then
-    /// signed with the new secret alone, which is what the client sent.
+    /// cannot be opened fails the refresh, which the client retries, rather
+    /// than drop the overlap a receiver still on it relies on.
     async fn previous_secret(
         &self,
         row: &McpEventSubscription,
         secret: &SigningSecret,
         now: DateTime<Utc>,
-    ) -> Option<McpPreviousSecret> {
-        match self.cipher.decrypt(&row.user_id, &row.secret).await {
-            Ok(stored) if stored.same_key(secret) => row
-                .previous_secret
-                .clone()
-                .filter(|previous| previous.expires_at > now),
-            Ok(_) => {
-                tracing::Span::current().record("secret_rotated", true);
-                Some(McpPreviousSecret {
-                    secret: row.secret.clone(),
-                    expires_at: now + SECRET_ROTATION_WINDOW,
-                })
-            }
-            Err(error) => {
-                tracing::warn!(error = ?error, "failed to open a refreshed mcp subscription's secret");
-                None
-            }
+    ) -> Result<(Option<McpPreviousSecret>, bool), McpSubscriptionError> {
+        let stored = self
+            .cipher
+            .decrypt(&row.user_id, &row.secret)
+            .await
+            .map_err(McpSubscriptionError::internal)?;
+        if stored.same_key(secret) {
+            return Ok((
+                row.previous_secret
+                    .clone()
+                    .filter(|previous| previous.expires_at > now),
+                false,
+            ));
         }
+        Ok((
+            Some(McpPreviousSecret {
+                secret: row.secret.clone(),
+                expires_at: now + SECRET_ROTATION_WINDOW,
+            }),
+            true,
+        ))
     }
 }
 
@@ -161,15 +169,6 @@ where
         let span = tracing::Span::current();
         span.record("subscription_id", subscription_id.as_str());
 
-        let now = Utc::now();
-        let existing = self
-            .repo
-            .get(&key.user_id, &subscription_id)
-            .await
-            .map_err(McpSubscriptionError::internal)?;
-        let live = existing.filter(|row| row.is_live(now));
-        span.record("refreshed", live.is_some());
-
         let filter = request.filter;
         filter
             .validate()
@@ -206,43 +205,79 @@ where
 
         // A refresh may replace the secret; deliveries then carry both
         // signatures for a while, so a receiver still on the old one accepts
-        // them.
-        let previous_secret = match &live {
-            Some(row) => self.previous_secret(row, &request.secret, now).await,
-            None => None,
-        };
-
-        // The quota is checked again where the row is written, under a
-        // per-user lock, so concurrent subscribes cannot pass it together.
-        let stored = self
-            .repo
-            .store_within_quota(
-                McpSubscriptionUpsert {
-                    id: Uuid::now_v7(),
-                    key,
-                    subscription_id,
-                    filter,
-                    secret: request.secret_ciphertext,
-                    previous_secret,
-                    profile: request.profile,
-                    expires_at: request.ttl.grant(now),
-                },
-                MAX_SUBSCRIPTIONS_PER_USER,
-            )
-            .await
-            .map_err(McpSubscriptionError::internal)?;
-        let row = match stored {
-            McpStoreOutcome::Stored(row) => *row,
-            McpStoreOutcome::QuotaExceeded => {
-                return Err(McpSubscriptionError::ResourceExhausted {
-                    max: MAX_SUBSCRIPTIONS_PER_USER,
-                });
+        // them. Which secret that is depends on the row as read, so the write
+        // is refused if a concurrent refresh changed the row first, and the
+        // row is read again.
+        let mut refreshed = false;
+        let mut rotated = false;
+        let mut stored = None;
+        for _ in 0..STORE_ATTEMPTS {
+            let now = Utc::now();
+            let existing = self
+                .repo
+                .get(&key.user_id, &subscription_id)
+                .await
+                .map_err(McpSubscriptionError::internal)?;
+            let read_secret = existing.as_ref().map(|row| row.secret.ciphertext.clone());
+            let live = existing.filter(|row| row.is_live(now));
+            refreshed = live.is_some();
+            let previous_secret = match &live {
+                Some(row) => {
+                    let (previous, replaced) =
+                        self.previous_secret(row, &request.secret, now).await?;
+                    rotated = replaced;
+                    previous
+                }
+                None => {
+                    rotated = false;
+                    None
+                }
+            };
+            // The quota is checked again where the row is written, under a
+            // per-user lock, so concurrent subscribes cannot pass it together.
+            let outcome = self
+                .repo
+                .store_within_quota(
+                    McpSubscriptionUpsert {
+                        id: Uuid::now_v7(),
+                        key: key.clone(),
+                        subscription_id: subscription_id.clone(),
+                        filter: filter.clone(),
+                        secret: request.secret_ciphertext.clone(),
+                        read_secret,
+                        previous_secret,
+                        profile: request.profile,
+                        expires_at: request.ttl.grant(now),
+                    },
+                    MAX_SUBSCRIPTIONS_PER_USER,
+                )
+                .await
+                .map_err(McpSubscriptionError::internal)?;
+            match outcome {
+                McpStoreOutcome::Stored(row) => {
+                    stored = Some(*row);
+                    break;
+                }
+                McpStoreOutcome::QuotaExceeded => {
+                    return Err(McpSubscriptionError::ResourceExhausted {
+                        max: MAX_SUBSCRIPTIONS_PER_USER,
+                    });
+                }
+                McpStoreOutcome::Changed => {}
             }
+        }
+        span.record("refreshed", refreshed);
+        span.record("secret_rotated", rotated);
+        let Some(row) = stored else {
+            return Err(McpSubscriptionError::internal(std::io::Error::other(
+                "the subscription kept changing under concurrent refreshes",
+            )));
         };
         Ok(McpSubscribeResult {
             id: row.subscription_id,
             refresh_before: row.expires_at,
             filter: row.filter,
+            profile: row.profile,
         })
     }
 
@@ -554,7 +589,7 @@ where
         };
         span.record("body_bytes", body.len());
         // ChatGPT refuses a larger body with a 413, which is not retried.
-        if body.len() > MAX_DELIVERY_BYTES {
+        if subscription.profile == McpDeliveryProfile::Chatgpt && body.len() > MAX_DELIVERY_BYTES {
             tracing::warn!(
                 body_bytes = body.len(),
                 "mcp event delivery is too large to send"

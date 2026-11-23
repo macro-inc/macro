@@ -185,7 +185,11 @@ fn chatgpt_occurrence_carries_the_delivery_id_and_no_people() {
             "mentioned": { "entity_type": "user", "entity_id": "macro|me@example.com" },
             "content": "ping other@example.org and ME@example.com",
             "count": 2,
-            "macro|other@example.com": true
+            "macro|other@example.com": true,
+            "requester_id": "macro|a!b@example.com",
+            "requester_name": "Ada Lovelace",
+            "channel_id": "0193d2a4-5b6c-7d8e-9f00-112233445566",
+            "channel_name": "general"
         }
     });
     let occurrence = McpEventOccurrence::new(
@@ -208,9 +212,13 @@ fn chatgpt_occurrence_carries_the_delivery_id_and_no_people() {
             "mentioned": { "entity_type": "user", "entity_id": "me" },
             "content": "ping someone and me",
             "count": 2,
-            "macro|other@example.com": true
+            "someone": true,
+            "requester_id": "someone",
+            "requester_name": "someone",
+            "channel_id": "0193d2a4-5b6c-7d8e-9f00-112233445566",
+            "channel_name": "general"
         }),
-        "values lose people, keys are kept"
+        "keys, values and a person's name lose people; other names stay"
     );
 }
 

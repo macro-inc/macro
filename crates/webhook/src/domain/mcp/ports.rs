@@ -27,6 +27,10 @@ pub struct McpSubscriptionUpsert {
     pub filter: McpEventFilter,
     /// The new encrypted secret.
     pub secret: McpSecretCiphertext,
+    /// The stored secret's ciphertext when the row was read, `None` when
+    /// there was no row: the refresh was decided against that row, so it is
+    /// not written over a row that has changed since.
+    pub read_secret: Option<Vec<u8>>,
     /// The secret this refresh replaced, or the one an earlier refresh
     /// replaced while its window lasts.
     pub previous_secret: Option<McpPreviousSecret>,
@@ -43,6 +47,8 @@ pub enum McpStoreOutcome {
     Stored(Box<McpEventSubscription>),
     /// The user already holds the most subscriptions allowed.
     QuotaExceeded,
+    /// The row is no longer the one read: another refresh wrote it first.
+    Changed,
 }
 
 /// Storage of MCP webhook subscriptions.
@@ -64,7 +70,7 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<McpEventSubscription>, Self::Err>> + Send;
 
     /// Insert, or refresh the secrets, profile, filter and expiry of the
-    /// existing row,
+    /// existing row if it still holds `upsert.read_secret`,
     /// unless the user would then hold more than `max` live subscriptions.
     /// Expired rows do not count. Serialized per user, so
     /// concurrent subscribes cannot pass the limit together.

@@ -29,6 +29,9 @@ struct FakeRepo {
     match_calls: Arc<Mutex<Vec<usize>>>,
     /// Whether reading the live subscribers fails.
     live_ids_fail: Arc<std::sync::atomic::AtomicBool>,
+    /// A secret another refresh writes just before the next store, as if it
+    /// had won a race with it.
+    racing_secret: Arc<Mutex<Option<McpSecretCiphertext>>>,
 }
 
 impl FakeRepo {
@@ -85,6 +88,13 @@ impl McpSubscriptionRepo for FakeRepo {
         if let Some(row) = rows.iter_mut().find(|row| {
             row.user_id == upsert.key.user_id && row.subscription_id == upsert.subscription_id
         }) {
+            if let Some(racing) = self.racing_secret.lock().expect("lock").take() {
+                row.previous_secret = None;
+                row.secret = racing;
+            }
+            if upsert.read_secret.as_ref() != Some(&row.secret.ciphertext) {
+                return Ok(McpStoreOutcome::Changed);
+            }
             row.filter = upsert.filter;
             row.secret = upsert.secret;
             row.previous_secret = upsert.previous_secret;
@@ -1121,20 +1131,50 @@ async fn a_closed_window_signs_with_the_current_secret_alone() {
 }
 
 #[tokio::test]
-async fn a_stored_secret_that_cannot_be_opened_is_replaced_without_overlap() {
+async fn a_stored_secret_that_cannot_be_opened_fails_the_refresh() {
     let repo = FakeRepo::default();
     subscribed(&repo).await;
     repo.rows.lock().expect("lock")[0].secret.ciphertext = vec![0xff];
+    let refreshed = service(&repo, &FakeEndpoint::accepting())
+        .subscribe(
+            user(ME),
+            rotating(request("mentions", mentions_of_me_in_channels())),
+        )
+        .await;
+    assert!(
+        matches!(refreshed, Err(McpSubscriptionError::Internal(_))),
+        "the client retries rather than lose the overlap: {refreshed:?}"
+    );
+    assert_eq!(
+        repo.rows()[0].secret.ciphertext,
+        vec![0xff],
+        "the row is unchanged"
+    );
+}
+
+#[tokio::test]
+async fn a_refresh_that_lost_a_race_keeps_the_secret_that_won_it() {
+    // Two refreshes read the row on the old secret; one rotates to
+    // `RACING` and commits first, then the other, rotating to
+    // `NEW_SECRET`, must keep `RACING` (which its client may have
+    // adopted), not the old secret it read.
+    const RACING: &str = "whsec_dGhlIHJhY2luZyByZWZyZXNoIHNlY3JldA==";
+    let repo = FakeRepo::default();
+    subscribed(&repo).await;
+    *repo.racing_secret.lock().expect("lock") = Some(ciphertext_of(RACING));
     service(&repo, &FakeEndpoint::accepting())
         .subscribe(
             user(ME),
             rotating(request("mentions", mentions_of_me_in_channels())),
         )
         .await
-        .expect("refreshed");
+        .expect("refreshed after reading the row again");
     let row = repo.rows().remove(0);
     assert_eq!(row.secret, ciphertext_of(NEW_SECRET));
-    assert_eq!(row.previous_secret, None);
+    assert_eq!(
+        row.previous_secret.map(|previous| previous.secret),
+        Some(ciphertext_of(RACING))
+    );
 }
 
 #[tokio::test]
@@ -1168,9 +1208,10 @@ async fn a_chatgpt_subscription_delivers_its_message_id_as_the_event_id() {
 }
 
 #[tokio::test]
-async fn a_delivery_over_the_size_limit_is_dropped() {
+async fn a_chatgpt_delivery_over_the_size_limit_is_dropped() {
     let repo = FakeRepo::default();
     let row = subscribed(&repo).await;
+    repo.rows.lock().expect("lock")[0].profile = McpDeliveryProfile::Chatgpt;
     let endpoint = FakeEndpoint::accepting();
     let mut event = mentioned_event("channel", ME);
     event.broker_envelope["metadata"]["content"] =
@@ -1180,4 +1221,18 @@ async fn a_delivery_over_the_size_limit_is_dropped() {
         .await;
     assert_eq!(disposition, WebhookWorkerDisposition::Acknowledge);
     assert!(endpoint.delivered.lock().expect("lock").is_empty());
+}
+
+#[tokio::test]
+async fn an_mcp_delivery_over_chatgpts_size_limit_is_still_sent() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    let endpoint = FakeEndpoint::accepting();
+    let mut event = mentioned_event("channel", ME);
+    event.broker_envelope["metadata"]["content"] =
+        serde_json::Value::String("x".repeat(MAX_DELIVERY_BYTES));
+    delivery(&repo, &endpoint, false)
+        .deliver(McpEventQueueMessage::new(row.id, event), 1)
+        .await;
+    assert_eq!(endpoint.delivered.lock().expect("lock").len(), 1);
 }

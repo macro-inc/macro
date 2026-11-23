@@ -63,6 +63,7 @@ fn upsert(
             kms_key_id: "alias/key".to_owned(),
             encryption_version: 1,
         },
+        read_secret: None,
         previous_secret: None,
         profile: McpDeliveryProfile::Mcp,
         expires_at: Utc::now() + expires_in,
@@ -71,13 +72,18 @@ fn upsert(
 
 const MAX: u32 = 50;
 
+/// Store `upsert` as the service does: decided against the row as read now.
 async fn store(
     repo: &PgMcpSubscriptionRepository,
-    upsert: McpSubscriptionUpsert,
+    mut upsert: McpSubscriptionUpsert,
 ) -> anyhow::Result<McpEventSubscription> {
+    upsert.read_secret = repo
+        .get(&upsert.key.user_id, &upsert.subscription_id)
+        .await?
+        .map(|row| row.secret.ciphertext);
     match repo.store_within_quota(upsert, MAX).await? {
         McpStoreOutcome::Stored(row) => Ok(*row),
-        McpStoreOutcome::QuotaExceeded => anyhow::bail!("unexpected quota refusal"),
+        outcome => anyhow::bail!("unexpected {outcome:?}"),
     }
 }
 
@@ -314,8 +320,10 @@ async fn the_quota_counts_live_rows_but_not_a_refresh(pool: PgPool) -> anyhow::R
         .await?,
         McpStoreOutcome::QuotaExceeded
     );
+    let mut refresh = first.clone();
+    refresh.read_secret = Some(first.secret.ciphertext.clone());
     assert!(matches!(
-        repo.store_within_quota(first, 2).await?,
+        repo.store_within_quota(refresh, 2).await?,
         McpStoreOutcome::Stored(_)
     ));
     assert!(
@@ -515,5 +523,46 @@ async fn live_subscribers_are_the_owners_of_live_rows(pool: PgPool) -> anyhow::R
     let mut owners = repo.list_live_subscriber_ids().await?;
     owners.sort();
     assert_eq!(owners, vec![ME.to_owned(), ME.to_owned()]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_refresh_decided_against_a_changed_row_is_not_written(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let first = upsert(
+        ME,
+        URL,
+        "mentions",
+        &["message.mentioned"],
+        Duration::hours(1),
+    );
+    store(&repo, first.clone()).await?;
+    let mut won = first.clone();
+    won.secret.ciphertext = vec![7];
+    let won = store(&repo, won).await?;
+
+    // Read before `won` committed: it names the first secret.
+    let mut lost = first.clone();
+    lost.secret.ciphertext = vec![8];
+    lost.read_secret = Some(first.secret.ciphertext.clone());
+    assert_eq!(
+        repo.store_within_quota(lost, MAX).await?,
+        McpStoreOutcome::Changed
+    );
+    assert_eq!(
+        repo.get(&user(ME), &first.subscription_id).await?,
+        Some(won),
+        "the row is the winner's"
+    );
+
+    // A first subscribe that raced another one finds the row there.
+    let mut late = first.clone();
+    late.read_secret = None;
+    assert_eq!(
+        repo.store_within_quota(late, MAX).await?,
+        McpStoreOutcome::Changed
+    );
     Ok(())
 }

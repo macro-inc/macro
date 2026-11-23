@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::mcp::models::{McpEndpointFailure, McpSubscriptionId, McpSubscriptionKey};
+use crate::domain::mcp::models::{
+    McpDeliveryProfile, McpEndpointFailure, McpSubscriptionId, McpSubscriptionKey,
+};
 use axum::body::{Body, to_bytes};
 use axum::http::Request;
 use chrono::{TimeZone as _, Utc};
@@ -100,6 +102,7 @@ impl McpEventSubscriptionService for FakeService {
             .expect("lock")
             .push(Call::Subscribe(user_id.as_ref().to_owned(), request));
         Ok(McpSubscribeResult {
+            profile: McpDeliveryProfile::default(),
             id: McpSubscriptionId::from_stored("sub_1".to_owned()),
             refresh_before: Utc
                 .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)

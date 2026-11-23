@@ -38,8 +38,8 @@ const MESSAGE_ID_PREFIX: &str = "msg_";
 /// after a refresh replaces it, so a receiver that still holds the old one
 /// accepts them.
 pub const SECRET_ROTATION_WINDOW: Duration = Duration::minutes(10);
-/// Largest delivery body ChatGPT accepts; a larger one is never sent, to any
-/// endpoint (a receiver answers 413, which is not retried either).
+/// Largest delivery body ChatGPT accepts; a larger ChatGPT delivery is never
+/// sent (ChatGPT answers 413, which is not retried either).
 pub const MAX_DELIVERY_BYTES: usize = 256 * 1024;
 
 /// Whose conventions a subscription's deliveries follow.
@@ -86,9 +86,11 @@ pub const SUBSCRIBER_PLACEHOLDER: &str = "me";
 /// What `data` says in place of anyone else's.
 pub const PERSON_PLACEHOLDER: &str = "someone";
 
-/// `value` with every user id and email address in its strings replaced: the
-/// subscriber's own by [`SUBSCRIBER_PLACEHOLDER`], anyone else's by
-/// [`PERSON_PLACEHOLDER`]. Object keys are kept.
+/// `value` with every user id and email address in its keys and strings
+/// replaced: the subscriber's own by [`SUBSCRIBER_PLACEHOLDER`], anyone
+/// else's by [`PERSON_PLACEHOLDER`]. A person's name goes the same way: a
+/// field `<who>_name` beside a `<who>_id` that holds a user id (as
+/// `requester_name` beside `requester_id`).
 #[must_use]
 pub fn without_people(
     value: &serde_json::Value,
@@ -98,39 +100,66 @@ pub fn without_people(
     let subscriber_email = subscriber_id
         .strip_prefix("macro|")
         .unwrap_or(subscriber_id);
-    // `macro|<email>` or a bare email address, anywhere in a string: the
-    // pattern ChatGPT's tools hide people by (`mcp-chatgpt-worker`'s person
-    // tokens).
-    let hide = |text: &str| -> String {
-        lazy_regex::regex_replace_all!(
-            r"(macro\|)?([A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})",
-            text,
-            |_, _, email: &str| if email.eq_ignore_ascii_case(subscriber_email) {
-                SUBSCRIBER_PLACEHOLDER
-            } else {
-                PERSON_PLACEHOLDER
-            }
-        )
-        .into_owned()
-    };
+    hide_people(value, subscriber_email)
+}
+
+/// [`without_people`] for the subscriber's email.
+fn hide_people(value: &serde_json::Value, subscriber_email: &str) -> serde_json::Value {
     match value {
-        serde_json::Value::String(text) => serde_json::Value::String(hide(text)),
+        serde_json::Value::String(text) => {
+            serde_json::Value::String(hide_identifiers(text, subscriber_email))
+        }
         serde_json::Value::Array(items) => serde_json::Value::Array(
             items
                 .iter()
-                .map(|item| without_people(item, subscriber))
+                .map(|item| hide_people(item, subscriber_email))
                 .collect(),
         ),
         serde_json::Value::Object(fields) => serde_json::Value::Object(
             fields
                 .iter()
-                .map(|(key, field)| (key.clone(), without_people(field, subscriber)))
+                .map(|(key, field)| {
+                    let hidden = match person_named_by(fields, key) {
+                        Some(placeholder) if field.is_string() => serde_json::Value::String(
+                            hide_identifiers(placeholder, subscriber_email),
+                        ),
+                        _ => hide_people(field, subscriber_email),
+                    };
+                    (hide_identifiers(key, subscriber_email), hidden)
+                })
                 .collect(),
         ),
         serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {
             value.clone()
         }
     }
+}
+
+/// The user id whose name `key` holds in `fields`: `<who>_name` beside a
+/// `<who>_id` that is a user id or an email address.
+fn person_named_by<'a>(
+    fields: &'a serde_json::Map<String, serde_json::Value>,
+    key: &str,
+) -> Option<&'a str> {
+    let who = key.strip_suffix("_name")?;
+    let id = fields.get(&format!("{who}_id"))?.as_str()?;
+    lazy_regex::regex_is_match!(r"^(macro\|)?[^@\s]+@[^@\s]+$", id).then_some(id)
+}
+
+/// `text` with each `macro|<email>` or bare email address replaced. The
+/// local part takes every character a Macro user id's email may hold
+/// (`macro_user_id`'s parser), so none is left half-hidden.
+fn hide_identifiers(text: &str, subscriber_email: &str) -> String {
+    lazy_regex::regex_replace_all!(
+        r"(macro\|)?([A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})",
+        text,
+        |_, _, email: &str| if email.eq_ignore_ascii_case(subscriber_email) {
+            SUBSCRIBER_PLACEHOLDER
+        } else {
+            PERSON_PLACEHOLDER
+        }
+    )
+    .into_owned()
 }
 
 /// The server-derived handle of a webhook subscription: `sub_` and 32 hex
@@ -472,6 +501,11 @@ pub struct McpSubscribeResult {
     /// The filter delivery evaluates.
     #[cfg_attr(feature = "inbound", schema(value_type = Object))]
     pub filter: McpEventFilter,
+    /// Whose conventions its deliveries follow, as stored. A caller asking
+    /// for a profile checks it here: storage that predates profiles leaves
+    /// it out, which reads as MCP's.
+    #[serde(default)]
+    pub profile: McpDeliveryProfile,
 }
 
 /// Why a callback endpoint was not accepted, as the spec's `lastError`

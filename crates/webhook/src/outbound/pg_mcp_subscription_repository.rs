@@ -208,7 +208,8 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             return Ok(McpStoreOutcome::QuotaExceeded);
         }
         // The key parts (user, URL, event type, arguments) are what the id is
-        // derived from, so a conflict only refreshes the rest.
+        // derived from, so a conflict only refreshes the rest, and only the
+        // row the refresh was decided against.
         let row = sqlx::query_as!(
             SubscriptionRow,
             r#"
@@ -232,6 +233,7 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
                 delivery_profile = EXCLUDED.delivery_profile,
                 expires_at = EXCLUDED.expires_at,
                 updated_at = now()
+            WHERE mcp_event_subscription.secret_ciphertext IS NOT DISTINCT FROM $17
             RETURNING id, user_id, subscription_id, event_type, arguments, filter,
                 endpoint_url, secret_ciphertext, secret_kms_key_id,
                 secret_encryption_version, previous_secret_ciphertext,
@@ -254,9 +256,16 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             previous.map(|previous| previous.expires_at),
             upsert.profile.as_ref(),
             upsert.expires_at,
+            upsert.read_secret.as_deref(),
         )
-        .fetch_one(&mut *transaction)
+        .fetch_optional(&mut *transaction)
         .await?;
+        // A conflicting row that no longer holds the secret this refresh read
+        // was written by another refresh in between.
+        let Some(row) = row else {
+            transaction.rollback().await?;
+            return Ok(McpStoreOutcome::Changed);
+        };
         // The event names index the row for matching; a refresh may change
         // the filter and always changes the expiry, so they are rewritten.
         sqlx::query!(
