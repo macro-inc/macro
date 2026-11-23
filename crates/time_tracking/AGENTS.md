@@ -63,8 +63,11 @@ and each task's Time logged total. Served over REST by
   (`{ timer, taskId }`) to all of the person's open sessions through the
   gateway: `timer` when their timer started, stopped or was discarded,
   `taskId` for the task whose entries changed. It is a hint to read again,
-  spawned on the event broker's shutdown tracker so the response never waits;
-  replays and refusals send nothing.
+  spawned on the event broker's shutdown tracker so the response never waits,
+  and sent with the person in the request body (a failed request's error
+  names its URL). Replayed logs, starts and stops and refused writes send
+  nothing; a discard always sends one, since the repository does not say
+  whether a timer was there.
 
 ## Related
 

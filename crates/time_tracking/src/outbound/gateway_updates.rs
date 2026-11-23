@@ -57,11 +57,13 @@ impl TimeTrackingUpdates for GatewayTimeTrackingUpdates {
         // already committed.
         self.tasks.spawn(
             async move {
+                // The batch call carries the person in the body: a failed
+                // request's error names its URL, and a user id is an email.
                 let sent = gateway
-                    .send_message(
-                        EntityType::User.with_entity_str(user_id.as_ref()),
+                    .batch_send_message(
                         TIME_TRACKING_CHANGED.to_owned(),
                         payload(&change),
+                        vec![EntityType::User.with_entity_str(user_id.as_ref())],
                     )
                     .await;
                 let span = tracing::Span::current();

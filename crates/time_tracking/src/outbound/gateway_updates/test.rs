@@ -2,7 +2,7 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde_json::{Value, json};
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{method, path_regex},
+    matchers::{method, path},
 };
 
 use super::*;
@@ -13,7 +13,7 @@ const TASK: &str = "00000000-0000-0000-0000-0000000000a1";
 async fn gateway() -> (MockServer, ConnectionGatewayClient) {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path_regex("^/message/send/user/.+$"))
+        .and(path("/message/batch_send"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "receipts": [] })))
         .mount(&server)
         .await;
@@ -32,8 +32,8 @@ async fn send(client: ConnectionGatewayClient, change: TimeTrackingChange) {
     tasks.wait().await;
 }
 
-/// `(path, message_type, message)` of every push the gateway received.
-async fn pushes(server: &MockServer) -> Vec<(String, Value, Value)> {
+/// `(path, message_type, message, entities)` of every push the gateway received.
+async fn pushes(server: &MockServer) -> Vec<(String, Value, Value, Value)> {
     server
         .received_requests()
         .await
@@ -45,6 +45,7 @@ async fn pushes(server: &MockServer) -> Vec<(String, Value, Value)> {
                 request.url.path().to_owned(),
                 body["message_type"].clone(),
                 body["message"].clone(),
+                body["entities"].clone(),
             )
         })
         .collect()
@@ -65,10 +66,14 @@ async fn an_entry_change_tells_the_persons_sessions_which_task_to_read_again() {
 
     let pushes = pushes(&server).await;
     assert_eq!(pushes.len(), 1);
-    let (path, message_type, message) = &pushes[0];
-    assert!(path.starts_with("/message/send/user/"), "{path}");
+    let (path, message_type, message, entities) = &pushes[0];
+    assert_eq!(path, "/message/batch_send");
     assert_eq!(message_type, &json!("time_tracking_changed"));
     assert_eq!(message, &json!({ "timer": false, "taskId": TASK }));
+    assert_eq!(
+        entities,
+        &json!([{ "entity_type": "user", "entity_id": PERSON }])
+    );
 }
 
 #[tokio::test]
