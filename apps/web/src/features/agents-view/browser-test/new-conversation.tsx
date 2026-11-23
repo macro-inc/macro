@@ -5,10 +5,7 @@ import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { CURSOR_BOT_PRINCIPAL_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_PRINCIPAL_ID } from '@core/constant/macroCoder';
-import {
-  type ChannelDirectory,
-  ChannelDirectoryProvider,
-} from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type {
@@ -19,6 +16,7 @@ import type {
 import { UserContextProvider } from '@core/context/user';
 import { EntityProvider } from '@entity';
 import { botProfileKeys } from '@queries/bots/keys';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient as client } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -68,17 +66,6 @@ const QUICK_ACCESS: QuickAccessContextValue = {
   refresh: () => {},
   getById: () => undefined,
   interactionForUser: () => undefined,
-};
-
-const EMPTY_CHANNELS: ChannelDirectory = {
-  channels: () => [],
-  complete: () => true,
-  failed: () => false,
-  lookup: () => ({ status: 'missing' }),
-  readComplete: async () => [],
-  retry: () => {},
-  recordView: () => {},
-  viewsCurrent: () => true,
 };
 
 const ROSTER = buildAgentRoster({
@@ -137,7 +124,9 @@ render(
           <EntityProvider>
             <UserContextProvider>
               <EmailLinksContextProvider>
-                <ChannelDirectoryProvider directory={EMPTY_CHANNELS}>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <QuickAccessContextProvider value={QUICK_ACCESS}>
                     <MobileSettingsProvider>
                       <MemoryRouter>

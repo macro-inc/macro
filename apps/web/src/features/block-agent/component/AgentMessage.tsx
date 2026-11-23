@@ -9,6 +9,12 @@
  * transcript that let each message decide showed every one of them working.
  */
 
+import {
+  createCodeLinkDescriber,
+  createCodeLinkOpener,
+  linkChangedCode,
+} from '@app/features/changes/code-links';
+import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import { AgentReplyLinks } from '@components/app/split-layout/split-router/agent-reply-links';
 import { useSessionActivity } from '@core/agent-session/session-activity';
 import { useUserId } from '@core/context/user';
@@ -85,6 +91,7 @@ function AgentMessagePart(props: {
   inFlight: boolean;
 }): JSX.Element {
   const session = useOptionalAgentSession();
+  const changes = useOptionalChanges();
   // Match accessors keep a part's renderer mounted when a streamed snapshot
   // replaces the object, preserving disclosures while updating their contents.
   return (
@@ -95,7 +102,7 @@ function AgentMessagePart(props: {
             text={
               props.message.author.kind === 'user'
                 ? stripAgentContext(part().text)
-                : part().text
+                : linkChangedCode(changes, part().text)
             }
             inFlight={props.inFlight}
             hideIncompleteXml={props.message.author.kind === 'agent'}
@@ -453,6 +460,7 @@ export function Message(props: {
 }) {
   const inFlight = () => props.inFlight;
   const segments = createMemo(() => segmentParts(props.message.parts));
+  const changes = useOptionalChanges();
   const liveRun = createMemo(() =>
     inFlight() ? liveToolSegment(props.message.parts, segments()) : -1
   );
@@ -470,8 +478,12 @@ export function Message(props: {
         !isNotificationMessage(props.message)
       }
       fallback={
-        // An agent's links to Macro open in the app, as its mention chips do.
-        <AgentReplyLinks>
+        // An agent's links to Macro open in the app, as its mention chips do,
+        // and its links to changed code open the Changes pane.
+        <AgentReplyLinks
+          openOther={changes ? createCodeLinkOpener(changes) : undefined}
+          describeOther={changes ? createCodeLinkDescriber(changes) : undefined}
+        >
           <div class="flex flex-col gap-1 min-w-0">
             {/* Segments are positional, and a run at the tail grows as calls
               stream in — so rows are keyed by index, not by segment value,
