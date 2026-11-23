@@ -1,0 +1,16 @@
+id: rust-macro-connect-flag-in-policy
+valid:
+  - |
+    // A comment may name the `macro-connect` rollout.
+    fn f() -> bool { connections.status(&app).is_connected() }
+  - |
+    fn f() -> String { format!("macro-connection-{}", id) }
+  - |
+    const OPS: &str = "macro-connect-ops";
+invalid:
+  - |
+    pub const MACRO_CONNECT_FLAG: &str = "macro-connect";
+  - |
+    async fn on(flags: &Flags, user: &User) -> bool { flags.is_enabled("macro-connect", user).await }
+  - |
+    const FLAG: &str = r#"macro-connect"#;

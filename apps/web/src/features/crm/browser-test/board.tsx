@@ -65,6 +65,15 @@ const columns: DatabaseViewColumn[] = [
         label: 'Won',
         color: 'green',
       },
+      // `?stages=N` adds empty lanes, for boards wider than the viewport.
+      ...Array.from(
+        { length: Number(new URLSearchParams(location.search).get('stages')) },
+        (_, index) => ({
+          id: `00000000-0000-0000-0001-${String(index).padStart(12, '0')}`,
+          label: `Stage ${index + 1}`,
+          color: 'blue' as const,
+        })
+      ),
     ],
   },
   {

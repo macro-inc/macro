@@ -1,4 +1,5 @@
 use super::*;
+use connectors::ConnectorId;
 use std::str::FromStr;
 
 #[test]
@@ -153,18 +154,19 @@ fn normalize_foreign_id_per_source() {
 }
 
 #[test]
-fn connector_slugs_preserve_single_apps_and_accept_both_slack_aliases() {
-    assert_eq!(ImportSource::Linear.pipedream_app_slugs(), &["linear"]);
-    assert_eq!(ImportSource::Notion.pipedream_app_slugs(), &["notion"]);
+fn each_source_is_one_catalog_app_and_both_slack_slugs_are_slack() {
+    for (source, slug) in [
+        (ImportSource::Linear, "linear"),
+        (ImportSource::Jira, "jira"),
+        (ImportSource::Notion, "notion"),
+        (ImportSource::Slack, "slack"),
+    ] {
+        assert_eq!(source.connector().unwrap().as_str(), slug);
+    }
     assert_eq!(
-        ImportSource::Slack.pipedream_app_slugs(),
-        &["slack", "slack_v2"]
+        ImportSource::Slack.connector().unwrap(),
+        ConnectorId::parse("slack_v2").unwrap()
     );
-
-    let slack = ImportSource::Slack.connector_ref();
-    assert!(slack.matches_pipedream_slug("slack"));
-    assert!(slack.matches_pipedream_slug("slack_v2"));
-    assert!(!slack.matches_pipedream_slug("slack_bot"));
 }
 
 #[test]

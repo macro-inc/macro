@@ -484,6 +484,14 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(())
     }
 
+    async fn get_viewed_at(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _channel_id: Uuid,
+    ) -> Result<Option<chrono::DateTime<Utc>>, Self::Err> {
+        Ok(None)
+    }
+
     async fn get_activities(&self, _user_id: String) -> Result<Vec<Activity>, Self::Err> {
         Ok(Vec::new())
     }
@@ -1152,6 +1160,70 @@ async fn get_or_create_dm_returns_get_for_existing_pair() {
 }
 
 #[tokio::test]
+async fn find_direct_message_reads_the_dm_get_or_create_would_reuse() {
+    let channel_id = Uuid::new_v4();
+    let actor = macro_id("macro|actor@example.com");
+    let recipient = macro_id("macro|recipient@example.com");
+    let mut repo = MockChannelRepo::new();
+    // The same lookup get-or-create runs first; a mock with no `ensure_dm`
+    // expectation fails the test if anything tries to create one.
+    repo.expect_maybe_get_dm()
+        .once()
+        .withf(|user, other| {
+            user.as_ref() == "macro|actor@example.com"
+                && other.as_ref() == "macro|recipient@example.com"
+        })
+        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
+    let events = FakeEvents::default();
+    let service = ChannelServiceImpl::with_dependencies(
+        repo,
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let found = service.find_direct_message(actor, recipient).await.unwrap();
+
+    assert_eq!(found, Some(channel_id));
+    assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn find_direct_message_with_yourself_is_none() {
+    let user = macro_id("macro|same@example.com");
+    let mut repo = MockChannelRepo::new();
+    repo.expect_maybe_get_dm().never();
+    let service = ChannelServiceImpl::new(repo);
+
+    let found = service
+        .find_direct_message(user.clone(), user)
+        .await
+        .unwrap();
+
+    assert_eq!(found, None);
+}
+
+#[tokio::test]
+async fn channel_viewed_at_reads_the_viewers_own_activity_row() {
+    let channel_id = Uuid::new_v4();
+    let viewed_at = chrono::DateTime::parse_from_rfc3339("2026-11-20T10:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let viewer = macro_id("macro|viewer@example.com");
+    let mut repo = MockChannelRepo::new();
+    repo.expect_get_viewed_at()
+        .once()
+        .withf(move |user, channel| {
+            user.as_ref() == "macro|viewer@example.com" && *channel == channel_id
+        })
+        .returning(move |_, _| Box::pin(async move { Ok(Some(viewed_at)) }));
+    let service = ChannelServiceImpl::new(repo);
+
+    let found = service.channel_viewed_at(viewer, channel_id).await.unwrap();
+
+    assert_eq!(found, Some(viewed_at));
+}
+
+#[tokio::test]
 async fn create_private_channel_allows_no_invited_participants() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
@@ -1372,6 +1444,45 @@ async fn patch_channel_dispatches_channel_updated() {
         [ChannelEvent::ChannelUpdated { previous_name: Some(previous), channel_name: Some(new), actor, .. }]
             if previous == "Project" && new == "Renamed" && actor == &macro_id("macro|sender@test.com")
     ));
+}
+
+#[tokio::test]
+async fn patch_channel_announces_settings_changes_that_keep_the_name() {
+    let team_id = Uuid::new_v4();
+    for request in [
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: Some(true),
+            auto_join_team: None,
+        },
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: None,
+            auto_join_team: Some(false),
+        },
+    ] {
+        let channel_id = Uuid::new_v4();
+        let repo = FakeMutationRepo::new(channel_id, "macro|sender@example.com");
+        repo.state.lock().unwrap().user_team_id = Some(team_id);
+        let events = FakeEvents::default();
+        let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+        svc.patch_channel(
+            patch_receipt("macro|sender@example.com", channel_id, AccessRole::Admin),
+            request,
+        )
+        .await
+        .unwrap();
+
+        // Members' cached copies follow the change; the equal names tell
+        // consumers such as the activity timeline that it was no rename.
+        let events = events.events.lock().unwrap();
+        assert!(matches!(
+            events.as_slice(),
+            [ChannelEvent::ChannelUpdated { channel_id: updated, previous_name: Some(previous), channel_name: Some(current), .. }]
+                if *updated == channel_id && previous == "Project" && current == "Project"
+        ));
+    }
 }
 
 #[tokio::test]
