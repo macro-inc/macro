@@ -21,3 +21,5 @@ Dovecot and Mailpit are local stand-ins. Passwordless sign-in uses local test au
 **Known gap:** forced refusal is stuck at this head after a pre-DATA failure on a stale pooled SMTP connection. The latest proof above shows the fixed refusal path. This recording does not validate later fixes, real-provider delivery, phone/notch layouts, or dark mode.
 
 Screenshots show before connection, pending first sync, first import, new arrival, ordinary send, threaded reply, and recovery. These are workflow before/after images from the same tested head, not main-versus-PR comparison screenshots. See [manifest](750eec99d0f/manifest.json).
+
+- [Connection recovery and retry-index evidence](round-one/connection-recovery-103f256f98ef/README.md) — source `103f256f98ef`; forward-migration upgrade and bounded SQL plans, synthetic database evidence only.
