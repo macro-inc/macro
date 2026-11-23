@@ -7,7 +7,8 @@ packages it as a signed DMG, and publishes the release.
 
 The macOS desktop app rendered with Chromium (CEF) instead of WKWebView. It is a
 thin binary over `../src-tauri` (`app_lib::run_with`) that selects
-`tauri-runtime-cef`.
+`tauri-runtime-cef`. It runs on Apple silicon Macs with macOS 14 (Sonoma) or
+later, the newest minimum of the binaries it bundles.
 
 ## Scope
 
@@ -57,6 +58,19 @@ CDP input enters Chromium's input pipeline as a real click does, so it reaches
 the same renderer code, but it skips AppKit's event timing.
 
 ## Gotchas
+
+- `bundle.macOS.minimumSystemVersion` in `tauri.conf.json` is the app's
+  `LSMinimumSystemVersion`; macOS refuses to open the app on anything older.
+  Keep it at the highest `minos` (`otool -l`) of any binary in the bundle,
+  since dyld won't load a library built for a newer macOS. Today that is 14.0,
+  from the Nix-built `libiconv`, `libcharset` and `macrod` (nixpkgs' default
+  Darwin target); Chromium's own is `mac_min_system_version` in its
+  `build/config/mac/mac_sdk.gni` (13.0 on CEF 151). When a CEF or nixpkgs bump
+  raises one, raise this value in the same change and tell whoever owns the
+  download pages and customer docs, which state the requirement. The release's
+  `Validate signed DMG` step fails while it is lower than any binary's `minos`.
+  The update feed carries the value, and installed apps on an older macOS skip
+  that release (`../src-tauri/README.md#desktop-native-updates`).
 
 - Keep this a separate workspace. A `[patch]` applies to every target in its
   workspace, so moving the CEF Tauri patches into `../Cargo.toml` would rebuild
