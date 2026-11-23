@@ -340,8 +340,12 @@ function Columns(props: {
       .getVirtualItems()
       .find((candidate) => String(candidate.key) === focusedKey);
     if (focused) {
+      // Show all of it, or fill the viewport with it when it is wider.
       const start = 16 + focused.index * (width + 16);
-      target = Math.min(start, Math.max(target, start + width - visible));
+      const wider = width > visible;
+      const first = wider ? start : start + width - visible;
+      const last = wider ? start + width + 16 - visible : start;
+      target = Math.min(last, Math.max(first, target));
     }
     target = Math.max(0, Math.min(end, target));
     // Lanes render from the new offset, so the ones in view stay mounted and

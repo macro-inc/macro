@@ -213,6 +213,43 @@ test('keeps a card being edited in view when the text size grows', async ({
   await cdp.detach();
 });
 
+test('keeps the end in view on a phone when the text grows past the screen', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  await viewport.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await page.getByRole('button', { name: 'New group', exact: true }).click();
+  const name = page.getByLabel('New group name');
+  await name.fill('Renewals');
+  // Lanes are now wider than the screen.
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('32px');
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('Renewals');
+  await expect(name).toBeInViewport();
+  await expect
+    .poll(() =>
+      viewport.evaluate(
+        (element) =>
+          element.scrollWidth - element.clientWidth - element.scrollLeft
+      )
+    )
+    .toBeLessThanOrEqual(1);
+  await cdp.detach();
+});
+
 test('keeps the reading position and unsaved input when the text size changes', async ({
   page,
 }) => {
