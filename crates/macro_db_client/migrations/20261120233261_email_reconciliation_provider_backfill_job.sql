@@ -6,7 +6,7 @@ SET LOCAL lock_timeout = '5s';
 CREATE TABLE email_reconciliation_provider_backfill (
     name TEXT PRIMARY KEY CHECK (name = 'v1'),
     phase TEXT NOT NULL DEFAULT 'scanning'
-        CHECK (phase IN ('scanning', 'validating', 'complete')),
+        CHECK (phase IN ('scanning', 'complete')),
     link_after UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
     pending_links UUID[] NOT NULL DEFAULT '{}'
         CHECK (cardinality(pending_links) <= 1000),
@@ -20,12 +20,9 @@ CREATE TABLE email_reconciliation_provider_backfill (
     message_rows_scanned BIGINT NOT NULL DEFAULT 0 CHECK (message_rows_scanned >= 0),
     rows_repaired BIGINT NOT NULL DEFAULT 0 CHECK (rows_repaired >= 0),
     batches BIGINT NOT NULL DEFAULT 0 CHECK (batches >= 0),
-    validation_failures INTEGER NOT NULL DEFAULT 0 CHECK (validation_failures >= 0),
-    scan_completed_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK ((lease_id IS NULL) = (lease_until IS NULL)),
-    CHECK (phase = 'scanning' OR scan_completed_at IS NOT NULL),
     CHECK ((phase = 'complete') = (completed_at IS NOT NULL))
 );
 

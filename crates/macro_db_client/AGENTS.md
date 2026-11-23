@@ -259,24 +259,22 @@ veto used by the shared eligibility function and mirrored in set-based ingestion
 and the inline Team reader, including selected contribution.
 
 
-Mailbox stream and message-reconciliation work derives its provider from its
-parent link for older writers too. Preserve the composite provider foreign keys
-and PostgreSQL's update cascade when changing link providers; they protect
-repeatable-read races that an ordinary parent trigger cannot see. Provider-prefixed
-claim indexes retain the older unprefixed indexes during rolling updates. If a
-concurrent build is interrupted, inspect `pg_index.indisvalid` and remove only
-that invalid index before retrying its migration.
+Mailbox stream and reconciliation rows derive routing metadata from their
+immutable link provider, including inserts from older binaries. Existing link-id
+foreign keys retain ownership; do not add composite provider keys, cascading
+provider updates or runtime constraint validation. Provider-prefixed claim
+indexes retain old unprefixed indexes during rolling updates. An interrupted
+concurrent build needs its INVALID index inspected and removed before retry.
 
-email_links.mailbox_issue and mailbox_retry_at are nullable additive sync-health projections. Keep it separate from needs_reauth and permit old binaries to ignore it.
+`email_links.mailbox_issue` and `mailbox_retry_at` are nullable sync-health
+projections, separate from `needs_reauth`; old binaries ignore them.
 
-Provider rollout gives work tables a constant Outlook default without a heap
-rewrite. Streams were Outlook-only; both FKs validate asynchronously. Reconciliation may
-contain Gmail cleanup and validates asynchronously after the automatic repair.
-`email_reconciliation_provider_backfill` is a singleton rollout journal with a
-leased bounded cursor and completion marker, retained for audit. Its cursor IDs
-have no foreign keys: deleted parents are skipped without erasing progress.
-Keep the provider trigger active for old writers throughout repair and rollback.
-
-The provider-repair journal's additive `constraint_failures` counter is distinct
-from transient validation history. Only a verified FK violation advances it;
-never infer permanent corruption from lock, timeout or transaction contention.
+Work provider columns use a constant Outlook default without a heap rewrite.
+Streams were Outlook-only; legacy reconciliation may include Gmail cleanup.
+The singleton `email_reconciliation_provider_backfill` retains a bounded leased
+cursor and completion marker. Cursor IDs have no foreign keys, so deleted links
+do not erase progress. Keep the derivation trigger active for old inserts during
+repair and rollback. Completing the bounded scan completes the job; it performs
+no runtime DDL or validation scan. See the [repair runbook](../../docs/runbooks/email-provider-repair.md)
+for the fresh-database requirement after removal of earlier unmerged migrations;
+never edit a preserved database's migration ledger to bypass that incompatibility.

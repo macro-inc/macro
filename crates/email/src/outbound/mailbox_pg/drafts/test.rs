@@ -7,7 +7,7 @@ use crate::{
     },
     outbound::{
         EmailPgRepo,
-        mailbox_pg::test::{fixture, page, snapshot},
+        mailbox_pg::test::{fixture_for_provider, page, snapshot},
     },
 };
 use email_api_client::domain::models::{MailboxState, SendRequest};
@@ -336,7 +336,15 @@ async fn setup(
     db: &PgPool,
     imported: bool,
 ) -> (PgMailboxSync, EmailPgRepo, ResolvedDraftInput, Uuid) {
-    let (sync, link) = fixture(db).await;
+    setup_for_provider(db, imported, crate::domain::models::UserProvider::Outlook).await
+}
+
+async fn setup_for_provider(
+    db: &PgPool,
+    imported: bool,
+    provider: crate::domain::models::UserProvider,
+) -> (PgMailboxSync, EmailPgRepo, ResolvedDraftInput, Uuid) {
+    let (sync, link) = fixture_for_provider(db, provider).await;
     let thread = Uuid::now_v7();
     let id = Uuid::now_v7();
     sqlx::query!(

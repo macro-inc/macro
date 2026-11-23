@@ -24,11 +24,18 @@ mod retries;
 mod unstorable_values;
 
 pub(super) async fn fixture(db: &PgPool) -> (PgMailboxSync, Uuid) {
+    fixture_for_provider(db, crate::domain::models::UserProvider::Outlook).await
+}
+
+pub(super) async fn fixture_for_provider(
+    db: &PgPool,
+    provider: crate::domain::models::UserProvider,
+) -> (PgMailboxSync, Uuid) {
     let link = macro_uuid::generate_uuid_v7();
     sqlx::query!(r#"
         INSERT INTO email_links (id,macro_id,fusionauth_user_id,email_address,provider,grant_generation)
-        VALUES ($1,'macro|outlook-test@example.com','outlook-owner','outlook-test@example.com','OUTLOOK',1)
-    "#,link).execute(db).await.unwrap();
+        VALUES ($1,'macro|outlook-test@example.com','outlook-owner','outlook-test@example.com',$2::text::email_user_provider_enum,1)
+    "#,link,provider.as_str()).execute(db).await.unwrap();
     sqlx::query!(
         r#"
         INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id)
@@ -40,7 +47,7 @@ pub(super) async fn fixture(db: &PgPool) -> (PgMailboxSync, Uuid) {
     .execute(db)
     .await
     .unwrap();
-    (PgMailboxSync::new(db.clone()), link)
+    (PgMailboxSync::new(db.clone()).with_provider(provider), link)
 }
 
 pub(super) fn page() -> MailboxChangePage {

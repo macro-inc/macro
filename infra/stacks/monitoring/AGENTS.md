@@ -78,11 +78,6 @@ From `infra/`:
   It finds the Graph and token spans by `@outlook.throttle_origin` and
   `@outlook.token_cache`, not by name: Datadog renames an HTTP client span to
   `http.client.request` with its method as the resource.
-- `monitors/email-provider-repair.ts` reads the domain's
-  `email.reconciliation.provider_backfill` span and closed
-  `backfill.outcome` for deferred attempts and hourly blocked-state heartbeats,
-  plus verified stream mismatch classifications. All three signals have env-only
-  dimensions, are non-paging and require a separately approved deployment.
 - `monitors/ai-providers.ts` reads the `ai provider account unavailable` and
   `ai usage priced` logs (`crates/genai_telemetry/src/provider_account.rs`,
   `crates/ai_usage/src/domain/service.rs`) and the AI editing worker's
@@ -139,7 +134,6 @@ From `infra/`:
 
 `monitors/imap-credentials.ts` counts bounded `imap.credentials.classification` spans from imap-service. Preserve the unreadable-count and fleet-guard field contract; dimensions are env only, never mailbox/key/context. The new metrics and monitors are code-only until an approved deployment.
 
-Follow the [validation cap and recovery contract](../../../docs/runbooks/email-provider-repair.md#validation-failures-and-the-constraint-cap).
 
 `monitors/imap-host-catchup.ts` counts long-pending host callback attempts and
 failed/aged catch-up pages. Both alerts notify without paging; only env is a

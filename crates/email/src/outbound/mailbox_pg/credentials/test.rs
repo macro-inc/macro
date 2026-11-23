@@ -5,21 +5,10 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 async fn imap_health_without_microsoft_scopes_does_not_lock_and_rejects_retired_generations(
     db: sqlx::PgPool,
 ) {
-    let (_, link) = super::super::test::fixture(&db).await;
-    sqlx::query!(
-        r#"
-        UPDATE
-            email_links
-        SET
-            provider = 'IMAP'
-        WHERE
-            id = $1
-        "#,
-        link,
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (_, link) =
+        super::super::test::fixture_for_provider(&db, crate::domain::models::UserProvider::Imap)
+            .await;
+
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
     let mailbox = MailboxAccess {

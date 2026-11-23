@@ -901,13 +901,14 @@ IMAP notifications project optional mailbox health and retry time under the exis
 
 An IMAP credentials_unreadable issue requires reconnect but is not a provider password rejection. Project needs_reauth under the same active-binding fence without stamping last_sync_error_at; emit the existing reauthorization event and preserve the separate reason.
 
-`domain/mailbox/provider_repair.rs` owns automatic rollout maintenance for legacy
-reconciliation provider metadata: bounded committed pages, a durable lease/cursor
-and completion marker, and background validation with hourly retry backoff. Its
-repository port owns no SQL or runtime configuration. Keep old writers correct
-through the provider trigger until the asynchronous FK validation completes.
-
-Follow the [validation cap and recovery contract](../../docs/runbooks/email-provider-repair.md#validation-failures-and-the-constraint-cap).
+`domain/mailbox/provider_repair.rs` owns automatic legacy reconciliation
+provider repair: bounded committed pages, durable lease/cursors and completion,
+with progress/failure spans and no runtime DDL or constraint validation. The
+provider-derivation trigger keeps new legacy-writer inserts correct. Initialize
+test links with their final provider before creating work; test setup must not
+rely on a provider-change cascade. See the
+[repair runbook](../../docs/runbooks/email-provider-repair.md), including the
+fresh-database requirement for local databases that applied removed migrations.
 
 Draft retry timing keeps local AccountBusy separate from provider pacing: cap
 local-contention release delays from five seconds, doubling to sixty using a

@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_reconciliation_provider_backfill\n            SET\n                available_at = clock_timestamp() + make_interval(secs => $2),\n                lease_id = NULL,\n                lease_until = NULL,\n                updated_at = clock_timestamp()\n            WHERE name = 'v1'\n                AND lease_id = $1\n                AND lease_until > clock_timestamp()\n            RETURNING\n                batches,\n                link_rows_scanned,\n                message_rows_scanned,\n                rows_repaired\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "batches",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_rows_scanned",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_rows_scanned",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "rows_repaired",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fa5773f35d31df10d47f4c4b6592d66babec89b343a298fa1eed28726f42b292"
+}

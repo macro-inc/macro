@@ -95,22 +95,9 @@ async fn a_locked_head_does_not_hide_its_same_mailbox_successor(db: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_definite_pre_data_failure_releases_the_same_link_for_its_next_draft(db: PgPool) {
-    let (sync, repo, input, link) = setup(&db, false).await;
-    sqlx::query!(
-        r#"
-        UPDATE
-            email_links
-        SET
-            provider = 'IMAP'
-        WHERE
-            id = $1
-        "#,
-        link,
-    )
-    .execute(&db)
-    .await
-    .unwrap();
-    let sync = sync.with_provider(crate::domain::models::UserProvider::Imap);
+    let (sync, repo, input, link) =
+        setup_for_provider(&db, false, crate::domain::models::UserProvider::Imap).await;
+
     let second = second_draft(&db, &repo, &input, link).await;
     let first = sync
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)

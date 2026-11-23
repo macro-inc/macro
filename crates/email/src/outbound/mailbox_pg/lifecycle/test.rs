@@ -100,7 +100,14 @@ async fn user(db: &PgPool, name: &str) -> Uuid {
     id
 }
 async fn shared(db: &PgPool) -> (PgMailboxSync, Uuid, Uuid) {
-    let (repo, link) = super::super::test::fixture(db).await;
+    shared_for_provider(db, crate::domain::models::UserProvider::Outlook).await
+}
+
+async fn shared_for_provider(
+    db: &PgPool,
+    provider: crate::domain::models::UserProvider,
+) -> (PgMailboxSync, Uuid, Uuid) {
+    let (repo, link) = super::super::test::fixture_for_provider(db, provider).await;
     for name in ["shared", "leaving", "remaining"] {
         user(db, name).await;
     }
@@ -756,14 +763,9 @@ async fn outlook_resync_starts_a_new_import_run_once(db: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn gmail_resync_commits_the_backfill_with_durable_publication(db: PgPool) {
-    let (repo, link, _) = shared(&db).await;
-    sqlx::query!(
-        "UPDATE email_links SET provider = 'GMAIL' WHERE id = $1",
-        link
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (repo, link, _) =
+        shared_for_provider(&db, crate::domain::models::UserProvider::Gmail).await;
+
     let service = InboxLifecycleService::new(repo, Effects);
     let first = service.resync(&actor("remaining"), link).await.unwrap();
     assert!(!first.already_in_progress);
@@ -945,14 +947,8 @@ async fn a_disconnect_behind_a_share_locked_link_fails_fast_then_disconnects(db:
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_imap_resync_reports_and_preserves_the_provider_pause(db: PgPool) {
-    let (repo, link, _) = shared(&db).await;
-    sqlx::query!(
-        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
-        link
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (repo, link, _) = shared_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
     sqlx::query!(
         r#"
         UPDATE email_sync_streams

@@ -2,11 +2,10 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 async fn setup(db: &PgPool) -> (PgMailboxSync, Uuid) {
-    let (repo, link) = super::super::test::fixture(db).await;
-    sqlx::query!("UPDATE email_links SET provider='GMAIL' WHERE id=$1", link)
-        .execute(db)
-        .await
-        .unwrap();
+    let (repo, link) =
+        super::super::test::fixture_for_provider(db, crate::domain::models::UserProvider::Gmail)
+            .await;
+
     sqlx::query!(
         "INSERT INTO email_gmail_histories(link_id,history_id) VALUES($1,'10')",
         link

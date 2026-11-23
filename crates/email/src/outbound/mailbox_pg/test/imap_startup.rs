@@ -148,14 +148,8 @@ async fn imap_startup_catchup_wakes_current_cursors_without_stealing_leases(db: 
 async fn successful_imap_commits_preserve_hints_even_when_their_timestamps_precede_the_lease(
     db: PgPool,
 ) {
-    let (_, link) = fixture(&db).await;
-    sqlx::query!(
-        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
-        link
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
     sqlx::query!(

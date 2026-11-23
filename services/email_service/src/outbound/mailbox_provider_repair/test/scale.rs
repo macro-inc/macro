@@ -35,7 +35,14 @@ async fn seed_link(pool: &PgPool, provider: UserProvider) -> Uuid {
 
 /// Explain the EXACT production SQL text, not a simplified copy. PREPARE's
 /// identifier and parameters below are trusted fixture literals, never input.
-async fn page_plan(pool: &PgPool, needle: &str, types: &str, args: &str, mode: &str) -> Value {
+async fn page_plan(
+    pool: &PgPool,
+    needle: &str,
+    types: &str,
+    args: &str,
+    mode: &str,
+    setup: &str,
+) -> Value {
     let source = include_str!("../../mailbox_provider_repair.rs");
     let statement = source
         .split("r#\"")
@@ -43,11 +50,21 @@ async fn page_plan(pool: &PgPool, needle: &str, types: &str, args: &str, mode: &
         .filter_map(|part| part.split_once("\"#").map(|(sql, _)| sql))
         .find(|sql| sql.contains(needle))
         .expect("production query must exist");
+    let declaration = if types.is_empty() {
+        String::new()
+    } else {
+        format!("({types})")
+    };
+    let arguments = if args.is_empty() {
+        String::new()
+    } else {
+        format!("({args})")
+    };
     let command = format!(
         "BEGIN; SET LOCAL plan_cache_mode = '{mode}'; SET LOCAL random_page_cost = 1.1; \
-         SET LOCAL work_mem = '16MB'; SET LOCAL statement_timeout = '30s'; \
-         PREPARE repair_scale_plan ({types}) AS {statement}; \
-         EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) EXECUTE repair_scale_plan ({args}); \
+         SET LOCAL work_mem = '16MB'; SET LOCAL statement_timeout = '10s'; {setup} \
+         PREPARE repair_scale_plan {declaration} AS {statement}; \
+         EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) EXECUTE repair_scale_plan {arguments}; \
          DEALLOCATE repair_scale_plan; ROLLBACK;"
     );
     let rows = sqlx::raw_sql(&command).fetch_all(pool).await.unwrap();
@@ -59,31 +76,47 @@ async fn page_plan(pool: &PgPool, needle: &str, types: &str, args: &str, mode: &
 #[sqlx::test(migrations = false)]
 #[ignore = "10M-row owned PG14 migration and repair benchmark"]
 async fn ten_million_legacy_rows_are_repaired_in_bounded_committed_pages(pool: PgPool) {
+    assert_eq!(pool.connect_options().get_host(), "127.0.0.1");
+    assert!(
+        pool.connect_options()
+            .get_database()
+            .is_some_and(|name| name.starts_with("_sqlx_test_"))
+    );
     let started = Instant::now();
     sqlx::raw_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
         .execute(&pool)
         .await
         .unwrap();
     migrations_through(20261120233249).run(&pool).await.unwrap();
+    // Prove the first plans do not depend on auto-analyzed MCV statistics.
+    // This setting affects only this newly created, disposable SQLx fixture.
+    sqlx::raw_sql("ALTER TABLE email_links SET (autovacuum_enabled=false); ALTER TABLE email_message_reconciliation SET (autovacuum_enabled=false);")
+        .execute(&pool).await.unwrap();
     let gmail = seed_link(&pool, UserProvider::Gmail).await;
-    let outlook = seed_link(&pool, UserProvider::Outlook).await;
+    let large = seed_link(&pool, UserProvider::Gmail).await;
     let streams = seed_link(&pool, UserProvider::Outlook).await;
-    for _ in 0..10 {
+    for batch in 0..10 {
+        let provider = if batch == 0 {
+            UserProvider::Gmail
+        } else {
+            UserProvider::Outlook
+        };
         let ids: Vec<Uuid> = (0..10_000).map(|_| Uuid::now_v7()).collect();
         sqlx::query!(
             r#"
             INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
-            SELECT id, 'macro|repair@example.com', id::text, 'repair@example.com', 'OUTLOOK'
+            SELECT id, 'macro|repair@example.com', id::text, 'repair@example.com', $2::text::email_user_provider_enum
             FROM unnest($1::uuid[]) AS id
             ON CONFLICT (id) DO NOTHING
             "#,
             &ids,
+            provider.as_str(),
         )
         .execute(&pool)
         .await
         .unwrap();
     }
-    for (link, count) in [(gmail, 100_000_i64), (outlook, 9_900_000)] {
+    for (link, count) in [(gmail, 100_000_i64), (large, 9_900_000)] {
         for first in (1..=count).step_by(100_000) {
             sqlx::query!(
                 r#"
@@ -162,8 +195,19 @@ async fn ten_million_legacy_rows_are_repaired_in_bounded_committed_pages(pool: P
             "fast defaults must not rewrite child heaps"
         );
     }
+    let statistics_rows = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM pg_statistic
+        WHERE starelid IN ('email_links'::regclass, 'email_message_reconciliation'::regclass)"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        statistics_rows, 0,
+        "the first plan set must never have been analyzed"
+    );
     let mut plans = Vec::new();
-    for statistics in ["stale", "analyzed"] {
+    for statistics in ["never_analyzed", "analyzed"] {
         if statistics == "analyzed" {
             sqlx::raw_sql("ANALYZE email_links; ANALYZE email_message_reconciliation;")
                 .execute(&pool)
@@ -174,26 +218,66 @@ async fn ten_million_legacy_rows_are_repaired_in_bounded_committed_pages(pool: P
             let args =
                 format!("'{gmail}'::uuid, '-9223372036854775808'::bigint, ''::text, 1000::bigint");
             plans.push(json!({"query": "child_page", "statistics": statistics, "mode": mode,
-                "plan": page_plan(&pool, "WITH page AS MATERIALIZED (\n                        SELECT generation", "uuid,bigint,text,bigint", &args, mode).await}));
+                "plan": page_plan(&pool, "WITH page AS MATERIALIZED (\n                        SELECT generation", "uuid,bigint,text,bigint", &args, mode, "").await}));
             plans.push(json!({"query": "parent_page", "statistics": statistics, "mode": mode,
-                "plan": page_plan(&pool, "SELECT id, provider\n                    FROM email_links", "uuid,bigint", "'00000000-0000-0000-0000-000000000000'::uuid, 1000::bigint", mode).await}));
+                "plan": page_plan(&pool, "SELECT id, provider\n                    FROM email_links", "uuid,bigint", "'00000000-0000-0000-0000-000000000000'::uuid, 1000::bigint", mode, "").await}));
+            let lease = Uuid::now_v7();
+            // Setup is fixture-only and rolls back with each EXPLAIN. Row-change
+            // counts and buffers come from the source statement's plan alone.
+            let setup = format!(
+                "UPDATE email_reconciliation_provider_backfill SET lease_id='{lease}', lease_until=clock_timestamp()+interval '180 seconds' WHERE name='v1';"
+            );
+            let lease_arg = format!("'{lease}'::uuid");
+            let claim_args = format!("'{lease}'::uuid, 180::float8");
+            let save_args = format!(
+                "'{lease}'::uuid, 'scanning'::text, '00000000-0000-0000-0000-000000000000'::uuid, '{{}}'::uuid[], NULL::uuid, '-9223372036854775808'::bigint, ''::text, 0::bigint, 0::bigint, 0::bigint, 0::bigint"
+            );
+            let defer_args = format!("'{lease}'::uuid, 5::float8");
+            let parent_args = format!("'{gmail}'::uuid");
+            for (name, needle, types, args, setup) in [
+                (
+                    "claim",
+                    "WITH candidate AS (",
+                    "uuid,float8",
+                    claim_args.as_str(),
+                    "",
+                ),
+                (
+                    "owner_lock",
+                    "lease_until > clock_timestamp()\n        FOR UPDATE",
+                    "uuid",
+                    lease_arg.as_str(),
+                    setup.as_str(),
+                ),
+                (
+                    "save",
+                    "phase = $2",
+                    "uuid,text,uuid,uuid[],uuid,bigint,text,bigint,bigint,bigint,bigint",
+                    save_args.as_str(),
+                    setup.as_str(),
+                ),
+                (
+                    "defer",
+                    "available_at = clock_timestamp() + make_interval",
+                    "uuid,float8",
+                    defer_args.as_str(),
+                    setup.as_str(),
+                ),
+                (
+                    "parent_fence",
+                    "provider IS DISTINCT FROM 'OUTLOOK'\n                FOR KEY SHARE",
+                    "uuid",
+                    parent_args.as_str(),
+                    "",
+                ),
+            ] {
+                plans.push(
+                    json!({"query": name, "statistics": statistics, "mode": mode,
+                    "plan": page_plan(&pool, needle, types, args, mode, setup).await}),
+                );
+            }
         }
     }
-    // Exercise the WORST cohort too: every one of the 10M queue rows requires
-    // repair. Only this isolated fixture bypasses the new provider cascade.
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query!("SET LOCAL session_replication_role = 'replica'")
-        .execute(&mut *tx)
-        .await
-        .unwrap();
-    sqlx::query!(
-        "UPDATE email_links SET provider = 'GMAIL' WHERE id = $1",
-        outlook
-    )
-    .execute(&mut *tx)
-    .await
-    .unwrap();
-    tx.commit().await.unwrap();
     let dedicated = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
         .connect_with(pool.connect_options().as_ref().clone())
@@ -203,7 +287,7 @@ async fn ten_million_legacy_rows_are_repaired_in_bounded_committed_pages(pool: P
     let timer = Instant::now();
     let mut prior = RepairProgress::default();
     let mut maximum_batch_seconds = 0_f64;
-    let mut validation_seconds = None;
+    let mut completion_seconds = None;
     for _ in 0..20_000 {
         let batch_start = Instant::now();
         match repair_once(&repository).await.unwrap() {
@@ -228,19 +312,10 @@ async fn ten_million_legacy_rows_are_repaired_in_bounded_committed_pages(pool: P
                 }
             }
             RepairTick::Complete => {
-                validation_seconds = Some(batch_start.elapsed().as_secs_f64());
+                completion_seconds = Some(batch_start.elapsed().as_secs_f64());
                 break;
             }
-            RepairTick::ValidationDeferred => {
-                // Autovacuum can legitimately own SHARE UPDATE EXCLUSIVE after
-                // a dense repair. Preserve that production outcome, wait for
-                // the conflicting lock, then advance only the fixture's clock.
-                wait_for_validation_lock(&pool).await;
-            }
             RepairTick::Busy => panic!("isolated benchmark unexpectedly lost its lease"),
-            RepairTick::ValidationBlocked => {
-                panic!("valid scale fixture must never consume the constraint cap")
-            }
         }
     }
     let completed = match repository.claim(Uuid::now_v7()).await.unwrap() {
@@ -250,20 +325,16 @@ async fn ten_million_legacy_rows_are_repaired_in_bounded_committed_pages(pool: P
     assert_eq!(completed.rows_repaired, 10_000_000);
     assert_eq!(completed.message_rows_scanned, 10_000_000);
     assert_eq!(completed.link_rows_scanned, 100_003);
-    let validated = sqlx::query_scalar!(
-        r#"
-        SELECT count(*) FILTER (WHERE convalidated) AS "validated!"
-        FROM pg_constraint
-        WHERE conname IN (
-            'email_message_reconciliation_link_provider_fkey',
-            'email_sync_streams_link_provider_fkey'
-        )
-        "#,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(validated, 2);
+    assert!(
+        completed.batches < 10_110,
+        "empty Gmail links must not add one child page each"
+    );
+    for mode in ["force_custom_plan", "force_generic_plan"] {
+        plans.push(
+            json!({"query": "completed", "statistics": "after_repair", "mode": mode,
+            "plan": page_plan(&pool, "AND phase = 'complete'", "", "", mode, "").await}),
+        );
+    }
     let version = sqlx::query_scalar!(r#"SELECT version() AS "version!""#)
         .fetch_one(&pool)
         .await
@@ -272,104 +343,15 @@ async fn ten_million_legacy_rows_are_repaired_in_bounded_committed_pages(pool: P
         "SCALE_EVIDENCE_JSON={}",
         json!({
             "postgres": version, "queue_rows": 10_000_000, "stream_rows": 1_000_000,
-            "parent_rows": 100_003, "repair_cohort_rows": 10_000_000,
+            "parent_rows": 100_003, "empty_non_outlook_links": 10_000, "repair_cohort_rows": 10_000_000,
             "seed_seconds": seed_seconds, "migration_times": migration_times,
             "heap_rewritten": false, "repair_seconds_unpaced": timer.elapsed().as_secs_f64(),
-            "maximum_batch_wall_seconds": maximum_batch_seconds, "validation_seconds": validation_seconds,
+            "maximum_batch_wall_seconds": maximum_batch_seconds, "completion_seconds": completion_seconds,
             "batches": completed.batches, "rows_repaired": completed.rows_repaired,
             "connections": 1, "production_pacing_ms": 250,
-            "note": "Unpaced isolated benchmark; production adds 250ms between committed pages. No production data. Validation locks SHARE UPDATE EXCLUSIVE; ordinary repair holds ROW EXCLUSIVE and parent KEY SHARE.",
+            "note": "Unpaced isolated benchmark; production adds 250ms between committed pages. No production data. Only bounded repair holds ROW EXCLUSIVE and parent KEY SHARE; no validation scan or lock.",
             "plans": plans,
         })
     );
     dedicated.close().await;
-}
-
-/// Resume only a failed local scale fixture; never accept a shared or hosted DB.
-#[tokio::test]
-#[ignore = "resume an owned SQLx scale fixture after a deferred validation"]
-async fn resumes_ten_million_repaired_rows_after_validation_backoff() {
-    use std::str::FromStr;
-    let options = sqlx::postgres::PgConnectOptions::from_str(
-        &std::env::var("DATABASE_URL").expect("an explicitly owned scale fixture is required"),
-    )
-    .unwrap();
-    assert_eq!(options.get_host(), "127.0.0.1");
-    assert!(
-        options
-            .get_database()
-            .is_some_and(|name| name.starts_with("_sqlx_test_"))
-    );
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(1)
-        .connect_with(options)
-        .await
-        .unwrap();
-    let repository = PgProviderRepair(pool.clone());
-    wait_for_validation_lock(&pool).await;
-    let start = Instant::now();
-    assert!(matches!(
-        repair_once(&repository).await.unwrap(),
-        RepairTick::Complete
-    ));
-    let progress = match repository.claim(Uuid::now_v7()).await.unwrap() {
-        RepairClaim::Complete(progress) => progress,
-        _ => panic!("validation must leave a durable completion marker"),
-    };
-    assert_eq!(progress.rows_repaired, 10_000_000);
-    assert_eq!(progress.message_rows_scanned, 10_000_000);
-    assert_eq!(progress.link_rows_scanned, 100_003);
-    assert!(progress.validation_failures > 0);
-    eprintln!(
-        "SCALE_RESUME_EVIDENCE_JSON={}",
-        json!({
-            "rows_repaired": progress.rows_repaired,
-            "rows_scanned": progress.message_rows_scanned,
-            "parent_rows": progress.link_rows_scanned,
-            "batches": progress.batches,
-            "validation_failures_before_success": progress.validation_failures,
-            "validation_resume_seconds": start.elapsed().as_secs_f64(),
-            "result": "automatic validation and durable completion after persisted backoff",
-            "data": "owned local synthetic SQLx fixture only",
-        })
-    );
-    pool.close().await;
-}
-
-/// Synchronize with real vacuum completion instead of sleeping or polling.
-/// This clock advance is confined to the explicitly owned test fixture.
-async fn wait_for_validation_lock(pool: &PgPool) {
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query!("SET LOCAL statement_timeout = '120s'")
-        .execute(&mut *tx)
-        .await
-        .unwrap();
-    sqlx::query!("SET LOCAL lock_timeout = '120s'")
-        .execute(&mut *tx)
-        .await
-        .unwrap();
-    sqlx::query!(
-        r#"
-        LOCK TABLE
-            email_message_reconciliation,
-            email_sync_streams
-        IN SHARE UPDATE EXCLUSIVE MODE
-        "#,
-    )
-    .execute(&mut *tx)
-    .await
-    .unwrap();
-    tx.commit().await.unwrap();
-    sqlx::query!(
-        r#"
-        UPDATE email_reconciliation_provider_backfill
-        SET available_at = clock_timestamp()
-        WHERE name = 'v1'
-            AND phase = 'validating'
-            AND lease_id IS NULL
-        "#,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
 }

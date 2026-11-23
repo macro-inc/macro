@@ -461,30 +461,24 @@ The changed reconnect-health and scheduler queries have measured plans on
 
 ## Legacy mailbox-work provider repair
 
-The provider column uses a constant Outlook default, without rewriting the
-existing work tables. Pre-existing sync streams were Outlook-only. Reconciliation can contain older
-Gmail cleanup work; both composite foreign keys remain NOT VALID until automatic
-maintenance finishes, keeping full-table validation outside the deploy path. The provider trigger keeps both old and new writers
-correct throughout, and claims still check the authoritative link provider.
+Work provider columns use constant Outlook defaults without rewriting existing
+heaps. Pre-existing streams were Outlook-only; legacy reconciliation can include
+Gmail cleanup work. Derivation triggers read each immutable link's provider so
+both old and new inserts get correct routing. Existing link-id foreign keys
+retain parent ownership; no composite provider keys or cascading updates are
+needed. Claims still check the authoritative link provider during repair.
 
-The pubsub worker runs one leased repair with durable parent and child keyset
-cursors. Each transaction scans at most 1,000 parent or message keys, filters
-only after selecting that page, and commits its repair with the cursor under
-the same fence. Non-Outlook parents drive child scans through the existing
-link-leading primary key. A dedicated pool adds at most one connection per
-pubsub replica while repair is pending; it closes on completion. Pages have
-10-second statement and idle limits, a one-second lock limit and 250 ms pacing.
+One leased repair uses durable parent/child keyset cursors. Each transaction
+selects at most 1,000 parent or message keys before filtering, and commits repair
+with its cursor under the same fence. Non-Outlook parents drive child scans
+through the link-leading primary key. A separate pool adds at most one connection
+per pubsub replica until completion. Pages have ten-second statement/idle limits,
+a one-second lock limit and 250 ms pacing. Scan exhaustion writes the durable
+completion marker; there is no runtime validation phase, growing-table validation
+scan or operator step. Progress/failure spans contain counts, never message data.
 
-Only a persisted scan-complete marker admits background FK validation. Its
-two 60-second statement budgets never block deployment; failures remain visible
-and retry with exponential backoff capped at one hour. Validation takes SHARE
-UPDATE EXCLUSIVE, allowing ordinary reads and writes while conflicting with
-DDL and autovacuum on that table. Three non-paging monitors are code only.
-Reconciliation FK validation completes asynchronously after deploy; normal
-deployment requires no operator action. A capped corruption incident needs
-the explicitly approved recovery described in the runbook. See the [repair runbook](../runbooks/email-provider-repair.md).
-
-Follow the [validation cap and recovery contract](../runbooks/email-provider-repair.md#validation-failures-and-the-constraint-cap).
+The [repair runbook](../runbooks/email-provider-repair.md) describes bounded
+inspection and the local migration-history compatibility limit.
 
 ## Host catch-up after restart
 

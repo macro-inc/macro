@@ -78,21 +78,8 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db: PgPool) {
     use email_api_client::domain::models::MailboxState;
-    let (_, link) = fixture(&db).await;
-    sqlx::query!(
-        r#"
-        UPDATE
-            email_links
-        SET
-            provider = 'IMAP'
-        WHERE
-            id = $1
-        "#,
-        link,
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
     let stream = repo
@@ -184,14 +171,8 @@ async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db
 async fn imap_notification_does_not_wait_for_a_foreign_key_reader(db: PgPool) {
     use crate::domain::mailbox::imap_notifications::ImapNotificationRepository;
 
-    let (_, link) = fixture(&db).await;
-    sqlx::query!(
-        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
-        link
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
     let mut foreign_key_reader = db.begin().await.unwrap();
@@ -235,13 +216,12 @@ async fn imap_notification_does_not_wait_for_a_foreign_key_reader(db: PgPool) {
 async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPool) {
     use crate::domain::mailbox::imap_notifications::ImapNotificationService;
     use imap_engine::domain::models::{Binding, Notification};
-    let (_, link) = fixture(&db).await;
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
     sqlx::query!(
         r#"
         UPDATE
             email_links
         SET
-            provider = 'IMAP',
             sync_generation = 2
         WHERE
             id = $1
@@ -411,21 +391,8 @@ impl MailboxGateway for MalformedThenValid {
 }
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn malformed_imap_mail_does_not_hold_later_messages_behind_it(db: PgPool) {
-    let (_, link) = fixture(&db).await;
-    sqlx::query!(
-        r#"
-        UPDATE
-            email_links
-        SET
-            provider = 'IMAP'
-        WHERE
-            id = $1
-        "#,
-        link,
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
     sqlx::query!(
         r#"
         INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import)
@@ -471,21 +438,8 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
     db: PgPool,
 ) {
     use email_api_client::domain::models::{FolderRole, MailboxState};
-    let (_, link) = fixture(&db).await;
-    sqlx::query!(
-        r#"
-        UPDATE
-            email_links
-        SET
-            provider = 'IMAP'
-        WHERE
-            id = $1
-        "#,
-        link,
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
     sqlx::query!(
@@ -631,13 +585,12 @@ async fn size_health_is_fenced_edge_triggered_and_cleared_without_reauth(db: PgP
     use crate::domain::mailbox::imap_notifications::ImapNotificationService;
     use imap_engine::domain::models::{Binding, Notification};
     use models_email::service::link::MailboxIssue;
-    let (_, link) = fixture(&db).await;
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
     sqlx::query!(
         r#"
         UPDATE
             email_links
         SET
-            provider = 'IMAP',
             sync_generation = 2
         WHERE
             id = $1
@@ -794,13 +747,12 @@ async fn unreadable_credentials_require_reconnect_without_claiming_a_provider_re
     use crate::domain::mailbox::imap_notifications::ImapNotificationService;
     use imap_engine::domain::models::{Binding, Notification};
     use models_email::service::link::MailboxIssue;
-    let (_, link) = fixture(&db).await;
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
     sqlx::query!(
         r#"
         UPDATE
             email_links
         SET
-            provider = 'IMAP',
             sync_generation = 2
         WHERE
             id = $1
@@ -887,14 +839,8 @@ async fn unreadable_credentials_require_reconnect_without_claiming_a_provider_re
 async fn reordered_host_hints_cannot_clear_newer_mailbox_health(db: PgPool) {
     use imap_engine::domain::models::{Binding, Notification};
     use models_email::service::link::MailboxIssue;
-    let (_, link) = fixture(&db).await;
-    sqlx::query!(
-        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
-        link
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
     let service = crate::domain::mailbox::imap_notifications::ImapNotificationService(
         PgMailboxSync::new(db.clone()),
     );

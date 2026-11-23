@@ -305,11 +305,8 @@ async fn an_old_binary_reactivation_recovers_parked_rows_without_changing_backof
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_inactive_hot_projection_link_costs_one_recovery_probe(db: PgPool) {
-    let (repo, dead) = fixture(&db).await;
-    sqlx::query!("UPDATE email_links SET provider='GMAIL' WHERE id=$1", dead)
-        .execute(&db)
-        .await
-        .unwrap();
+    let (repo, dead) = fixture_for_provider(&db, crate::domain::models::UserProvider::Gmail).await;
+
     let (_, active) = fixture(&db).await;
     sqlx::query!(
         "UPDATE email_links SET is_sync_active=false WHERE id=$1",
@@ -478,22 +475,10 @@ async fn projection_row_lock_before_lease_commit_holds_its_successor(db: PgPool)
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn one_projection_claimer_drains_main_style_rows_for_every_provider(db: PgPool) {
-    let (repo, gmail) = fixture(&db).await;
-    sqlx::query!(
-        "UPDATE email_links SET provider = 'GMAIL' WHERE id = $1",
-        gmail
-    )
-    .execute(&db)
-    .await
-    .unwrap();
-    let (_, imap) = fixture(&db).await;
-    sqlx::query!(
-        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
-        imap
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (repo, gmail) = fixture_for_provider(&db, crate::domain::models::UserProvider::Gmail).await;
+
+    let (_, imap) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
     let (_, outlook) = fixture(&db).await;
     for link in [gmail, imap, outlook] {
         let event = Uuid::now_v7();
