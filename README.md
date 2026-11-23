@@ -2,6 +2,8 @@
 
 Latest SMTP happy-path runtime proof at `8a06e487b804`: [scope and receipt](round-one/smtp-8a06e487b804/README.md). Mailbox claim measurements remain at `7d3b89c17dd`: [non-FIFO measurements](round-one/nonfifo-7d3b89c17dd/README.md), with [projection measurements](round-one/projection-166462eea37/README.md) at `166462eea37`. [Provider repair measurements](round-one/provider-647b23e2aae/README.md) at `647b23e2aae` are superseded because `7d3b89c17dd` removes that job. Other round-one fixes, human playback and real-provider proof remain open.
 
+Contacts list-member query evidence at `d7e350efb509`: [scope, source hashes and plans](round-one/contacts-list-members-d7e350efb509/README.md). The committed regression covers the populated IMAP range in both custom and generic modes.
+
 Previous runtime checkpoint `f0740021328`: [main-merge runtime checks](merge-f4bd312fc30/README.md), on `f4bd312fc30` plus one test-only commit.
 
 [Desktop and phone proof recorded at f678c962e57](f678c962e57/README.md), plus the connect clip and smoke at `76dda9df8e3`, source provenance, final-head comparison, stand-ins and scope gaps.
