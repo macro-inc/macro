@@ -324,6 +324,8 @@ it('goes back through creation steps without losing the name or chosen color', a
     expect(mocks.apply).toHaveBeenCalledWith('user', 'created-tag')
   );
   expect(mocks.add).toHaveBeenCalledWith({
+    // The add is fenced by the login session the creation began in.
+    session: expect.any(Number),
     propertyDefinitionId: 'tags',
     body: {
       type: 'select_string',

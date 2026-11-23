@@ -27,6 +27,8 @@ const soup = vi.hoisted(() => ({
   /** The cache store's answers to reads of the tag sets, in order; then a miss. */
   cachedReads: [] as unknown[],
   session: 1,
+  /** The cache session generation. */
+  epoch: 'gen-1',
   /** Runs while the add reads the cache's records. */
   duringRead: undefined as (() => void) | undefined,
 }));
@@ -55,6 +57,13 @@ vi.mock('@graphql-cache/index', async (importOriginal) => ({
     result.queued
       ? { kind: 'queued', transactionId: result.queued }
       : undefined,
+}));
+
+vi.mock('@app/lib/urql-solid/authorization', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@app/lib/urql-solid/authorization')
+  >()),
+  crmSnapshotAuthorization: () => ({ epoch: soup.epoch, paused: false }),
 }));
 
 vi.mock('../../auth/account-scope', () => ({
@@ -88,6 +97,7 @@ beforeEach(() => {
   soup.session = 1;
   soup.definitionCached = true;
   soup.duringRead = undefined;
+  soup.epoch = 'gen-1';
 });
 
 /** A cache host whose queue holds every write until the test settles it. */
@@ -241,6 +251,29 @@ describe('adding an option', () => {
     const added = await outcomeOf(addPropertyOption('def-1', TAG));
     expect(isCatalogErrorCode(added, 'ACCOUNT_CHANGED')).toBe(true);
     expect(soup.optimistic).not.toHaveBeenCalled();
+  });
+
+  it('stamps an add with the cache generation its links were read under', async () => {
+    queueingHost();
+    soup.duringRead = () => {
+      soup.epoch = 'gen-2';
+    };
+    // the queue never settles it here, so the test does not wait for it
+    const added = outcomeOf(addPropertyOption('def-1', TAG));
+    await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+    const [, , , , options] = soup.optimistic.mock.calls[0] ?? [];
+    expect(options).toMatchObject({ authorizationEpoch: 'gen-1' });
+    expect(added).toBeInstanceOf(Promise);
+  });
+
+  it('drops an add whose flow began under another login', async () => {
+    queueingHost();
+    const added = await outcomeOf(
+      addPropertyOption('def-1', TAG, { session: 0 })
+    );
+    expect(isCatalogErrorCode(added, 'ACCOUNT_CHANGED')).toBe(true);
+    expect(soup.optimistic).not.toHaveBeenCalled();
+    expect(soup.mutation).not.toHaveBeenCalled();
   });
 
   it('rejects a queued add the server refuses later', async () => {

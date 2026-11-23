@@ -1,6 +1,7 @@
 import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import type { EnsureTagSetRequest } from '@service-properties/generated/schemas/ensureTagSetRequest';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
@@ -188,19 +189,24 @@ const createTagFailed = () => toast.failure('Failed to create tag');
 export async function createTag(
   vars: CreateTagParams
 ): Promise<CreateTagResult> {
+  const session = queryAccountSession();
   const tagSet = await provisionTagSet(vars.scope);
   const definition = tagSet.definition;
   if (!definition) {
     throw new Error(`Tag set for scope "${vars.scope}" has no definition`);
   }
-  const option = await addPropertyOption(definition.id, {
-    type: 'select_string',
-    option: {
-      value: vars.value,
-      color: vars.color,
-      display_order: nextTagDisplayOrder(tagSet),
+  const option = await addPropertyOption(
+    definition.id,
+    {
+      type: 'select_string',
+      option: {
+        value: vars.value,
+        color: vars.color,
+        display_order: nextTagDisplayOrder(tagSet),
+      },
     },
-  });
+    { session }
+  );
   return { scope: vars.scope, tagSet, option };
 }
 
