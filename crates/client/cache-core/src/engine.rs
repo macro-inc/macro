@@ -262,8 +262,12 @@ struct PersistPlan {
     changed: BTreeSet<EntityKey<'static>>,
     search_changed_buckets: BTreeSet<String>,
     viewer_fields: ViewerFields,
+    /// Changed records, for storage and then the hot tier.
     to_persist: Vec<(EntityKey<'static>, Record)>,
-    touched: Vec<(EntityKey<'static>, Record)>,
+    /// Unchanged records, for the hot tier only.
+    unchanged: Vec<(EntityKey<'static>, Record)>,
+    /// For each update in order, whether its record is in `to_persist`.
+    persisted: Vec<bool>,
     revision_advanced: bool,
 }
 
@@ -1974,7 +1978,8 @@ impl<S: Storage> Engine<S> {
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
         // records mid-merge and overwrite storage with partial updates.
-        let mut staging: HashMap<EntityKey<'static>, Record> = HashMap::new();
+        let mut staging: HashMap<EntityKey<'static>, Record> =
+            HashMap::with_capacity(updates.len());
         let mut missing: Vec<EntityKey<'static>> = Vec::new();
         let mut kept = self.take_kept_reads();
         let mut from_kept: Vec<EntityKey<'static>> = Vec::new();
@@ -2029,7 +2034,8 @@ impl<S: Storage> Engine<S> {
         let mut search_changed_buckets = BTreeSet::new();
         let mut viewer_fields = ViewerFields::new();
         let mut to_persist: Vec<(EntityKey<'static>, Record)> = Vec::new();
-        let mut touched = Vec::with_capacity(updates.len());
+        let mut unchanged: Vec<(EntityKey<'static>, Record)> = Vec::new();
+        let mut persisted = Vec::with_capacity(updates.len());
         for (key, update) in updates {
             let (merged, did_change) = match staging.remove(&key) {
                 Some(mut existing) => {
@@ -2064,9 +2070,11 @@ impl<S: Storage> Engine<S> {
             };
             if did_change {
                 changed.insert(key.clone());
-                to_persist.push((key.clone(), merged.clone()));
+                to_persist.push((key, merged));
+            } else {
+                unchanged.push((key, merged));
             }
-            touched.push((key, merged));
+            persisted.push(did_change);
         }
 
         // Unchanged bases are already durable, including those fetched after
@@ -2084,7 +2092,8 @@ impl<S: Storage> Engine<S> {
             search_changed_buckets,
             viewer_fields,
             to_persist,
-            touched,
+            unchanged,
+            persisted,
             revision_advanced,
         })
     }
@@ -2101,7 +2110,8 @@ impl<S: Storage> Engine<S> {
             search_changed_buckets,
             viewer_fields,
             to_persist,
-            touched,
+            unchanged,
+            persisted,
             revision_advanced,
         } = plan;
         let projection_keys = projections
@@ -2113,7 +2123,7 @@ impl<S: Storage> Engine<S> {
         // the storage write, as before.
         if revision_advanced || !self.optimistic.is_empty() {
             self.storage
-                .put_batch_with_projections(to_persist, projections)
+                .put_records_with_projections(&to_persist, projections)
                 .await
                 .map_err(EngineError::Storage)?;
         }
@@ -2133,8 +2143,19 @@ impl<S: Storage> Engine<S> {
         }
         // Publish only after the atomic write succeeds. Otherwise a failed
         // write could poison the hot tier and make its retry look unchanged.
-        for (key, record) in touched {
-            self.hot.put(key, record);
+        // Records go in in update order, so the LRU ends as it did when every
+        // record was cloned into one list.
+        let mut to_persist = to_persist.into_iter();
+        let mut unchanged = unchanged.into_iter();
+        for persisted in persisted {
+            let next = if persisted {
+                to_persist.next()
+            } else {
+                unchanged.next()
+            };
+            if let Some((key, record)) = next {
+                self.hot.put(key, record);
+            }
         }
         Ok(PersistedChanges {
             field_changes,
