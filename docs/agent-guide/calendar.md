@@ -336,8 +336,11 @@ The website can frame the booking page and receipt without duplicate Macro
 branding. A completed booking notifies the same-origin parent page; other sites
 cannot frame these routes.
 Uncertain calendar writes retain the booking and show its private receipt while automatic recovery runs.
-After a network response cannot be verified, `Check booking status` retries the original request;
-do not create a replacement booking. Receipt pages poll while the calendar update is pending. The private
+When a booking gets no answer (the connection dropped, or the server failed), the details step
+shows `Finishing your booking` and resends the original request by itself, backing off to every
+15 seconds, until the server answers; after four unanswered retries it says `Still finishing your
+booking`. Never create a replacement booking. Receipt pages poll while the calendar update is
+pending: every 2 seconds while `processing`, every 5 while a failed write is being retried. The private
 `/app/booking/:id#token` receipt supports cancellation and rescheduling; preserve
 that private link. Rescheduling defaults to the browser's time zone; `Your time
 zone` controls both the selected calendar date and the displayed times. Changing

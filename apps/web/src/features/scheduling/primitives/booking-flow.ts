@@ -1,4 +1,5 @@
-import { createSignal } from 'solid-js';
+import { sleep } from '@core/util/sleep';
+import { createSignal, onCleanup } from 'solid-js';
 import { BookingRejectedError } from '../core/booking-error';
 import type { BookingReceipt, BookingRequest } from '../core/types';
 
@@ -16,14 +17,31 @@ export type BookingSource = {
   ) => Promise<BookingReceipt>;
 };
 
+type PendingBooking = { eventId: string; request: BookingRequest };
+
+/**
+ * Waits between automatic retries of a booking whose outcome is unknown: the
+ * last delay repeats until the booking settles or the page closes.
+ */
+const FINISH_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
+/** Unanswered retries before the visitor is told it is taking longer. */
+const STALLED_AFTER_RETRIES = 4;
+
 export function createBookingFlow(source: BookingSource, profileId: string) {
   const [slots, setSlots] = createSignal<
     { startsAt: string; endsAt: string }[]
   >([]);
   const [loading, setLoading] = createSignal(false);
   const [submitting, setSubmitting] = createSignal(false);
-  const [uncertain, setUncertain] = createSignal(false);
-  let attempted: { eventId: string; request: BookingRequest } | undefined;
+  // A booking sent without a definite answer (the connection dropped, or the
+  // server failed): it may already be reserved, so the same request is sent
+  // again until the server answers it.
+  const [finishing, setFinishing] = createSignal(false);
+  const [stalled, setStalled] = createSignal(false);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const [error, setError] = createSignal('');
   const [selected, setSelected] = createSignal<string>();
   const [receipt, setReceipt] = createSignal<BookingReceipt>();
@@ -34,7 +52,7 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
     date: string,
     timeZone: string
   ) => {
-    if (submitting() || uncertain()) return;
+    if (submitting() || finishing()) return;
     const current = ++generation;
     setSelected(undefined);
     setSlots([]);
@@ -53,40 +71,48 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
       if (current === generation) setLoading(false);
     }
   };
+  /** Send the request once; true when the server settled it. */
+  const send = async (pending: PendingBooking) => {
+    try {
+      setReceipt(
+        await source.book(profileId, pending.eventId, pending.request)
+      );
+    } catch (error) {
+      if (!(error instanceof BookingRejectedError)) return false;
+      setError(error.message);
+    }
+    setFinishing(false);
+    setStalled(false);
+    return true;
+  };
+  const finish = async (pending: PendingBooking) => {
+    setFinishing(true);
+    for (let retry = 0; ; retry++) {
+      await sleep(
+        FINISH_RETRY_DELAYS_MS[
+          Math.min(retry, FINISH_RETRY_DELAYS_MS.length - 1)
+        ]
+      );
+      if (disposed || (await send(pending))) return;
+      if (retry + 1 >= STALLED_AFTER_RETRIES) setStalled(true);
+    }
+  };
   const submit = async (
     eventId: string,
     details: Omit<BookingRequest, 'startsAt' | 'requestId'>
   ) => {
     const startsAt = selected();
-    if (!startsAt || submitting()) return;
+    if (!startsAt || submitting() || finishing()) return;
     setSubmitting(true);
     setError('');
-    try {
-      attempted ??= { eventId, request: { ...details, startsAt, requestId } };
-      setReceipt(
-        await source.book(profileId, attempted.eventId, attempted.request)
-      );
-      setUncertain(false);
-      attempted = undefined;
-    } catch (error) {
-      if (error instanceof BookingRejectedError) {
-        attempted = undefined;
-        setUncertain(false);
-        setError(error.message);
-      } else {
-        setUncertain(true);
-        setError(
-          'We could not verify the response. Your time may already be reserved. Retry this same request to check it; do not make another booking.'
-        );
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    const pending = { eventId, request: { ...details, startsAt, requestId } };
+    const settled = await send(pending);
+    setSubmitting(false);
+    if (!settled) await finish(pending);
   };
   return {
     reset: () => {
-      if (submitting() || uncertain()) return;
-      attempted = undefined;
+      if (submitting() || finishing()) return;
       generation++;
       setSlots([]);
       setSelected(undefined);
@@ -98,19 +124,20 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
     slots,
     loading,
     submitting,
-    uncertain,
+    finishing,
+    stalled,
     error,
     selected,
     receipt,
     chooseDate,
     submit,
     select: (start: string) => {
-      if (submitting() || uncertain()) return;
+      if (submitting() || finishing()) return;
       setSelected(start);
       requestId = crypto.randomUUID();
     },
     back: () => {
-      if (!submitting() && !uncertain()) setSelected(undefined);
+      if (!submitting() && !finishing()) setSelected(undefined);
     },
   };
 }

@@ -85,7 +85,7 @@ export function BookingReceiptView(props: {
                         ? 'Not added to your host’s calendar'
                         : r().booking.status === 'failed'
                           ? 'We’re updating your booking'
-                          : 'Booking is processing'}
+                          : 'Finishing your booking'}
               </h1>
               <div class="mt-6 rounded-xl bg-surface-0 p-5">
                 <h2 class="font-semibold">{r().booking.title}</h2>
@@ -124,7 +124,7 @@ export function BookingReceiptView(props: {
                       ? 'This booking isn’t confirmed. Cancel it to free the time.'
                       : r().booking.status === 'failed'
                         ? 'Your time is reserved. We’re retrying the calendar update automatically; keep this page to check its status and avoid making another booking.'
-                        : ''}
+                        : 'Your time is reserved. We’re updating your host’s calendar, and this page updates by itself.'}
               </p>
               <p class="mt-4 text-xs leading-relaxed text-ink-muted">
                 {bookingAbandoned(r().booking)

@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Button } from '@ui';
+import { Button, Spinner } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -37,13 +37,13 @@ export function BookingPicker(props: {
   preview?: boolean;
 }) {
   const flow = createBookingFlow(props.source, props.profile.id);
-  // An in-flight or uncertain request stays on its own event until resolved,
+  // An in-flight or finishing request stays on its own event until resolved,
   // so a retry never books an event other than the one on screen.
   const [held, setHeld] = createSignal<PublicEvent>();
   const event = () => held() ?? props.event;
   // Memoized so a refetched copy of the same event keeps the selection.
   const eventId = createMemo(() => event().id);
-  const locked = () => flow.submitting() || flow.uncertain();
+  const locked = () => flow.submitting() || flow.finishing();
   const [date, setDate] = createSignal('');
   const [zone, setZone] = createSignal(
     Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -110,7 +110,7 @@ export function BookingPicker(props: {
     });
     const receipt = flow.receipt();
     if (receipt) props.onReceipt(receipt);
-    if (!flow.uncertain()) setHeld(undefined);
+    if (!flow.finishing()) setHeld(undefined);
   };
   return (
     <section class="@container overflow-hidden rounded-2xl border border-edge-muted bg-surface-1 text-ink">
@@ -197,6 +197,26 @@ export function BookingPicker(props: {
                 {flow.error()}
               </p>
             </Show>
+            <Show when={flow.finishing()}>
+              <div
+                role="status"
+                class="mb-5 flex items-start gap-3 rounded-lg bg-surface-0 p-3 text-sm"
+              >
+                <Spinner decorative size="sm" class="mt-0.5" />
+                <div>
+                  <p class="font-medium">
+                    {flow.stalled()
+                      ? 'Still finishing your booking'
+                      : 'Finishing your booking'}
+                  </p>
+                  <p class="mt-1 text-ink-muted">
+                    {flow.stalled()
+                      ? 'This is taking longer than usual. Keep this page open and check your connection; it finishes on its own.'
+                      : 'This takes a moment. Keep this page open.'}
+                  </p>
+                </div>
+              </div>
+            </Show>
             <Show
               when={!flow.selected()}
               fallback={
@@ -258,14 +278,14 @@ export function BookingPicker(props: {
                   <Button
                     type="submit"
                     variant="primary"
-                    disabled={flow.submitting() || props.preview}
+                    disabled={locked() || props.preview}
                   >
                     {props.preview
                       ? 'Booking is off in preview'
                       : flow.submitting()
                         ? 'Booking…'
-                        : flow.uncertain()
-                          ? 'Check booking status'
+                        : flow.finishing()
+                          ? 'Finishing booking…'
                           : event().requiresConfirmation
                             ? 'Request booking'
                             : 'Confirm booking'}
