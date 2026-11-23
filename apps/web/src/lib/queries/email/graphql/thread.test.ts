@@ -491,14 +491,14 @@ describe('open-thread revalidation without normalized caching', () => {
       const f = setup({ cached: true, identity: 'unreadable', missingHost });
       cacheEnabledMock.mockImplementation(cached);
       if (missingHost) await new Promise((resolve) => setTimeout(resolve, 0));
-      else await vi.waitFor(() => expect(f.query.isEnabled).toBe(true));
-      expect(f.reads).toEqual([]); // Unknown while cache is active: no network.
+      else await vi.waitFor(() => expect(f.query.isSuccess).toBe(true));
+      // Unknown while the cache is active: read from the server without
+      // storing it, once a cache client exists to send through.
+      expect(f.reads).toEqual(missingHost ? [] : [0]);
       setCached(false);
       await vi.waitFor(() => expect(f.query.isSuccess).toBe(true));
-      expect(f.reads).toEqual([0]);
       await archiveEmailThread({ id: 'thread-1', value: false });
       expect(f.query.data?.pages[0].inbox_visible).toBe(true);
-      expect(f.reads).toEqual([0, 0]);
     }
   );
 
@@ -900,7 +900,7 @@ it('exposes the resolved identity across queue settlement without confusing a di
   expect(unsubscribe).toHaveBeenCalledOnce();
 });
 
-it('keeps identity-read failures cache-only and recovers on a cache change', async () => {
+it('reads the server without storing the answer when the identity read fails, and recovers on a cache change', async () => {
   initializeClientMock.mockReset();
   executeQueryMock.mockReset();
   cacheEnabledMock.mockReturnValue(true);
@@ -923,7 +923,10 @@ it('keeps identity-read failures cache-only and recovers on a cache change', asy
   }));
   try {
     await vi.waitFor(() => expect(executeQueryMock).toHaveBeenCalledOnce());
-    expect(executeQueryMock.mock.calls[0][1].requestPolicy).toBe('cache-only');
+    expect(executeQueryMock.mock.calls[0][1].requestPolicy).toBe(
+      'network-only'
+    );
+    expect(executeQueryMock.mock.calls[0][1].persistResult).toBe(false);
     read.mockResolvedValue({
       revision: '2',
       records: [
@@ -944,8 +947,116 @@ it('keeps identity-read failures cache-only and recovers on a cache change', asy
     expect(executeQueryMock.mock.calls.at(-1)?.[1].requestPolicy).toBe(
       'cache-and-network'
     );
+    expect(executeQueryMock.mock.calls.at(-1)?.[1].persistResult).toBe(
+      undefined
+    );
   } finally {
     root.dispose();
+  }
+});
+
+it('reads the thread from the server when the cache does not answer its identity in time', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  initializeClientMock.mockReset();
+  executeQueryMock.mockReset();
+  cacheEnabledMock.mockReturnValue(true);
+  let answer = (_result: unknown) => {};
+  hostMock.mockReturnValue({
+    readRecordsByKeys: vi.fn(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    ),
+    onCacheChanged: () => () => {},
+  });
+  executeQueryMock.mockImplementation(() => makeSubject().source);
+  const root = createRoot((dispose) => ({
+    dispose,
+    ...createGraphqlEmailThreadQuery(
+      () => 'thread-1',
+      () => ({ enabled: true })
+    ),
+  }));
+  try {
+    expect(root.identityPending()).toBe(true);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(executeQueryMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(root.identityPending()).toBe(false);
+    expect(executeQueryMock).toHaveBeenCalledOnce();
+    expect(executeQueryMock.mock.calls[0][0].variables.threadId).toBe(
+      'thread-1'
+    );
+    expect(executeQueryMock.mock.calls[0][1].requestPolicy).toBe(
+      'network-only'
+    );
+    expect(executeQueryMock.mock.calls[0][1].persistResult).toBe(false);
+
+    // The cache's late answer takes over.
+    answer({ revision: '1', records: [] });
+    await vi.waitFor(() =>
+      expect(executeQueryMock.mock.calls.at(-1)?.[1].requestPolicy).toBe(
+        'cache-and-network'
+      )
+    );
+    expect(executeQueryMock.mock.calls.at(-1)?.[1].persistResult).toBe(
+      undefined
+    );
+  } finally {
+    root.dispose();
+    vi.useRealTimers();
+  }
+});
+
+it('applies an identity answer that a cache change overtook', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  initializeClientMock.mockReset();
+  executeQueryMock.mockReset();
+  cacheEnabledMock.mockReturnValue(true);
+  let changed = () => {};
+  const answers: Array<(result: unknown) => void> = [];
+  const read = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        answers.push(resolve);
+      })
+  );
+  hostMock.mockReturnValue({
+    readRecordsByKeys: read,
+    onCacheChanged: (callback: () => void) => {
+      changed = callback;
+      return () => {};
+    },
+  });
+  executeQueryMock.mockImplementation(() => makeSubject().source);
+  const root = createRoot((dispose) => ({
+    dispose,
+    ...createGraphqlEmailThreadQuery(
+      () => 'thread-1',
+      () => ({ enabled: true })
+    ),
+  }));
+  try {
+    await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+    // A busy cache reports changes faster than it answers the read.
+    for (let i = 0; i < 5; i++) changed();
+    expect(read).toHaveBeenCalledOnce();
+
+    answers[0]({ revision: '1', records: [] });
+    await vi.waitFor(() => expect(executeQueryMock).toHaveBeenCalledOnce());
+    expect(executeQueryMock.mock.calls[0][1].requestPolicy).toBe(
+      'cache-and-network'
+    );
+    // The changes ask for one more read, not one each.
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    answers[1]({ revision: '2', records: [] });
+    await Promise.resolve();
+    expect(read).toHaveBeenCalledTimes(2);
+  } finally {
+    root.dispose();
+    vi.useRealTimers();
   }
 });
 

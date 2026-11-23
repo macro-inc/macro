@@ -9,6 +9,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
+import { Telemetry } from '@macro-inc/observability';
 import type { ApiThread } from '@service-email/generated/schemas';
 import {
   EmailThreadIdentityFieldsFragmentDoc,
@@ -101,10 +102,28 @@ export function mapGraphqlThreadError(error: CombinedError): ThrownResultError {
 type ThreadIdentity = {
   requested: string;
   canonical: string;
-  /** A failed lookup is not proof of a local draft. Only `local` forbids
-   * network reads after the session has abandoned its normalized cache. */
+  /** A failed or unanswered lookup is not proof of a local draft. Only `local`
+   * forbids network reads; an `unknown` thread is read from the server without
+   * storing the answer, until the cache answers. */
   kind: 'remote' | 'local' | 'unknown';
 };
+
+/**
+ * How long an open thread waits for the cache to tell a local draft from a
+ * server thread before reading it from the server. The lookup normally answers
+ * well within this; a cache that stops answering must not hold the thread.
+ */
+const IDENTITY_WAIT_MS = 1_000;
+
+function unresolvedInCache(kind: ThreadIdentity['kind'] | undefined) {
+  return kind === 'unknown' && graphqlCacheEnabled();
+}
+
+function threadRequestPolicy(kind: ThreadIdentity['kind'] | undefined) {
+  if (kind === 'local') return 'cache-only';
+  if (unresolvedInCache(kind)) return 'network-only';
+  return 'cache-and-network';
+}
 
 /** Resolve a durable local route before contacting the server with its ID. */
 async function cachedThreadIdentity(
@@ -231,6 +250,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
 ): {
   query: GraphqlEmailThreadQuery<TData>;
   resolvedThreadId: Accessor<string>;
+  identityPending: Accessor<boolean>;
 } {
   // Client construction installs the host. Subscribe before the first read so
   // settlement cannot leave a reopened local thread stuck on cache-only.
@@ -243,33 +263,74 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     canonical: string;
   }>();
   let request = 0;
+  let lookingUp: string | undefined;
+  let lookUpAgain = false;
   let disposed = false;
+  // The opening view's trace, for a fallback recorded after an await.
+  const trace = Telemetry.captureContext();
+  const isCurrent = (id: string, generation: number) =>
+    !disposed && generation === request && id === threadId();
+
+  // While the cache cannot say whether the route is a local draft, read the
+  // thread from the server.
+  const fallBackToServer = (
+    id: string,
+    reason: 'timeout' | 'error',
+    startedAt: number
+  ) => {
+    if (untrack(identity)?.requested === id) return;
+    trace.run(() => {
+      const span = Telemetry.span('email.thread.identity_fallback');
+      span.setAttr('email.thread_id', id);
+      span.setAttr('email.thread.identity_fallback_reason', reason);
+      span.setAttr(
+        'email.thread.identity_wait_ms',
+        Math.round(performance.now() - startedAt)
+      );
+      span.end();
+    });
+    setIdentity({ requested: id, canonical: id, kind: 'unknown' });
+  };
+
+  // One lookup at a time per thread. A cache change during a lookup asks for
+  // one more after it instead of discarding its answer: a busy cache reports
+  // changes faster than it answers reads, so no answer would ever land.
   const refreshIdentity = async () => {
     const id = threadId();
+    if (lookingUp === id) {
+      lookUpAgain = true;
+      return;
+    }
     const generation = ++request;
+    lookingUp = id;
+    const startedAt = performance.now();
+    const deadline = setTimeout(() => {
+      if (isCurrent(id, generation)) fallBackToServer(id, 'timeout', startedAt);
+    }, IDENTITY_WAIT_MS);
     try {
-      const result = await cachedThreadIdentity(id, untrack(identity));
-      if (disposed || generation !== request || id !== threadId()) return;
-      setIdentity((previous) =>
-        previous?.requested === result.requested &&
-        previous.canonical === result.canonical &&
-        previous.kind === result.kind
-          ? previous
-          : result
-      );
-    } catch {
-      // An initially unreadable identity may still be a local draft. Preserve
-      // any known identity and policy; otherwise wait for resolution in cache.
-      if (!disposed && generation === request && id === threadId())
-        setIdentity((previous) =>
-          previous?.requested === id
-            ? previous
-            : {
-                requested: id,
-                canonical: id,
-                kind: 'unknown',
-              }
-        );
+      do {
+        lookUpAgain = false;
+        try {
+          const result = await cachedThreadIdentity(id, untrack(identity));
+          if (!isCurrent(id, generation)) return;
+          setIdentity((previous) =>
+            previous?.requested === result.requested &&
+            previous.canonical === result.canonical &&
+            previous.kind === result.kind
+              ? previous
+              : result
+          );
+        } catch {
+          // An initially unreadable identity may still be a local draft.
+          // Preserve any known identity and policy; otherwise read from the
+          // server until the cache answers.
+          if (isCurrent(id, generation))
+            fallBackToServer(id, 'error', startedAt);
+        }
+      } while (lookUpAgain && isCurrent(id, generation));
+    } finally {
+      clearTimeout(deadline);
+      if (generation === request) lookingUp = undefined;
     }
   };
   // The memo re-reads identity only when the id value changes, not whenever
@@ -323,11 +384,12 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
         : identity()?.kind !== 'local') &&
       threadId().length > 0 &&
       identity()?.requested === threadId(),
-    requestPolicy:
-      identity()?.kind === 'local' ||
-      (identity()?.kind === 'unknown' && graphqlCacheEnabled())
-        ? 'cache-only'
-        : 'cache-and-network',
+    requestPolicy: threadRequestPolicy(identity()?.kind),
+    // A server "not found" for an unresolved local draft must not be stored
+    // over the draft's cached thread.
+    context: unresolvedInCache(identity()?.kind)
+      ? { persistResult: false }
+      : undefined,
     keepPreviousData: false,
     onResult: (result, { pageIndex }) => {
       const canonical = result.data?.user.emailThread?.id;
@@ -369,5 +431,9 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       },
     })
   );
-  return { query, resolvedThreadId };
+  return {
+    query,
+    resolvedThreadId,
+    identityPending: () => identity()?.requested !== threadId(),
+  };
 }
