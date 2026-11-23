@@ -1,0 +1,42 @@
+crates/agent_permissions/src/domain/service.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 559-561
+crates/agent_permissions/src/inbound/axum_router.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 94
+crates/agent_permissions/src/domain/service/test.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 270-274,1398
+crates/agent_permissions/src/domain/resolve.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 251-254,576
+crates/agent_permissions/src/domain/resolve/test.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 189-192,194-197,218-221,225-228,252-256,342-349,374-381,1048-1051
+crates/agent_permissions/src/outbound/pg/test/sources.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 15-17,207-210,250-254,308-313,317-322,349-354,372-377,382-387,395-411,420-426,505-510,534
+crates/agent_permissions/src/domain/resolve/chain/test.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 125-128,304-307,376-379,428-431,477-481,560-565
+crates/agent_permissions/src/inbound/toolset/test.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 9-10
+crates/agent_permissions/src/domain/resolve/chain.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 17,276-280
+crates/agent_permissions/src/domain/model.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 280-282
+crates/agent_permissions/src/outbound/pg.rs
+  s_aa9038102244a3::t_38aa83592ff9ec 22,393-395
+  s_aa9038102244a3::t_6d8edd9dd5d1ee 366-368,372,384,389,425-431,806
+.sqlx/query-138228fae51b9e23c2ba071fed874a7b3e1522454284728ed6b683c828767acd.json
+  s_aa9038102244a3::t_b884ce6f6282da 3,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "18d77c58bce34dca790958c8206dc71af2a9a4d4",
+  "prompts": {},
+  "sessions": {
+    "s_aa9038102244a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8722afde-2cce-4eb5-b137-43e8230dc6d1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
