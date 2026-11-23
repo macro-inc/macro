@@ -491,26 +491,32 @@ export async function addPropertyOption(
       createdAt: now,
       updatedAt: now,
     };
+    // Context does not survive the await for the links, so the enqueue runs
+    // in the trace the add started in.
+    const parent = Telemetry.captureContext();
+    const enqueue = async (cacheHost: CacheHost) => {
+      const updates = await optionListLinks(
+        cacheHost,
+        propertyDefinitionId,
+        option
+      );
+      return parent.run(() =>
+        executeOptimisticMutation(
+          client,
+          AddPropertyOptionDocument,
+          { input },
+          { addPropertyOption: option },
+          { uuid: id, updates }
+        ).toPromise()
+      );
+    };
     const outcome = await settle<
       AddPropertyOptionMutation,
       { input: typeof input }
     >(
       async (context) =>
         host
-          ? executeOptimisticMutation(
-              client,
-              AddPropertyOptionDocument,
-              { input },
-              { addPropertyOption: option },
-              {
-                uuid: id,
-                updates: await optionListLinks(
-                  host,
-                  propertyDefinitionId,
-                  option
-                ),
-              }
-            ).toPromise()
+          ? enqueue(host)
           : client
               .mutation(AddPropertyOptionDocument, { input }, context)
               .toPromise(),
