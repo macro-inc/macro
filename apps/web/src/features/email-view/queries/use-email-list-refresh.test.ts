@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import type { QueryAccount } from '@queries/auth/account-scope';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useEmailListRefresh } from './use-email-list-refresh';
 
@@ -58,6 +58,7 @@ const push = (
 
 function mount() {
   let enabled = true;
+  const [fetching, setFetching] = createSignal(false);
   let scope = 'selected-inbox-a';
   let selected = 'inbox-a';
   const refresh = vi.fn<() => Promise<void>>().mockResolvedValue();
@@ -67,11 +68,13 @@ function mount() {
       enabled: () => enabled,
       scope: () => scope,
       matchesLink: (link) => link === selected,
+      isFetching: fetching,
       refresh,
     });
   });
   return {
     refresh,
+    setFetching,
     setEnabled: (value: boolean) => {
       enabled = value;
     },
@@ -125,6 +128,7 @@ it('coalesces an in-flight import burst into one fresh follow-up', async () => {
   const first = Promise.withResolvers<void>();
   view.refresh.mockReturnValueOnce(first.promise);
   push();
+  await vi.waitFor(() => expect(view.refresh).toHaveBeenCalledTimes(1));
   for (let i = 0; i < 20; i++) push();
   await vi.advanceTimersByTimeAsync(5_000);
   expect(view.refresh).toHaveBeenCalledTimes(1);
@@ -143,5 +147,70 @@ it('defers hidden mail and catches up on visibility or reconnection', async () =
   document.dispatchEvent(new Event('visibilitychange'));
   await vi.waitFor(() => expect(view.refresh).toHaveBeenCalledTimes(1));
   for (const reconnect of socket.reconnect) reconnect();
-  await vi.waitFor(() => expect(view.refresh).toHaveBeenCalledTimes(2));
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(view.refresh).toHaveBeenCalledTimes(2);
+});
+
+it('does no network work when a clean tab is shown again', async () => {
+  const view = mount();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  document.dispatchEvent(new Event('visibilitychange'));
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  document.dispatchEvent(new Event('visibilitychange'));
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(view.refresh).not.toHaveBeenCalled();
+});
+
+it('coalesces a reconnect storm without an immediate fleet-wide read', async () => {
+  const view = mount();
+  for (let wake = 0; wake < 20; wake += 1) {
+    for (const reconnect of socket.reconnect) reconnect();
+  }
+  expect(view.refresh).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(view.refresh).toHaveBeenCalledTimes(1);
+});
+
+it('applies all hints received during a page fetch once after that fetch settles', async () => {
+  const view = mount();
+  view.setFetching(true);
+  for (let hint = 0; hint < 20; hint += 1) push();
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(view.refresh).not.toHaveBeenCalled();
+  view.setFetching(false);
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(view.refresh).toHaveBeenCalledTimes(1);
+});
+
+it('disposes a reader waiting for pagination without a refresh-failure warning', async () => {
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const view = mount();
+  view.setFetching(true);
+  push();
+  dispose?.();
+  dispose = undefined;
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(view.refresh).not.toHaveBeenCalled();
+  expect(warning).not.toHaveBeenCalled();
+});
+
+it('requests a full catch-up after the reconnect debounce', async () => {
+  const view = mount();
+  for (const reconnect of socket.reconnect) reconnect();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(view.refresh).toHaveBeenCalledWith(true);
+});
+
+it('does not warn when disposal cancels an in-flight refresh', async () => {
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const response = Promise.withResolvers<void>();
+  const view = mount();
+  view.refresh.mockReturnValueOnce(response.promise);
+  push();
+  await vi.waitFor(() => expect(view.refresh).toHaveBeenCalledOnce());
+  dispose?.();
+  dispose = undefined;
+  response.reject(new DOMException('Disposed', 'AbortError'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(warning).not.toHaveBeenCalled();
 });

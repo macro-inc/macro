@@ -21,6 +21,7 @@ import type { EntityFilters } from '@service-storage/generated/schemas/entityFil
 import type { Params } from '@service-storage/generated/schemas/params';
 import type { PostSoupAstRequestAllOf } from '@service-storage/generated/schemas/postSoupAstRequestAllOf';
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
+import { until } from '@solid-primitives/promise';
 import {
   type InfiniteData,
   infiniteQueryOptions,
@@ -28,7 +29,7 @@ import {
   type StaleTime,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
-import { type Accessor, onCleanup } from 'solid-js';
+import { type Accessor, getOwner, onCleanup, runWithOwner } from 'solid-js';
 import type { QueryRevalidation } from '../../graphql-cache/exchange/optimistic';
 import { queryClient } from '../client';
 import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
@@ -387,6 +388,8 @@ export type SoupAstItemsQuery = {
   resetToInitialPage(): void;
   /** Forces the selected transport to refetch from the network. */
   refresh(): Promise<void>;
+  /** Cache-maintained heads are bounded; other readers reload their chain. */
+  refreshHead(): Promise<void>;
 };
 
 /**
@@ -398,6 +401,10 @@ export function useSoupAstItemsQuery(
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ): SoupAstItemsQuery {
+  const owner = getOwner();
+  const lifetime = new AbortController();
+  let automaticRestRefresh: Promise<void> | undefined;
+  onCleanup(() => lifetime.abort());
   const queryEnabled = () => options?.().enabled !== false;
   const graphqlRequested = () => args().transport !== 'rest';
 
@@ -567,6 +574,8 @@ export function useSoupAstItemsQuery(
       if (usesGraphql()) {
         await activeGraphqlQuery().fetchNextPage();
       } else {
+        if (automaticRestRefresh)
+          await Promise.allSettled([automaticRestRefresh]);
         await restQuery.fetchNextPage();
       }
     },
@@ -574,6 +583,8 @@ export function useSoupAstItemsQuery(
       if (usesGraphql()) {
         await activeGraphqlQuery().refresh();
       } else {
+        if (automaticRestRefresh)
+          await Promise.allSettled([automaticRestRefresh]);
         await restQuery.refetch();
       }
     },
@@ -584,10 +595,37 @@ export function useSoupAstItemsQuery(
       graphqlGroupedQuery.resetToInitialPage();
       if (!usesGraphql()) resetRestToInitialPage();
     },
+    async refreshHead() {
+      if (!queryEnabled()) return;
+      if (usesGraphql()) {
+        const reader = activeGraphqlQuery();
+        if (reader.refreshHead) await reader.refreshHead();
+        else await reader.refresh();
+        return;
+      }
+      // REST has no maintained membership cache. Keep its full refresh, but
+      // coalesce it and serialize foreground paging behind this one request.
+      if (automaticRestRefresh) return automaticRestRefresh;
+      const scope = JSON.stringify(args());
+      const pending = (async () => {
+        await runWithOwner(owner, () => until(() => !restQuery.isFetching));
+        lifetime.signal.throwIfAborted();
+        if (!queryEnabled() || scope !== JSON.stringify(args())) return;
+        await restQuery.refetch({ throwOnError: true });
+      })();
+      automaticRestRefresh = pending;
+      try {
+        await pending;
+      } finally {
+        if (automaticRestRefresh === pending) automaticRestRefresh = undefined;
+      }
+    },
     async refresh() {
       if (usesGraphql()) {
         await activeGraphqlQuery().refresh();
       } else {
+        if (automaticRestRefresh)
+          await Promise.allSettled([automaticRestRefresh]);
         await restQuery.refetch({ throwOnError: true });
       }
     },

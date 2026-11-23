@@ -76,6 +76,7 @@ describe('CRM activity queries', () => {
         refetch: vi.fn(async () => {}),
         resetToInitialPage: vi.fn(),
         refresh: vi.fn(async () => {}),
+        refreshHead: vi.fn(async () => {}),
       };
       const createQuery = vi.fn<typeof useSoupAstItemsQuery>(() => query);
       const source = useCrmActivityQuery(createQuery, tab, userId);

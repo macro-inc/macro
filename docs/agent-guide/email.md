@@ -485,6 +485,22 @@ scrolling past the first 100 threads, then marking a thread done and letting new
 mail arrive (locally: insert a thread and publish `email.message_received` on
 `macro.email`).
 
+Automatic mailbox hints wait for an in-flight Load More to finish and coalesce
+into one settled batch. Cache-maintained lists re-read their head, prefer its
+fresh records and use its time range to remove missing known rows; timestamp
+boundary ties are retained. Only a row with an unchanged sort timestamp anchors
+the previous chain: a reply lifting an old thread is not enough. An unanchored
+full head rebuilds the loaded chain while keeping visible rows. A complete
+head removes obsolete continuation pages without resetting a one-page list. Shared caches keep known rows below the head current.
+REST fallback and non-maintained GraphQL lists reload the full chain once per
+batch. Spam and Trash also require that full read because their previews bypass
+both shared caches. These reads are limited to mounted views and wait for paging.
+Returning to a clean tab performs no list read; debounced reconnect catch-up and
+the user's explicit refresh reload the full chain. Mailbox hints do not rerun
+submitted service searches or alias/admission lookups. Historical imports create
+neither new-message notifications nor the viewer's own touches, so they do not
+refetch Home's activity feeds. Inactive REST lists are marked stale without IO.
+
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
 under the new heading. Active searches also hide retained results and show loading

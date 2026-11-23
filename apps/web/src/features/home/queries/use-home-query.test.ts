@@ -157,6 +157,7 @@ function makeQuery(initial: EntityData[], hasMore = true) {
     fetchNextPage,
     refetch: vi.fn(async () => {}),
     refresh: vi.fn(async () => {}),
+    refreshHead: vi.fn(async () => {}),
     resetToInitialPage: vi.fn(),
   };
   return {

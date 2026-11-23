@@ -628,4 +628,105 @@ describe('createUrqlInfiniteQuery', () => {
     expect(query.isError).toBe(true);
     expect(query.hasNextPage).toBe(false);
   });
+
+  it('revalidates only the head while retaining the loaded continuation cursor', async () => {
+    const executions: Array<string | null> = [];
+    let heads = 0;
+    const client = {
+      executeQuery(
+        request: GraphQLRequest<Page, Variables>,
+        context: Partial<OperationContext>
+      ) {
+        const cursor = request.variables.cursor;
+        executions.push(cursor);
+        if (cursor === null) heads += 1;
+        const data: Page =
+          cursor === null
+            ? {
+                values: heads === 1 ? ['first'] : ['new', 'first'],
+                nextCursor: heads === 1 ? 'old-boundary' : 'new-boundary',
+              }
+            : { values: ['tail'], nextCursor: null };
+        return fromValue({ operation: { kind: 'query', context }, data });
+      },
+    } as unknown as Client;
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    createRoot((dispose) => {
+      disposals.push(dispose);
+      query = createUrqlInfiniteQuery(() => ({
+        query: DOCUMENT,
+        client,
+        initialPageParam: null as string | null,
+        variables: (cursor: string | null) => ({ cursor }),
+        getNextPageParam: (page: Page) => page.nextCursor,
+        select: ({ pages }: { pages: Page[] }) =>
+          pages.flatMap((page) => page.values),
+      }));
+    });
+    await query.fetchNextPage();
+    await query.refetch({ pages: 'head' });
+    expect(executions).toEqual([null, 'old-boundary', null]);
+    expect(query.data).toEqual(['new', 'first', 'tail']);
+    expect(query.hasNextPage).toBe(false);
+  });
+  it('keeps an explicit full refresh full when requested during a head read', async () => {
+    const executions: Array<string | null> = [];
+    const held = makeSubject<OperationResult<Page, Variables>>();
+    let heads = 0;
+    let headOperation!: Operation<Page, Variables>;
+    const client = {
+      executeQuery(
+        request: GraphQLRequest<Page, Variables>,
+        context: Partial<OperationContext>
+      ) {
+        const cursor = request.variables.cursor;
+        executions.push(cursor);
+        const operation = { kind: 'query', context } as Operation<
+          Page,
+          Variables
+        >;
+        if (cursor === null && ++heads === 2) {
+          headOperation = operation;
+          return held.source;
+        }
+        return fromValue({
+          operation,
+          data: {
+            values: cursor === null ? ['head'] : ['tail'],
+            nextCursor: cursor === null ? 'tail' : null,
+          },
+        });
+      },
+    } as unknown as Client;
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    createRoot((dispose) => {
+      disposals.push(dispose);
+      query = createUrqlInfiniteQuery(() => ({
+        query: DOCUMENT,
+        client,
+        initialPageParam: null as string | null,
+        variables: (cursor: string | null) => ({ cursor }),
+        getNextPageParam: (page: Page) => page.nextCursor,
+        select: ({ pages }: { pages: Page[] }) =>
+          pages.flatMap((page) => page.values),
+      }));
+    });
+    await query.fetchNextPage();
+    const head = query.refetch({ pages: 'head' });
+    const full = query.refetch();
+    expect(executions).toEqual([null, 'tail', null]);
+    held.next({
+      operation: headOperation,
+      data: { values: ['new', 'head'], nextCursor: 'tail' },
+      stale: false,
+      hasNext: false,
+    });
+    await head;
+    await full;
+    expect(executions).toEqual([null, 'tail', null, null, 'tail']);
+  });
 });

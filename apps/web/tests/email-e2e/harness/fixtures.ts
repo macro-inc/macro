@@ -91,6 +91,10 @@ async function relayGateway(
   const sockets = new Set<WebSocketRoute>();
   await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
     sockets.add(socket);
+    // Match the gateway heartbeat so long tests do not create reconnect storms.
+    socket.onMessage((message) => {
+      if (message === 'ping') socket.send('pong');
+    });
     socket.onClose(() => sockets.delete(socket));
   });
   // Other sockets to services the stack does not run stay silent.

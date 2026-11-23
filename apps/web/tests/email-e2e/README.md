@@ -66,9 +66,10 @@ the app's disconnected paths.
   recovery cases keep the list fault active until Retry requests it, then allow
   automatic recovery after releasing the fault.
 - The connection gateway is not run. The fixture answers the browser's gateway
-  socket and passes on what the email services ask the gateway to send the user.
+  socket, answers `ping` with `pong` as the real gateway does, and passes on
+  what the email services ask the gateway to send the user. Missing heartbeat
+  replies would create artificial reconnect refreshes during long tests.
 - Not in the stack: the notification, search, contacts and calendar services.
-  New mail does not appear in an open list by itself; sync, then open.
 - The bundle has unified notifications on (`enable-unified-notifications` is
   on in dev), so the navigation's unread marks, the Mail badge among them,
   follow the server's count of unread notification rows, which only the

@@ -837,7 +837,22 @@ export function useEmailDataSource(
     matchesLink: (linkId) =>
       (state.inboxIds === undefined || state.inboxIds.includes(linkId)) &&
       (!state.aliasFilter || state.aliasFilter.inboxId === linkId),
-    refresh: () => dataSource.refresh(),
+    isFetching: () => dataSource.isFetching() || dataSource.isLoadingMore(),
+    refresh: async (catchUp) => {
+      // These sources own their own invalidation, and service search is a
+      // submitted snapshot. Generic mailbox hints extend ordinary lists only.
+      if (
+        showsReminders() ||
+        showsScheduled() ||
+        showsFocus() ||
+        usesServiceSearch()
+      )
+        return;
+      // Isolated folder previews bypass both shared caches. Their known rows
+      // require a full read, still coalesced behind the same paging gate.
+      if (catchUp || isExcludedEmailFolder(state.tab)) await query.refresh();
+      else await query.refreshHead();
+    },
   });
   return dataSource;
 }

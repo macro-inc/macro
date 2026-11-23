@@ -8,7 +8,11 @@ const testState = vi.hoisted(() => ({
   restPlaceholder: false,
   restData: undefined as SoupAstItemsData | undefined,
 }));
-const restRefetch = vi.hoisted(() => vi.fn(async () => undefined));
+const restNext = vi.hoisted(() => vi.fn(async () => undefined));
+
+const restRefetch = vi.hoisted(() =>
+  vi.fn<() => Promise<void>>().mockResolvedValue()
+);
 const fetchSoup = vi.hoisted(() => vi.fn());
 const flatQuery = vi.hoisted(() => makeGraphqlQuery(false));
 const groupedQuery = vi.hoisted(() => makeGraphqlQuery(true));
@@ -83,7 +87,7 @@ vi.mock('@tanstack/solid-query', () => ({
     },
     isEnabled: true,
     hasNextPage: false,
-    fetchNextPage: vi.fn(async () => undefined),
+    fetchNextPage: restNext,
     refetch: restRefetch,
   })),
 }));
@@ -334,4 +338,38 @@ describe('Soup refetch transport selection', () => {
     expect(groupedQuery.refresh).toHaveBeenCalledOnce();
     expect(restRefetch).not.toHaveBeenCalled();
   });
+
+  it.each(['refresh', 'refetch', 'fetchNextPage'] as const)(
+    'still performs an explicit %s after a background head fails',
+    async (action) => {
+      const started = Promise.withResolvers<void>();
+      const response = Promise.withResolvers<void>();
+      restRefetch.mockImplementationOnce(() => {
+        started.resolve();
+        return response.promise;
+      });
+      let query!: SoupAstItemsQuery;
+      createRoot((dispose) => {
+        disposeRoot = dispose;
+        query = useSoupAstItemsQuery(() => ({
+          params: {},
+          body: {},
+          transport: 'rest',
+        }));
+      });
+      const head = query.refreshHead();
+      const failure = expect(head).rejects.toThrow('head failed');
+      await started.promise;
+      const explicit = query[action]();
+      response.reject(new Error('head failed'));
+      await failure;
+      await explicit;
+      expect(restRefetch).toHaveBeenCalledTimes(
+        action === 'fetchNextPage' ? 1 : 2
+      );
+      expect(restNext).toHaveBeenCalledTimes(
+        action === 'fetchNextPage' ? 1 : 0
+      );
+    }
+  );
 });

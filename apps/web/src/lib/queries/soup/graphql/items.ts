@@ -66,6 +66,8 @@ export type GraphqlSoupAstItemsQuery = {
   fetchNextPage: () => Promise<void>;
   /** Discards loaded continuation pages while retaining the initial page. */
   resetToInitialPage: () => void;
+  /** Only flat readers can extend the head without reloading continuations. */
+  refreshHead?: () => Promise<void>;
   /** Refetches the currently loaded page chain from the network. */
   refresh: () => Promise<void>;
 };
