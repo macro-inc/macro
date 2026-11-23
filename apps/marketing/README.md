@@ -280,12 +280,10 @@ is unchanged; run `apps/web` separately when testing local signup changes.
 Linux”. It offers both published installers, Apple silicon DMG and x86_64
 AppImage, with the visitor's platform first as the primary button; other
 browsers list macOS first, and Windows visitors are pointed to the web app.
-It searches recent stable GitHub releases for each installer, skipping CLI-only
-releases and unfinished platform uploads.
-Verified direct installer URLs remain usable while loading and if the API fails;
-update these fallbacks in `desktopDownloads.ts` when retiring older installers.
-The separate “All releases” link opens GitHub, with the primary installer's
-release version displayed beneath it. Below the installers, the page describes
+The buttons link to `/download/mac` and `/download/linux`, which redirect to
+the current release's installers (`seo/download-redirects.json`), so the page
+never names a version or calls GitHub. The separate “All releases” link opens
+GitHub. Below the installers, the page describes
 the desktop, web, iOS, and Android apps.
 Phones are not offered the desktop download page: the main navigation hides
 its link below 768px, and the homepage rail that holds “Download for Desktop”
