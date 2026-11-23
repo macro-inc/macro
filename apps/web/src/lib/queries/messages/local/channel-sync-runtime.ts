@@ -7,6 +7,7 @@ import * as Fiber from 'effect/Fiber';
 import * as Scope from 'effect/Scope';
 import * as Semaphore from 'effect/Semaphore';
 import { channelEntryKeys } from './channel-map';
+import { noteChannelReset } from './channel-resets';
 
 export type ChannelChangesPage = ChannelChangesQuery['user']['channelChanges'];
 
@@ -323,6 +324,7 @@ export function createChannelSyncRuntime(
     }
     // Too far behind to replay: drop what the device holds, and the views
     // read the channel again from the server.
+    noteChannelReset(deps.host, channelId);
     yield* commit(channelId, { reset: true }, generation);
     state.seq = null;
     state.held.clear();

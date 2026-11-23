@@ -30,6 +30,7 @@ import {
   mapChannelTimelineEntry,
 } from './channel-map';
 import { queryChannelNetwork } from './channel-network';
+import { channelResetMark, unchangedSince } from './channel-resets';
 
 export type ChannelPageHost = Pick<
   CacheHost,
@@ -351,6 +352,8 @@ async function loadPage(
   const host = deps.host;
   // The session the page is read under: a later one must not store it.
   const generation = cacheSessionGeneration.capture();
+  // A reset or eviction after this must not be followed by its coverage.
+  const resets = channelResetMark(host, request.channelId);
   const read = readDeviceOrFail(host, request);
   const answered = channelCacheAnswered(host as CacheHost);
   const device = answered
@@ -413,6 +416,9 @@ async function loadPage(
     }
     if (held.kind === 'failed') return null;
     markChannelCacheAnswered(host as CacheHost);
+    // Deleted meanwhile: the records the page stored may be gone with it,
+    // and coverage would show them as held.
+    if (!unchangedSince(host, request.channelId, resets)) return null;
     const touchedAtMs = deps.touches.due(
       request.channelId,
       (deps.now ?? Date.now)()

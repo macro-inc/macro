@@ -29,6 +29,7 @@ import {
   queryChannelNetwork,
   SESSION_CHANGE_RELOADS,
 } from './channel-network';
+import { channelResetMark, unchangedSince } from './channel-resets';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 export type ChannelThreadHost = Pick<
@@ -161,6 +162,8 @@ async function fetchServerThread(
 > {
   // The session the thread is read under: a later one must not store it.
   const generation = cacheSessionGeneration.capture();
+  // A reset or eviction after this must not be followed by its coverage.
+  const resets = channelResetMark(host, channelId);
   const ask = (cursor: Partial<ChannelThreadInput> = {}) =>
     fetchPage(
       { channelId, rootId, limit: MAX_CHANNEL_TIMELINE_PAGE, ...cursor },
@@ -196,6 +199,10 @@ async function fetchServerThread(
   let committed: string | null = null;
   try {
     await Promise.all(stored);
+    // Deleted meanwhile: coverage would show records that may be gone.
+    if (!unchangedSince(host, channelId, resets)) {
+      return { thread, seq: null, readSeq: seq, sessionChanged: false };
+    }
     const result = await host.channelTimelineCommit(
       {
         channelId,

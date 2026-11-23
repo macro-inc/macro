@@ -19,6 +19,7 @@ import {
   type FetchChannelServerPage,
   loadChannelPage,
 } from './channel-pages';
+import { noteChannelsEvicted } from './channel-resets';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 /** Unread channels kept ready on the device, most recently active first. */
@@ -224,11 +225,15 @@ export const evictIdleChannels = (
     let evicted = 0;
     for (let pass = 0; pass < MAX_EVICTION_PASSES; pass += 1) {
       const result = yield* Effect.tryPromise({
-        try: () =>
-          host.channelTimelineEvict({
+        try: () => {
+          // Counted before it is sent: a fill in flight must not cover
+          // what it removes.
+          noteChannelsEvicted(host);
+          return host.channelTimelineEvict({
             touchedBeforeMs,
             maxChannels: MAX_EVICTED_CHANNELS,
-          }),
+          });
+        },
         catch: (error) => error,
       });
       if (result.kind === 'unsupported') break;

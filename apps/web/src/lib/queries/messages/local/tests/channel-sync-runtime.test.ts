@@ -3,6 +3,7 @@ import type {
   ChannelTimelineCommitArgs,
 } from '@graphql-cache/index';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { channelResetMark, unchangedSince } from '../channel-resets';
 import {
   CATCH_UP_DEBOUNCE_MS,
   type ChannelChangesPage,
@@ -299,8 +300,10 @@ describe('createChannelSyncRuntime', () => {
       return changes(after, { hasMore: true });
     });
 
+    const mark = channelResetMark(host, CHANNEL_ID);
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('reset');
     expect(fetch).toHaveBeenCalledTimes(MAX_CHANGE_PAGES);
+    expect(unchangedSince(host, CHANNEL_ID, mark)).toBe(false);
     expect(host.commits.at(-1)).toEqual({
       channelId: CHANNEL_ID,
       reset: true,

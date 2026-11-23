@@ -13,6 +13,7 @@ import {
   PREWARM_PAGE_SIZE,
   runChannelPrewarmPass,
 } from '../channel-prewarm';
+import { channelResetMark, unchangedSince } from '../channel-resets';
 
 vi.mock('@macro-inc/observability', async (importOriginal) => {
   const span = {
@@ -204,12 +205,14 @@ describe('evictIdleChannels', () => {
         hasMore: false,
       });
 
-    const evicted = await Effect.runPromise(
-      evictIdleChannels({ channelTimelineEvict: evict }, () => 0)
-    );
+    const host = { channelTimelineEvict: evict };
+    const mark = channelResetMark(host, 'a');
+    const evicted = await Effect.runPromise(evictIdleChannels(host, () => 0));
 
     expect(evicted).toBe(3);
     expect(evict).toHaveBeenCalledTimes(2);
+    // A fill already in flight will not cover what this removed.
+    expect(unchangedSince(host, 'a', mark)).toBe(false);
   });
 });
 

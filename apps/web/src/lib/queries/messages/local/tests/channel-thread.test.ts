@@ -7,6 +7,7 @@ import type { Message } from '@service-storage/messages';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { channelMessageKey, mapChannelMessage } from '../channel-map';
+import { noteChannelReset } from '../channel-resets';
 import {
   createLocalChannelThread,
   type FetchChannelThreadPage,
@@ -150,6 +151,30 @@ describe('loadChannelThread', () => {
       seq: null,
       sessionChanged: true,
     });
+    expect(host.commits).toEqual([]);
+  });
+
+  it('commits no coverage when the channel was reset while the thread was fetched', async () => {
+    const host = fakeHost([devicePage([], { covered: false })]);
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async () => {
+      noteChannelReset(host, CHANNEL_ID);
+      return {
+        page: {
+          root,
+          replies: [first, second],
+          olderCursor: null,
+          newerCursor: null,
+          seq: '12',
+        },
+        cached: Promise.resolve(),
+      };
+    });
+
+    const loaded = await loadChannelThread(host, CHANNEL_ID, ROOT_ID, {
+      fetchPage,
+    });
+
+    expect(loaded).toMatchObject({ source: 'server', seq: null });
     expect(host.commits).toEqual([]);
   });
 

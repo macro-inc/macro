@@ -12,6 +12,7 @@ import {
   loadChannelPage,
   serverPageCoverage,
 } from '../channel-pages';
+import { noteChannelReset, noteChannelsEvicted } from '../channel-resets';
 import {
   CHANNEL_ID,
   devicePage,
@@ -137,6 +138,40 @@ describe('loadChannelPage', () => {
       },
     ]);
   });
+
+  it.each([
+    ['the channel was reset', () => noteChannelReset],
+    ['channels were evicted', () => noteChannelsEvicted],
+  ] as const)(
+    'commits no coverage when %s while the page was fetched',
+    async (_, note) => {
+      const { host } = countingHost([
+        devicePage([], { covered: false, seq: null }),
+      ]);
+      let storeRecords!: () => void;
+      const cached = new Promise<void>((resolve) => {
+        storeRecords = resolve;
+      });
+      const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+        page: serverPage(),
+        cached,
+      }));
+
+      const loaded = await loadChannelPage(
+        { host, touches: { due: () => 5 }, fetchPage },
+        { channelId: CHANNEL_ID, limit: 50 }
+      );
+      if (loaded === 'unsupported') throw new Error('unexpected');
+      // The delete lands after the records were stored, before the coverage.
+      note()(host, CHANNEL_ID);
+      storeRecords();
+
+      expect(await loaded.stored).toBeNull();
+      expect(host.commits).toEqual([]);
+      // The page itself still shows.
+      expect(loaded.page.entries).toHaveLength(2);
+    }
+  );
 
   it('asks the server when the device read fails, never showing an empty channel', async () => {
     const { host } = countingHost(() => {
