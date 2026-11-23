@@ -16,4 +16,5 @@ export type ToolPermissionPolicyKind =
 export const ToolPermissionPolicyKind = {
   agent: 'agent',
   persona: 'persona',
+  team: 'team',
 } as const;

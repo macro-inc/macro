@@ -3443,6 +3443,51 @@ export type TaskSuggestions = {
 };
 
 /**
+ * A team's default permissions: what the team's agents follow unless they
+ * pick another source, resolved as a policy that owns its settings.
+ */
+export type TeamToolPermissions = {
+    /**
+     * The caller may change and reset them: a team admin or owner, signed
+     * in to Macro.
+     */
+    canEdit: boolean;
+    /**
+     * Each action's default, in display order.
+     */
+    defaults: Array<ToolPermissionDefault>;
+    /**
+     * Every catalog group with an operation, with the actions it has
+     * operations for.
+     */
+    groups: Array<ToolPermissionGroup>;
+    /**
+     * Always `team`.
+     */
+    kind: ToolPermissionPolicyKind;
+    /**
+     * The policy's stable id, to follow.
+     */
+    policyId: ToolPermissionPolicyId;
+    /**
+     * How many operations are not always allowed.
+     */
+    restricted: number;
+    /**
+     * The saved settings, hidden ones included.
+     */
+    rules: Array<ToolPermissionRule>;
+    /**
+     * The team.
+     */
+    teamId: string;
+    /**
+     * The registry version the resolution used.
+     */
+    version: string;
+};
+
+/**
  * The result of a tightening.
  */
 export type TightenToolPermissionsResponse = {
@@ -3712,7 +3757,7 @@ export type ToolPermissionPolicyId = string;
  * Whether the permissions are an owned agent's or the caller's own for a
  * built-in persona.
  */
-export type ToolPermissionPolicyKind = 'agent' | 'persona';
+export type ToolPermissionPolicyKind = 'agent' | 'persona' | 'team';
 
 /**
  * A stored setting.
@@ -3758,6 +3803,7 @@ export type ToolPermissionSource = {
      * Whether it still applies as itself.
      */
     status: ToolPermissionSourceStatus;
+    team?: null | ToolPermissionSourceTeam;
     /**
      * The rest of the chain past the source, toward its root.
      */
@@ -3795,10 +3841,7 @@ export type ToolPermissionSourceAgent = {
  * A policy the picker offers as a source.
  */
 export type ToolPermissionSourceCandidate = {
-    /**
-     * Its agent (or persona).
-     */
-    agent: ToolPermissionSourceAgent;
+    agent?: null | ToolPermissionSourceAgent;
     /**
      * The agent follows it now.
      */
@@ -3815,12 +3858,13 @@ export type ToolPermissionSourceCandidate = {
      * Whose it is, for the badge.
      */
     scope: ToolPermissionSourceScope;
+    team?: null | ToolPermissionSourceTeam;
     unavailable?: null | ToolPermissionSourceUnavailable;
 };
 
 /**
- * The sources the picker offers: the person's own Macro first, then
- * agents.
+ * The sources the picker offers: the person's own Macro first, then team
+ * defaults, then agents.
  */
 export type ToolPermissionSourceCandidates = {
     /**
@@ -3840,13 +3884,31 @@ export type ToolPermissionSourceScope = {
     /**
      * The team.
      */
-    teamId: string;
+    team_id: string;
+    /**
+     * Its name, when it could be read.
+     */
+    team_name?: string | null;
 };
 
 /**
  * Whether a followed source still applies as itself.
  */
 export type ToolPermissionSourceStatus = 'live' | 'deleted' | 'lost';
+
+/**
+ * A team, as a person recognizes it.
+ */
+export type ToolPermissionSourceTeam = {
+    /**
+     * The team.
+     */
+    id: string;
+    /**
+     * Its name.
+     */
+    name: string;
+};
 
 /**
  * Why a candidate source can't be picked.
@@ -5918,6 +5980,93 @@ export type GetAgentToolPermissionSourcesResponses = {
 };
 
 export type GetAgentToolPermissionSourcesResponse = GetAgentToolPermissionSourcesResponses[keyof GetAgentToolPermissionSourcesResponses];
+
+export type ResetTeamToolPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * The team
+         */
+        team_id: string;
+    };
+    query?: never;
+    url: '/agent-tool-permissions/teams/{team_id}';
+};
+
+export type ResetTeamToolPermissionsErrors = {
+    401: string;
+    /**
+     * Not a team admin or owner, or not a person's own session (needs_person)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type ResetTeamToolPermissionsError = ResetTeamToolPermissionsErrors[keyof ResetTeamToolPermissionsErrors];
+
+export type ResetTeamToolPermissionsResponses = {
+    200: TeamToolPermissions;
+};
+
+export type ResetTeamToolPermissionsResponse = ResetTeamToolPermissionsResponses[keyof ResetTeamToolPermissionsResponses];
+
+export type GetTeamToolPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * The team
+         */
+        team_id: string;
+    };
+    query?: never;
+    url: '/agent-tool-permissions/teams/{team_id}';
+};
+
+export type GetTeamToolPermissionsErrors = {
+    401: string;
+    /**
+     * Off, or not a member of the team
+     */
+    404: ToolPermissionError;
+};
+
+export type GetTeamToolPermissionsError = GetTeamToolPermissionsErrors[keyof GetTeamToolPermissionsErrors];
+
+export type GetTeamToolPermissionsResponses = {
+    200: TeamToolPermissions;
+};
+
+export type GetTeamToolPermissionsResponse = GetTeamToolPermissionsResponses[keyof GetTeamToolPermissionsResponses];
+
+export type SetTeamToolPermissionsData = {
+    body: ToolPermissionChanges;
+    path: {
+        /**
+         * The team
+         */
+        team_id: string;
+    };
+    query?: never;
+    url: '/agent-tool-permissions/teams/{team_id}';
+};
+
+export type SetTeamToolPermissionsErrors = {
+    400: ToolPermissionError;
+    401: string;
+    /**
+     * Not a team admin or owner, or not a person's own session (needs_person)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type SetTeamToolPermissionsError = SetTeamToolPermissionsErrors[keyof SetTeamToolPermissionsErrors];
+
+export type SetTeamToolPermissionsResponses = {
+    200: TeamToolPermissions;
+};
+
+export type SetTeamToolPermissionsResponse = SetTeamToolPermissionsResponses[keyof SetTeamToolPermissionsResponses];
 
 export type ListAgentWorkRegistrationsData = {
     body?: never;

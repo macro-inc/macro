@@ -7,7 +7,8 @@
 
 import type { ToolPermissionPolicyId } from './toolPermissionPolicyId';
 import type { ToolPermissionPolicyKind } from './toolPermissionPolicyKind';
-import type { ToolPermissionSourceAgent } from './toolPermissionSourceAgent';
+import type { ToolPermissionSourceCandidateAgent } from './toolPermissionSourceCandidateAgent';
+import type { ToolPermissionSourceCandidateTeam } from './toolPermissionSourceCandidateTeam';
 import type { ToolPermissionSourceCandidateUnavailable } from './toolPermissionSourceCandidateUnavailable';
 import type { ToolPermissionSourceScope } from './toolPermissionSourceScope';
 
@@ -15,8 +16,7 @@ import type { ToolPermissionSourceScope } from './toolPermissionSourceScope';
  * A policy the picker offers as a source.
  */
 export interface ToolPermissionSourceCandidate {
-  /** Its agent (or persona). */
-  agent: ToolPermissionSourceAgent;
+  agent?: ToolPermissionSourceCandidateAgent;
   /** The agent follows it now. */
   current: boolean;
   /** Whose it is. */
@@ -25,5 +25,6 @@ export interface ToolPermissionSourceCandidate {
   policyId: ToolPermissionPolicyId;
   /** Whose it is, for the badge. */
   scope: ToolPermissionSourceScope;
+  team?: ToolPermissionSourceCandidateTeam;
   unavailable?: ToolPermissionSourceCandidateUnavailable;
 }

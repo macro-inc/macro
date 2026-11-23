@@ -7,8 +7,8 @@
 import type { ToolPermissionSourceCandidate } from './toolPermissionSourceCandidate';
 
 /**
- * The sources the picker offers: the person's own Macro first, then
-agents.
+ * The sources the picker offers: the person's own Macro first, then team
+defaults, then agents.
  */
 export interface ToolPermissionSourceCandidates {
   /** The candidates, in display order. */
