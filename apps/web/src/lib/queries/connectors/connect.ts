@@ -1,10 +1,10 @@
+import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   openPipedreamConnectUI,
   type PipedreamConnectEvent,
   type PipedreamConnectUI,
 } from '@core/pipedream/connect-ui';
 import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
-import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTauri } from '@core/util/platform';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { type Span, Telemetry } from '@macro-inc/observability';
