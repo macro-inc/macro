@@ -807,7 +807,6 @@ export default {
       'No se encontraron ajustes. Prueba con “firma”, “tema” o “calendario”.',
     backToSettings: 'Volver a configuración',
     closeSettings: 'Cerrar configuración',
-    goToTab: 'Ir a la pestaña de configuración {{number}}',
     editProfile: 'Editar perfil',
     logOut: 'Cerrar sesión',
     yourAccount: 'Tu cuenta',
