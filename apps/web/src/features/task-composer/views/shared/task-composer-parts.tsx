@@ -326,7 +326,7 @@ function Properties(props: { class?: string }) {
     enabled: startDateEnabled,
     other: () => draftDate(SYSTEM_PROPERTY_IDS.START_DATE),
     saveOther: (property, value) =>
-      composer.saveHandler.saveProperty(property, { valueType: 'DATE', value }),
+      composer.saveHandler.saveProperty(property, value),
     get editor() {
       return pickers.datesEditor;
     },

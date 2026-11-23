@@ -103,3 +103,51 @@ describe('time-range property values', () => {
     ).toBeNull();
   });
 });
+
+describe('date property values', () => {
+  const dateDefinition = {
+    ...definition,
+    id: 'review',
+    data_type: 'DATE',
+  } as const;
+  const dateAssignment = {
+    ...assignment,
+    property_definition_id: 'review',
+  } as const;
+
+  it('reads a date with its time of day set as timed, and one without as a whole day', () => {
+    const timed = entityPropertyFromApi({
+      definition: dateDefinition,
+      property: dateAssignment,
+      value: { type: 'Date', value: '2026-03-01T14:30:00Z', has_time: true },
+    });
+    const day = entityPropertyFromApi({
+      definition: dateDefinition,
+      property: dateAssignment,
+      value: { type: 'Date', value: '2026-03-01T00:00:00Z' },
+    });
+
+    expect(timed).toMatchObject({
+      valueType: 'DATE',
+      value: new Date('2026-03-01T14:30:00Z'),
+      hasTime: true,
+    });
+    expect(day.valueType).toBe('DATE');
+    expect('hasTime' in day).toBe(false);
+  });
+
+  it('sends has_time only for a date with its time of day set', () => {
+    const at = new Date('2026-03-01T14:30:00Z');
+
+    expect(
+      propertyValueToApi({ valueType: 'DATE', value: at, hasTime: true }, false)
+    ).toEqual({
+      type: 'date',
+      value: '2026-03-01T14:30:00.000Z',
+      has_time: true,
+    });
+    expect(propertyValueToApi({ valueType: 'DATE', value: at }, false)).toEqual(
+      { type: 'date', value: '2026-03-01T14:30:00.000Z' }
+    );
+  });
+});
