@@ -285,8 +285,7 @@ describe('agenda paging', () => {
     paging.positionInitial();
     paging.onScroll();
     expect(paging.indices()).toEqual([-2, -1, 0, 1, 2]);
-    viewport.dispatchEvent(new Event('keydown'));
-    paging.onScroll();
+    viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
     expect(paging.indices()).toEqual([-3, -2, -1, 0, 1]);
     dispose();
   });
@@ -626,6 +625,115 @@ describe('agenda paging', () => {
       expect(paging.indices()[0]).toBe(-2 + direction * 2);
     }
   );
+
+  it('loads toward the reader on a short list instead of reversing at both edges', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    );
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    Object.defineProperty(viewport, 'clientHeight', { value: 600 });
+    Object.defineProperty(viewport, 'scrollHeight', { value: 700 });
+    const date = new Date(2026, 2, 7);
+    const day = document.createElement('section');
+    day.dataset.agendaDay = date.toDateString();
+    day.getBoundingClientRect = () =>
+      ({
+        top: 0 - viewport.scrollTop,
+        bottom: 700 - viewport.scrollTop,
+      }) as DOMRect;
+    viewport.append(day);
+    const { paging, dispose } = createRoot((dispose) => ({
+      paging: createAgendaPaging(() => viewport, date),
+      dispose,
+    }));
+    paging.positionInitial();
+    viewport.dispatchEvent(new Event('pointerdown'));
+    viewport.scrollTop = 100;
+    paging.onScroll();
+    expect(paging.indices()).toEqual([-1, 0, 1, 2, 3]);
+    frames.shift()?.(0);
+    expect(paging.indices()).toEqual([-1, 0, 1, 2, 3]);
+    viewport.scrollTop = 0;
+    paging.onScroll();
+    expect(paging.indices()).toEqual([-2, -1, 0, 1, 2]);
+    dispose();
+  });
+
+  it('does not load an older range on a stationary short-list scroll event', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    vi.stubGlobal('requestAnimationFrame', () => 1);
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    Object.defineProperty(viewport, 'clientHeight', { value: 600 });
+    Object.defineProperty(viewport, 'scrollHeight', { value: 700 });
+    const day = document.createElement('section');
+    day.dataset.agendaDay = new Date(2026, 2, 7).toDateString();
+    day.getBoundingClientRect = () => ({ top: 0, bottom: 700 }) as DOMRect;
+    viewport.append(day);
+    const { paging, dispose } = createRoot((dispose) => ({
+      paging: createAgendaPaging(() => viewport, new Date(2026, 2, 7)),
+      dispose,
+    }));
+    paging.positionInitial();
+    viewport.dispatchEvent(new Event('pointerdown'));
+    paging.onScroll();
+    expect(paging.indices()).toEqual([-2, -1, 0, 1, 2]);
+    dispose();
+  });
+
+  it('queues newer input during a short-list rotation without reversing or skipping windows', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    );
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    Object.defineProperty(viewport, 'clientHeight', { value: 600 });
+    Object.defineProperty(viewport, 'scrollHeight', { value: 700 });
+    const day = document.createElement('section');
+    day.dataset.agendaDay = new Date(2026, 2, 7).toDateString();
+    day.getBoundingClientRect = () =>
+      ({
+        top: -viewport.scrollTop,
+        bottom: 700 - viewport.scrollTop,
+      }) as DOMRect;
+    viewport.append(day);
+    const { paging, dispose } = createRoot((dispose) => ({
+      paging: createAgendaPaging(() => viewport, new Date(2026, 2, 7)),
+      dispose,
+    }));
+    paging.move(1);
+    viewport.scrollTop = 100;
+    paging.onScroll();
+    frames.shift()?.(0);
+    expect(paging.indices()).toEqual([0, 1, 2, 3, 4]);
+    dispose();
+  });
 
   it('can wheel toward newer windows from a collapsed list at the lower supported bound', () => {
     vi.stubGlobal(

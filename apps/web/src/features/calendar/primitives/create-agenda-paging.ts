@@ -266,35 +266,45 @@ export function createAgendaPaging(
       if (pendingMove) {
         // A shorter rotated list can clamp scrollTop without reader input.
         // Otherwise keep movement after the snapshot instead of snapping it back.
-        const clamped = isLayoutClamp(element, pendingMove.scrollTop);
+        const previous = pendingMove.scrollTop;
+        const clamped = isLayoutClamp(element, previous);
         if (!clamped) {
-          pendingMove.anchor.top -= element.scrollTop - pendingMove.scrollTop;
+          pendingMove.anchor.top -= element.scrollTop - previous;
         }
         pendingMove.scrollTop = element.scrollTop;
         if (clamped) return;
+        if (element.scrollTop !== previous) {
+          const direction = element.scrollTop < previous ? -1 : 1;
+          if (
+            direction < 0
+              ? element.scrollTop < 320
+              : element.scrollHeight -
+                  element.clientHeight -
+                  element.scrollTop <
+                320
+          )
+            queuedDirection = direction;
+        }
       }
-      if (element.scrollTop < 320) queuedDirection = -1;
-      else if (
-        element.scrollHeight - element.clientHeight - element.scrollTop <
-        320
-      )
-        queuedDirection = 1;
       return;
     }
+    const previousScrollTop = anchoredScrollTop;
     if (initialPositioning && element.scrollTop !== anchoredScrollTop) {
       // Layout shrinkage is not reader intent. Browser find and assistive
       // navigation, however, hand initial positioning over to the reader.
       if (!isLayoutClamp(element, anchoredScrollTop))
         initialPositioning = false;
     }
-    if (initialPositioning) return;
-    if (element.scrollTop !== anchoredScrollTop) captureAnchor(element);
-    if (element.scrollTop < 320) move(-1);
-    else if (
-      element.scrollHeight - element.clientHeight - element.scrollTop <
-      320
+    if (initialPositioning || element.scrollTop === previousScrollTop) return;
+    captureAnchor(element);
+    // When both edges are close, the reader's direction determines which window to load.
+    const direction = element.scrollTop < previousScrollTop ? -1 : 1;
+    if (
+      direction < 0
+        ? element.scrollTop < 320
+        : element.scrollHeight - element.clientHeight - element.scrollTop < 320
     )
-      move(1);
+      move(direction);
   };
 
   onCleanup(() => {
