@@ -339,6 +339,16 @@ fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
     storage.into_inner()
 }
 
+#[cfg(not(test))]
+fn turso_storage(storage: &BrowserStorage) -> &TursoStorage {
+    storage
+}
+
+#[cfg(test)]
+fn turso_storage(storage: &BrowserStorage) -> &TursoStorage {
+    storage.inner()
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct JsEntityFilterRequest {
@@ -541,6 +551,14 @@ impl CacheState {
             err_js(error)
         }
     }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsWalCheckpoint {
+    ran: bool,
+    wal_frames: u64,
+    backfilled_frames: u64,
 }
 
 #[wasm_bindgen]
@@ -1287,6 +1305,27 @@ impl CacheEngine {
                 },
             )?;
             Ok(value.into())
+        })
+    }
+
+    /// Copies the WAL into the database file once it holds 500 frames or more.
+    /// The worker calls it between requests, when its queue is empty, so a
+    /// COMMIT rarely reaches the 1,000 frames at which Turso copies inside it.
+    /// Resolves to `{ran, walFrames, backfilledFrames}`. A failed copy rejects
+    /// and leaves the WAL whole for the next call to retry; like any storage
+    /// call, only an error that means corruption latches a reset.
+    #[wasm_bindgen(js_name = checkpointIfDue)]
+    pub fn checkpoint_if_due(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let result = turso_storage(state.engine_mut()?.storage()).checkpoint_if_due();
+            let checkpoint = state.engine_result(result.map_err(EngineError::Storage))?;
+            to_js(&JsWalCheckpoint {
+                ran: checkpoint.ran,
+                wal_frames: checkpoint.wal_frames,
+                backfilled_frames: checkpoint.backfilled_frames,
+            })
         })
     }
 

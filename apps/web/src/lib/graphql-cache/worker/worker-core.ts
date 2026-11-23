@@ -3,6 +3,7 @@
  * coordinator-routed RPCs, and fans out invalidations.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
 import {
@@ -45,6 +46,7 @@ import {
   type CacheEngine,
   type CacheOpenOutcome,
   type CacheOpenResult,
+  type CacheWalCheckpoint,
   loadCacheWasm,
 } from './wasm-module';
 
@@ -106,6 +108,8 @@ export interface CacheWorkerCoreOptions {
   queueDiagnosticsTimeoutMs?: number;
   /** Calls `resume` once the messages already delivered have been handled. */
   afterArrivedMessages?: (resume: () => void) => void;
+  /** Calls `run` once the engine has been quiet; returns a cancel. */
+  afterQuiet?: (run: () => void) => () => void;
 }
 
 // A burst that keeps arriving must not hold back the requests already here.
@@ -119,6 +123,18 @@ function afterArrivedMessages(resume: () => void): void {
     resume();
   };
   port2.postMessage(undefined);
+}
+
+/**
+ * How long the engine stays quiet before it copies the WAL: long enough for
+ * the requests a page sends on an answer (the boot reads after an open, the
+ * re-reads after a write's change notice) to arrive and run first.
+ */
+const IDLE_CHECKPOINT_QUIET_MS = 100;
+
+function afterQuiet(run: () => void): () => void {
+  const timer = setTimeout(run, IDLE_CHECKPOINT_QUIET_MS);
+  return () => clearTimeout(timer);
 }
 
 // Backfill hydration is cache warming, so foreground reads may overtake it.
@@ -251,7 +267,11 @@ export class CacheWorkerCore {
   private running = false;
   /** Between two requests, while arrivals join the queue. */
   private yielding = false;
+  /** A request that can write ran since the last WAL checkpoint. */
+  private checkpointPending = false;
+  private cancelIdleCheckpoint: (() => void) | undefined;
   private readonly afterArrivedMessages: (resume: () => void) => void;
+  private readonly afterQuiet: (run: () => void) => () => void;
   private acceptingRequests = true;
   private activeRequestHandlers = 0;
   private readonly drainWaiters = new Set<() => void>();
@@ -281,6 +301,7 @@ export class CacheWorkerCore {
     this.queueDiagnosticsTimeoutMs = options.queueDiagnosticsTimeoutMs ?? 250;
     this.afterArrivedMessages =
       options.afterArrivedMessages ?? afterArrivedMessages;
+    this.afterQuiet = options.afterQuiet ?? afterQuiet;
   }
 
   addPort(port: PortLike): void {
@@ -417,6 +438,8 @@ export class CacheWorkerCore {
     this.acceptingRequests = false;
     // A best-effort observation may never delay correctness teardown.
     this.cancelQueueDiagnostics?.();
+    this.cancelIdleCheckpoint?.();
+    this.cancelIdleCheckpoint = undefined;
     if (
       this.activeRequestHandlers > 0 ||
       this.running ||
@@ -546,9 +569,91 @@ export class CacheWorkerCore {
       )
       .finally(() => {
         this.running = false;
+        if (!isReadOnlyCacheRequest(queued.request.kind)) {
+          this.checkpointPending = true;
+        }
         this.collectArrivalsThenDrain();
+        this.scheduleIdleCheckpoint();
         this.resolveDrainWaitersIfIdle();
       });
+  }
+
+  /**
+   * Turso copies the WAL into the database file inside the COMMIT that takes
+   * it to 1,000 frames, so one write pays for the others. After a request
+   * that can write, once the engine has been quiet for a moment, it copies
+   * the WAL here from 500 frames instead. Each request that runs re-arms the
+   * wait, so the requests a page sends on an answer run before the copy. One
+   * that arrives during the copy waits for it, as it waited for the write
+   * that used to carry it.
+   */
+  private scheduleIdleCheckpoint(): void {
+    this.cancelIdleCheckpoint?.();
+    this.cancelIdleCheckpoint = undefined;
+    if (!this.checkpointPending || !this.acceptingRequests) return;
+    const engine = this.engine;
+    const checkpointIfDue = engine?.checkpointIfDue?.bind(engine);
+    if (!checkpointIfDue) {
+      // An engine without it keeps Turso's own checkpoint.
+      this.checkpointPending = false;
+      return;
+    }
+    this.cancelIdleCheckpoint = this.afterQuiet(() => {
+      this.cancelIdleCheckpoint = undefined;
+      if (
+        this.running ||
+        this.yielding ||
+        this.queue.length > 0 ||
+        !this.acceptingRequests ||
+        this.engine !== engine
+      ) {
+        // A request is under way and re-arms the wait when it finishes.
+        return;
+      }
+      this.checkpointPending = false;
+      this.running = true;
+      fireAndForget(
+        this.runIdleCheckpoint(checkpointIfDue),
+        'graphql_cache.wal_checkpoint'
+      );
+    });
+  }
+
+  /** Runs one idle copy, records it, and drains what arrived meanwhile. */
+  private async runIdleCheckpoint(
+    checkpointIfDue: () => Promise<CacheWalCheckpoint>
+  ): Promise<void> {
+    const startedAt = this.now();
+    try {
+      const checkpoint = await checkpointIfDue();
+      if (checkpoint.ran) {
+        this.telemetry.record({
+          name: 'graphql_cache.wal_checkpoint',
+          operationCategory: 'storage',
+          outcome: 'success',
+          errorCode: 'none',
+          durationMs: this.now() - startedAt,
+          count: checkpoint.backfilledFrames,
+          walFrames: checkpoint.walFrames,
+        });
+      }
+    } catch (error) {
+      // A failed copy leaves the WAL whole; the next idle retries it.
+      this.checkpointPending = true;
+      this.telemetry.record({
+        name: 'graphql_cache.wal_checkpoint',
+        operationCategory: 'storage',
+        outcome: 'error',
+        ...describeCacheError(error),
+        durationMs: this.now() - startedAt,
+      });
+      this.reportResetRequired(error);
+      if (isStorageBusy(error)) this.options.onStorageBusy?.();
+    } finally {
+      this.running = false;
+      this.collectArrivalsThenDrain();
+      this.resolveDrainWaitersIfIdle();
+    }
   }
 
   /**
