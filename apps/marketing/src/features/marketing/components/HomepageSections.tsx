@@ -12,6 +12,7 @@ import SheetsIcon from '@icon/wide-spreadsheet.svg';
 import ChatIcon from '@phosphor/chats-circle.svg';
 import { For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import agentBuilderScreen from '../../../assets/homepage/agent-builder.webp';
 import agentsScreen from '../../../assets/homepage/agents.webp';
 import calendarScreen from '../../../assets/homepage/calendar.webp';
 import callsScreen from '../../../assets/homepage/calls.webp';
@@ -238,6 +239,28 @@ function Shortcuts() {
 export function HomepageSections() {
   return (
     <>
+      <FeaturePageSection
+        id="agent-builder"
+        aura="agents"
+        title="The Michael Jordan of AI agents."
+        description="Give your agent an email address and a job on your team. When an invoice needs a second look, tag your finance agent in the thread where it came up."
+      >
+        <img
+          class="homepage-agent-builder-screen"
+          src={agentBuilderScreen}
+          alt="The Macro Bot builder shows Ledger’s avatar beside its finance role, computer, and working hours."
+          width="3066"
+          height="1970"
+          loading="lazy"
+          decoding="async"
+        />
+        <SectionCaption
+          sentences={[
+            'Here we’ve given Ledger a standard computer and a Monday through Friday schedule.',
+            'You can see what that setup costs per working hour before you create it.',
+          ]}
+        />
+      </FeaturePageSection>
       <For each={SECTIONS}>
         {(section) => (
           <FeaturePageSection
