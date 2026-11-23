@@ -229,7 +229,11 @@ header, `Tabs` and list controller, in a wide and a 700px split (stand-in
 panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
 header's tabs from its list, are focus order on a header button, leave an
 open item that replaced the list open, and leave a thread beside the list
-open after a click on its text.
+open after a click on its text. Its `?sidebar` page adds a real `ViewSidebar`
+and a stand-in rail: a folder clicked there, a project whose tabs mount only
+once it opens, or the rail after it, leaves Tab to the header's tabs; the keyboard walks the sidebar in focus
+order, and a folder's disclosure caret or a control there that opens a menu
+or a dialog chooses nothing.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
