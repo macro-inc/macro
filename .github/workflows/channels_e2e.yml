@@ -532,6 +532,18 @@ jobs:
           (cd apps/web && bun tests/channels-e2e/ledger/check.ts \
             --report tests/channels-e2e/.run/playwright-report.json) 2>&1 |
             tee -a "$GITHUB_STEP_SUMMARY" || failed=1
+
+          # A backend defect, not one of channels, fails tests at random: a pooled
+          # database connection handed back inside a transaction, on which every later
+          # request fails. Postgres logs each of those, so a red run says when it had it.
+          if [ "$failed" = 1 ]; then
+            aborted=$(docker compose -p "macro-$CHANNELS_E2E_INSTANCE" logs --no-color postgres 2>/dev/null |
+              grep -c 'current transaction is aborted' || true)
+            if [ "${aborted:-0}" -gt 0 ]; then
+              echo "A database connection of the stack was left in an aborted transaction ($aborted failed statements): tests that could not open a channel failed for that." |
+                tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
           exit "$failed"
         env:
           CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'

@@ -1,5 +1,5 @@
 import { ChannelView } from './harness/channel';
-import { expect, failsSometimes, test } from './harness/fixtures';
+import { arrivesLive, expect, failsSometimes, test } from './harness/fixtures';
 import { historyText } from './harness/history';
 
 // If this fails, scrolling back through a long channel loses, repeats or
@@ -69,6 +69,7 @@ test('SCROLL-03 at the end of the channel, a message from someone else arrives i
 
   await ben.post(channel.id, 'arrives at the end');
 
+  await arrivesLive(view, view.message('arrives at the end'));
   await expect(view.message('arrives at the end')).toBeInViewport();
   await view.expectAtBottom();
 });

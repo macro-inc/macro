@@ -152,10 +152,6 @@ test('CHN-04 a rename shows in the header of a member who has the channel open',
   people,
   pageFor,
 }) => {
-  // Known defect on main: the other member's list row and the system line
-  // change at once, but the header and the composer's placeholder keep the
-  // old name until the page is reloaded.
-  knownDefect();
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['before the rename']);
   const renamed = unique('renamed');

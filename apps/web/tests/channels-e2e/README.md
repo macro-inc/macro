@@ -98,6 +98,13 @@ A red run on `main` blocks nothing. Its last job tells the Macro Alerts
 channel when the pushes or the nightly runs turn red, with the failed tests,
 and when they pass again
 ([what to do](../../../../docs/development/ci.md#when-an-email-end-to-end-alert-fires)).
+When a run fails with many tests waiting for a channel to show
+(`harness/channel.ts`, `shown`), look at the line the step prints after the
+ledger: "a database connection of the stack was left in an aborted
+transaction". It names a backend defect, not one of channels: a pooled
+connection handed back inside a transaction fails every later request that
+gets it, so pages show "Conversation unavailable". The run stays red.
+
 A failed run keeps the stack's logs (`channels-e2e-stack-logs`) and its
 traces (`channels-e2e-results`). One that runs out of time keeps the logs too: the
 suite's step stops after 30 minutes, short of the job's 45, so the steps
