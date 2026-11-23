@@ -48,7 +48,8 @@ function Fixture() {
   const settingsResults = createMemo(() =>
     searchSettings(settingsGroups, settingsSearch())
   );
-  const [loseNextResponse, setLoseNextResponse] = createSignal(false);
+  const [lostAnswers, setLostAnswers] = createSignal(0);
+  const [answerProcessing, setAnswerProcessing] = createSignal(false);
   const receipts = new Map<string, BookingReceipt>();
   const [narrow, setNarrow] = createSignal(false);
   const [dark, setDark] = createSignal(false);
@@ -393,10 +394,17 @@ function Fixture() {
         <button type="button" onClick={() => setNarrow(!narrow())}>
           {narrow() ? 'Full width' : 'Mobile width'}
         </button>
-        <button type="button" onClick={() => setLoseNextResponse(true)}>
-          {loseNextResponse()
-            ? 'Lost response armed'
+        <button type="button" onClick={() => setLostAnswers(lostAnswers() + 1)}>
+          {lostAnswers()
+            ? `Losing ${lostAnswers()} booking answers`
             : 'Simulate lost booking response'}
+        </button>
+        <button
+          type="button"
+          aria-pressed={answerProcessing()}
+          onClick={() => setAnswerProcessing(!answerProcessing())}
+        >
+          Book as still processing
         </button>
         <span role="status">{notice()}</span>
       </div>
@@ -467,8 +475,16 @@ function Fixture() {
                   endsAt: `${date}T${hour}:30:00Z`,
                 })),
               book: async (_p, eventId, r) => {
+                const lose = () => {
+                  if (!lostAnswers()) return;
+                  setLostAnswers(lostAnswers() - 1);
+                  throw new TypeError('Failed to fetch');
+                };
                 const existing = receipts.get(r.requestId);
-                if (existing) return existing;
+                if (existing) {
+                  lose();
+                  return existing;
+                }
                 const e = current().eventTypes.find((e) => e.id === eventId)!;
                 const booking: PreviewBooking = {
                   profileId: current().id,
@@ -486,7 +502,11 @@ function Fixture() {
                   ).toISOString(),
                   timeZone: r.timeZone,
                   hosts: e.hosts,
-                  status: e.requiresConfirmation ? 'pending' : 'confirmed',
+                  status: answerProcessing()
+                    ? 'processing'
+                    : e.requiresConfirmation
+                      ? 'pending'
+                      : 'confirmed',
                   location: e.macroCall
                     ? 'https://macro.com/app/meet/join/0123456789abcdef0123456789abcdef'
                     : e.googleMeet
@@ -501,10 +521,7 @@ function Fixture() {
                   scheduleTimeZone: 'America/New_York',
                 };
                 receipts.set(r.requestId, receipt);
-                if (loseNextResponse()) {
-                  setLoseNextResponse(false);
-                  throw new Error('Injected lost response after reservation');
-                }
+                lose();
                 return receipt;
               },
             }}

@@ -73,7 +73,9 @@ can be counted as completed, but this alone is not evidence of attendance.
   checks client validation and request races/retries.
 - `/src/features/scheduling/browser-test/index.html` on the Vite dev server mounts
   the real scheduling components with injected sample data. It never sends invitations
-  or writes hosted data; it is separate from production routes.
+  or writes hosted data; it is separate from production routes. Its Playwright suite
+  (`src/features/scheduling/browser-test/playwright.config.ts`) checks a booking whose
+  answer is lost and a receipt still processing.
 
 ## Operational behavior
 

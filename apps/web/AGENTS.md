@@ -571,6 +571,15 @@ above the event whenever a late section changes its height. Keep the guest
 editors' `overlap`: without it their height follows the room below the button,
 so they never overflow, never flip, and squeeze the chosen people to nothing.
 
+A booking link's details step has a backend-free browser regression over the
+scheduling fixture (`/src/features/scheduling/browser-test/index.html`): a
+booking whose answer is lost shows Finishing your booking and resends the same
+request by itself (Playwright's clock runs the backoff), says it is taking
+longer after four unanswered retries, fits a phone, and a receipt still
+processing says the page updates by itself. `SCHEDULING_SCREENSHOT_DIR` saves
+its screenshots. On gab-dev run it under `tests/view-parity/isolated-network.sh ""`:
+`bunx playwright test --config src/features/scheduling/browser-test/playwright.config.ts`.
+
 Email invitation cards have a backend-free desktop/phone regression for long
 descriptions wrapping inside the card, collapsed and expanded, the guest row
 lining up with its icon, and `+N more` keeping a 44px tap target on touch:
