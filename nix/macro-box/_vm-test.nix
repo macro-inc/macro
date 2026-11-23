@@ -333,13 +333,15 @@ pkgs.testers.runNixOSTest {
           assert int(size) > 1000, size
 
       with subtest("the screen encoder serves the agent's desktop on loopback, in its sandbox"):
-          agent.wait_for_open_port(5902)
+          # No port probe: each connection starts an instance.
+          agent.wait_for_unit("macro-agent-screen-encoder.socket")
           listeners = agent.succeed("ss -ltnH 'sport = :5902'")
           assert listeners.strip() and all(line.split()[3] == "127.0.0.1:5902" for line in listeners.splitlines()), listeners
           viewer = "${pkgs.python3}/bin/python3 ${./files/test-screen-encoder-client.py}"
           # A viewer held open while the instance is inspected.
-          agent.succeed(f"{viewer} 5902 '10 640 360 10' 8 /tmp/encoder.mp4 >/tmp/encoder.log 2>&1 &")
-          instance = agent.wait_until_succeeds("systemctl list-units --plain --no-legend --state=running 'macro-agent-screen-encoder@*' | awk '{print $1}' | grep .").split()[0]
+          agent.succeed(f"{viewer} 5902 '10 640 360 10' 10 /tmp/encoder.mp4 >/tmp/encoder.log 2>&1 &")
+          instance = agent.wait_until_succeeds("systemctl list-units --plain --no-legend --state=running 'macro-agent-screen-encoder@*' | awk '{print $1}' | grep .").strip()
+          # The script execs ffmpeg, so the main process is the encoder.
           encoder = agent.succeed(f"systemctl show {instance} --property=MainPID --value").strip()
           agent.succeed(f"grep -E '^Uid:\\s+1000\\s' /proc/{encoder}/status")
           agent.succeed(f"[ \"$(stat -c %G /proc/{encoder})\" = macro-agent ]")
@@ -354,6 +356,10 @@ pkgs.testers.runNixOSTest {
           agent.wait_until_fails(f"systemctl is-active --quiet {instance}")
           # A bad config line closes the connection with nothing sent.
           agent.fail(f"{viewer} 5902 '0 640 360 10' 5 /tmp/refused.mp4")
+          # So does a connection that hangs up without one (a port probe),
+          # and neither leaves an instance behind.
+          agent.succeed("${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/5902; exec 3>&-'")
+          agent.wait_until_succeeds("! systemctl list-units --plain --no-legend --state=running 'macro-agent-screen-encoder@*' | grep .")
 
       with subtest("the agent rejects a repo URL with credentials"):
           agent.succeed(

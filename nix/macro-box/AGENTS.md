@@ -368,8 +368,9 @@ existing credentials: no new pairing and no Claude login.
   window, reads its AT-SPI tree and returns a screenshot PNG; the screen
   encoder listens on 127.0.0.1:5902 only, runs each viewer as macro with group
   `macro-agent` in `macro-agent.slice` with no capabilities, sends Constrained
-  Baseline fMP4 starting on a keyframe, ends with its connection and refuses a
-  bad config line; the agent rejects a credentialed repo URL without
+  Baseline fMP4 starting on a keyframe, ends with its connection, and closes
+  on a bad config line or a hang-up without one (a port probe), leaving no
+  instance; the agent rejects a credentialed repo URL without
   contacting the repo; a rewritten file restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its
   credentials in its environment or the rest of macro's home in its view;

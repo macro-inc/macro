@@ -1,6 +1,8 @@
 # A viewer of the agent screen encoder, for the VM tests: connect to
-# 127.0.0.1:<port>, send `<config line>`, write what arrives in <seconds> to
-# <output>, then check it is ftyp + moov, then whole moof + mdat pairs.
+# 127.0.0.1:<port>, send `<config line>`, write what arrives in the <seconds>
+# after the first byte (which may take a while: ffmpeg's cold start in a
+# loaded test VM) to <output>, then check it is ftyp + moov, then whole
+# moof + mdat pairs.
 # Usage: test-screen-encoder-client.py <port> <config line> <seconds> <output>
 import socket
 import struct
@@ -11,7 +13,7 @@ port, line, seconds, output = int(sys.argv[1]), sys.argv[2], float(sys.argv[3]),
 data = bytearray()
 with socket.create_connection(("127.0.0.1", port), timeout=10) as connection:
     connection.sendall(line.encode() + b"\n")
-    deadline = time.monotonic() + seconds
+    deadline = time.monotonic() + 60
     while (left := deadline - time.monotonic()) > 0:
         connection.settimeout(left)
         try:
@@ -20,6 +22,8 @@ with socket.create_connection(("127.0.0.1", port), timeout=10) as connection:
             break
         if not chunk:
             break
+        if not data:
+            deadline = time.monotonic() + seconds
         data += chunk
 
 boxes, at, whole = [], 0, 0
