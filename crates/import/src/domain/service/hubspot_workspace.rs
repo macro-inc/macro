@@ -117,10 +117,12 @@ pub(in crate::domain::service) struct HubspotMeta {
 /// Each pipeline's entries by deal link, read once per write.
 type DealLinks = HashMap<Uuid, HashMap<String, Uuid>>;
 
-/// What one write phase links objects to.
-struct Known<'a> {
+/// What a write links objects to, kept across its phases.
+struct Known {
     /// Earlier phases' records and earlier imports', by plan key.
-    targets: HashMap<&'a str, Uuid>,
+    targets: HashMap<String, Uuid>,
+    /// Records a stopped write made, by ledger row.
+    earlier: HashMap<Uuid, Uuid>,
     /// Pipeline entries by deal link.
     links: DealLinks,
 }
@@ -235,6 +237,46 @@ where
     ) -> Result<usize> {
         let hubspot = self.hubspot.clone().ok_or(NOT_AVAILABLE)?;
         let team = self.repo.user_team_id(user).await?;
+        // One read of the ledger serves every phase: each phase adds the
+        // records it writes, so later phases link to them.
+        let rows = self
+            .repo
+            .list(user, Some(self.workspace_source), None)
+            .await?;
+        let todo: Vec<&ImportEntity> = rows
+            .iter()
+            .filter(|row| {
+                row.user_id == user.as_ref()
+                    && row.review_id == Some(review)
+                    && row.status == ImportStatus::Importing
+                    && row.waiting_on.is_none()
+            })
+            .collect();
+        // Records a stopped write already made, read once for the whole write.
+        let ids: Vec<Uuid> = todo.iter().map(|row| row.id).collect();
+        let earlier = self
+            .repo
+            .written(user, &ids)
+            .await?
+            .into_iter()
+            .filter(|object| object.kind == WrittenKind::CrmRecord)
+            .map(|object| (object.import_id, object.macro_id))
+            .collect();
+        let mut known = Known {
+            // Records earlier imports made.
+            targets: rows
+                .iter()
+                .filter(|row| row.user_id == user.as_ref() && row.status == ImportStatus::Imported)
+                .filter_map(|row| {
+                    Some((
+                        row.foreign_id.clone(),
+                        row.entity_id.as_deref()?.parse().ok()?,
+                    ))
+                })
+                .collect(),
+            earlier,
+            links: DealLinks::default(),
+        };
         let mut failed = 0;
         let mut written = 0;
         for kind in WRITE_ORDER {
@@ -245,40 +287,14 @@ where
                 failed = tracing::field::Empty
             );
             let phase = async {
-                let rows = self
-                    .repo
-                    .list(user, Some(self.workspace_source), None)
-                    .await?;
-                // Earlier phases' records, and records earlier imports made.
-                let targets = rows
+                let objects: Vec<&ImportEntity> = todo
                     .iter()
-                    .filter(|row| {
-                        row.user_id == user.as_ref() && row.status == ImportStatus::Imported
-                    })
-                    .filter_map(|row| {
-                        Some((
-                            row.foreign_id.as_str(),
-                            row.entity_id.as_deref()?.parse().ok()?,
-                        ))
-                    })
+                    .copied()
+                    .filter(|row| row.kind == kind)
                     .collect();
-                let mut known = Known {
-                    targets,
-                    links: DealLinks::default(),
-                };
-                let todo: Vec<&ImportEntity> = rows
-                    .iter()
-                    .filter(|row| {
-                        row.user_id == user.as_ref()
-                            && row.review_id == Some(review)
-                            && row.status == ImportStatus::Importing
-                            && row.waiting_on.is_none()
-                            && row.kind == kind
-                    })
-                    .collect();
-                tracing::Span::current().record("objects", todo.len());
+                tracing::Span::current().record("objects", objects.len());
                 let mut phase_failed = 0;
-                for row in todo {
+                for row in objects {
                     if control.reason().is_some() {
                         return Ok::<_, ImportError>(phase_failed);
                     }
@@ -293,7 +309,11 @@ where
                         )
                         .await;
                     match result {
-                        Ok(()) => written += 1,
+                        Ok(Some(id)) => {
+                            written += 1;
+                            known.targets.insert(row.foreign_id.clone(), id);
+                        }
+                        Ok(None) => {}
                         Err(error) => {
                             phase_failed += 1;
                             self.repo
@@ -322,10 +342,10 @@ where
         user: &MacroUserIdStr<'static>,
         row: &ImportEntity,
         team: Option<Uuid>,
-        known: &mut Known<'_>,
+        known: &mut Known,
         writer: &dyn CrmImportWriter,
         control: &JobControl,
-    ) -> Result<()> {
+    ) -> Result<Option<Uuid>> {
         let meta: HubspotMeta = serde_json::from_value(row.metadata.clone())?;
         let team = team.ok_or(ImportError::CrmAccessRequired)?;
         let resolved = claim::resolve(
@@ -354,20 +374,13 @@ where
                 self.repo
                     .mark_imported(user, row.id, &entity_id, &entity_type, None)
                     .await?;
-                return Ok(());
+                return Ok(entity_id.parse().ok());
             }
-            TeamClaim::Waiting { .. } => return Ok(()),
+            TeamClaim::Waiting { .. } => return Ok(None),
             TeamClaim::Held | TeamClaim::Free => {}
         }
         // A record created before a crash is reused, never created again.
-        let earlier = self
-            .repo
-            .written(user, &[row.id])
-            .await?
-            .into_iter()
-            .find(|object| object.kind == WrittenKind::CrmRecord)
-            .map(|object| object.macro_id);
-        let id = match earlier {
+        let id = match known.earlier.get(&row.id).copied() {
             Some(id) => id,
             None => {
                 let (id, created) = self
@@ -393,7 +406,7 @@ where
                 Some(team),
             )
             .await?;
-        Ok(())
+        Ok(Some(id))
     }
 
     /// The CRM record for one object: an existing one by its natural key
@@ -404,10 +417,10 @@ where
         user: &MacroUserIdStr<'static>,
         meta: &HubspotMeta,
         link: &str,
-        known: &mut Known<'_>,
+        known: &mut Known,
         writer: &dyn CrmImportWriter,
     ) -> Result<(Uuid, bool)> {
-        let Known { targets, links } = known;
+        let Known { targets, links, .. } = known;
         match &meta.object {
             HubspotObject::Pipeline { stages } => Ok((
                 writer
