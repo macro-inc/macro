@@ -148,7 +148,7 @@ fn rows_but_schema(storage: &TursoStorage) -> Vec<String> {
     let mut lines = Vec::new();
     for table in driver::query(
         &connection,
-        "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'cache_schema' ORDER BY name",
+        "SELECT name FROM sqlite_schema WHERE type = 'table' AND substr(name, 1, 7) <> 'sqlite_' AND name <> 'cache_schema' ORDER BY name",
         vec![],
     )
     .unwrap()
@@ -1043,7 +1043,7 @@ fn every_table_is_derived_shadow_or_kept() {
         .collect::<std::collections::BTreeSet<_>>();
     let unnamed = driver::query(
         &storage.connection(),
-        "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__turso_internal%' ORDER BY name",
+        "SELECT name FROM sqlite_schema WHERE type = 'table' AND substr(name, 1, 7) <> 'sqlite_' AND substr(name, 1, 16) <> '__turso_internal' ORDER BY name",
         vec![],
     )
     .unwrap()
