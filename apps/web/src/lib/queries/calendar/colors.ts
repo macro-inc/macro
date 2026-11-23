@@ -86,7 +86,8 @@ function calendarIdOf(variables: unknown) {
 const isLastPendingSaveOf = (calendarId: string) =>
   queryClient.isMutating({
     mutationKey: CALENDAR_COLOR_MUTATION_KEY,
-    predicate: (mutation) => calendarIdOf(mutation.state.variables) === calendarId,
+    predicate: (mutation) =>
+      calendarIdOf(mutation.state.variables) === calendarId,
   }) === 1;
 
 const calendarColorMutationOptions = {
