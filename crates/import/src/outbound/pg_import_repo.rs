@@ -526,7 +526,7 @@ impl ImportRepo for PgImportRepo {
                 last_error = 'the import was interrupted — select it again to retry',
                 updated_at = NOW()
             WHERE user_id = $1 AND status = 'importing'
-              AND NOT (source IN ('notion', 'linear', 'jira') AND metadata->'plan' IS NOT NULL)
+              AND NOT (source IN ('notion', 'linear', 'jira', 'hubspot') AND metadata->'plan' IS NOT NULL)
               AND updated_at < NOW() - ($2::double precision * interval '1 second')
             "#,
             user.as_ref(),
@@ -657,7 +657,7 @@ impl ImportRepo for PgImportRepo {
             SET status = 'failed',
                 error = 'discovery was interrupted — try again',
                 updated_at = NOW()
-            WHERE user_id = $1 AND status IN ('running', 'importing') AND source NOT IN ('notion', 'linear', 'jira')
+            WHERE user_id = $1 AND status IN ('running', 'importing') AND source NOT IN ('notion', 'linear', 'jira', 'hubspot')
               AND updated_at < NOW() - ($2::double precision * interval '1 second')
             "#,
             user.as_ref(),

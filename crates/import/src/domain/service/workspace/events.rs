@@ -146,6 +146,7 @@ fn workspace(source: ImportSource) -> Option<ImportWorkspace> {
         ImportSource::Notion => Some(ImportWorkspace::Notion),
         ImportSource::Linear => Some(ImportWorkspace::Linear),
         ImportSource::Jira => Some(ImportWorkspace::Jira),
+        ImportSource::Hubspot => Some(ImportWorkspace::Hubspot),
         ImportSource::Slack => None,
     }
 }

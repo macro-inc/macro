@@ -891,6 +891,7 @@ mod reimport;
 /// The session events the import produces, in order.
 mod root;
 mod tracker;
+mod hubspot;
 
 mod dates;
 mod folders;

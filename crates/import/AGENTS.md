@@ -311,3 +311,30 @@ contract; original source values remain in the task body.
 Jira ids include the cloud id. Epic groups have a separate identity from their
 issue task. Tracker imports never use the generic accept/finalize paths; those
 paths reject workspace-plan rows so approval cannot be bypassed.
+
+## HubSpot CRM imports
+
+`ImportFromHubspot` uses the same reviewed lifecycle with no decision model
+(`domain/service/hubspot_workspace.rs` + `plan`). The host registers an
+`import_hubspot::domain::HubspotConnections` reader and a `CrmImportWriter`
+(`ai_tools::HubspotCrmWriter`, over `crm::domain::record_import`) with
+`with_hubspot`; hosts without them answer "not available". A plan needs a team
+whose CRM the user may use (`ImportError::CrmAccessRequired`, checked before the
+run starts); every row is shared with the team and not shareable, so the card
+offers no sharing choice. Rows are keyed `{portal}:{type}:{id}` (pipeline ids
+are words, record ids numbers), so re-runs and teammates dedupe through the
+ledger and the `import_entity_hubspot_team_object_key` index.
+
+Plans are fully decided when staged: deals with no company or no live pipeline
+are `skip` with a reason; everything Macro CRM cannot hold is a typed
+`HubspotLoss` on the row, counted into the report's `hubspot` section with the
+owner match summary kept on the first row (`hubspotSummary`, not `summary`,
+which the shared report reads as text). Writes go pipelines, companies,
+contacts, deals. Each object is claimed for the team, then reuses a
+`WrittenKind::CrmRecord` marker from a stopped write, then a natural key
+(company domain, any of the contact's addresses, the deal's HubSpot URL in the
+pipeline's `Source link` field, read once per pipeline per write), and only
+then creates. Left open: a crash between creating a name-only company, an
+address-less contact or a pipeline and recording its marker duplicates that
+one record. Deleted CRM copies are not re-imported (their targets read as live).
+
