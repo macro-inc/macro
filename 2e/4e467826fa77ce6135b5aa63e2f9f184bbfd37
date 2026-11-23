@@ -1,0 +1,29 @@
+crates/agent_harness/src/domain/service/deliver.rs
+  s_dfeff50ab3a311::t_fca5297b0d4239 364,403-404,408,421-425
+crates/agent_harness/src/domain/service/test/notifications.rs
+  s_0cc55d4013f523::t_6db4132d796891 919-954
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2e4e467826fa77ce6135b5aa63e2f9f184bbfd37",
+  "prompts": {},
+  "sessions": {
+    "s_0cc55d4013f523": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca630804-2c38-4ccc-9ee3-17de52402d45",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dfeff50ab3a311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31e166a2-a818-480e-ab2c-3772bc01fc33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
