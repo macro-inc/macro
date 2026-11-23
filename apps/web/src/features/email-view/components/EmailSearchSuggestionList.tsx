@@ -23,8 +23,11 @@ function RecentSearch(props: { search: string }) {
       <ClockIcon aria-hidden="true" class="size-4 shrink-0 text-ink-muted" />
       <Show when={field().scope}>
         {(scope) => (
-          <span class="shrink-0 rounded-full border border-edge-button bg-control px-2 text-xs leading-5 text-ink-muted">
-            {emailSearchScopeLabel(scope())}
+          <span class="flex h-5 shrink-0 items-center gap-1 rounded-full bg-active px-2 text-xs leading-none">
+            <span class="text-ink-muted">{t('emailViews.searchIn')}</span>
+            <span class="font-medium text-ink">
+              {emailSearchScopeLabel(scope())}
+            </span>
           </span>
         )}
       </Show>
