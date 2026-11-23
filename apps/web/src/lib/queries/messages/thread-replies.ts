@@ -7,9 +7,12 @@ import {
   type MessageThread,
 } from '@service-storage/messages';
 import { useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { queryClient } from '../client';
+import { useChannelReadPath } from './channel-timeline-source';
 import { messageKeys } from './keys';
+import { channelSyncRuntime } from './local/channel-sync';
+import { createLocalChannelThread } from './local/channel-thread';
 import { normalizeMessageThreadSenders } from './message-sender';
 import { useMessageSubscription } from './subscription';
 import { findTopLevelMessageInMessageTimeline } from './timeline';
@@ -71,20 +74,60 @@ function selectThreadReplies(thread: MessageThread) {
   return thread.replies;
 }
 
+/** A thread's replies, whichever path reads them; never suspends a reader that checks `isPending` first. */
+export interface ThreadRepliesRead {
+  readonly data: EntityMessage[] | undefined;
+  readonly isPending: boolean;
+  readonly error: unknown;
+}
+
+/**
+ * A thread's replies: from the device for a channel that reads from it
+ * (`enable-channel-local-sync`), otherwise the REST query, untouched.
+ */
 export function useThreadRepliesQuery(
   parent: Accessor<MessageParent>,
   messageId: Accessor<string>,
   enabled: Accessor<boolean>
-) {
+): ThreadRepliesRead {
+  const { host, mode, setUnsupported } = useChannelReadPath(parent);
   useMessageSubscription(parent);
-  return useQuery(() => {
+  const rest = useQuery(() => {
     seedThreadRepliesFromMessageTimeline(parent(), messageId());
     return {
       ...threadRepliesQueryOptions(parent(), messageId()),
-      enabled: enabled(),
+      enabled: enabled() && mode() === 'rest',
       select: selectThreadReplies,
     };
   });
+  const local = createMemo(() => {
+    const current = host();
+    if (mode() !== 'local' || !current) return undefined;
+    return createLocalChannelThread(
+      { host: current, runtime: channelSyncRuntime(current) },
+      parent().id,
+      messageId,
+      enabled,
+      setUnsupported
+    );
+  });
+  return {
+    get data() {
+      const thread = local();
+      if (thread) return thread.replies();
+      // REST readers keep their own pending handling.
+      return mode() === 'rest' ? rest.data : undefined;
+    },
+    get isPending() {
+      const thread = local();
+      if (thread) return thread.isPending();
+      return mode() === 'pending' || rest.isPending;
+    },
+    get error() {
+      const thread = local();
+      return thread ? thread.error() : rest.error;
+    },
+  };
 }
 
 /** Returns the cache key for one thread replies query. */

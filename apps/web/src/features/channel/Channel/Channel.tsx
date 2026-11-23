@@ -71,6 +71,7 @@ import { MessageNotificationIndexContext } from '@notifications/components/MarkM
 import { recordChannelViewWhenIdle } from '@queries/channel/activity';
 import { queryClient } from '@queries/client';
 import { useChannelTimelineSource } from '@queries/messages/channel-timeline-source';
+import { channelCacheHost } from '@queries/messages/local/channel-flag';
 import {
   newMessageId,
   useDeleteMessageMutation,
@@ -433,6 +434,8 @@ export function Channel(props: ChannelProps) {
     threadManager.getOrCreateThreadState(threadId).setIsExpanded(true);
     // Reply data and the load-around message window can load in parallel. The
     // mounted query reuses this request and remains the owner of render state.
+    // A channel read from the device loads its threads there instead.
+    if (channelCacheHost()) return;
     queryClient.prefetchQuery(
       threadRepliesQueryOptions(
         { type: 'channel', id: props.channelId },

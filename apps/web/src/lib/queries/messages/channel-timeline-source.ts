@@ -159,15 +159,12 @@ function localSource(
 }
 
 /**
- * Picks the path once per mount: channels read from the device when the flag
- * is on and the cache host serves channel timelines; everything else, and a
- * host found unable mid-way, stays on REST. While the flag is still loading
- * on a device with a cache, nothing loads.
+ * Which path reads a parent's messages, chosen once per mount: the device
+ * when the flag is on and the cache host serves channel timelines; REST for
+ * everything else, and from the moment the host turns out unable. While the
+ * flag is still loading on a device with a cache, `pending`.
  */
-export function useChannelTimelineSource(
-  parent: Accessor<MessageParent>,
-  aroundMessageId: Accessor<string | null | undefined>
-): ChannelTimelineSource {
+export function useChannelReadPath(parent: Accessor<MessageParent>) {
   const flag = useFeatureFlag(enableChannelLocalSync);
   const [unsupported, setUnsupported] = createSignal(false);
 
@@ -185,6 +182,20 @@ export function useChannelTimelineSource(
     if (answer.loading) return 'pending';
     return answer.enabled ? 'local' : 'rest';
   }, 'pending');
+  return { host, mode, setUnsupported: () => setUnsupported(true) };
+}
+
+/**
+ * Picks the path once per mount: channels read from the device when the flag
+ * is on and the cache host serves channel timelines; everything else, and a
+ * host found unable mid-way, stays on REST. While the flag is still loading
+ * on a device with a cache, nothing loads.
+ */
+export function useChannelTimelineSource(
+  parent: Accessor<MessageParent>,
+  aroundMessageId: Accessor<string | null | undefined>
+): ChannelTimelineSource {
+  const { host, mode, setUnsupported } = useChannelReadPath(parent);
 
   const rest = restSource(parent, aroundMessageId, () => mode() === 'rest');
   const local = createMemo(() => {
@@ -200,7 +211,7 @@ export function useChannelTimelineSource(
         },
         parent().id,
         aroundMessageId,
-        () => setUnsupported(true)
+        setUnsupported
       )
     );
   });
