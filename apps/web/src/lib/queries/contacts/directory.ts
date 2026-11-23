@@ -1,3 +1,7 @@
+import {
+  enableNamedContactSearch,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { IUser } from '@core/user/types';
 import { normalizeNameText, startsWordsOf } from '@core/util/name-match-score';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -14,6 +18,7 @@ import type { ContactDirectoryFieldsFragment } from '@service-storage/graphql/ge
 import {
   fetchContactDirectoryByIds,
   fetchContactDirectoryPage,
+  fetchContactNamedPeople,
   fetchContactReferencePage,
 } from '@service-storage/graphql-contacts';
 import { hashKey } from '@tanstack/solid-query';
@@ -603,23 +608,67 @@ function answeredRows<Answer>(
   return found.length > bound ? undefined : found;
 }
 
+/** The people the server finds by the typed text's names. With
+ * `enable-named-contact-search` it reads the whole directory, ranked by list
+ * group and then exact names, and the local ranking's rules classify each
+ * person. Without it, it reads the exact name matches of a scan of the first
+ * 2,000 contacts, listed as exact. */
+async function readServerNames({
+  request,
+  limit,
+  signal,
+  span,
+}: WindowInput): Promise<{
+  viewer: string;
+  rows: readonly ContactDirectoryFieldsFragment[];
+  exact: boolean;
+}> {
+  const wholeDirectory = isFeatureEnabled(enableNamedContactSearch);
+  span.setAttr(
+    'contacts.named_read',
+    wholeDirectory ? 'whole_directory' : 'exact_scan'
+  );
+  if (wholeDirectory) {
+    const answer = await span.span('contacts.read_server_named_by', () =>
+      fetchContactNamedPeople({ search: request.query, limit }, signal)
+    );
+    return {
+      viewer: answer.user.id,
+      rows: answer.user.contactsNamedBy,
+      exact: false,
+    };
+  }
+  const answer = await span.span('contacts.read_server_exact', () =>
+    fetchContactReferencePage(
+      { limit, search: request.query, matching: 'ANY_NAME' },
+      signal
+    )
+  );
+  return {
+    viewer: answer.user.id,
+    rows: answer.user.contacts.nodes,
+    exact: true,
+  };
+}
+
 /** Reads the people typed text may name, for the first server page: the
- * server's exact name matches, and by ID a whole typed address or the viewer's
- * teammates (the first 500). The exact search scans only the first 2,000
- * contacts; a lookup by ID finds a person however large the directory is.
- * Each read only adds people to rank, so one that fails, or has not answered
- * when the page's own rows are in and the budget is spent, costs the page
- * those people and nothing else: the other read's people and the page's own
- * rows are still ranked. */
+ * server's people named by the text (`readServerNames`), and by ID a whole
+ * typed address or the viewer's teammates (the first 500); a lookup by ID
+ * finds a person however large the directory is. Each read only adds people
+ * to rank, so one that fails, or has not answered when the page's own rows
+ * are in and the budget is spent, costs the page those people and nothing
+ * else: the other read's people and the page's own rows are still ranked. */
 async function readNamedPeople(
   typed: TypedText,
-  { viewer, request, limit, signal, span }: WindowInput,
+  input: WindowInput,
   page: Promise<unknown>
 ): Promise<{
   exact: readonly ContactDirectoryFieldsFragment[];
+  named: readonly ContactDirectoryFieldsFragment[];
   lookedUp: readonly ContactDirectoryFieldsFragment[];
 }> {
-  if (!typed.text) return { exact: [], lookedUp: [] };
+  const { viewer, request, limit, signal, span } = input;
+  if (!typed.text) return { exact: [], named: [], lookedUp: [] };
 
   // A whole address names one person; any other text may name a teammate.
   const lookupIds = new Set<string>();
@@ -638,18 +687,11 @@ async function readNamedPeople(
     await Promise.allSettled([page, budget]);
     return 'late';
   })();
-  const [exact, lookedUp] = await Promise.all([
+  const [names, lookedUp] = await Promise.all([
     extraRead(
       // No name is an address: a whole one is looked up by ID, and nothing
-      // equals part of one.
-      typed.text.includes('@')
-        ? undefined
-        : span.span('contacts.read_server_exact', () =>
-            fetchContactReferencePage(
-              { limit, search: request.query, matching: 'ANY_NAME' },
-              signal
-            )
-          ),
+      // names part of one.
+      typed.text.includes('@') ? undefined : readServerNames(input),
       deadline
     ),
     extraRead(
@@ -664,33 +706,40 @@ async function readNamedPeople(
   clearTimeout(timer);
   // A superseded read ends here, whatever its reads answered.
   signal.throwIfAborted();
-  for (const read of [exact, lookedUp]) {
-    const answer = read.state === 'answered' ? read.answer : undefined;
-    if (answer && answer.user.id !== viewer)
-      throw new ContactDirectoryScopeError();
-  }
+  const answeredViewers = [
+    names.state === 'answered' ? names.answer?.viewer : undefined,
+    lookedUp.state === 'answered' ? lookedUp.answer?.user.id : undefined,
+  ];
+  if (answeredViewers.some((id) => id !== undefined && id !== viewer))
+    throw new ContactDirectoryScopeError();
 
-  const named = {
-    exact: answeredRows(exact, (answer) => answer.user.contacts.nodes, limit),
+  const found = {
+    names: answeredRows(names, (answer) => answer.rows, limit),
     lookedUp: answeredRows(
       lookedUp,
       (answer) => answer.user.contactsByUserIds,
       lookupIds.size
     ),
   };
-  if ([exact, lookedUp].some((read) => read.state === 'late'))
+  if ([names, lookedUp].some((read) => read.state === 'late'))
     span.setAttr('contacts.named_late', true);
-  if (!named.exact || !named.lookedUp)
+  if (!found.names || !found.lookedUp)
     span.setAttr('contacts.named_failed', true);
-  return { exact: named.exact ?? [], lookedUp: named.lookedUp ?? [] };
+  const exact = names.state === 'answered' && names.answer?.exact === true;
+  return {
+    exact: exact ? (found.names ?? []) : [],
+    named: exact ? [] : (found.names ?? []),
+    lookedUp: found.lookedUp ?? [],
+  };
 }
 
 /** Lists the people the text names ahead of the rest of the server's page,
  * each person once: the server's exact matches, then everyone read whom the
- * text names exactly, then those it names by a word start, then the page. */
+ * text names exactly, then those it names by a word start, then the page.
+ * `named` people come in the server's rank order, ahead of the other reads. */
 function listNamedFirst(
   typed: TypedText,
-  people: { exact: IUser[]; lookedUp: IUser[]; page: IUser[] }
+  people: { exact: IUser[]; named: IUser[]; lookedUp: IUser[]; page: IUser[] }
 ): { users: IUser[]; named: NonNullable<ContactDirectoryPage['named']> } {
   const listed = new Map<string, IUser>();
   const add = (users: IUser[]) => {
@@ -702,7 +751,7 @@ function listNamedFirst(
     }
     return added;
   };
-  const read = [...people.lookedUp, ...people.page];
+  const read = [...people.named, ...people.lookedUp, ...people.page];
   const named = {
     exact: add([
       ...people.exact,
@@ -757,6 +806,7 @@ async function readServerWindow(
       .filter((user) => !excluded.has(user.id.toLowerCase()));
   const { users, named } = listNamedFirst(typed, {
     exact: eligible(namedPeople.exact),
+    named: eligible(namedPeople.named),
     lookedUp: eligible(namedPeople.lookedUp),
     page: eligible(page.nodes),
   });

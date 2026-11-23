@@ -7,6 +7,7 @@ type ServerReads = Pick<
   typeof server,
   | 'fetchContactDirectoryPage'
   | 'fetchContactDirectoryByIds'
+  | 'fetchContactNamedPeople'
   | 'fetchContactReferencePage'
 >;
 let answers: ServerReads | undefined;
@@ -28,3 +29,6 @@ export const fetchContactDirectoryByIds: ServerReads['fetchContactDirectoryByIds
   (...args) => serverReads().fetchContactDirectoryByIds(...args);
 export const fetchContactReferencePage: ServerReads['fetchContactReferencePage'] =
   (...args) => serverReads().fetchContactReferencePage(...args);
+export const fetchContactNamedPeople: ServerReads['fetchContactNamedPeople'] = (
+  ...args
+) => serverReads().fetchContactNamedPeople(...args);

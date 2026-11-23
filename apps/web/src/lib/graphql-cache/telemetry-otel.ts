@@ -82,6 +82,9 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.oldestAgeMs !== undefined) {
           span.setAttr('cache.oldest_age_ms', event.oldestAgeMs);
         }
+        if (event.walFrames !== undefined) {
+          span.setAttr('cache.wal_frames', event.walFrames);
+        }
         try {
           if (event.name === 'graphql_cache.slow_query') {
             const attributes = {

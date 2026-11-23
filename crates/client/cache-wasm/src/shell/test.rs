@@ -2015,6 +2015,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
     ))
     .await;
     assert_reset_required(engine.clear()).await;
+    assert_reset_required(engine.checkpoint_if_due()).await;
 
     resolved(engine.physical_reset()).await;
     let identity: Option<String> = from_js(resolved(engine.bound_identity()).await);
@@ -2335,6 +2336,7 @@ async fn every_method_rejects_after_consuming_close() {
     assert_closed(engine.external_reset()).await;
     assert_closed(engine.teardown_operation("closed:1".into())).await;
     assert_closed(engine.clear()).await;
+    assert_closed(engine.checkpoint_if_due()).await;
     assert_closed(engine.physical_reset()).await;
     assert_closed(engine.close()).await;
 
@@ -2870,4 +2872,507 @@ async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_
         .is_err()
     );
     close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn idle_checkpoint_copies_a_due_wal_once_and_keeps_reads() {
+    const SCOPE: &str = "cache-wasm-idle-checkpoint";
+    let engine = fresh_engine(SCOPE).await;
+    let checkpoint =
+        || async { from_js::<serde_json::Value>(resolved(engine.checkpoint_if_due()).await) };
+
+    let mut copied = None;
+    for written in 0..2_000 {
+        resolved(engine.write_query(
+            write_context(None),
+            QUERY.into(),
+            Some("Soup".into()),
+            js(variables()),
+            js(soup_data(&format!("doc-{written}"))),
+            Some("user-1".into()),
+        ))
+        .await;
+        let result = checkpoint().await;
+        if result["ran"] == true {
+            copied = Some(result);
+            break;
+        }
+        // Below 500 frames nothing is copied.
+        assert_eq!(result["backfilledFrames"], 0);
+        assert!(result["walFrames"].as_u64().unwrap() < 500);
+    }
+    let copied = copied.expect("the WAL reached 500 frames");
+    assert!(copied["walFrames"].as_u64().unwrap() >= 500);
+    assert_eq!(copied["backfilledFrames"], copied["walFrames"]);
+
+    // Nothing new since the copy: the next call skips it.
+    assert_eq!(checkpoint().await["ran"], false);
+    let read: serde_json::Value = from_js(
+        resolved(engine.read_query(
+            Some("tab:after-checkpoint".into()),
+            QUERY.into(),
+            Some("Soup".into()),
+            js(variables()),
+            JsValue::UNDEFINED,
+        ))
+        .await,
+    );
+    assert_eq!(read["kind"], "hit");
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+const BACKFILL_ITEM: &str = "00000000-0000-0000-0000-0000000000b1";
+
+fn backfill_variables() -> JsValue {
+    js(serde_json::json!({ "input": { "initial": { "limit": 1 } } }))
+}
+
+fn backfill_page() -> JsValue {
+    js(serde_json::json!({
+        "user": {
+            "id": "user-1",
+            "soup": {
+                "nextCursor": "next",
+                "items": [projected_document_item(
+                    BACKFILL_ITEM,
+                    "macro|user@example.com",
+                    false,
+                    None,
+                    10,
+                )]
+            }
+        }
+    }))
+}
+
+fn hydrate_backfill(engine: &CacheEngine) -> js_sys::Promise {
+    engine.hydrate_query(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        backfill_variables(),
+        backfill_page(),
+        Some("user-1".into()),
+        JsValue::UNDEFINED,
+    )
+}
+
+fn prepare_backfill(engine: &CacheEngine) -> js_sys::Promise {
+    engine.prepare_hydrate(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        backfill_variables(),
+        backfill_page(),
+        Some("user-1".into()),
+        JsValue::UNDEFINED,
+    )
+}
+
+fn write_soup(engine: &CacheEngine, document_id: &str) -> js_sys::Promise {
+    engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(soup_data(document_id)),
+        Some("user-1".into()),
+    )
+}
+
+/// Both queries, the predicate index over the user's documents, and the
+/// revision, as JSON.
+async fn hydrated_state(engine: &CacheEngine) -> serde_json::Value {
+    let mut owned = documents_preset_filter(
+        serde_json::json!({"literal": {"owner": "macro|user@example.com"}}),
+    );
+    owned["limit"] = serde_json::json!(10);
+    let read = |query: &str, name: &str, variables: JsValue| {
+        engine.read_query(
+            None,
+            query.into(),
+            Some(name.into()),
+            variables,
+            JsValue::UNDEFINED,
+        )
+    };
+    serde_json::json!({
+        "soup": from_js::<serde_json::Value>(resolved(read(QUERY, "Soup", js(variables()))).await),
+        "backfill": from_js::<serde_json::Value>(
+            resolved(read(SOUP_BACKFILL_WITH_PROJECTION_QUERY, "SoupBackfill", backfill_variables()))
+                .await
+        ),
+        "owned": from_js::<serde_json::Value>(resolved(engine.entity_filter(js(owned))).await),
+        "revision": from_js::<String>(resolved(engine.current_revision()).await),
+    })
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_prepared_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate";
+    let engine = fresh_engine(SCOPE).await;
+    let whole: serde_json::Value = from_js(resolved(hydrate_backfill(&engine)).await);
+    let whole_state = hydrated_state(&engine).await;
+    close_and_destroy(&engine, SCOPE).await;
+
+    let engine = fresh_engine(SCOPE).await;
+    resolved(prepare_backfill(&engine)).await;
+    // A read between the halves sees the cache as it was before the hydrate.
+    let between: serde_json::Value = from_js(
+        resolved(engine.read_query(
+            None,
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            backfill_variables(),
+            JsValue::UNDEFINED,
+        ))
+        .await,
+    );
+    assert_eq!(between["kind"], "miss");
+    let split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+    assert_eq!(split, whole);
+    assert!(split.get("projectionsReread").is_none());
+    assert_eq!(engine.state.lock().await.projection_reads, 1);
+    assert_eq!(hydrated_state(&engine).await, whole_state);
+
+    // The kept hydrate is gone once committed.
+    let error = JsFuture::from(engine.commit_hydrate())
+        .await
+        .expect_err("nothing left to commit");
+    assert_eq!(
+        js_sys::Reflect::get(&error, &"message".into())
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        "no prepared hydrate to commit"
+    );
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_write_between_prepare_and_commit_makes_the_commit_read_projections_again() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate-moved";
+    // The order the split one must match: the write, then the hydrate.
+    let engine = fresh_engine(SCOPE).await;
+    resolved(write_soup(&engine, "doc-between")).await;
+    let whole: serde_json::Value = from_js(resolved(hydrate_backfill(&engine)).await);
+    let whole_state = hydrated_state(&engine).await;
+    close_and_destroy(&engine, SCOPE).await;
+
+    let engine = fresh_engine(SCOPE).await;
+    resolved(prepare_backfill(&engine)).await;
+    resolved(write_soup(&engine, "doc-between")).await;
+    let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+    assert_eq!(split["projectionsReread"], true);
+    // Once before the write and once after it.
+    assert_eq!(engine.state.lock().await.projection_reads, 2);
+    split.as_object_mut().unwrap().remove("projectionsReread");
+    assert_eq!(split, whole);
+    assert_eq!(hydrated_state(&engine).await, whole_state);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_failed_prepare_leaves_nothing_to_commit() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate-failed";
+    let engine = fresh_engine(SCOPE).await;
+    resolved(prepare_backfill(&engine)).await;
+    // A second prepare replaces the first, and a failed one leaves none.
+    JsFuture::from(engine.prepare_hydrate(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        backfill_variables(),
+        js(
+            serde_json::json!({ "user": { "id": "user-1", "soup": { "nextCursor": null, "items": [{
+            "__typename": "GraphqlSoupDocument",
+            "id": "00000000-0000-0000-0000-0000000000b2",
+            "cacheProjection": null,
+            "displayName": "Invalid backfill item",
+            "ownerId": "macro|user@example.com"
+        }] } } }),
+        ),
+        Some("user-1".into()),
+        JsValue::UNDEFINED,
+    ))
+    .await
+    .expect_err("an incomplete required projection rejects");
+    assert!(JsFuture::from(engine.commit_hydrate()).await.is_err());
+    assert_eq!(
+        from_js::<String>(resolved(engine.current_revision()).await),
+        "0"
+    );
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+/// A call run before or between the halves of a hydrate.
+#[derive(Clone, Copy)]
+enum Step {
+    /// A Soup page holding one document, for an identity.
+    Soup(&'static str, &'static str),
+    /// The backfill page again, with its document updated at another time.
+    Backfill(i64),
+    /// A Soup page holding one document with the moving notification, in a
+    /// state.
+    Notified(&'static str, &'static str),
+    Clear,
+    ExternalReset,
+}
+
+async fn run_steps(engine: &CacheEngine, steps: &[Step]) {
+    for step in steps {
+        match *step {
+            Step::Soup(document_id, identity) => {
+                resolved(engine.write_query(
+                    write_context(None),
+                    QUERY.into(),
+                    Some("Soup".into()),
+                    js(variables()),
+                    js(soup_data(document_id)),
+                    Some(identity.into()),
+                ))
+                .await;
+            }
+            Step::Backfill(updated_at) => {
+                resolved(engine.hydrate_query(
+                    SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+                    Some("SoupBackfill".into()),
+                    backfill_variables(),
+                    js(serde_json::json!({
+                        "user": {
+                            "id": "user-1",
+                            "soup": {
+                                "nextCursor": "next",
+                                "items": [projected_document_item(
+                                    BACKFILL_ITEM,
+                                    "macro|user@example.com",
+                                    false,
+                                    None,
+                                    updated_at,
+                                )]
+                            }
+                        }
+                    })),
+                    Some("user-1".into()),
+                    JsValue::UNDEFINED,
+                ))
+                .await;
+            }
+            Step::Notified(document_id, state) => {
+                resolved(engine.hydrate_query(
+                    SOUP_WITH_PROJECTION_QUERY.into(),
+                    Some("SoupWithProjection".into()),
+                    js(serde_json::json!({ "input": { "limit": 100 } })),
+                    js(serde_json::json!({
+                        "user": {
+                            "id": "user-1",
+                            "soup": {
+                                "nextCursor": null,
+                                "items": [notified_document_item(document_id, state, 10)]
+                            }
+                        }
+                    })),
+                    Some("user-1".into()),
+                    JsValue::UNDEFINED,
+                ))
+                .await;
+            }
+            Step::Clear => {
+                resolved(engine.clear()).await;
+            }
+            Step::ExternalReset => {
+                resolved(engine.external_reset()).await;
+            }
+        }
+    }
+}
+
+/// Whatever runs between the halves, the commit answers and leaves the cache
+/// as `hydrateQuery` issued after it does.
+async fn assert_commit_is_hydrate_after(scope: &str, before: &[Step], between: &[Step]) {
+    assert_page_commit_is_hydrate_after(scope, before, between, backfill_page, &[]).await;
+}
+
+/// The moving notification and a document other than the backfill's.
+const MOVING_NOTIFICATION: &str = "00000000-0000-0000-0000-0000000000d1";
+const OTHER_DOCUMENT: &str = "00000000-0000-0000-0000-0000000000c1";
+
+fn notified_document_item(document_id: &str, state: &str, updated_at: i64) -> serde_json::Value {
+    let mut item = projected_document_item(
+        document_id,
+        "macro|user@example.com",
+        false,
+        None,
+        updated_at,
+    );
+    item["notifications"] = serde_json::json!([{
+        "id": MOVING_NOTIFICATION,
+        "entityId": document_id,
+        "entityType": "DOCUMENT",
+        "state": state,
+    }]);
+    item
+}
+
+fn notified_backfill_page() -> JsValue {
+    js(serde_json::json!({
+        "user": {
+            "id": "user-1",
+            "soup": {
+                "nextCursor": "next",
+                "items": [notified_document_item(BACKFILL_ITEM, "SEEN", 10)]
+            }
+        }
+    }))
+}
+
+/// The stored projection rows of documents, by id, as text.
+async fn projection_rows(engine: &CacheEngine, documents: &[&str]) -> Vec<String> {
+    let state = engine.state.lock().await;
+    let storage = state
+        .engine
+        .as_ref()
+        .expect("open cache has an engine")
+        .storage();
+    let keys: Vec<_> = documents
+        .iter()
+        .map(|id| RecordKey::new(format!("GraphqlSoupDocument:{id}")).unwrap())
+        .collect();
+    storage
+        .load_projection_states(&keys)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|state| format!("{state:?}"))
+        .collect()
+}
+
+/// Runs `before`, `between` and a hydrate of `page` in order, then `before`,
+/// a prepare of `page`, `between` and the commit, and compares the two: the
+/// commit reads its projections again and stores what the hydrate stored.
+async fn assert_page_commit_is_hydrate_after(
+    scope: &str,
+    before: &[Step],
+    between: &[Step],
+    page: fn() -> JsValue,
+    documents: &[&str],
+) {
+    let hydrate = |engine: &CacheEngine| {
+        engine.hydrate_query(
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            backfill_variables(),
+            page(),
+            Some("user-1".into()),
+            JsValue::UNDEFINED,
+        )
+    };
+    let engine = fresh_engine(scope).await;
+    run_steps(&engine, before).await;
+    run_steps(&engine, between).await;
+    let whole: serde_json::Value = from_js(resolved(hydrate(&engine)).await);
+    let whole_state = hydrated_state(&engine).await;
+    let whole_rows = projection_rows(&engine, documents).await;
+    close_and_destroy(&engine, scope).await;
+
+    let engine = fresh_engine(scope).await;
+    run_steps(&engine, before).await;
+    resolved(engine.prepare_hydrate(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        backfill_variables(),
+        page(),
+        Some("user-1".into()),
+        JsValue::UNDEFINED,
+    ))
+    .await;
+    run_steps(&engine, between).await;
+    let reads = engine.state.lock().await.projection_reads;
+    let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+    assert_eq!(split["projectionsReread"], true);
+    assert_eq!(engine.state.lock().await.projection_reads, reads + 1);
+    split.as_object_mut().unwrap().remove("projectionsReread");
+    assert_eq!(split, whole);
+    assert_eq!(hydrated_state(&engine).await, whole_state);
+    assert_eq!(projection_rows(&engine, documents).await, whole_rows);
+    close_and_destroy(&engine, scope).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_notification_moved_between_prepare_and_commit_leaves_its_old_document() {
+    // The hydrate moves the notification to its document. Only projections
+    // read after the write between know the old document holds it, and
+    // remove it there.
+    assert_page_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-moved-notification",
+        &[],
+        &[Step::Notified(OTHER_DOCUMENT, "UNSEEN")],
+        notified_backfill_page,
+        &[OTHER_DOCUMENT, BACKFILL_ITEM],
+    )
+    .await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_clear_between_prepare_and_commit_commits_as_a_hydrate_after_it() {
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-cleared",
+        &[Step::Soup("doc-before-clear", "user-1")],
+        &[Step::Clear],
+    )
+    .await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn an_external_reset_between_prepare_and_commit_commits_as_a_hydrate_after_it() {
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-external-reset",
+        &[Step::Soup("doc-before-reset", "user-1")],
+        &[Step::ExternalReset],
+    )
+    .await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn rebinding_writes_between_prepare_and_commit_commit_as_a_hydrate_after_them() {
+    // To another identity, which the hydrate's own identity then resets.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-rebound",
+        &[Step::Soup("doc-of-user-1", "user-1")],
+        &[Step::Soup("doc-of-user-2", "user-2")],
+    )
+    .await;
+    // Away and back again: two resets the identity alone would not show.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-rebound-back",
+        &[Step::Soup("doc-of-user-1", "user-1")],
+        &[
+            Step::Soup("doc-of-user-2", "user-2"),
+            Step::Soup("doc-of-user-1-again", "user-1"),
+        ],
+    )
+    .await;
+    // To the hydrate's own identity, from another one.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-rebound-to-own",
+        &[Step::Soup("doc-of-user-2", "user-2")],
+        &[Step::Soup("doc-of-user-1", "user-1")],
+    )
+    .await;
+    // A first binding of an unbound cache.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-first-bind",
+        &[],
+        &[Step::Soup("doc-binds-user-2", "user-2")],
+    )
+    .await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_write_of_the_same_document_between_prepare_and_commit_loses_to_the_commit() {
+    // The hydrate's document, updated at another time: the commit is the
+    // last write of it, and its sort position is the commit's.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-same-document",
+        &[],
+        &[Step::Backfill(20)],
+    )
+    .await;
 }

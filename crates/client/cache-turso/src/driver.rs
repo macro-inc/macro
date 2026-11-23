@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
-use turso_core::{Connection, LimboError, Row, Statement, StepResult, Value};
+use turso_core::{CheckpointMode, Connection, LimboError, Row, Statement, StepResult, Value};
 
 pub(crate) type Values = Vec<Value>;
 pub(crate) type Rows = Vec<Values>;
@@ -22,6 +22,35 @@ const REMEMBERED_TEXTS: usize = 4096;
 /// Prepared copies kept per text, for a text that runs nested within itself.
 const CACHED_COPIES_PER_TEXT: usize = 2;
 
+/// WAL frames from which an idle checkpoint is due. Turso checkpoints inside
+/// the COMMIT that takes the WAL past 1,000 frames beyond the last checkpoint;
+/// checkpointing at half that between requests leaves a request room for 500
+/// frames (2 MB) before its own COMMIT would.
+pub(crate) const CHECKPOINT_DUE_FRAMES: u64 = 500;
+
+/// What an idle checkpoint request did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WalCheckpoint {
+    /// Whether a checkpoint ran. A reader on another connection can leave it
+    /// nothing to copy, so `backfilled_frames` may still be zero.
+    pub ran: bool,
+    /// Frames in the WAL when the request looked.
+    pub wal_frames: u64,
+    /// Frames this checkpoint copied into the database file.
+    pub backfilled_frames: u64,
+}
+
+/// Where the WAL ends, as this connection sees it: every write it commits
+/// moves it, and nothing else does until a write starts the log over. Two
+/// equal positions taken on one connection mean it committed no write in
+/// between; a write on another connection may not show until this one starts
+/// a read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WalPosition {
+    checkpoint_seq_no: u32,
+    max_frame: u64,
+}
+
 /// A connection and the statements prepared on it.
 ///
 /// Clones share one statement cache. Cached statements hold their connection,
@@ -30,6 +59,10 @@ const CACHED_COPIES_PER_TEXT: usize = 2;
 pub(crate) struct Db {
     connection: Arc<Connection>,
     statements: Option<Arc<Mutex<StatementCache>>>,
+    /// The WAL (checkpoint sequence, last frame) the last idle checkpoint
+    /// copied completely, as the copy reported it; until a write changes it,
+    /// the WAL stays due but holds nothing to copy.
+    copied_wal: Arc<Mutex<Option<(u32, u64)>>>,
 }
 
 impl Db {
@@ -38,6 +71,7 @@ impl Db {
         Self {
             connection,
             statements: Some(Arc::new(Mutex::new(StatementCache::default()))),
+            copied_wal: Arc::default(),
         }
     }
 
@@ -47,6 +81,7 @@ impl Db {
         Self {
             connection,
             statements: None,
+            copied_wal: Arc::default(),
         }
     }
 
@@ -62,6 +97,71 @@ impl Db {
         self.statements
             .as_ref()
             .map_or(0, |statements| statements.lock().unwrap().texts.len())
+    }
+
+    /// Copies the WAL into the database file when it holds at least `frames`
+    /// frames. Call it outside a transaction.
+    ///
+    /// This is the passive checkpoint Turso itself runs inside COMMIT, run
+    /// earlier; Turso keeps restarting the log at the next write and
+    /// checkpointing on close. A failure is Turso's own too: the WAL stays
+    /// whole and the next checkpoint copies it again. Once a copy is complete
+    /// the WAL stays due until the next write starts it over, so calls in
+    /// between skip it: Turso's explicit checkpoint drops the page cache even
+    /// when it has nothing to copy.
+    pub(crate) fn checkpoint_over(&self, frames: u64) -> Result<WalCheckpoint, TursoStorageError> {
+        let wal = self
+            .connection
+            .wal_state()
+            .map_err(|_| TursoStorageError::Database)?;
+        let wal_frames = wal.max_frame;
+        let position = Some((wal.checkpoint_seq_no, wal_frames));
+        let mut outcome = WalCheckpoint {
+            ran: false,
+            wal_frames,
+            backfilled_frames: 0,
+        };
+        let mut copied_wal = self
+            .copied_wal
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if wal_frames < frames.max(1) || *copied_wal == position {
+            return Ok(outcome);
+        }
+        match self.connection.checkpoint(CheckpointMode::Passive {
+            upper_bound_inclusive: None,
+        }) {
+            Ok(copied) => {
+                // The frame count is this connection's own view and can be
+                // stale; the copy reports the log it actually copied. A log
+                // started over meanwhile records nothing.
+                let generation = self
+                    .connection
+                    .wal_state()
+                    .map_err(|_| TursoStorageError::Database)?
+                    .checkpoint_seq_no;
+                *copied_wal = (copied.everything_backfilled()
+                    && generation == wal.checkpoint_seq_no)
+                    .then_some((generation, copied.wal_max_frame));
+                outcome.ran = true;
+                outcome.backfilled_frames = copied.wal_checkpoint_backfilled;
+                Ok(outcome)
+            }
+            Err(LimboError::Busy | LimboError::BusySnapshot) => Ok(outcome),
+            Err(_) => Err(TursoStorageError::Database),
+        }
+    }
+
+    /// The end of the WAL as this connection sees it.
+    pub(crate) fn wal_position(&self) -> Result<WalPosition, TursoStorageError> {
+        let wal = self
+            .connection
+            .wal_state()
+            .map_err(|_| TursoStorageError::Database)?;
+        Ok(WalPosition {
+            checkpoint_seq_no: wal.checkpoint_seq_no,
+            max_frame: wal.max_frame,
+        })
     }
 
     /// Drops every cached statement, and with it their connection references.

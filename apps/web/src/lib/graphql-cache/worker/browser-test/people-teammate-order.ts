@@ -57,6 +57,20 @@ answerServerReads({
         return name === query || name.split(' ')[0] === query;
       })
     ),
+  // The whole directory's people whose name has a word starting with each
+  // typed word, as `contactsNamedBy` answers with `enable-named-contact-search`.
+  fetchContactNamedPeople: async ({ search }) => ({
+    user: {
+      id: VIEWER,
+      contactsNamedBy: nodes.filter((node) => {
+        const words = node.name.toLowerCase().split(' ');
+        return search
+          .toLowerCase()
+          .split(' ')
+          .every((typed) => words.some((word) => word.startsWith(typed)));
+      }),
+    },
+  }),
   fetchContactDirectoryByIds: async (ids) => ({
     user: {
       id: VIEWER,
