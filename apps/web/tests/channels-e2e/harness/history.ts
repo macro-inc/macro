@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Api, type SentMessage } from './api';
-import { apiFor, cast, readPeople } from './people';
+import { apiFor, cast, PERSON_KEYS, readPeople } from './people';
 import { runDirectory, stackUrl } from './stack';
 
 export const HISTORY_LENGTH = 230;
@@ -140,4 +140,48 @@ export async function clearFavoriteChannels(ofCast: number): Promise<void> {
   } finally {
     await http.dispose();
   }
+}
+
+/**
+ * Removes every notification the cast's people hold. Each run leaves some
+ * thousands, and a page reads a person's whole notification feed again on
+ * every mark-seen and every notification pushed to it: a cast that had run
+ * for days held 20,000 and its pages were minutes behind on their writes.
+ */
+export async function clearNotifications(ofCast: number): Promise<void> {
+  await Promise.all(
+    PERSON_KEYS.map(async (key) => {
+      const http = await apiFor(key, ofCast);
+      try {
+        let last = '';
+        for (;;) {
+          const listed = await http.get(
+            '/notification/v1/user_notifications?states=&limit=500'
+          );
+          if (!listed.ok()) {
+            throw new Error(`list notifications failed (${listed.status()})`);
+          }
+          const { items } = (await listed.json()) as {
+            items: { id: string }[];
+          };
+          if (items.length === 0) return;
+          if (items[0].id === last) {
+            throw new Error('removed notifications are still listed');
+          }
+          last = items[0].id;
+          const removed = await http.delete(
+            '/notification/v1/user_notifications/bulk',
+            { data: { notificationIds: items.map((item) => item.id) } }
+          );
+          if (!removed.ok()) {
+            throw new Error(
+              `remove notifications failed (${removed.status()})`
+            );
+          }
+        }
+      } finally {
+        await http.dispose();
+      }
+    })
+  );
 }

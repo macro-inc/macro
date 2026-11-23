@@ -105,6 +105,12 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   never reaches the header (CHN-16), so a test that renames in the app waits
   with `channelListRead` first (CHN-03). Check a test that started failing on
   an old stack against a cast that has run little (`CHANNELS_E2E_FIRST_CAST`).
+- Every run also leaves each person some thousands of notifications, and on
+  some builds a page read the person's whole feed of them again on every
+  mark-seen and every push: at 20,000 a page spent its time on that and its
+  writes were minutes late. Global setup removes the casts' notifications
+  (`clearNotifications`), so a run starts with none; a finding that shows only
+  late in a long run may still be that load.
 - The Invite dialog's one row reads "Invite <address>" until the device's own
   list of people answers, then becomes that person's row, sometimes under the
   click: find the row by the address (`inviteByEmail`), not by that name.

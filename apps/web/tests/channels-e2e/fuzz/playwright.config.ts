@@ -5,6 +5,12 @@ import { runDirectory, workers } from '../harness/stack';
 // The differential fuzzer: random sequences of channel operations, run
 // against whichever build the stack serves. README.md says how to run both
 // builds and compare them.
+
+/** A trace of every sequence (`all`), of those that fail, or of none. */
+function traces(): 'on' | 'retain-on-failure' | 'off' {
+  if (process.env.FUZZ_TRACE === 'all') return 'on';
+  return process.env.FUZZ_TRACE ? 'retain-on-failure' : 'off';
+}
 export default defineConfig({
   testDir: '.',
   testMatch: 'differential.fuzz.ts',
@@ -27,7 +33,7 @@ export default defineConfig({
     // A trace of four windows over forty operations is large: kept only
     // for a run asked to fail on what it finds, which is how a shrunk
     // sequence is recorded.
-    trace: process.env.FUZZ_TRACE ? 'retain-on-failure' : 'off',
+    trace: traces(),
     video: 'off',
     ignoreHTTPSErrors: true,
     launchOptions: {

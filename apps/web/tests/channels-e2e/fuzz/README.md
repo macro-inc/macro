@@ -95,7 +95,7 @@ fails in one or a waiting message is not shown. `compare.ts` writes `fuzz/report
 | `FUZZ_LENGTH` | Operations in a sequence; default 40 |
 | `FUZZ_CASES` | A file of sequences to run instead (what `shrink.ts` writes) |
 | `FUZZ_FAIL_ON` | Fail a sequence that has this finding (`any`, a kind, or kind and shape) |
-| `FUZZ_TRACE` | Keep a Playwright trace of a sequence that fails |
+| `FUZZ_TRACE` | Keep a Playwright trace of a sequence that fails, or of every sequence with `all` |
 | `CHANNELS_E2E_WORKERS` | Sequences at once, one cast of people each |
 
 ## Reproduce and shrink
