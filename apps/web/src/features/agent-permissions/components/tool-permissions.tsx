@@ -151,7 +151,8 @@ export function ToolPermissions(props: {
                 toolSettings={toolSettingsFor(
                   props.catalog,
                   props.view,
-                  action
+                  action,
+                  props.follower?.inherited
                 )}
                 editable={props.editable}
                 restrictions={restrictions(action)}

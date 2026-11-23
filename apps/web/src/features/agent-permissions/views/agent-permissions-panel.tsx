@@ -28,7 +28,7 @@ import {
   settingCounts,
   targetKey,
 } from '../core/model';
-import { followerExceptionRules } from '../core/references';
+import { followerRules } from '../core/references';
 import {
   useAgentToolPermissionsQuery,
   useResetAgentToolPermissionsMutation,
@@ -182,7 +182,7 @@ export function AgentPermissionsPanel(props: {
                   follower={
                     loaded().view.source
                       ? {
-                          inherited: followerExceptionRules(loaded().view),
+                          inherited: followerRules(loaded().view),
                           restrictions: loaded().view.rules,
                           canRemove: loaded().view.canEdit,
                         }

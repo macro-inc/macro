@@ -9,8 +9,16 @@ import type {
   ToolPermissionChange,
 } from '@service-agent-harness/generated/schemas';
 import { Button, ConfirmDialog, cn, Tabs } from '@ui';
-import { ResultAsync } from 'neverthrow';
-import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import { ok, ResultAsync } from 'neverthrow';
+import {
+  createSignal,
+  createUniqueId,
+  type JSX,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { FollowingNote, sourceMention } from '../components/following-note';
 import { PermissionsSkeleton } from '../components/permissions-skeleton';
 import { PolicySourceCard } from '../components/policy-source-card';
@@ -61,15 +69,19 @@ export async function applyPermissionsDraft(
   agentId: string,
   draft: PermissionsDraft
 ) {
+  const sourcePolicyId = draft.sourcePolicyId;
+  const follows =
+    sourcePolicyId !== undefined && sourcePolicyId !== draft.defaultPolicyId;
+  // The scope's default needs no request at all.
+  if (!follows && draft.mode !== 'own') return ok(undefined);
   const interaction = beginInteraction(
     draft.mode === 'own'
       ? 'agent_permissions.detach'
       : 'agent_permissions.set_source'
   );
-  const sourcePolicyId = draft.sourcePolicyId;
   const result = await ResultAsync.fromPromise(
     (async () => {
-      if (sourcePolicyId && sourcePolicyId !== draft.defaultPolicyId) {
+      if (follows && sourcePolicyId) {
         await setSourceNow({
           agentId,
           sourcePolicyId,
@@ -114,6 +126,7 @@ function ModeTabs(props: {
 /** "Show @macro's permissions": what the source resolves to, read-only, collapsed. */
 function InheritedPreview(props: { mention: string; children: JSX.Element }) {
   const [open, setOpen] = createSignal(false);
+  const regionId = createUniqueId();
   return (
     <div class="flex flex-col gap-3">
       <Button
@@ -122,6 +135,7 @@ function InheritedPreview(props: { mention: string; children: JSX.Element }) {
         size="sm"
         class="self-start"
         aria-expanded={open()}
+        aria-controls={regionId}
         onClick={() => setOpen(!open())}
       >
         {open()
@@ -138,7 +152,9 @@ function InheritedPreview(props: { mention: string; children: JSX.Element }) {
           )}
         />
       </Button>
-      <Show when={open()}>{props.children}</Show>
+      <Show when={open()}>
+        <div id={regionId}>{props.children}</div>
+      </Show>
     </div>
   );
 }
@@ -155,11 +171,17 @@ const NOTHING_PENDING = () => undefined;
 export function NewAgentPermissions(props: {
   share: 'Private' | 'Team';
   teamId?: string;
-  draft: (read: () => PermissionsDraft) => void;
+  /** Registers the draft's reader; `undefined` once the section is gone. */
+  draft: (read: (() => PermissionsDraft) | undefined) => void;
 }) {
   const [mode, setMode] = createSignal<Mode>('source');
   const [picked, setPicked] = createSignal<string>();
-  const [changes, setChanges] = createSignal<ToolPermissionChange[]>([]);
+  // Own permissions' changes, over the source they were made on: a
+  // different source (picked, or the scope changed) starts them over.
+  const [edits, setEdits] = createSignal<{
+    base?: string;
+    changes: ToolPermissionChange[];
+  }>({ changes: [] });
 
   const catalogQuery = useToolPermissionCatalogQuery();
   const candidatesQuery = useSourceCandidatesQuery(() => ({
@@ -178,13 +200,18 @@ export function NewAgentPermissions(props: {
   const catalog = () =>
     queryReadyGate(catalogQuery) ? catalogQuery.data : undefined;
   // Own permissions start from what the picked agent resolves to.
+  // Nothing to start from until the candidates say what is followed.
   const prefill = (): AgentToolPermissions | undefined => {
     const current = catalog();
-    if (!current) return undefined;
+    if (!current || !queryReadyGate(candidatesQuery)) return undefined;
     if (!selected()) return blankView(current);
     if (!queryReadyGate(sourceView)) return undefined;
     return sourceView.data ?? blankView(current);
   };
+  const changes = () =>
+    edits().base === selected()?.policyId ? edits().changes : [];
+  const addChange = (change: ToolPermissionChange) =>
+    setEdits({ base: selected()?.policyId, changes: [...changes(), change] });
   const ownView = () => {
     const base = prefill();
     return base && applyChanges(base, changes());
@@ -196,8 +223,11 @@ export function NewAgentPermissions(props: {
     defaultPolicyId: fallback()?.policyId,
     changes: changes(),
   }));
+  onCleanup(() => props.draft(undefined));
 
-  const available = () => catalogQuery.data !== null;
+  // Gated on success: reading `data` while pending would suspend the form.
+  const available = () =>
+    queryReadyGate(catalogQuery) && catalogQuery.data !== null;
 
   return (
     <Show when={available()}>
@@ -278,9 +308,7 @@ export function NewAgentPermissions(props: {
                       view={view()}
                       editable
                       pendingState={NOTHING_PENDING}
-                      onChange={(change) =>
-                        setChanges((list) => [...list, change])
-                      }
+                      onChange={addChange}
                     />
                   )}
                 </Show>

@@ -170,6 +170,34 @@ describe('NewAgentPermissions', () => {
   });
 });
 
+describe('NewAgentPermissions draft', () => {
+  it('starts own changes over when another agent is picked', async () => {
+    let read: (() => PermissionsDraft) | undefined;
+    wrap(() => (
+      <NewAgentPermissions
+        share="Private"
+        draft={(reader) => {
+          read = reader;
+        }}
+      />
+    ));
+    await screen.findByRole('button', { name: /Set agent/ });
+    fireEvent.click(tab('Set my own permissions'));
+    fireEvent.click(
+      await waitFor(() => option('Create default permission', 'Never'))
+    );
+    expect(read?.().changes).toHaveLength(1);
+    fireEvent.click(tab('Use another agent’s permissions'));
+    choose(screen.getByRole('button', { name: /Set agent/ }), /Scout/);
+    await waitFor(() =>
+      expect(read?.()).toMatchObject({
+        sourcePolicyId: 'policy-scout',
+        changes: [],
+      })
+    );
+  });
+});
+
 describe('applyPermissionsDraft', () => {
   it('follows a picked agent that is not the default', async () => {
     client.setSource.mockResolvedValue(ok(FOLLOWING_VIEW));

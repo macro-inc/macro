@@ -73,15 +73,14 @@ export function FollowingNote(props: {
 
 function Warning(props: { children: JSX.Element; action?: JSX.Element }) {
   return (
-    <div
-      role="status"
-      class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-edge-muted px-3.5 py-2.5 text-sm text-ink"
-    >
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-edge-muted px-3.5 py-2.5 text-sm text-ink">
       <WarningCircleIcon
         aria-hidden="true"
         class="size-4 shrink-0 text-failure"
       />
-      <span class="min-w-0 flex-1 basis-56">{props.children}</span>
+      <span role="status" class="min-w-0 flex-1 basis-56">
+        {props.children}
+      </span>
       <Show when={props.action}>
         <span class="ml-auto shrink-0">{props.action}</span>
       </Show>

@@ -51,7 +51,7 @@ export function ToolSettingsList(props: {
                   <PermissionStateGlyph state={setting().rule.state} />
                   {stateLabel(setting().rule.state)}
                 </span>
-                <Show when={props.removable}>
+                <Show when={props.removable && setting().own}>
                   <Button
                     type="button"
                     variant="ghost"

@@ -230,18 +230,26 @@ export type ToolSetting = {
   tool: ToolPermissionCatalogTool;
   group: ToolPermissionCatalogGroup;
   rule: ToolPermissionRule;
+  /** This policy's own rule, not one it inherits. */
+  own: boolean;
 };
 
-/** Saved rules on individual tools of `action`, for catalog tools only. */
+/**
+ * Saved rules on individual tools of `action`, for catalog tools only: the
+ * policy's own, then (for a follower) inherited ones it has none for.
+ */
 export function toolSettingsFor(
   catalog: ToolPermissionCatalog,
   view: AgentToolPermissions,
-  action: PermissionAction
+  action: PermissionAction,
+  inherited: readonly ToolPermissionRule[] = []
 ): ToolSetting[] {
   return catalog.groups.flatMap((group) =>
-    actionTools(group, action).flatMap((tool) => {
-      const rule = ruleFor(view.rules, toolTarget(tool));
-      return rule ? [{ tool, group, rule }] : [];
+    actionTools(group, action).flatMap((tool): ToolSetting[] => {
+      const own = ruleFor(view.rules, toolTarget(tool));
+      if (own) return [{ tool, group, rule: own, own: true }];
+      const rule = ruleFor(inherited, toolTarget(tool));
+      return rule ? [{ tool, group, rule, own: false }] : [];
     })
   );
 }

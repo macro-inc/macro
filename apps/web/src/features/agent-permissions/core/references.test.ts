@@ -10,7 +10,7 @@ import {
   applyChanges,
   blankView,
   defaultCandidate,
-  followerExceptionRules,
+  followerRules,
   latestChanges,
 } from './references';
 
@@ -132,14 +132,16 @@ describe('defaultCandidate', () => {
   });
 });
 
-describe('followerExceptionRules', () => {
+describe('followerRules', () => {
   it("lists inherited exceptions and the follower's own", () => {
     expect(
-      followerExceptionRules(FOLLOWING_VIEW).map((rule) =>
-        rule.target.kind === 'group_action'
-          ? `${rule.target.group}.${rule.target.action}`
-          : ''
-      )
+      followerRules(FOLLOWING_VIEW)
+        .filter((rule) => rule.target.kind === 'group_action')
+        .map((rule) =>
+          rule.target.kind === 'group_action'
+            ? `${rule.target.group}.${rule.target.action}`
+            : ''
+        )
     ).toEqual([
       'contacts.read',
       'external_chats.read',

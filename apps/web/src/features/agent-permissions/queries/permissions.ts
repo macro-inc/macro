@@ -103,6 +103,17 @@ export function useSessionToolPermissionsQuery(
   );
 }
 
+/** A cached view of an agent that follows another policy. */
+function followsAPolicy(data: unknown): boolean {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'source' in data &&
+    data.source !== null &&
+    data.source !== undefined
+  );
+}
+
 export function storeView(view: AgentToolPermissions) {
   queryClient.setQueryData(
     agentToolPermissionKeys.agent(view.agentId).queryKey,
@@ -112,7 +123,8 @@ export function storeView(view: AgentToolPermissions) {
   // view and every policy preview is read again.
   queryClient.invalidateQueries({
     queryKey: agentToolPermissionKeys.agent._def,
-    predicate: (query) => query.queryKey[2] !== view.agentId,
+    predicate: (query) =>
+      query.queryKey[2] !== view.agentId && followsAPolicy(query.state.data),
   });
   queryClient.invalidateQueries({
     queryKey: agentToolPermissionKeys.policy._def,

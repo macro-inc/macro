@@ -155,14 +155,12 @@ export function policyIdentity(policy: Pick<PolicySource, 'agent' | 'team'>): {
 }
 
 /**
- * The rules whose targets a follower shows as exceptions: the ones it
- * inherits, and its own restrictions on a group's action.
+ * What a follower shows as its settings: the rules it inherits, and its
+ * own restrictions (which also make a group's action an exception).
  */
-export function followerExceptionRules(view: {
+export function followerRules(view: {
   rules: readonly ToolPermissionRule[];
   inherited?: readonly ToolPermissionRule[] | null;
 }): ToolPermissionRule[] {
-  return [...(view.inherited ?? []), ...view.rules].filter(
-    (rule) => rule.target.kind === 'group_action'
-  );
+  return [...(view.inherited ?? []), ...view.rules];
 }
