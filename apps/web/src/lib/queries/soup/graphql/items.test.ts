@@ -3185,6 +3185,68 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('rebuilds a notified chain when a page read on its own ends on another row', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { limit: 1, sortMethod: 'NOTIFIED_AT' },
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'notified_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    const ids = () =>
+      (query.data()?.entities as { id: string }[] | undefined)?.map(
+        (entity) => entity.id
+      );
+    const page = (id: string, nextCursor: string | null) =>
+      graphqlSoupPage({ items: [{ id }], next_cursor: nextCursor });
+    const cursorOf = (execution: FakeExecution) =>
+      (
+        execution.variables.input as {
+          continuation?: { cursor: string };
+        }
+      ).continuation?.cursor ?? null;
+    try {
+      fake.executions[0].next(page('removed', 'after-removed'));
+      for (const [index, [id, next]] of [
+        ['a', 'after-a'],
+        ['b', 'after-b'],
+      ].entries()) {
+        const more = query.fetchNextPage();
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(index + 2));
+        fake.executions[index + 1].next(page(id, next));
+        await more;
+      }
+      expect(ids()).toEqual(['removed', 'a', 'b']);
+
+      // The first row leaves the list, and a revalidation reads each loaded
+      // page again with the variables it was read with.
+      fake.executions[0].next(page('a', 'after-a'));
+      fake.executions[1].next(page('a', 'after-a'));
+      fake.executions[2].next(page('b', 'after-b'));
+      expect(ids()).toEqual(['a', 'b']);
+
+      // The chain is read again in order, from the first page's new end.
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+      expect(cursorOf(fake.executions[3])).toBeNull();
+      fake.executions[3].next(page('a', 'after-a'));
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(5));
+      expect(cursorOf(fake.executions[4])).toBe('after-a');
+      fake.executions[4].next(page('b', 'after-b'));
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(6));
+      expect(cursorOf(fake.executions[5])).toBe('after-b');
+      fake.executions[5].next(page('c', null));
+      await vi.waitFor(() => expect(ids()).toEqual(['a', 'b', 'c']));
+      expect(fake.executions).toHaveLength(6);
+    } finally {
+      dispose();
+    }
+  });
+
   it('reprojects retained pages when projection inputs change', () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

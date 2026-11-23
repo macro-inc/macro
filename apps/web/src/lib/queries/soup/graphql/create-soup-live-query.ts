@@ -218,6 +218,9 @@ export function createSoupLiveQuery(
     records: Accessor<GraphqlSoupItem[]>;
     baseline: Accessor<GraphqlSoupItem[]>;
     notifiedAt: Accessor<ReadonlyMap<string, string>>;
+    /** Each loaded page's own next cursor, by page index (undefined for a
+     * page without a Soup payload). */
+    nextCursors: readonly (string | null | undefined)[];
   };
   type LocalProjection = {
     input: GraphqlSoupInput;
@@ -464,6 +467,9 @@ export function createSoupLiveQuery(
           (page) => querySnapshot(page).user.soup.items
         ),
       notifiedAt: () => pageNotifiedAt(soupPages),
+      nextCursors: pages.map((page) =>
+        hasSoupPage(page) ? (page.user.soup.nextCursor ?? null) : undefined
+      ),
     };
   };
 
@@ -585,6 +591,36 @@ export function createSoupLiveQuery(
     };
   });
   loadedCursors = () => query.data?.pageParams ?? [];
+
+  // A notified list shows its pages as they came (it has no local projection
+  // to place rows), and each continuation page was read with the cursor the
+  // page before it ended on. A loaded page read again on its own, as a
+  // revalidation replays every page's variables, can end on another row once
+  // a row above it left or joined the list: the next page then repeats a row
+  // the list already shows, or starts past one it now skips. Rebuild the
+  // chain in order, as an explicit refresh does, once for each such state.
+  let rebuiltChain: string | undefined;
+  createEffect(() => {
+    if (firstPageInput()?.initial.sortMethod !== 'NOTIFIED_AT') return;
+    if (query.isFetching) return;
+    const data = query.data;
+    if (!data) return;
+    const broken = data.pageParams.some((cursor, index) => {
+      const ended = data.nextCursors[index - 1];
+      return index > 0 && ended !== undefined && ended !== cursor;
+    });
+    if (!broken) {
+      rebuiltChain = undefined;
+      return;
+    }
+    const chain = JSON.stringify([data.pageParams, data.nextCursors]);
+    if (chain === rebuiltChain) return;
+    rebuiltChain = chain;
+    fireAndForget(
+      query.refetch({ requestPolicy: 'network-only' }),
+      'soup-live-query'
+    );
+  });
 
   /** The updatedAt NOTIFIED_AT pages' own network responses gave each email
    * thread on the loaded pages, by record key, which the thread's shared

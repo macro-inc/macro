@@ -170,12 +170,19 @@ export function createGraphqlSoupAstItemsQuery(
   const byKey = createMemo(
     () => new Map(projected().map((item) => [item.key, item]))
   );
+  // A row two loaded pages list (a notified chain read again page by page,
+  // until it is rebuilt) shows once, where it comes first.
   const visible = createMemo(
-    () =>
-      (source.data() ?? []).flatMap((record) => {
-        const item = byKey().get(soupItemKey(record));
-        return item ? [item] : [];
-      }),
+    () => {
+      const shown = new Set<string>();
+      return (source.data() ?? []).flatMap((record) => {
+        const key = soupItemKey(record);
+        const item = byKey().get(key);
+        if (!item || shown.has(key)) return [];
+        shown.add(key);
+        return [item];
+      });
+    },
     undefined,
     { equals: arrayEquals }
   );
