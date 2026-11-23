@@ -90,7 +90,7 @@ export function VoiceMemoPanel(props: { memo: VoiceMemoController }) {
             <Match when={phase() === 'failed'}>
               <FailureMark />
             </Match>
-            <Match when={phase() === 'starting' || phase() === 'recording'}>
+            <Match when={phase() === 'recording'}>
               <span
                 class="size-2 rounded-full bg-failure"
                 classList={{
@@ -133,7 +133,9 @@ export function VoiceMemoPanel(props: { memo: VoiceMemoController }) {
           </Match>
           <Match
             when={
-              phase() === 'recording' && props.memo.volumeHistory().length > 0
+              // Attaching keeps the recording's timeline, still.
+              (phase() === 'recording' || phase() === 'attaching') &&
+              props.memo.volumeHistory().length > 0
             }
           >
             <VolumeTimeline levels={props.memo.volumeHistory()} />

@@ -125,10 +125,11 @@ export function VoiceMemoPlayer(props: {
           setTime(value);
         }}
       >
-        <Slider.Track class="my-0 h-1">
-          <Slider.Fill />
+        <Slider.Track class="mx-1.5 my-0 h-1 w-auto">
+          {/* Neutral like the rest of the chip, as the composer's Send is. */}
+          <Slider.Fill class="bg-ink-muted" />
           <Slider.Thumb
-            class="size-3"
+            class="size-3 border-0 bg-ink shadow-none"
             aria-label={t('channelComposer.seekVoiceMemo')}
             aria-valuetext={positionLabel()}
           >

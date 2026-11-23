@@ -60,9 +60,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
       .with('listening', 'idle', 'unavailable', () => undefined)
       .exhaustive();
   const time = () =>
-    (phase() === 'listening' || phase() === 'review') &&
-    !failure() &&
-    !props.dictation.limitReached()
+    (phase() === 'listening' || phase() === 'review') && !failure()
       ? formatRecordingTime(props.dictation.elapsedMs())
       : undefined;
 

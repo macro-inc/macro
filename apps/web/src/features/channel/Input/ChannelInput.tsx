@@ -458,6 +458,13 @@ export function ChannelInput(props: ChannelInputProps) {
     ...inputState.commands,
     // Keyboard, toolbar, and external handles all share this guard.
     send: async () => (recordingActive() ? false : inputState.commands.send()),
+    // A note about a memo (the limit) is stale once it leaves the draft.
+    removeAttachment: (
+      ...attachment: Parameters<typeof inputState.commands.removeAttachment>
+    ) => {
+      composerVoiceMemo.clearNotice();
+      return inputState.commands.removeAttachment(...attachment);
+    },
   };
   // The add menu's actions are the slash menu's, run from the + instead.
   const actionContext: ActionContext = {
@@ -680,7 +687,12 @@ export function ChannelInput(props: ChannelInputProps) {
     mode: () =>
       isReplyInput(inputState.view()) ||
       inputState.view().showFormatRibbon ||
-      inputState.view().attachments?.length
+      // A memo still uploading under its recording panel is not shown.
+      inputState
+        .view()
+        .attachments?.some(
+          (attachment) => !(attachment.kind === 'audio' && attachment.pending)
+        )
         ? 'expanded'
         : 'auto',
   });
