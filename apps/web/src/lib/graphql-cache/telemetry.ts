@@ -5,6 +5,10 @@ import type { CacheRequest } from './protocol';
 export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.wasm_download',
   'graphql_cache.wasm_compile',
+  // The page's download and compile ahead of its engine worker, which may
+  // never start: a follower tab's compile is dropped unused.
+  'graphql_cache.wasm_prefetch_download',
+  'graphql_cache.wasm_prefetch_compile',
   'graphql_cache.wasm_instantiate',
   'graphql_cache.schema_init',
   'graphql_cache.db_ready',
@@ -16,6 +20,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.transaction',
   'graphql_cache.read',
   'graphql_cache.slow_query',
+  'graphql_cache.slow_request',
   'graphql_cache.owner',
   'graphql_cache.stale_drop',
   'graphql_cache.lock_wait',
@@ -209,6 +214,42 @@ export const CACHE_ERROR_DETAILS = [
 ] as const;
 export type CacheErrorDetail = (typeof CACHE_ERROR_DETAILS)[number];
 
+/** Every engine request kind, so a new kind fails to compile until listed. */
+const CACHE_REQUEST_KINDS: Readonly<Record<CacheRequest['kind'], true>> = {
+  init: true,
+  read: true,
+  'current-revision': true,
+  'read-records-by-keys': true,
+  search: true,
+  'people-search': true,
+  'people-references': true,
+  'people-sql': true,
+  'contact-snapshot': true,
+  'people-context': true,
+  'entity-filter': true,
+  'calendar-range': true,
+  write: true,
+  hydrate: true,
+  'calendar-commit': true,
+  'people-update': true,
+  'contact-reconcile': true,
+  'enqueue-optimistic-mutation': true,
+  'claim-next-mutation': true,
+  'defer-optimistic-write': true,
+  'commit-optimistic-write': true,
+  'rollback-optimistic-write': true,
+  'inspect-query': true,
+  'inspect-query-variants': true,
+  invalidate: true,
+  'delete-records': true,
+  teardown: true,
+  clear: true,
+  'current-storage-generation': true,
+  'current-authority': true,
+  'transition-authority': true,
+  'inspect-mutations': true,
+};
+
 export type CacheTelemetryObservation = {
   name: CacheTelemetryEventName;
   /** Original fixed event name represented by an aggregate envelope. */
@@ -239,6 +280,10 @@ export type CacheTelemetryObservation = {
   oldestAgeMs?: number;
   /** Frames in the WAL when a checkpoint ran (`graphql_cache.wal_checkpoint`). */
   walFrames?: number;
+  /** The engine request a `slow_request` timed; a fixed protocol name. */
+  requestKind?: CacheRequest['kind'];
+  /** How long a `slow_request` waited in the engine queue before it ran. */
+  queueWaitMs?: number;
 };
 
 /** The only cohort/browser/backend dimensions permitted on exported events. */
@@ -382,6 +427,13 @@ function sanitizeObservation(
       : {}),
     ...(boundedNumber(input.walFrames) !== undefined
       ? { walFrames: boundedNumber(input.walFrames) }
+      : {}),
+    ...(typeof input.requestKind === 'string' &&
+    Object.hasOwn(CACHE_REQUEST_KINDS, input.requestKind)
+      ? { requestKind: input.requestKind }
+      : {}),
+    ...(boundedNumber(input.queueWaitMs, 3_600_000) !== undefined
+      ? { queueWaitMs: boundedNumber(input.queueWaitMs, 3_600_000) }
       : {}),
   };
 }
@@ -813,6 +865,8 @@ export function isCacheTelemetryObservation(
       'queueDepth',
       'oldestAgeMs',
       'walFrames',
+      'requestKind',
+      'queueWaitMs',
     ].includes(key)
   );
 }

@@ -324,8 +324,6 @@ export interface CacheWasmModule {
       success: boolean
     ) => void
   ): void;
-  /** Installs the schema shipped with this frontend before opening storage. */
-  configureCacheSchema(schemaSdl: string): void;
   schemaHash(): string;
   /** Read-only binary metadata; optional so fixtures can diagnose stale artifacts. */
   cacheBuildInfo?(): unknown;
@@ -376,10 +374,6 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
           if (!(exports.memory instanceof WebAssembly.Memory)) {
             throw new Error('cache WASM did not export its linear memory');
           }
-          const { default: schemaSdl } = await import(
-            '../../../../../../static_assets/schema.graphql?raw'
-          );
-          mod.configureCacheSchema(schemaSdl);
           wasmMemory = exports.memory;
           mod.setSlowQueryCallback?.(
             (queryFingerprint, durationMs, success) => {
@@ -420,6 +414,8 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
       const offered = import.meta.env.DEV
         ? undefined
         : await compiledEngineExchange?.offered;
+      // The wait for the page, apart from instantiating what it offered.
+      const offeredAt = now();
       if (offered?.assetUrl === wasmUrl.href) {
         let started: EngineExports | undefined;
         try {
@@ -429,17 +425,18 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
         }
         if (started) {
           // Nothing was downloaded or compiled; traces tell reuse by this.
+          // Its duration is the wait for the page's offer.
           telemetry.record({
             name: 'graphql_cache.wasm_download',
             operationCategory: 'initialization',
             outcome: 'success',
             errorCode: 'none',
-            durationMs: now() - reuseStartedAt,
+            durationMs: offeredAt - reuseStartedAt,
             bytes: 0,
           });
           // Past this point a failure would repeat with a fresh copy of
           // the same asset, so it is reported rather than retried.
-          return finish(Promise.resolve(started), reuseStartedAt);
+          return finish(Promise.resolve(started), offeredAt);
         }
       }
 

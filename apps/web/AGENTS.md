@@ -1125,8 +1125,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   lazily in every new worker, which cost more than reopening the database on
   each tab return. The exchange has its own port, so a failure only costs the
   shortcut; never put the module in the activation message.
-  A reused engine records `graphql_cache.wasm_download` with 0 bytes and no
-  `wasm_compile`. The dev server never reuses: its asset URL outlives a rebuild.
+  Before any engine worker exists, the page compiles the engine itself, from
+  before its liveness lock, and offers that compile to the first worker for up
+  to 10 s; it drops the compile when the coordinator acknowledges it while
+  another visible tab owns the cache (`ownerElsewhere`). The page records
+  `graphql_cache.wasm_prefetch_download` and `wasm_prefetch_compile`.
+  A reused engine records `graphql_cache.wasm_download` with 0 bytes, timed as
+  the wait for the offer, and no `wasm_compile`. The dev server never reuses or
+  compiles ahead: its asset URL outlives a rebuild.
   A fresh engine compiles a response served as exactly `application/wasm` with
   `WebAssembly.compileStreaming` (`worker/wasm-compile.ts`): only then does
   Chromium cache the optimized code for the next page load. Streamed,

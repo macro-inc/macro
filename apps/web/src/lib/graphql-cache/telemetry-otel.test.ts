@@ -62,6 +62,34 @@ describe('cache OpenTelemetry sink', () => {
     expect(span.end).toHaveBeenCalledOnce();
   });
 
+  it('exports a slow request with its kind and queue wait', () => {
+    createOtelCacheTelemetrySink().emit({
+      browserFamily: 'chromium',
+      browserVersion: '152',
+      appVersion: '0.1',
+      backend: 'turso-wasm-opfs',
+      rolloutCohort: 'treatment',
+      name: 'graphql_cache.slow_request',
+      operationCategory: 'read',
+      requestKind: 'read',
+      outcome: 'success',
+      errorCode: 'none',
+      queueWaitMs: 9_000,
+      durationMs: 3,
+      queueDepth: 1,
+    });
+
+    expect(anonymousSpan).toHaveBeenCalledWith('graphql_cache.slow_request');
+    expect(Object.fromEntries(span.setAttr.mock.calls)).toMatchObject({
+      'cache.operation_category': 'read',
+      'cache.request_kind': 'read',
+      'cache.queue_wait_ms': 9_000,
+      'cache.duration_ms': 3,
+      'cache.queue_depth': 1,
+    });
+    expect(span.end).toHaveBeenCalledOnce();
+  });
+
   it('exports a slow execution as a correlated warning without SQL or parameters', () => {
     createOtelCacheTelemetrySink().emit({
       browserFamily: 'firefox',

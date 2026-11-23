@@ -2105,26 +2105,31 @@ export type GraphqlScheduledSendStatus =
 /** A typed value accepted when setting an entity property. */
 export type GraphqlSetPropertyValue =
   {   /** A Boolean value. */
-  boolean: boolean; date?: never; dateRange?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
-  |  { boolean?: never;   /** An RFC 3339 date-time value. */
-  date: string; dateRange?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
+  boolean: boolean; date?: never; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
+  |  { boolean?: never;   /**
+   * An RFC 3339 date-time value standing for a whole day, shown as the day
+   * it falls on in the viewer's time zone.
+   */
+  date: string; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
   |  { boolean?: never; date?: never;   /** A span from a start date-time to an end one. */
-  dateRange: GraphqlDateRangeInput; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
-  |  { boolean?: never; date?: never; dateRange?: never;   /** A single entity reference. */
+  dateRange: GraphqlDateRangeInput; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
+  |  { boolean?: never; date?: never; dateRange?: never;   /** An RFC 3339 date-time whose time of day was set. */
+  dateWithTime: string; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
+  |  { boolean?: never; date?: never; dateRange?: never; dateWithTime?: never;   /** A single entity reference. */
   entityReference: GraphqlEntityReferenceInput; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
-  |  { boolean?: never; date?: never; dateRange?: never; entityReference?: never;   /** A single URL value. */
+  |  { boolean?: never; date?: never; dateRange?: never; dateWithTime?: never; entityReference?: never;   /** A single URL value. */
   link: string; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
-  |  { boolean?: never; date?: never; dateRange?: never; entityReference?: never; link?: never;   /** Multiple entity references. */
+  |  { boolean?: never; date?: never; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never;   /** Multiple entity references. */
   multiEntityReference: Array<GraphqlEntityReferenceInput>; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
-  |  { boolean?: never; date?: never; dateRange?: never; entityReference?: never; link?: never; multiEntityReference?: never;   /** Multiple URL values. */
+  |  { boolean?: never; date?: never; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never;   /** Multiple URL values. */
   multiLink: Array<string>; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
-  |  { boolean?: never; date?: never; dateRange?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never;   /** Multiple selected option identifiers. */
+  |  { boolean?: never; date?: never; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never;   /** Multiple selected option identifiers. */
   multiSelectOption: Array<string | number>; number?: never; selectOption?: never; string?: never; }
-  |  { boolean?: never; date?: never; dateRange?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never;   /** A numeric value. */
+  |  { boolean?: never; date?: never; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never;   /** A numeric value. */
   number: number; selectOption?: never; string?: never; }
-  |  { boolean?: never; date?: never; dateRange?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never;   /** A single selected option identifier. */
+  |  { boolean?: never; date?: never; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never;   /** A single selected option identifier. */
   selectOption: string | number; string?: never; }
-  |  { boolean?: never; date?: never; dateRange?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never;   /** A string value. */
+  |  { boolean?: never; date?: never; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never;   /** A string value. */
   string: string; };
 
 /** Operation applied to one channel share-policy entry. */
