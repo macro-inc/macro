@@ -493,6 +493,8 @@ type SoupBackfillRunOptions = {
   onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void;
   /** As the lane starts, with how long its lock took (none without locks). */
   onStarted?: (lockWaitMs: number | undefined) => void;
+  /** When the run fails, while it still holds the lane's locks. */
+  onFailed?: () => void;
   /** Leave the lane, returning false, while another tab is running it. */
   ifAvailable?: boolean;
   /**
@@ -836,7 +838,9 @@ export const runSoupBackfill = (
       options.lanes ?? DEFAULT_SOUP_BACKFILL_LANES,
       params
     ),
-    runUnlockedSoupBackfill(userId, host, params, options),
+    runUnlockedSoupBackfill(userId, host, params, options).pipe(
+      Effect.tapError(() => Effect.sync(() => options.onFailed?.()))
+    ),
     options
   );
 
@@ -885,6 +889,10 @@ const runTrackedSoupBackfill = (
           loadSoupBackfillCheckpoint(userId, lane).pagesFetched
         );
       },
+      onFailed: () => {
+        // No other tab can have saved the lane while this one holds it.
+        leftStored = readSoupBackfillCheckpoint(userId, lane).stored;
+      },
       onCheckpoint: (checkpoint) => {
         pagesFetched += 1;
         if (
@@ -897,9 +905,6 @@ const runTrackedSoupBackfill = (
     }).pipe(
       Effect.tapError((error) =>
         Effect.sync(() => {
-          // The attempt has let go of the lane's locks, but no other tab can
-          // have taken them and saved yet.
-          leftStored = readSoupBackfillCheckpoint(userId, lane).stored;
           if (retry && !lane.resumesAfter?.(thrownBy(error))) {
             retry.pageFetcher = undefined;
           }
