@@ -467,7 +467,7 @@ const booking = graphqlOccurrence({
     endsAt: '2026-10-08T14:30:00+00:00',
     timeZone: null,
   },
-  event: graphqlEvent({ id: 'booking-1', title: "Pine's Booking Link" }),
+  event: graphqlEvent({ id: 'booking-1', title: 'Booking' }),
 });
 
 /** A tab whose cache holds the week as current, with REST as the server. */
@@ -523,6 +523,31 @@ describe('calendar week after an event is deleted elsewhere', () => {
 
     await vi.waitFor(() => expect(eventIds(query.data)).toEqual(['event-1']));
     expect(cache.holds('booking-1')).toBe(true);
+    cache.controller.dispose();
+    warn.mockRestore();
+  });
+
+  it('keeps a week a pending write shaped on the cache while the delta fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { cache, cancelBooking } = await currentCacheWithBooking();
+    const query = renderWeek();
+    await vi.waitFor(() =>
+      expect(eventIds(query.data)).toEqual(['event-1', 'booking-1'])
+    );
+
+    // REST cannot show the edit still pending in this week; its settle
+    // refreshes the week once the write lands.
+    cache.state.pendingWrite = true;
+    cache.delta.mode = 'fail';
+    await cancelBooking();
+    await query.refetch();
+
+    expect(mocks.listOccurrences).not.toHaveBeenCalled();
+    expect(eventIds(query.data)).toEqual(['event-1', 'booking-1']);
+
+    cache.state.pendingWrite = false;
+    await invalidateCalendarOccurrences();
+    await vi.waitFor(() => expect(eventIds(query.data)).toEqual(['event-1']));
     cache.controller.dispose();
     warn.mockRestore();
   });

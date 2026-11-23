@@ -53,11 +53,13 @@ export const MAX_DELTA_RETRIES = 3;
 
 /**
  * What a read about to answer from the cache did first. `current`: the cache
- * held everything already shown, so nothing ran. `held`: a delta ran, or a
+ * held everything already shown and every change it was told of, so nothing
+ * ran. `held`: a delta ran, or a
  * running one was joined, and brought the cache forward. `retried`: as
  * `held`, with a retry of a failed delta. `behind`: the cache could not be
  * brought forward (the delta failed or stopped short, or a failed one's retry
- * is backing off or used up), so it may be older than what REST showed.
+ * is backing off or used up), so it may be older than what REST showed or
+ * than a change it was told of.
  */
 export type CalendarCatchUp = 'current' | 'held' | 'retried' | 'behind';
 

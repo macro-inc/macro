@@ -25,7 +25,8 @@ const timedBounds = (occurrence: OccurrenceFragment) =>
 /**
  * A calendar cache that has covered every week and holds `initial`, with a
  * delta that brings it forward by the events deleted on the server since it
- * last ran. `delta.mode` makes the delta fail, or hold until `release`.
+ * last ran. `delta.mode` makes the delta fail, or hold until `release`;
+ * `state.pendingWrite` marks its ranges as shaped by a pending write.
  */
 export function fakeCalendarCache(initial: OccurrenceFragment[]) {
   const records = new Map(
@@ -36,6 +37,7 @@ export function fakeCalendarCache(initial: OccurrenceFragment[]) {
   let seq = 1;
   const deletedOnServer: string[] = [];
   const delta = { mode: 'apply' as 'apply' | 'fail' | 'hold' };
+  const state = { pendingWrite: false };
   let held = Promise.withResolvers<void>();
 
   const host = {
@@ -57,7 +59,7 @@ export function fakeCalendarCache(initial: OccurrenceFragment[]) {
         gaps: [],
         freshness: 'fresh',
         uncertainEventKeys: [],
-        optimistic: false,
+        optimistic: state.pendingWrite,
         watermark: [{ linkId: 'link-1', seq: String(seq) }],
       })
     ),
@@ -118,6 +120,7 @@ export function fakeCalendarCache(initial: OccurrenceFragment[]) {
     controller,
     fetchChanges,
     delta,
+    state,
     /** Whether the cache still holds an occurrence of `eventId`. */
     holds: (eventId: string) =>
       [...records.values()].some(

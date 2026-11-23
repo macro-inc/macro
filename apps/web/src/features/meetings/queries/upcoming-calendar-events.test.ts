@@ -411,7 +411,7 @@ function cachedOccurrence(day: number, title: string) {
  */
 async function cachedAgendaWithBooking() {
   const meeting = cachedOccurrence(1, 'Standup');
-  const booking = cachedOccurrence(2, "Pine's Booking Link");
+  const booking = cachedOccurrence(2, 'Booking');
   const cache = fakeCalendarCache([meeting, booking]);
   cacheHost = cache.host;
   setActiveCalendarSyncController(cache.controller);
@@ -433,9 +433,7 @@ async function cachedAgendaWithBooking() {
   await cache.controller.runDelta();
   const { result } = setup();
   const titles = () => result.events().map((event) => event.title);
-  await vi.waitFor(() =>
-    expect(titles()).toEqual(['Standup', "Pine's Booking Link"])
-  );
+  await vi.waitFor(() => expect(titles()).toEqual(['Standup', 'Booking']));
   expect(list).not.toHaveBeenCalled();
   const cancelBooking = () => {
     onServer = [meeting];

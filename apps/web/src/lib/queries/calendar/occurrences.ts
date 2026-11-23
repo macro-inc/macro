@@ -299,14 +299,16 @@ export function useCalendarOccurrencesQuery(
   });
 }
 
-async function runDeltaReportingFailure(
+async function runDeltaForRefresh(
   controller: CalendarSyncController
-): Promise<void> {
+): Promise<'synced' | 'failed'> {
   const run = await ResultAsync.fromPromise(
     controller.runDelta(),
     (error) => error
   );
-  if (run.isErr()) console.warn('Calendar delta sync failed', run.error);
+  if (run.isOk()) return 'synced';
+  console.warn('Calendar delta sync failed', run.error);
+  return 'failed';
 }
 
 /**
@@ -324,17 +326,28 @@ async function runDeltaReportingFailure(
 export async function invalidateCalendarOccurrences(
   stillCurrent: () => boolean = () => true
 ) {
-  const controller = activeCalendarSyncController();
-  controller?.noticeChange();
-  if (controller?.answering()) {
-    await withinDeadline(
-      runDeltaReportingFailure(controller),
-      CALENDAR_CACHE_READ_DEADLINE_MS
-    );
-  }
-  if (!stillCurrent()) return;
-  return queryClient.invalidateQueries({
-    queryKey: calendarKeys.occurrences._def,
+  return Telemetry.span('calendar.occurrences_refresh', async (span) => {
+    const controller = activeCalendarSyncController();
+    span.setAttr('calendar.transport', controller ? 'graphql' : 'rest');
+    controller?.noticeChange();
+    if (controller?.answering()) {
+      span.setAttr(
+        'calendar.delta.outcome',
+        await withinDeadline(
+          runDeltaForRefresh(controller),
+          CALENDAR_CACHE_READ_DEADLINE_MS
+        )
+      );
+    } else if (controller) {
+      span.setAttr('calendar.delta.outcome', 'cache_starting');
+    }
+    if (!stillCurrent()) {
+      span.setAttr('calendar.refresh.superseded', true);
+      return;
+    }
+    return queryClient.invalidateQueries({
+      queryKey: calendarKeys.occurrences._def,
+    });
   });
 }
 

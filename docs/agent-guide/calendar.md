@@ -186,7 +186,12 @@ reads wait for it or read REST; viewports not on screen refetch when they
 mount. Without this, an event deleted elsewhere (a booking its guest
 cancelled) stayed in the grid and in Upcoming events, which reads the same
 occurrence viewports, until a reload whenever the poke's delta failed or was
-held behind another tab's database handoff.
+held behind another tab's database handoff. A week a pending write shaped
+(an edit, RSVP or create still in flight or queued) answers from the cache
+without catching up (`calendar.read.pending_write`), since REST cannot show the
+write; the write's settle refreshes it. Span `calendar.occurrences_refresh`
+records how the refresh's delta went (`calendar.delta.outcome`: `synced`,
+`failed`, `deadline`, `cache_starting`).
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without

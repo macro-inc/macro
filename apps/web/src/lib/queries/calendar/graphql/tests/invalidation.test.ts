@@ -26,6 +26,7 @@ describe('invalidateCalendarOccurrences', () => {
   afterEach(() => {
     setActiveCalendarSyncController(undefined);
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it('applies the delta before cache-backed viewports reread', async () => {
@@ -82,7 +83,6 @@ describe('invalidateCalendarOccurrences', () => {
     await vi.advanceTimersByTimeAsync(1);
     await invalidated;
     expect(invalidateQueriesMock).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
   });
 
   it('still refetches when the delta fails', async () => {
