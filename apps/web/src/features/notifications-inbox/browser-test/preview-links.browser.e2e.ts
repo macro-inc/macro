@@ -70,19 +70,20 @@ test.describe('desktop', () => {
   }) => {
     const row = await openInbox(page);
     const { x, y } = await centerOf(row.locator(`a[href="${SPEC_URL}"]`));
-    const pages = context.pages().length;
+    const tabs: string[] = [];
+    context.on('page', (tab) => tabs.push(tab.url()));
 
     await page.keyboard.down('ControlOrMeta');
     await page.mouse.click(x, y);
     await page.keyboard.up('ControlOrMeta');
     await page.mouse.click(x, y, { button: 'middle' });
 
-    // A tab would have opened by the time the row answers a plain click.
-    await page.mouse.click(x, y);
+    // A tab opened by either click exists by the time another row answers.
+    await page.locator('#dm-ana').click();
     await expect
       .poll(() => page.evaluate(() => window.__inboxShown.at(-1)?.row))
-      .toBe(ROW_ID);
-    expect(context.pages()).toHaveLength(pages);
+      .toBe('dm-ana');
+    expect(tabs).toEqual([]);
     expect(await windowOpens(page)).toEqual([]);
   });
 

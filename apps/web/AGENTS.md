@@ -848,10 +848,12 @@ notification), hovering a row swaps its time for Mark done without moving
 anything, and an open stack leaves the other rows undimmed, on phones too.
 
 Notification preview text is a picture of the message: every `StaticMarkdown`
-that renders it (inbox rows and stack items, `NotificationContent` under Home
-and list rows) is `inert`, so pressing a link or mention in it presses the row
-and opens nothing. The same suite's `preview-links.browser.e2e.ts` clicks,
-Cmd-clicks, middle-clicks and taps a link in a row and in an unfolded stack.
+that renders it (inbox rows and stack items, `NotificationContent` under list
+rows, and touch Home's `InboxCardLayout` cards) is `inert`, so pressing a link
+or mention in it presses the row and opens nothing. The same suite's
+`preview-links.browser.e2e.ts` clicks, Cmd-clicks, middle-clicks and taps a
+link in a row and in an unfolded stack; the Signal suite's
+(`next-soup/soup-view/views/inbox/browser-test`) taps one in a Home card.
 
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
