@@ -17,8 +17,9 @@ Use a pale blue selection highlight (#b8d5ff) with dark text (#101820) in both w
 The homepage uses the feature-page hero with the live site's headline and subhead.
 Break the H1 after “The unified workspace” and keep the supporting H2 “Macro
 replaces 27+ apps with one connected system for humans and agents.”
-balanced below it. Center the hero on desktop and left-align it below 700px,
-with Get Macro (signup) beside Book a demo. `HomepageTour` follows in an 800px
+balanced below it on desktop. Below 700px, left-align the hero and use the
+product-list subhead ending in “Everything links to everything else.” Keep Get
+Macro (signup) beside Book a demo. `HomepageTour` follows in an 800px
 maximum desktop frame at 16:9. Each module
 (Home, Mail, Chat, Tasks, Calendar, Docs, CRM, Calls) has a tab showing its
 captured app window on a `TutorialWallpaper`. The tour advances every five
@@ -396,7 +397,7 @@ Feature-page hero titles are short strings. Let them wrap naturally and balance
 across up to three lines on phones. Keep the font size steady and every line
 at the same color. Add 0.1em of leading between wrapped lines and preserve the
 space around a single-line title. Feature-page desktop hero titles are 40px at weight 320 in
-dark mode. Feature, homepage, and blog hero titles use a 34–40px
+dark mode. Feature and blog hero titles use a 34–40px
 responsive scale on phones, keeping the title visibly larger than body copy.
 
 Feature chapters use the homepage's single-column layout on every screen: a

@@ -149,19 +149,21 @@
 
 @media (max-width: 699px) {
   .homepage-tour {
-    width: calc(100% - 32px);
+    width: calc(100% - 22px);
     aspect-ratio: auto;
-    padding: 14px 0 0 14px;
+    padding: 14px 0 0 22px;
     border-radius: 20px;
   }
 
   .homepage-tour-bar {
     justify-content: flex-start;
-    margin-bottom: 16px;
-    padding-right: 14px;
+    margin-bottom: 14px;
+    padding-right: 11px;
   }
 
-  .homepage-tour .homepage-tour-tabs button { padding-inline: 18px; }
+  .homepage-tour-tabs { padding: 4px; }
+  .homepage-tour .homepage-tour-tabs button { min-height: 29px; padding-inline: 14px; font-size: 12px; }
+  .homepage-tour .homepage-tour-next { width: 37px; height: 37px; }
 
   /* Keep the left side readable on phones without enlarging the window on tablets. */
   .homepage-tour-screen {
