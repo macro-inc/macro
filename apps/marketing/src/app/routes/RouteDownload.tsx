@@ -38,8 +38,11 @@ export function RouteDownload() {
   onMount(() => {
     setVisitor(detectVisitorPlatform(navigator.userAgent));
     const controller = new AbortController();
-    void fetchDesktopDownloadUrls(controller.signal).then(setDownloads);
     onCleanup(() => controller.abort());
+    const loadLatestRelease = async () => {
+      setDownloads(await fetchDesktopDownloadUrls(controller.signal));
+    };
+    void loadLatestRelease();
   });
 
   return (
