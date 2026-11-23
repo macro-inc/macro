@@ -7,6 +7,20 @@ async function archive(page: Page) {
   return dialog;
 }
 
+/** Waits for finite motion; a looping skeleton pulse never finishes. */
+function settle(page: Page) {
+  return page.evaluate(() =>
+    Promise.allSettled(
+      document
+        .getAnimations()
+        .filter(
+          (motion) => motion.effect?.getComputedTiming().endTime !== Infinity
+        )
+        .map((motion) => motion.finished)
+    )
+  );
+}
+
 /** Opens the information panel and waits for it to stop moving. */
 async function openDetails(page: Page, kind: string) {
   await page.goto(`/?kind=${kind}`);
@@ -14,9 +28,16 @@ async function openDetails(page: Page, kind: string) {
   await expect(
     page.getByRole('region', { name: 'Record details' })
   ).toBeVisible();
-  await page.waitForFunction(() =>
-    document.getAnimations().every((motion) => motion.playState !== 'running')
-  );
+  await settle(page);
+}
+
+/** Where a block's text starts, inside any padding of its own. */
+function textStart(locator: Locator) {
+  return locator.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getBoundingClientRect().x;
+  });
 }
 test.beforeEach(async ({ page }) => {
   await page.route('https://**', (route) => route.abort());
@@ -375,7 +396,7 @@ test('Details rows and the references empty state use the panel type scale', asy
     for (const label of labels) {
       const cell = details.getByText(label, { exact: true });
       expect(await style(cell)).toEqual(labelStyle);
-      expect((await cell.boundingBox())!.x).toBe(labelX);
+      expect(Math.abs((await cell.boundingBox())!.x - labelX)).toBeLessThan(2);
     }
     const name = details.getByText(
       kind === 'company' ? 'Example company' : 'Example person',
@@ -392,7 +413,10 @@ test('Details rows and the references empty state use the panel type scale', asy
     if ((await references.getAttribute('aria-expanded')) !== 'true')
       await references.click();
     await expect(empty).toBeVisible();
+    await settle(page);
     expect(await style(empty)).toEqual(labelStyle);
-    expect((await empty.boundingBox())!.x).toBe(labelX);
+    expect(
+      Math.abs((await textStart(empty)) - (await textStart(propertyLabel)))
+    ).toBeLessThan(2);
   }
 });

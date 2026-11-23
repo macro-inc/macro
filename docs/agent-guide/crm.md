@@ -285,8 +285,9 @@ so that restoration happens there first. Unfiled people restore directly. Compan
 **Archive / Restore** actions also confirm the cascade. Both information panels, on
 desktop and in the phone **Show details** sheet, list **Record details**, then
 **Properties**, then the company-only **Lists** and **Email sharing**, with
-**References** last, like a task's or document's panel. Record details rows use the
-same small muted labels and row height as the Properties rows. Neither panel has a
+**References** last; as in a task's or document's panel, Properties come before
+References. Record details rows use the same text size and small muted labels as the
+Properties rows. Neither panel has a
 duplicate visibility control. A contact's
 Properties hold the team's custom properties only: Stage, Owner and Revenue are
 company-only, so its **Add property** list leaves them out (a company's leaves

@@ -21,7 +21,7 @@ export function RecordDetailsSection(props: {
     >
       <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)] gap-y-1">
         <SidePanel.Row label="Name">
-          <span class="truncate">
+          <span class="min-w-0 wrap-break-word">
             {props.company?.name ?? props.contact?.name ?? '—'}
           </span>
         </SidePanel.Row>
@@ -30,7 +30,9 @@ export function RecordDetailsSection(props: {
             <SidePanel.Row label="Website">
               <div class="flex min-w-0 flex-col">
                 <For each={company().domains}>
-                  {(domain) => <span class="truncate">{domain.domain}</span>}
+                  {(domain) => (
+                    <span class="wrap-break-word">{domain.domain}</span>
+                  )}
                 </For>
               </div>
             </SidePanel.Row>

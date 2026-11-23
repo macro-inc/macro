@@ -116,6 +116,7 @@ export function RecordItemList(props: {
               <CrmListRetry
                 message="Couldn't load this list."
                 onRetry={() => props.source.refetch()}
+                inline
               />
             }
           >
