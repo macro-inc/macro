@@ -897,6 +897,44 @@ fn a_reset_keeps_the_identity_and_the_queue() {
     });
 }
 
+/// Every table of a fresh file is one a schema change drops with the records
+/// it derives from, or one every tier keeps. A store that adds tables says
+/// which: a table no list names would keep rows a reset or a changed type
+/// should have taken.
+#[test]
+fn every_table_is_derived_shadow_or_kept() {
+    let storage = TursoStorage::open_in_memory("schema-table-classes").unwrap();
+    let kept = [
+        "cache_schema",
+        "meta",
+        "mutation_queue",
+        "optimistic_layers",
+        "records",
+    ];
+    let named = crate::storage::schema_store::DERIVED_TABLES
+        .iter()
+        .chain(&crate::storage::schema_store::SHADOW_TABLES)
+        .chain(
+            crate::storage::schema_store::DERIVED_STORES
+                .iter()
+                .flat_map(|store| store.tables),
+        )
+        .chain(&kept)
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    let unnamed = driver::query(
+        &storage.connection(),
+        "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__turso_internal%' ORDER BY name",
+        vec![],
+    )
+    .unwrap()
+    .iter()
+    .map(|row| required_text(row, 0).unwrap())
+    .filter(|table| !named.contains(table.as_str()))
+    .collect::<Vec<_>>();
+    assert!(unnamed.is_empty(), "tables no tier names: {unnamed:?}");
+}
+
 #[test]
 fn queued_writes_without_records_are_still_sorted() {
     block_on(async {

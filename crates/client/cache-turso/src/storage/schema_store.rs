@@ -97,7 +97,7 @@ const FACT_INDEXES: &str = "SELECT name, sql FROM sqlite_schema WHERE tbl_name =
 
 /// The index's tables derived from records, facts before the documents
 /// their foreign keys name; [`DERIVED_STORES`] lists the others.
-const DERIVED_TABLES: [&str; 5] = [
+pub(super) const DERIVED_TABLES: [&str; 5] = [
     "exact_facts",
     "integer_facts",
     "sort_facts",
@@ -106,7 +106,7 @@ const DERIVED_TABLES: [&str; 5] = [
 ];
 /// The tables of queued writes' index shadows, those that name a table
 /// before it.
-const SHADOW_TABLES: [&str; 5] = [
+pub(super) const SHADOW_TABLES: [&str; 5] = [
     "optimistic_exact_facts",
     "optimistic_integer_facts",
     "optimistic_sort_facts",
@@ -132,18 +132,18 @@ const TABLE_SQL: &str = "SELECT sql FROM sqlite_schema WHERE tbl_name = ?1 AND s
 /// and empty and never refetch. A new store adds itself to
 /// [`DERIVED_STORES`], and the fields its rows read to
 /// `cache_core::schema_change::ProjectionInputs`' derived inputs.
-struct DerivedStore {
+pub(super) struct DerivedStore {
     /// The record types its rows derive from.
     typenames: &'static [&'static str],
     /// Its tables, those that name a table before it.
-    tables: &'static [&'static str],
+    pub(super) tables: &'static [&'static str],
     /// Empties its tables and drops its sync state.
     clear: fn(&Db) -> Result<(), TursoStorageError>,
 }
 
 /// Every [`DerivedStore`]. The calendar's range rows, coverage and sync
 /// state describe its three types together.
-const DERIVED_STORES: [DerivedStore; 1] = [DerivedStore {
+pub(super) const DERIVED_STORES: [DerivedStore; 1] = [DerivedStore {
     typenames: &[OCCURRENCE_TYPENAME, EVENT_TYPENAME, CALENDAR_TYPENAME],
     tables: &calendar::TABLES,
     clear: calendar::clear,
