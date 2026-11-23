@@ -361,7 +361,7 @@ where
                 genai_telemetry::propagation::link(&tracing::Span::current(), Some(context));
             }
             let owner = match self
-                .continuing_owner(session_id, &batch.notifications)
+                .continuing_owner(session_id, batch.action_id, &batch.notifications)
                 .await
             {
                 Ok(owner) => owner,
@@ -400,9 +400,12 @@ where
     /// The owner connecting an app is not their word on what a bot or
     /// someone else asked for, so continuing anyone else's turn, or an older
     /// button from one, acts for nobody and its calls wait for the owner.
+    /// A batch sent again after an interruption already opened its turn, so
+    /// it keeps the authority that turn was given at dispatch.
     async fn continuing_owner(
         &self,
         session_id: AgentSessionId,
+        action_id: AgentActionId,
         notifications: &[agent_runtime_protocol::domain::notification::Notification],
     ) -> Result<Option<MacroUserIdStr<'static>>> {
         if !crate::domain::app_connections::continues_for_owner(notifications) {
@@ -415,6 +418,11 @@ where
         let Some(previous) = self.sessions.turn_prompter(session_id).await? else {
             return Ok(None);
         };
+        if previous.action_id == action_id {
+            let resumed = previous.kind == agent_session::domain::model::PrompterKind::Program
+                && previous.acting_user() == Some(owner);
+            return Ok(resumed.then(|| owner.clone()));
+        }
         if previous.acting_user() != Some(owner) {
             return Ok(None);
         }

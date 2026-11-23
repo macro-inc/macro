@@ -916,6 +916,42 @@ async fn an_app_connected_after_the_owners_turn_acts_for_the_owner() {
     assert_eq!(service.inner.busy.turn(id).unwrap().actor, Some(owner));
 }
 
+/// The continuation interrupted mid-turn (the runtime disconnected while
+/// one of its calls waited) is sent again as the same turn, and keeps the
+/// owner's access instead of falling back to acting for nobody.
+#[tokio::test]
+async fn an_interrupted_continuation_resent_still_acts_for_the_owner() {
+    let outbox = Arc::new(Outbox::default());
+    let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
+    let id = AgentSessionId::new();
+    let container = owner_session_answered(&service, &containers, id, ASKS_FOR_CONFLUENCE).await;
+    turns.settled(id).await;
+    app_connected(&outbox, id).await;
+    let first = woken_prompter(&service, &repo, &container, id, 4).await;
+    assert_eq!(
+        first.kind,
+        agent_session::domain::model::PrompterKind::Program
+    );
+    repo.extend_log(agent_fold::testing::parse_log_as(
+        id,
+        r#"{"direction":"to_server","content":{"type":"event","event":"disconnected"}}"#,
+    ));
+    service.inner.notification_batches.remove(&id);
+    service.inner.busy.clear(id);
+    outbox.expired.store(true, Ordering::SeqCst);
+    let resent = woken_prompter(&service, &repo, &container, id, 5).await;
+    assert_eq!(
+        resent.action_id, first.action_id,
+        "the same turn, sent again"
+    );
+    assert_eq!(
+        resent.kind,
+        agent_session::domain::model::PrompterKind::Program
+    );
+    assert_eq!(resent.acting_user(), Some(&sender()));
+    assert_eq!(service.inner.busy.turn(id).unwrap().actor, Some(sender()));
+}
+
 /// Connecting an app is not the owner's word on what somebody else asked
 /// for: continuing another person's turn acts for nobody, so its calls on
 /// the owner's access still wait for the owner.
