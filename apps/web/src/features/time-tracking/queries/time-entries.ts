@@ -196,6 +196,8 @@ export type CachedTimeTask = {
   task: TimeLoggedTaskPropertiesFragment | undefined;
   /** Whether its first page of entries is cached, so a link patch can reach it. */
   pageCached: boolean;
+  /** The day of the page's first entry, newest first; absent on an empty page. */
+  firstDay: string | undefined;
 };
 
 async function readCached<T>(
@@ -223,7 +225,7 @@ export async function readCachedTimeTask(
   host: TimeLoggedHost | undefined,
   taskId: string
 ): Promise<CachedTimeTask> {
-  if (!host) return { task: undefined, pageCached: false };
+  if (!host) return { task: undefined, pageCached: false, firstDay: undefined };
   const [task, page] = await Promise.all([
     readCached<TimeLoggedTaskPropertiesFragment>(
       host,
@@ -236,7 +238,11 @@ export async function readCachedTimeTask(
       taskId
     ),
   ]);
-  return { task, pageCached: page !== undefined };
+  return {
+    task,
+    pageCached: page !== undefined,
+    firstDay: page?.timeEntries.entries[0]?.date,
+  };
 }
 
 /**
@@ -275,13 +281,20 @@ export function optimisticEntry(args: {
   };
 }
 
-/** The link patches that put a new entry at the top of its task's cached page. */
+/**
+ * The link patches that put a new entry at the top of its task's cached page.
+ * The cache applies them again over the server's page when the write commits,
+ * so an entry dated before the page's first entry is left to the reply, which
+ * places it in order.
+ */
 export function logTimeUpdates(
   cached: CachedTimeTask,
   taskId: string,
-  entryId: string
+  entry: { id: string; date: string }
 ): OptimisticUpdate[] {
   if (!cached.pageCached) return [];
+  if (cached.firstDay !== undefined && entry.date < cached.firstDay) return [];
+  const entryId = entry.id;
   return [
     update(
       entriesOf(taskId),
@@ -356,7 +369,13 @@ export async function logTime(
     LogTimeDocument,
     { input: { id, taskId: args.taskId, ...args.values } },
     optimisticData,
-    { uuid: id, updates: logTimeUpdates(cached, args.taskId, id) }
+    {
+      uuid: id,
+      updates: logTimeUpdates(cached, args.taskId, {
+        id,
+        date: args.values.date,
+      }),
+    }
   ).toPromise();
   return timeWriteResult(result);
 }

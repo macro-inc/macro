@@ -80,7 +80,8 @@ const entry: TimeEntryFieldsFragment = {
 /** A cache holding the task's properties and, when `page`, its first page of entries. */
 function host(
   properties: SoupPropertyFieldsFragment[] | undefined,
-  page: boolean
+  page: boolean,
+  firstDay?: string
 ): TimeLoggedHost {
   return {
     async readRecordsByKeys({ fragmentName, keys }) {
@@ -94,7 +95,9 @@ function host(
           : page && {
               __typename: 'GraphqlSoupDocument',
               id: TASK,
-              timeEntries: { entries: [] },
+              timeEntries: {
+                entries: firstDay ? [{ id: 'older', date: firstDay }] : [],
+              },
             };
       return {
         revision: parseCacheRevision('1'),
@@ -193,6 +196,37 @@ describe('logTime', () => {
       (optimistic.optimisticResponse as LogTimeMutation).logTime.task
         ?.properties
     ).toEqual([timeLogged(120)]);
+  });
+
+  it('leaves an entry dated before the first cached entry to the reply', async () => {
+    // The cache applies the link recipe again over the server's page at
+    // commit, so a prepend here would move the reply's ordered entry to the top.
+    const { client, operations } = queuedClient();
+    await logTime(
+      {
+        taskId: TASK,
+        userId: AUTHOR,
+        values: { ...values, date: '2026-11-19' },
+        id: ENTRY,
+      },
+      {
+        client,
+        host: host([timeLogged(90)], true, '2026-11-20'),
+        now: () => NOW,
+      }
+    );
+    expect(sent(operations).optimistic.linkPatches).toEqual([]);
+
+    const today = queuedClient();
+    await logTime(
+      { taskId: TASK, userId: AUTHOR, values, id: ENTRY },
+      {
+        client: today.client,
+        host: host([timeLogged(90)], true, '2026-11-20'),
+        now: () => NOW,
+      }
+    );
+    expect(sent(today.operations).optimistic.linkPatches).toHaveLength(1);
   });
 
   it('predicts nothing about a task the cache does not hold', async () => {

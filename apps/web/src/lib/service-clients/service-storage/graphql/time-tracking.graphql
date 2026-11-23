@@ -48,13 +48,15 @@ fragment TimeLoggedTaskProperties on GraphqlSoupDocument {
   }
 }
 
-# Fragment-rooted link updates on a task's first page of entries.
+# Fragment-rooted link updates on a task's first page of entries. The first
+# entry's day tells a new entry whether it belongs at the top.
 fragment TimeEntriesParent on GraphqlSoupDocument {
   __typename
   id
   timeEntries(limit: 50) {
     entries {
       id
+      date
     }
   }
 }
