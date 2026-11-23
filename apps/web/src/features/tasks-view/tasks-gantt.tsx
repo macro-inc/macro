@@ -16,10 +16,11 @@ import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { PROPERTY_OPTION_IDS } from '@property/identifiers';
 import type { Accessor, JSX } from 'solid-js';
 import { TASK_SORT_DEFINITIONS } from './constants';
-import { taskGanttDates } from './queries/task-gantt';
+import { taskGanttDates, taskGanttTimed } from './queries/task-gantt';
 import { createTaskGanttQueries } from './queries/task-gantt-queries';
 import { useTasksView } from './tasks-view-context';
 import type { TaskCreateOptions } from './types';
@@ -43,6 +44,7 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
     });
   const onCreate = () =>
     context.createTask ?? (!context.scopeKey ? createTask : undefined);
+  const startDates = useStartDateEnabled();
   const queries = createTaskGanttQueries({
     rows: source.boardRows ?? source.items,
     grouping: () => state.groupBy,
@@ -95,7 +97,14 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
       >
         {label}
         <Gantt.Bar
-          {...taskGanttDates(task())}
+          {...taskGanttDates(task(), startDates())}
+          timed={startDates() && taskGanttTimed(task())}
+          regroup={startDates()}
+          onReschedule={
+            startDates() && queries.canReschedule(task().id)
+              ? (range) => queries.reschedule(task().id, range)
+              : undefined
+          }
           title={task().name}
           deadlineWarning={deadlineWarning()}
           onClick={(event) => onOpen(task(), event)}
@@ -113,6 +122,7 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
   return (
     <TaskGanttView
       ref={props.ref}
+      startDates={startDates()}
       source={source}
       groupBy={state.groupBy}
       groupMoves={{
