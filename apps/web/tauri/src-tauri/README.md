@@ -676,11 +676,24 @@ it from the startup config if it no longer exists (`src/desktop/main_window.rs`)
 ## Desktop native updates
 
 Release builds for macOS Apple Silicon and Linux AppImage check for native updates
-after startup and every six hours. Downloads are verified with Tauri's updater
-signature before becoming eligible for installation. A ready update installs on
-normal app quit; closing/hiding a window only installs if it actually exits the
-app. Force-killing loses the in-memory download and the next launch checks again.
-No network work is started during quit. Errors retry with backoff.
+after startup and every six hours. The download streams into
+`native-update/` under the app's local data directory (Application Support on
+macOS, never a purgeable cache): `download.partial` while it arrives,
+`download.bin` once complete, and `download.json` naming the version and
+signature they belong to. A quit, crash or failed attempt keeps what arrived;
+the next attempt or launch, offered the same update, resumes with an HTTP
+`Range` request (a server that answers with the whole file replaces the saved
+bytes), and a complete file is reused without downloading. A different
+offered update, a release that needs a newer OS, or a feed that offers none,
+deletes the saved files. The whole
+file is verified with Tauri's updater signature (the updater's own
+`minisign-verify` check, `desktop_update/desktop/download.rs`) before it becomes
+eligible for installation, and read and verified again just before installing;
+bytes that fail are deleted, so the next check downloads afresh. A successful
+install deletes them too. Without an app data directory native updates stay
+disabled. The download uses the updater's timeout and proxy settings. A ready update installs on normal app quit;
+closing/hiding a window only installs if it actually exits the app. No network
+work is started during quit. Errors retry with backoff.
 
 The ready notification and Settings → Account offer **Restart to update**. Explicit
 restart waits for registered canvas/PDF saves and local query persistence, and is
@@ -767,9 +780,11 @@ The coordinator queues up to 32 reports (`desktop_update/report.rs`) and emits
 when it mounts and after each emit, so each report goes out once. A check
 reports `up_to_date`, `needs_newer_os` (a newer release whose
 `minimumSystemVersion` this Mac is below, with that minimum; not downloaded),
-`update_found` then `downloaded`, `check_failed` or `download_failed` (span
-`native.update.check`, timed by the host, with a `native.update.download`
-child; `update_found` is a PostHog event only). Failures
+`update_found` then `downloaded` (with `resumed_bytes`, the bytes kept from an
+earlier launch or attempt; equal to `download_bytes` when a saved download was
+reused whole), `check_failed` or `download_failed` (span `native.update.check`,
+timed by the host, with a `native.update.download` child; `update_found` is a
+PostHog event only). Failures
 carry `consecutive_failures`. Installs run as the app quits, so before
 installing the app writes `native-update/pending-install.json` under the app's
 local data directory, adding the failure if `install()` returns one. The next
@@ -792,7 +807,8 @@ types (`generated/native-update.ts`, same command as above).
 
 The Rust coordinator tests exercise the pinned updater against a local HTTP
 server with a test-only public key and signed fixture (the test private key is
-discarded), including corrupt signatures and older versions. Release metadata tests
+discarded), including corrupt signatures, older versions, resumed and reused
+saved downloads, servers that ignore `Range`, and saved bytes changed before install. Release metadata tests
 run from `apps/web` with `bunx vitest run --project scripts scripts/desktop-release.test.ts scripts/desktop-signing.test.ts`.
 Frontend preparation tests are in the web `tauri` Vitest project. Native replacement/notarization still
 requires platform release testing; mocked HTTP tests never replace the test runner.
