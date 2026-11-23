@@ -1,0 +1,19 @@
+apps/web/tests/native/driver.ts
+  s_1d737fa3b08a67::t_3e64ab132248fe 35-36,39-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e163b49523b96ab831ecf394126056374e37d90a",
+  "prompts": {},
+  "sessions": {
+    "s_1d737fa3b08a67": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f75f008e-7e0d-4333-aa33-ce79870c1674",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
