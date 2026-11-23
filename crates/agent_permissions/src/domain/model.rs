@@ -1,6 +1,9 @@
 //! Permission states, what a setting targets, who a policy belongs to, who is
 //! asking, and the views the API returns.
 
+#[cfg(test)]
+mod test;
+
 use agent_fold::domain::log::AgentSessionId;
 use agent_permission_registry::Action;
 use bot_id::BotId;
@@ -698,11 +701,9 @@ pub struct SourceAgent {
 /// Whose a source policy is: a person's own (their Macro, their private
 /// agents) or a team's.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(
-    tag = "kind",
-    rename_all = "snake_case",
-    rename_all_fields = "camelCase"
-)]
+// Fields are renamed one by one: the OpenAPI schema ignores serde's
+// `rename_all_fields`.
+#[serde(tag = "kind", rename_all = "snake_case")]
 #[schema(as = ToolPermissionSourceScope)]
 pub enum SourceScope {
     /// A person's own.
@@ -710,6 +711,7 @@ pub enum SourceScope {
     /// A team's.
     Team {
         /// The team.
+        #[serde(rename = "teamId")]
         team_id: Uuid,
     },
 }
