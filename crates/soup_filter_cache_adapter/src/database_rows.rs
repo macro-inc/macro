@@ -9,6 +9,16 @@ mod test;
 
 type Object = serde_json::Map<String, serde_json::Value>;
 
+/// The fields of a row record its projection and patch read.
+pub(super) const INPUTS: &[&str] = &[
+    "id",
+    "ownerId",
+    "tableId",
+    "createdAt",
+    "updatedAt",
+    "cacheProjection",
+];
+
 fn uuid(value: Option<&serde_json::Value>) -> Result<uuid::Uuid, ()> {
     uuid::Uuid::parse_str(value.and_then(serde_json::Value::as_str).ok_or(())?).map_err(|_| ())
 }
