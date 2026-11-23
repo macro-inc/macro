@@ -227,7 +227,8 @@ fn upgrade_cost_on_a_retained_cache() {
 /// transaction as the runner runs it, then the commit. It leaves out what the
 /// runner adds before that commit, the `storage_schema_version` write and the
 /// frozen-schema check, so it splits up the DDL, not the whole upgrade, which
-/// `timed_open` times.
+/// `timed_open` times. The connection keeps sorts in memory under the native
+/// page cache, as the upgrade's does, since a large `CREATE INDEX` sorts.
 fn step_phases(older: &Path, live: &Path) -> Vec<(String, Duration)> {
     copy_pair(older, live);
     let io: Arc<dyn IO> = Arc::new(PlatformIO::new().unwrap());
@@ -237,7 +238,12 @@ fn step_phases(older: &Path, live: &Path) -> Vec<(String, Duration)> {
         OpenOptions::new(Arc::new(SqliteDialect)),
     )
     .unwrap();
-    let connection = Db::uncached(database.connect().unwrap());
+    let connection = database.connect().unwrap();
+    connection.set_temp_store(TempStore::Memory);
+    connection
+        .execute(format!("PRAGMA cache_size = {NATIVE_PAGE_CACHE_PAGES}"))
+        .unwrap();
+    let connection = Db::uncached(connection);
     let mut phases = Vec::new();
     driver::execute(&connection, "BEGIN IMMEDIATE", vec![]).unwrap();
     for sql in crate::storage::migration::UPGRADE_11_TO_12 {
