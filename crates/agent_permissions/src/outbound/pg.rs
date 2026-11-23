@@ -799,6 +799,50 @@ impl PermissionStore for PgPermissionStore {
         Ok(Ok(rules.len()))
     }
 
+    #[tracing::instrument(skip_all, fields(agents = agents.len()), err)]
+    async fn ensure_agent_policies(&self, agents: &[BotId]) -> Result<Vec<PolicyId>, Self::Err> {
+        if agents.is_empty() {
+            return Ok(Vec::new());
+        }
+        let bots: Vec<macro_uuid::Uuid> = agents.iter().map(|agent| agent.as_uuid()).collect();
+        let ids: Vec<macro_uuid::Uuid> = agents
+            .iter()
+            .map(|_| PolicyId::generate().as_uuid())
+            .collect();
+        let mut connection = self.pool.acquire().await?;
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_permission_policy (id, kind, bot_id)
+            SELECT id, 'agent', bot_id FROM UNNEST($1::uuid[], $2::uuid[]) AS agent (id, bot_id)
+            ON CONFLICT (bot_id) WHERE bot_id IS NOT NULL DO NOTHING
+            "#,
+            &ids,
+            &bots,
+        )
+        .execute(&mut *connection)
+        .await?;
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, bot_id AS "bot_id!" FROM agent_permission_policy
+            WHERE bot_id = ANY($1)
+            "#,
+            &bots,
+        )
+        .fetch_all(&mut *connection)
+        .await?;
+        agents
+            .iter()
+            .map(|agent| {
+                rows.iter()
+                    .find(|row| row.bot_id == agent.as_uuid())
+                    .map(|row| PolicyId::from_uuid(row.id))
+                    .ok_or_else(|| {
+                        PgPermissionStoreError::Corrupt("policy vanished on create".to_owned())
+                    })
+            })
+            .collect()
+    }
+
     #[tracing::instrument(skip_all, fields(policy_id = %policy), err)]
     async fn followers_height(&self, policy: PolicyId) -> Result<usize, Self::Err> {
         let mut transaction = self.pool.begin().await?;

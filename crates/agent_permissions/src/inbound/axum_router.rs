@@ -1,5 +1,6 @@
-//! The HTTP API: the catalog, an agent's and a session's permissions, and
-//! setting, tightening and resetting them.
+//! The HTTP API: the catalog, an agent's and a session's permissions,
+//! setting, tightening and resetting them, and following another policy
+//! (its source) or detaching from it.
 //!
 //! Handlers only translate: the caller's credential becomes a [`Credential`]
 //! (from transport facts: a person's own session, an agent-attributed token
@@ -13,10 +14,10 @@ use std::sync::Arc;
 
 use agent_fold::domain::log::AgentSessionId;
 use axum::Router;
-use axum::extract::{FromRef, Json, Path, State};
+use axum::extract::{FromRef, Json, Path, Query, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use bot_id::BotId;
 use entity_access::domain::models::ViewAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
@@ -30,8 +31,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::model::{
-    Caller, Change, Credential, LoosenedOperation, PermissionError, PermissionsView, Target,
-    Tightened, ToolPermissionCatalog,
+    Caller, CandidatesFor, Change, Credential, LoosenedOperation, PermissionError, PermissionsView,
+    PolicyId, SourceCandidates, Target, Tightened, ToolPermissionCatalog,
 };
 use crate::domain::service::AgentPermissions;
 
@@ -46,17 +47,77 @@ pub struct ToolPermissionChanges {
     pub changes: Vec<Change>,
 }
 
+/// The policy an agent is to follow.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetToolPermissionSource {
+    /// The source's policy id, from the picker (`sources`) or a view's
+    /// `policyId`.
+    pub source_policy_id: PolicyId,
+}
+
+/// A detach, and the changes to make in the same transaction.
+#[derive(Debug, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DetachToolPermissions {
+    /// Changes applied on top of the snapshot (between 1 and 200), as `set`
+    /// takes them.
+    #[serde(default)]
+    pub changes: Option<Vec<Change>>,
+}
+
+/// Whose sources to list: an agent's, or a scope for an agent not created
+/// yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceScopeQuery {
+    /// The caller's private agent.
+    Private,
+    /// A team's agent (`teamId`).
+    Team,
+}
+
+/// The picker's query.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct SourceCandidatesQuery {
+    /// An existing agent: its scope, with candidates it can't follow marked.
+    pub agent_id: Option<Uuid>,
+    /// Without `agentId`: the scope the new agent will have.
+    pub scope: Option<SourceScopeQuery>,
+    /// With `scope=team`: the team.
+    pub team_id: Option<Uuid>,
+}
+
+impl SourceCandidatesQuery {
+    fn of(&self) -> Result<CandidatesFor, PermissionError> {
+        match (self.agent_id, self.scope, self.team_id) {
+            (Some(agent), None, None) => Ok(CandidatesFor::Agent(BotId::new_from_uuid(agent))),
+            (None, Some(SourceScopeQuery::Private), None) => Ok(CandidatesFor::Private),
+            (None, Some(SourceScopeQuery::Team), Some(team)) => Ok(CandidatesFor::Team(team)),
+            _ => Err(PermissionError::Invalid(
+                "pass agentId, scope=private, or scope=team with teamId".to_owned(),
+            )),
+        }
+    }
+}
+
 /// Why a request was refused.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolPermissionError {
     /// `invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,
-    /// `would_loosen`, `source_cycle`, `source_too_deep`,
+    /// `would_loosen`, `follows_source`, `source_cycle`, `source_too_deep`,
     /// `source_not_allowed` or `internal`.
     pub code: &'static str,
     /// What went wrong, for a person.
     pub message: String,
-    /// For `would_loosen`: the operations the change would have loosened.
+    /// For `follows_source`: the policy the agent follows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<PolicyId>,
+    /// For `would_loosen` and `follows_source`: the operations the change
+    /// would have loosened.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operations: Option<Vec<LoosenedOperation>>,
     /// For `unknown_target`: the targets the registry does not have.
@@ -71,6 +132,7 @@ pub struct ToolPermissionApiError(pub PermissionError);
 impl IntoResponse for ToolPermissionApiError {
     fn into_response(self) -> Response {
         let message = self.0.to_string();
+        let mut source = None;
         let (status, code, operations, targets) = match self.0 {
             PermissionError::Disabled | PermissionError::NotFound => {
                 (StatusCode::NOT_FOUND, "not_found", None, None)
@@ -90,6 +152,18 @@ impl IntoResponse for ToolPermissionApiError {
                 Some(operations),
                 None,
             ),
+            PermissionError::FollowsSource {
+                operations,
+                followed,
+            } => {
+                source = followed;
+                (
+                    StatusCode::CONFLICT,
+                    "follows_source",
+                    Some(operations),
+                    None,
+                )
+            }
             PermissionError::SourceCycle => (StatusCode::CONFLICT, "source_cycle", None, None),
             PermissionError::SourceTooDeep => (StatusCode::CONFLICT, "source_too_deep", None, None),
             PermissionError::SourceNotAllowed => {
@@ -105,6 +179,7 @@ impl IntoResponse for ToolPermissionApiError {
             Json(ToolPermissionError {
                 code,
                 message,
+                source,
                 operations,
                 targets,
             }),
@@ -181,6 +256,22 @@ where
         .route(
             "/agents/{agent_id}/tool-permissions/tighten",
             post(tighten_handler::<Access, Auth>),
+        )
+        .route(
+            "/agents/{agent_id}/tool-permissions/source",
+            put(set_source_handler::<Access, Auth>),
+        )
+        .route(
+            "/agents/{agent_id}/tool-permissions/detach",
+            post(detach_handler::<Access, Auth>),
+        )
+        .route(
+            "/agent-tool-permissions/sources",
+            get(get_sources_handler::<Access, Auth>),
+        )
+        .route(
+            "/agent-tool-permissions/policies/{policy_id}",
+            get(get_policy_handler::<Access, Auth>),
         )
         .route(
             "/agent-sessions/{session_id}/tool-permissions",
@@ -440,6 +531,175 @@ where
         .reset(
             &caller(authorization.authorization),
             BotId::new_from_uuid(agent_id),
+        )
+        .await
+        .map(Json)
+        .map_err(ToolPermissionApiError)
+}
+
+#[utoipa::path(
+    put,
+    path = "/agents/{agent_id}/tool-permissions/source",
+    tag = TAG,
+    operation_id = "set_agent_tool_permissions_source",
+    params(("agent_id" = Uuid, Path, description = "The owned agent")),
+    request_body = SetToolPermissionSource,
+    responses(
+        (status = 200, body = PermissionsView),
+        (status = 401, body = String),
+        (status = 403, body = ToolPermissionError, description = "May not edit the agent, not a person's own session (needs_person), or a source it may not follow (source_not_allowed)"),
+        (status = 404, body = ToolPermissionError),
+        (status = 409, body = ToolPermissionError, description = "The source follows the agent (source_cycle), or too many agents would follow each other in a row (source_too_deep)"),
+    )
+)]
+/// Make an agent follow another policy (its source): the source's settings
+/// apply on the agent's next call, and its own rows only restrict them. An
+/// agent that owned its settings loses the ones a person made; its
+/// restrictions on itself stay. Only a person signed in to Macro who may
+/// edit the agent; following grants nothing over the source.
+#[tracing::instrument(skip_all, fields(%agent_id), err(Debug, level = "warn"))]
+pub async fn set_source_handler<Access, Auth>(
+    State(state): State<AgentPermissionsRouterState<Access, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Path(agent_id): Path<Uuid>,
+    Json(request): Json<SetToolPermissionSource>,
+) -> Result<Json<PermissionsView>, ToolPermissionApiError>
+where
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .set_source(
+            &caller(authorization.authorization),
+            BotId::new_from_uuid(agent_id),
+            request.source_policy_id,
+        )
+        .await
+        .map(Json)
+        .map_err(ToolPermissionApiError)
+}
+
+#[utoipa::path(
+    post,
+    path = "/agents/{agent_id}/tool-permissions/detach",
+    tag = TAG,
+    operation_id = "detach_agent_tool_permissions",
+    params(("agent_id" = Uuid, Path, description = "The owned agent")),
+    request_body = DetachToolPermissions,
+    responses(
+        (status = 200, body = PermissionsView),
+        (status = 400, body = ToolPermissionError),
+        (status = 401, body = String),
+        (status = 403, body = ToolPermissionError, description = "May not edit the agent, or not a person's own session (needs_person)"),
+        (status = 404, body = ToolPermissionError),
+    )
+)]
+/// Make an agent own its settings again: they become what it resolves to
+/// now (session restrictions and approvals aside), its own restrictions
+/// kept, with `changes` applied on top, all in one transaction. Only a
+/// person signed in to Macro who may edit the agent.
+#[tracing::instrument(skip_all, fields(%agent_id), err(Debug, level = "warn"))]
+pub async fn detach_handler<Access, Auth>(
+    State(state): State<AgentPermissionsRouterState<Access, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Path(agent_id): Path<Uuid>,
+    Json(request): Json<DetachToolPermissions>,
+) -> Result<Json<PermissionsView>, ToolPermissionApiError>
+where
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .detach(
+            &caller(authorization.authorization),
+            BotId::new_from_uuid(agent_id),
+            request.changes,
+        )
+        .await
+        .map(Json)
+        .map_err(ToolPermissionApiError)
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-tool-permissions/sources",
+    tag = TAG,
+    operation_id = "get_agent_tool_permission_sources",
+    params(SourceCandidatesQuery),
+    responses(
+        (status = 200, body = SourceCandidates),
+        (status = 400, body = ToolPermissionError),
+        (status = 401, body = String),
+        (status = 403, body = ToolPermissionError),
+        (status = 404, body = ToolPermissionError),
+    )
+)]
+/// The policies an agent may follow, for the picker: the caller's own Macro
+/// first (private agents only), then agents. With `agentId`, those it can't
+/// follow say why (`unavailable`) and the one it follows is `current`.
+#[tracing::instrument(skip_all, err(Debug, level = "warn"))]
+pub async fn get_sources_handler<Access, Auth>(
+    State(state): State<AgentPermissionsRouterState<Access, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(query): Query<SourceCandidatesQuery>,
+) -> Result<Json<SourceCandidates>, ToolPermissionApiError>
+where
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let caller = caller(authorization.authorization);
+    let of = match query.of() {
+        Ok(of) => of,
+        Err(invalid) => {
+            // With the feature off, a bad query is still not found.
+            state
+                .service
+                .catalog(&caller)
+                .await
+                .map_err(ToolPermissionApiError)?;
+            return Err(ToolPermissionApiError(invalid));
+        }
+    };
+    state
+        .service
+        .source_candidates(&caller, of)
+        .await
+        .map(Json)
+        .map_err(ToolPermissionApiError)
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-tool-permissions/policies/{policy_id}",
+    tag = TAG,
+    operation_id = "get_agent_tool_permission_policy",
+    params(("policy_id" = Uuid, Path, description = "The policy")),
+    responses(
+        (status = 200, body = PermissionsView),
+        (status = 401, body = String),
+        (status = 404, body = ToolPermissionError),
+    )
+)]
+/// A policy by id, read only: the caller's own Macro policy, or an agent's
+/// they may edit. The form shows it before the agent that will follow it
+/// exists.
+#[tracing::instrument(skip_all, fields(%policy_id), err(Debug, level = "warn"))]
+pub async fn get_policy_handler<Access, Auth>(
+    State(state): State<AgentPermissionsRouterState<Access, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Path(policy_id): Path<Uuid>,
+) -> Result<Json<PermissionsView>, ToolPermissionApiError>
+where
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .view_policy(
+            &caller(authorization.authorization),
+            PolicyId::from_uuid(policy_id),
         )
         .await
         .map(Json)

@@ -71,6 +71,36 @@ impl AgentPermissions for Viewer {
     async fn reset(&self, _: &Caller, _: BotId) -> Result<PermissionsView, PermissionError> {
         Err(PermissionError::NotFound)
     }
+    async fn set_source(
+        &self,
+        _: &crate::domain::model::Caller,
+        _: bot_id::BotId,
+        _: crate::domain::model::PolicyId,
+    ) -> Result<crate::domain::model::PermissionsView, crate::domain::model::PermissionError> {
+        Err(crate::domain::model::PermissionError::NotFound)
+    }
+    async fn detach(
+        &self,
+        _: &crate::domain::model::Caller,
+        _: bot_id::BotId,
+        _: Option<Vec<crate::domain::model::Change>>,
+    ) -> Result<crate::domain::model::PermissionsView, crate::domain::model::PermissionError> {
+        Err(crate::domain::model::PermissionError::NotFound)
+    }
+    async fn source_candidates(
+        &self,
+        _: &crate::domain::model::Caller,
+        _: crate::domain::model::CandidatesFor,
+    ) -> Result<crate::domain::model::SourceCandidates, crate::domain::model::PermissionError> {
+        Err(crate::domain::model::PermissionError::NotFound)
+    }
+    async fn view_policy(
+        &self,
+        _: &crate::domain::model::Caller,
+        _: crate::domain::model::PolicyId,
+    ) -> Result<crate::domain::model::PermissionsView, crate::domain::model::PermissionError> {
+        Err(crate::domain::model::PermissionError::NotFound)
+    }
     async fn resolve_calls(
         &self,
         _: &SessionPolicy,

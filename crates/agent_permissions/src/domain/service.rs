@@ -21,18 +21,24 @@ use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessL
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::model::{
-    AgentAccess, AppliedTo, Caller, Catalog, Change, Credential, OperationKey, Origin,
-    PermissionError, PermissionState, PermissionsView, PolicyId, PolicyKind, PolicyOwner,
-    ResolvedCall, Rule, SessionFacts, SessionPolicy, SetBy, Tightened, ToolPermissionCatalog,
+    AgentAccess, AgentFacts, AgentOwner, AgentScope, AppliedTo, Caller, CandidatesFor, Catalog,
+    Change, Credential, MAX_CHAIN, OperationKey, Origin, PermissionError, PermissionState,
+    PermissionsView, PolicyChain, PolicyId, PolicyKind, PolicyOwner, PolicySource, ResolvedCall,
+    Rule, SessionFacts, SessionPolicy, SetBy, SourceAgent, SourceCandidate, SourceCandidates,
+    SourceScope, SourceStatus, SourceUnavailable, SourceVia, Tightened, ToolPermissionCatalog,
 };
 use super::ports::{
-    AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory, Write, WriteTo,
+    AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory, SourceWrite, Write,
+    WriteTo,
 };
 use super::resolve::{self, Resolver, ViewAccess};
 
 /// The most changes one request may make: more than one group's custom view
 /// holds.
 pub const MAX_CHANGES: usize = 200;
+
+/// The most agents the source picker lists.
+pub const MAX_CANDIDATES: usize = 100;
 
 /// Agent permissions, as the HTTP API and a run's gate use them.
 ///
@@ -82,6 +88,45 @@ pub trait AgentPermissions: Send + Sync + 'static {
         &self,
         caller: &Caller,
         agent: BotId,
+    ) -> Result<PermissionsView, PermissionError>;
+
+    /// Make `agent` follow the policy `source`: its source's settings apply
+    /// on its next call, and its own rows only restrict them. A person who
+    /// may edit the agent, from their own session; the source must be in
+    /// the agent's scope. Following grants no authority over the source.
+    async fn set_source(
+        &self,
+        caller: &Caller,
+        agent: BotId,
+        source: PolicyId,
+    ) -> Result<PermissionsView, PermissionError>;
+
+    /// Make `agent` own its settings again: they become a snapshot of what
+    /// it resolves to now (session overlays and approvals aside), with
+    /// `changes` applied on top, in one transaction. Same caller rule as
+    /// [`AgentPermissions::set_source`].
+    async fn detach(
+        &self,
+        caller: &Caller,
+        agent: BotId,
+        changes: Option<Vec<Change>>,
+    ) -> Result<PermissionsView, PermissionError>;
+
+    /// The sources the picker offers, for an agent (annotated with why one
+    /// can't be picked) or a scope a new agent will have.
+    async fn source_candidates(
+        &self,
+        caller: &Caller,
+        of: CandidatesFor,
+    ) -> Result<SourceCandidates, PermissionError>;
+
+    /// A policy the caller may read, by id: their own Macro policy, or an
+    /// agent's they may edit. The preview of a source before the agent that
+    /// will follow it exists.
+    async fn view_policy(
+        &self,
+        caller: &Caller,
+        policy: PolicyId,
     ) -> Result<PermissionsView, PermissionError>;
 
     /// What a session's permissions say about each of `calls`. An operation
@@ -182,6 +227,35 @@ fn view_access(
     ViewAccess {
         can_edit: person && may_edit,
         can_tighten: tighten_destination(caller, agent, access, owner, context).is_some(),
+    }
+}
+
+/// A built-in persona as a source: Macro, reached as `@macro`.
+fn persona_agent(persona: BotId) -> SourceAgent {
+    let system = bot_id::system_bot(persona);
+    SourceAgent {
+        id: persona,
+        name: system.map_or_else(|| "Macro".to_owned(), |bot| bot.name.to_owned()),
+        handle: system.map(|bot| bot_id::mention_handle(persona, bot.handle).to_owned()),
+        avatar_url: None,
+        deleted: false,
+    }
+}
+
+fn agent_source(facts: &AgentFacts) -> SourceAgent {
+    SourceAgent {
+        id: facts.id,
+        name: facts.name.clone(),
+        handle: facts.handle.clone(),
+        avatar_url: facts.avatar_url.clone(),
+        deleted: facts.deleted,
+    }
+}
+
+fn owner_scope(owner: &AgentOwner) -> SourceScope {
+    match owner {
+        AgentOwner::User(_) => SourceScope::Personal,
+        AgentOwner::Team(team) => SourceScope::Team { team_id: *team },
     }
 }
 
@@ -331,14 +405,203 @@ where
             .await
             .map_err(internal)?
             .ok_or(PermissionError::NotFound)?;
-        Ok(resolve::view(
+        let mut view = resolve::view(
             &self.catalog,
             agent,
             kind,
             view_access(caller, agent, access, &owner, context),
             &chain,
             overlay,
-        ))
+        );
+        view.can_set_source = caller.credential == Credential::PersonSession
+            && access == AgentAccess::Manageable
+            && kind == PolicyKind::Agent;
+        if chain.follows() {
+            view.source = Some(self.source_view(caller, agent, &chain).await?);
+            view.inherited = Some(resolve::materialize(
+                &self.catalog,
+                &chain.with_rules(Vec::new()),
+            ));
+        }
+        Ok(view)
+    }
+
+    async fn facts(&self, agent: BotId) -> Result<Option<AgentFacts>, PermissionError> {
+        self.agents.facts(agent).await.map_err(internal)
+    }
+
+    /// A source policy's agent (for a persona, the persona), whose it is,
+    /// and its facts when it is an agent's.
+    async fn source_identity(
+        &self,
+        owner: &PolicyOwner,
+    ) -> Result<Option<(SourceAgent, SourceScope, PolicyKind, Option<AgentFacts>)>, PermissionError>
+    {
+        match owner {
+            PolicyOwner::Persona { persona, .. } => Ok(Some((
+                persona_agent(*persona),
+                SourceScope::Personal,
+                PolicyKind::Persona,
+                None,
+            ))),
+            PolicyOwner::Agent(bot) => Ok(self.facts(*bot).await?.map(|facts| {
+                (
+                    agent_source(&facts),
+                    owner_scope(&facts.owner),
+                    PolicyKind::Agent,
+                    Some(facts),
+                )
+            })),
+        }
+    }
+
+    /// Whether an agent owned by `follower` may follow `source` (section
+    /// 4.8): a private agent its owner's Macro, their private agents and
+    /// their teams' agents; a team agent its team's agents. Never a persona
+    /// other than Macro, nor a person's policy for a team agent.
+    async fn in_scope(
+        &self,
+        follower: &AgentOwner,
+        source: &PolicyOwner,
+        source_facts: Option<&AgentFacts>,
+    ) -> Result<bool, PermissionError> {
+        match (follower, source) {
+            (AgentOwner::User(owner), PolicyOwner::Persona { persona, user }) => {
+                Ok(*persona == bot_id::MACRO_NEW_BOT_ID && user == owner)
+            }
+            (AgentOwner::Team(_), PolicyOwner::Persona { .. }) => Ok(false),
+            (_, PolicyOwner::Agent(bot)) => {
+                let Some(facts) = source_facts else {
+                    return Ok(false);
+                };
+                Ok(match (follower, &facts.owner) {
+                    (AgentOwner::User(owner), AgentOwner::User(source_owner)) => {
+                        owner == source_owner
+                    }
+                    // A team's agent is in the person's scope when they are
+                    // its member: whoever may edit it.
+                    (AgentOwner::User(owner), AgentOwner::Team(_)) => {
+                        self.agents.access(owner, *bot).await.map_err(internal)?
+                            == AgentAccess::Manageable
+                    }
+                    (AgentOwner::Team(team), AgentOwner::Team(source_team)) => team == source_team,
+                    (AgentOwner::Team(_), AgentOwner::User(_)) => false,
+                })
+            }
+        }
+    }
+
+    /// The source a following `chain` shows: who it is, whether it still
+    /// applies as itself and is in scope, the caller's own authority over
+    /// it, and the rest of the chain.
+    async fn source_view(
+        &self,
+        caller: &Caller,
+        agent: BotId,
+        chain: &PolicyChain,
+    ) -> Result<PolicySource, PermissionError> {
+        let Some(source) = chain.source() else {
+            return Ok(PolicySource {
+                policy_id: None,
+                kind: None,
+                agent: None,
+                scope: None,
+                status: SourceStatus::Lost,
+                in_scope: false,
+                can_edit: false,
+                via: Vec::new(),
+            });
+        };
+        let identity = self.source_identity(&source.owner).await?;
+        let follower = self.facts(agent).await?;
+        let in_scope = match &follower {
+            Some(follower) => {
+                let facts = identity
+                    .as_ref()
+                    .and_then(|(_, _, _, facts)| facts.as_ref());
+                self.in_scope(&follower.owner, &source.owner, facts).await?
+            }
+            None => false,
+        };
+        let person = caller.credential == Credential::PersonSession;
+        let can_edit = person
+            && match &source.owner {
+                PolicyOwner::Persona { user, .. } => *user == caller.user,
+                PolicyOwner::Agent(bot) => {
+                    self.access(&caller.user, *bot).await? == AgentAccess::Manageable
+                }
+            };
+        let mut via = Vec::new();
+        for level in chain.sources().iter().skip(1) {
+            if let Some((agent, ..)) = self.source_identity(&level.owner).await? {
+                via.push(SourceVia {
+                    name: agent.name,
+                    handle: agent.handle,
+                });
+            }
+        }
+        let deleted = identity.as_ref().is_none_or(|(agent, ..)| agent.deleted);
+        Ok(match identity {
+            Some((agent, scope, kind, _)) => PolicySource {
+                policy_id: Some(source.id),
+                kind: Some(kind),
+                agent: Some(agent),
+                scope: Some(scope),
+                status: if deleted {
+                    SourceStatus::Deleted
+                } else {
+                    SourceStatus::Live
+                },
+                in_scope,
+                can_edit: can_edit && !deleted,
+                via,
+            },
+            // The agents directory no longer knows it (its row went with
+            // its team): it applies frozen.
+            None => PolicySource {
+                policy_id: Some(source.id),
+                kind: Some(PolicyKind::Agent),
+                agent: None,
+                scope: None,
+                status: SourceStatus::Deleted,
+                in_scope: false,
+                can_edit: false,
+                via,
+            },
+        })
+    }
+
+    /// The agent a person sets the source of or detaches: an owned agent
+    /// they may edit, from their own session.
+    async fn followable_agent(
+        &self,
+        caller: &Caller,
+        agent: BotId,
+    ) -> Result<(PolicyId, AgentAccess), PermissionError> {
+        let (owner, kind, access) = self.editable_owner(caller, agent).await?;
+        if kind != PolicyKind::Agent {
+            // A persona's policy is a root: it never follows.
+            return Err(PermissionError::SourceNotAllowed);
+        }
+        Ok((self.policy_id(&owner).await?, access))
+    }
+
+    async fn agent_view(
+        &self,
+        caller: &Caller,
+        agent: BotId,
+        access: AgentAccess,
+        policy: PolicyId,
+    ) -> Result<PermissionsView, PermissionError> {
+        self.build_view(
+            caller,
+            agent,
+            access,
+            (policy, PolicyOwner::Agent(agent), PolicyKind::Agent),
+            None,
+            None,
+        )
+        .await
     }
 }
 
@@ -490,8 +753,20 @@ where
             by: &caller.user,
             set_by: SetBy::Person,
         };
+        let catalog = &self.catalog;
         self.store
-            .write(write, |_, _| Ok(resolve::normalize(changes, false)))
+            .write(write, |chain, _| {
+                let changes = resolve::normalize(changes, false);
+                // A follower's rows only restrict its source's: one looser
+                // than the source would be saved and do nothing.
+                resolve::below_source(catalog, chain, &changes).map_err(|operations| {
+                    PermissionError::FollowsSource {
+                        operations,
+                        followed: chain.source().map(|source| source.id),
+                    }
+                })?;
+                Ok(changes)
+            })
             .await
             .map_err(internal)??;
         self.build_view(caller, agent, access, (policy, owner, kind), None, None)
@@ -607,6 +882,279 @@ where
         let (owner, kind, access) = self.editable_owner(caller, agent).await?;
         let policy = self.policy_id(&owner).await?;
         self.store.reset(policy).await.map_err(internal)?;
+        self.build_view(caller, agent, access, (policy, owner, kind), None, None)
+            .await
+    }
+
+    #[tracing::instrument(
+        name = "agent_permissions.set_source",
+        skip_all,
+        fields(
+            agent_id = %agent,
+            source_policy_id = %source,
+            policy_id = tracing::field::Empty,
+            chain_len = tracing::field::Empty,
+        ),
+        err(level = "warn")
+    )]
+    async fn set_source(
+        &self,
+        caller: &Caller,
+        agent: BotId,
+        source: PolicyId,
+    ) -> Result<PermissionsView, PermissionError> {
+        self.ensure_enabled(caller).await?;
+        let (owner, kind, access) = self.editable_owner(caller, agent).await?;
+        if kind != PolicyKind::Agent {
+            return Err(PermissionError::SourceNotAllowed);
+        }
+        let follower = self.facts(agent).await?.ok_or(PermissionError::NotFound)?;
+        let source_chain = self
+            .store
+            .chain(source)
+            .await
+            .map_err(internal)?
+            .ok_or(PermissionError::NotFound)?;
+        let source_owner = &source_chain.policy().owner;
+        let source_facts = match source_owner {
+            PolicyOwner::Agent(bot) => {
+                let facts = self.facts(*bot).await?.ok_or(PermissionError::NotFound)?;
+                // A deleted agent's policy stays followed where it was, but
+                // nobody newly follows it.
+                if facts.deleted {
+                    return Err(PermissionError::SourceNotAllowed);
+                }
+                Some(facts)
+            }
+            PolicyOwner::Persona { .. } => None,
+        };
+        if !self
+            .in_scope(&follower.owner, source_owner, source_facts.as_ref())
+            .await?
+        {
+            return Err(PermissionError::SourceNotAllowed);
+        }
+
+        let policy = self.policy_id(&owner).await?;
+        let span = tracing::Span::current();
+        span.record("policy_id", tracing::field::display(policy));
+        span.record("chain_len", source_chain.depth() + 1);
+        self.store
+            .set_source(
+                SourceWrite {
+                    policy,
+                    by: &caller.user,
+                },
+                source,
+            )
+            .await
+            .map_err(internal)??;
+        self.agent_view(caller, agent, access, policy).await
+    }
+
+    #[tracing::instrument(
+        name = "agent_permissions.detach",
+        skip_all,
+        fields(
+            agent_id = %agent,
+            changes = changes.as_ref().map_or(0, Vec::len),
+            policy_id = tracing::field::Empty,
+            source_policy_id = tracing::field::Empty,
+            chain_len = tracing::field::Empty,
+            rules_written = tracing::field::Empty,
+        ),
+        err(level = "warn")
+    )]
+    async fn detach(
+        &self,
+        caller: &Caller,
+        agent: BotId,
+        changes: Option<Vec<Change>>,
+    ) -> Result<PermissionsView, PermissionError> {
+        self.ensure_enabled(caller).await?;
+        if let Some(changes) = &changes {
+            validate(&self.catalog, changes)?;
+        }
+        let (policy, access) = self.followable_agent(caller, agent).await?;
+        let span = tracing::Span::current();
+        span.record("policy_id", tracing::field::display(policy));
+
+        let changes = resolve::normalize(changes.unwrap_or_default(), false);
+        let catalog = &self.catalog;
+        let written = self
+            .store
+            .detach(
+                SourceWrite {
+                    policy,
+                    by: &caller.user,
+                },
+                |chain| {
+                    span.record("chain_len", chain.depth());
+                    if let Some(source) = chain.source() {
+                        span.record("source_policy_id", tracing::field::display(source.id));
+                    }
+                    // A policy that owns its settings keeps them as they are;
+                    // a follower takes the snapshot of what it resolves to.
+                    let base = if chain.follows() {
+                        resolve::materialize(catalog, chain)
+                    } else {
+                        chain.rules().to_vec()
+                    };
+                    Ok(resolve::apply(&base, &changes, SetBy::Person))
+                },
+            )
+            .await
+            .map_err(internal)??;
+        span.record("rules_written", written);
+        self.agent_view(caller, agent, access, policy).await
+    }
+
+    #[tracing::instrument(
+        name = "agent_permissions.source_candidates",
+        skip_all,
+        fields(candidates = tracing::field::Empty),
+        err(level = "warn")
+    )]
+    async fn source_candidates(
+        &self,
+        caller: &Caller,
+        of: CandidatesFor,
+    ) -> Result<SourceCandidates, PermissionError> {
+        self.ensure_enabled(caller).await?;
+        // For an existing agent: its scope, its policy, how tall its
+        // follower tree is and what it follows now.
+        let (scope, follower) = match of {
+            CandidatesFor::Agent(agent) => {
+                match self.access(&caller.user, agent).await? {
+                    AgentAccess::Manageable => {}
+                    AgentAccess::Persona => return Err(PermissionError::SourceNotAllowed),
+                    AgentAccess::NotFound => return Err(PermissionError::NotFound),
+                    AgentAccess::NotManageable => return Err(PermissionError::Forbidden),
+                }
+                let facts = self.facts(agent).await?.ok_or(PermissionError::NotFound)?;
+                let scope = match facts.owner {
+                    AgentOwner::User(user) => AgentScope::Private(user),
+                    AgentOwner::Team(team) => AgentScope::Team(team),
+                };
+                let policy = self.policy_id(&PolicyOwner::Agent(agent)).await?;
+                let height = self
+                    .store
+                    .followers_height(policy)
+                    .await
+                    .map_err(internal)?;
+                let current = self
+                    .store
+                    .chain(policy)
+                    .await
+                    .map_err(internal)?
+                    .and_then(|chain| chain.source().map(|source| source.id));
+                (scope, Some((agent, policy, height, current)))
+            }
+            CandidatesFor::Private => (AgentScope::Private(caller.user.clone()), None),
+            CandidatesFor::Team(team) => (AgentScope::Team(team), None),
+        };
+
+        let mut candidates = Vec::new();
+        if let AgentScope::Private(user) = &scope {
+            let persona = bot_id::MACRO_NEW_BOT_ID;
+            let policy = self
+                .policy_id(&PolicyOwner::Persona {
+                    persona,
+                    user: user.clone(),
+                })
+                .await?;
+            candidates.push(SourceCandidate {
+                policy_id: policy,
+                kind: PolicyKind::Persona,
+                agent: persona_agent(persona),
+                scope: SourceScope::Personal,
+                current: false,
+                unavailable: None,
+            });
+        }
+        let mut agents: Vec<AgentFacts> = self
+            .agents
+            .source_candidates(&caller.user, &scope)
+            .await
+            .map_err(internal)?
+            .into_iter()
+            .filter(|facts| !facts.deleted && follower.is_none_or(|(agent, ..)| agent != facts.id))
+            .collect();
+        agents.truncate(MAX_CANDIDATES);
+        let ids: Vec<BotId> = agents.iter().map(|facts| facts.id).collect();
+        let policies = self
+            .store
+            .ensure_agent_policies(&ids)
+            .await
+            .map_err(internal)?;
+        for (facts, policy) in agents.iter().zip(policies) {
+            candidates.push(SourceCandidate {
+                policy_id: policy,
+                kind: PolicyKind::Agent,
+                agent: agent_source(facts),
+                scope: owner_scope(&facts.owner),
+                current: false,
+                unavailable: None,
+            });
+        }
+
+        if let Some((_, policy, height, current)) = follower {
+            for candidate in &mut candidates {
+                candidate.current = current == Some(candidate.policy_id);
+                let Some(chain) = self
+                    .store
+                    .chain(candidate.policy_id)
+                    .await
+                    .map_err(internal)?
+                else {
+                    continue;
+                };
+                candidate.unavailable = if chain.levels().any(|level| level.id == policy) {
+                    Some(SourceUnavailable::Cycle)
+                } else if height + chain.depth() > MAX_CHAIN {
+                    Some(SourceUnavailable::TooDeep)
+                } else {
+                    None
+                };
+            }
+        }
+        tracing::Span::current().record("candidates", candidates.len());
+        Ok(SourceCandidates { candidates })
+    }
+
+    #[tracing::instrument(
+        name = "agent_permissions.view_policy",
+        skip_all,
+        fields(policy_id = %policy),
+        err(level = "warn")
+    )]
+    async fn view_policy(
+        &self,
+        caller: &Caller,
+        policy: PolicyId,
+    ) -> Result<PermissionsView, PermissionError> {
+        self.ensure_enabled(caller).await?;
+        let chain = self
+            .store
+            .chain(policy)
+            .await
+            .map_err(internal)?
+            .ok_or(PermissionError::NotFound)?;
+        // Another person's or an unreadable agent's policy is not found, so
+        // an id says nothing about whose it is.
+        let owner = chain.policy().owner.clone();
+        let (agent, kind, access) = match &owner {
+            PolicyOwner::Persona { persona, user } if *user == caller.user => {
+                (*persona, PolicyKind::Persona, AgentAccess::Persona)
+            }
+            PolicyOwner::Persona { .. } => return Err(PermissionError::NotFound),
+            PolicyOwner::Agent(bot) => match self.access(&caller.user, *bot).await? {
+                AgentAccess::Manageable => (*bot, PolicyKind::Agent, AgentAccess::Manageable),
+                AgentAccess::NotManageable | AgentAccess::NotFound | AgentAccess::Persona => {
+                    return Err(PermissionError::NotFound);
+                }
+            },
+        };
         self.build_view(caller, agent, access, (policy, owner, kind), None, None)
             .await
     }

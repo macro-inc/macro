@@ -446,6 +446,42 @@ pub struct SessionFacts {
     pub owner: MacroUserIdStr<'static>,
 }
 
+/// Who owns an owned agent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentOwner {
+    /// A person's private agent.
+    User(MacroUserIdStr<'static>),
+    /// A team's agent, shared by its members.
+    Team(Uuid),
+}
+
+/// What the agents directory says about an owned agent: its owner and the
+/// identity a person recognizes it by.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentFacts {
+    /// The agent.
+    pub id: BotId,
+    /// Its owner.
+    pub owner: AgentOwner,
+    /// Its name.
+    pub name: String,
+    /// Its handle; unknown once it is deleted.
+    pub handle: Option<String>,
+    /// Its picture.
+    pub avatar_url: Option<String>,
+    /// It was deleted (its policy stays, frozen).
+    pub deleted: bool,
+}
+
+/// Whose agents a follower may follow.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentScope {
+    /// A person's private agents (and the agents of their teams).
+    Private(MacroUserIdStr<'static>),
+    /// A team's agents.
+    Team(Uuid),
+}
+
 /// One registry group, as the catalog lists it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogGroup {
@@ -639,6 +675,152 @@ pub struct ToolPermissionGroup {
     pub actions: Vec<ToolPermissionAction>,
 }
 
+/// The agent a source policy belongs to (for a built-in persona, the
+/// persona), as a person recognizes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = ToolPermissionSourceAgent)]
+pub struct SourceAgent {
+    /// The agent's (or persona's) id.
+    pub id: BotId,
+    /// Its name.
+    pub name: String,
+    /// Its handle; absent once it is deleted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handle: Option<String>,
+    /// Its picture.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    /// It was deleted: its policy still applies, and nobody can edit it.
+    pub deleted: bool,
+}
+
+/// Whose a source policy is: a person's own (their Macro, their private
+/// agents) or a team's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+#[schema(as = ToolPermissionSourceScope)]
+pub enum SourceScope {
+    /// A person's own.
+    Personal,
+    /// A team's.
+    Team {
+        /// The team.
+        team_id: Uuid,
+    },
+}
+
+/// Whether a followed source still applies as itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+#[schema(as = ToolPermissionSourceStatus)]
+pub enum SourceStatus {
+    /// It exists and its owner can change it.
+    Live,
+    /// Its agent was deleted: it applies frozen, as it was.
+    Deleted,
+    /// It was deleted for good: everything asks until someone picks a
+    /// source or detaches.
+    Lost,
+}
+
+/// One more policy along a chain: "Scout follows Macro".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = ToolPermissionSourceVia)]
+pub struct SourceVia {
+    /// Its name.
+    pub name: String,
+    /// Its handle, when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handle: Option<String>,
+}
+
+/// The policy a follower follows, as its view shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = ToolPermissionSource)]
+pub struct PolicySource {
+    /// The source's policy id; `null` once it was lost.
+    pub policy_id: Option<PolicyId>,
+    /// Whose it is; absent once it was lost.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<PolicyKind>,
+    /// Its agent (or persona); absent once it was lost.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<SourceAgent>,
+    /// Whose it is, for the picker's badge; absent once it was lost.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<SourceScope>,
+    /// Whether it still applies as itself.
+    pub status: SourceStatus,
+    /// The follower may still follow it: false once the follower's or the
+    /// source's owner changed so that it would not be offered now. Nothing
+    /// loosens; its editors should pick a source or detach.
+    pub in_scope: bool,
+    /// The caller may edit the source itself (through its own permissions).
+    pub can_edit: bool,
+    /// The rest of the chain past the source, toward its root.
+    pub via: Vec<SourceVia>,
+}
+
+/// Why a candidate source can't be picked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+#[schema(as = ToolPermissionSourceUnavailable)]
+pub enum SourceUnavailable {
+    /// It follows the agent, directly or through others.
+    Cycle,
+    /// Too many policies would follow each other in a row.
+    TooDeep,
+}
+
+/// A policy the picker offers as a source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = ToolPermissionSourceCandidate)]
+pub struct SourceCandidate {
+    /// Its policy id, to set as the source.
+    pub policy_id: PolicyId,
+    /// Whose it is.
+    pub kind: PolicyKind,
+    /// Its agent (or persona).
+    pub agent: SourceAgent,
+    /// Whose it is, for the badge.
+    pub scope: SourceScope,
+    /// The agent follows it now.
+    pub current: bool,
+    /// Why it can't be picked, when it can't.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable: Option<SourceUnavailable>,
+}
+
+/// The sources the picker offers: the person's own Macro first, then
+/// agents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = ToolPermissionSourceCandidates)]
+pub struct SourceCandidates {
+    /// The candidates, in display order.
+    pub candidates: Vec<SourceCandidate>,
+}
+
+/// Which candidates to list: an agent's (its scope), or, for an agent not
+/// created yet, a scope.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CandidatesFor {
+    /// An existing agent: the sources it may follow, annotated.
+    Agent(BotId),
+    /// A new private agent of the caller.
+    Private,
+    /// A new agent of this team.
+    Team(Uuid),
+}
+
 /// An agent's permissions as they apply to the caller.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -671,6 +853,17 @@ pub struct PermissionsView {
     /// Every catalog group with an operation, with the actions it has
     /// operations for.
     pub groups: Vec<ToolPermissionGroup>,
+    /// The caller may set this agent's source or detach it: a person who
+    /// may edit an owned agent.
+    pub can_set_source: bool,
+    /// The policy it follows, when it follows one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<PolicySource>,
+    /// When it follows: the settings it inherits, as a policy owning them
+    /// would hold them (what a detach copies, before the agent's own
+    /// restrictions). Read only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inherited: Option<Vec<Rule>>,
 }
 
 /// Where a tightening was saved.
@@ -770,6 +963,15 @@ pub enum PermissionError {
     /// A tightening would make these operations more permissive.
     #[error("an agent can only make its permissions stricter")]
     WouldLoosen(Vec<LoosenedOperation>),
+    /// A follower's setting may not be looser than its source's: raising it
+    /// takes an edit of the source, or a detach and then an edit.
+    #[error("this agent follows another agent's permissions, which are stricter")]
+    FollowsSource {
+        /// The operations the change would have loosened.
+        operations: Vec<LoosenedOperation>,
+        /// The policy it follows.
+        followed: Option<PolicyId>,
+    },
     /// Following the source would make a policy follow itself.
     #[error("that agent already follows this one's permissions, directly or through others")]
     SourceCycle,

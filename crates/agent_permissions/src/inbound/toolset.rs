@@ -162,8 +162,24 @@ pub struct ShowPermissionsResult {
     /// group's action without an exception follows.
     #[serde(default)]
     pub defaults: Vec<ToolPermissionDefault>,
+    /// When the agent follows another policy: "Follows <name> (@handle)".
+    /// Its settings come from there, and changes made there apply here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follows: Option<String>,
     /// What the model should do next.
     pub message: String,
+}
+
+/// The line naming what a following view follows.
+fn follows_line(view: &PermissionsView) -> Option<String> {
+    let source = view.source.as_ref()?;
+    Some(match &source.agent {
+        Some(agent) => match &agent.handle {
+            Some(handle) => format!("Follows {} (@{handle})", agent.name),
+            None => format!("Follows {}", agent.name),
+        },
+        None => "Follows a deleted agent's permissions: everything asks".to_owned(),
+    })
 }
 
 impl ToolAnnotated for ShowPermissions {
@@ -246,6 +262,7 @@ impl AsyncTool<PermissionToolContext> for ShowPermissions {
             session_id: context.session,
             current: current(&view, &selection),
             defaults: view.defaults.clone(),
+            follows: follows_line(&view),
             selection,
             reason: self.reason.clone(),
             message,
