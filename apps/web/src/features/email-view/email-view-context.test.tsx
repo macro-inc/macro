@@ -206,7 +206,7 @@ describe('email view inbox reconciliation', () => {
 it('narrows a running search to the tab picked, keeping its words', () => {
   const { view } = mount();
   view.setState('search', 'invoice');
-  expect(view.shownTab()).toBeUndefined();
+  expect(view.shownTab()).toBe('all');
 
   view.setTab('sent');
   expect(view.state.tab).toBe('sent');
@@ -224,7 +224,7 @@ it('narrows a running search to the tab picked, keeping its words', () => {
 
   view.setTab('all');
   expect(view.state.search).toBe('invoice');
-  expect(view.shownTab()).toBeUndefined();
+  expect(view.shownTab()).toBe('all');
 });
 
 it('ends a search on a tab the search index has no view of', () => {

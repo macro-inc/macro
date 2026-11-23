@@ -161,11 +161,11 @@ export type EmailViewContext = {
   /** Opens the Inbox view last open (Focus, Signal or Noise), or `in:inbox`. */
   selectInbox: () => void;
   /**
-   * The tab the navigation shows as selected: the open tab, or while a search
-   * runs the view its `in:` filter names (`inbox` for the whole Inbox), and
-   * none while it covers all mail.
+   * The view the navigation and the header show as selected: the open tab,
+   * or while a search runs the view it searches: the one its `in:` filter
+   * names (`inbox` for the whole Inbox), else All mail.
    */
-  shownTab: Accessor<EmailTab | 'inbox' | undefined>;
+  shownTab: Accessor<EmailTab | 'inbox'>;
   setInboxIds: (ids: string[] | undefined) => void;
   setAliasFilter: (alias: NonNullable<EmailViewState['aliasFilter']>) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
@@ -454,11 +454,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const parsedSearch = createMemo(() => parseEmailSearch(state.search));
   const searching = () =>
     canSearchEmailTab(state.tab) && parsedSearch().query !== '';
-  const shownTab = (): EmailTab | 'inbox' | undefined => {
+  const shownTab = (): EmailTab | 'inbox' => {
     if (!searching()) return state.tab;
 
     const scope = parsedSearch().scope;
-    if (!scope) return undefined;
+    if (!scope) return 'all';
     return emailSearchScopeTab(scope) ?? 'inbox';
   };
   const listInput: EmailDataSourceInput = {

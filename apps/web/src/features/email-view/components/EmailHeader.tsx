@@ -63,17 +63,23 @@ export type EmailHeaderProps = {
   tabOnly?: boolean;
 };
 
+/** Whether the view shown belongs to the Inbox: Inbox itself, or one of its tabs. */
+const showsInbox = (tab: EmailTab | 'inbox') =>
+  tab === 'inbox' || isEmailInboxTab(tab);
+
 export function EmailViewBreadcrumbItem() {
-  const { state, tagViewTitle, savedViewActive, savedViews } = useEmailView();
+  const { shownTab, tagViewTitle, savedViewActive, savedViews } =
+    useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
+  // The title names the view the navigation shows, as the sidebar does.
   const inboxSelected = () =>
-    !isTouchDevice() && !savedViewActive() && isEmailInboxTab(state.tab);
+    !isTouchDevice() && !savedViewActive() && showsInbox(shownTab());
   const tabTitle = () =>
     savedViewTitle() ??
     tagViewTitle() ??
     (inboxSelected()
       ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
+      : (EMAIL_TABS.find((tab) => tab.id === shownTab())?.label ?? 'Email'));
   const appearance = () => {
     const view = savedViews?.view();
     return view?.kind === 'saved' ? view.record.appearance : undefined;
@@ -137,17 +143,15 @@ export function EmailHeader(props: EmailHeaderProps) {
   } = useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
   const [filterOpen, setFilterOpen] = createSignal(false);
-  // A search of all mail, or of the whole Inbox, selects none of its tabs.
+  // A search of the whole Inbox selects none of its tabs.
   const shownInboxTab = () => {
     const tab = shownTab();
-    return tab !== undefined && tab !== 'inbox' && isEmailInboxTab(tab)
-      ? tab
-      : undefined;
+    return tab !== 'inbox' && isEmailInboxTab(tab) ? tab : undefined;
   };
   let releaseSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const isVisible = useVisibleEmailTab();
-  const inboxSelected = () => !savedViewActive() && isEmailInboxTab(state.tab);
+  const inboxSelected = () => !savedViewActive() && showsInbox(shownTab());
   const inboxTabs = () =>
     EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
       value: id,
@@ -177,7 +181,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     tagViewTitle() ??
     (inboxSelected()
       ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
+      : (EMAIL_TABS.find((tab) => tab.id === shownTab())?.label ?? 'Email'));
 
   const canSearch = () => canSearchEmailTab(state.tab);
   const scopeAvailable = useEmailSearchScopeAvailability();

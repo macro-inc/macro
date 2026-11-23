@@ -86,7 +86,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
   const { shownTab, selectInbox, savedViewActive } = useEmailView();
   const inboxShown = () => {
     const tab = shownTab();
-    return tab === 'inbox' || (tab !== undefined && isEmailInboxTab(tab));
+    return tab === 'inbox' || isEmailInboxTab(tab);
   };
   const isVisible = useVisibleEmailTab();
   return (

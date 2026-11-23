@@ -89,8 +89,8 @@ the Soup-backed thread list, and saved email views.
   Reminders hand their rows to the search while it runs. `setTab` during a
   search narrows it to the tab's view instead of leaving it, except
   Scheduled, Reminders, Spam and Trash, which have no view in the search
-  index and end the search; navigation reads `shownTab` (none while a search
-  covers all mail), never `state.tab`.
+  index and end the search; the sidebar and the header read `shownTab` (the
+  view a search runs in, All mail without an `in:`), never `state.tab`.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
