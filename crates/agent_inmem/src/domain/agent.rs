@@ -106,6 +106,15 @@ pub const ASK_COMMAND: &str = "/ask";
 /// The property the `/ask` form's one field is sent back under.
 const ASK_FIELD: &str = "answer";
 
+/// The free-text "Other" companion of a question with options: the answer
+/// the user typed instead of picking one, sent back under this name.
+const ASK_CUSTOM_FIELD: &str = "answer_custom";
+
+/// The `_meta` key that marks [`ASK_CUSTOM_FIELD`] as the select's "Other"
+/// box: the un-namespaced marker Claude Code shares, which the fold reads for
+/// any harness and collapses into one field with a text box.
+const CUSTOM_ANSWER_MARKER: &str = "_askUserQuestionCustomAnswer";
+
 /// What one turn reads out of its session's state before running.
 struct TurnInput {
     /// The conversation so far plus the prompt being answered.
@@ -572,25 +581,45 @@ fn string_format(format: &str) -> Option<StringFormat> {
     }
 }
 
+/// The form for one question: free text, or a single select with an "Other"
+/// box, so the user can always give an answer the agent did not offer.
+///
+/// Neither half of a select is required: the user answers with one or the
+/// other, and the fold marks the collapsed field required.
+fn ask_form_schema(options: &[String]) -> ElicitationSchema {
+    let field = StringPropertySchema::new().title("Answer");
+    if options.is_empty() {
+        return ElicitationSchema::new().property(ASK_FIELD, field, true);
+    }
+    let select = field.one_of(
+        options
+            .iter()
+            .map(|option| EnumOption::new(option.clone(), option.clone()))
+            .collect::<Vec<_>>(),
+    );
+    let mut marker = Meta::new();
+    marker.insert(
+        CUSTOM_ANSWER_MARKER.to_owned(),
+        serde_json::json!({ "questionId": ASK_FIELD, "isCustomAnswer": true }),
+    );
+    let other = StringPropertySchema::new()
+        .title("Other")
+        .description("Type your own answer instead of choosing an option above.")
+        .meta(marker);
+    ElicitationSchema::new()
+        .property(ASK_FIELD, select, false)
+        .property(ASK_CUSTOM_FIELD, other, false)
+}
+
 #[async_trait]
 impl UserInputRequester for AcpUserInputRequester {
     async fn ask(&self, request: UserInputRequest) -> Result<UserInputOutcome, UserInputError> {
         let _waiting = self.awaiting.begin();
         let options = request.options;
-        let mut field = StringPropertySchema::new().title("Answer");
-        if !options.is_empty() {
-            field = field.one_of(
-                options
-                    .iter()
-                    .map(|option| EnumOption::new(option.clone(), option.clone()))
-                    .collect::<Vec<_>>(),
-            );
-        }
-        let schema = ElicitationSchema::new().property(ASK_FIELD, field, true);
         let request = CreateElicitationRequest::new(
             ElicitationFormMode::new(
                 ElicitationSessionScope::new(self.session_id.clone()),
-                schema,
+                ask_form_schema(&options),
             ),
             request.question,
         );
@@ -603,17 +632,30 @@ impl UserInputRequester for AcpUserInputRequester {
             .map_err(|error| UserInputError::RequestFailed(error.to_string()))?;
         match response.action {
             ElicitationAction::Accept(accept) => {
-                let answer = accept
-                    .content
-                    .as_ref()
-                    .and_then(|content| content.get(ASK_FIELD))
-                    .and_then(|value| serde_json::to_value(value).ok())
-                    .ok_or(UserInputError::MissingAnswer)?;
-                let serde_json::Value::String(answer) = answer else {
-                    return Err(UserInputError::InvalidAnswer(
-                        "the answer was not a string".to_owned(),
-                    ));
+                let text_of = |field: &str| -> Result<Option<String>, UserInputError> {
+                    let Some(value) = accept
+                        .content
+                        .as_ref()
+                        .and_then(|content| content.get(field))
+                        .and_then(|value| serde_json::to_value(value).ok())
+                    else {
+                        return Ok(None);
+                    };
+                    match value {
+                        serde_json::Value::String(text) => Ok(Some(text)),
+                        _ => Err(UserInputError::InvalidAnswer(
+                            "the answer was not a string".to_owned(),
+                        )),
+                    }
                 };
+                // Typed text wins over a choice, as the fold reads the pair.
+                if !options.is_empty()
+                    && let Some(custom) = text_of(ASK_CUSTOM_FIELD)?
+                    && !custom.trim().is_empty()
+                {
+                    return Ok(UserInputOutcome::Answered(custom.trim().to_owned()));
+                }
+                let answer = text_of(ASK_FIELD)?.ok_or(UserInputError::MissingAnswer)?;
                 if !options.is_empty() && !options.contains(&answer) {
                     return Err(UserInputError::InvalidAnswer(format!(
                         "{answer:?} was not one of the offered options"

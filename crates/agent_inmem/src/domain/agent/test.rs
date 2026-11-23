@@ -2311,11 +2311,158 @@ async fn ask_sends_a_form_elicitation_and_echoes_the_accepted_answer() {
             .collect::<Vec<_>>()),
         Some(vec!["red", "blue", "green"])
     );
-    assert_eq!(
-        form.requested_schema.required.as_deref(),
-        Some(&[ASK_FIELD.to_owned()][..])
-    );
     assert_eq!(spoken(&notifications), "You answered: blue");
+}
+
+/// A question with options always offers a box for the user's own answer:
+/// without one, an agent that wants free text offers an "Other (I'll type
+/// it)" option that opens nothing, and the user cannot answer at all. The
+/// box is the shared companion the fold collapses into the select's "Other"
+/// row, so the rendered form has one field with a text box.
+#[tokio::test]
+async fn ask_with_options_offers_an_other_box_the_fold_collapses_into_the_select() {
+    use agent_client_protocol::schema::v1::ElicitationAction;
+    use agent_fold::domain::model::{ElicitationPropertySchema, ElicitationRequest, MessagePart};
+
+    let (_, asked, _) =
+        with_asking_agent(ElicitationAction::Decline, async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "/ask Daily budget? | $50 | $100"))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
+
+    let schema = folded_form(&asked[0]);
+    assert_eq!(
+        schema
+            .properties
+            .iter()
+            .map(|property| property.name.as_str())
+            .collect::<Vec<_>>(),
+        [ASK_FIELD],
+        "the Other box folds into the select"
+    );
+    assert_eq!(schema.required, [ASK_FIELD]);
+    let ElicitationPropertySchema::String {
+        options,
+        custom_field,
+        ..
+    } = &schema.properties[0].schema
+    else {
+        panic!("a select: {:?}", schema.properties[0].schema);
+    };
+    assert_eq!(options.len(), 2);
+    assert_eq!(custom_field.as_deref(), Some(ASK_CUSTOM_FIELD));
+
+    // A free-text question has no companion: its one field is the text box.
+    let (_, asked, _) =
+        with_asking_agent(ElicitationAction::Decline, async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "/ask Name the service"))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
+    let schema = folded_form(&asked[0]);
+    assert_eq!(schema.properties.len(), 1);
+    assert!(matches!(
+        &schema.properties[0].schema,
+        ElicitationPropertySchema::String { options, custom_field: None, .. } if options.is_empty()
+    ));
+
+    /// The form the web renders for `request`: the fold of a prompt and the
+    /// agent's `elicitation/create`, as the session log records them.
+    fn folded_form(
+        request: &CreateElicitationRequest,
+    ) -> agent_fold::domain::model::ElicitationSchema {
+        use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
+
+        let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(1));
+        let row = |content: Message| AgentSessionLog {
+            agent_session_id: session,
+            user_id: None,
+            content,
+            logged_at: None,
+        };
+        let prompt = serde_json::json!({
+            "type": "acp", "jsonrpc": "2.0", "id": "p", "method": "session/prompt",
+            "params": {"sessionId": "s", "prompt": [{"type": "text", "text": "go"}]},
+        });
+        let ask = serde_json::json!({
+            "type": "acp", "jsonrpc": "2.0", "id": 1, "method": "elicitation/create",
+            "params": request,
+        });
+        let messages = agent_fold::domain::fold::fold([
+            row(Message::ToRuntime(
+                serde_json::from_value(prompt).expect("a prompt frame"),
+            )),
+            row(Message::ToServer(
+                serde_json::from_value(ask).expect("an elicitation frame"),
+            )),
+        ]);
+        messages
+            .iter()
+            .flat_map(|message| message.parts.iter())
+            .find_map(|part| match part {
+                MessagePart::Elicitation {
+                    request: ElicitationRequest::Form { schema },
+                    ..
+                } => Some(schema.clone()),
+                _ => None,
+            })
+            .expect("the fold shows the question as a form")
+    }
+}
+
+/// What the user types in the "Other" box is the answer, even though it is
+/// none of the options; a blank box falls back to the option they chose.
+#[tokio::test]
+async fn ask_takes_the_answer_typed_in_the_other_box() {
+    use std::collections::BTreeMap;
+
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
+    };
+
+    let typed =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_CUSTOM_FIELD.to_owned(),
+            ElicitationContentValue::String(" $2000 ".to_owned()),
+        )])));
+    let (notifications, _, response) = with_asking_agent(typed, async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "/ask Daily budget? | $50 | $100"))
+            .block_task()
+            .await
+            .expect("the ask should complete")
+    })
+    .await;
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(spoken(&notifications), "You answered: $2000");
+
+    let blank =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([
+            (
+                ASK_FIELD.to_owned(),
+                ElicitationContentValue::String("$100".to_owned()),
+            ),
+            (
+                ASK_CUSTOM_FIELD.to_owned(),
+                ElicitationContentValue::String("  ".to_owned()),
+            ),
+        ])));
+    let (notifications, _, _) = with_asking_agent(blank, async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "/ask Daily budget? | $50 | $100"))
+            .block_task()
+            .await
+            .expect("the ask should complete")
+    })
+    .await;
+    assert_eq!(spoken(&notifications), "You answered: $100");
 }
 
 #[tokio::test]
