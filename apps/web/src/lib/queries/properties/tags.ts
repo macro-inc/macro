@@ -114,7 +114,7 @@ const quietEnsureFailure = (error: unknown) =>
  */
 async function provisionTagSet(
   scope: EnsureTagSetParams['scope'],
-  session?: number
+  session = queryAccountSession()
 ) {
   return (
     (await cachedTagSet(scope)) ?? (await ensureTagSet(scope, { session }))

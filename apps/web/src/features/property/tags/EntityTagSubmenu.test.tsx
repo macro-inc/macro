@@ -341,17 +341,20 @@ it('goes back through creation steps without losing the name or chosen color', a
 
 it('does not apply a tag created under a login that has since left', async () => {
   const created = Promise.withResolvers<{ id: string }>();
-  mocks.add.mockReturnValue(created.promise);
+  const adding = Promise.withResolvers<void>();
+  mocks.add.mockImplementation(() => {
+    adding.resolve();
+    return created.promise;
+  });
   setup();
   const search = await openTags();
   fireEvent.input(search, { target: { value: 'New tag' } });
   fireEvent.click(screen.getByText('Create new tag "New tag"'));
   fireEvent.click(screen.getByText('Green', { exact: true }));
   fireEvent.click(screen.getByText('Personal', { exact: true }));
-  await waitFor(() =>
-    expect(mocks.add).toHaveBeenCalledWith(
-      expect.objectContaining({ session: 1 })
-    )
+  await adding.promise;
+  expect(mocks.add).toHaveBeenCalledWith(
+    expect.objectContaining({ session: 1 })
   );
   expect(mocks.ensure).toHaveBeenCalledWith({ scope: 'user', session: 1 });
   mocks.session = 2;
