@@ -168,8 +168,17 @@ pub fn setup<R: Runtime>(
         && !cfg!(debug_assertions)
         && cfg!(feature = "auto_apply_update")
         && !recording;
+    // Downloads are kept in app data; without it, updates stay disabled and
+    // the status says so. The updater plugin can't start without its key.
+    let store = match update_directory(app.handle()) {
+        Some(directory) if enabled => {
+            let pubkey = updater_pubkey(app).ok_or("the updater config has no pubkey")?;
+            Some(Store::new(directory, pubkey))
+        }
+        _ => None,
+    };
     let coordinator = Arc::new(Coordinator::new(
-        enabled,
+        store.is_some(),
         app.package_info().version.to_string(),
     ));
     app.manage(coordinator.clone());
@@ -184,14 +193,7 @@ pub fn setup<R: Runtime>(
     }) {
         report_outcome(app.handle(), &coordinator, report);
     }
-    if !enabled {
-        return Ok(());
-    }
-    let Some(store) = update_directory(app.handle())
-        .zip(updater_pubkey(app))
-        .map(|(directory, pubkey)| Store::new(directory, pubkey))
-    else {
-        tracing::warn!("native updates need an app data directory and an updater key");
+    let Some(store) = store else {
         return Ok(());
     };
     app.handle()

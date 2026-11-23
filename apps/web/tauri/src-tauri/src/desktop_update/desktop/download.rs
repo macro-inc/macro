@@ -18,7 +18,6 @@ use tokio::io::AsyncWriteExt;
 pub(super) const RECORD: &str = "download.json";
 pub(super) const PARTIAL: &str = "download.partial";
 pub(super) const COMPLETE: &str = "download.bin";
-const USER_AGENT: &str = concat!("macro-desktop/", env!("CARGO_PKG_VERSION"));
 
 /// The update the saved bytes belong to.
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -132,9 +131,16 @@ impl Store {
         if saved > 0 {
             headers.insert(RANGE, HeaderValue::try_from(format!("bytes={saved}-"))?);
         }
-        let mut client = reqwest::Client::builder().user_agent(USER_AGENT);
+        // The same client settings the updater's own download applies.
+        let mut client = reqwest::Client::builder()
+            .user_agent(format!("macro-desktop/{}", update.current_version));
         if let Some(timeout) = update.timeout {
             client = client.timeout(timeout);
+        }
+        if update.no_proxy {
+            client = client.no_proxy();
+        } else if let Some(proxy) = &update.proxy {
+            client = client.proxy(reqwest::Proxy::all(proxy.as_str())?);
         }
         let mut response = client
             .build()?
@@ -144,9 +150,12 @@ impl Store {
             .await?;
 
         let status = response.status();
-        if status == StatusCode::RANGE_NOT_SATISFIABLE {
-            // The saved bytes don't fit the file the server has; start over.
-            remove_file(&partial)?;
+        if status == StatusCode::RANGE_NOT_SATISFIABLE && saved > 0 {
+            // Nothing follows the saved bytes: the app stopped after the last
+            // chunk but before marking the file complete, or the bytes are of
+            // another file. Verification tells which, and removes them if so.
+            tokio::fs::rename(&partial, self.directory.join(COMPLETE)).await?;
+            return Ok(saved);
         }
         if !status.is_success() {
             // The updater's own wording, which telemetry reads the status from.

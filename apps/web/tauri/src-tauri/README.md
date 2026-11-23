@@ -620,7 +620,8 @@ file is verified with Tauri's updater signature (the updater's own
 `minisign-verify` check, `desktop_update/desktop/download.rs`) before it becomes
 eligible for installation, and read and verified again just before installing;
 bytes that fail are deleted, so the next check downloads afresh. A successful
-install deletes them too. A ready update installs on normal app quit;
+install deletes them too. Without an app data directory native updates stay
+disabled. The download uses the updater's timeout and proxy settings. A ready update installs on normal app quit;
 closing/hiding a window only installs if it actually exits the app. No network
 work is started during quit. Errors retry with backoff.
 

@@ -42,6 +42,7 @@ pub enum Outcome {
     Downloaded {
         target_version: String,
         download_ms: u32,
+        /// The update's size, including any `resumed_bytes`.
         #[cfg_attr(test, specta(type = specta_typescript::Number))]
         download_bytes: u64,
         /// Bytes an earlier launch or attempt had saved, which this one kept

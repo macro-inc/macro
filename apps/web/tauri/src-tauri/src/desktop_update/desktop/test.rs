@@ -56,6 +56,10 @@ async fn check_fixture(directory: &Path, version: &str, serve: Serve) -> Run {
                     .unwrap_or(0);
                 requests.lock().unwrap().push(start as u64);
                 match serve {
+                    Serve::Signed if start >= ARTIFACT.len() => format!(
+                        "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        ARTIFACT.len()
+                    ),
                     Serve::Signed if start > 0 => format!(
                         "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {start}-{}/{}\r\nConnection: close\r\n\r\n{}",
                         ARTIFACT.len() - start,
@@ -179,6 +183,21 @@ async fn an_interrupted_download_resumes_where_it_stopped() {
     assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
     assert_eq!(run.artifact_requests, [10]);
     assert_eq!(downloaded(&run), (ARTIFACT.len() as u64, 10));
+}
+
+#[tokio::test]
+async fn a_download_stopped_before_it_was_marked_complete_becomes_ready() {
+    let directory = tempfile::tempdir().unwrap();
+    check_fixture(directory.path(), "99.0.0", Serve::Signed).await;
+    interrupt(directory.path(), ARTIFACT.len() as u64);
+
+    let run = check_fixture(directory.path(), "99.0.0", Serve::Signed).await;
+    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+    assert_eq!(run.artifact_requests, [ARTIFACT.len() as u64]);
+    assert_eq!(
+        downloaded(&run),
+        (ARTIFACT.len() as u64, ARTIFACT.len() as u64)
+    );
 }
 
 #[tokio::test]
