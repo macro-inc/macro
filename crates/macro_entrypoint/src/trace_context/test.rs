@@ -63,6 +63,10 @@ fn malformed_traceparents_are_still_refused() {
         format!("00-{TRACE_ID}-{SPAN_ID}-+0"),
         format!("00-{TRACE_ID}-{SPAN_ID}-0A"),
         format!("00-{TRACE_ID}-{SPAN_ID}-0B"),
+        // Flags of the wrong length, which the SDK alone reads as sampled.
+        format!("00-{TRACE_ID}-{SPAN_ID}-1"),
+        format!("00-{TRACE_ID}-{SPAN_ID}-001"),
+        format!("00-{TRACE_ID}-{SPAN_ID}-01-"),
         format!("00-00000000000000000000000000000000-{SPAN_ID}-03"),
         format!("00-{TRACE_ID}-0000000000000000-03"),
         "03".to_owned(),
@@ -104,4 +108,23 @@ fn a_flag_the_sdk_reads_leniently_is_refused() {
         "the stock propagator takes +1 as sampled"
     );
     assert!(!extract(&traceparent).is_valid());
+}
+
+#[test]
+fn flags_of_the_wrong_length_are_refused() {
+    for traceparent in [
+        format!("00-{TRACE_ID}-{SPAN_ID}-1"),
+        format!("00-{TRACE_ID}-{SPAN_ID}-001"),
+    ] {
+        let headers = HashMap::from([(TRACEPARENT.to_owned(), traceparent.clone())]);
+        assert!(
+            TraceContextPropagator::new()
+                .extract(&headers)
+                .span()
+                .span_context()
+                .is_sampled(),
+            "the stock propagator takes {traceparent} as sampled"
+        );
+        assert!(!extract(&traceparent).is_valid(), "{traceparent}");
+    }
 }

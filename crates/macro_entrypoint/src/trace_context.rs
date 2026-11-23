@@ -63,21 +63,27 @@ impl<'a> KnownFlags<'a> {
 /// What the SDK is shown of a `traceparent`.
 #[derive(Debug, PartialEq)]
 enum Traceparent {
-    /// The header as it came: absent, not version 00, or with `sampled` at
-    /// most.
+    /// The header as it came: absent, another version, or version 00 with
+    /// `sampled` at most.
     AsSent,
     /// A version-00 header with its flags narrowed to `sampled`.
     Narrowed(String),
-    /// A version-00 header whose flags are not two lowercase hex digits,
-    /// which the SDK would read leniently (`+1` as sampled): none at all.
+    /// A version-00 header of the wrong length, or whose flags are not two
+    /// lowercase hex digits, which the SDK would read leniently (`+1` or
+    /// `1` as sampled): none at all.
     Refused,
 }
 
 /// What to show of a `traceparent` sent as `value`.
 fn known_flags_only(value: &str) -> Traceparent {
     let value = value.trim();
-    if value.len() != VERSION_00_LEN || !value.starts_with("00-") {
+    if !value.starts_with("00-") {
         return Traceparent::AsSent;
+    }
+    // Version 00 has exactly one length; the SDK also takes a shorter or
+    // longer flags field (`1`, `001`).
+    if value.len() != VERSION_00_LEN {
+        return Traceparent::Refused;
     }
     let Some((prefix, flags)) = value.split_at_checked(FLAGS_AT) else {
         return Traceparent::Refused;
