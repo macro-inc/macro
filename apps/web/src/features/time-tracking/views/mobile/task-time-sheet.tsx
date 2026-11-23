@@ -64,9 +64,10 @@ export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
                       submitLabel={t('timeTracking.save')}
                       onCancel={() => setMode({ kind: 'list' })}
                       onSubmit={(values) => {
+                        const edited = entry();
                         setMode({ kind: 'list' });
                         reportWrite(
-                          time.update(entry(), values),
+                          time.update(edited, values),
                           t('timeTracking.saveFailed')
                         );
                       }}
