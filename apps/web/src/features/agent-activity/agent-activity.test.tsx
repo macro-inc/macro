@@ -119,13 +119,8 @@ it('folds a sealed run to a summary that opens to its steps, without the session
         { id: 't1', label: 'Ran', detail: 'cargo', status: 'completed' },
         { id: 't2', label: 'Read', detail: 'lib.rs', status: 'failed' },
         { id: 't3', label: 'Edit', detail: 'lib.rs', status: 'interrupted' },
-        { id: 't4', label: 'A step failed', detail: null, status: 'failed' },
-        {
-          id: 't5',
-          label: 'Step interrupted',
-          detail: null,
-          status: 'interrupted',
-        },
+        { id: 't4', label: 'A step failed', status: 'failed' },
+        { id: 't5', label: 'Step interrupted', status: 'interrupted' },
       ]}
       sealed
     />
