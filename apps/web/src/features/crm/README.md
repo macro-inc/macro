@@ -297,6 +297,10 @@ Tasks and Files. The current record breadcrumb returns to the captured section
 and entry state. Preview headers append their own live title and menu after the
 source trail without an extra separator; do not duplicate the selected title in
 the prefix. Modified clicks keep their existing split behavior.
+It opens notes, tasks, snippets and skills in `MarkdownDetail` and every other
+file (PDF, Word, image, video, canvas, code, CSV) through `EntityDetail`, by
+the shared `entityDetailOpensMarkdown`; `entityDetailHostsSplitHeader` is
+whether a detail hosts its touch header, not which viewer it uses.
 Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
 Sales Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
