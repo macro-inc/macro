@@ -14,6 +14,9 @@ enum Serve {
     SignedWhole,
     /// Bytes that don't match the signature.
     Tampered,
+    /// The first 10 bytes of the signed artifact, then the connection closes
+    /// before the declared length.
+    Cut,
 }
 
 struct Run {
@@ -70,6 +73,11 @@ async fn check_fixture(directory: &Path, version: &str, serve: Serve) -> Run {
                     Serve::Signed | Serve::SignedWhole => format!(
                         "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{ARTIFACT}",
                         ARTIFACT.len()
+                    ),
+                    Serve::Cut => format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        ARTIFACT.len(),
+                        &ARTIFACT[..10]
                     ),
                     Serve::Tampered => "HTTP/1.1 200 OK\r\nContent-Length: 17\r\nConnection: close\r\n\r\ntampered artifact".to_string(),
                 }
@@ -178,6 +186,24 @@ async fn an_interrupted_download_resumes_where_it_stopped() {
     let directory = tempfile::tempdir().unwrap();
     check_fixture(directory.path(), "99.0.0", Serve::Signed).await;
     interrupt(directory.path(), 10);
+
+    let run = check_fixture(directory.path(), "99.0.0", Serve::Signed).await;
+    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+    assert_eq!(run.artifact_requests, [10]);
+    assert_eq!(downloaded(&run), (ARTIFACT.len() as u64, 10));
+}
+
+#[tokio::test]
+async fn a_failed_transfer_keeps_its_bytes_for_the_next_attempt() {
+    let directory = tempfile::tempdir().unwrap();
+    let run = check_fixture(directory.path(), "99.0.0", Serve::Cut).await;
+    assert!(matches!(run.result, Err(CheckError::Download { .. })));
+    assert_eq!(
+        std::fs::read_to_string(directory.path().join(PARTIAL)).unwrap(),
+        &ARTIFACT[..10]
+    );
+    assert!(directory.path().join(RECORD).exists());
+    assert!(!directory.path().join(COMPLETE).exists());
 
     let run = check_fixture(directory.path(), "99.0.0", Serve::Signed).await;
     assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
