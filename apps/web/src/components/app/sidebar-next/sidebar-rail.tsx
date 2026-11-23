@@ -5,7 +5,15 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
-import { For, Match, Suspense, Switch } from 'solid-js';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import {
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { useNavigationUnread } from '../use-navigation-unread';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -13,6 +21,7 @@ import { ListNav, type ListNavProps } from './list-nav';
 import { MoreMenu } from './more-menu';
 import { visibleNavItems } from './nav-items';
 import { useNextMeetingBadge } from './queries/use-next-meeting-badge';
+import { railNavFitCount } from './rail-fit';
 import { ReturnToCallButton } from './return-to-call-button';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
@@ -36,6 +45,9 @@ function CalendarListNav(props: Omit<ListNavProps, 'badge'>) {
  * nav shortcuts are registered by `GoToHotkeys`, which `Layout` mounts
  * separately. Each button's tooltip carries its shortcut, and after `g` is
  * pressed each button shows its destination key in a corner badge.
+ *
+ * Buttons that don't fit the window's height move into the More menu, so the
+ * rail never cuts one in half.
  */
 export const SidebarRail = () => {
   const gates = useNavItemGates();
@@ -43,6 +55,30 @@ export const SidebarRail = () => {
   const layout = useSplitLayout();
   const unread = useNavigationUnread();
   const [calendarPreferences] = useCalendarPreferences();
+
+  // The nav and the spacer under More share the rail's free height: the
+  // spacer (flex-basis 0) only takes what the nav leaves, and an overflowing
+  // nav shrinks to what is left. Their sum is the room for nav buttons however
+  // many are shown, so re-measure when either resizes (window height, footer
+  // buttons appearing). Buttons past what fits go to the More menu.
+  let nav: HTMLElement | undefined;
+  let spacer: HTMLDivElement | undefined;
+  const [fitCount, setFitCount] = createSignal(Number.POSITIVE_INFINITY);
+  createResizeObserver(
+    () => [nav, spacer],
+    () => {
+      if (!nav || !spacer) return;
+      const room =
+        nav.getBoundingClientRect().height +
+        spacer.getBoundingClientRect().height;
+      setFitCount(railNavFitCount(room));
+    }
+  );
+  // Memoized so a fit change only re-slices: Home is rebuilt on every call,
+  // and a new object would remount its button.
+  const navItems = createMemo(() => visibleNavItems(gates()));
+  const railItems = () => navItems().slice(0, fitCount());
+  const overflowItems = () => navItems().slice(fitCount());
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;
@@ -66,9 +102,9 @@ export const SidebarRail = () => {
       <SidebarRailCreateButton />
       <SearchRailButton />
 
-      <nav class="min-h-0 overflow-y-auto pt-4">
+      <nav ref={nav} class="min-h-0 overflow-y-auto pt-4">
         <ul class="flex flex-col items-center gap-1">
-          <For each={visibleNavItems(gates())}>
+          <For each={railItems()}>
             {(item) => (
               <li class="flex">
                 <Switch
@@ -115,9 +151,9 @@ export const SidebarRail = () => {
         </ul>
       </nav>
 
-      <MoreMenu gates={gates()} />
+      <MoreMenu gates={gates()} overflowItems={overflowItems()} />
 
-      <div class="min-h-0 flex-1" />
+      <div ref={spacer} class="min-h-0 flex-1" />
 
       <ReturnToCallButton />
       <FooterActions />

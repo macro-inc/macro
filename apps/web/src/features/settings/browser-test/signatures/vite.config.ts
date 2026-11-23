@@ -33,13 +33,13 @@ export default defineConfig({
           return boundary;
         if (
           source === '../client' &&
-          importer?.endsWith('/queries/auth/account-scope.ts')
+          (importer?.endsWith('/queries/auth/account-scope.ts') ||
+            importer?.endsWith('/queries/channel/directory.ts'))
         )
           return boundary;
         if (
           source === '@service-storage/client' &&
-          (importer?.endsWith('/queries/channel/channels.ts') ||
-            importer?.endsWith('/queries/channel/activity.ts'))
+          importer?.endsWith('/queries/channel/channels.ts')
         )
           return boundary;
         if (

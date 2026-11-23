@@ -13,9 +13,11 @@ const statusOptions = () => [
 export function InboxStatusTabs(props: {
   status: InboxStatus;
   onChange: (status: InboxStatus) => void;
+  ref?: (element: HTMLElement) => void;
 }) {
   return (
     <Tabs
+      ref={props.ref}
       aria-label={t('notificationsInbox.status')}
       fullWidth
       options={statusOptions()}
