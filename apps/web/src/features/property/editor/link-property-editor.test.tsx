@@ -167,7 +167,7 @@ describe('link property editor', () => {
       value: ['https://linkedin.com/in/old'],
     });
 
-    type(field, 'not a url');
+    type(field, 'https://');
     fireEvent.keyDown(field, { key: 'Enter' });
     type(field, 'linkedin.com/in/old');
     fireEvent.keyDown(field, { key: 'Enter' });
