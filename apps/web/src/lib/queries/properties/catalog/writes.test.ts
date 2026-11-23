@@ -1,3 +1,4 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import type { MutationSettlement } from '@graphql-cache/protocol';
 import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError, type OperationResult } from '@urql/core';
@@ -14,8 +15,11 @@ const soup = vi.hoisted(() => ({
           listener: (settlement: MutationSettlement) => void
         ) => () => void;
         onCacheGenerationChanged: () => () => void;
+        readRecordsByKeys: (args: { keys: string[] }) => Promise<unknown>;
       }
     | undefined,
+  /** Whether the cache holds the definition's options on its record. */
+  definitionCached: true,
   settle: (_settlement: MutationSettlement) => {},
   optimistic: vi.fn(),
   reload: undefined as Partial<OperationResult> | undefined,
@@ -76,6 +80,7 @@ beforeEach(() => {
   soup.optimistic.mockReset();
   soup.reload = undefined;
   soup.session = 1;
+  soup.definitionCached = true;
 });
 
 /** A cache host whose queue holds every write until the test settles it. */
@@ -87,6 +92,12 @@ function queueingHost() {
       return () => listeners.delete(listener);
     },
     onCacheGenerationChanged: () => () => {},
+    readRecordsByKeys: async ({ keys }) => ({
+      revision: { generation: 0, sequence: 0 },
+      records: soup.definitionCached
+        ? keys.map((recordKey) => ({ recordKey, record: { options: [] } }))
+        : [],
+    }),
   };
   soup.optimistic.mockImplementation(() => ({
     toPromise: async () => ({ queued: 'tx-1' }),
@@ -165,6 +176,25 @@ describe('adding an option', () => {
     });
   });
 
+  it('links through the definition only when the cache holds its options', async () => {
+    queueingHost();
+    soup.definitionCached = false;
+    // the queue never settles it here, so the test does not wait for it
+    const added = addPropertyOption('def-1', TAG).catch(
+      (error: unknown) => error
+    );
+    await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+    const [, , , , options] = soup.optimistic.mock.calls[0] ?? [];
+    // A record link the cache cannot apply would drop every link of the add.
+    expect(
+      options.updates.some(
+        (link: { recordRoot?: unknown }) => link.recordRoot !== undefined
+      )
+    ).toBe(false);
+    expect(options.updates).toHaveLength(1);
+    expect(added).toBeInstanceOf(Promise);
+  });
+
   it('rejects a queued add the server refuses later', async () => {
     const settle = queueingHost();
     const added = addPropertyOption('def-1', TAG).catch(
@@ -211,6 +241,20 @@ describe('a write started offline', () => {
       onlineManager.setOnline(true);
       await deleted;
       expect(soup.mutation).toHaveBeenCalledTimes(1);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('is sent in the trace it was started in', async () => {
+    onlineManager.setOnline(false);
+    try {
+      soup.result = { data: { deletePropertyOption: true } };
+      const deleted = deletePropertyOption('def-1', 'opt-1', () => {});
+      onlineManager.setOnline(true);
+      await deleted;
+      const [, , context] = soup.mutation.mock.calls[0] ?? [];
+      expect(context?.[TRACE_PARENT_CONTEXT_KEY]).toBeDefined();
     } finally {
       onlineManager.setOnline(true);
     }
@@ -278,14 +322,50 @@ describe('provisioning a tag set', () => {
     const ensured = await ensureTagSet('team').catch((error: unknown) => error);
     expect(ensured).toBeInstanceOf(Error);
   });
+
+  it('fails when the reloaded list does not hold the set', async () => {
+    queueingHost();
+    soup.result = {
+      data: {
+        ensureTagSet: {
+          scope: 'TEAM',
+          definition: {
+            __typename: 'GraphqlPropertyDefinition',
+            id: 'def-team',
+            owner: { scope: 'TEAM', principalId: 'team-1' },
+            displayName: 'Tags',
+            dataType: 'SELECT_STRING',
+            isMultiSelect: true,
+            specificEntityType: null,
+            isSystem: false,
+            isMetadata: false,
+            createdAt: new Date(0).toISOString(),
+            updatedAt: new Date(0).toISOString(),
+          },
+          options: [],
+        },
+      },
+    };
+    soup.reload = { data: { user: { tagSets: [] } } };
+    const ensured = await ensureTagSet('team').catch((error: unknown) => error);
+    expect(ensured).toBeInstanceOf(Error);
+  });
 });
 
 describe('option order', () => {
-  /** Mounted readers: which of them a write reloads. */
+  /**
+   * Mounted readers. Each reload of a reader is recorded and held until the
+   * test releases it; `reloaded(n)` resolves once n reloads have started.
+   */
   function mountedReaders() {
     const refreshed: string[] = [];
-    const refresh = (name: string) => async () => {
+    const held: Array<() => void> = [];
+    const waiters: Array<{ count: number; resolve: () => void }> = [];
+    const refresh = (name: string) => () => {
       refreshed.push(name);
+      for (const waiter of waiters.filter((w) => refreshed.length >= w.count))
+        waiter.resolve();
+      return new Promise<void>((resolve) => held.push(resolve));
     };
     const dispose = createRoot((dispose) => {
       registerCatalogReader({
@@ -319,13 +399,27 @@ describe('option order', () => {
       });
       return dispose;
     });
-    return { refreshed, dispose };
+    return {
+      refreshed,
+      reloaded: (count: number) =>
+        new Promise<void>((resolve) => {
+          if (refreshed.length >= count) resolve();
+          else waiters.push({ count, resolve });
+        }),
+      release: () => {
+        for (const resolve of held.splice(0)) resolve();
+      },
+      dispose: () => {
+        for (const resolve of held.splice(0)) resolve();
+        dispose();
+      },
+    };
   }
   const HOLDING_DEF_1 = [
     'options of def-1',
     'definitions with options',
     'tags',
-  ];
+  ].sort();
 
   it('reloads the lists holding the options once an add commits', async () => {
     const readers = mountedReaders();
@@ -333,34 +427,55 @@ describe('option order', () => {
       const settle = queueingHost();
       const added = addPropertyOption('def-1', TAG);
       await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
-      await Promise.resolve();
       expect(readers.refreshed).toEqual([]);
       settle({ transactionId: 'tx-1', status: 'committed' });
       await added;
-      expect(readers.refreshed.sort()).toEqual([...HOLDING_DEF_1].sort());
+      await readers.reloaded(HOLDING_DEF_1.length);
+      expect([...readers.refreshed].sort()).toEqual(HOLDING_DEF_1);
     } finally {
       readers.dispose();
     }
   });
 
   it('reloads them once a rename commits, not for a colour change', async () => {
-    for (const [body, reloads] of [
-      [{ value: 'Renamed' }, HOLDING_DEF_1],
-      [{ color: '#0f0' }, []],
-    ] as const) {
-      const readers = mountedReaders();
-      try {
-        const settle = queueingHost();
-        soup.result = { queued: 'tx-1' } as Partial<OperationResult>;
-        await updatePropertyOption('def-1', 'opt-1', body, () => {});
-        expect(readers.refreshed).toEqual([]);
-        settle({ transactionId: 'tx-1', status: 'committed' });
-        await vi.waitFor(() =>
-          expect(readers.refreshed.sort()).toEqual([...reloads].sort())
-        );
-      } finally {
-        readers.dispose();
+    const readers = mountedReaders();
+    try {
+      const settle = queueingHost();
+      soup.result = { queued: 'tx-colour' } as Partial<OperationResult>;
+      await updatePropertyOption('def-1', 'opt-1', { color: '#0f0' }, () => {});
+      soup.result = { queued: 'tx-rename' } as Partial<OperationResult>;
+      await updatePropertyOption('def-1', 'opt-1', { value: 'B' }, () => {});
+      // The colour change commits first; only the rename reloads.
+      settle({ transactionId: 'tx-colour', status: 'committed' });
+      settle({ transactionId: 'tx-rename', status: 'committed' });
+      await readers.reloaded(HOLDING_DEF_1.length);
+      expect([...readers.refreshed].sort()).toEqual(HOLDING_DEF_1);
+    } finally {
+      readers.dispose();
+    }
+  });
+
+  it('reloads once more for every write that commits during a reload', async () => {
+    const readers = mountedReaders();
+    try {
+      const settle = queueingHost();
+      for (const tx of ['tx-a', 'tx-b', 'tx-c']) {
+        soup.result = { queued: tx } as Partial<OperationResult>;
+        await updatePropertyOption('def-1', 'opt-1', { value: tx }, () => {});
       }
+      settle({ transactionId: 'tx-a', status: 'committed' });
+      await readers.reloaded(HOLDING_DEF_1.length);
+      // Two more commits while the first reload runs.
+      settle({ transactionId: 'tx-b', status: 'committed' });
+      settle({ transactionId: 'tx-c', status: 'committed' });
+      readers.release();
+      await readers.reloaded(2 * HOLDING_DEF_1.length);
+      readers.release();
+      expect([...readers.refreshed].sort()).toEqual(
+        [...HOLDING_DEF_1, ...HOLDING_DEF_1].sort()
+      );
+    } finally {
+      readers.dispose();
     }
   });
 });

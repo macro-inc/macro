@@ -20,14 +20,19 @@
  *   the cache queues shows at once and the queue sends it.
  */
 
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
+  type CacheHost,
   executeOptimisticMutation,
+  normalizedCacheResultMetadata,
   type OptimisticUpdate,
   optimisticMutationDispositionOf,
   prependUnique,
+  readRecordsByKeys,
   select,
   selectRecord,
+  selectRecords,
   update,
 } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
@@ -58,7 +63,11 @@ import {
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import { onlineManager } from '@tanstack/solid-query';
-import type { AnyVariables, OperationResult } from '@urql/core';
+import type {
+  AnyVariables,
+  OperationContext,
+  OperationResult,
+} from '@urql/core';
 import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import { queryAccountSession } from '../../auth/account-scope';
@@ -158,11 +167,18 @@ type Settled<TData> =
  * dropped if another login took over the page meanwhile.
  */
 async function settle<TData, TVariables extends AnyVariables>(
-  send: () => Promise<OperationResult<TData, TVariables>>,
+  send: (
+    context: Partial<OperationContext>
+  ) => Promise<OperationResult<TData, TVariables>>,
   options: SettleOptions
 ): Promise<Settled<TData>> {
-  // Context does not survive an await in the browser.
+  // Context does not survive an await in the browser, so a write the server
+  // answers carries it to its request (see trace-parent-exchange). The cache
+  // queue sends the others inside its own attempt span.
   const trace = Telemetry.captureContext();
+  const context: Partial<OperationContext> = options.serverAnswered
+    ? { [TRACE_PARENT_CONTEXT_KEY]: trace }
+    : {};
   if (options.serverAnswered && !onlineManager.isOnline()) {
     const session = queryAccountSession();
     await whenOnline();
@@ -177,7 +193,7 @@ async function settle<TData, TVariables extends AnyVariables>(
   );
   let observing = false;
   try {
-    const result = await trace.run(send);
+    const result = await trace.run(() => send(context));
     const disposition = optimisticMutationDispositionOf(result);
     if (disposition?.kind === 'queued') {
       if (options.waitForCommit) {
@@ -231,13 +247,35 @@ function holdsOptionsOf(propertyDefinitionId: string) {
       .exhaustive(() => false);
 }
 
-/** Puts a definition's options back in the server's order (see the header). */
+/** Definitions whose option lists wait for a reload, and whether one runs. */
+const reorder = { waiting: new Set<string>(), running: false };
+
+/**
+ * Puts a definition's options back in the server's order (see the header).
+ * One reload runs at a time and covers every definition whose write committed
+ * meanwhile, so replaying a queue of writes reloads each list once or twice,
+ * not once per write.
+ */
 function reorderOptionsOf(propertyDefinitionId: string) {
-  if (usingCache())
-    refreshCatalogReadersInBackground(
-      undefined,
-      holdsOptionsOf(propertyDefinitionId)
-    );
+  if (!usingCache()) return;
+  reorder.waiting.add(propertyDefinitionId);
+  if (!reorder.running) fireAndForget(reorderWaiting(), 'property-catalog');
+}
+
+async function reorderWaiting(): Promise<void> {
+  reorder.running = true;
+  try {
+    while (reorder.waiting.size > 0) {
+      const ids = [...reorder.waiting];
+      reorder.waiting.clear();
+      const holders = ids.map(holdsOptionsOf);
+      await refreshCatalogReaders(undefined, (reader) =>
+        holders.some((holds) => holds(reader))
+      );
+    }
+  } finally {
+    reorder.running = false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -253,19 +291,23 @@ export async function updatePropertyOption(
     span.setAttr('property.definition_id', propertyDefinitionId);
     span.setAttr('property.option_id', optionId);
     const outcome = await settle(
-      () =>
+      (context) =>
         getGraphqlSoupClient()
-          .mutation(UpdatePropertyOptionDocument, {
-            input: {
-              propertyDefinitionId,
-              optionId,
-              ...(body.value != null ? { value: body.value } : {}),
-              ...(body.color != null ? { color: body.color } : {}),
-              ...(body.display_order != null
-                ? { displayOrder: body.display_order }
-                : {}),
+          .mutation(
+            UpdatePropertyOptionDocument,
+            {
+              input: {
+                propertyDefinitionId,
+                optionId,
+                ...(body.value != null ? { value: body.value } : {}),
+                ...(body.color != null ? { color: body.color } : {}),
+                ...(body.display_order != null
+                  ? { displayOrder: body.display_order }
+                  : {}),
+              },
             },
-          })
+            context
+          )
           .toPromise(),
       {
         waitForCommit: false,
@@ -289,12 +331,13 @@ export async function deletePropertyOption(
     span.setAttr('property.definition_id', propertyDefinitionId);
     span.setAttr('property.option_id', optionId);
     const outcome = await settle(
-      () =>
+      (context) =>
         getGraphqlSoupClient()
-          .mutation(DeletePropertyOptionDocument, {
-            propertyDefinitionId,
-            optionId,
-          })
+          .mutation(
+            DeletePropertyOptionDocument,
+            { propertyDefinitionId, optionId },
+            context
+          )
           .toPromise(),
       { waitForCommit: false, serverAnswered: !usingCache(), onLateFailure }
     );
@@ -309,9 +352,13 @@ export async function deletePropertyDefinition(
   await Telemetry.span('property_catalog.delete_definition', async (span) => {
     span.setAttr('property.definition_id', propertyDefinitionId);
     const outcome = await settle(
-      () =>
+      (context) =>
         getGraphqlSoupClient()
-          .mutation(DeletePropertyDefinitionDocument, { propertyDefinitionId })
+          .mutation(
+            DeletePropertyDefinitionDocument,
+            { propertyDefinitionId },
+            context
+          )
           .toPromise(),
       { waitForCommit: false, serverAnswered: !usingCache(), onLateFailure }
     );
@@ -339,8 +386,26 @@ async function cachedTagScopeOf(propertyDefinitionId: string) {
   )?.scope;
 }
 
+/**
+ * Whether the cache holds a definition's options on its record. A link
+ * through a record the cache lacks is refused, and the cache then drops every
+ * link of the write.
+ */
+async function cachedDefinitionOptions(
+  host: CacheHost,
+  propertyDefinitionId: string
+): Promise<boolean> {
+  const { records } = await readRecordsByKeys(
+    host,
+    selectRecords(PropertyCatalogDefinitionOptionsFragmentDoc),
+    [`GraphqlPropertyDefinition:${propertyDefinitionId}`]
+  );
+  return records.length > 0;
+}
+
 /** Cached lists the new option belongs in; lists not in the cache are skipped. */
 async function optionListLinks(
+  host: CacheHost,
   propertyDefinitionId: string,
   option: { __typename: 'GraphqlPropertyOption'; id: string }
 ): Promise<OptimisticUpdate[]> {
@@ -354,15 +419,17 @@ async function optionListLinks(
   ];
   // A definition's options are one field of its record, so linking through
   // the record updates every list that holds it, cached or on screen.
-  links.push(
-    update(
-      selectRecord(PropertyCatalogDefinitionOptionsFragmentDoc, {
-        __typename: 'GraphqlPropertyDefinition',
-        id: propertyDefinitionId,
-      }).field('options'),
-      prependUnique(option)
-    )
-  );
+  if (await cachedDefinitionOptions(host, propertyDefinitionId)) {
+    links.push(
+      update(
+        selectRecord(PropertyCatalogDefinitionOptionsFragmentDoc, {
+          __typename: 'GraphqlPropertyDefinition',
+          id: propertyDefinitionId,
+        }).field('options'),
+        prependUnique(option)
+      )
+    );
+  }
   const scope = await cachedTagScopeOf(propertyDefinitionId);
   if (scope) {
     links.push(
@@ -413,7 +480,7 @@ export async function addPropertyOption(
       AddPropertyOptionMutation,
       { input: typeof input }
     >(
-      async () =>
+      async (context) =>
         host
           ? executeOptimisticMutation(
               client,
@@ -422,10 +489,16 @@ export async function addPropertyOption(
               { addPropertyOption: option },
               {
                 uuid: id,
-                updates: await optionListLinks(propertyDefinitionId, option),
+                updates: await optionListLinks(
+                  host,
+                  propertyDefinitionId,
+                  option
+                ),
               }
             ).toPromise()
-          : client.mutation(AddPropertyOptionDocument, { input }).toPromise(),
+          : client
+              .mutation(AddPropertyOptionDocument, { input }, context)
+              .toPromise(),
       {
         waitForCommit: true,
         serverAnswered: !host,
@@ -469,12 +542,12 @@ export async function createPropertyDefinition(
     span.setAttr('property.scope', body.scope);
     span.setAttr('property.data_type', body.data_type.type);
     const outcome = await settle(
-      () =>
+      (context) =>
         getGraphqlSoupClient()
           .mutation(
             CreatePropertyDefinitionDocument,
             { input: toCreateDefinitionInput(body) },
-            { optimisticMutation: false }
+            { optimisticMutation: false, ...context }
           )
           .toPromise(),
       { waitForCommit: true, serverAnswered: true }
@@ -502,12 +575,12 @@ export async function ensureTagSet(scope: TagScope): Promise<TagSetResponse> {
     span.setAttr('property.scope', scope);
     const client = getGraphqlSoupClient();
     const outcome = await settle(
-      () =>
+      (context) =>
         client
           .mutation(
             EnsureTagSetDocument,
             { scope: toGraphqlTagScope(scope) },
-            { optimisticMutation: false }
+            { optimisticMutation: false, ...context }
           )
           .toPromise(),
       { waitForCommit: true, serverAnswered: true }
@@ -542,6 +615,15 @@ export async function ensureTagSet(scope: TagScope): Promise<TagSetResponse> {
         // A tag added to a set the cache does not list would show nowhere.
         // Provisioning is idempotent, so the caller can simply try again.
         if (reloaded.error) throw errorOf(reloaded);
+        if (
+          !reloaded.data?.user.tagSets.some(
+            (candidate) => candidate.definition?.id === mapped.definition?.id
+          )
+        )
+          noData('ensureTagSet reload');
+        // The caller's next add reads the list from the cache.
+        const metadata = normalizedCacheResultMetadata(reloaded);
+        if (metadata?.source === 'live-network') await metadata.persistence;
       }
     }
     return mapped;
@@ -575,12 +657,12 @@ export async function promoteTag(
   return Telemetry.span('property_catalog.promote_tag', async (span) => {
     span.setAttr('property.option_id', optionId);
     const outcome = await settle(
-      () =>
+      (context) =>
         getGraphqlSoupClient()
           .mutation(
             PromoteTagDocument,
             { optionId },
-            { optimisticMutation: false }
+            { optimisticMutation: false, ...context }
           )
           .toPromise(),
       { waitForCommit: true, serverAnswered: true }
@@ -610,12 +692,12 @@ export async function mergeTag(
     span.setAttr('property.option_id', optionId);
     span.setAttr('property.target_option_id', targetOptionId);
     const outcome = await settle(
-      () =>
+      (context) =>
         getGraphqlSoupClient()
           .mutation(
             MergeTagDocument,
             { optionId, targetOptionId },
-            { optimisticMutation: false }
+            { optimisticMutation: false, ...context }
           )
           .toPromise(),
       { waitForCommit: true, serverAnswered: true }
