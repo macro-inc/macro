@@ -85,7 +85,10 @@ fn key(value: &str) -> PipelineKey {
 fn team() -> CrmTeam {
     CrmTeam {
         team_id: Uuid::nil(),
-        member_emails: vec!["member@example.com".into()],
+        members: vec![crate::domain::ports::CrmMember {
+            email: "member@example.com".into(),
+            user_id: "macro|member@example.com".into(),
+        }],
     }
 }
 
@@ -205,7 +208,7 @@ fn a_currency_macro_does_not_support_drops_the_amount() {
     assert_eq!(plan.outcome, DealOutcome::Lost);
     assert_eq!(plan.stage.as_deref(), Some("Review (2)"));
     assert_eq!(plan.close_date, None);
-    assert_eq!(plan.owner.as_deref(), Some("member@example.com"));
+    assert_eq!(plan.owner.as_deref(), Some("macro|member@example.com"));
 }
 
 #[test]

@@ -2,7 +2,6 @@
 //! approve, write, re-run, resume after a failure, and a teammate's import.
 
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -13,8 +12,11 @@ use import_hubspot::domain::{
 
 use super::*;
 use crate::domain::models::{HubspotLoss, HubspotLossCount, NotionImportReport};
+use crate::domain::models::{WrittenKind, WrittenObject};
 use crate::domain::ports::ImportError;
-use crate::domain::ports::{CrmImportWriter, CrmTeam, DealOutcome, NewCrmContact, NewDealEntry};
+use crate::domain::ports::{
+    CrmImportWriter, CrmMember, CrmTeam, DealOutcome, NewCrmContact, NewDealEntry,
+};
 use crate::domain::service::WorkspaceImporter;
 
 fn id(value: &str) -> RecordId {
@@ -129,6 +131,13 @@ fn portal(owner_email: &str) -> Inventory {
             ),
             contact("21", None, vec![]),
             contact("22", Some("bob@acme.example"), vec![link("10", false)]),
+            // Same primary address as 20: one CRM contact.
+            contact("23", Some("ADA@acme.example"), vec![]),
+            // Its further address is never used to match.
+            Contact {
+                additional_emails: vec!["carol.home@example.net".into()],
+                ..contact("24", Some("carol@acme.example"), vec![link("10", true)])
+            },
         ],
         deals: vec![
             Deal {
@@ -175,8 +184,24 @@ struct Crm {
     companies: Mutex<Vec<(Uuid, String, Option<String>)>>,
     contacts: Mutex<Vec<(Uuid, NewCrmContact)>>,
     entries: Mutex<Vec<(Uuid, Uuid, NewDealEntry)>>,
-    /// The next contact creation fails, as a crash would.
-    fail_next_contact: AtomicBool,
+    /// Contacts with these names fail to be created, once each.
+    failing_contacts: Mutex<HashSet<String>>,
+    /// Companies with these names fail to be created.
+    failing_companies: Mutex<HashSet<String>>,
+    /// Records with these names are created, then the call fails, as a crash
+    /// between creating and recording would; once each.
+    crash_after_create: Mutex<HashSet<String>>,
+    /// Every address contacts were looked up by.
+    email_lookups: Mutex<Vec<String>>,
+}
+
+impl Crm {
+    fn crash(&self, name: &str) -> anyhow::Result<()> {
+        if self.crash_after_create.lock().unwrap().remove(name) {
+            anyhow::bail!("the process stopped");
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -210,11 +235,15 @@ impl CrmImportWriter for Crm {
         name: &str,
         domain: Option<&str>,
     ) -> anyhow::Result<Uuid> {
+        if self.failing_companies.lock().unwrap().contains(name) {
+            anyhow::bail!("CRM refused the company");
+        }
         let id = Uuid::now_v7();
         self.companies
             .lock()
             .unwrap()
             .push((id, name.into(), domain.map(str::to_owned)));
+        self.crash(name)?;
         Ok(id)
     }
     async fn contact_by_email(
@@ -222,6 +251,7 @@ impl CrmImportWriter for Crm {
         _: &MacroUserIdStr<'static>,
         email: &str,
     ) -> anyhow::Result<Option<Uuid>> {
+        self.email_lookups.lock().unwrap().push(email.to_owned());
         Ok(self
             .contacts
             .lock()
@@ -235,7 +265,7 @@ impl CrmImportWriter for Crm {
         _: &MacroUserIdStr<'static>,
         contact: &NewCrmContact,
     ) -> anyhow::Result<Uuid> {
-        if self.fail_next_contact.swap(false, Ordering::SeqCst) {
+        if self.failing_contacts.lock().unwrap().remove(&contact.name) {
             anyhow::bail!("CRM was unavailable");
         }
         let id = Uuid::now_v7();
@@ -280,6 +310,7 @@ impl CrmImportWriter for Crm {
             .lock()
             .unwrap()
             .push((id, pipeline, deal.clone()));
+        self.crash(&deal.name)?;
         Ok(id)
     }
 }
@@ -326,13 +357,19 @@ async fn present(pool: &PgPool, service: &Service, owner: &MacroUserIdStr<'stati
     review
 }
 
-/// Plan, present, approve and finish writing one HubSpot import.
-async fn import(
+/// A planned and presented HubSpot import, not yet approved.
+struct Planned {
+    service: Service,
+    tracker: TaskTracker,
+    review: Uuid,
+}
+
+async fn plan(
     pool: &PgPool,
     inventory: Inventory,
     crm: Arc<Crm>,
     owner: &MacroUserIdStr<'static>,
-) -> NotionImportReport {
+) -> Planned {
     let tracker = TaskTracker::new();
     let service = hubspot_service(pool, inventory, crm, tracker.clone());
     let planned = service
@@ -341,13 +378,26 @@ async fn import(
         .unwrap();
     assert_eq!(planned.status, Some(RunStatus::Ready), "{planned:?}");
     let review = present(pool, &service, owner).await;
+    Planned {
+        service,
+        tracker,
+        review,
+    }
+}
+
+/// Approve with `choices` and wait for the write to end.
+async fn finish(
+    planned: Planned,
+    owner: &MacroUserIdStr<'static>,
+    choices: NotionWriteChoices,
+) -> NotionImportReport {
+    let Planned {
+        service,
+        tracker,
+        review,
+    } = planned;
     match service
-        .start_workspace_write(
-            owner,
-            ImportSource::Hubspot,
-            review,
-            NotionWriteChoices::default(),
-        )
+        .start_workspace_write(owner, ImportSource::Hubspot, review, choices)
         .await
     {
         Ok(_) => {}
@@ -363,13 +413,39 @@ async fn import(
         .unwrap()
 }
 
+/// Plan, present, approve and finish writing one HubSpot import.
+async fn import(
+    pool: &PgPool,
+    inventory: Inventory,
+    crm: Arc<Crm>,
+    owner: &MacroUserIdStr<'static>,
+) -> NotionImportReport {
+    let planned = plan(pool, inventory, crm, owner).await;
+    finish(planned, owner, NotionWriteChoices::default()).await
+}
+
+/// The ledger row planned for a HubSpot object.
+async fn row_id(pool: &PgPool, owner: &MacroUserIdStr<'static>, key: &str) -> Uuid {
+    PgImportRepo::new(pool.clone())
+        .list(owner, Some(ImportSource::Hubspot), None)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|row| row.foreign_id == format!("248109388:{key}"))
+        .unwrap()
+        .id
+}
+
 fn crm_for(team: Uuid, members: &[&MacroUserIdStr<'static>]) -> Arc<Crm> {
     Arc::new(Crm {
         team: Some(CrmTeam {
             team_id: team,
-            member_emails: members
+            members: members
                 .iter()
-                .map(|member| member.as_ref().trim_start_matches("macro|").to_owned())
+                .map(|member| CrmMember {
+                    email: member.as_ref().trim_start_matches("macro|").to_owned(),
+                    user_id: member.as_ref().to_owned(),
+                })
                 .collect(),
         }),
         ..Crm::default()
@@ -411,7 +487,15 @@ async fn writes_a_portal_into_the_crm_and_reruns_add_nothing(pool: PgPool) {
 
     // Contacts are filed under their primary company.
     let contacts = crm.contacts.lock().unwrap().clone();
-    assert_eq!(contacts.len(), 3);
+    assert_eq!(contacts.len(), 4);
+    // Contacts are matched by their primary address only.
+    let lookups = crm.email_lookups.lock().unwrap().clone();
+    assert!(
+        !lookups
+            .iter()
+            .any(|email| email == "carol.home@example.net"),
+        "{lookups:?}"
+    );
     let by_email = |email: &str| {
         contacts
             .iter()
@@ -448,7 +532,8 @@ async fn writes_a_portal_into_the_crm_and_reruns_add_nothing(pool: PgPool) {
     assert_eq!(won.amount, Some(100.0));
     assert_eq!(won.currency.as_deref(), Some("USD"));
     assert_eq!(won.close_date.as_deref(), Some("2026-03-01"));
-    assert_eq!(won.owner.as_deref(), Some("hubspot-owner@example.com"));
+    // The owner is stored as the member's Macro user id.
+    assert_eq!(won.owner.as_deref(), Some(owner.as_ref()));
     assert_eq!(
         won.link,
         "https://app.hubspot.com/contacts/248109388/record/0-3/30"
@@ -469,8 +554,11 @@ async fn writes_a_portal_into_the_crm_and_reruns_add_nothing(pool: PgPool) {
             hubspot.contacts,
             hubspot.deals
         ),
-        (1, 4, 3, 3)
+        (1, 4, 5, 3)
     );
+    // Company 11 shares Acme's domain and contact 23 shares Ada's address:
+    // both link to the record their twin created.
+    assert_eq!((hubspot.created, hubspot.linked), (10, 2));
     assert_eq!((hubspot.owners, hubspot.owners_matched), (2, 1));
     assert_eq!(
         hubspot.losses,
@@ -495,6 +583,14 @@ async fn writes_a_portal_into_the_crm_and_reruns_add_nothing(pool: PgPool) {
                 loss: HubspotLoss::UnsupportedCurrency,
                 count: 1
             },
+            HubspotLossCount {
+                loss: HubspotLoss::MergedCompany,
+                count: 1
+            },
+            HubspotLossCount {
+                loss: HubspotLoss::MergedContact,
+                count: 1
+            },
         ]
     );
 
@@ -502,7 +598,7 @@ async fn writes_a_portal_into_the_crm_and_reruns_add_nothing(pool: PgPool) {
     import(&pool, inventory, crm.clone(), &owner).await;
     assert_eq!(crm.pipelines.lock().unwrap().len(), 1);
     assert_eq!(crm.companies.lock().unwrap().len(), 3);
-    assert_eq!(crm.contacts.lock().unwrap().len(), 3);
+    assert_eq!(crm.contacts.lock().unwrap().len(), 4);
     assert_eq!(crm.entries.lock().unwrap().len(), 2);
 }
 
@@ -511,7 +607,10 @@ async fn a_failed_object_is_reported_and_the_next_run_writes_only_it(pool: PgPoo
     let team = Uuid::now_v7();
     let owner = teammate(&pool, "hubspot-retry", team).await;
     let crm = crm_for(team, &[&owner]);
-    crm.fail_next_contact.store(true, Ordering::SeqCst);
+    crm.failing_contacts
+        .lock()
+        .unwrap()
+        .insert("Person 22".into());
     let inventory = portal("hubspot-retry@example.com");
 
     let report = import(&pool, inventory.clone(), crm.clone(), &owner).await;
@@ -520,11 +619,11 @@ async fn a_failed_object_is_reported_and_the_next_run_writes_only_it(pool: PgPoo
         report.failures[0].reason.as_deref(),
         Some("CRM was unavailable")
     );
-    assert_eq!(crm.contacts.lock().unwrap().len(), 2);
+    assert_eq!(crm.contacts.lock().unwrap().len(), 3);
 
     let report = import(&pool, inventory, crm.clone(), &owner).await;
     assert!(report.failures.is_empty(), "{:?}", report.failures);
-    assert_eq!(crm.contacts.lock().unwrap().len(), 3);
+    assert_eq!(crm.contacts.lock().unwrap().len(), 4);
     assert_eq!(crm.companies.lock().unwrap().len(), 3);
     assert_eq!(crm.entries.lock().unwrap().len(), 2);
     let emails: HashSet<_> = crm
@@ -534,7 +633,7 @@ async fn a_failed_object_is_reported_and_the_next_run_writes_only_it(pool: PgPoo
         .iter()
         .flat_map(|(_, c)| c.emails.clone())
         .collect();
-    assert_eq!(emails.len(), 2);
+    assert_eq!(emails.len(), 4);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -550,7 +649,7 @@ async fn a_teammate_importing_the_same_portal_links_the_team_copy(pool: PgPool) 
 
     assert_eq!(crm.pipelines.lock().unwrap().len(), 1);
     assert_eq!(crm.companies.lock().unwrap().len(), 3);
-    assert_eq!(crm.contacts.lock().unwrap().len(), 3);
+    assert_eq!(crm.contacts.lock().unwrap().len(), 4);
     assert_eq!(crm.entries.lock().unwrap().len(), 2);
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert!(report.already_in_macro > 0, "{report:?}");
@@ -579,4 +678,167 @@ async fn without_crm_access_nothing_is_planned(pool: PgPool) {
             .unwrap()
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_contact_whose_company_failed_waits_for_it_instead_of_losing_it(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-orphan", team).await;
+    let crm = crm_for(team, &[&owner]);
+    crm.failing_companies
+        .lock()
+        .unwrap()
+        .extend(["Acme".to_owned(), "Acme EU".to_owned()]);
+    let mut inventory = portal("hubspot-orphan@example.com");
+    // No twin address: Ada's record must be her own.
+    inventory
+        .contacts
+        .retain(|contact| contact.id.as_str() != "23");
+
+    let report = import(&pool, inventory.clone(), crm.clone(), &owner).await;
+    let failed: HashSet<_> = report
+        .failures
+        .iter()
+        .map(|failure| failure.title.as_str())
+        .collect();
+    for name in ["Person 20", "Person 22", "Person 24", "Deal 30"] {
+        assert!(failed.contains(name), "{name} in {failed:?}");
+    }
+    // Nothing filed under Acme was created without it.
+    assert!(
+        crm.contacts
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(_, contact)| contact.name == "Person 21"),
+        "{:?}",
+        crm.contacts.lock().unwrap()
+    );
+
+    crm.failing_companies.lock().unwrap().clear();
+    let report = import(&pool, inventory, crm.clone(), &owner).await;
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    let acme = crm
+        .companies
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|(_, _, domain)| domain.as_deref() == Some("acme.example"))
+        .unwrap()
+        .0;
+    let contacts = crm.contacts.lock().unwrap().clone();
+    assert_eq!(contacts.len(), 4);
+    for (_, contact) in contacts.iter().filter(|(_, c)| c.name != "Person 21") {
+        assert_eq!(contact.company, Some(acme), "{contact:?}");
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn contacts_of_a_left_out_company_are_counted(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-excluded", team).await;
+    let crm = crm_for(team, &[&owner]);
+    let planned = plan(
+        &pool,
+        portal("hubspot-excluded@example.com"),
+        crm.clone(),
+        &owner,
+    )
+    .await;
+    let choices = NotionWriteChoices {
+        excluded: vec![
+            row_id(&pool, &owner, "company:10").await,
+            row_id(&pool, &owner, "company:11").await,
+        ],
+        ..NotionWriteChoices::default()
+    };
+    let report = finish(planned, &owner, choices).await;
+
+    // Ada, Bob and Carol are created without a company, and counted.
+    let contacts = crm.contacts.lock().unwrap().clone();
+    assert_eq!(contacts.len(), 4, "{contacts:?}");
+    assert!(
+        contacts
+            .iter()
+            .all(|(_, contact)| contact.company.is_none())
+    );
+    let losses = report.hubspot.unwrap().losses;
+    assert!(
+        losses.contains(&HubspotLossCount {
+            loss: HubspotLoss::ContactWithoutCompany,
+            count: 3
+        }),
+        "{losses:?}"
+    );
+    // The deal that tracks Acme cannot be written and says why.
+    assert!(
+        report
+            .failures
+            .iter()
+            .any(|failure| failure.title == "Deal 30"
+                && failure
+                    .reason
+                    .as_deref()
+                    .is_some_and(|r| r.contains("left out"))),
+        "{:?}",
+        report.failures
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn records_made_before_a_stop_are_found_again_not_duplicated(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-crash", team).await;
+    let crm = crm_for(team, &[&owner]);
+    // The process stops after CRM made these, before the ledger recorded them.
+    crm.crash_after_create
+        .lock()
+        .unwrap()
+        .extend(["Acme".to_owned(), "Deal 31".to_owned()]);
+    let inventory = portal("hubspot-crash@example.com");
+
+    let report = import(&pool, inventory.clone(), crm.clone(), &owner).await;
+    assert!(!report.failures.is_empty());
+    let report = import(&pool, inventory, crm.clone(), &owner).await;
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+
+    assert_eq!(crm.pipelines.lock().unwrap().len(), 1);
+    assert_eq!(crm.companies.lock().unwrap().len(), 3);
+    assert_eq!(crm.contacts.lock().unwrap().len(), 4);
+    assert_eq!(crm.entries.lock().unwrap().len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_record_a_stopped_write_recorded_is_reused(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-marker", team).await;
+    let crm = crm_for(team, &[&owner]);
+    let planned = plan(
+        &pool,
+        portal("hubspot-marker@example.com"),
+        crm.clone(),
+        &owner,
+    )
+    .await;
+    // A write that stopped after making the pipeline and recording it, before
+    // the ledger row was marked imported.
+    let pipeline = crm
+        .create_deal_pipeline(&owner, "Sales Pipeline", &[])
+        .await
+        .unwrap();
+    let row = row_id(&pool, &owner, "pipeline:default").await;
+    PgImportRepo::new(pool.clone())
+        .record_written(
+            &owner,
+            &[WrittenObject::own(row, WrittenKind::CrmRecord, pipeline)],
+        )
+        .await
+        .unwrap();
+
+    let report = finish(planned, &owner, NotionWriteChoices::default()).await;
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert_eq!(crm.pipelines.lock().unwrap().len(), 1);
+    let entries = crm.entries.lock().unwrap().clone();
+    assert_eq!(entries.len(), 2);
+    assert!(entries.iter().all(|(_, p, _)| *p == pipeline));
 }

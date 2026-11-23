@@ -138,7 +138,11 @@ pub(in crate::domain::service) fn rows(
     crm: &dyn CrmImportWriter,
 ) -> Result<Vec<PlanRow>> {
     let portal = inventory.portal.id;
-    let members: HashSet<&str> = team.member_emails.iter().map(String::as_str).collect();
+    let members: HashMap<&str, &str> = team
+        .members
+        .iter()
+        .map(|member| (member.email.as_str(), member.user_id.as_str()))
+        .collect();
     let owners: HashMap<&RecordId, Option<&str>> = inventory
         .owners
         .iter()
@@ -150,7 +154,7 @@ pub(in crate::domain::service) fn rows(
             .copied()
             .flatten()
             .map(str::to_lowercase)
-            .filter(|email| members.contains(email.as_str()))
+            .and_then(|email| members.get(email.as_str()).map(|id| (*id).to_owned()))
     };
     let mut named_owners: HashSet<&RecordId> = HashSet::new();
     let mut rows = Vec::new();
@@ -198,6 +202,7 @@ pub(in crate::domain::service) fn rows(
     }
 
     let planned: HashSet<&RecordId> = inventory.companies.iter().map(|c| &c.id).collect();
+    let mut domains: HashSet<String> = HashSet::new();
     for company in &inventory.companies {
         let mut losses = Vec::new();
         let raw = company
@@ -205,6 +210,11 @@ pub(in crate::domain::service) fn rows(
             .as_deref()
             .or(company.website.as_deref().and_then(website_host));
         let domain = raw.and_then(|raw| crm.company_domain(raw));
+        if let Some(domain) = &domain
+            && !domains.insert(domain.clone())
+        {
+            losses.push(HubspotLoss::MergedCompany);
+        }
         if raw.is_some() && domain.is_none() {
             losses.push(HubspotLoss::DomainRejected);
         }
@@ -238,6 +248,7 @@ pub(in crate::domain::service) fn rows(
         )?);
     }
 
+    let mut primaries: HashSet<String> = HashSet::new();
     for contact in &inventory.contacts {
         let mut losses = Vec::new();
         let mut emails: Vec<String> = Vec::new();
@@ -246,6 +257,11 @@ pub(in crate::domain::service) fn rows(
             if email.contains('@') && !emails.contains(&email) {
                 emails.push(email);
             }
+        }
+        if let Some(primary) = emails.first()
+            && !primaries.insert(primary.clone())
+        {
+            losses.push(HubspotLoss::MergedContact);
         }
         let (company, extra) = company_of(&contact.companies, &planned);
         if extra {

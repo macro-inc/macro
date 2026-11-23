@@ -7,7 +7,7 @@ use bot_id::BotId;
 use crm::domain::record_import::{CrmRecordImports, ImportedDeal, ImportedOutcome};
 use databases::domain::models::Viewer;
 use import::domain::ports::{
-    CrmImportWriter, CrmTeam, DealOutcome, NewCrmContact, NewDealEntry, WorkspaceWriter,
+    CrmImportWriter, CrmMember, CrmTeam, DealOutcome, NewCrmContact, NewDealEntry, WorkspaceWriter,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -61,17 +61,17 @@ impl CrmImportWriter for HubspotCrmWriter {
         let Some(team_id) = self.records.crm_team(&self.viewer(user)).await? else {
             return Ok(None);
         };
-        let member_emails = self
+        let members = self
             .roster
             .team_members(user)
             .await?
             .into_iter()
-            .map(|member| member.email.to_lowercase())
+            .map(|member| CrmMember {
+                email: member.email.to_lowercase(),
+                user_id: member.user_id.as_ref().to_owned(),
+            })
             .collect();
-        Ok(Some(CrmTeam {
-            team_id,
-            member_emails,
-        }))
+        Ok(Some(CrmTeam { team_id, members }))
     }
 
     fn company_domain(&self, raw: &str) -> Option<String> {

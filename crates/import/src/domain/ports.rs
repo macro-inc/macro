@@ -1216,8 +1216,17 @@ pub trait WrittenObjects: Send + Sync + 'static {
 pub struct CrmTeam {
     /// The team whose CRM receives the records.
     pub team_id: Uuid,
-    /// Members' email addresses, lowercased, for matching HubSpot owners.
-    pub member_emails: Vec<String>,
+    /// Its members, for matching HubSpot owners.
+    pub members: Vec<CrmMember>,
+}
+
+/// A team member HubSpot owners are matched against.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmMember {
+    /// Login email, lowercased; matched against the owner's email.
+    pub email: String,
+    /// The Macro user id the matched owner is stored as.
+    pub user_id: String,
 }
 
 /// A contact to create in the team's CRM.
@@ -1260,7 +1269,7 @@ pub struct NewDealEntry {
     pub currency: Option<String>,
     /// Close date, `YYYY-MM-DD`.
     pub close_date: Option<String>,
-    /// The owning team member's email.
+    /// The owning team member's Macro user id.
     pub owner: Option<String>,
     /// The deal's HubSpot URL; unique per deal, so it is the entry's
     /// identity on resume.

@@ -20,7 +20,8 @@ use uuid::Uuid;
 use super::super::ImportServiceImpl;
 use super::super::notion_workspace::{notice_import_ids, report};
 use crate::domain::models::{
-    ImportSource, NotionImportReport, NotionReportItem, ReviewedRun, RunStatus,
+    ImportSource, ImportStatus, NotionImportReport, NotionReportItem, ReviewedRun, RunStatus,
+    WrittenKind,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, NotionPlanRepo, NotionRunRepo, Result,
@@ -127,6 +128,30 @@ where
         let notices = self.repo.task_notice_counts(user, &ids).await?;
         let mut report = report(run.as_ref(), &rows, &notices)?;
         report.on_team = self.repo.user_team_id(user).await?.is_some();
+        if let Some(hubspot) = report.hubspot.as_mut() {
+            // A record this import created carries its CRM marker; one it
+            // matched by natural key or linked from a teammate does not.
+            let imported: Vec<Uuid> = rows
+                .iter()
+                .filter(|row| {
+                    row.user_id == user.as_ref()
+                        && row.review_id.is_some()
+                        && row.review_id == report.review_id
+                        && row.status == ImportStatus::Imported
+                })
+                .map(|row| row.id)
+                .collect();
+            let created = self
+                .repo
+                .written(user, &imported)
+                .await?
+                .into_iter()
+                .filter(|object| object.kind == WrittenKind::CrmRecord)
+                .count();
+            hubspot.created = u32::try_from(created).unwrap_or(u32::MAX);
+            hubspot.linked =
+                u32::try_from(imported.len().saturating_sub(created)).unwrap_or(u32::MAX);
+        }
         Ok(report)
     }
 }

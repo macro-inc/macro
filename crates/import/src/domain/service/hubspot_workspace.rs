@@ -75,7 +75,7 @@ pub(in crate::domain::service) struct DealPlan {
     pub currency: Option<String>,
     /// `YYYY-MM-DD`.
     pub close_date: Option<String>,
-    /// The owning team member's email.
+    /// The owning team member's Macro user id.
     pub owner: Option<String>,
 }
 
@@ -125,6 +125,8 @@ struct Known {
     earlier: HashMap<Uuid, Uuid>,
     /// Pipeline entries by deal link.
     links: DealLinks,
+    /// Plan keys of objects the owner left out of this review.
+    left_out: std::collections::HashSet<String>,
 }
 
 /// Kinds in write order: what a later kind links to is written first.
@@ -166,7 +168,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(name = "import.hubspot.plan", skip_all, fields(rows), err)]
+    #[tracing::instrument(name = "import.hubspot.plan", skip_all, fields(portal, rows), err)]
     pub(super) async fn plan_hubspot(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -202,7 +204,9 @@ where
             return Ok(());
         }
         let mut rows = plan::rows(&found, &team, hubspot.writer.as_ref())?;
-        tracing::Span::current().record("rows", rows.len());
+        let span = tracing::Span::current();
+        span.record("portal", found.portal.id);
+        span.record("rows", rows.len());
         let copies = super::lifecycle::team_copies(
             &self.repo,
             self.creator.as_ref(),
@@ -276,6 +280,15 @@ where
                 .collect(),
             earlier,
             links: DealLinks::default(),
+            left_out: rows
+                .iter()
+                .filter(|row| {
+                    row.user_id == user.as_ref()
+                        && row.review_id == Some(review)
+                        && row.status == ImportStatus::Discarded
+                })
+                .map(|row| row.foreign_id.clone())
+                .collect(),
         };
         let mut failed = 0;
         let mut written = 0;
@@ -284,6 +297,7 @@ where
                 "import.hubspot.write.phase",
                 kind = kind.as_ref(),
                 objects = tracing::field::Empty,
+                written = tracing::field::Empty,
                 failed = tracing::field::Empty
             );
             let phase = async {
@@ -294,6 +308,7 @@ where
                     .collect();
                 tracing::Span::current().record("objects", objects.len());
                 let mut phase_failed = 0;
+                let mut phase_written = 0;
                 for row in objects {
                     if control.reason().is_some() {
                         return Ok::<_, ImportError>(phase_failed);
@@ -311,6 +326,7 @@ where
                     match result {
                         Ok(Some(id)) => {
                             written += 1;
+                            phase_written += 1;
                             known.targets.insert(row.foreign_id.clone(), id);
                         }
                         Ok(None) => {}
@@ -324,6 +340,7 @@ where
                     self.notify(user).await;
                 }
                 tracing::Span::current().record("failed", phase_failed);
+                tracing::Span::current().record("written", phase_written);
                 Ok(phase_failed)
             };
             failed += phase.instrument(span).await?;
@@ -420,7 +437,12 @@ where
         known: &mut Known,
         writer: &dyn CrmImportWriter,
     ) -> Result<(Uuid, bool)> {
-        let Known { targets, links, .. } = known;
+        let Known {
+            targets,
+            links,
+            left_out,
+            ..
+        } = known;
         match &meta.object {
             HubspotObject::Pipeline { stages } => Ok((
                 writer
@@ -442,15 +464,26 @@ where
                 ))
             }
             HubspotObject::Contact { emails, company } => {
-                for email in emails {
-                    if let Some(existing) = writer.contact_by_email(user, email).await? {
-                        return Ok((existing, false));
-                    }
+                // Only the primary address identifies a contact: a further
+                // address another contact holds must not merge the two.
+                if let Some(primary) = emails.first()
+                    && let Some(existing) = writer.contact_by_email(user, primary).await?
+                {
+                    return Ok((existing, false));
                 }
+                let company = match company.as_deref() {
+                    None => None,
+                    // The owner left the company out: the contact stays
+                    // without one, and the report counts it.
+                    Some(key) if left_out.contains(key) => None,
+                    Some(key) => Some(targets.get(key).copied().ok_or(ImportError::NotReady(
+                        "Its company has not been imported. Plan again to retry this contact.",
+                    ))?),
+                };
                 let contact = NewCrmContact {
                     name: meta.title.clone(),
                     emails: emails.clone(),
-                    company: company.as_deref().and_then(|key| targets.get(key)).copied(),
+                    company,
                 };
                 Ok((writer.create_contact(user, &contact).await?, true))
             }
@@ -462,6 +495,11 @@ where
                         .ok_or(ImportError::NotReady(
                             "Its pipeline has not been imported. Plan again to retry this deal.",
                         ))?;
+                if left_out.contains(deal.company.as_str()) {
+                    return Err(ImportError::NotReady(
+                        "Its company was left out of the import, and a pipeline entry tracks a company.",
+                    ));
+                }
                 let company =
                     targets
                         .get(deal.company.as_str())
@@ -509,6 +547,15 @@ pub(in crate::domain::service) fn report<'a>(
     let mut report = HubspotReport::default();
     let mut losses: HashMap<HubspotLoss, u32> = HashMap::new();
     let mut any = false;
+    let rows: Vec<&ImportEntity> = rows.into_iter().collect();
+    // Companies the owner left out: their contacts are written without them.
+    let left_out: std::collections::HashSet<&str> = rows
+        .iter()
+        .filter(|row| {
+            row.kind == ImportKind::HubspotCompany && row.status == ImportStatus::Discarded
+        })
+        .map(|row| row.foreign_id.as_str())
+        .collect();
     for row in rows {
         let Ok(meta) = serde_json::from_value::<HubspotMeta>(row.metadata.clone()) else {
             continue;
@@ -526,6 +573,17 @@ pub(in crate::domain::service) fn report<'a>(
         }
         for loss in meta.losses {
             *losses.entry(loss).or_default() += 1;
+        }
+        if let HubspotObject::Contact {
+            company: Some(company),
+            ..
+        } = &meta.object
+            && left_out.contains(company.as_str())
+            && row.status != ImportStatus::Discarded
+        {
+            *losses
+                .entry(HubspotLoss::ContactWithoutCompany)
+                .or_default() += 1;
         }
         if let Some(summary) = meta.summary {
             report.owners = summary.owners;

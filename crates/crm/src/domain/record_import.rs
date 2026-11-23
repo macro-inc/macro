@@ -271,11 +271,16 @@ where
         company: Option<Uuid>,
     ) -> Result<Uuid, TransferError> {
         let primary = emails.first().map(String::as_str);
+        // A company the viewer cannot see is refused, never dropped: filing the
+        // contact elsewhere would lose the association silently.
         let company = match company {
-            Some(company) => {
+            Some(company) => Some(
                 self.permission(viewer, company, EntityType::CrmCompany)
                     .await?
-            }
+                    .ok_or_else(|| {
+                        TransferError::Invalid("Its company is not visible to the user.".into())
+                    })?,
+            ),
             None => None,
         };
         let contact = match company {
@@ -368,6 +373,13 @@ where
                 },
             )
             .await?;
+        // An entry past the scan limit would be added again on a retry, so a
+        // pipeline that large is refused rather than read in part.
+        if !found.complete {
+            return Err(TransferError::Invalid(format!(
+                "The pipeline has more than {MAX_SCANNED_ROWS} entries, so its imported deals cannot be checked."
+            )));
+        }
         let links: HashMap<String, Uuid> = found
             .entries
             .into_iter()

@@ -1005,6 +1005,15 @@ pub enum HubspotLoss {
     AdditionalDomains,
     /// A company's HubSpot owner; Macro companies have no owner.
     CompanyOwner,
+    /// A company sharing its domain with another planned company; both become
+    /// one CRM company.
+    MergedCompany,
+    /// A contact sharing its primary address with another planned contact;
+    /// both become one CRM contact.
+    MergedContact,
+    /// A contact whose company was left out of the import; it is created
+    /// without one.
+    ContactWithoutCompany,
 }
 
 /// How many records lost one thing.
@@ -1039,6 +1048,13 @@ pub struct HubspotReport {
     pub owners_matched: u32,
     /// Records already in Macro from an earlier import, left as they are.
     pub already_imported: u32,
+    /// Records this import created in the CRM.
+    #[serde(default)]
+    pub created: u32,
+    /// Records this import matched to ones already in the CRM (same domain,
+    /// address or deal) or to a teammate's import, instead of creating them.
+    #[serde(default)]
+    pub linked: u32,
     /// What cannot be carried over, by kind.
     pub losses: Vec<HubspotLossCount>,
     /// Portal-defined property names whose values stay in HubSpot.
