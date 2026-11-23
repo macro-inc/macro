@@ -352,6 +352,9 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
 export function useEditCompanyDomainMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
+      // The header and Record details each edit through their own instance;
+      // one edit at a time keeps a slower response from replacing a newer list.
+      scope: { id: 'crm-company-domain-edits' },
       mutationFn: ({
         companyId,
         domain,
@@ -390,6 +393,7 @@ async function editCompanyDomain(
     await deps.client.cancelQueries({
       queryKey: crmKeys.company(companyId).queryKey,
     });
+    if (!canCache()) return company;
     deps.client.setQueryData<CrmCompanyResponse>(
       crmKeys.company(companyId).queryKey,
       (current) => current && { ...current, domains: company.domains }
