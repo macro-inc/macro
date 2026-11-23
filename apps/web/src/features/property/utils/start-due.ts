@@ -29,6 +29,8 @@ export type StartDue = {
   start: Date | null;
   due: Date | null;
   timed?: boolean;
+  /** With times, an end saved as a whole day, read without a time. */
+  wholeDay?: DateField;
 };
 
 const DAY_FORMAT = new Intl.DateTimeFormat('en-US', {
@@ -105,44 +107,54 @@ function formatTimedStartDue(dates: StartDue, now: Date): string | undefined {
 }
 
 function timedStartDueText(dates: StartDue, now: Date): string | undefined {
-  const { start, due } = dates;
+  const { start, due, wholeDay } = dates;
   const thisYear = (date: Date) => date.getFullYear() === now.getFullYear();
-  if (!start)
-    return due ? dayTimeFormat(!thisYear(due)).format(due) : undefined;
-  if (!due) return `${dayTimeFormat(!thisYear(start)).format(start)} →`;
+  const text = (end: DateField, date: Date, withYear: boolean) =>
+    wholeDay === end
+      ? (withYear ? DAY_YEAR_FORMAT : DAY_FORMAT).format(date)
+      : dayTimeFormat(withYear).format(date);
+  if (!start) return due ? text('due', due, !thisYear(due)) : undefined;
+  if (!due) return `${text('start', start, !thisYear(start))} →`;
   if (isSameDay(start, due)) {
-    return dayTimeFormat(!thisYear(start)).formatRange(start, due);
+    // A whole-day start on the due date's day adds nothing to read.
+    if (wholeDay === 'start') return text('due', due, !thisYear(due));
+    if (!wholeDay) {
+      return dayTimeFormat(!thisYear(start)).formatRange(start, due);
+    }
   }
   const withYear = !thisYear(start) || !thisYear(due);
-  const format = dayTimeFormat(withYear);
-  return `${format.format(start)} → ${format.format(due)}`;
+  return `${text('start', start, withYear)} → ${text('due', due, withYear)}`;
 }
 
 /**
  * `formatStartDue` for a narrow list cell or card: times of day are compact,
- * as on a calendar event (`Nov 26, 2–4pm`, `Nov 26, 2pm → Nov 28, 4pm`).
- * Whole days read as `formatStartDue` gives them.
+ * as on a calendar event (`Nov 26, 2–4pm`, `Nov 26, 2pm`). A range across
+ * days reads as its days alone (`Nov 26 → Nov 28`), as whole days do, since
+ * both times do not fit; the pill and the picker show them.
  */
 export function formatStartDueCompact(
   dates: StartDue,
   now = new Date()
 ): string | undefined {
-  if (!dates.timed) return formatStartDue(dates, now);
-  const { start, due } = dates;
+  const { start, due, wholeDay } = dates;
+  if (!dates.timed || (start && due && !isSameDay(start, due))) {
+    return formatStartDue({ start, due }, now);
+  }
   const clock = clockIs12Hour() ? '12-hour' : '24-hour';
   const withYear =
     (start && start.getFullYear() !== now.getFullYear()) ||
     (due && due.getFullYear() !== now.getFullYear());
   const day = (date: Date) =>
     (withYear ? DAY_YEAR_FORMAT : DAY_FORMAT).format(date);
-  const at = (date: Date) =>
-    `${day(date)}, ${formatCompactCalendarTime(date, clock)}`;
-  if (!start) return due ? at(due) : undefined;
-  if (!due) return `${at(start)} →`;
-  if (isSameDay(start, due)) {
-    return `${day(start)}, ${formatCompactCalendarTimeRange(start, due, clock)}`;
-  }
-  return `${at(start)} → ${at(due)}`;
+  const at = (end: DateField, date: Date) =>
+    wholeDay === end
+      ? day(date)
+      : `${day(date)}, ${formatCompactCalendarTime(date, clock)}`;
+  if (!start) return due ? at('due', due) : undefined;
+  if (!due) return `${at('start', start)} →`;
+  if (wholeDay === 'start') return at('due', due);
+  if (wholeDay === 'due') return `${at('start', start)} → ${day(due)}`;
+  return `${day(start)}, ${formatCompactCalendarTimeRange(start, due, clock)}`;
 }
 
 /**
@@ -232,6 +244,50 @@ export function pickTime(
   return { dates: { ...dates, due: at }, changed: ['due'] };
 }
 
+/** One end a timeline drag saves: its new moment and whether it keeps a time. */
+export type RescheduledEnd = {
+  field: DateField;
+  value: Date;
+  hasTime: boolean;
+};
+
+/**
+ * The saves a timeline drag makes from the range the bar was dropped at:
+ * each end that changed (by day for whole days, by moment for times), the
+ * due date first when the new start passes the saved due date, as the
+ * server keeps a start on or before it. A bar drawn from the created date,
+ * for a task with no start, gains a start only when its start moved. A timed
+ * bar's `wholeDay` end, saved without a time, stays a whole day.
+ */
+export function rescheduledStartDue(
+  previous: { start: Date; due: Date | null; wholeDay?: DateField },
+  range: { start: Date; end: Date; allDay: boolean }
+): RescheduledEnd[] {
+  const wholeDay = (field: DateField) =>
+    range.allDay || previous.wholeDay === field;
+  const moved = (field: DateField, before: Date | null, after: Date) =>
+    !before ||
+    (wholeDay(field)
+      ? !isSameDay(before, after)
+      : before.getTime() !== after.getTime());
+  const end = (field: DateField, value: Date): RescheduledEnd => ({
+    field,
+    value: wholeDay(field) && !range.allDay ? startOfDay(value) : value,
+    hasTime: !wholeDay(field),
+  });
+  const ends: RescheduledEnd[] = [];
+  if (moved('start', previous.start, range.start)) {
+    ends.push(end('start', range.start));
+  }
+  if (moved('due', previous.due, range.end)) {
+    ends.push(end('due', range.end));
+  }
+  if (ends.length === 2 && previous.due && range.start > previous.due) {
+    ends.reverse();
+  }
+  return ends;
+}
+
 /** The calendar days from `start` to `due`, both counted. */
 export function startDueDays(start: Date, due: Date): number {
   return differenceInCalendarDays(due, start) + 1;
@@ -319,10 +375,17 @@ export function startDueOf(
   start: Property | undefined,
   due: Property | undefined
 ): StartDue {
-  const timed = [start, due].some(
-    (end) => end && isDateProperty(end) && end.hasTime === true
-  );
-  return { start: dayOf(start), due: dayOf(due), ...(timed ? { timed } : {}) };
+  const hasTime = (end: Property | undefined) =>
+    !!end && isDateProperty(end) && end.hasTime === true;
+  const dates = { start: dayOf(start), due: dayOf(due) };
+  if (!hasTime(start) && !hasTime(due)) return dates;
+  const wholeDay: DateField | undefined =
+    dates.start && dates.due && hasTime(start) !== hasTime(due)
+      ? hasTime(start)
+        ? 'due'
+        : 'start'
+      : undefined;
+  return { ...dates, timed: true, ...(wholeDay ? { wholeDay } : {}) };
 }
 
 /** The end a Start Date or Due Date definition holds, or none for others. */

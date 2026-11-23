@@ -600,6 +600,38 @@ describe('Chat session input', () => {
     expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
   it.each([false, true])(
+    'places new-session modes outside and below the composer, like Home (touch: %s)',
+    (touch) => {
+      vi.mocked(isTouchDevice).mockReturnValue(touch);
+      const { container } = render(() => (
+        <ChatComposer
+          draft=""
+          onDraftChange={vi.fn()}
+          onSend={vi.fn()}
+          selector={<button>Model</button>}
+          settingsPlacement="below"
+          drawerOpen
+          drawer={<button>Auto / Chat / Code</button>}
+        />
+      ));
+      const surface = container.querySelector('[data-agent-composer]');
+      const modes = screen.getByRole('button', { name: 'Auto / Chat / Code' });
+      expect(surface?.contains(modes)).toBe(false);
+      expect(
+        (surface?.compareDocumentPosition(modes) ?? 0) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        modes.closest('.composer-drawer')?.getAttribute('data-placement')
+      ).toBe('bottom');
+      expect(
+        screen
+          .getByRole('button', { name: 'Model' })
+          .closest('[data-agent-composer]')
+      ).toBe(surface);
+    }
+  );
+  it.each([false, true])(
     'keeps settings and editor mounted in desktop controls or the touch drawer (touch: %s)',
     (touch) => {
       vi.mocked(isTouchDevice).mockReturnValue(touch);
@@ -1055,7 +1087,21 @@ it('keeps the list composer expanded across model selection and dismisses an orp
   });
   fireEvent.click(trigger);
   fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
-  const search = await screen.findByRole('textbox');
+  let search = await screen.findByRole('textbox');
+  const sheet = search.closest('[data-corvu-drawer-content]')!;
+  fireEvent.click(sheet.querySelector('button')!);
+  // The closing sheet must retire its focus trap before a new card mounts.
+  expect(
+    document.querySelector('[role="dialog"]:not([data-corvu-drawer-content])')
+  ).toBeNull();
+  await waitFor(() =>
+    expect(
+      document.querySelector('[role="dialog"]:not([data-corvu-drawer-content])')
+    ).not.toBeNull()
+  );
+  expect(open()).toBe(true);
+  fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
+  search = await screen.findByRole('textbox');
   fireEvent.focusOut(input, { relatedTarget: search });
   fireEvent.pointerDown(search);
   expect(surface.hasAttribute('data-composer-expanded')).toBe(true);

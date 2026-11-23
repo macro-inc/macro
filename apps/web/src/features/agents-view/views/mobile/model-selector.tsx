@@ -3,7 +3,7 @@ import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigat
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import * as Popover from '@kobalte/core/popover';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
 import { ModelSelectionList } from '../shared/model-selection-list';
@@ -15,6 +15,11 @@ export function MobileModelSelector() {
   let trigger: HTMLButtonElement | undefined;
   const nav = createModelSelectorNavigation(state.onOpenChange, () => trigger);
   const sheetOpen = () => nav.open() && nav.page() !== 'card';
+  const [sheetPresent, setSheetPresent] = createSignal(false);
+  const openSheet = (page: 'list' | 'agentModels') => {
+    setSheetPresent(true);
+    nav.setPage(page);
+  };
   createCloseOnNavigation({
     open: nav.open,
     close: () => nav.changeOpen(false),
@@ -23,9 +28,9 @@ export function MobileModelSelector() {
   let sheet: HTMLDivElement | undefined;
   return (
     <Popover.Root
-      open={nav.open() && !sheetOpen()}
+      open={nav.open() && !sheetPresent()}
       onOpenChange={(open) => {
-        if (!open && sheetOpen()) return;
+        if (!open && sheetPresent()) return;
         nav.changeOpen(open);
       }}
       placement="top-end"
@@ -45,7 +50,7 @@ export function MobileModelSelector() {
         <UnifiedModelTriggerContent />
       </Popover.Trigger>
       <Popover.Portal>
-        <Show when={!sheetOpen()}>
+        <Show when={nav.open() && !sheetPresent()}>
           <div
             data-model-selector-overlay
             onClick={() => nav.changeOpen(false)}
@@ -54,7 +59,7 @@ export function MobileModelSelector() {
             aria-hidden="true"
           />
         </Show>
-        <Show when={!sheetOpen()}>
+        <Show when={!sheetPresent()}>
           <Popover.Content
             ref={card}
             class="portal-scope menu-surface z-modal w-[358px] max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px)-32px)] rounded-[28px] p-0 outline-none"
@@ -63,7 +68,7 @@ export function MobileModelSelector() {
                 'inset 0 0 0 1px var(--color-edge), var(--shadow-menu)',
             }}
             onCloseAutoFocus={(event) => {
-              if (sheetOpen()) event.preventDefault();
+              if (sheetPresent()) event.preventDefault();
               else state.onCloseAutoFocus?.(event);
             }}
           >
@@ -72,27 +77,32 @@ export function MobileModelSelector() {
             </Popover.Title>
             <ModelSelectorCard
               mobile
-              onSelect={() => nav.setPage('list')}
-              onModels={() => nav.setPage('agentModels')}
+              onSelect={() => openSheet('list')}
+              onModels={() => openSheet('agentModels')}
             />
           </Popover.Content>
         </Show>
       </Popover.Portal>
       <MobileDrawer
+        restoreFocus
         onEscapeKeyDown={(event) => {
           event.preventDefault();
           nav.escape();
         }}
         open={sheetOpen()}
         onOpenChange={(open) => {
-          if (!open) nav.changeOpen(false);
+          if (!open && sheetOpen()) nav.changeOpen(false);
         }}
         onInitialFocus={(event) => {
           event.preventDefault();
-          sheet?.focus({ preventScroll: true });
+          if (!sheet?.contains(document.activeElement))
+            sheet?.focus({ preventScroll: true });
         }}
         onFinalFocus={(event) => {
           event.preventDefault();
+          // Corvu retains its focus trap for the exit transition. Mount the
+          // returning card only after that trap has retired.
+          setSheetPresent(false);
           if (nav.open()) {
             queueMicrotask(() => {
               if (nav.open() && card?.isConnected)

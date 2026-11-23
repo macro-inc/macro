@@ -19,18 +19,24 @@ export function DesktopModelSelector() {
     close: () => nav.changeOpen(false),
   });
   let content: HTMLDivElement | undefined;
-  const backToCard = () => {
-    nav.setPage('card');
-    queueMicrotask(() =>
-      content?.querySelector<HTMLButtonElement>('button')?.focus({
-        preventScroll: true,
-      })
+  const changePage = (page: Parameters<typeof nav.setPage>[0]) => {
+    // The clicked page button is about to unmount. Keep focus on the stable
+    // dialog so its dismissal layer never sees a detached focused target.
+    content?.focus({ preventScroll: true });
+    nav.setPage(page);
+    queueMicrotask(() => {
+      if (!nav.open()) return;
+      content
+        ?.querySelector<HTMLElement>(page === 'card' ? 'button' : 'input')
+        ?.focus({ preventScroll: true });
+    });
+  };
+  const navigation = { ...nav, setPage: changePage };
+  const backToCard = () => changePage('card');
+  const goBack = () =>
+    changePage(
+      nav.page() === 'all' || nav.page() === 'agents' ? 'list' : 'card'
     );
-  };
-  const goBack = () => {
-    if (nav.page() === 'list' || nav.page() === 'agentModels') backToCard();
-    else nav.back();
-  };
   return (
     <Popover.Root
       open={nav.open()}
@@ -86,15 +92,15 @@ export function DesktopModelSelector() {
             when={nav.page() === 'card'}
             fallback={
               <ModelSelectionList
-                navigation={nav}
+                navigation={navigation}
                 onPick={backToCard}
                 onBack={goBack}
               />
             }
           >
             <ModelSelectorCard
-              onSelect={() => nav.setPage('list')}
-              onModels={() => nav.setPage('agentModels')}
+              onSelect={() => changePage('list')}
+              onModels={() => changePage('agentModels')}
             />
           </Show>
         </Popover.Content>

@@ -1,7 +1,7 @@
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import { Show } from 'solid-js';
-import { AgentIcon } from '../../components/AgentGlyph';
+import { AgentAvatar } from '../../components/AgentGlyph';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { MACRO_PERSONA_ID } from '../../core/roster';
 
@@ -19,9 +19,12 @@ export function ModelSelectorIdentity(props: { mobile?: boolean }) {
           />
         }
       >
-        <span class="flex size-[18px] shrink-0 items-center justify-center rounded bg-ink-extra-muted text-surface">
-          <AgentIcon agent={state.agent!} class="size-4" />
-        </span>
+        <AgentAvatar
+          agent={state.agent!}
+          coder={false}
+          class="size-[18px]"
+          iconClass="size-4"
+        />
       </Show>
       <span class="min-w-0 truncate">
         {custom()

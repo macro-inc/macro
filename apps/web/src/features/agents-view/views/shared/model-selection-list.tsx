@@ -1,5 +1,4 @@
 import { t } from '@app/lib/i18n';
-import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import CaretLeft from '@icon/system/regular/caret-left.svg';
@@ -11,7 +10,7 @@ import X from '@icon/system/regular/x.svg';
 import { Button, Input } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, onMount, Show } from 'solid-js';
-import { AgentIcon } from '../../components/AgentGlyph';
+import { AgentAvatar } from '../../components/AgentGlyph';
 import { AgentBubble } from '../../components/agent-bubble/agent-bubble';
 import { ModelRows } from '../../components/unified-model-selector/model-rows';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
@@ -297,17 +296,16 @@ export function ModelSelectionList(props: {
           </Show>
           <Show when={!searching() && auto()}>
             {(option) => (
-              <div class="px-2 pt-4 pb-2">
-                <ModelRows
-                  models={[option()]}
-                  mobile={props.mobile}
-                  selected={
-                    state.suggestedSelected !== false ? state.model : undefined
-                  }
-                  disabled={state.disabled || state.suggestedDisabled}
-                  onPick={pickModel}
-                />
-              </div>
+              <ModelRows
+                class="mx-2 mt-4 mb-2 w-[calc(100%-1rem)]"
+                models={[option()]}
+                mobile={props.mobile}
+                selected={
+                  state.suggestedSelected !== false ? state.model : undefined
+                }
+                disabled={state.disabled || state.suggestedDisabled}
+                onPick={pickModel}
+              />
             )}
           </Show>
           <Show when={searching() && filtered().allModels.length > 0}>
@@ -401,14 +399,12 @@ export function ModelSelectionList(props: {
           <For each={filtered().allProviders}>
             {(group) => (
               <div class="px-2 pb-2" role="group" aria-label={group.label}>
-                <div class="flex items-center gap-2 px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
-                  <ModelIcon model={group.options[0]?.id} class="size-4" />
+                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
                   {group.label}
                 </div>
                 <ModelRows
                   models={group.options}
                   mobile={props.mobile}
-                  showLogos={false}
                   selected={
                     state.suggestedSelected !== false ? state.model : undefined
                   }
@@ -443,9 +439,12 @@ export function ModelSelectionList(props: {
                       }
                       onClick={() => pickAgent(agent)}
                     >
-                      <span class="grid size-[18px] shrink-0 place-items-center rounded bg-ink-extra-muted text-surface">
-                        <AgentIcon agent={agent} class="size-4" />
-                      </span>
+                      <AgentAvatar
+                        agent={agent}
+                        coder={false}
+                        class="size-[18px]"
+                        iconClass="size-4"
+                      />
                       <span class="flex-1 text-left">{agent.name}</span>
                       <span class="text-xs text-ink-extra-muted">
                         {agent.connectLabel ?? agent.runtime.label}
@@ -464,14 +463,12 @@ export function ModelSelectionList(props: {
           <For each={agentModels().allProviders}>
             {(group) => (
               <div class="px-2 pb-2" role="group" aria-label={group.label}>
-                <div class="flex items-center gap-2 px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
-                  <ModelIcon model={group.options[0]?.id} class="size-4" />
+                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
                   {group.label}
                 </div>
                 <ModelRows
                   models={group.options}
                   mobile={props.mobile}
-                  showLogos={false}
                   selected={state.model}
                   disabled={state.disabled}
                   onPick={(id) => pickModel(id, true)}

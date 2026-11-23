@@ -111,7 +111,10 @@ vi.mock('../queries/repository-branches', () => ({
     retry: vi.fn(),
   }),
 }));
-vi.mock('../components/AgentGlyph', () => ({ AgentIcon: () => <span /> }));
+vi.mock('../components/AgentGlyph', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../components/AgentGlyph')>()),
+  AgentIcon: () => <span />,
+}));
 
 vi.mock('@queries/auth/ai-billing', () => ({
   useAiBillingSummaryQuery: () => ({
@@ -210,12 +213,17 @@ vi.mock('@queries/agents/models', () => ({
   }),
 }));
 
+vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
+  FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,
+}));
+
 // Keep the real picker and send wiring; substitute only the Lexical editor.
 type ComposerProps = {
   corner: JSX.Element;
   selector: JSX.Element;
   drawer: JSX.Element;
   drawerOpen: boolean;
+  settingsPlacement?: 'inside' | 'below';
   draft: string;
   attachments: InputAttachmentData[];
   onRemoveAttachment: (attachment: InputAttachmentData) => void;
@@ -238,7 +246,11 @@ vi.mock('../components/ChatComposer', () => ({
           </button>
         )}
       </For>
-      <div data-testid="drawer" hidden={!props.drawerOpen}>
+      <div
+        data-testid="drawer"
+        data-placement={props.settingsPlacement}
+        hidden={!props.drawerOpen}
+      >
         {props.drawer}
       </div>
       <input
@@ -337,8 +349,10 @@ async function openAgentModels(name: string) {
   fireEvent.click(
     screen.getByRole('button', { name: 'Choose an agent or model' })
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Cursor Default' }));
-  return within(screen.getByRole('dialog'));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Cursor Default' })
+  );
+  return within(await screen.findByRole('dialog'));
 }
 
 describe('agent-led new conversation', () => {
@@ -383,6 +397,33 @@ describe('agent-led new conversation', () => {
     motionStyles.remove();
     vi.unstubAllGlobals();
   });
+  it.each([false, true])(
+    'uses Home settings placement for a full new session (touch: %s)',
+    (touch) => {
+      mocks.touch = touch;
+      render(() => (
+        <NewChatPage
+          roster={buildAgentRoster({
+            agents: [],
+            runtimes: [],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+            cursorDefaultModel: 'cursor-default',
+          })}
+          rosterLoading={false}
+          onStart={vi.fn()}
+          onOpenRoster={vi.fn()}
+        />
+      ));
+      expect(screen.getByTestId('drawer').getAttribute('data-placement')).toBe(
+        'below'
+      );
+      expect(
+        screen.getByRole('radiogroup', { name: 'Conversation mode' })
+      ).toBeTruthy();
+    }
+  );
   it('selects a coding model from the phone sheet without hover and preserves the draft', async () => {
     mocks.touch = true;
     const send = page(true, [], false, [], 'code');
@@ -1591,6 +1632,38 @@ describe('agent-led new conversation', () => {
     }
   );
 
+  it('keeps desktop card, catalog, search and More models open through focused page changes', async () => {
+    const user = userEvent.setup();
+    page(true, [], false, [], 'code');
+    await user.click(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+    );
+    const card = screen.getByRole('dialog');
+    const stableFocus = vi.spyOn(card, 'focus');
+    await user.click(within(card).getByRole('button', { name: 'Cursor' }));
+    expect(stableFocus).toHaveBeenCalledWith({ preventScroll: true });
+    const search = screen.getByRole('textbox', {
+      name: 'Search agents and models',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    await user.type(search, 'GPT');
+    expect(screen.getByRole('button', { name: 'GPT-5' })).toBeTruthy();
+    await user.clear(search);
+    await user.click(screen.getByRole('button', { name: 'More models' }));
+    expect(screen.getByRole('dialog')).toBe(card);
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    for (const avatar of document.querySelectorAll('[data-agent-avatar]')) {
+      expect(avatar.className).toContain('bg-surface-1');
+      expect(avatar.className).toContain('text-ink-muted');
+      expect(avatar.className).toContain('rounded-full');
+    }
+    fireEvent.keyDown(search, { key: 'Escape' });
+    const modelButton = screen.getByRole('button', { name: 'Cursor Default' });
+    await user.click(modelButton);
+    expect(screen.getByRole('textbox', { name: 'Search models' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'GPT-5' })).toBeTruthy();
+  });
+
   it('focuses the shared search and filters the selected agent catalog', async () => {
     page(true, [], false, [], 'code');
     fireEvent.click(
@@ -2009,7 +2082,7 @@ describe('agent-led new conversation', () => {
       });
       expect(trigger.textContent).not.toContain('Low');
       if (touch) fireEvent.click(trigger);
-      const slider = screen.getByRole('slider', { name: 'Thinking' });
+      const slider = await screen.findByRole('slider', { name: 'Thinking' });
       slider.focus();
       fireEvent.keyDown(slider, { key: 'End' });
       expect(trigger.textContent).toContain('Ultra');

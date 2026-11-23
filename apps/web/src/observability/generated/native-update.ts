@@ -57,8 +57,23 @@ export type Outcome =
 { kind: "up_to_date" } |
 /**  The feed offers a newer version; its download starts now. */
 { kind: "update_found"; target_version: string } |
+/**
+ *  The feed offers a newer version built for a newer OS than this
+ *  computer runs, so it is not downloaded.
+ */
+{ kind: "needs_newer_os"; target_version: string;
+/**  The feed's `minimumSystemVersion` for this platform. */
+minimum_system_version: string } |
 /**  The update downloaded and its signature verified. It installs on quit. */
-{ kind: "downloaded"; target_version: string; download_ms: number; download_bytes: number } |
+{ kind: "downloaded"; target_version: string; download_ms: number;
+/**  The update's size, including any `resumed_bytes`. */
+download_bytes: number;
+/**
+ *  Bytes an earlier launch or attempt had saved, which this one kept
+ *  instead of downloading again. Equals `download_bytes` when the
+ *  saved download was complete.
+ */
+resumed_bytes: number } |
 /**  Reading the feed failed. Counts every failure since the last success. */
 { kind: "check_failed"; failure: Failure; consecutive_failures: number } |
 /**  Downloading or verifying the offered update failed. */

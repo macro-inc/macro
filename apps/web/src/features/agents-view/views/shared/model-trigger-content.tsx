@@ -5,7 +5,7 @@ import PinFill from '@icon/system/fill/push-pin-fill.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import Rocket from '@icon/system/regular/rocket.svg';
 import { Show } from 'solid-js';
-import { AgentIcon } from '../../components/AgentGlyph';
+import { AgentAvatar } from '../../components/AgentGlyph';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { speedChoices, speedTier } from '../../core/model-selection';
 import { MACRO_PERSONA_ID } from '../../core/roster';
@@ -26,7 +26,7 @@ export function UnifiedModelTriggerContent() {
     if (!effort || effort.options.length < 2) return;
     const value = state.effortValue ?? effort.currentValue;
     if (
-      state.defaultEffortValue === undefined ||
+      state.defaultEffortValue !== undefined &&
       value === state.defaultEffortValue
     )
       return;
@@ -39,9 +39,12 @@ export function UnifiedModelTriggerContent() {
           when={custom()}
           fallback={<ModelIcon model={state.model} class="size-4 shrink-0" />}
         >
-          <span class="flex size-4 shrink-0 items-center justify-center rounded-[5px] bg-ink-extra-muted text-surface">
-            <AgentIcon agent={state.agent!} class="size-3.5" />
-          </span>
+          <AgentAvatar
+            agent={state.agent!}
+            coder={false}
+            class="size-4"
+            iconClass="size-3.5"
+          />
         </Show>
         <span class="min-w-0 truncate text-ink-muted">{label()}</span>
       </span>

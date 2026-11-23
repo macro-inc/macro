@@ -296,7 +296,8 @@ right preview instead of a standalone split. The Agents sidebar stays left and c
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has history-based Back and search, and keeps the navigation dock but no composer; Back restores the list or page it was opened from. Long-press a row for its entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
+The phone collection uses one measured floating header. An initial nonshrinking spacer inside the unpadded list scroller reserves the island row; its single 20/26 heading follows the bubbles and sticks at that same measured inset while rows scroll beneath it. Archived shares this layout, with its heading immediately below the islands.
+The phone list shows startable custom agents as bubbles above a sticky **Conversations** heading, followed by Waiting on you, Favorites, and the remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the model pill to open its card. Thinking and Speed change there without dismissal; tap the name to open the agent/model sheet. The sheet lists recent agent bubbles, Auto, Recent, Suggested, and More models. Suggested excludes Auto and Recent and appears only for matching frontier models. More models pushes a complete provider catalog in the same sheet. An agent card has a Model row that opens its runtime's models without changing the agent. Picking closes the sheet; Back returns to the card. Search filters all available models and agent names. Unavailable agents retain their existing connection action.
 
@@ -483,7 +484,7 @@ the shimmer.
   cannot receive their MCP callbacks. Check the runtime error before retrying, and
   start a new session after correcting its gateway network configuration.
 
-- Open **Go to Agents** → `/app/component/agents`. The workspace uses one
+- Open **Go to Agents** → `/app/agents` (`/app/component/agents` remains a compatibility link). The workspace uses one
   sidebar for Chat and Code.
   The desktop footer contains **Agents**, **Routines**, and **Archived**.
   **Agents** opens the same roster as the composer’s **Create agent** action.
@@ -571,14 +572,15 @@ the shimmer.
   not remount it.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. On desktop, **Archived** in the footer opens a searchable main-pane
-  list with the loaded count, code identity, and archive date. Hover or focus a
+  actions. On desktop, **Archived** in the footer opens `/app/agents/archive`, a searchable main-pane
+  list with the loaded count, code identity, and archive date. Its single heading stays inside the list content padding, not in a separate workspace header. The phone drawer opens the same durable route with the normal collection heading and independent archive filters. Reload, direct links, and Back/Forward retain the destination; old in-place archive entries migrate without adding a history step. Hover or focus a
   row for **Unarchive** and **More actions**; right-click offers the same actions.
   Unarchive restores the row to the sidebar. Non-action code/date cells open the
   conversation while icons and action buttons retain their own behavior. The
   archived page reads more pages while fewer than 20 matching rows are loaded,
   then pages near the scroll end. Empty results appear only after paging finishes;
   counts describe loaded rows, not a server total. Phone has its own Archived view.
+  Conversation-name tooltips appear only when the rendered label is clipped. Each open request checks its current width, so resizing before reopening updates whether the tooltip appears; phone rows do not show hover tooltips.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
   conversations** menu, which adds it to the count in the filter button and unchecks it with
@@ -611,11 +613,7 @@ the shimmer.
   16px top padding when expanded. Light mode uses a faint shadow outline and
   layered outer shadow; dark mode retains the production glass rim and shadow.
   Both modes retain the production composer background.
-- The starting page uses the shared grouped **Auto / Chat / Code** Tabs pill,
-  below the input on desktop and above it in the phone drawer. The shared Tabs
-  component owns spacing, selection, focus, and touch treatment; the composer
-  does not resize or recolor its parts. Verify switching modes with the pointer
-  and keyboard on desktop and at 390×844.
+- Full new-session pages share Home's **Auto / Chat / Code** Tabs and repository row below the composer on desktop and phone, using the same composition, spacing, and alignment. The compact phone list accessory retains its grouped upper drawer. Opening a sent conversation leaves the preflight modes behind. The shared Tabs component owns selection, focus, and touch treatment; verify pointer and keyboard changes on desktop and at 390×844.
   Chat and Code limit the offered agents; the choice
   lasts only while the composer is mounted, and every composer opens in **Auto**. Auto is
   behind the `enable-composer-auto-mode` PostHog flag (Macro employees only), which the
@@ -641,6 +639,7 @@ the shimmer.
 - Tap the model trigger to open its card. On desktop the card and model menu open 6px below the trigger, end-aligned, and flip above only when space requires it. Phone popovers and sheets retain their existing placement. Tap the name to reach search, recent agent bubbles, Auto, Recent models, Suggested, and More models. Suggested uses only fixed frontier matches, excludes Auto and Recent, shows at most five models, and hides when empty. Recent remembers five unique models per signed-in user. See all opens the full existing agent groups. More models opens an in-place complete provider page on desktop and the same pushed page inside the phone sheet. Search covers the full catalog. Desktop search takes focus; ArrowDown/ArrowUp enter matching rows. Escape returns directly to the card, then dismisses it. On desktop, picking returns to the card; on phone it closes the sheet. An agent's Model row opens a separate provider-grouped page without changing the agent; a single-model runtime keeps a fixed row.
   The popover is the card surface, without a second padded frame. Card content has 8px padding on desktop and 12px on phone, with 8px between the name row and fields. Model and Thinking label rows have an additional 6px horizontal inset on desktop and 10px on phone; the slider track spans the content edges without extra wrapper padding. The phone thumb retains an invisible 44px hit target. Provider logos sit one spacing step closer to names than Thinking levels, and names and Thinking values share their type size. Desktop selection pages use 400px width and a content-sized, capped scroll region.
   Empty search shows a centered search icon, **No matches for “query”**, and a **Clear search** pill on every selection page. The pill clears the query and restores field focus; ArrowDown reaches it and Enter activates it. The phone card unmounts while its sheet is open, so keyboard viewport changes cannot reposition a hidden card. Navigation, hidden or detached triggers, outside taps, and Escape dismiss the selector; its portals retain the list composer's expanded interaction state.
+  Auto is a standalone row between the agents and model groups. Each row in More models carries its provider logo; provider headings are text-only. Agent identities reuse the Agents view's circular, surface-1 avatars with muted glyphs. Returning from a phone sheet waits until its closing focus trap retires before showing the card again.
   The in-memory catalog leads with **Auto**, where automatic routing sorts each
   turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 3.8
   Flash**, and the rest on **GPT-6.1 Sol**. It then offers the closed Anthropic and OpenAI chat
@@ -705,14 +704,7 @@ the shimmer.
 - On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's
   vertical center. The heading stays anchored while the composer expands downward,
-  with controls inside the composer. Only the plus attachment action stays on the
-  left of the bottom row. The right group contains mode/repository controls on
-  the Agents desktop composer, then the agent/model selector, dictation, and Send.
-  Home keeps mode and repository controls in its existing drawer below. Mode/repository
-  controls can wrap above the final model, dictation, and Send controls.
-  On mobile, grouped Auto/Chat/Code stays above the composer with repository
-  controls; both pickers open standard bottom drawers. Selecting Chat hides
-  repository controls without remounting the editor or losing the draft.
+  with model and send controls inside the composer. Only the plus attachment action stays on the left of the bottom row; the right group contains the agent/model selector, dictation, and Send. Home and full new-session views place mode and repository controls together in their shared row below the input. The compact phone list composer keeps grouped modes and repository controls in its upper drawer. Both pickers open standard bottom drawers. Selecting Chat hides repository controls without remounting the editor or losing the draft.
   Reduced-motion preferences disable the expansion animation. **Repository**
   (**Auto-detect** with a GitHub icon unless a default was saved) opens a searchable list:
   **Auto-detect**, then the repositories the signed-in user reaches
@@ -768,8 +760,8 @@ the shimmer.
   arrow keys, Home, and End commit immediately. Models with at most one effort
   option retain a disabled-looking slot labeled **Not available for this model**.
   Agent cards show Thinking and Speed only when the runtime advertises them;
-  Auto has no settings. Thinking labels and track ends share the card's content
-  inset on desktop and phone. **Speed** opens a small menu above its button,
+  Auto has no settings. Thinking label rows use the same inset as Model labels;
+  the track itself spans the card content width. **Speed** opens a small menu above its button,
   not a sheet; Standard is ghost, Fast shows a bolt, and Ultrafast shows a rocket
   only when advertised by the selected model.
 - On desktop, chat agents' empty input shows the static hint **Type @ to mention
@@ -917,8 +909,7 @@ the shimmer.
 
 ## Routine run history
 
-On phones, Routines uses the shared header islands: Back to the previous page,
-its title, Search, and Create Routine actions stay above the list. Opening a routine replaces them with Back,
+On phones, the Routines list uses the shared hamburger drawer when opened from the Agents drawer, and Back when opened from elsewhere. Search and Create Routine actions remain above its in-page heading and count. Opening a routine replaces them with Back,
 the routine title, save status, and its action menu. Overview and Runs tabs remain
 in the page below the islands; desktop breadcrumbs and toolbar stay unchanged.
 
@@ -2528,7 +2519,7 @@ speed glyph. Desktop model picking returns to the card; phone model picking
 closes the sheet. Back returns to the card without changing selection.
 Thinking and Speed changes leave the card open. The slider commits on release
 or each navigation key. Models without adjustable thinking keep the no-thinking
-slot; agents and Auto have only a name row. Search covers all models and agents.
+slot; agent cards retain their Model row and show other settings only when supported. Auto keeps only its name row. Search covers all models and agents.
 Recent stores five model IDs per user; More models opens the complete provider
 catalog. See all retains the existing agent availability and connection groups.
 
@@ -2648,10 +2639,16 @@ the caret after them, waiting for what to change.
 Ask the AI to find or reuse an existing booking link before creating another.
 `ListBookingLinks` returns personal links, current team IDs, full settings and
 shareable URLs (including paused links). It also supplies the revision used to
-protect edits from concurrent settings changes.
+protect edits from concurrent settings changes, and the connected accounts a
+personal link can book on: a draft's `emailLinkId` puts its bookings on that
+account's calendar, with invitations from its address. Saving refuses a newly
+chosen account you can't book on, and Google Meet newly asked of an account that
+can't add a video meeting; an unchanged choice whose account was removed since
+still saves, and that link takes no bookings until another account is chosen.
 
 Booking links are confirmed in conversation, with no special booking form. The AI
-first explains the proposed meeting details, ownership and named hosts, time zone,
+first explains the proposed meeting details, ownership and named hosts, the
+calendar account when it is not the primary one, time zone,
 availability and date exceptions, booking rules, guest questions and whether the
 link accepts bookings. It asks whether to proceed and waits for your reply before
 calling `CreateBookingLink` or `EditBookingLink`. An initial request to create a

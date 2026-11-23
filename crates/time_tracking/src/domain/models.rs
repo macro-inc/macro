@@ -28,6 +28,10 @@ pub const DEFAULT_PAGE_LIMIT: u8 = 50;
 /// The most entries one page may list.
 pub const MAX_PAGE_LIMIT: u8 = 200;
 
+/// What [`TimeTrackingError::NotFound`] names when time tracking is off for
+/// the caller, so adapters can tell it from a missing task.
+pub const TIME_TRACKING_OFF: &str = "time tracking";
+
 /// The finest instant the tables store: Postgres keeps microseconds.
 const STORED_PRECISION: u16 = 6;
 
@@ -54,6 +58,7 @@ pub fn may_change_entry(entry: &TimeEntry, caller: &MacroUserIdStr<'_>) -> bool 
 /// How a time entry was made.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "toolset", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",

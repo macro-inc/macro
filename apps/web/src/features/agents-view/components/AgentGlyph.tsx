@@ -5,6 +5,7 @@ import MacroLogo from '@icon/macro-logo.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
+import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { MACRO_PERSONA_ID } from '../core/roster';
 
@@ -62,14 +63,25 @@ export function AgentAvatar(props: {
   agent: GlyphAgent;
   coder: boolean;
   cls?: 'av' | 'bigav';
+  /** Size override for compact identity surfaces; material stays agent-owned. */
+  class?: string;
+  iconClass?: string;
   children?: JSX.Element;
 }) {
   return (
-    <span class="avw">
-      <span class={props.cls ?? 'av'}>
+    <span class="avw relative inline-grid shrink-0">
+      <span
+        data-agent-avatar
+        class={cn(
+          props.cls ?? 'av',
+          'flex shrink-0 items-center justify-center overflow-hidden rounded-full',
+          props.cls !== 'bigav' && 'bg-surface-1 text-ink-muted',
+          props.class
+        )}
+      >
         <Show
           when={props.agent.avatarUrl}
-          fallback={<AgentIcon agent={props.agent} />}
+          fallback={<AgentIcon agent={props.agent} class={props.iconClass} />}
         >
           {(url) => (
             <img

@@ -9,6 +9,7 @@ import { Show } from 'solid-js';
 /** Keyed rows retain focused DOM nodes when capabilities or selection update. */
 export function ModelRows(props: {
   models: CatalogModelOption[];
+  class?: string;
   mobile?: boolean;
   selected?: string;
   disabled?: boolean;
@@ -26,7 +27,8 @@ export function ModelRows(props: {
             'flex w-full items-center text-left font-normal gap-2.5 px-2.5 py-2 rounded-lg not-touch:hover:bg-hover focus-visible:bg-active text-sm',
             props.mobile
               ? 'h-11 rounded-[22px] gap-3 px-3 py-2.5 text-base leading-[22px]'
-              : 'min-h-9'
+              : 'min-h-9',
+            props.class
           )}
           disabled={props.disabled}
           onClick={() => props.onPick(option().id)}
