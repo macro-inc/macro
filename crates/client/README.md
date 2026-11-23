@@ -149,12 +149,14 @@ type:
   not validate, or applying the Types tier failed or ran out of space and
   rolled back. Every refetchable row goes.
 
-Every tier keeps the cache's identity, authority and queued mutations. Types
-and Reset drop the storage generation record, so the backfill starts over and
+Every tier keeps the cache's identity, authority and queued mutations; the
+migration of a previous cache format, which runs before adoption, keeps only
+the queue. Types and Reset drop the storage generation record, so the backfill starts over and
 refetches what went. A queued write's optimistic overlay that no longer fits is retired:
 the mutation is still sent, but its overlay adds no records and its queued
-projections go with it. Queued projections of the records that went go too, so
-no optimistic list entry outlives its record. The stored schema
+projections go with it. Queued projections of the records that went go too,
+and every queued projection when every document is marked incomplete, so no
+optimistic list entry outlives its record or the facts it was derived from. The stored schema
 is the incoming one plus the definitions it removed that kept records may still
 hold, so a later build that adds a field back with another shape drops the old
 values instead of reading them as the new type. A cache stored before schema 13
