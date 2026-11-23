@@ -15,13 +15,36 @@ export interface TimeEntryChanges {
   minutes?: number;
   /** What the time was spent on; `null` removes the note. */
   note?: string | null;
-  /** When the work started, given with `endedAt`; `null` clears both. */
+  /** When the work started, set together with `endedAt`; `null` clears both. */
   startedAt?: Date | null;
   /** When the work ended, after `startedAt`; `null` clears both. */
   endedAt?: Date | null;
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * The span fields of an edit. The server keeps a start and an end together,
+ * so `null` for one with the other left out clears both.
+ */
+function spanChanges(changes: TimeEntryChanges): {
+  startedAt?: string | null;
+  endedAt?: string | null;
+} {
+  const { startedAt, endedAt } = changes;
+  if (startedAt === undefined && endedAt === undefined) return {};
+  if (
+    (startedAt === null && endedAt === undefined) ||
+    (endedAt === null && startedAt === undefined)
+  )
+    return { startedAt: null, endedAt: null };
+  return {
+    ...(startedAt !== undefined && {
+      startedAt: startedAt?.toISOString() ?? null,
+    }),
+    ...(endedAt !== undefined && { endedAt: endedAt?.toISOString() ?? null }),
+  };
+}
 
 /** @internal Throws unless `date` is a `YYYY-MM-DD` day. */
 export function checkDay(method: string, date: unknown): void {
@@ -128,12 +151,7 @@ export class TimeEntry extends MacroEntity<TimeEntryRecord> {
           ...(changes.date !== undefined && { date: changes.date }),
           ...(changes.minutes !== undefined && { minutes: changes.minutes }),
           ...(changes.note !== undefined && { note: changes.note }),
-          ...(changes.startedAt !== undefined && {
-            startedAt: changes.startedAt?.toISOString() ?? null,
-          }),
-          ...(changes.endedAt !== undefined && {
-            endedAt: changes.endedAt?.toISOString() ?? null,
-          }),
+          ...spanChanges(changes),
         },
       }),
     );

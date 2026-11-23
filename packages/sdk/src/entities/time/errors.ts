@@ -18,7 +18,8 @@ export class NotTimeEntryAuthorError extends MacroApiError {
 /**
  * The running timer has run past 8 hours, so nothing was saved (HTTP 409).
  * Ask the user when they stopped working, then call `timer.stop({ endedAt })`,
- * or `timer.stop({ logAll: true })` to log it all, or `timer.discard()`.
+ * or `timer.stop({ logAll: true })` to log it all (up to 24 hours), or
+ * `timer.discard()`.
  * A refused `task.startTimer()` names the timer that was already running;
  * resolve it first, then start again.
  */
@@ -50,7 +51,7 @@ export function unwrapTime<TData, TError>(
     .with(
       {
         status: 409,
-        error: { code: 'timer_over_limit', timer: P.select() },
+        error: { code: 'timer_over_limit', timer: P.optional(P.select()) },
       },
       (timer, { error }) => {
         throw new TimerOverLimitError(

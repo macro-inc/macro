@@ -19,7 +19,7 @@ export interface StopTimerOptions {
    * from the start to this instant instead of to now.
    */
   endedAt?: Date;
-  /** Log all the time until now, for a timer past 8 hours. */
+  /** Log all the time until now, for a timer past 8 hours; at most 24 hours can be logged. */
   logAll?: boolean;
 }
 
@@ -97,6 +97,7 @@ export class Timer extends MacroEntity<RunningTimer> {
    * Throw the timer away without logging any time.
    *
    * @destructive
+   * @idempotent
    */
   async discard(): Promise<void> {
     unwrapTime(

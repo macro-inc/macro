@@ -14,9 +14,10 @@ import { Timer } from './timer';
  * it (`NotTimeEntryAuthorError` otherwise); don't request access for that.
  * A timer past 8 hours is refused with `TimerOverLimitError` until the user
  * says when they stopped (`timer.stop({ endedAt })`), to log it all
- * (`logAll: true`) or to discard it. Starting a timer stops and saves one
- * running on another task. The task's Time logged property is the sum of its
- * entries and cannot be set directly.
+ * (`logAll: true`, up to 24 hours) or to discard it. Starting a timer stops
+ * and saves any timer already running, even on the same task, so read
+ * `macro.time.timer()` before starting one. The task's Time logged property
+ * is the sum of its entries and cannot be set directly.
  */
 export class TimeNamespace {
   constructor(private readonly client: MacroClient) {}

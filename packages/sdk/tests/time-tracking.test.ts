@@ -219,6 +219,68 @@ describe('task.timeEntries', () => {
 });
 
 describe('TimeEntry', () => {
+  test('a start and end travel as RFC 3339 instants', async () => {
+    const requests = serve(() =>
+      Response.json({ entry: entry(), totalMinutes: 60 }),
+    );
+    await macro()
+      .tasks.byId(taskId)
+      .logTime({
+        minutes: 60,
+        date: '2026-11-20',
+        startedAt: new Date('2026-11-20T09:00:00Z'),
+        endedAt: new Date('2026-11-20T10:00:00Z'),
+      });
+
+    expect(requests[0]?.body).toEqual({
+      date: '2026-11-20',
+      minutes: 60,
+      startedAt: '2026-11-20T09:00:00.000Z',
+      endedAt: '2026-11-20T10:00:00.000Z',
+    });
+  });
+
+  test('null for one end of the span clears both, which the server needs', async () => {
+    const requests = serve(() =>
+      Response.json({ entry: entry(), totalMinutes: 90 }),
+    );
+    const found = TimeEntry.byId(macro()._client, entryId);
+
+    await found.edit({ startedAt: null });
+    await found.edit({ endedAt: null });
+    await found.edit({
+      startedAt: new Date('2026-11-20T09:00:00Z'),
+      endedAt: new Date('2026-11-20T10:30:00Z'),
+    });
+
+    expect(requests.map((request) => request.body)).toEqual([
+      { startedAt: null, endedAt: null },
+      { startedAt: null, endedAt: null },
+      {
+        startedAt: '2026-11-20T09:00:00.000Z',
+        endedAt: '2026-11-20T10:30:00.000Z',
+      },
+    ]);
+  });
+
+  test('edit, startTimer and stop refuse options they do not take', async () => {
+    const requests = serve(() => Response.json({}));
+    const client = macro()._client;
+
+    await expect(
+      TimeEntry.byId(client, entryId).edit({ user: 'someone' } as never),
+    ).rejects.toThrow('timeEntry.edit does not take `user`');
+    await expect(
+      macro()
+        .tasks.byId(taskId)
+        .startTimer({ startedAt: new Date() } as never),
+    ).rejects.toThrow('task.startTimer does not take `startedAt`');
+    await expect(
+      Timer.byId(client, timerId).stop({ minutes: 5 } as never),
+    ).rejects.toThrow('timer.stop does not take `minutes`');
+    expect(requests).toHaveLength(0);
+  });
+
   test('edit sends only the changed fields and keeps the stored entry', async () => {
     const requests = serve(() =>
       Response.json({
@@ -267,7 +329,7 @@ describe('TimeEntry', () => {
   });
 
   test('remove deletes the entry', async () => {
-    const requests = serve(() => Response.json({ taskId, totalMinutes: 0 }));
+    const requests = serve(() => Response.json({ totalMinutes: 0 }));
 
     await TimeEntry.byId(macro()._client, entryId).remove();
 
@@ -380,6 +442,54 @@ describe('timer', () => {
       timerId,
       endedAt: endedAt.toISOString(),
     });
+  });
+
+  test('stopping a timer past the limit throws without saving, then logs all of it', async () => {
+    const requests = serve(({ body }) =>
+      (body as { logAll?: boolean }).logAll
+        ? Response.json({
+            logged: {
+              entry: entry({ id: timerId, minutes: 540, source: 'timer' }),
+              totalMinutes: 540,
+            },
+          })
+        : Response.json(
+            {
+              code: 'timer_over_limit',
+              message: 'the timer ran over 8 hours',
+              timer: runningTimer(),
+            },
+            { status: 409 },
+          ),
+    );
+    const timer = Timer.byId(macro()._client, timerId);
+
+    const refusal = await timer.stop().catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(TimerOverLimitError);
+    expect((refusal as TimerOverLimitError).timer?.id).toBe(timerId);
+
+    const saved = await timer.stop({ logAll: true });
+    expect(await saved?.minutes()).toBe(540);
+    expect(requests.map((request) => request.body)).toEqual([
+      { timerId },
+      { timerId, logAll: true },
+    ]);
+  });
+
+  test('an over-limit refusal without its timer is still a TimerOverLimitError', async () => {
+    serve(() =>
+      Response.json(
+        { code: 'timer_over_limit', message: 'the timer ran over 8 hours' },
+        { status: 409 },
+      ),
+    );
+
+    const refusal = await Timer.byId(macro()._client, timerId)
+      .stop()
+      .catch((error: unknown) => error);
+
+    expect(refusal).toBeInstanceOf(TimerOverLimitError);
+    expect((refusal as TimerOverLimitError).timer).toBeUndefined();
   });
 
   test('discard drops the timer', async () => {

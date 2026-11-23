@@ -299,9 +299,10 @@ export class Task extends Document {
   }
 
   /**
-   * Start your timer on this task; needs edit access. A timer running on
-   * another task stops and its entry is saved (`stopped`); one past 8 hours
-   * throws `TimerOverLimitError` instead, naming that timer to resolve first.
+   * Start your timer on this task, first stopping and saving any timer you
+   * have running, on this task too (`stopped`); check `macro.time.timer()`
+   * first. Needs edit access. A running timer past 8 hours throws
+   * `TimerOverLimitError` instead, naming that timer to resolve first.
    *
    * @write
    */
