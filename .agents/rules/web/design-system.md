@@ -54,7 +54,8 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   Keep 8px between islands. Filter, sort, group, and download live in the header, never
   in a second toolbar row; only active filter chips sit below it. A pane's
   top-bar `Tabs` take Tab, Shift+Tab and 1–9 through `useViewTabHotkeys`,
-  registered beside them; a sidebar's navigation and the rest of a view never
+  registered beside them on the split's own scope (`splitRootScope`, which an
+  inline preview keeps); a sidebar's navigation and the rest of a view never
   bind Tab. Tabs atop a list that is the sidebar (Chat, New Home) are that
   pane's top bar.
 - **FE-63** Style controls only through their props (`variant`, `size`, `finish`,

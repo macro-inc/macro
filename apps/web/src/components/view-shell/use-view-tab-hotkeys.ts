@@ -1,12 +1,14 @@
 import { t } from '@app/lib/i18n';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
 import { getScopeElement } from '@core/hotkey/utils';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { onCleanup } from 'solid-js';
 
 export type UseViewTabHotkeysOptions<TTab extends string> = {
-  /** The split's hotkey scope: the pane the tabs head. */
+  /**
+   * The split's own hotkey scope (`splitRootScope(panel)`), never an inline
+   * preview's: a key pressed on the split itself reaches only that one.
+   */
   scopeId: string;
   /**
    * The tabs in the pane's top bar. The keys act only while this element is
@@ -26,10 +28,17 @@ export type UseViewTabHotkeysOptions<TTab extends string> = {
 /**
  * Focus targets that stand for the pane itself rather than for one of its
  * controls: a container that owns keys (the split, a conversation's message
- * list, a list scope) or a list grid, whose rows take focus virtually.
+ * list, a list scope), a list whose rows take focus virtually, or a container
+ * a view focuses to give its pane the keyboard, marked `data-pane-focus`.
  */
 const PANE_FOCUS_SELECTOR =
-  '[data-hotkey-scope], [role="grid"], [role="treegrid"], [role="tree"], [role="listbox"]';
+  '[data-hotkey-scope], [data-pane-focus], [role="grid"], [role="treegrid"], [role="tree"], [role="listbox"], [role="table"]';
+
+/**
+ * Data grids and canvases that move by the arrow keys (a database's cells, a
+ * slide stage) are content, not a list: a key there is never the pane's.
+ */
+const OWNS_ITS_KEYS_SELECTOR = '[data-owns-arrow-keys]';
 
 /** The view-shell regions a split lays its list, sidebar and detail in. */
 const PANE_REGION_SELECTOR =
@@ -48,8 +57,8 @@ function isOnScreen(element: Element | undefined): boolean {
  * holding the tabs (a list beside a detail is its own pane), else the whole
  * split. Nothing focused counts as the pane, as the split keeps the keyboard
  * after a load or an item opening, unless the user last put the keyboard in
- * another of the split's panes (`lastPlace`, that pane: a press on plain text
- * in a detail beside the list focuses the split itself).
+ * another of the split's panes still on screen (`lastPlace`, that pane: a
+ * press on plain text in a detail beside the list focuses the split itself).
  */
 function keyboardIsOnPane(
   target: EventTarget | null | undefined,
@@ -65,17 +74,26 @@ function keyboardIsOnPane(
     target === split
   )
     return (
-      !lastPlace || !split?.contains(lastPlace) || !!pane?.contains(lastPlace)
+      !lastPlace ||
+      !split?.contains(lastPlace) ||
+      !isOnScreen(lastPlace) ||
+      !!pane?.contains(lastPlace)
     );
   if (!pane?.contains(target)) return false;
-  return target.matches(PANE_FOCUS_SELECTOR) && !isEditableInput(target);
+  return (
+    target.matches(PANE_FOCUS_SELECTOR) &&
+    !target.matches(OWNS_ITS_KEYS_SELECTOR) &&
+    !isEditableInput(target)
+  );
 }
 
 /**
  * Tab, Shift+Tab and 1–9 for the tabs in a pane's top bar. They act only
  * while those tabs are on screen and the keyboard is on the pane; anywhere
  * else (a field, an editor, a button, an open item without tabs) Tab is
- * normal focus order.
+ * normal focus order. A split can hold several panes with tabs (a list
+ * beside a conversation), so each set registers alongside the others and
+ * the first whose pane has the keyboard takes the key.
  */
 export function useViewTabHotkeys<TTab extends string>(
   options: UseViewTabHotkeysOptions<TTab>
@@ -118,8 +136,8 @@ export function useViewTabHotkeys<TTab extends string>(
   numberKeys.forEach((key, index) => {
     registerHotkey({
       hotkey: key,
-      hotkeyToken: TOKENS.soup.tabs[key],
       scopeId: options.scopeId,
+      registrationType: 'add',
       description: () => {
         const id = options.ids()[index];
         return t('tabs.viewTabGoTo', { label: id ? options.label(id) : key });
@@ -157,8 +175,8 @@ export function useViewTabHotkeys<TTab extends string>(
 
   registerHotkey({
     hotkey: 'tab',
-    hotkeyToken: TOKENS.soup.tabs.next,
     scopeId: options.scopeId,
+    registrationType: 'add',
     description: () => t('tabs.viewTabNext'),
     condition: () => isEnabled() && options.ids().length > 1,
     keyDownHandler: (event) => keyboardOnPane(event) && move(1),
@@ -166,8 +184,8 @@ export function useViewTabHotkeys<TTab extends string>(
 
   registerHotkey({
     hotkey: 'shift+tab',
-    hotkeyToken: TOKENS.soup.tabs.prev,
     scopeId: options.scopeId,
+    registrationType: 'add',
     description: () => t('tabs.viewTabPrevious'),
     condition: () => isEnabled() && options.ids().length > 1,
     keyDownHandler: (event) => keyboardOnPane(event) && move(-1),
