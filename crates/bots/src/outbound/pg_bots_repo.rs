@@ -11,8 +11,9 @@ use crate::domain::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AgentStoppedReason,
         AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner,
         BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest,
-        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessFacts,
-        HarnessId, PatchBotRequest, UpdateAgentRequest,
+        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        DeletedHarnessAgents, HarnessFacts, HarnessId, PatchBotRequest, ReplacedAgent,
+        UpdateAgentRequest,
     },
     ports::{BotRepo, HarnessRemoved},
 };
@@ -470,7 +471,7 @@ impl BotRepo for PgBotsRepo {
         bot_id: BotId,
         owner: BotOwner,
         req: UpdateAgentRequest,
-    ) -> Result<Option<Agent>, Self::Err> {
+    ) -> Result<Option<ReplacedAgent>, Self::Err> {
         let (owner_user_id, team_id) = owner_columns(owner);
         let mut tx = self
             .pool
@@ -569,7 +570,7 @@ impl BotRepo for PgBotsRepo {
         // A direct conversation the persona is in belongs to the person it
         // is with, not to the persona's channel selection.
         let bot_principal = principal_id(bot_id);
-        sqlx::query!(
+        let previous_channel_ids = sqlx::query_scalar!(
             r#"
             UPDATE comms_channel_participants
             SET left_at = now()
@@ -581,10 +582,11 @@ impl BotRepo for PgBotsRepo {
                   WHERE ca.channel_id = comms_channel_participants.channel_id
                     AND ca.kind = 'direct'
               )
+            RETURNING channel_id
             "#,
             &bot_principal,
         )
-        .execute(&mut *tx)
+        .fetch_all(&mut *tx)
         .await
         .context("failed to clear the agent's previous channels")?;
 
@@ -611,7 +613,7 @@ impl BotRepo for PgBotsRepo {
             .await
             .context("failed to commit agent update transaction")?;
 
-        Ok(Some(Agent {
+        let agent = Agent {
             bot: map_bot_row(bot_row)?,
             instructions: req.instructions,
             harness: req.harness,
@@ -624,6 +626,10 @@ impl BotRepo for PgBotsRepo {
             is_coding: req.is_coding,
             // Saving one checks that its owner may run on its runtime.
             stopped_reason: None,
+        };
+        Ok(Some(ReplacedAgent {
+            agent,
+            previous_channel_ids,
         }))
     }
 
@@ -1464,7 +1470,7 @@ impl BotRepo for PgBotsRepo {
         row.map(map_bot_row).transpose()
     }
 
-    async fn delete_bot(&self, bot_id: BotId) -> Result<bool, Self::Err> {
+    async fn delete_bot(&self, bot_id: BotId) -> Result<Option<Vec<Uuid>>, Self::Err> {
         let mut tx = self.pool.begin().await?;
         let result = sqlx::query!(
             r#"
@@ -1479,30 +1485,52 @@ impl BotRepo for PgBotsRepo {
         .await
         .context("failed to soft-delete bot")?;
 
-        if result.rows_affected() > 0 {
-            sqlx::query!(
-                r#"
-                UPDATE comms_channel_participants
-                SET left_at = now()
-                WHERE user_id = $1
-                  AND left_at IS NULL
-                "#,
-                principal_id(bot_id),
-            )
-            .execute(&mut *tx)
-            .await
-            .context("failed to remove deleted bot from channels")?;
+        if result.rows_affected() == 0 {
+            tx.commit().await?;
+            return Ok(None);
         }
 
+        let left_channel_ids = sqlx::query_scalar!(
+            r#"
+            UPDATE comms_channel_participants
+            SET left_at = now()
+            WHERE user_id = $1
+              AND left_at IS NULL
+            RETURNING channel_id
+            "#,
+            principal_id(bot_id),
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .context("failed to remove deleted bot from channels")?;
+
         tx.commit().await?;
-        Ok(result.rows_affected() > 0)
+        Ok(Some(left_channel_ids))
     }
 
     async fn delete_harness_agents(
         &self,
         harness: HarnessId,
-    ) -> Result<Vec<(BotId, BotOwner)>, Self::Err> {
+    ) -> Result<DeletedHarnessAgents, Self::Err> {
         self.delete_harness_agents_inner(harness).await
+    }
+
+    async fn channel_names(
+        &self,
+        channel_ids: &[Uuid],
+    ) -> Result<Vec<(Uuid, Option<String>)>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name
+            FROM comms_channels
+            WHERE id = ANY($1::uuid[])
+            "#,
+            channel_ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to read channel names")?;
+        Ok(rows.into_iter().map(|row| (row.id, row.name)).collect())
     }
 
     async fn add_bot_to_channel(&self, channel_id: Uuid, bot_id: BotId) -> Result<(), Self::Err> {

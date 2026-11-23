@@ -12,10 +12,12 @@ import { type SimilarTask, Task, type TaskSummary } from './task';
  * Creating a task needs only what the request states; don't research what it
  * describes unless asked.
  *
- * @routing Use when creating, assigning or updating tasks, reporting on open or overdue tasks, or managing reusable task templates; not reminders, which are routines.
+ * @routing Use when creating, assigning or updating tasks, logging time on a task or running a timer, reporting on open or overdue tasks, or managing reusable task templates; not reminders, which are routines.
  *
  * @agent
  * Never edit, merge or delete the tasks `findSimilar` matches unless the user asks.
+ * When changing both of a task's dates, set the Due Date before the Start Date:
+ * a start after the current due date is saved as that due date.
  */
 export class TaskNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -26,8 +28,8 @@ export class TaskNamespace {
   }
 
   /**
-   * Create a task, with its initiative, assignees and due date in the same
-   * request. The task starts Not started.
+   * Create a task, with its initiative, assignees, start and due dates in the
+   * same request. The task starts Not started.
    *
    * @write
    */
@@ -40,7 +42,18 @@ export class TaskNamespace {
     initiative?: Initiative;
     /** Assignees; defaults to the creator. Pass `[]` to leave it unassigned. */
     assignees?: User[];
+    /** The day the task is due, kept as a whole day. */
     dueDate?: Date;
+    /**
+     * The day work on the task starts, kept as a whole day. A start after
+     * `dueDate` is saved as the due date.
+     */
+    startDate?: Date;
+    /**
+     * Keeps the time of day of `startDate` and `dueDate`, making each an
+     * exact moment (a 2 to 4 PM block) instead of a whole day.
+     */
+    withTimes?: boolean;
     /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
     team?: Team;
     /** Defaults to team sharing, or private when the session cannot share. */

@@ -141,17 +141,6 @@ export const enableEntityAppearance = defineFlag({
   default: onInDev,
 });
 
-/**
- * Connect apps Macro Connect serves through it instead of Pipedream. The
- * backend reads the same PostHog key and decides per app; this side only
- * reserves the consent popup inside the click. Off in dev too: dev has no
- * Connect customer key until one is added to Doppler.
- */
-export const macroConnect = defineFlag({
-  key: 'macro-connect',
-  env: 'ENABLE_MACRO_CONNECT',
-});
-
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',
@@ -474,6 +463,24 @@ export const disableCrmContactSearch = defineFlag({
   env: 'DISABLE_CRM_CONTACT_SEARCH',
 });
 
+// Stores each contact's `GraphqlContact.lists` in the local cache. Off in dev
+// too: a server without the field refuses any read that selects it, so this
+// waits for the server to ship it. Override with VITE_ENABLE_CONTACT_LISTS.
+export const enableContactLists = defineFlag({
+  key: 'enable-contact-lists',
+  env: 'ENABLE_CONTACT_LISTS',
+});
+
+// In a tab without the local cache, reads the people typed text names from the
+// whole directory (`GraphqlUser.contactsNamedBy`) instead of the exact-name
+// scan of the first 2,000 contacts. Off in dev too: a server without the field
+// refuses any read that selects it, so this waits for the server to ship it.
+// Override with VITE_ENABLE_NAMED_CONTACT_SEARCH.
+export const enableNamedContactSearch = defineFlag({
+  key: 'enable-named-contact-search',
+  env: 'ENABLE_NAMED_CONTACT_SEARCH',
+});
+
 // No dev override: the server requires this same remote flag before accepting writes.
 export const enableCrmMemberAccessChanges = defineFlag({
   key: 'enable-crm-member-access-changes',
@@ -502,6 +509,16 @@ export const enableCrmLists = defineFlag({
 export const enableTaskSourceProperty = defineFlag({
   key: 'enable-task-source-property',
   env: 'ENABLE_TASK_SOURCE_PROPERTY',
+  default: onInDev,
+});
+
+/**
+ * Start Date on tasks and projects: the dates pill and picker, the details
+ * row, the composer, and the range in list cells and board cards.
+ */
+export const enableTaskStartDate = defineFlag({
+  key: 'enable-task-start-date',
+  env: 'ENABLE_TASK_START_DATE',
   default: onInDev,
 });
 
@@ -706,6 +723,16 @@ export const enableChatSidebarSectionResize = defineFlag({
   env: 'ENABLE_CHAT_SIDEBAR_SECTION_RESIZE',
 });
 
+// Desktop channel gutter: a Mark done check beside each notification stack,
+// and a bell toggle opening a list of the channel's not-done or unread stacks.
+// On in development; deployed environments defer to PostHog (Macro staff
+// first).
+export const enableChannelNotificationGutter = defineFlag({
+  key: 'enable-channel-notification-gutter',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_GUTTER',
+  default: onInDev,
+});
+
 // Manual and smart channel labels, including their queries and drag/drop UI.
 // Off until PostHog enables them; override with VITE_ENABLE_CHANNEL_TAGS.
 export const enableChannelTags = defineFlag({
@@ -752,6 +779,19 @@ export const enableActivityFeed = defineFlag({
   key: 'enable-activity-feed',
   env: 'ENABLE_ACTIVITY_FEED',
   default: onInDev,
+});
+
+/**
+ * Notifications a person, agent or script writes with
+ * `macro.notifications.send`: their "Agent pings" setting. The notification
+ * service refuses to send while the same flag is off for the sender. On only
+ * on a local stack, where that service is on for everyone; a deployment asks
+ * PostHog on both sides. Override with VITE_ENABLE_AGENT_NOTIFICATIONS.
+ */
+export const enableAgentNotifications = defineFlag({
+  key: 'enable-agent-notifications',
+  env: 'ENABLE_AGENT_NOTIFICATIONS',
+  default: LOCAL_ONLY || undefined,
 });
 
 // The unified notifications view: the /notifications route (redirects to Home

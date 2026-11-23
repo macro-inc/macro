@@ -49,14 +49,18 @@ import {
   selectConfigOption,
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
-import { type AgentKind, kindForMode } from '../core/agent-kind';
+import { type AgentKind, kindForMode, modeForKind } from '../core/agent-kind';
 import {
   type AgentsMode,
   agentsModeLabel,
   type ComposerMode,
 } from '../core/mode';
 import { defaultBranchFor, sameRepository } from '../core/repository';
-import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import {
+  MACRO_PERSONA_ID,
+  type RosterAgent,
+  rosterAgentForMention,
+} from '../core/roster';
 import { UnifiedModelSelector } from '../model-selector';
 import {
   createPersistedComposerAttachments,
@@ -148,13 +152,24 @@ export function NewChatPage(props: {
     props.roster.filter((agent) => agent.kind === kindForMode(kind));
   const options = () => optionsFor(agentsMode());
   const [agentId, setAgentId] = createSignal<string>();
+  // A mention made before the roster has loaded is applied once it has,
+  // unless something later decides first: another mention, a pick, a mode
+  // switch or a requested agent.
+  const [pendingMention, setPendingMention] = createSignal<string>();
   createEffect(
     on(
       () => props.requestedAgent,
       (requested) => {
-        if (requested) setAgentId(requested.agentId);
+        if (!requested) return;
+        setPendingMention(undefined);
+        setAgentId(requested.agentId);
       }
     )
+  );
+  // A switch between Chat and Code, not Auto appearing once the flags load.
+  const agentKind = createMemo(agentsMode);
+  createEffect(
+    on(agentKind, () => setPendingMention(undefined), { defer: true })
   );
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
@@ -470,6 +485,8 @@ export function NewChatPage(props: {
     model?: string,
     selection?: EffortChoice
   ) => {
+    // The latest pick wins over a mention still waiting for the roster.
+    setPendingMention(undefined);
     setAgentId(agent.id);
     if (agent.id === MACRO_PERSONA_ID) {
       if (model) preferredInmem.remember(model);
@@ -481,6 +498,41 @@ export function NewChatPage(props: {
     }
     if (selection) rememberEffort(selection);
   };
+
+  // An @mentioned agent becomes the active one, switching to its mode, as
+  // mentioning it in a channel starts it; the mention stays in the prompt.
+  // An unavailable one is selected too, so the send is blocked with its
+  // reason instead of going to another agent. The last agent picked wins.
+  // Mentioning the agent already active changes nothing, so a model picked
+  // for it stays.
+  const activateMentioned = (agent: RosterAgent) => {
+    const agentMode = modeForKind(agent.kind);
+    if (agent.id === selected()?.id && mode() === agentMode) return;
+    if (mode() !== agentMode) setMode(agentMode);
+    selectAgent(agent);
+  };
+  const selectMentionedAgent = (mentionedId: string) => {
+    // Only agents select; a person mentioned meanwhile keeps a pending one.
+    if (!mentionedId.startsWith('bot|')) return;
+    const agent = rosterAgentForMention(props.roster, mentionedId);
+    if (agent) {
+      setPendingMention(undefined);
+      activateMentioned(agent);
+    } else if (props.rosterLoading || props.availabilityLoading)
+      setPendingMention(mentionedId);
+  };
+  createEffect(
+    on(
+      () => [props.roster, props.rosterLoading] as const,
+      ([roster, loading]) => {
+        const mentionedId = pendingMention();
+        if (!mentionedId) return;
+        const agent = rosterAgentForMention(roster, mentionedId);
+        if (agent || !loading) setPendingMention(undefined);
+        if (agent) activateMentioned(agent);
+      }
+    )
+  );
 
   let focusInput: (() => void) | undefined;
   const chatAboutUpdate = (sessionId: string, sessionName: string) => {
@@ -563,6 +615,7 @@ export function NewChatPage(props: {
   );
 
   const setMode = (next: ComposerMode) => {
+    setPendingMention(undefined);
     // A model picked for the other mode's agent does not carry over.
     setModelOverride(undefined);
     if (props.onModeChange) props.onModeChange(next);
@@ -679,6 +732,7 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
+      onMentionUser={selectMentionedAgent}
       modelName={catalogModelLabel(
         composerModelOverride(),
         selectedCatalog.models()

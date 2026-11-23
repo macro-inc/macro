@@ -3535,7 +3535,8 @@ input GraphqlChannelLiteral @oneOf {
 	"""
 	The is participant option. Filters by whether the requesting user is an
 	active participant; its presence widens the candidate set to team channels
-	of the user's teams they have not joined.
+	of the user's teams they have not joined, and, when the filter admits only
+	channels it names by id, to public channels too.
 	"""
 	isParticipant: Boolean
 	"""
@@ -4033,6 +4034,12 @@ type GraphqlContact {
 	Macro profile name, then this viewer's address-book name; null means use email fallback.
 	"""
 	name: String
+	"""
+	Keys of the viewer's lists this person is in (`teammates`, `interacted`,
+	`invited`, `gmail`, `outlook`; more may be added), each once. Empty for
+	the viewer, and for a person in no list.
+	"""
+	lists: [String!]!
 }
 
 """
@@ -4504,13 +4511,19 @@ input GraphqlDateLiteral @oneOf {
 }
 
 """
-A date-time property value.
+A date property value.
 """
 type GraphqlDatePropertyValue {
 	"""
-	The stored date-time formatted as RFC 3339.
+	The stored instant formatted as RFC 3339.
 	"""
 	value: String!
+	"""
+	Whether its time of day was set. Without one the value stands for a
+	whole day, shown as the day its instant falls on in the viewer's time
+	zone.
+	"""
+	hasTime: Boolean!
 }
 
 """
@@ -5082,9 +5095,9 @@ type GraphqlEmailThreadFocus {
 	"""
 	needsReply: Boolean!
 	"""
-	The owner sent the latest message and should come back to the thread: it
-	has an open loop or has waited for an answer. Never true together with
-	`needs_reply`.
+	The owner sent the latest message and the thread is back to follow up:
+	no answer came in the wait, or its due day has come. Never true together
+	with `needs_reply`.
 	"""
 	needsFollowUp: Boolean!
 	"""
@@ -6849,7 +6862,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlPingMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -7040,6 +7053,42 @@ type GraphqlPasswordAccessRequestedMetadata {
 	Item display name when the request was made.
 	"""
 	itemName: String!
+}
+
+"""
+Metadata for a notification its sender wrote.
+"""
+type GraphqlPingMetadata {
+	"""
+	What the sender wrote.
+	"""
+	body: String!
+	"""
+	The linked entity's name when it was sent, when it has one that reads
+	the same to every recipient.
+	"""
+	entityName: String
+	"""
+	The agent whose code sent it, when one did.
+	"""
+	agentId: ID
+	"""
+	The sending agent's name when it was sent.
+	"""
+	agentName: String
+	"""
+	The sending agent's avatar when it was sent.
+	"""
+	agentAvatarUrl: String
+	"""
+	The channel message it opens at, when the sender linked one.
+	"""
+	messageId: ID
+	"""
+	The top-level message the linked message replies to, when it is a
+	reply.
+	"""
+	threadId: ID
 }
 
 """
@@ -8139,9 +8188,14 @@ input GraphqlSetPropertyValue @oneOf {
 	"""
 	boolean: Boolean
 	"""
-	An RFC 3339 date-time value.
+	An RFC 3339 date-time value standing for a whole day, shown as the day
+	it falls on in the viewer's time zone.
 	"""
 	date: String
+	"""
+	An RFC 3339 date-time whose time of day was set.
+	"""
+	dateWithTime: String
 	"""
 	A span from a start date-time to an end one.
 	"""
@@ -8817,6 +8871,10 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	participants: [GraphqlSoupChannelParticipant!]!
 	"""
+	The bots that participate in the channel. `participants` lists users only.
+	"""
+	botParticipants: [GraphqlSoupChannelBotParticipant!]!
+	"""
 	The latest message.
 	"""
 	latestMessage: GraphqlSoupChannelMessagePreview
@@ -8870,6 +8928,32 @@ type GraphqlSoupChannelAgentDm {
 	The persona's avatar URL, when it has one.
 	"""
 	avatarUrl: String
+}
+
+"""
+A bot that participates in a soup channel.
+"""
+type GraphqlSoupChannelBotParticipant {
+	"""
+	The identifier of the channel.
+	"""
+	channelId: ID!
+	"""
+	The identifier of the bot.
+	"""
+	botId: ID!
+	"""
+	The role.
+	"""
+	role: String!
+	"""
+	The joined timestamp in RFC 3339 format.
+	"""
+	joinedAt: String!
+	"""
+	The left timestamp in RFC 3339 format.
+	"""
+	leftAt: String
 }
 
 """
@@ -10978,6 +11062,27 @@ type GraphqlUser {
 		emails: [String!]!
 	): [GraphqlContact!]!
 	"""
+	The viewer's contacts whom the text names, across the whole directory:
+	their whole name, or for one word their first name, equals it, or each
+	typed word starts a word of the name they are shown with (their Macro
+	profile name, else the viewer's address-book label, else their
+	address's local part). Ranked by contact list (interacted or invited,
+	then teammates, then connected inboxes, then anyone else; teammates,
+	then anyone else, for a directory without lists), then exact names,
+	then user ID. There is no continuation. An address or user ID names
+	nobody: look it up with `contactsByEmails` or `contactsByUserIds`.
+	"""
+	contactsNamedBy(
+		"""
+		Typed text, at most 512 UTF-8 bytes and 32 words.
+		"""
+		search: String!,
+		"""
+		Maximum contacts, at least 1; defaults to 20 and is capped at 50.
+		"""
+		limit: Int
+	): [GraphqlContact!]!
+	"""
 	Read one page of the viewer's personal contacts with resolved names.
 	"""
 	contacts(
@@ -10998,6 +11103,20 @@ type GraphqlUser {
 		"""
 		matching: GraphqlContactMatching
 	): GraphqlContactPage!
+	"""
+	The id of the authenticated user's direct message with `userId`, the
+	one a first message to them would reuse, while the authenticated user
+	is still in it: of several, one both are in, then one only `userId`
+	left, then the oldest, then the lowest id. Null when they are in none,
+	or when `userId` is the authenticated user. Asking never creates one.
+	"""
+	directMessageChannelId(userId: ID!): ID
+	"""
+	When the authenticated user last viewed the channel, in RFC 3339
+	format, whether or not they are still in it. Null when they never
+	viewed it. Their own activity row needs no access to the channel.
+	"""
+	channelViewedAt(channelId: ID!): String
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.
@@ -12510,6 +12629,34 @@ Opaque versioned supplement containing authoritative server-only facts.
 scalar SoupCacheProjection
 
 """
+Where a Soup page reads its channels.
+"""
+enum SoupChannelReads {
+	"""
+	The default: the channel query reads the read replica, as ordinary
+	Soup lists do.
+	"""
+	REPLICA
+	"""
+	The channel query reads the primary, where the REST channel list reads
+	it, so the page's channels, with their members and activity, reflect
+	every membership change committed before it ran. Nothing else moves:
+	other entity types and per-item lookups keep the database they read.
+	Served only for channel directory pages: a timestamp sort (not NAME,
+	PROPERTY or NOTIFIED_AT), newest first, at most 100 items, channel
+	threads excluded by a nil-id filter, no `favoritesOnly: true`, no CRM
+	association of any kind (company, contact or activity), neither as
+	`crmAssociation` nor as a `crmAssociated` literal anywhere in the
+	document filter (a CRM email scope is allowed), and either no
+	channel filter or one that admits only
+	channels it names by id: at most 100 id literals, with nothing beside
+	them but at most two isParticipant literals in the whole tree. Any
+	other page is refused.
+	"""
+	PRIMARY
+}
+
+"""
 Input for continuing a Soup query.
 """
 input SoupContinuationInput {
@@ -12532,6 +12679,11 @@ input SoupContinuationInput {
 	used or the continuation flips order mid-list.
 	"""
 	sortDirection: GraphqlSortDirection
+	"""
+	Where the page reads its channels. Defaults to REPLICA. The cursor
+	does not carry it, so re-send whatever the initial query used.
+	"""
+	channelReads: SoupChannelReads
 }
 
 """
@@ -12582,6 +12734,10 @@ input SoupInitialInput {
 	Direction to order the page in. Defaults to DESC.
 	"""
 	sortDirection: GraphqlSortDirection
+	"""
+	Where the page reads its channels. Defaults to REPLICA.
+	"""
+	channelReads: SoupChannelReads
 }
 
 """

@@ -1,15 +1,24 @@
-import { SearchBar, ViewShell } from '@app/components/view-shell';
+import {
+  SearchBar,
+  useViewTabHotkeys,
+  ViewShell,
+} from '@app/components/view-shell';
 import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
+import {
+  splitRootScope,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, ComposerSurface, Layer, Tabs } from '@ui';
 import { type Accessor, createSignal, type JSX, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 
@@ -102,8 +111,29 @@ export function RoutinesList(props: {
         rows: filtered().filter((row) => row.group === group.key),
       }))
       .filter((group) => group.rows.length > 0);
+  const tabIds = (): ListTab[] =>
+    props.discover ? ['all', 'on', 'discover'] : ['all', 'on'];
+  const [tabsElement, setTabsElement] = createSignal<HTMLElement>();
+  const panel = useSplitPanel();
+  if (panel) {
+    useViewTabHotkeys<ListTab>({
+      scopeId: splitRootScope(panel),
+      enabled: panel.isPanelActive,
+      tabs: tabsElement,
+      ids: tabIds,
+      activeId: showing,
+      setActiveId: setShow,
+      label: (tab) =>
+        match(tab)
+          .with('all', () => 'All')
+          .with('on', () => 'On')
+          .with('discover', () => t('routineSuggestions.discover'))
+          .exhaustive(),
+    });
+  }
   const tabs = (): JSX.Element => (
     <Tabs
+      ref={setTabsElement}
       aria-label="Show routines"
       options={[
         { value: 'all', label: 'All', count: props.rows.length },

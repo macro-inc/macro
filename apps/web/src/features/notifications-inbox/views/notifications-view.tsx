@@ -184,14 +184,23 @@ export function NotificationsView(props: NotificationsViewProps) {
   );
   const condensed = () => props.frame?.condensed() ?? false;
 
-  // A frame numbers All and Unread among its own tabs.
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: () => !props.frame && panel.isPanelActive(),
-    ids: () => INBOX_STATUSES,
-    activeId: () => filters.filters().status,
-    setActiveId: filters.setStatus,
-  });
+  // In a frame (New Home), All and Unread are a filter row under the frame's
+  // own tabs, which take Tab and the number keys.
+  const [statusTabs, setStatusTabs] = createSignal<HTMLElement>();
+  if (!props.frame) {
+    useViewTabHotkeys<InboxStatus>({
+      scopeId: panel.splitHotkeyScope,
+      enabled: panel.isPanelActive,
+      tabs: statusTabs,
+      ids: () => INBOX_STATUSES,
+      activeId: () => filters.filters().status,
+      setActiveId: filters.setStatus,
+      label: (status) =>
+        status === 'all'
+          ? t('notificationsInbox.statusAll')
+          : t('notificationsInbox.statusUnread'),
+    });
+  }
 
   const [filterOpen, setFilterOpen] = createSignal(false);
   useViewControlHotkeys({
@@ -217,9 +226,6 @@ export function NotificationsView(props: NotificationsViewProps) {
   const isUnfolded = (id: string) => !condensed() && stacks.isExpanded(id);
   const listItems = createInboxListItems(rows, isUnfolded);
   const sectionEnds = createMemo(() => inboxSectionEnds(listItems()));
-  const anyStackOpen = createMemo(() =>
-    rows().some((row) => row.count > 1 && isUnfolded(row.id))
-  );
   const rowsById = createMemo(
     () => new Map(rows().map((row) => [row.id, row] as const))
   );
@@ -678,11 +684,6 @@ export function NotificationsView(props: NotificationsViewProps) {
           unseen={card.row().unseen}
           highlighted={highlighted()}
           endsSection={sectionEnds().has(card.row().id)}
-          receded={
-            anyStackOpen() &&
-            !stacks.isExpanded(card.row().id) &&
-            !highlighted()
-          }
           onHover={() => list.focus.set(card.row().id, { reason: 'hover' })}
           onClick={(event) =>
             list.activate.key(card.row().id, {
@@ -1056,8 +1057,6 @@ export function NotificationsView(props: NotificationsViewProps) {
                     {(frame) =>
                       frame().header({
                         actions: listActions(),
-                        status: () => filters.filters().status,
-                        onStatusChange: filters.setStatus,
                         closePreview: () => closePreview(),
                       })
                     }
@@ -1072,6 +1071,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                     }
                   >
                     <InboxStatusTabs
+                      ref={setStatusTabs}
                       status={filters.filters().status}
                       onChange={filters.setStatus}
                     />

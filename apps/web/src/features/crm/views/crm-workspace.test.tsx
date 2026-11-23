@@ -584,7 +584,7 @@ it('shows CRM settings in place of an open record and returns to it', () => {
   fireEvent.click(screen.getByRole('button', { name: 'CRM settings' }));
   expect(screen.getByText('Stage settings')).toBeTruthy();
   expect(screen.queryByText('Sales record company:acme')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Close CRM settings' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
   expect(screen.queryByText('Stage settings')).toBeNull();
   expect(screen.getByText('Sales record company:acme')).toBeTruthy();
   expect(record.close).not.toHaveBeenCalled();
@@ -601,7 +601,7 @@ it.each([false, true])(
     expect(screen.queryByText('tasks feed')).toBeNull();
     expect(screen.queryByText('Record list')).toBeNull();
     expect(activeTab()).toBe('tasks');
-    fireEvent.click(screen.getByRole('button', { name: 'Close CRM settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
     expect(screen.getByText('tasks feed')).toBeTruthy();
     expect(screen.queryByText('Stage settings')).toBeNull();
     expect(screen.queryByText('Record list')).toBeNull();

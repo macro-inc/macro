@@ -54,6 +54,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Put phone conversation headings after the agent bubbles and before pinned sections; use MobileListLayout as the sole island-inset owner, and share its offset between scroll padding and the sticky heading without extra top padding or a hosted split header.
 - Reuse EmptyStatePanel for exhausted empty phone lists regardless of retained filters; omit search/filter actions and focus the existing accessory composer from Start a conversation.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
+- An agent picked from the new-conversation composer's @ menu (Agents page, Home and the phone composer, which all mount `NewChatPage`) becomes the selected agent through `rosterAgentForMention` and the picker's own `selectAgent`; never add a second selection path.
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
 - Keep phone file inputs and overlay owners mounted on blur; add-menu, model, and repository sheets hold the composer expanded.
 - Keep the phone list composer's unfocused 46px pill vertically centered with no Send control; hide controls without unmounting their file or overlay owners.
@@ -64,6 +65,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 From `apps/web`:
 
 - `bun run test --project app src/features/agents-view`
+- New-conversation composer in a browser, backend-free (real `NewChatPage` and @ menu, mocked catalogs): `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bunx playwright test --config src/features/agents-view/browser-test/playwright.config.ts`. Mention chips render empty there; the started-prompt log shows the mention markup.
 - `bun run test --project app src/lib/i18n`
 - `bun run type-check`
 

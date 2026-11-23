@@ -61,11 +61,10 @@ use agent_changes::outbound::postgres::PgChangesetRepo;
 use agent_changes::outbound::s3::S3ChangesetBlobStore;
 use agent_egress::domain::approval::ToolApprovalService;
 use agent_egress::domain::service::EgressServiceImpl;
-use agent_egress::outbound::custom_mcp::WithCustomMcp;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, WithMacroMcp};
-use agent_egress::outbound::mcp_credentials::PipedreamMcpCredentials;
+use agent_egress::outbound::mcp_credentials::ConnectorsMcpCredentials;
 use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_egress::outbound::tool_approvals::{PgToolApprovalSignals, PgToolApprovalStore};
 use agent_fold::domain::service::FoldedMessageService;
@@ -174,17 +173,10 @@ use macro_service_urls::{
     AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
     StaticFilePublicUrl, StaticFileServiceUrl,
 };
-use mcp_client::domain::models::AesKey;
-use mcp_client::outbound::NativeServerStore;
-use mcp_client::outbound::pg_server_repo::PgServerRepo;
 use model_providers::{
     CursorModels, InMemoryModels, MacrodModels, PgKnownModels, VisibleHarnessAccess,
 };
 use permission_policy::PgPermissionPolicySource;
-use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
-use pipedream_mcp::outbound::connect::ConnectAdapter;
-use pipedream_mcp::outbound::dispatch::ConnectorBackends;
-use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
@@ -524,77 +516,42 @@ pub async fn run() -> anyhow::Result<()> {
     // Tracks event publishes the in-memory agent's tool context starts;
     // closed and drained on shutdown so nothing is dropped mid-publish.
     let event_broker_tracker = tokio_util::task::TaskTracker::new();
-    // MCP connections: the same rows the chat tool path reads, so an app
-    // connected in Macro is an app the sandbox can reach, with nothing to
-    // keep in sync. The rows hold no secrets - Pipedream owns the grants.
-    let mcp_connections = Arc::new(PgConnectionRepo::new(pool.clone()));
-    // Custom MCP servers - the ones a person added by URL - in the same rows
-    // agent_harness_service::cognition manages, under the same encryption key, so
-    // the proxy can refresh a stored grant and persist what comes back. GitHub
-    // is authorized by the account link instead.
-    let mcp_credentials_key = AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
-        .context("invalid MCP credentials encryption key")?;
-    let linked_github = Some(config.linked_github_tokens()?);
-    let mcp_servers = Arc::new(NativeServerStore::new(
-        PgServerRepo::new(pool.clone(), mcp_credentials_key),
-        linked_github.clone(),
-    ));
+    // Chat, completions and integrations read the same environment; their
+    // secrets resolve here so the connectors below are built once, from it.
+    let cognition_config = agent_harness_service::cognition::config::Config::from_env()?
+        .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
+        .await
+        .context("failed to resolve cognition secrets")?;
+    // This process's one connectors composition: chat, code mode, routines,
+    // agent app pins, the connector tools and the `/connectors` routes all
+    // read users' connections through it. Native OAuth state shares the
+    // Redis cognition's other state lives in.
+    let connectors = connectors::composition::compose(
+        cognition_config.connectors_config()?,
+        pool.clone(),
+        Arc::new(
+            redis::Client::open(cognition_config.redis_host.as_ref())
+                .context("failed to create the connectors Redis client")?,
+        ),
+        config.auth_service_client()?,
+    )
+    .map_err(|report| anyhow::anyhow!("failed to compose connectors: {report:?}"))?;
 
-    // The client that addresses Pipedream's remote MCP server, built from the
-    // same credentials `agent_harness_service::cognition` uses.
-    let pipedream = PipedreamClient::new(PipedreamConfig {
-        client_id: config.pipedream_client_id.to_string(),
-        client_secret: config.pipedream_client_secret.to_string(),
-        project_id: config.pipedream_project_id.to_string(),
-        environment: config.pipedream_environment.clone(),
-        api_url: config.pipedream_api_url.clone(),
-        mcp_url: config.pipedream_mcp_url.clone(),
-        // Only Connect tokens carry allowed origins, and this service never
-        // mints one: connecting apps stays in the app.
-        allowed_origins: Vec::new(),
-    })
-    .context("failed to build Pipedream client")?;
-    // Grants held by Macro Connect are reached through its MCP gateway; a
-    // user on Connect alone gets no Pipedream grant.
-    let connect = ai_tools::connect_adapter(config.connect_customer_key.value())?;
-    let connect_rollout = ai_tools::macro_connect_rollout(
-        config.posthog_api_key.value(),
-        config.posthog_host.value(),
-        config.environment,
-    )?;
-    let pipedream = Arc::new(pipedream);
-    let backends = |connect: Option<Arc<ConnectAdapter>>| {
-        let backends = ConnectorBackends::new(Arc::clone(&pipedream), connect);
-        match &connect_rollout {
-            Some(rollout) => backends.with_rollout(Arc::clone(rollout)),
-            None => backends,
-        }
-    };
-    // Routines count the grants these same backends dispatch, so they ask
-    // them who is on Connect alone and which apps Connect serves; `None`
-    // where Connect isn't configured.
-    let routine_connect = connect
-        .clone()
-        .map(|connect| Arc::new(backends(Some(connect))));
-    let connectors = backends(connect);
+    // The connection services every consumer below binds on.
+    let connectors_service = Arc::new(connectors.connectors.clone());
 
     // Session egress reaches only public addresses, except on a local stack
     // whose MCP and preview services sit on the compose network.
     let mcp_address_policy =
-        mcp_client::outbound::guarded_http::AddressPolicy::for_environment(config.environment);
-    let mcp_http = mcp_client::outbound::guarded_http::McpHttp::new(mcp_address_policy)?;
+        connectors::guarded_http::AddressPolicy::for_environment(config.environment);
 
     // Every session's MCP servers: Macro's own under the reserved `macro`
-    // slug, the owner's custom servers by URL key, then the owner's Pipedream
-    // connections. The `macro` credential is signed inline with the same key
+    // slug, then the owner's connections as the connectors decide them. The
+    // `macro` credential is signed inline with the same key
     // authentication_service holds; what this process hands out is always
     // single-user and minutes from expiry.
     let mcp_credentials = WithMacroMcp::new(
-        WithCustomMcp::new(
-            PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), connectors),
-            Arc::clone(&mcp_servers),
-            mcp_http.clone(),
-        ),
+        ConnectorsMcpCredentials::new(Arc::clone(&connectors_service)),
         MacroApiTokenSigner::new(
             pool.clone(),
             config.macro_api_token_issuer.as_ref(),
@@ -681,7 +638,7 @@ pub async fn run() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         recorder.clone(),
-        linked_github,
+        Some(&connectors),
         // Lets agent sessions' `SendEmail` name a verified send-as alias in `from`.
         email::outbound::GmailSenderProvider::new(
             gmail_client::GmailClient::without_watch(),
@@ -694,11 +651,11 @@ pub async fn run() -> anyhow::Result<()> {
     .await
     .context("failed to build the in-memory agent tool context")?;
     let cognition_runtime = agent_harness_service::cognition::build(
-        agent_harness_service::cognition::config::Config::from_env()?,
+        cognition_config,
         pool.clone(),
         event_broker_tracker.clone(),
         import_jobs.clone(),
-        mcp_http,
+        &connectors,
     )
     .await
     .context("failed to compose cognition APIs")?;
@@ -824,7 +781,7 @@ pub async fn run() -> anyhow::Result<()> {
             config.document_storage_service_auth_key.clone(),
             macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
         ),
-        routine_connect.clone(),
+        Arc::clone(&connectors_service),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
@@ -933,14 +890,12 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::new(code_mode::connected_apps::SessionConnectedApps {
             egress: Arc::clone(&egress),
             provisioner: EgressProvisioner::new(
-                Arc::clone(&mcp_connections),
-                Arc::clone(&mcp_servers),
+                Arc::clone(&connectors_service),
                 egress_base_url.clone(),
             ),
             sessions: session_repo.clone(),
             gate: owner_tool_gate.clone(),
-            connectors: tool_context.connector_tool_context.clone(),
-            mcp_servers: tool_context.mcp_server_tool_context.clone(),
+            connector_tools: tool_context.connector_tool_context.clone(),
         }),
     );
     // A running program's `macro.ui.open`: the prompting person's own tab,
@@ -1340,10 +1295,16 @@ pub async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
     );
 
-    let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::ContactsQueue::new().to_string(),
+    let contacts_ingress = Arc::new(contacts::domain::list_writes::ListWritesGate {
+        inner: contacts::domain::service::SqsContactsIngress {
+            queue: contacts::outbound::ingress::SqsContactsQueue::new(
+                aws_sdk_sqs::Client::new(&aws_config),
+                macro_queues::ContactsQueue::new().to_string(),
+            ),
+        },
+        writes: contacts::domain::list_writes::ContactListWrites::new(
+            config.environment,
+            feature_flags.clone(),
         ),
     });
     // The same message service the storage API composes, so an announcement
@@ -1646,12 +1607,8 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             prompt_context,
             prompt_composer,
-            EgressProvisioner::new(
-                Arc::clone(&mcp_connections),
-                Arc::clone(&mcp_servers),
-                egress_base_url,
-            )
-            .with_external_base_url(config.external_egress_base_url.clone()),
+            EgressProvisioner::new(Arc::clone(&connectors_service), egress_base_url)
+                .with_external_base_url(config.external_egress_base_url.clone()),
             RedisCommandForwarder::new(redis.clone()),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
@@ -2003,10 +1960,7 @@ pub async fn run() -> anyhow::Result<()> {
             session_repo.clone(),
             PgHarnessRepo::new(pool.clone()),
         ),
-        routine_sessions::PipedreamConnectedApps::new(
-            PgConnectionRepo::new(pool.clone()),
-            routine_connect.clone(),
-        ),
+        routine_sessions::RoutineConnectedApps::new(Arc::clone(&connectors_service)),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let coding_agents = coding_agents::router(
@@ -2030,10 +1984,7 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             draining_sessions.clone(),
             (*harness).clone(),
-            routine_sessions::PipedreamConnectedApps::new(
-                PgConnectionRepo::new(pool.clone()),
-                routine_connect.clone(),
-            ),
+            routine_sessions::RoutineConnectedApps::new(Arc::clone(&connectors_service)),
         ),
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -2200,11 +2151,8 @@ pub async fn run() -> anyhow::Result<()> {
                 agent_harness::domain::app_connections::AppConnectedContinuation::new(
                     Arc::new(session_repo.clone()),
                     Arc::new(
-                        agent_harness::outbound::connected_apps::PipedreamConnectedApps::new(
-                            Arc::clone(&mcp_connections),
-                            Arc::new(mcp_select::NativeOverlayConnections::new(Some(Arc::clone(
-                                &mcp_servers,
-                            )))),
+                        agent_harness::outbound::connected_apps::ConnectorsConnectedApps::new(
+                            Arc::clone(&connectors_service),
                         ),
                     ),
                     Arc::clone(&notification_service),

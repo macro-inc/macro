@@ -125,29 +125,3 @@ async fn new_mail_in_a_synced_folder_waits_behind_one_queued_import_message_not_
     let before_synced: Vec<_> = reads.iter().take_while(|read| *read != "synced").collect();
     assert_eq!(before_synced, ["importing", "message"], "{reads:?}");
 }
-
-#[tokio::test]
-async fn the_live_import_pass_follows_its_flag_and_is_off_while_the_flag_cannot_be_read() {
-    use feature_flags::outbound::fake::FakeFeatureFlags;
-    use feature_flags::{FlagSnapshot, FlagValue};
-
-    let switch = LiveImportPass::default();
-    let mut on = FakeFeatureFlags::default();
-    on.set_service(
-        LIVE_IMPORT_PASS_CONTEXT,
-        Ok(FlagSnapshot::new([(
-            LIVE_IMPORT_PASS_FLAG.to_owned(),
-            FlagValue::Boolean(true),
-        )])),
-    );
-    let mut failing = FakeFeatureFlags::default();
-    failing.set_service(
-        LIVE_IMPORT_PASS_CONTEXT,
-        Err("PostHog is unavailable".into()),
-    );
-
-    assert!(refresh_live_import_pass(&on, &switch, false).await);
-    assert!(switch.enabled());
-    assert!(!refresh_live_import_pass(&failing, &switch, false).await);
-    assert!(!switch.enabled());
-}

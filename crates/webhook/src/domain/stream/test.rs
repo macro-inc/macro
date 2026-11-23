@@ -884,7 +884,7 @@ async fn picture_event_reaches_the_changed_user() {
 
 #[tokio::test]
 async fn picture_event_reaches_a_contact_with_one_lookup() {
-    let contacts = FakeContactChecker::with_pair(CHANGED_USER_ID, SUBSCRIBER_ID);
+    let contacts = FakeContactChecker::with_pair(SUBSCRIBER_ID, CHANGED_USER_ID);
     assert!(
         picture_reaches(
             WebhookScope::User,
@@ -895,6 +895,22 @@ async fn picture_event_reaches_a_contact_with_one_lookup() {
         .await
     );
     assert_eq!(*contacts.calls.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn picture_event_skips_a_subscriber_only_the_changed_user_has() {
+    // Directories are directed: the changed user having the subscriber does
+    // not put the changed user in the subscriber's directory.
+    let contacts = FakeContactChecker::with_pair(CHANGED_USER_ID, SUBSCRIBER_ID);
+    assert!(
+        !picture_reaches(
+            WebhookScope::User,
+            subscriber(),
+            contacts,
+            picture_candidate(&[])
+        )
+        .await
+    );
 }
 
 #[tokio::test]
@@ -936,7 +952,7 @@ async fn picture_event_reaches_team_streams_of_the_users_teams_only() {
 #[tokio::test]
 async fn team_stream_does_not_get_contact_audience() {
     // A contact's team-scoped stream is not the contact's own user stream.
-    let contacts = FakeContactChecker::with_pair(CHANGED_USER_ID, SUBSCRIBER_ID);
+    let contacts = FakeContactChecker::with_pair(SUBSCRIBER_ID, CHANGED_USER_ID);
     assert!(
         !picture_reaches(
             WebhookScope::Team,

@@ -65,13 +65,12 @@ By default the desktop sidebar continues with `Favorites`, `Drafts`, `Sent`,
 heading before or after the unnamed Inbox/Favorites/Drafts/Sent group to change
 their shared local order. The unnamed group has no grip or keyboard move control.
 Accounts stays pinned at the top and is not a drop target. Section order is per
-account and survives reloads. Sidebar number shortcuts retain their default destination
-order. `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
-`Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
-This holds while the email list itself has focus, as it does after `Escape`
-closes a thread; only on a control inside the list (a row's sender name,
-checkbox or actions, Load more) does `Tab` move browser focus to the next
-control. Leaving the
+account and survives reloads. `Tab`, `Shift+Tab` and `1`–`3` move between the Inbox
+tabs in the header (Focus, Signal, Noise) while the keyboard is on the list or
+nothing has focus, as after `Escape` closes a thread. On any control (a row's
+sender name, checkbox or actions, Load more, a header button), in the search
+field, in an open thread, and in another mailbox, whose header has no tabs,
+`Tab` is browser focus order. Leaving the
 search field (`Escape`, `ArrowDown`, `Enter`, or picking a recent search)
 hands the keyboard to the view, so `Tab` switches tabs there too. Calendar mail
 remains available through
@@ -128,8 +127,8 @@ Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star and `z` undo the last action. `g` then a letter
 keeps its app-wide meaning inside Email too ([navigation](navigation.md)):
 `g e` opens Email on Signal and `g s` on Sent from any view, as long as no
-editor or input (Email search included) has focus; other tabs are on the
-number keys and the sidebar. `Escape` in a
+editor or input (Email search included) has focus; other mailboxes are in the
+sidebar. `Escape` in a
 list steps back one level: it clears a selection, then a search, and with
 neither returns to Signal; in the reading pane it first hands the keyboard back
 to the list. From the search field, `ArrowDown` or `Enter` moves to the first
@@ -182,7 +181,9 @@ text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
 Enter or a click picks the highlighted suggestion; on a complete typed address,
 Enter or Tab adds that address unless an arrow key picked another row. Type,
 paste, or Tab straight after picking one and check that both recipients stay
-and the input is empty.
+and the input is empty. With no highlighted row and no complete address (text
+that matches no one, or results still loading), Tab moves on and clears the
+text, as a click elsewhere does.
 
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
@@ -283,9 +284,20 @@ time) stays in until its event is over, or for 7 days after the notice when it i
 recurring event or no time can be read, and is the only mail with the Calendar
 category in Focus. New invites and RSVP notices stay out. A calendar notice counts
 only as the thread's latest message: once anyone writes after it, the thread takes
-the same rules as any other. A thread the owner answered last joins 3 days after
-their message, unless that message only closes the exchange ("Thanks!"). `Follow up`
-marks only threads whose
+the same rules as any other. Plain mail the due-date read finds is about a meeting
+leaves once the meeting's day is over for the owner, unless it names a deadline
+after that day. Mail written after the meeting, such as its notes or thanks, keeps
+it out, unless that mail asks the owner something or for a decision only they
+can make, or the owner's own question is still waiting: then the thread is judged
+on its own. Mail more than two weeks after the meeting, by the day its writer
+wrote it on, is no longer about it. Once the owner has written last, the thread
+leaves Focus. It comes back 3 days after their message with no answer, or on its
+due day if that comes first, unless the
+closing-reply check reads that message as only ending the exchange (a short
+"Thanks!" or a brush-off, nothing else); a closing it misses, such as "Done, sent
+it over", comes back after the wait. An answer from the other side has the thread
+judged again. `Follow up`
+marks only threads that came back after that wait or on their due day, whose
 latest message is the owner's, and `Reply needed` only threads whose latest message
 is someone else's. A thread holding only the owner's sent mail is not listed: it
 has no inbox state, so Mark Done could not remove it. Each row says why it is
@@ -324,8 +336,11 @@ calendar change whose event ends or importance moving shows at the tab's next
 read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
 worker classifies an inbox only while someone whose tab shows it has
-`enable-email-focus` on: its owner, or a user it is linked to, so a mailbox you
-link is classified while you have the flag even when its own account does not.
+`enable-email-focus` on and has used Macro in the last 7 days: its owner, or a
+user it is linked to, so a mailbox you link is classified while you have the
+flag even when its own account does not. Someone away for a week gets nothing
+classified until they open Macro again; within about 6 minutes of that their
+inboxes are backfilled as if they had just joined.
 A user who joins the rollout gets a filled tab without new mail: within about
 6 minutes the worker finds them (it looks at every connected inbox each minute,
 evaluating the flag from definitions it polls from PostHog every 5 minutes) and
@@ -770,7 +785,9 @@ that driver.
 
 **Reading pane.** On desktop the header's columns button (or `Shift+V`) shows
 threads beside the list instead of in its place; the choice is remembered per
-browser. The list keeps its own keys: j/k and arrows move the cursor and the
+browser. A pane too narrow for the header's actions hides the columns button
+and the Focus sort before Search would leave the pane; `Shift+V` still works
+there. The list keeps its own keys: j/k and arrows move the cursor and the
 pane follows it (replacing history rather than adding entries) while the list
 keeps focus, even if the thread is still loading; Mark done on
 the open row follows the next row (an action on another row, such as the one
@@ -970,9 +987,14 @@ In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
 thread's Copy link. Clicking the Cc or Bcc button also focuses the revealed
-field, so typing goes there instead of to app shortcuts. `bunx playwright test
+field, so typing goes there instead of to app shortcuts. Tab runs To, Cc and
+Bcc when shown, Subject (new emails only), then the body, and Shift+Tab goes
+back; the new email's Cc and Bcc buttons are left out of it. In the body,
+Shift+Tab outdents while there is something to outdent and otherwise leaves.
+`bunx playwright test
 --config src/features/email-compose/browser-test/playwright.app.config.ts` (from
-`apps/web`) checks both shortcuts and both buttons in all four composers.
+`apps/web`) checks both shortcuts and both buttons in all four composers, and
+the Tab order (`tab-order.app.e2e.ts`).
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone

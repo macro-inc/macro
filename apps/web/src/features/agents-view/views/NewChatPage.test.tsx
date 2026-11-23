@@ -1,6 +1,7 @@
 import type { InputAttachmentData } from '@channel/Input/types';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
+import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
 import {
   cleanup,
   fireEvent,
@@ -44,11 +45,20 @@ const mocks = vi.hoisted(() => ({
   }),
   repositories: [] as { url: string; defaultBranch?: string }[],
   autoEnabled: true,
+  setFlagsLoaded: (_loaded: boolean) => {},
   chooseAgentMode: vi.fn(async (_prompt: string) => 'chat' as 'chat' | 'code'),
 }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.autoEnabled, loading: false }),
-}));
+vi.mock('@app/lib/analytics/posthog', async () => {
+  const { createSignal } = await import('solid-js');
+  const [loaded, setLoaded] = createSignal(true);
+  mocks.setFlagsLoaded = setLoaded;
+  return {
+    useFeatureFlag: () => () => ({
+      enabled: loaded() && mocks.autoEnabled,
+      loading: !loaded(),
+    }),
+  };
+});
 vi.mock('@queries/agents/mode-choice', () => ({
   chooseAgentMode: (prompt: string) => mocks.chooseAgentMode(prompt),
 }));
@@ -214,6 +224,7 @@ type ComposerProps = {
   onRemoveAttachment: (attachment: InputAttachmentData) => void;
   onDraftChange: (draft: string) => void;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
+  onMentionUser?: (userId: string) => void;
 };
 vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
@@ -242,6 +253,10 @@ vi.mock('../components/ChatComposer', () => ({
         value={props.draft}
         onInput={(event) => props.onDraftChange(event.currentTarget.value)}
       />
+      <input
+        aria-label="Mention"
+        onChange={(event) => props.onMentionUser?.(event.currentTarget.value)}
+      />
       <button
         onClick={() =>
           props.onSend(
@@ -265,6 +280,7 @@ beforeEach(() => {
   mocks.userId = () => 'user';
   mocks.chooseAgentMode.mockClear();
   mocks.autoEnabled = true;
+  mocks.setFlagsLoaded(true);
 });
 
 function page(
@@ -720,6 +736,267 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({ prompt: 'Prompt', botId: CURSOR_BOT_ID })
+    );
+  });
+  it('makes an @mentioned agent the active agent, switching to its mode', () => {
+    const send = page();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    expect(
+      (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: CURSOR_BOT_ID })
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${MACRO_NEW_BOT_ID}` },
+    });
+    expect(
+      (screen.getByRole('radio', { name: 'Chat' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: undefined })
+    );
+  });
+  it('keeps a model picked for the agent an @mention names again', async () => {
+    mocks.touch = true;
+    const send = page(true, [], false, [], 'code');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Model' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'GPT-5' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ botId: CURSOR_BOT_ID, modelOverride: 'gpt-5' })
+    );
+  });
+  it('applies an @mention made while the roster loads once it arrives', () => {
+    const [loading, setLoading] = createSignal(true);
+    const [connected, setConnected] = createSignal(false);
+    const send = vi.fn();
+    render(() => (
+      <NewChatPage
+        roster={
+          connected()
+            ? buildAgentRoster({
+                agents: [],
+                runtimes: [],
+                cursorConnected: true,
+                cursorNeedsConnection: false,
+                macroDefaultModel: 'chat-default',
+                cursorDefaultModel: 'cursor-default',
+              })
+            : []
+        }
+        rosterLoading={loading()}
+        onStart={send}
+        onOpenRoster={vi.fn()}
+      />
+    ));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    // A person mentioned meanwhile leaves the agent's mention waiting.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: 'macro|person@example.com' },
+    });
+    setConnected(true);
+    setLoading(false);
+    expect(
+      (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ botId: CURSOR_BOT_ID })
+    );
+  });
+  it('lets a pick made while the roster loads win over an earlier @mention', async () => {
+    const computerAgent: PersistedAgentLike = {
+      bot: { id: 'computer-agent', name: "Maya's Agent", handle: 'maya' },
+      harness: 'macrod',
+      harness_id: 'computer',
+      default_model: 'default',
+    };
+    const [agents, setAgents] = createSignal<PersistedAgentLike[]>([]);
+    const [loading, setLoading] = createSignal(true);
+    const send = vi.fn();
+    render(() => (
+      <NewChatPage
+        mode="code"
+        roster={buildAgentRoster({
+          agents: agents(),
+          runtimes: [{ id: 'computer', name: 'Agent Box', connected: true }],
+          cursorConnected: true,
+          cursorNeedsConnection: false,
+        })}
+        rosterLoading={loading()}
+        onStart={send}
+        onOpenRoster={vi.fn()}
+      />
+    ));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: 'bot|computer-agent' },
+    });
+    await selectAgent(/Cursor/);
+    setAgents([computerAgent]);
+    setLoading(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ botId: CURSOR_BOT_ID })
+    );
+  });
+  describe('a mention waiting for the roster gives way to a later decision', () => {
+    const saved = (id: string, name: string): PersistedAgentLike => ({
+      bot: { id, name, handle: id },
+      harness: 'macrod',
+      harness_id: 'computer',
+      default_model: 'default',
+    });
+    function loadingPage(request?: () => AgentRequest | undefined) {
+      const [agents, setAgents] = createSignal<PersistedAgentLike[]>([]);
+      const [loading, setLoading] = createSignal(true);
+      const send = vi.fn();
+      render(() => (
+        <NewChatPage
+          requestedAgent={request?.()}
+          roster={buildAgentRoster({
+            agents: agents(),
+            runtimes: [{ id: 'computer', name: 'Agent Box', connected: true }],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+          })}
+          rosterLoading={loading()}
+          onStart={send}
+          onOpenRoster={vi.fn()}
+        />
+      ));
+      const mention = (value: string) =>
+        fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+          target: { value },
+        });
+      const load = () => {
+        setAgents([
+          saved('maya-agent', "Maya's Agent"),
+          saved('ben-agent', "Ben's Agent"),
+        ]);
+        setLoading(false);
+      };
+      const sendNow = () =>
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      return { send, mention, load, sendNow };
+    }
+
+    it('a later mention of the active agent', () => {
+      const { send, mention, load, sendNow } = loadingPage();
+      fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
+      mention('bot|maya-agent');
+      mention(`bot|${MACRO_NEW_BOT_ID}`);
+      load();
+      sendNow();
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: undefined })
+      );
+    });
+
+    it('a mode switch', () => {
+      const { send, mention, load, sendNow } = loadingPage();
+      fireEvent.click(screen.getByRole('radio', { name: 'Code' }));
+      mention('bot|maya-agent');
+      fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
+      load();
+      expect(
+        (screen.getByRole('radio', { name: 'Chat' }) as HTMLInputElement)
+          .checked
+      ).toBe(true);
+      sendNow();
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: undefined })
+      );
+    });
+
+    it('but not the flags loading', () => {
+      mocks.setFlagsLoaded(false);
+      const { send, mention, load, sendNow } = loadingPage();
+      mention('bot|maya-agent');
+      mocks.setFlagsLoaded(true);
+      load();
+      expect(
+        (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement)
+          .checked
+      ).toBe(true);
+      sendNow();
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: 'maya-agent' })
+      );
+    });
+
+    it('a requested agent', () => {
+      const [request, setRequest] = createSignal<AgentRequest>();
+      const { send, mention, load, sendNow } = loadingPage(request);
+      fireEvent.click(screen.getByRole('radio', { name: 'Code' }));
+      mention('bot|maya-agent');
+      setRequest({ agentId: 'ben-agent', request: 'set up' });
+      load();
+      sendNow();
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: 'ben-agent' })
+      );
+    });
+  });
+  it('selects an @mentioned agent from Auto, showing its selector', () => {
+    startInChat = false;
+    const send = page();
+    expect(
+      screen.queryByRole('button', { name: 'Choose an agent or model' })
+    ).toBeNull();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    expect(
+      (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement).checked
+    ).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+        .textContent
+    ).toContain('Cursor');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(mocks.chooseAgentMode).not.toHaveBeenCalled();
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: CURSOR_BOT_ID })
+    );
+  });
+  it('blocks the send on an @mentioned unavailable agent instead of sending it elsewhere', () => {
+    const send = page(false);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    expect(
+      (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).not.toHaveBeenCalled();
+  });
+  it('leaves the active agent alone when a person is mentioned', () => {
+    const send = page();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: 'macro|person@example.com' },
+    });
+    expect(
+      (screen.getByRole('radio', { name: 'Chat' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: undefined })
     );
   });
   it('restores an unsent draft after the page remounts', () => {

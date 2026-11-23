@@ -195,6 +195,7 @@ async fn bounded_contact_hydration_and_search_over_opfs() {
         generation
     );
     contacts::assert_contact_search(&mut engine, 1_500).await;
+    contacts::assert_contact_top_up(&mut engine).await;
     contacts::assert_account_reset(&mut engine).await;
     healthy_close(engine.into_storage().try_close().unwrap())
         .preserve()
@@ -467,6 +468,123 @@ async fn incompatible_opfs_initialization_exposes_reset_only_and_cannot_preserve
     assert_eq!(
         storage.get_batch(&[key("Type:9")]).await.unwrap(),
         vec![None]
+    );
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+/// About 3 KB that payload compression cannot shrink, distinct per record.
+fn incompressible(write: usize, index: usize) -> String {
+    let mut state = (write as u64) << 32 | index as u64;
+    (0..375)
+        .map(|_| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            format!("{:08x}", (state >> 32) as u32)
+        })
+        .collect()
+}
+
+fn checkpoint_write(write: usize) -> Vec<(EntityKey<'static>, Record)> {
+    (0..50)
+        .map(|index| {
+            (
+                key(&format!("Document:{index}")),
+                record(&incompressible(write, index)),
+            )
+        })
+        .collect()
+}
+
+#[wasm_bindgen_test(async)]
+async fn the_idle_checkpoint_copies_the_wal_and_survives_a_reopen_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-turso-idle-checkpoint.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("recovery wipe must produce a complete fresh pair")
+    };
+    let mut storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "checkpoint-scope").unwrap();
+    // About 27 frames a write: due after some 19 writes.
+    let mut writes = 0;
+    let checkpoint = loop {
+        storage.put_batch(checkpoint_write(writes)).await.unwrap();
+        writes += 1;
+        let checkpoint = storage.checkpoint_if_due().unwrap();
+        if checkpoint.ran {
+            break checkpoint;
+        }
+        assert!(checkpoint.wal_frames < 500, "{checkpoint:?}");
+        assert!(writes < 40, "never due");
+    };
+    assert!(checkpoint.wal_frames >= 500, "{checkpoint:?}");
+    assert_eq!(checkpoint.backfilled_frames, checkpoint.wal_frames);
+    let last = checkpoint_write(writes - 1);
+    let owner = healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap();
+
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("a checkpointed database must reopen")
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "checkpoint-scope").unwrap();
+    let keys = last.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
+    assert_eq!(
+        storage.get_batch(&keys).await.unwrap(),
+        last.into_iter()
+            .map(|(_, record)| Some(record))
+            .collect::<Vec<_>>()
+    );
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[cfg(feature = "browser-test-hooks")]
+#[wasm_bindgen_test(async)]
+async fn reopened_opfs_database_skips_checks_it_would_pass() {
+    let owner = OpfsOwner::acquire("cache-turso-schema-digest.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("recovery wipe must produce a complete fresh pair")
+    };
+    let mut storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "schema-digest").unwrap();
+    storage
+        .put_batch(vec![(key("Type:1"), record("kept"))])
+        .await
+        .unwrap();
+    storage.enqueue_mutation(queued()).await.unwrap();
+    let owner = healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap();
+
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("preserved complete pair must reopen")
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "schema-digest").unwrap();
+    assert!(storage.browser_test_run_skippable_open_checks().unwrap());
+    assert_eq!(
+        storage.get_batch(&[key("Type:1")]).await.unwrap(),
+        vec![Some(record("kept"))]
     );
     healthy_close(storage.try_close().unwrap())
         .preserve()
