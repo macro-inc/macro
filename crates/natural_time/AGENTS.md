@@ -52,8 +52,9 @@ instants (`wall-clock.ts`).
   longer readings first in `element`), then a table case.
 - Change a rule: update the list in `src/lib.rs` and the affected table cases.
 - Change what the browser receives: `src/wasm.rs`, the types in
-  `apps/web/src/lib/core/natural-time/wasm-module.ts`, and the web tests that
-  read through the real package.
+  `apps/web/src/lib/core/natural-time/wasm-module.ts`, the generated
+  declarations (`bun scripts/wasm-types.ts` in `apps/web`), and the web tests
+  that read through the real package.
 
 ## Checks
 

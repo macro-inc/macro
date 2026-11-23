@@ -11,14 +11,16 @@
  * cancelled.
  */
 
+import aiEngineWasm from 'wasm:ai-engine';
+import type { AiFile } from '@core/wasm/generated/ai-engine';
+import { isWasmTrap } from '@core/wasm/is-wasm-trap';
 import { match } from 'ts-pattern';
 import type { AiRequest, AiResponse } from './protocol';
 import { overColor } from './tile-pixels';
-import { isWasmTrap, loadAiEngineWasm, type WasmAiFile } from './wasm-module';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-let file: WasmAiFile | undefined;
+let file: AiFile | undefined;
 let trapped = false;
 
 type Render = Extract<AiRequest, { kind: 'render' }>;
@@ -56,7 +58,7 @@ function fail(id: number, error: unknown) {
   });
 }
 
-function openFile(): WasmAiFile {
+function openFile(): AiFile {
   if (trapped) throw new Error('the engine stopped after an internal error');
   if (!file) throw new Error('no file is open');
   return file;
@@ -64,7 +66,7 @@ function openFile(): WasmAiFile {
 
 /** A query's JSON answer. */
 function query(
-  f: WasmAiFile,
+  f: AiFile,
   request: Extract<AiRequest, { kind: 'query' }>
 ): string {
   const [a, b, c, d, e] = request.args;
@@ -95,7 +97,7 @@ function query(
 type Request<K extends AiRequest['kind']> = Extract<AiRequest, { kind: K }>;
 
 async function openDocument(request: Request<'open'>) {
-  const wasm = await loadAiEngineWasm();
+  const wasm = await aiEngineWasm.load();
   file?.free();
   file = new wasm.AiFile(new Uint8Array(request.bytes));
   post({
@@ -183,7 +185,7 @@ function placeImage(request: Request<'placeImage'>) {
 async function registerFont(request: Request<'registerFont'>) {
   // Fonts belong to the worker (every file it opens), so they can arrive
   // before the file.
-  const wasm = await loadAiEngineWasm();
+  const wasm = await aiEngineWasm.load();
   const json = wasm.AiFile.registerFont(
     new Uint8Array(request.bytes),
     request.family ?? undefined
@@ -192,7 +194,7 @@ async function registerFont(request: Request<'registerFont'>) {
 }
 
 async function blank(request: Request<'blank'>) {
-  const wasm = await loadAiEngineWasm();
+  const wasm = await aiEngineWasm.load();
   postSaved(request.id, wasm.AiFile.blank(request.width, request.height));
 }
 

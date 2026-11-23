@@ -270,16 +270,16 @@ was moved onto `crates/docx_engine` the next day; start with a crate.
   `assetFilter` in `nix/cloud-storage.nix` for any service that links the
   engine; `.ttf` and `.xml` were missing and broke the deploy.
 - **Client** in `apps/web/src/lib/core/<x>-engine/`: `client.ts` (typed
-  requests), `<x>.worker.ts`, `protocol.ts`, `types.ts`, `wasm-module.ts`.
+  requests), `<x>.worker.ts`, `protocol.ts`, `types.ts`.
   - Construct the `Worker` on first use, never at module load: an eager module
     worker deadlocks WKWebView on iOS ([web agent guide](../../apps/web/AGENTS.md)).
   - Write `new Worker(new URL('./<x>.worker.ts', import.meta.url), { type: 'module' })`
     inline. Vite only bundles the worker in that exact shape; hoisting the URL
     shipped raw TypeScript to production.
-  - Load the binary with a static
-    `new URL('./wasm/<x>_engine_bg.wasm', import.meta.url)` passed to the
-    generated init. The generated JS's own relative URL 404s in production
-    builds.
+  - Load the engine in the worker with `import xEngineWasm from
+    'wasm:<x>-engine'` and `xEngineWasm.load()`, after adding it to
+    `apps/web/wasm-modules.json` and running `bun scripts/wasm-types.ts`; see
+    "Loading a wasm module" in the [web agent guide](../../apps/web/AGENTS.md).
   - Keep the engine out of the entry chunk: `definition.ts` and shared helpers
     import only types from it, and nothing touches it at module load.
   - Open the block in the native iOS app once. Relative wasm URLs there were

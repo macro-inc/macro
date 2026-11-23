@@ -1,3 +1,4 @@
+import cacheWasm from 'wasm:cache-wasm';
 import { fireAndForget } from '@core/util/fireAndForget';
 import * as Effect from 'effect/Effect';
 import { APP_BUILD_TIME } from '../app-build';
@@ -157,8 +158,7 @@ const compileProductionEngine =
   async (): Promise<CompiledEngine> => {
     // The same asset the engine worker would load: the worker only takes a
     // module compiled from it.
-    const url = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
-    const now = (): number => performance.now();
+    const url = new URL(cacheWasm.binaryUrl, globalThis.location.href);
     // Recorded apart from the worker's own download and compile: a follower
     // tab compiles ahead too, and no engine starts from it.
     const prefetchTelemetry = {
@@ -170,7 +170,7 @@ const compileProductionEngine =
     };
     return {
       assetUrl: url.href,
-      module: await compileCacheWasm(url, prefetchTelemetry, now),
+      module: await compileCacheWasm(prefetchTelemetry),
     };
   };
 

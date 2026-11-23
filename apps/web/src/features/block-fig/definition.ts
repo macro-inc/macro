@@ -1,3 +1,4 @@
+import figEngineWasm from 'wasm:fig-engine';
 import {
   defineBlock,
   type ExtractLoadType,
@@ -5,7 +6,6 @@ import {
   loadResult,
 } from '@core/block';
 import { enableFigViewer, isFeatureEnabled } from '@core/constant/featureFlags';
-import { compiledFigModule } from '@core/fig-engine/compiled-module';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazy } from '@core/util/lazy';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
@@ -17,7 +17,7 @@ export const FIG_MIME = 'application/x-figma';
 
 async function warmEngine() {
   try {
-    await compiledFigModule();
+    await figEngineWasm.compiled();
   } catch {
     // Opening the engine retries a failed warmup and reports the error.
   }

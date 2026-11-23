@@ -312,13 +312,13 @@
           runHook postBuild
         '';
 
-        # Vite leaves new URL() imports unchanged when their generated source
-        # files are absent. Reject that otherwise-successful but broken bundle.
+        # Each module's glue is a chunk at the dist root and its binary an
+        # asset; check both made it into the bundle.
         doCheck = true;
         checkPhase = ''
           runHook preCheck
           for name in ${lib.concatMapStringsSep " " (pkg: pkg.outName) wasmPackages}; do
-            for asset in "apps/web/dist/assets/$name-"*.js "apps/web/dist/assets/''${name}_bg-"*.wasm; do
+            for asset in "apps/web/dist/$name-"*.js "apps/web/dist/assets/''${name}_bg-"*.wasm; do
               test -s "$asset" || { echo "Missing $name wasm bundle asset: $asset" >&2; exit 1; }
             done
           done
