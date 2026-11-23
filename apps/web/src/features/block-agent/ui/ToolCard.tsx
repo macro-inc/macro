@@ -21,6 +21,8 @@ export interface ToolCardProps {
   title: JSX.Element | string;
   /** Mono, truncated detail next to the title (a path, a command, ...). */
   subtitle?: string;
+  /** A short title that never truncates; the subtitle gives way instead. */
+  fixedTitle?: boolean;
   /** Compact `key=value` details after the subtitle. */
   args?: Record<string, string>;
   /** Status text or counts after the detail. A failure is never named here. */
@@ -56,8 +58,12 @@ export function ToolCard(props: ToolCardProps) {
     <>
       {/* The detail gives way first: it shrinks a hundredfold faster, so a
           label truncates only once its detail is gone. */}
-      <span class="min-w-0 truncate">
-        {typeof props.title === 'string' ? (
+      <span class={props.fixedTitle ? 'shrink-0' : 'min-w-0 truncate'}>
+        {/* A fixed title never truncates, so a tooltip would only repeat it
+            (and cover the transcript under a row that just settled). */}
+        {typeof props.title === 'string' && props.fixedTitle ? (
+          <TextShimmer text={props.title} active={active()} />
+        ) : typeof props.title === 'string' ? (
           <Tooltip
             label={props.title}
             as="span"
@@ -76,7 +82,8 @@ export function ToolCard(props: ToolCardProps) {
             as="span"
             class="min-w-0 shrink-[100] truncate text-ink-disabled"
           >
-            {subtitle()}
+            {/* The trigger is a flex box, which can't draw an ellipsis itself. */}
+            <span class="truncate">{subtitle()}</span>
           </Tooltip>
         )}
       </Show>

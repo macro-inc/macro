@@ -14,8 +14,8 @@ use super::*;
 use crate::{
     domain::service::TimeTrackingServiceImpl,
     test_support::{
-        AUTHOR, EDITOR, FakeAccess, FakeRepo, FixedRollout, OUTSIDER, RecordingPublisher, TASK,
-        TestClock, VIEWER, noon,
+        AUTHOR, EDITOR, FakeAccess, FakeRepo, FixedRollout, OUTSIDER, RecordingPublisher,
+        RecordingUpdates, TASK, TestClock, VIEWER, noon,
     },
 };
 
@@ -52,7 +52,8 @@ impl MacroAuthorizationService for BearerIsUser {
     }
 }
 
-type Service = TimeTrackingServiceImpl<FakeRepo, FakeAccess, RecordingPublisher, TestClock>;
+type Service =
+    TimeTrackingServiceImpl<FakeRepo, FakeAccess, RecordingPublisher, RecordingUpdates, TestClock>;
 
 struct App {
     router: Router,
@@ -67,6 +68,7 @@ fn app() -> App {
         access.clone(),
         Arc::new(FixedRollout(true)),
         RecordingPublisher::default(),
+        RecordingUpdates::default(),
     )
     .with_clock(clock.clone());
     let router = time_tracking_router(TimeTrackingRouterState::new(
