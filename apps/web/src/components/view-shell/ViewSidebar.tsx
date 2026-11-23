@@ -366,6 +366,7 @@ function Item(
       {...rest}
       type={local.type ?? 'button'}
       aria-current={ariaCurrent()}
+      data-view-sidebar-item=""
       onClick={(
         event: MouseEvent & {
           currentTarget: HTMLButtonElement;

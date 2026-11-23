@@ -4,7 +4,10 @@ import {
   createListController,
   useListInteractions,
 } from '@app/components/list';
-import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
+import {
+  appNavigationAttribute,
+  hotkeyScopeNeutralAttribute,
+} from '@core/dom-selectors';
 import {
   attachGlobalDOMScope,
   registerHotkey,
@@ -65,6 +68,8 @@ function Fixture() {
   const [sectionTabs, setSectionTabs] = createSignal<HTMLElement>();
   const [creating, setCreating] = createSignal(false);
   let createView: HTMLButtonElement | undefined;
+  const [projectOpen, setProjectOpen] = createSignal(false);
+  let lastFocused: HTMLElement | undefined;
 
   const list = createListController({
     items: () => THREADS.map((subject) => ({ id: subject })),
@@ -116,9 +121,13 @@ function Fixture() {
   });
 
   // The rail's press keeps focus off its button and gives the split back
-  // whatever in it had focus, else the split itself (`returnFocus`).
+  // focus as the split focus tracker does: where it is if inside the split,
+  // else the element last focused there, else the split itself.
   const returnFocus = () => {
-    if (split?.contains(document.activeElement)) return;
+    const active = document.activeElement;
+    if (active !== split && split?.contains(active)) return;
+    if (lastFocused?.isConnected && split?.contains(lastFocused))
+      return lastFocused.focus();
     split?.focus();
   };
 
@@ -210,6 +219,7 @@ function Fixture() {
       <Show when={sidebar}>
         <nav
           {...hotkeyScopeNeutralAttribute}
+          {...appNavigationAttribute}
           aria-label="App"
           class="flex flex-col gap-1"
         >
@@ -231,6 +241,10 @@ function Fixture() {
           ref={(element) => {
             split = element;
             attachSplit(element);
+          }}
+          onFocusIn={(event) => {
+            if (event.target !== split && event.target instanceof HTMLElement)
+              lastFocused = event.target;
           }}
           tabIndex={-1}
           class="flex gap-4 rounded-xl bg-panel p-4"
@@ -269,12 +283,15 @@ function Fixture() {
                   </ViewSidebar.Item>
                 </ViewSidebar.Nav>
                 <ViewSidebar.Nav aria-label="Projects">
-                  <ViewSidebar.Item
+                  <ViewSidebar.TreeItem
                     active={place() === PROJECT}
+                    label={PROJECT}
+                    expanded={projectOpen()}
+                    onToggle={() => setProjectOpen(!projectOpen())}
                     onClick={() => go(PROJECT)}
                   >
                     {PROJECT}
-                  </ViewSidebar.Item>
+                  </ViewSidebar.TreeItem>
                 </ViewSidebar.Nav>
               </ViewSidebar.Root>
             </div>

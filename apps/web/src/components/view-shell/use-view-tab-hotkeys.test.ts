@@ -36,10 +36,12 @@ function pane() {
     <div data-view-shell-aside>
       <aside data-view-sidebar>
         <nav aria-label="Email tabs">
-          <button type="button">Inbox</button>
-          <button type="button">Favorites</button>
-          <button type="button" aria-haspopup="menu">Options</button>
-          <input aria-label="View name" />
+          <button type="button" data-view-sidebar-item>Inbox</button>
+          <button type="button" data-view-sidebar-item>Favorites</button>
+          <button type="button" data-view-sidebar-item aria-haspopup="menu">Options</button>
+          <button type="button" data-view-sidebar-control aria-expanded="false">Expand</button>
+          <button type="button">Try again</button>
+          <div data-view-sidebar-item><input aria-label="View name" /></div>
         </nav>
         <button type="button">New</button>
       </aside>
@@ -56,6 +58,7 @@ function pane() {
     </div>`;
   const rail = document.createElement('nav');
   rail.dataset.hotkeyScopeNeutral = '';
+  rail.dataset.appNavigation = '';
   rail.innerHTML = '<button type="button">Mail</button>';
   document.body.append(rail, split);
   for (const region of split.querySelectorAll(
@@ -71,7 +74,8 @@ function pane() {
   Object.defineProperty(tabs, 'getClientRects', {
     value: () => (onScreen ? [tabs.getBoundingClientRect()] : []),
   });
-  const find = (selector: string) => split.querySelector(selector)!;
+  const find = (selector: string) =>
+    split.querySelector<HTMLElement>(selector)!;
   return {
     split,
     tabs,
@@ -83,6 +87,8 @@ function pane() {
     inbox: find('nav button'),
     favorites: find('nav button + button'),
     options: find('nav [aria-haspopup]'),
+    caret: find('nav [aria-expanded]'),
+    tryAgain: find('nav button:not([data-view-sidebar-item], [aria-expanded])'),
     viewName: find('nav input'),
     sidebarNew: find('aside > button'),
     rail: rail.querySelector('button')!,
@@ -92,10 +98,15 @@ function pane() {
   };
 }
 
-const press = (element: Element) =>
-  element.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-const focus = (element: Element) =>
-  element.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+const press = (element: Element, button = 0) =>
+  element.dispatchEvent(
+    new MouseEvent('pointerdown', { bubbles: true, button })
+  );
+/** Focus moved to `element` from `from`, or from outside the page. */
+const focus = (element: Element, from?: Element) =>
+  element.dispatchEvent(
+    new FocusEvent('focusin', { bubbles: true, relatedTarget: from ?? null })
+  );
 const typeKey = () =>
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
 
@@ -278,38 +289,64 @@ it('leaves the keys to the pane on a sidebar destination a pointer press chose, 
     const move = mailTabs(view);
 
     press(view.inbox);
-    focus(view.inbox);
+    focus(view.inbox, view.grid);
     expect(handler('tab')(keydown(view.inbox))).toBe(true);
     expect(handler('2')(keydown(view.inbox))).toBe(true);
-    expect(move).toHaveBeenCalledTimes(2);
+    // Back from another window, focus lands on it again.
+    focus(view.inbox);
+    expect(handler('tab')(keydown(view.inbox))).toBe(true);
+    expect(move).toHaveBeenCalledTimes(3);
 
     typeKey();
-    focus(view.favorites);
+    focus(view.favorites, view.inbox);
     expect(handler('tab')(keydown(view.favorites))).toBe(false);
     // Back on the destination by the keyboard, it is focus order too.
-    focus(view.inbox);
+    focus(view.inbox, view.favorites);
     expect(handler('tab')(keydown(view.inbox))).toBe(false);
-    expect(move).toHaveBeenCalledTimes(2);
+    expect(move).toHaveBeenCalledTimes(3);
     dispose();
   });
 });
 
-it('chooses nothing with a keyboard focus, a control that opens something, a field, or a control outside the navigation', () => {
+it('chooses the destination pressed when it already has focus', () => {
   createRoot((dispose) => {
     const view = pane();
     const move = mailTabs(view);
 
+    view.inbox.focus();
+    expect(handler('tab')(keydown(view.inbox))).toBe(false);
+    // The browser fires no focusin for the element that already has focus.
+    press(view.inbox);
+    expect(handler('tab')(keydown(view.inbox))).toBe(true);
+    expect(move).toHaveBeenCalledTimes(1);
+    dispose();
+  });
+});
+
+it('chooses nothing with a keyboard focus, a secondary press, a control that opens or discloses something, a plain button or a field', () => {
+  createRoot((dispose) => {
+    const view = pane();
+    const move = mailTabs(view);
+    const pressAndFocus = (element: Element, button = 0) => {
+      const before = document.activeElement ?? undefined;
+      press(element, button);
+      focus(element, before);
+    };
+
     focus(view.inbox);
     expect(handler('tab')(keydown(view.inbox))).toBe(false);
-    press(view.options);
-    focus(view.options);
-    expect(handler('tab')(keydown(view.options))).toBe(false);
-    press(view.viewName);
-    focus(view.viewName);
-    expect(handler('tab')(keydown(view.viewName))).toBe(false);
-    press(view.sidebarNew);
-    focus(view.sidebarNew);
-    expect(handler('tab')(keydown(view.sidebarNew))).toBe(false);
+    pressAndFocus(view.favorites, 2);
+    expect(handler('tab')(keydown(view.favorites))).toBe(false);
+    for (const control of [
+      view.options,
+      view.caret,
+      view.tryAgain,
+      view.viewName,
+      view.sidebarNew,
+    ]) {
+      pressAndFocus(control);
+      expect(handler('tab')(keydown(control))).toBe(false);
+    }
     expect(move).not.toHaveBeenCalled();
     dispose();
   });
@@ -324,10 +361,10 @@ it('ends the choice when the press opens something that takes focus', () => {
     document.body.append(dialog);
 
     press(view.inbox);
-    focus(view.inbox);
-    focus(dialog);
+    focus(view.inbox, view.grid);
+    focus(dialog, view.inbox);
     // Focus handed back to the destination as the dialog closes.
-    focus(view.inbox);
+    focus(view.inbox, dialog);
     expect(handler('tab')(keydown(view.inbox))).toBe(false);
     expect(move).not.toHaveBeenCalled();
     dispose();
@@ -349,11 +386,18 @@ it('hands the pane the keyboard from a press on the navigation, wherever it was 
     press(view.detailText);
     focus(view.split);
     expect(handler('tab')(keydown(view.split))).toBe(false);
-    // The rail hands the split back the destination that had focus.
+    // The rail hands the split back the destination that last had focus.
     press(view.rail);
-    focus(view.inbox);
+    focus(view.inbox, view.split);
     expect(handler('tab')(keydown(view.inbox))).toBe(true);
-    expect(move).toHaveBeenCalledTimes(2);
+
+    // Or leaves focus on the destination the keyboard is on.
+    typeKey();
+    view.favorites.focus();
+    expect(handler('tab')(keydown(view.favorites))).toBe(false);
+    press(view.rail);
+    expect(handler('tab')(keydown(view.favorites))).toBe(true);
+    expect(move).toHaveBeenCalledTimes(3);
     dispose();
   });
 });

@@ -111,7 +111,7 @@ async function openWithSidebar(page: Page) {
     folder: (name: string) => folders.getByRole('button', { name }),
     project: page
       .getByRole('navigation', { name: 'Projects' })
-      .getByRole('button', { name: 'Launch plan' }),
+      .getByRole('button', { name: 'Launch plan', exact: true }),
     rail: page
       .getByRole('navigation', { name: 'App' })
       .getByRole('button', { name: 'Mail' }),
@@ -158,17 +158,18 @@ test('the keyboard walks the sidebar in focus order', async ({ page }) => {
   await page.keyboard.press('Shift+Tab');
   await expect(folder('Inbox')).toBeFocused();
   await expect(tab).toHaveText('important');
+});
 
-  // Tabbing on from a folder chosen with the mouse is still focus order once
-  // the keyboard has moved focus.
-  await folder('Favorites').click();
+test("a folder's disclosure caret chooses nothing", async ({ page }) => {
+  const { tab } = await openWithSidebar(page);
+  const caret = page.getByRole('button', {
+    name: /^(Expand|Collapse) Launch plan$/,
+  });
+  await caret.click();
+  await expect(caret).toBeFocused();
+
   await page.keyboard.press('Tab');
-  await expect(folder('Archived')).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
-  await expect(folder('Inbox')).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(folder('Favorites')).toBeFocused();
+  await expect(caret).not.toBeFocused();
   await expect(tab).toHaveText('important');
 });
 
@@ -192,22 +193,27 @@ test("a project chosen in the sidebar with the mouse leaves Tab to the project's
 test('a view chosen on the app rail leaves Tab to the header tabs', async ({
   page,
 }) => {
-  const { tab, section, folder, project, rail } = await openWithSidebar(page);
-  // The rail hands the split back the folder the mouse last chose.
-  await folder('Inbox').click();
+  const { tab, folder, rail } = await openWithSidebar(page);
+  // The keyboard left on a folder: the rail's press leaves focus there.
+  await folder('Inbox').focus();
   await rail.click();
+  await expect(folder('Inbox')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(tab).toHaveText('noise');
+});
 
-  // From a project, the rail returns to Mail and its tabs.
-  await project.click();
+test('a view chosen on the app rail leaves Tab to the header tabs when it hands focus back', async ({
+  page,
+}) => {
+  const { tab, folder, rail } = await openWithSidebar(page);
+  // The split had focus last on a folder, then on itself.
+  await folder('Inbox').focus();
+  await page.getByRole('heading', { name: 'Inbox' }).click();
+  await expect(folder('Inbox')).not.toBeFocused();
   await rail.click();
-  await expect(
-    page.getByRole('radiogroup', { name: 'Inbox view' })
-  ).toBeVisible();
+  await expect(folder('Inbox')).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(tab).toHaveText('focus');
-  await expect(section).toHaveText('overview');
+  await expect(tab).toHaveText('noise');
 });
 
 test('a sidebar control that opens a menu or a dialog chooses nothing, so Tab stays focus order after it closes', async ({
