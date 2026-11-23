@@ -475,7 +475,9 @@ describe('MCP Events', () => {
     );
     const handle = createHandler(parseConfig(BINDINGS));
 
-    const response = await handle(rpc('events/list', {}, 'user-token'));
+    const response = await handle(
+      rpc('events/list', { _meta: { 'openai/locale': 'en' } }, 'user-token')
+    );
 
     expect((await response.json()).result).toEqual(LISTED);
     expect(forwarded).toHaveLength(1);
@@ -483,7 +485,23 @@ describe('MCP Events', () => {
     expect(headers?.get('authorization')).toBe('Bearer user-token');
     expect(headers?.get('x-macro-events-profile')).toBe('chatgpt');
     expect(headers?.get('mcp-protocol-version')).toBe('2026-07-28');
-    expect(body).toMatchObject({ method: 'events/list', params: {} });
+    expect(headers?.get('mcp-method')).toBe('events/list');
+    expect(headers?.has('mcp-name')).toBe(false);
+    // ChatGPT's own _meta stays here; the request carries the 2026-07-28
+    // metadata the public MCP server requires in place of initialize.
+    expect(body).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'events/list',
+      params: {
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientCapabilities': {
+            extensions: { 'io.modelcontextprotocol/events': {} },
+          },
+        },
+      },
+    });
   });
 
   test('a refusal keeps its code, message and data', async () => {
@@ -525,7 +543,9 @@ describe('MCP Events', () => {
   });
 
   test('unsubscribe relays the empty result', async () => {
-    stubPublicMcp(() => Response.json({ jsonrpc: '2.0', id: 1, result: {} }));
+    const forwarded = stubPublicMcp(() =>
+      Response.json({ jsonrpc: '2.0', id: 1, result: {} })
+    );
     const handle = createHandler(parseConfig(BINDINGS));
 
     const response = await handle(
@@ -541,6 +561,9 @@ describe('MCP Events', () => {
     );
 
     expect((await response.json()).result).toEqual({});
+    const { headers } = forwarded[0] ?? {};
+    expect(headers?.get('mcp-method')).toBe('events/unsubscribe');
+    expect(headers?.get('mcp-name')).toBe('message.posted');
   });
 
   test('an answer that is not JSON-RPC is an internal error', async () => {

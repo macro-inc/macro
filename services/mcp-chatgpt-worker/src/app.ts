@@ -71,6 +71,18 @@ export const EVENTS_PROFILE_HEADER = 'x-macro-events-profile';
 /** The MCP revision whose events methods the public MCP server serves. */
 const EVENTS_PROTOCOL_VERSION = '2026-07-28';
 
+/**
+ * What a stateless 2026-07-28 request carries in `params._meta` in place of
+ * an `initialize` handshake: its revision and that this client speaks the
+ * events extension. The public MCP server refuses a request without them.
+ */
+const EVENTS_REQUEST_META = {
+  'io.modelcontextprotocol/protocolVersion': EVENTS_PROTOCOL_VERSION,
+  'io.modelcontextprotocol/clientCapabilities': {
+    extensions: { 'io.modelcontextprotocol/events': {} },
+  },
+};
+
 /** A JSON-RPC error relayed with its code, message and data as the public MCP server sent them. */
 class RelayedError extends Error {
   constructor(
@@ -385,9 +397,17 @@ export function createHandler(config: Config) {
       if (typeof params?.name === 'string')
         span.setAttr('mcp.event.name', params.name);
       const people = personTokens(token);
-      let revealed: unknown;
+      // ChatGPT's own `_meta` is for this server; the public MCP server gets
+      // the 2026-07-28 request metadata in its place.
+      const { _meta: _chatgptMeta, ...ownParams } = params ?? {};
+      let revealed: Record<string, unknown>;
       try {
-        revealed = await people.reveal(params ?? {});
+        revealed = {
+          ...z
+            .record(z.string(), z.unknown())
+            .parse(await people.reveal(ownParams)),
+          _meta: EVENTS_REQUEST_META,
+        };
       } catch (error) {
         span.setAttr('mcp.outcome', 'invalid');
         if (error instanceof PersonTokenError)
@@ -403,6 +423,13 @@ export function createHandler(config: Config) {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
         'mcp-protocol-version': EVENTS_PROTOCOL_VERSION,
+        // The 2026-07-28 HTTP transport routes by these, and refuses a
+        // request without Mcp-Method or with an Mcp-Name that isn't the
+        // body's name.
+        'mcp-method': method,
+        ...(typeof params?.name === 'string'
+          ? { 'mcp-name': params.name }
+          : {}),
         [EVENTS_PROFILE_HEADER]: 'chatgpt',
       };
       span.injectTraceHeaders(headers);
