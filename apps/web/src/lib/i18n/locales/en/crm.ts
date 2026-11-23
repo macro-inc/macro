@@ -191,6 +191,7 @@ export default {
     other: 'Email: {{email}} and {{count}} more',
   },
   primaryEmail: 'Primary',
+  companyWebsite: 'Website',
   makePrimaryContactEmail: 'Make primary',
   makeContactEmailPrimaryNamed: 'Make {{email}} primary',
   removeContactEmail: 'Remove',

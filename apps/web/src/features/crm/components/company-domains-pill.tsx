@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import GlobeIcon from '@icon/system/regular/globe.svg';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
 import { HoverCard } from '@ui';
@@ -36,7 +37,9 @@ export function CompanyDomainsPill(props: { domains: string[] }) {
           contentClass="menu-surface p-1.5 px-3"
           content={
             <div class="flex min-w-0 max-w-80 flex-col gap-1 text-sm">
-              <span class="text-xs text-ink-muted">Website</span>
+              <span class="text-xs text-ink-muted">
+                {t('crm.companyWebsite')}
+              </span>
               <For each={props.domains}>
                 {(domain) => <span class="min-w-0 truncate">{domain}</span>}
               </For>

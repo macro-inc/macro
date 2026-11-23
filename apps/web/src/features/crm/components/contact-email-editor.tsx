@@ -135,8 +135,10 @@ export function ContactEmailEditor(props: {
         </form>
       </Show>
       <Show when={props.emails.length > 0}>
+        {/* The rows scroll under the field; the popover's own height cap
+            doesn't reach this list through its wrappers. */}
         <ul
-          class="flex min-w-0 flex-col gap-0.5 p-1"
+          class="flex max-h-72 min-w-0 flex-col gap-0.5 overflow-y-auto p-1"
           aria-label={t('crm.email')}
         >
           <For each={props.emails}>
