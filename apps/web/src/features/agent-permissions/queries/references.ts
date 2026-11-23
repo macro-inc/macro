@@ -1,13 +1,15 @@
 import { throwOnErr } from '@core/util/result';
 import type { TraceContext } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
-import type { ToolPermissionChange } from '@service-agent-harness/generated/schemas';
+import type {
+  AgentToolPermissions,
+  ToolPermissionChange,
+} from '@service-agent-harness/generated/schemas';
 import { toolPermissionsClient } from '@service-agent-harness/tool-permissions';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentToolPermissionKeys } from './keys';
 import { orUnavailable, storeView } from './permissions';
-import type { ReferencesView, SourceCandidate } from './references-view';
 
 /** Which candidates to list: an agent's, or a new agent's by its scope. */
 export type SourceQuery = {
@@ -24,10 +26,8 @@ export function sourceCandidatesQueryOptions(
     queryKey: agentToolPermissionKeys.sources(query).queryKey,
     queryFn: () =>
       orUnavailable(() =>
-        throwOnErr(() =>
-          toolPermissionsClient.sources<SourceCandidate[]>(query)
-        )
-      ),
+        throwOnErr(() => toolPermissionsClient.sources(query))
+      ).then((list) => list?.candidates ?? null),
     enabled,
   });
 }
@@ -40,9 +40,7 @@ export function policyViewQueryOptions(
     queryKey: agentToolPermissionKeys.policy(policyId ?? '').queryKey,
     queryFn: () =>
       orUnavailable(() =>
-        throwOnErr(() =>
-          toolPermissionsClient.policy<ReferencesView>(policyId ?? '')
-        )
+        throwOnErr(() => toolPermissionsClient.policy(policyId ?? ''))
       ),
     enabled: enabled && policyId !== undefined,
   });
@@ -77,7 +75,7 @@ export type DetachVariables = {
 };
 
 /** A source change also changes what the agent's candidates say. */
-function storeSourceView(view: ReferencesView) {
+function storeSourceView(view: AgentToolPermissions) {
   queryClient.invalidateQueries({
     queryKey: agentToolPermissionKeys.sources._def,
   });
@@ -94,7 +92,7 @@ function setSourceMutationOptions(agentId: string) {
       }),
     mutationFn: (variables: SetSourceVariables) =>
       throwOnErr(() =>
-        toolPermissionsClient.setSource<ReferencesView>(
+        toolPermissionsClient.setSource(
           variables.agentId,
           { sourcePolicyId: variables.sourcePolicyId },
           variables.trace
@@ -113,9 +111,10 @@ function detachMutationOptions(agentId: string) {
       }),
     mutationFn: (variables: DetachVariables) =>
       throwOnErr(() =>
-        toolPermissionsClient.detach<ReferencesView>(
+        toolPermissionsClient.detach(
           variables.agentId,
-          variables.changes ? { changes: variables.changes } : {},
+          // The route takes between 1 and 200 changes, or none at all.
+          variables.changes?.length ? { changes: variables.changes } : {},
           variables.trace
         )
       ),

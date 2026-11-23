@@ -1,12 +1,15 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import type { ObjectLike } from '@core/util/result';
 import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
 import type { TraceContext } from '@macro-inc/observability';
 import type {
   AgentToolPermissions,
+  DetachToolPermissions,
+  GetAgentToolPermissionSourcesParams,
+  SetToolPermissionSource,
   ToolPermissionCatalog,
   ToolPermissionChanges,
+  ToolPermissionSourceCandidates,
 } from './generated/schemas';
 
 const host = SERVER_HOSTS['agent-harness'];
@@ -43,15 +46,7 @@ function agentPath(agentId: string) {
   return `${host}/agents/${encodeURIComponent(agentId)}/tool-permissions`;
 }
 
-/**
- * An agent's tool permissions (agent harness, `agent-tool-permissions`).
- *
- * TODO(agent-permissions references): the source routes and the view's
- * `source`/`inherited` fields aren't in the generated client yet, so these
- * methods take the response type from the caller
- * (`features/agent-permissions/queries/references-view.ts`). Drop the type
- * parameters for the generated types once the OpenAPI has them.
- */
+/** An agent's tool permissions (agent harness, `agent-tool-permissions`). */
 export const toolPermissionsClient = {
   /** Every group, its tools and the five actions, in display order. */
   catalog() {
@@ -62,8 +57,8 @@ export const toolPermissionsClient = {
   },
 
   /** The agent's saved rules and every group action's resolved state. */
-  get<View extends ObjectLike = AgentToolPermissions>(agentId: string) {
-    return fetchWithToken<View, typeof TOOL_PERMISSION_REFUSED>(
+  get(agentId: string) {
+    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
       agentPath(agentId),
       {
         errorResponseHandler: toolPermissionError,
@@ -117,12 +112,12 @@ export const toolPermissionsClient = {
   },
 
   /** Makes the agent follow another policy (its source). */
-  setSource<View extends ObjectLike>(
+  setSource(
     agentId: string,
-    body: { sourcePolicyId: string },
+    body: SetToolPermissionSource,
     parentSpan?: TraceContext
   ) {
-    return fetchWithToken<View, typeof TOOL_PERMISSION_REFUSED>(
+    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
       `${agentPath(agentId)}/source`,
       {
         method: 'PUT',
@@ -138,12 +133,12 @@ export const toolPermissionsClient = {
    * Stops following: copies what the source resolves to into the agent's
    * own settings, then applies `changes`, in one transaction.
    */
-  detach<View extends ObjectLike>(
+  detach(
     agentId: string,
-    body: { changes?: ToolPermissionChanges['changes'] },
+    body: DetachToolPermissions,
     parentSpan?: TraceContext
   ) {
-    return fetchWithToken<View, typeof TOOL_PERMISSION_REFUSED>(
+    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
       `${agentPath(agentId)}/detach`,
       {
         method: 'POST',
@@ -159,27 +154,23 @@ export const toolPermissionsClient = {
    * The policies an agent may follow: for an agent (`agentId`), or for a
    * new one by its scope.
    */
-  sources<List extends ObjectLike>(query: {
-    agentId?: string;
-    scope?: 'private' | 'team';
-    teamId?: string;
-  }) {
+  sources(query: GetAgentToolPermissionSourcesParams) {
     const params = new URLSearchParams();
     if (query.agentId) params.set('agentId', query.agentId);
     if (query.scope) params.set('scope', query.scope);
     if (query.teamId) params.set('teamId', query.teamId);
-    return fetchWithToken<List, typeof TOOL_PERMISSION_REFUSED>(
-      `${host}/agent-tool-permissions/sources?${params}`,
-      {
-        errorResponseHandler: toolPermissionError,
-        trace: FEATURE_OFF_IS_EXPECTED,
-      }
-    );
+    return fetchWithToken<
+      ToolPermissionSourceCandidates,
+      typeof TOOL_PERMISSION_REFUSED
+    >(`${host}/agent-tool-permissions/sources?${params}`, {
+      errorResponseHandler: toolPermissionError,
+      trace: FEATURE_OFF_IS_EXPECTED,
+    });
   },
 
   /** A policy's resolved permissions, read-only (a source's preview). */
-  policy<View extends ObjectLike>(policyId: string) {
-    return fetchWithToken<View, typeof TOOL_PERMISSION_REFUSED>(
+  policy(policyId: string) {
+    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
       `${host}/agent-tool-permissions/policies/${encodeURIComponent(policyId)}`,
       {
         errorResponseHandler: toolPermissionError,

@@ -1281,7 +1281,7 @@ control back and shows a toast.
 
 An agent can follow another policy instead of keeping its own. Its row's
 panel then shows the source's card (picture, name, @handle, `Personal` or
-`Team · <team>`), `This agent automatically follows permission changes made
+`Team`; a team's name arrives with the team directory), `This agent automatically follows permission changes made
 to @handle.` (with `@handle follows @other.` for a longer chain), and the
 component read-only: inherited exceptions listed, and the agent's own
 restrictions marked on their rows (`Restricted by the agent: Ask`) with a ✕

@@ -254,6 +254,7 @@ function view(): AgentToolPermissions {
     kind: 'agent',
     canEdit: VIEWER === OWNER,
     canTighten: true,
+    canSetSource: false,
     version: CATALOG.version,
     restricted: Object.keys(saved).length,
     defaults: ACTIONS.map((action) => ({

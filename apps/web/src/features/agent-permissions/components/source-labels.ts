@@ -1,20 +1,34 @@
 import { t } from '@app/lib/i18n';
+import type {
+  ToolPermissionSourceCandidate,
+  ToolPermissionSourceScope,
+} from '@service-agent-harness/generated/schemas';
 import { match } from 'ts-pattern';
-import type { PolicyScope, SourceCandidate } from '../queries/references-view';
 
-/** Whose a policy is: "Personal" or "Team · Acme". */
-export function scopeLabel(scope: PolicyScope): string {
-  return match(scope)
-    .with({ kind: 'personal' }, () => t('agentPermissions.scopePersonal'))
-    .with({ kind: 'team' }, (team) =>
-      t('agentPermissions.scopeTeam', { team: team.teamName })
-    )
-    .exhaustive();
+/** Whose a policy is: "Personal" or "Team". */
+export function scopeLabel(
+  scope: ToolPermissionSourceScope | null | undefined
+): string | undefined {
+  if (!scope) return undefined;
+  // The team's name comes with the team directory; until then, "Team".
+  return match(scope.kind)
+    .with('personal', () => t('agentPermissions.scopePersonal'))
+    .with('team', () => t('agentPermissions.scopeTeamOnly'))
+    .exhaustive(() => undefined);
+}
+
+/** A policy's name: its agent's, or "Team default" for a team's. */
+export function policyName(policy: {
+  agent?: { name: string } | null;
+  kind?: string | null;
+}): string {
+  if (policy.agent) return policy.agent.name;
+  return policy.kind === 'team' ? t('agentPermissions.teamDefault') : '';
 }
 
 /** Why a candidate can't be picked, if it can't. */
 export function unavailableReason(
-  candidate: SourceCandidate
+  candidate: ToolPermissionSourceCandidate
 ): string | undefined {
   if (!candidate.unavailable) return undefined;
   return match(candidate.unavailable)

@@ -7,6 +7,7 @@ import { queryReadyGate } from '@queries/gate';
 import type {
   AgentToolPermissions,
   ToolPermissionChange,
+  ToolPermissionSourceCandidate,
 } from '@service-agent-harness/generated/schemas';
 import { Button, ConfirmDialog, cn, Tabs } from '@ui';
 import { ok, ResultAsync } from 'neverthrow';
@@ -42,7 +43,6 @@ import {
   useSetSourceMutation,
   useSourceCandidatesQuery,
 } from '../queries/references';
-import type { SourceCandidate } from '../queries/references-view';
 import { AgentPermissionsPanel } from './agent-permissions-panel';
 import { refusalMessage } from './permission-changes';
 
@@ -188,7 +188,7 @@ export function NewAgentPermissions(props: {
     scope: props.share === 'Private' ? 'private' : 'team',
     teamId: props.share === 'Team' ? props.teamId : undefined,
   }));
-  const candidates = (): SourceCandidate[] =>
+  const candidates = (): ToolPermissionSourceCandidate[] =>
     queryReadyGate(candidatesQuery) ? (candidatesQuery.data ?? []) : [];
   const fallback = () => defaultCandidate(candidates(), props.share);
   // A pick from the other scope (Who can use it changed) no longer applies.
@@ -257,7 +257,6 @@ export function NewAgentPermissions(props: {
                   <PolicySourceCard
                     kind={source().kind}
                     agent={source().agent}
-                    team={source().team}
                     scope={source().scope}
                     title={t('agentPermissions.useSamePermissionsAs')}
                     action={
@@ -339,14 +338,15 @@ export function EditAgentPermissions(props: {
   const detach = useDetachMutation(() => props.agentId);
   // A tab picked without acting yet; otherwise the tab says what is saved.
   const [tab, setTab] = createSignal<Mode>();
-  const [confirming, setConfirming] = createSignal<SourceCandidate>();
+  const [confirming, setConfirming] =
+    createSignal<ToolPermissionSourceCandidate>();
 
   const view = () =>
     queryReadyGate(viewQuery) ? (viewQuery.data ?? undefined) : undefined;
   const following = () => Boolean(view()?.source);
   const mode = (): Mode => tab() ?? (following() ? 'source' : 'own');
   const canSetSource = () => view()?.canSetSource ?? false;
-  const candidates = (): SourceCandidate[] =>
+  const candidates = (): ToolPermissionSourceCandidate[] =>
     queryReadyGate(candidatesQuery) ? (candidatesQuery.data ?? []) : [];
 
   const confirmingMention = () => {
@@ -354,7 +354,7 @@ export function EditAgentPermissions(props: {
     return candidate ? sourceMention(candidate) : '';
   };
 
-  const follow = async (candidate: SourceCandidate) => {
+  const follow = async (candidate: ToolPermissionSourceCandidate) => {
     const interaction = beginInteraction('agent_permissions.set_source');
     const result = await ResultAsync.fromPromise(
       setSource.mutateAsync({
@@ -376,7 +376,7 @@ export function EditAgentPermissions(props: {
   };
 
   // Following another policy replaces own settings, so ask first.
-  const pick = (candidate: SourceCandidate) => {
+  const pick = (candidate: ToolPermissionSourceCandidate) => {
     if (following()) fireAndForget(follow(candidate), 'agent-permissions');
     else setConfirming(candidate);
   };

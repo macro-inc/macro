@@ -4,9 +4,10 @@ import type {
   ToolPermissionCatalog,
   ToolPermissionChange,
   ToolPermissionRule,
+  ToolPermissionSourceAgent,
+  ToolPermissionSourceCandidate,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
-import type { PolicySource, SourceCandidate } from '../queries/references-view';
 import { ACTION_ORDER, targetKey, visibleActions } from './model';
 
 /**
@@ -33,6 +34,7 @@ export function blankView(
     kind: 'agent',
     canEdit: true,
     canTighten: true,
+    canSetSource: false,
     version: catalog.version,
     restricted: 0,
     defaults: ACTION_ORDER.map((action) => ({
@@ -136,22 +138,24 @@ export function applyChanges(
  * server lists one).
  */
 export function defaultCandidate(
-  candidates: readonly SourceCandidate[],
+  candidates: readonly ToolPermissionSourceCandidate[],
   share: 'Private' | 'Team'
-): SourceCandidate | undefined {
+): ToolPermissionSourceCandidate | undefined {
   const kind = share === 'Private' ? 'persona' : 'team';
   return candidates.find((candidate) => candidate.kind === kind);
 }
 
-/** The name and handle a source or candidate shows. */
-export function policyIdentity(policy: Pick<PolicySource, 'agent' | 'team'>): {
-  name: string;
-  handle?: string;
-} {
-  if (policy.agent) {
-    return { name: policy.agent.name, handle: policy.agent.handle };
-  }
-  return { name: policy.team?.name ?? '' };
+/**
+ * The name and @handle a source or candidate shows: its agent's (a deleted
+ * agent has no handle). A team's default has no agent; the caller names it.
+ */
+export function policyIdentity(policy: {
+  agent?: ToolPermissionSourceAgent | null;
+}): { name?: string; handle?: string } {
+  return {
+    name: policy.agent?.name,
+    handle: policy.agent?.handle ?? undefined,
+  };
 }
 
 /**

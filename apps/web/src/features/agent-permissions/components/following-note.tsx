@@ -1,14 +1,18 @@
 import { t } from '@app/lib/i18n';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
+import type { ToolPermissionSource } from '@service-agent-harness/generated/schemas';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import { policyIdentity } from '../core/references';
-import type { PolicySource } from '../queries/references-view';
 import { PolicySourceCard } from './policy-source-card';
+import { policyName } from './source-labels';
 
-/** "@macro", or a team default's name, for prose. */
-export function sourceMention(source: Pick<PolicySource, 'agent' | 'team'>) {
-  const identity = policyIdentity(source);
-  return identity.handle ? `@${identity.handle}` : identity.name;
+/** "@macro", or the name (a deleted agent, a team's default), for prose. */
+export function sourceMention(source: {
+  agent?: ToolPermissionSource['agent'];
+  kind?: string | null;
+}) {
+  const handle = policyIdentity(source).handle;
+  return handle ? `@${handle}` : policyName(source);
 }
 
 /**
@@ -17,13 +21,15 @@ export function sourceMention(source: Pick<PolicySource, 'agent' | 'team'>) {
  * what to do when the source was deleted, is gone, or is out of scope.
  */
 export function FollowingNote(props: {
-  source: PolicySource;
+  source: ToolPermissionSource;
   title?: string;
   action?: JSX.Element;
 }) {
   const mention = () => sourceMention(props.source);
   const via = () =>
-    props.source.via.map((entry) => `@${entry.handle}`).join(', ');
+    props.source.via
+      .map((entry) => (entry.handle ? `@${entry.handle}` : entry.name))
+      .join(', ');
 
   return (
     <div class="flex flex-col gap-2">
@@ -31,7 +37,6 @@ export function FollowingNote(props: {
         <PolicySourceCard
           kind={props.source.kind}
           agent={props.source.agent}
-          team={props.source.team}
           scope={props.source.scope}
           title={props.title}
           action={props.action}

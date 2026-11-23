@@ -3,6 +3,7 @@
  */
 
 import { queryClient } from '@queries/client';
+import type { AgentToolPermissions } from '@service-agent-harness/generated/schemas';
 import {
   fireEvent,
   render,
@@ -14,7 +15,6 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { createSignal, Suspense } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReferencesView } from '../queries/references-view';
 import {
   CANDIDATES,
   ENTITY_CATALOG,
@@ -84,7 +84,7 @@ beforeEach(() => {
   queryClient.clear();
   for (const mock of Object.values(client)) mock.mockReset();
   client.catalog.mockResolvedValue(ok(ENTITY_CATALOG));
-  client.sources.mockResolvedValue(ok(CANDIDATES));
+  client.sources.mockResolvedValue(ok({ candidates: CANDIDATES }));
   client.policy.mockResolvedValue(ok(ENTITY_VIEW));
 });
 
@@ -133,7 +133,11 @@ describe('NewAgentPermissions', () => {
 
   it('lists an agent that would loop, disabled with the reason', async () => {
     renderNew();
-    const trigger = await screen.findByRole('button', { name: /Set agent/ });
+    // The picker beside the default source, once the candidates are in.
+    await screen.findByText(
+      'This agent automatically follows permission changes made to @macro.'
+    );
+    const trigger = screen.getByRole('button', { name: /Set agent/ });
     fireEvent.keyDown(trigger, { key: 'Enter' });
     const analyst = screen.getByRole('menuitem', { name: /Analyst/ });
     expect(analyst.getAttribute('aria-disabled')).toBe('true');
@@ -248,7 +252,7 @@ describe('applyPermissionsDraft', () => {
 });
 
 describe('EditAgentPermissions', () => {
-  function renderEdit(view: ReferencesView) {
+  function renderEdit(view: AgentToolPermissions) {
     client.get.mockResolvedValue(ok(view));
     wrap(() => <EditAgentPermissions agentId="agent-2" agentName="Analyst" />);
   }

@@ -10,7 +10,6 @@ import { toolPermissionsClient } from '@service-agent-harness/tool-permissions';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentToolPermissionKeys } from './keys';
-import type { ReferencesView } from './references-view';
 
 /**
  * The routes answer 404 while the feature is off for the caller (or the
@@ -51,9 +50,7 @@ export function agentToolPermissionsQueryOptions(
   return queryOptions({
     queryKey: agentToolPermissionKeys.agent(agentId).queryKey,
     queryFn: () =>
-      orUnavailable(() =>
-        throwOnErr(() => toolPermissionsClient.get<ReferencesView>(agentId))
-      ),
+      orUnavailable(() => throwOnErr(() => toolPermissionsClient.get(agentId))),
     enabled,
     refetchOnWindowFocus: true,
   });

@@ -30,8 +30,8 @@ changes.
 - `core/references.ts`: draft application, default candidate, follower
   exceptions (pure, tested).
 - `queries/references.ts`: source candidates, policy previews, set source
-  and detach. `queries/references-view.ts` holds their types ahead of the
-  generated client (see its TODO).
+  and detach (a detach sends its changes only when there are some: the route
+  takes between 1 and 200).
 - `queries/permissions.ts`: catalog, per-agent and per-session queries,
   set/reset mutations (a save re-reads every session view). A 404 (feature
   off for the caller) reads as `null`: hide the UI.

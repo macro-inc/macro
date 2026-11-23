@@ -1,14 +1,16 @@
 import MacroLogo from '@icon/macro-logo.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
-import UsersIcon from '@icon/system/regular/users.svg';
+import type {
+  ToolPermissionPolicyKind,
+  ToolPermissionSourceAgent,
+} from '@service-agent-harness/generated/schemas';
 import { Avatar } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import type { PolicyAgent, PolicyKind } from '../queries/references-view';
 
-/** A policy's picture: its agent's avatar, Macro's logo, or a team glyph. */
+/** A policy's picture: its agent's avatar, or Macro's logo for the persona. */
 export function PolicyAvatar(props: {
-  kind: PolicyKind;
-  agent?: PolicyAgent | null;
+  kind?: ToolPermissionPolicyKind | null;
+  agent?: ToolPermissionSourceAgent | null;
   size?: 'md' | 'lg';
 }) {
   const glyph = () => (props.size === 'md' ? 'size-3.5' : 'size-5');
@@ -24,9 +26,6 @@ export function PolicyAvatar(props: {
             <Switch fallback={<AgentIcon class={glyph()} />}>
               <Match when={props.kind === 'persona'}>
                 <MacroLogo class={glyph()} />
-              </Match>
-              <Match when={props.kind === 'team'}>
-                <UsersIcon class={glyph()} />
               </Match>
             </Switch>
           </Avatar.Fallback>

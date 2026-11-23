@@ -1,11 +1,11 @@
 import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import type { ToolPermissionSourceCandidate } from '@service-agent-harness/generated/schemas';
 import { Dropdown, SingleSelectCheck } from '@ui';
 import { For, Show } from 'solid-js';
 import { policyIdentity } from '../core/references';
-import type { SourceCandidate } from '../queries/references-view';
 import { PolicyAvatar } from './policy-avatar';
-import { scopeLabel, unavailableReason } from './source-labels';
+import { policyName, scopeLabel, unavailableReason } from './source-labels';
 
 /**
  * Set agent: the policies this agent may follow, each with its picture,
@@ -13,11 +13,11 @@ import { scopeLabel, unavailableReason } from './source-labels';
  * listed but disabled, saying why.
  */
 export function PolicySourcePicker(props: {
-  candidates: readonly SourceCandidate[];
+  candidates: readonly ToolPermissionSourceCandidate[];
   /** The candidate shown as picked. */
   selected?: string;
   disabled?: boolean;
-  onPick: (candidate: SourceCandidate) => void;
+  onPick: (candidate: ToolPermissionSourceCandidate) => void;
 }) {
   return (
     <Dropdown placement="bottom-end">
@@ -39,7 +39,7 @@ export function PolicySourcePicker(props: {
               const identity = () => policyIdentity(candidate);
               return (
                 <Dropdown.Item
-                  textValue={identity().name}
+                  textValue={policyName(candidate)}
                   disabledReason={unavailableReason(candidate)}
                   onSelect={() => props.onPick(candidate)}
                 >
@@ -50,7 +50,7 @@ export function PolicySourcePicker(props: {
                   />
                   <span class="flex min-w-0 flex-1 flex-col">
                     <span class="flex min-w-0 items-baseline gap-1.5">
-                      <span class="truncate">{identity().name}</span>
+                      <span class="truncate">{policyName(candidate)}</span>
                       <Show when={identity().handle}>
                         {(handle) => (
                           <span class="truncate text-xs text-ink-muted">

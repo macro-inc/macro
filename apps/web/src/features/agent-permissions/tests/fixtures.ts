@@ -3,12 +3,9 @@ import type {
   PermissionAction,
   ToolPermissionCatalog,
   ToolPermissionRule,
+  ToolPermissionSourceCandidate,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
-import type {
-  ReferencesView,
-  SourceCandidate,
-} from '../queries/references-view';
 
 /**
  * Email (with a Send override), Documents (Delete only) and Tasks, which has
@@ -78,6 +75,7 @@ export const VIEW: AgentToolPermissions = {
   kind: 'agent',
   canEdit: true,
   canTighten: true,
+  canSetSource: false,
   version: 'v1',
   restricted: 1,
   defaults: [
@@ -339,6 +337,7 @@ export const ENTITY_VIEW: AgentToolPermissions = {
   kind: 'agent',
   canEdit: true,
   canTighten: true,
+  canSetSource: false,
   version: 'v2',
   restricted: 9,
   defaults: (['read', 'create', 'update', 'send', 'destroy'] as const).map(
@@ -385,7 +384,7 @@ export const ENTITY_VIEW: AgentToolPermissions = {
 };
 
 /** The policies a private agent may follow: personal Macro, then Scout. */
-export const CANDIDATES: SourceCandidate[] = [
+export const CANDIDATES: ToolPermissionSourceCandidate[] = [
   {
     policyId: 'policy-macro',
     kind: 'persona',
@@ -432,7 +431,7 @@ export const CANDIDATES: SourceCandidate[] = [
  * `ENTITY_VIEW`, as an agent following Scout sees it: Scout's exceptions
  * are inherited, and the agent restricted itself to Never on Email · Read.
  */
-export const FOLLOWING_VIEW: ReferencesView = {
+export const FOLLOWING_VIEW: AgentToolPermissions = {
   ...ENTITY_VIEW,
   canSetSource: true,
   rules: [
