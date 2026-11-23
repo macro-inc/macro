@@ -16,8 +16,11 @@ class FakeRecorder implements RecorderHandle {
   }
 }
 
-function setup(attach = vi.fn(async (_file: File) => true)) {
+function setup(
+  attach = vi.fn(async (_file: File): Promise<string | undefined> => 'file-1')
+) {
   let now = 1_000;
+  const onFinish = vi.fn();
   const trace = {
     event: vi.fn(),
     span: <T>(
@@ -34,13 +37,15 @@ function setup(attach = vi.fn(async (_file: File) => true)) {
       startTrace: () => trace,
       createRecorder: (callbacks) => new FakeRecorder(callbacks),
       now: () => now,
-      recordedAt: () => new Date(2026, 10, 23, 9, 5),
+      fileName: () => 'Voice memo 9:05 AM',
       attach,
+      onFinish,
     })
   );
   return {
     ...hook,
     attach,
+    onFinish,
     trace,
     advance: (ms: number) => {
       now += ms;
@@ -62,7 +67,7 @@ describe('voice memo', () => {
     await Promise.all([test.result.stop(), test.result.stop()]);
     expect(test.attach).toHaveBeenCalledOnce();
     const file = test.attach.mock.calls[0][0];
-    expect(file.name).toBe('Voice memo 09.05.m4a');
+    expect(file.name).toBe('Voice memo 9:05 AM.m4a');
     expect(file.type).toBe('audio/mp4');
     expect(test.result.phase()).toBe('idle');
     expect(test.result.notice()).toBeUndefined();
@@ -70,6 +75,7 @@ describe('voice memo', () => {
       'voice_memo.outcome',
       'attached'
     );
+    expect(test.onFinish).toHaveBeenCalledOnce();
     expect(test.trace.end).toHaveBeenCalledOnce();
   });
 
@@ -149,15 +155,15 @@ describe('voice memo', () => {
     await test.result.stop();
     FakeRecorder.nextAudio = new Blob(['audio'], { type: 'audio/mp4' });
     expect(test.attach).toHaveBeenCalledOnce();
-    expect(test.attach.mock.calls[0][0].name).toBe('Voice memo 09.05.webm');
+    expect(test.attach.mock.calls[0][0].name).toBe('Voice memo 9:05 AM.webm');
     expect(test.result.notice()).toBe('limit');
   });
 
   it('keeps a recording whose upload failed so it can be retried', async () => {
     const attach = vi
-      .fn<(file: File) => Promise<boolean>>()
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+      .fn<(file: File) => Promise<string | undefined>>()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce('file-1');
     const test = setup(attach);
     await test.result.start();
     await test.result.stop();
@@ -172,7 +178,9 @@ describe('voice memo', () => {
   });
 
   it('discards a failed recording on cancel', async () => {
-    const attach = vi.fn(async (_file: File) => false);
+    const attach = vi.fn(
+      async (_file: File): Promise<string | undefined> => undefined
+    );
     const test = setup(attach);
     await test.result.start();
     await test.result.stop();
@@ -199,7 +207,7 @@ describe('voice memo', () => {
         startTrace: vi.fn(),
         createRecorder,
         now: () => 0,
-        recordedAt: () => new Date(),
+        fileName: () => 'Voice memo',
         attach: vi.fn(),
       })
     );
@@ -207,5 +215,26 @@ describe('voice memo', () => {
     expect(hook.result.phase()).toBe('unavailable');
     expect(hook.result.disabled()).toBe(true);
     expect(createRecorder).not.toHaveBeenCalled();
+  });
+
+  it('keeps uploading when discarded mid-upload, so the draft never gets a memo it was told to drop', async () => {
+    let finishUpload: (id: string | undefined) => void = () => {};
+    const attach = vi.fn(
+      (_file: File) =>
+        new Promise<string | undefined>((resolve) => {
+          finishUpload = resolve;
+        })
+    );
+    const test = setup(attach);
+    await test.result.start();
+    const stopped = test.result.stop();
+    expect(test.result.phase()).toBe('attaching');
+    test.result.cancel();
+    expect(test.result.phase()).toBe('attaching');
+    expect(test.onFinish).not.toHaveBeenCalled();
+    finishUpload('file-1');
+    await stopped;
+    expect(test.result.phase()).toBe('idle');
+    expect(test.onFinish).toHaveBeenCalledOnce();
   });
 });

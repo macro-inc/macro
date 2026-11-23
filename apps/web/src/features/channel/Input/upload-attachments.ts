@@ -83,9 +83,9 @@ export async function uploadInputAttachments(options: {
   isActive?: () => boolean;
   /** Overrides classifying each file by its type, as for a voice memo. */
   kind?: InputAttachmentKind;
-}): Promise<number> {
+}): Promise<string[]> {
   const isActive = options.isActive ?? (() => true);
-  let attached = 0;
+  const attached: string[] = [];
   for (const file of options.files) {
     if (!isActive()) break;
     const uploadSource = createUploadFile(file);
@@ -150,7 +150,7 @@ export async function uploadInputAttachments(options: {
         pendingId,
         uploaded
       );
-      if (retainedPreview) attached += 1;
+      if (retainedPreview) attached.push(uploaded.id);
     } catch (error) {
       console.error('failed to upload attachment', error);
       if (isActive()) toast.failure(`Failed to upload ${file.name}`);

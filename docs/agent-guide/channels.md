@@ -525,13 +525,17 @@ A voice memo records in the browser (AAC in MP4 where the browser can, else
 WebM/Opus) with a level timeline and an `m:ss` timer. **Stop and attach**
 (focused while recording, so Space works) uploads it as a `static/audio`
 attachment with a player in the draft; the typed draft is never touched.
-Escape or **Discard voice memo** throws the recording away without uploading.
+Escape or **Discard voice memo** throws the recording away without uploading;
+once it is uploading, Discard is disabled and the memo lands in the draft,
+where its remove button takes it out.
 A failed upload keeps the recording and offers **Try attaching again**.
-Recordings stop and attach themselves at five minutes. A blocked or missing
+Recordings stop and attach themselves at five minutes. A draft already holding
+the maximum number of attachments disables the memo microphone. A blocked or missing
 microphone says so under the composer. Sending is blocked while dictating or
 recording, including keyboard and external send actions. Recipients play the
-memo with a native audio player in the message. WhatsApp chats offer
-dictation only. To check: record a memo, type before and after it, send, and
+memo with a native audio player in the message. Only channel
+messages and channel thread replies offer voice memos; comments, calls, email
+discussions, message edits and WhatsApp chats keep dictation only. To check: record a memo, type before and after it, send, and
 play it as the other participant; repeat at 390px with touch emulation.
 
 Composer and conversation body text use `text-base` (15px at the default root

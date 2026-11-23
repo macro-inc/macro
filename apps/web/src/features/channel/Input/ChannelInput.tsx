@@ -128,7 +128,8 @@ type ChannelInputFeatures = {
   dictation: boolean;
   /**
    * Recording a voice memo from the microphone, attached as a `static/audio`
-   * file. Needs `attachments` and Macro's own static uploads.
+   * file. Needs `attachments` and Macro's own static uploads; off by default,
+   * on for channel messages and thread replies.
    */
   voiceMemos: boolean;
 };
@@ -140,7 +141,7 @@ const ALL_FEATURES: ChannelInputFeatures = {
   richBlocks: true,
   attachments: true,
   dictation: true,
-  voiceMemos: true,
+  voiceMemos: false,
 };
 
 /** Slash actions behind each switchable feature. */
@@ -410,21 +411,30 @@ export function ChannelInput(props: ChannelInputProps) {
   };
   // A recording attaches through the same tracker as picked files, so it
   // shows, uploads, sends and restores with the rest of the draft.
-  const composerVoiceMemo = createComposerVoiceMemo(
-    async (file) =>
-      (await uploadInputAttachments({
+  const composerVoiceMemo = createComposerVoiceMemo({
+    attach: async (file) => {
+      const [staticFileId] = await uploadInputAttachments({
         files: [file],
         tracker: attachmentTracker,
         kind: 'audio',
         uploadFile: (memo) =>
           uploadFile(memo, () => 'static', { hideProgressIndicator: true }),
-      })) > 0
-  );
+      });
+      return staticFileId;
+    },
+    // Pointer users keep typing; on touch, focus would raise the keyboard.
+    onFinish: () => {
+      if (!isTouchDevice()) lexicalEditor().focus();
+    },
+  });
   const voiceMemo: VoiceMemoController = {
     ...composerVoiceMemo,
-    start: () => {
+    // A full draft could never take the recording.
+    disabled: () => composerVoiceMemo.disabled() || attachmentTracker.isFull(),
+    start: async () => {
+      if (attachmentTracker.isFull()) return;
       collapsedInput.expand();
-      return composerVoiceMemo.start();
+      await composerVoiceMemo.start();
     },
   };
   const showVoiceMemo = () =>

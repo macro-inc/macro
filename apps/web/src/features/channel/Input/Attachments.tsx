@@ -151,10 +151,8 @@ function AudioAttachmentItem(props: {
         }
       >
         <VoiceMemoPlayer
-          src={
-            props.attachment.previewSrc ??
-            staticFileIdEndpoint(props.attachment.id)
-          }
+          // Not the local preview: a restored draft's blob: URL is dead.
+          src={staticFileIdEndpoint(props.attachment.id)}
           label={props.attachment.name}
         />
       </Show>

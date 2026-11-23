@@ -64,6 +64,7 @@ export function VoiceMemoPanel(props: { memo: VoiceMemoController }) {
           variant="ghost"
           size="icon-md"
           class="text-composer-ink"
+          disabled={phase() === 'attaching'}
           onClick={props.memo.cancel}
         >
           <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />

@@ -17,6 +17,7 @@ export default {
   dictateDescription: 'Type what you say into the message',
   voiceMemo: 'Voice memo',
   voiceMemoDescription: 'Send a recording of your voice',
+  voiceMemoFileName: 'Voice memo {{time}}',
   recordVoiceMemo: 'Record a voice memo',
   voiceMemoRecording: 'Recording voice memo',
   voiceMemoStarting: 'Starting…',

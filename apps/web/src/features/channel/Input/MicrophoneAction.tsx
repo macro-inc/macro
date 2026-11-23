@@ -43,6 +43,12 @@ export function MicrophoneAction(props: {
           onPointerDown={() => {
             pressedHere = true;
           }}
+          onPointerCancel={() => {
+            pressedHere = false;
+          }}
+          onPointerLeave={() => {
+            pressedHere = false;
+          }}
           onMouseDown={(event: MouseEvent) => {
             if (event.button === 0) event.preventDefault();
           }}

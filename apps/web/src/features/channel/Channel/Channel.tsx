@@ -1374,6 +1374,7 @@ export function Channel(props: ChannelProps) {
                                 autofocus={props.autofocus}
                                 onEscape={focusMessageList}
                                 collapsible
+                                features={{ voiceMemos: true }}
                                 input={{
                                   mode: 'channel',
                                   id: `channel-input-${props.channelId}`,

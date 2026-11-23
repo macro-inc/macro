@@ -122,6 +122,8 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         host: props.host,
       }}
       collapsible={props.collapsible}
+      // Channel threads take voice memos; email-thread discussions do not.
+      features={{ voiceMemos: props.parent.type === 'channel' }}
       autofocus={false}
       bots={channelBotMentionUsers}
       attachmentTracker={tracker}

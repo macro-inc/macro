@@ -47,10 +47,12 @@ export function createVoiceMemo(options: {
   createRecorder: CreateRecorder;
   /** Monotonic milliseconds, for the elapsed time. */
   now: () => number;
-  /** Wall-clock time the file is named after. */
-  recordedAt: () => Date;
-  /** Upload and attach the file to the draft; false when that failed. */
-  attach: (file: File) => Promise<boolean>;
+  /** The attached file's name, without its extension. */
+  fileName: () => string;
+  /** Upload and attach the file to the draft; its static file id, or none. */
+  attach: (file: File) => Promise<string | undefined>;
+  /** The panel closed: attached, discarded, or ended with a notice. */
+  onFinish?: () => void;
 }): VoiceMemoController {
   const [phase, setPhase] = createSignal<VoiceMemoPhase>(
     options.supported ? 'idle' : 'unavailable'
@@ -97,6 +99,7 @@ export function createVoiceMemo(options: {
     endTrace(outcome);
     reset('idle');
     setNotice(outcome);
+    options.onFinish?.();
   };
 
   const attach = async (file: File) => {
@@ -107,9 +110,10 @@ export function createVoiceMemo(options: {
     // The browser drops the active context at the first await, so the upload
     // span parents explicitly on the session.
     const upload = async (span?: Pick<Span, 'setAttr'>) => {
-      const ok = await options.attach(file);
-      span?.setAttr('voice_memo.attached', ok);
-      return ok;
+      const staticFileId = await options.attach(file);
+      span?.setAttr('voice_memo.attached', !!staticFileId);
+      if (staticFileId) span?.setAttr('static_file.id', staticFileId);
+      return !!staticFileId;
     };
     let attached = false;
     try {
@@ -134,6 +138,7 @@ export function createVoiceMemo(options: {
     endTrace('attached');
     reset('idle');
     setNotice(stoppedAtLimit ? 'limit' : undefined);
+    options.onFinish?.();
   };
 
   const onRecording = (audio: Blob) => {
@@ -148,7 +153,7 @@ export function createVoiceMemo(options: {
       abandon('empty');
       return;
     }
-    return attach(voiceMemoFile(audio, options.recordedAt()));
+    return attach(voiceMemoFile(audio, options.fileName()));
   };
 
   const start = async () => {
@@ -225,11 +230,13 @@ export function createVoiceMemo(options: {
     await attach(recording);
   };
 
+  // An upload in flight finishes into the draft; the person removes it there.
   const cancel = () => {
-    if (!active()) return;
+    if (!active() || phase() === 'attaching') return;
     endTrace('cancelled');
     reset('idle');
     setNotice(undefined);
+    options.onFinish?.();
   };
 
   onCleanup(() => {

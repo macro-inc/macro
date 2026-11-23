@@ -65,8 +65,9 @@ impl StaticFileLinks {
     /// a static file - documents reach the agent through mentions, and have
     /// no URL an agent could fetch unauthenticated.
     ///
-    /// Channel rows record only that a file is an image or a video, not its
-    /// exact type, so the media type is the matching wildcard range.
+    /// Channel rows record only that a file is an image, a video or a voice
+    /// memo, not its exact type, so the media type is the matching wildcard
+    /// range.
     #[must_use]
     fn file_link(&self, entity_type: &str, entity_id: &str) -> Option<PromptAttachment> {
         let (kind, mime_type) = match entity_type {

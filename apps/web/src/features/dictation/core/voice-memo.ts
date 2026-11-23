@@ -34,7 +34,7 @@ export interface VoiceMemoController {
   stop(): Promise<void>;
   /** Attach a recording whose upload failed again. */
   retry(): Promise<void>;
-  /** Discard the recording without uploading it. */
+  /** Discard the recording; does nothing once it is uploading. */
   cancel(): void;
 }
 
@@ -45,15 +45,14 @@ const EXTENSIONS: Record<string, string> = {
 };
 
 /**
- * The file a recording is attached as. The type drops codec parameters: the
- * static file store serves it back as the Content-Type players sniff.
+ * The file a recording is attached as, `name` plus the container's
+ * extension. The type drops codec parameters: the static file store serves
+ * it back as the Content-Type players sniff.
  */
-export function voiceMemoFile(audio: Blob, recordedAt: Date): File {
+export function voiceMemoFile(audio: Blob, name: string): File {
   const type = audio.type.split(';')[0].trim();
   const extension = EXTENSIONS[type] ?? 'webm';
-  const hours = String(recordedAt.getHours()).padStart(2, '0');
-  const minutes = String(recordedAt.getMinutes()).padStart(2, '0');
-  return new File([audio], `Voice memo ${hours}.${minutes}.${extension}`, {
+  return new File([audio], `${name}.${extension}`, {
     type: type || 'audio/webm',
   });
 }
