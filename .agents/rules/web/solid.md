@@ -21,7 +21,7 @@ State ownership, reactivity, and async error handling.
   make dependencies explicit when an effect is warranted. Prefer wrapping the
   setter over `createEffect(() => { if (signal()) sideEffect() })` when setting
   a value should also clear related UI, blur a control, or scroll. Set a
-  library's state where it changes (a prop, or the open or key handler), not
+  library's state where it changes (a prop or an event handler), not
   in an effect that watches the library and corrects it afterwards.
 - **FE-11** Check `solid-primitives` before writing a custom reactive utility.
 - **FE-70** Keep related state that changes together in one createStore, not parallel signals.

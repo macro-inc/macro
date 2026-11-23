@@ -154,3 +154,27 @@ for (const key of ['ArrowDown', 'ArrowUp']) {
     await expect(chips(page, 'To')).toHaveCount(3);
   });
 }
+
+// When this fails, clearing the text of a closed list reopens it on someone
+// already added, and Enter or Tab removes them.
+for (const key of ['Enter', 'Tab']) {
+  test(`${key} after clearing a closed list's text keeps the sender`, async ({
+    page,
+  }) => {
+    await open(page, 'reply');
+    await field(page, 'To').click();
+    await page.keyboard.type('a');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+    await page.keyboard.press('Backspace');
+    await expect(page.getByRole('listbox')).toHaveCount(1);
+    await expect(
+      page.locator('[role="option"][aria-disabled="true"][data-highlighted]')
+    ).toHaveCount(0);
+    // It adds the highlighted row, if any, and the sender stays.
+    await page.keyboard.press(key);
+    await expect(
+      chips(page, 'To').filter({ hasText: 'sender@example.com' })
+    ).toHaveCount(1);
+  });
+}

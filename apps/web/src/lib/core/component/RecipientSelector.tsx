@@ -787,6 +787,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return commitEmails([inputValue()]);
   };
 
+  // Kobalte opens a closed list on its first selected row, a disabled one
+  // when it was already added. Opened here first, before Kobalte's own
+  // handler runs, the highlight is left to typing, the arrow keys and each
+  // page of results, which all skip disabled rows.
+  const openBeforeKobalte = () => {
+    if (!isOpen() && addedValues().size > 0) setComboboxOpen(true);
+  };
+
   const onInputChange = (next: string) => {
     rowPickedByKey = false;
     props.onInputChange?.(next);
@@ -799,6 +807,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     if (next !== previous) {
       setSuppressOpenUntilInputChange(false);
     }
+    openBeforeKobalte();
     if (next.length === 0) return;
 
     setIsOpen(true);
@@ -1084,13 +1093,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
                       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                         rowPickedByKey = true;
-                        // Kobalte opens a closed list on its first selected
-                        // row, a disabled one when it was already added.
-                        // Opened here first, the key moves to the first (or
-                        // last) row that can be picked instead.
-                        if (!isOpen() && addedValues().size > 0) {
-                          setComboboxOpen(true);
-                        }
+                        // Alt+Arrow opens or closes without moving.
+                        if (!e.altKey) openBeforeKobalte();
                       }
 
                       if (
