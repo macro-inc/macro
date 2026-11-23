@@ -7,6 +7,17 @@ import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
 import { Team } from '../teams/team';
+import {
+  type LogTimeOptions,
+  logTime,
+  type StartTimerOptions,
+  startTimer,
+  type TimeEntriesOptions,
+  type TimerStart,
+  timeEntries,
+  timeLogged,
+} from '../time/task-time';
+import type { TimeEntry } from '../time/time-entry';
 import { User } from '../users/user';
 
 /**
@@ -259,6 +270,52 @@ export class Task extends Document {
     if (!taskTeam) return undefined;
 
     return `${await taskTeam.slug()}-${teamTaskId}`;
+  }
+
+  /**
+   * Log time you spent on this task, as yourself; needs edit access, and an
+   * entry is at most 24 hours. `date` is the day in your own calendar
+   * (`YYYY-MM-DD`, today in UTC when omitted). The task's Time logged grows by
+   * `minutes`.
+   *
+   * @example
+   * await task.logTime({ minutes: 90, date: '2026-11-20', note: 'Review' });
+   *
+   * @write
+   */
+  logTime(opts: LogTimeOptions): Promise<TimeEntry> {
+    return logTime(this.client, this, opts);
+  }
+
+  /**
+   * Everyone's time entries on this task, newest day first, auto-paginated;
+   * `maxItems` caps the total.
+   *
+   * @readonly
+   */
+  timeEntries(opts?: TimeEntriesOptions): AsyncGenerator<TimeEntry> {
+    return timeEntries(this.client, this, opts);
+  }
+
+  /**
+   * The task's Time logged: the minutes of all its entries.
+   *
+   * @readonly
+   */
+  timeLogged(): Promise<number> {
+    return timeLogged(this.client, this);
+  }
+
+  /**
+   * Start your timer on this task, first stopping and saving any timer you
+   * have running, on this task too (`stopped`); check `macro.time.timer()`
+   * first. Needs edit access. A running timer past 8 hours throws
+   * `TimerOverLimitError` instead, naming that timer to resolve first.
+   *
+   * @write
+   */
+  startTimer(opts?: StartTimerOptions): Promise<TimerStart> {
+    return startTimer(this.client, this, opts);
   }
 
   /**
