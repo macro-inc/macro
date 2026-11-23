@@ -30,6 +30,8 @@ HARNESS = {
     "last_connected_at": None,
 }
 
+applied = False
+
 
 def log(message):
     print(f"{time.clock_gettime(time.CLOCK_BOOTTIME):.3f} {message}", file=sys.stderr, flush=True)
@@ -68,7 +70,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("sec-websocket-accept", accept)
             self.end_headers()
             self.wfile.flush()
-            if APPLY_AGENT:
+            # Once: macrod reconnects every few seconds here (its agents list
+            # is a 404), and a resend would overwrite what the test installs
+            # through the inbox after it.
+            global applied
+            if APPLY_AGENT and not applied:
+                applied = True
                 with open(APPLY_AGENT) as file:
                     environment = json.load(file)
                 self.send_text(json.dumps({"type": "applyAgent", "environment": environment}))
