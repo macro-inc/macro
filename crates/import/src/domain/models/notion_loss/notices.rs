@@ -166,7 +166,9 @@ impl ImportNotice {
             ImportNoticeKind::RowBodyUnavailable => {
                 format!("Page “{source}”: content could not be read; its database row was kept.")
             }
-            ImportNoticeKind::DatabaseOccurrence { loss } => format!("Database “{source}”: {loss}"),
+            ImportNoticeKind::DatabaseOccurrence { loss } => {
+                format!("Database “{source}”: {loss}.")
+            }
             ImportNoticeKind::PageDatabaseOccurrence { database, loss } => {
                 format!("Page “{source}”, database “{database}”: {loss}.")
             }

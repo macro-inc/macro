@@ -152,10 +152,12 @@ function RowStatus(props: { node: ImportPlanNode; excluded: boolean }) {
           {match(props.node.status)
             .with('imported', () => 'Imported')
             .with('importing', () => 'Writing…')
-            .with('discarded', () => 'Left out')
+            .with('discarded', () =>
+              props.node.decision === 'hand' ? 'Needs you' : 'Left out'
+            )
             .with('staged', () =>
               props.node.decision === 'hand'
-                ? 'Left for the agent'
+                ? 'Needs you'
                 : isWritten(props.node.decision) && !props.excluded
                   ? 'Waiting'
                   : ''
@@ -204,7 +206,10 @@ export function ImportPlanRow(props: {
       class={cn(
         'flex min-w-0 flex-col',
         !included() && !props.showStatus && 'text-ink-muted',
-        props.showStatus && props.node.status === 'discarded' && 'opacity-60'
+        props.showStatus &&
+          props.node.status === 'discarded' &&
+          props.node.decision !== 'hand' &&
+          'opacity-60'
       )}
     >
       <div

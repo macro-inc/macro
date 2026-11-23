@@ -84,8 +84,15 @@ function PhaseStatus(props: {
       parts
     );
     const leftOut = omissionTotals(props.progress?.details);
+    const needsYou = omissionTotals(props.progress?.details, 'by_hand');
     const written = volume ? `Imported ${volume}.` : 'Nothing was imported.';
-    return `${written}${leftOut.total > 0 ? ` ${omissionCountLabel(leftOut)} left out.` : ''}${failed}`;
+    const choices =
+      leftOut.total > 0 ? ` ${omissionCountLabel(leftOut)} left out.` : '';
+    const byHand =
+      needsYou.total > 0
+        ? ` ${omissionCountLabel(needsYou)} ${needsYou.total === 1 ? 'needs' : 'need'} you.`
+        : '';
+    return written + choices + byHand + failed;
   };
   const total = () =>
     imported() +

@@ -80,7 +80,8 @@ function importPlanSummary(plan: ImportPlan) {
     )
     .exhaustive();
   let summary = `${importLabel(plan.source)} plan ready · ${counts}`;
-  if (plan.byHand) summary += ` · ${plan.byHand} by hand`;
+  if (plan.byHand)
+    summary += ` · ${plan.byHand} ${plan.byHand === 1 ? 'needs' : 'need'} you`;
   return { summary, failed: false };
 }
 
@@ -99,8 +100,9 @@ function importSettlementSummary(report: ImportSettlement) {
     const rows = report.partialDatabaseRows;
     summary += ` · ${rows} ${rows === 1 ? 'row' : 'rows'} from unfinished databases`;
   }
-  if (report.handItems.length)
-    summary += ` · ${report.handItems.length} by hand`;
+  const handCount = report.handItems.length;
+  if (handCount)
+    summary += ` · ${handCount} ${handCount === 1 ? 'needs' : 'need'} you`;
   return {
     summary,
     failed: report.outcome === 'failed' || failures > 0,

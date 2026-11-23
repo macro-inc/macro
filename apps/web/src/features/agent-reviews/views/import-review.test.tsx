@@ -416,6 +416,7 @@ describe('import review', () => {
       'Imported 1 page and 1 database (9 rows). 60 pages left out. 55\u00a0items couldn’t be imported.'
     );
     expect(screen.getByText('Not imported · 60 pages')).toBeTruthy();
+    expect(screen.getByText('Showing 1 of 60 pages.')).toBeTruthy();
     const disclosure = screen
       .getByText('Needs attention · 55 items')
       .closest('details')!;
@@ -534,7 +535,8 @@ describe('import review', () => {
             item: {
               ...item,
               importId: 'billing',
-              title: 'Billing page',
+              title: 'Unavailable database',
+              kind: 'data_source',
               reason: 'Manual review',
             },
           },
@@ -564,19 +566,37 @@ describe('import review', () => {
         ],
       },
     };
+    imports.entities.push(
+      entity(
+        'manual',
+        null,
+        'Restricted source',
+        { decision: 'hand', reason: 'Manual review', rows: 0 },
+        { status: 'discarded' }
+      )
+    );
     setup({ item: { status: 'completed' } });
 
     expect(screen.getByRole('status').textContent).toContain(
-      '3 pages left out.'
+      '2 pages left out. 1 database needs you.'
     );
     const imported = screen
-      .getByText('Not imported · 3 pages')
+      .getByText('Not imported · 2 pages')
       .closest('details')!;
     const choices = within(imported);
     expect(
       choices.getByText('Left out by the reviewed plan · 2 pages')
     ).toBeTruthy();
-    expect(choices.getByText('Left for the agent · 1 page')).toBeTruthy();
+    expect(choices.queryByText('Unavailable database')).toBeNull();
+    const needsYouGroup = screen
+      .getByText('Needs you · 1 database')
+      .closest('details')!;
+    expect(needsYouGroup.open).toBe(true);
+    const needsYou = within(needsYouGroup);
+    expect(needsYou.getByText('Unavailable database')).toBeTruthy();
+    expect(needsYou.getByText('Manual review')).toBeTruthy();
+    const row = screen.getByText('Restricted source').closest('li')!;
+    expect(within(row).getByText('Needs you', { exact: true })).toBeTruthy();
     expect(choices.getByText('Empty template')).toBeTruthy();
     expect(screen.getByText('Couldn’t be copied · 3 items')).toBeTruthy();
     expect(screen.getByText('Other details · 1 notice')).toBeTruthy();

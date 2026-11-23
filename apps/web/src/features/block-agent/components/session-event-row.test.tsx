@@ -140,7 +140,7 @@ it('announces a ready import plan with its counts and opens its review', async (
     />
   ));
   expect(view.getByRole('status').textContent).toContain(
-    'Import plan ready · 12 to copy · 1 task list · 2 by hand'
+    'Import plan ready · 12 to copy · 1 task list · 2 need you'
   );
   await fireEvent.click(view.getByRole('button', { name: 'View review' }));
   expect(open).toHaveBeenCalledExactlyOnceWith('review-id');

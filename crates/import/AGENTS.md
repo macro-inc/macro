@@ -389,6 +389,8 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   retain skipped page ancestors for the folder layout of written children.
   Persisted review rows are the writer’s canonical plan: retain discarded data
   sources as Skip references so start and resume report them as not imported.
+  Hand dependencies cannot be included in the write. Keep their decision and
+  reason in the report and settlement even when approval discards their rows.
   Keep permanently unreadable
   tab slots in list order; a missing default never silently selects the next tab.
   Retain other readable tabs and propagate transient detail failures.

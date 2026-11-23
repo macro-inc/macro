@@ -3,14 +3,16 @@
 
 use std::collections::{HashMap, HashSet};
 
+use import_notion::domain::databases::DatabaseLoss;
+
 use crate::domain::ports::{
     FolderSeparation, Result, TaskImportNoticeCount, TaskImportNoticeReason,
 };
 
 use crate::domain::models::{
-    ImportEntity, ImportKind, ImportRun, ImportSource, ImportStatus, NotionDecision, NotionDocMeta,
-    NotionImportReport, NotionImporter, NotionReportItem, NotionReviewOmission,
-    NotionReviewOmissionKind, RunStatus,
+    FidelityWarning, ImportEntity, ImportKind, ImportNotice, ImportNoticeKind, ImportRun,
+    ImportSource, ImportStatus, NotionDecision, NotionDocMeta, NotionImportReport, NotionImporter,
+    NotionReportItem, NotionReviewOmission, NotionReviewOmissionKind, RunStatus,
 };
 
 mod details;
@@ -58,31 +60,56 @@ pub(in crate::domain::service) fn report(
     .then(details::Details::default);
     for (row, meta) in &current {
         if let Some(warnings) = row.metadata.get("warnings") {
-            let typed = crate::domain::models::FidelityWarning::decode_entries(warnings);
-            for warning in crate::domain::models::FidelityWarning::merge(typed) {
-                let (counted, deduplicate) = match &warning {
-                    crate::domain::models::FidelityWarning::References { .. }
-                    | crate::domain::models::FidelityWarning::OmittedOptions { .. } => {
+            let warnings = FidelityWarning::merge(FidelityWarning::decode_entries(warnings));
+            let page_losses: HashSet<_> = warnings
+                .iter()
+                .filter_map(|warning| match warning {
+                    FidelityWarning::Notice {
+                        notice:
+                            ImportNotice {
+                                kind:
+                                    ImportNoticeKind::PageDatabaseOccurrence {
+                                        loss: loss @ DatabaseLoss::SourceUnavailable { .. },
+                                        ..
+                                    },
+                                ..
+                            },
+                    } => Some(loss),
+                    _ => None,
+                })
+                .collect();
+            for warning in &warnings {
+                // Match the source ID and reason, which survive title changes.
+                if matches!(
+                    warning,
+                    FidelityWarning::Notice {
+                        notice: ImportNotice {
+                            kind: ImportNoticeKind::DatabaseOccurrence { loss },
+                            ..
+                        },
+                    } if page_losses.contains(loss)
+                ) {
+                    continue;
+                }
+                let (counted, deduplicate) = match warning {
+                    FidelityWarning::References { .. } | FidelityWarning::OmittedOptions { .. } => {
                         (true, false)
                     }
-                    crate::domain::models::FidelityWarning::Text(_)
-                    | crate::domain::models::FidelityWarning::Notice {
+                    FidelityWarning::Text(_)
+                    | FidelityWarning::Notice {
                         notice:
-                            crate::domain::models::ImportNotice {
-                                kind:
-                                    crate::domain::models::ImportNoticeKind::MissingContainerIdentity,
+                            ImportNotice {
+                                kind: ImportNoticeKind::MissingContainerIdentity,
                                 ..
                             },
                     } => (false, true),
-                    crate::domain::models::FidelityWarning::SourceStopped { .. }
-                    | crate::domain::models::FidelityWarning::UnmappedPeople { .. }
-                    | crate::domain::models::FidelityWarning::ViewLoss(_)
-                    | crate::domain::models::FidelityWarning::PropertySnapshot { .. }
-                    | crate::domain::models::FidelityWarning::PropertyOmitted { .. }
-                    | crate::domain::models::FidelityWarning::Notice { .. }
-                    | crate::domain::models::FidelityWarning::UnsupportedEntries { .. } => {
-                        (false, false)
-                    }
+                    FidelityWarning::SourceStopped { .. }
+                    | FidelityWarning::UnmappedPeople { .. }
+                    | FidelityWarning::ViewLoss(_)
+                    | FidelityWarning::PropertySnapshot { .. }
+                    | FidelityWarning::PropertyOmitted { .. }
+                    | FidelityWarning::Notice { .. }
+                    | FidelityWarning::UnsupportedEntries { .. } => (false, false),
                 };
                 let rendered = if counted {
                     format!("{}: {}", meta.title, warning.render())
@@ -93,14 +120,14 @@ pub(in crate::domain::service) fn report(
                     continue;
                 }
                 if let Some(details) = &mut details {
-                    details.warning(&warning, &rendered);
+                    details.warning(warning, &rendered);
                 }
                 // Tab choices are useful context outside the loss totals.
                 if matches!(
                     warning,
-                    crate::domain::models::FidelityWarning::Notice {
-                        notice: crate::domain::models::ImportNotice {
-                            kind: crate::domain::models::ImportNoticeKind::TabChosen { .. },
+                    FidelityWarning::Notice {
+                        notice: ImportNotice {
+                            kind: ImportNoticeKind::TabChosen { .. },
                             ..
                         },
                     }
@@ -233,8 +260,8 @@ pub(in crate::domain::service) fn report(
         };
         let choice = match decision {
             NotionDecision::Skip => Some(NotionReviewOmissionKind::LeftOut),
-            _ if row.status == ImportStatus::Discarded => Some(NotionReviewOmissionKind::Excluded),
             NotionDecision::Hand => Some(NotionReviewOmissionKind::ByHand),
+            _ if row.status == ImportStatus::Discarded => Some(NotionReviewOmissionKind::Excluded),
             _ => None,
         };
         if let (Some(details), Some(kind)) = (&mut details, choice) {
@@ -244,6 +271,15 @@ pub(in crate::domain::service) fn report(
             }
             details.omission(NotionReviewOmission { kind, item });
         }
+        if decision == NotionDecision::Hand
+            && matches!(row.status, ImportStatus::Staged | ImportStatus::Discarded)
+        {
+            if report.hand_items.len() < REPORT_LIST_LIMIT {
+                report.hand_items.push(reported());
+            } else {
+                report.settlement_lists_truncated = true;
+            }
+        }
         match row.status {
             ImportStatus::Imported => report.imported += 1,
             ImportStatus::Importing if row.waiting_on.is_some() => {
@@ -251,13 +287,7 @@ pub(in crate::domain::service) fn report(
             }
             ImportStatus::Importing => report.writing += 1,
             ImportStatus::Staged => {
-                if decision == NotionDecision::Hand {
-                    if report.hand_items.len() < REPORT_LIST_LIMIT {
-                        report.hand_items.push(reported());
-                    } else {
-                        report.settlement_lists_truncated = true;
-                    }
-                } else if decision != NotionDecision::Skip {
+                if !matches!(decision, NotionDecision::Hand | NotionDecision::Skip) {
                     report.waiting += 1;
                 }
                 if let Some(error) = &row.last_error {

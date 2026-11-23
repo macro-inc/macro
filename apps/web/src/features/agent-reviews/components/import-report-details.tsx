@@ -1,9 +1,11 @@
+import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import type { NotionImportReport } from '@queries/import';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import {
   type ImportReportItem,
   omissionCountLabel,
+  omissionNoun,
   omissionTotals,
   type ReviewOmission,
 } from '../core/import-plan';
@@ -13,7 +15,6 @@ type Details = NonNullable<NotionImportReport['details']>;
 const choicesByKind = [
   { kind: 'left_out', label: 'Left out by the reviewed plan' },
   { kind: 'excluded', label: 'Excluded in the review' },
-  { kind: 'by_hand', label: 'Left for the agent' },
 ] satisfies { kind: ReviewOmission['kind']; label: string }[];
 
 function plural(count: number, noun: string): string {
@@ -23,10 +24,14 @@ function plural(count: number, noun: string): string {
 function Disclosure(props: {
   label: string;
   failure?: boolean;
+  expanded?: boolean;
   children: JSX.Element;
 }) {
   return (
-    <details open={props.failure} class="min-w-0 text-xs text-ink-muted">
+    <details
+      open={props.failure || props.expanded}
+      class="min-w-0 text-xs text-ink-muted"
+    >
       <summary
         class={cn(
           'min-h-8 content-center font-medium touch:min-h-11',
@@ -52,6 +57,31 @@ function SampleHint(props: { shown: number; total: number; noun: string }) {
   );
 }
 
+function OmissionList(props: {
+  items: ReviewOmission[];
+  totals: ReturnType<typeof omissionTotals>;
+}) {
+  return (
+    <>
+      <ul class="list-disc space-y-2 pl-4">
+        <For each={props.items}>
+          {({ item }) => (
+            <li>
+              <span class="text-ink">{item.title || 'Untitled'}</span>
+              <Show when={item.reason}>{(reason) => <p>{reason()}</p>}</Show>
+            </li>
+          )}
+        </For>
+      </ul>
+      <SampleHint
+        shown={props.items.length}
+        total={props.totals.total}
+        noun={omissionNoun(props.totals)}
+      />
+    </>
+  );
+}
+
 function PartialWrites(props: { confirmed: NotionImportReport['confirmed'] }) {
   const rows = () => props.confirmed?.partialDatabaseRows ?? 0;
   const tasks = () => props.confirmed?.partialTasks ?? 0;
@@ -70,6 +100,22 @@ function PartialWrites(props: { confirmed: NotionImportReport['confirmed'] }) {
         </p>
       </Show>
     </>
+  );
+}
+
+function ReportScroller(props: { children: JSX.Element }) {
+  const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
+  return (
+    <div class="relative min-w-0 shrink-0">
+      <section
+        ref={setScrollRef}
+        aria-label="Import report"
+        class="max-h-[40dvh] min-w-0 overflow-y-auto"
+      >
+        <div>{props.children}</div>
+      </section>
+      <ScrollIndicators scrollRef={scrollRef} appearance="gradient" />
+    </div>
   );
 }
 
@@ -99,6 +145,10 @@ export function ImportReportDetails(props: {
     props.details.notes.filter((note) => note.kind !== 'omitted')
   );
   const reviewed = () => omissionTotals(props.details);
+  const needsYou = () => omissionTotals(props.details, 'by_hand');
+  const byHandItems = createMemo(() =>
+    props.details.notImported.filter((choice) => choice.kind === 'by_hand')
+  );
   const omitted = () =>
     props.details.noteCounts?.find((entry) => entry.kind === 'omitted') ?? {
       count: omissions().reduce((count, note) => count + note.count, 0),
@@ -126,16 +176,14 @@ export function ImportReportDetails(props: {
       when={
         needsAttention() ||
         reviewed().total ||
+        needsYou().total ||
         viewCount() ||
         tabCount() ||
         omitted().count ||
         otherCount()
       }
     >
-      <section
-        aria-label="Import report"
-        class="flex max-h-[40dvh] min-w-0 shrink-0 flex-col overflow-y-auto"
-      >
+      <ReportScroller>
         <Show when={needsAttention()}>
           <Disclosure
             label={
@@ -168,6 +216,14 @@ export function ImportReportDetails(props: {
             />
           </Disclosure>
         </Show>
+        <Show when={needsYou().total > 0}>
+          <Disclosure
+            expanded
+            label={`Needs you · ${omissionCountLabel(needsYou())}`}
+          >
+            <OmissionList items={byHandItems()} totals={needsYou()} />
+          </Disclosure>
+        </Show>
         <Show when={reviewed().total > 0}>
           <Disclosure
             label={`Not imported · ${omissionCountLabel(reviewed())}`}
@@ -178,25 +234,7 @@ export function ImportReportDetails(props: {
                   <p class="font-medium text-ink">
                     {label} · {omissionCountLabel(totals)}
                   </p>
-                  <ul class="list-disc space-y-2 pl-4">
-                    <For each={items}>
-                      {({ item }) => (
-                        <li>
-                          <span class="text-ink">
-                            {item.title || 'Untitled'}
-                          </span>
-                          <Show when={item.reason}>
-                            {(reason) => <p>{reason()}</p>}
-                          </Show>
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                  <SampleHint
-                    shown={items.length}
-                    total={totals.total}
-                    noun="item"
-                  />
+                  <OmissionList items={items} totals={totals} />
                 </Show>
               )}
             </For>
@@ -298,7 +336,7 @@ export function ImportReportDetails(props: {
             />
           </Disclosure>
         </Show>
-      </section>
+      </ReportScroller>
     </Show>
   );
 }

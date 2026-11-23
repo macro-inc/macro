@@ -1855,6 +1855,8 @@ attention on phone and desktop and show a count when items failed. Place a
 run-level error above the failed items when it adds separate context. Call out
 rows and tasks that survived an unfinished copy. Use typed totals
 for the outcome and disclosures so bounded samples don't change the counts.
+Show **Needs you** separately from review skips and retain each item's reason
+after approval, even when the ledger no longer schedules the item for writing.
 Group changes by source and view identity and label each tab choice with its
 placement. Omit the report when it has no details.
 The flat warning disclosure is the fallback for legacy reports and other phases.

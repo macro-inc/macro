@@ -54,6 +54,76 @@ fn settled_import(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn approval_keeps_discarded_by_hand_dependencies_in_the_settlement(pool: PgPool) {
+    use crate::domain::models::NotionReviewOmissionKind;
+
+    const REASON: &str = "The database is not shared with the Notion connection.";
+    let owner = user("inline-by-hand");
+    let tracker = TaskTracker::new();
+    let sessions = Arc::new(Sessions::default());
+    let service = ImportServiceImpl::new(
+        notifying_repo(&pool, &sessions),
+        no_connections(),
+        Arc::new(Writer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Connected))
+    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+    let repo = service.repo.clone();
+    repo.start_run(&owner, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+    let mut source = planned_page('d', "Unavailable database", false);
+    source.kind = ImportKind::DataSource;
+    source.metadata["plan"]["decision"] = serde_json::json!("hand");
+    source.metadata["plan"]["reason"] = serde_json::json!(REASON);
+    source.metadata["plan"]["dependencyOf"] = serde_json::json!([page_id('a')]);
+    let (review, ids) = approved(&pool, &owner, &[page('a', "Project"), source]).await;
+    repo.finish_run(&owner, ImportSource::Notion, RunStatus::Ready, None)
+        .await
+        .unwrap();
+
+    // The disabled Hand dependency cannot be opted in through the review.
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+
+    let discarded = repo
+        .list(
+            &owner,
+            Some(ImportSource::Notion),
+            Some(ImportStatus::Discarded),
+        )
+        .await
+        .unwrap();
+    assert!(discarded.iter().any(|row| row.id == ids[1]));
+    let report = service.notion_import_report(&owner).await.unwrap();
+    assert_eq!(report.status, Some(RunStatus::Completed));
+    let details = report.details.unwrap();
+    let item = details
+        .not_imported
+        .iter()
+        .find(|entry| entry.item.import_id == ids[1])
+        .unwrap();
+    assert_eq!(item.kind, NotionReviewOmissionKind::ByHand);
+    assert_eq!(item.item.reason.as_deref(), Some(REASON));
+    assert_eq!(report.hand_items.len(), 1);
+    assert_eq!(report.hand_items[0].import_id, ids[1]);
+    assert_eq!(report.hand_items[0].reason.as_deref(), Some(REASON));
+
+    let notifications = sessions.0.lock().unwrap();
+    assert_eq!(notifications.len(), 1);
+    let settlement = settled_import(&notifications[0]);
+    assert_eq!(settlement.outcome, ImportOutcome::Completed);
+    assert_eq!(settlement.hand_items.len(), 1);
+    assert_eq!(settlement.hand_items[0].title, "Unavailable database");
+    assert_eq!(settlement.hand_items[0].reason.as_deref(), Some(REASON));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_plan_presented_while_planning_tells_its_session_once_it_is_ready(pool: PgPool) {
     let owner = user("planned");
     let (review, session, _) = presented_while_planning(&pool, &owner).await;

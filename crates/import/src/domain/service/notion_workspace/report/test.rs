@@ -73,6 +73,65 @@ fn workspace_notion_failures_use_safe_copy_for_direct_and_wrapped_provider_error
 }
 
 #[test]
+fn reports_an_unavailable_source_once_with_its_page_context() {
+    use crate::domain::models::{ImportNotice, ImportNoticeKind};
+    use import_notion::domain::{
+        databases::{DatabaseLoss, ReadFailure},
+        model::NotionId,
+    };
+
+    let mut page = row(
+        "Project",
+        ImportKind::Page,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    let source_id = NotionId::parse("dddddddddddddddddddddddddddddddd").unwrap();
+    let unavailable = |reason| DatabaseLoss::SourceUnavailable {
+        source_id: source_id.clone(),
+        reason,
+    };
+    let notice = |source: &str, kind| FidelityWarning::Notice {
+        notice: ImportNotice {
+            object: source_id.clone(),
+            source: source.into(),
+            kind,
+        },
+    };
+    page.metadata["warnings"] = serde_json::json!([
+        notice(
+            "Renamed archive",
+            ImportNoticeKind::DatabaseOccurrence {
+                loss: unavailable(ReadFailure::NotFound),
+            },
+        ),
+        notice(
+            "Project",
+            ImportNoticeKind::PageDatabaseOccurrence {
+                database: "Archive".into(),
+                loss: unavailable(ReadFailure::NotFound),
+            },
+        ),
+        notice(
+            "Archive",
+            ImportNoticeKind::DatabaseOccurrence {
+                loss: unavailable(ReadFailure::Forbidden),
+            },
+        ),
+    ]);
+    let report = report(None, &[page]);
+    let notes = report.details.unwrap().notes;
+    assert_eq!(notes.len(), 2);
+    assert!(notes.iter().any(|note| {
+        note.message
+            .starts_with("Page “Project”, database “Archive”")
+    }));
+    assert!(notes.iter().all(|note| note.message.ends_with('.')));
+}
+
+#[test]
 fn report_counts_omissions_failures_and_notices_beyond_its_sample() {
     let limit = REPORT_LIST_LIMIT;
     let input = 0..limit + 5;

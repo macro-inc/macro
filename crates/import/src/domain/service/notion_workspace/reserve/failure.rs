@@ -91,12 +91,17 @@ pub(super) fn named(item: &write::WriteItem, error: ImportError) -> ImportError 
     } else {
         &item.title
     };
+    let punctuation = if reason.ends_with(['.', '!', '?']) {
+        ""
+    } else {
+        "."
+    };
     if unexpected {
         ImportError::Other(anyhow::anyhow!(
-            "An unexpected error stopped {title}. {reason}"
+            "An unexpected error stopped {title}. {reason}{punctuation}"
         ))
     } else {
-        ImportError::Other(anyhow::anyhow!("Database \"{title}\": {reason}"))
+        ImportError::Other(anyhow::anyhow!("Database “{title}”: {reason}{punctuation}"))
     }
 }
 
@@ -179,7 +184,7 @@ fn notion(error: &NotionError) -> Failure {
             NotionDatabaseFallback::Unresolved,
         ),
         NotionError::Upstream { status: 401, .. } => Failure::RunWide(
-            "Notion authentication is unavailable; reconnect Notion and retry this import",
+            "Notion authentication is unavailable. Reconnect Notion and retry this import",
         ),
         NotionError::RateLimited { .. } | NotionError::Upstream { status: 429, .. } => {
             Failure::RunWide("Notion rate limited the request; retry this import")
