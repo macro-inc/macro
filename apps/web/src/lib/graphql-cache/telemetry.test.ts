@@ -105,6 +105,47 @@ describe('cache telemetry privacy contract', () => {
     );
   });
 
+  it('exports an open schema change and drops unknown tiers and reasons', () => {
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext('treatment'),
+      { emit: (event) => events.push(event) }
+    );
+    reporter.emit({
+      name: 'graphql_cache.schema_init',
+      operationCategory: 'initialization',
+      outcome: 'success',
+      schemaChange: 'reset',
+      schemaResetReason: 'roots',
+      schemaChangedTypes: 0,
+      schemaDroppedRecords: 1200,
+      schemaIncompleteDocuments: 0,
+      schemaRetiredOverlays: 3,
+      schemaAdoptMs: 250,
+    });
+    reporter.emit({
+      name: 'graphql_cache.schema_init',
+      operationCategory: 'initialization',
+      outcome: 'success',
+      schemaChange: 'GraphqlSecretType',
+      schemaResetReason: 'private',
+    } as unknown as CacheTelemetryObservation);
+
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        schemaChange: 'reset',
+        schemaResetReason: 'roots',
+        schemaChangedTypes: 0,
+        schemaDroppedRecords: 1200,
+        schemaIncompleteDocuments: 0,
+        schemaRetiredOverlays: 3,
+        schemaAdoptMs: 250,
+      })
+    );
+    expect(events[1]).not.toHaveProperty('schemaChange');
+    expect(events[1]).not.toHaveProperty('schemaResetReason');
+  });
+
   it('exports a slow request with its fixed kind and wait, and drops an unknown kind', () => {
     const events: CacheTelemetryEnvelope[] = [];
     const reporter = new CacheTelemetryReporter(

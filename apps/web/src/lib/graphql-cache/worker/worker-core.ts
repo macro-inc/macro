@@ -47,6 +47,7 @@ import {
   type CacheEngineHydrationResult,
   type CacheOpenOutcome,
   type CacheOpenResult,
+  type CacheOpenSchemaChange,
   type CacheWalCheckpoint,
   loadCacheWasm,
 } from './wasm-module';
@@ -1527,6 +1528,7 @@ export class CacheWorkerCore {
         : undefined;
       try {
         let openOutcome: CacheOpenOutcome;
+        let schemaChange: CacheOpenSchemaChange | undefined;
         if (awaitStorageGrant && onOwnerLockBusy) {
           const open = this.options.recoveryOpen
             ? wasm.openCacheForRecoveryWithOutcome
@@ -1551,6 +1553,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          schemaChange = opened.schemaChange;
         } else if (this.options.recoveryOpen) {
           if (wasm.openCacheForRecoveryWithOutcome) {
             const opened = await wasm.openCacheForRecoveryWithOutcome(
@@ -1560,6 +1563,7 @@ export class CacheWorkerCore {
             );
             this.engine = opened.engine;
             openOutcome = opened.outcome;
+            schemaChange = opened.schemaChange;
           } else {
             this.engine = await wasm.openCacheForRecovery(scope, hotCapacity);
             openOutcome = 'reset-storage-uncertain';
@@ -1572,6 +1576,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          schemaChange = opened.schemaChange;
         } else {
           this.engine = await wasm.openCache(scope, hotCapacity);
           openOutcome = 'opened-existing';
@@ -1587,6 +1592,17 @@ export class CacheWorkerCore {
           outcome: 'success',
           errorCode: 'none',
           openOutcome,
+          ...(schemaChange === undefined
+            ? {}
+            : {
+                schemaChange: schemaChange.change,
+                schemaResetReason: schemaChange.resetReason,
+                schemaChangedTypes: schemaChange.changedTypes,
+                schemaDroppedRecords: schemaChange.droppedRecords,
+                schemaIncompleteDocuments: schemaChange.incompleteDocuments,
+                schemaRetiredOverlays: schemaChange.retiredOverlays,
+                schemaAdoptMs: schemaChange.adoptMs,
+              }),
           durationMs: this.now() - schemaStartedAt,
         });
         await this.refreshQueueDiagnostics(true);

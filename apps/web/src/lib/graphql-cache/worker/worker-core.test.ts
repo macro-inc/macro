@@ -3244,6 +3244,53 @@ describe('CacheWorkerCore', () => {
     );
   });
 
+  it('records what bringing the opened records to the schema did', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: vi.fn().mockResolvedValue({
+        engine: {
+          queueDiagnostics: vi.fn().mockResolvedValue({
+            availability: 'available',
+            depth: '0',
+            oldestCreatedAtMs: null,
+          }),
+        },
+        outcome: 'opened-existing',
+        schemaChange: {
+          change: 'types',
+          changedTypes: 2,
+          droppedRecords: 40,
+          incompleteDocuments: 0,
+          retiredOverlays: 1,
+          adoptMs: 12.5,
+        },
+      }),
+    });
+    const core = new CacheWorkerCore({
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.schema_init',
+        openOutcome: 'opened-existing',
+        schemaChange: 'types',
+        schemaChangedTypes: 2,
+        schemaDroppedRecords: 40,
+        schemaIncompleteDocuments: 0,
+        schemaRetiredOverlays: 1,
+        schemaAdoptMs: 12.5,
+      })
+    );
+  });
+
   it('leaves recovery-open wipe authority with the coordinator', async () => {
     const observations: Array<Record<string, unknown>> = [];
     loadCacheWasmMock.mockResolvedValue({
