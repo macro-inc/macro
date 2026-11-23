@@ -11473,6 +11473,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "import_hubspot"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "connectors",
+ "http 1.4.0",
+ "import_tracker",
+ "macro_user_id",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "import_jira"
 version = "0.1.0"
 dependencies = [
