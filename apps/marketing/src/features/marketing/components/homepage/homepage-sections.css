@@ -1,0 +1,101 @@
+/* Homepage product sections: the feature-page chapter layout with a captured app window. */
+.macro-homepage .product-feature-intro .homepage-feature-more {
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+
+.macro-homepage .product-feature-intro .homepage-feature-more > a {
+  padding-block: 0;
+}
+
+.homepage-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-ink-muted);
+  font: 370 14px/1 'Inter Variable', Inter, sans-serif;
+}
+
+.homepage-shortcuts li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.homepage-shortcuts kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid #ffffff33;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: #151515;
+  color: var(--color-ink);
+  font: 600 12px/1 'Inter Variable', Inter, sans-serif;
+}
+
+.homepage-shortcuts kbd:last-of-type { margin-right: 4px; }
+
+.homepage-modules {
+  width: min(640px, 100%);
+  margin: 0 auto;
+  padding: 0;
+  columns: 2;
+  column-gap: 40px;
+  list-style: none;
+}
+
+.homepage-modules li {
+  break-inside: avoid;
+  padding: 13px 0;
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent);
+  color: var(--color-ink);
+  font: 370 16px/1.4 'Inter Variable', Inter, sans-serif;
+}
+
+.homepage-clone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(640px, 100%);
+  min-width: 0;
+  margin: 0 auto;
+  padding: 8px 8px 8px 18px;
+  border-radius: 14px;
+  background: #0d0d0d;
+  box-shadow: inset 0 0 0 1px #ffffff29;
+}
+
+.homepage-clone code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  color: var(--color-ink);
+  font: 400 14px/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
+  white-space: nowrap;
+}
+
+.homepage-clone > button {
+  flex: none;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font: 500 13.5px/1 'Inter Variable', Inter, sans-serif;
+}
+
+@media (max-width: 699px) {
+  .homepage-shortcuts { gap: 10px 20px; }
+  .homepage-modules { width: calc(100% - 16px); column-gap: 24px; }
+  .homepage-clone { width: calc(100% - 16px); }
+  .homepage-clone button { min-height: 44px; }
+}

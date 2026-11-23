@@ -105,6 +105,8 @@ export function FeaturePageSection(props: {
   title: string | readonly string[];
   description: string;
   demo?: FeatureDemoComposition;
+  /** Shown under the description, before the demo. */
+  more?: JSX.Element;
   children?: JSX.Element;
 }) {
   let heading: HTMLHeadingElement | undefined;
@@ -146,6 +148,7 @@ export function FeaturePageSection(props: {
         <p>
           <ProductCopy text={props.description} />
         </p>
+        {props.more}
       </header>
       <Show when={props.demo} fallback={props.children}>
         {(composition) => (

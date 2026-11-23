@@ -1,311 +1,254 @@
-import {
-  createMemo,
-  For,
-  type JSX,
-  lazy,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
-import siteStyles from '../../../app/main/index.css?inline';
-import { DeferredDemo, DemoPlaceholder } from './DeferredDemo';
-import { DemoInteractionBoundary } from './DemoInteractionBoundary';
-import { emailDraftMessages } from './email/emailDraftMessages';
-import { HomepageAgentLogos } from './HomepageAgentLogos';
-import { HomepageBlog } from './HomepageBlog';
+import { createSignal, For } from 'solid-js';
+import agentsScreen from '../../../assets/homepage/agents.webp';
+import calendarScreen from '../../../assets/homepage/calendar.webp';
+import callsScreen from '../../../assets/homepage/calls.webp';
+import chatScreen from '../../../assets/homepage/chat-thread.webp';
+import crmScreen from '../../../assets/homepage/crm.webp';
+import docsScreen from '../../../assets/homepage/docs-split.webp';
+import inboxScreen from '../../../assets/homepage/inbox.webp';
+import mailScreen from '../../../assets/homepage/mail-thread.webp';
+import pullRequestScreen from '../../../assets/homepage/pull-request.webp';
+import tasksScreen from '../../../assets/homepage/tasks-board.webp';
+import type { TutorialVideoId } from '../core/tutorial-videos';
+import { FeaturePageSection } from './FeaturePage';
 import { HomepageClosing } from './HomepageClosing';
-import {
-  HomepageConversation,
-  type HomepageMessage,
-} from './HomepageConversation';
 import {
   HomepageFeatureDetails,
   type ProductPagePath,
 } from './HomepageFeatureDetails';
-import { HomepageFeatureHeading } from './HomepageFeatureHeading';
-import { HomepageMention } from './HomepageMention';
-import { HomepageSidebar } from './HomepageSidebar';
-import { HomepageSidebarConnection } from './HomepageSidebarConnection';
-import { HomepageTestimonials } from './HomepageTestimonials';
-import './workspace-story.css';
-import './demo-glass.css';
+import { HomepageScreen } from './homepage/HomepageScreen';
+import './homepage/homepage-sections.css';
 
-const loadPullRequest = () => import('./HomepagePullRequest');
-const loadEmailCompose = () => import('./HomepageEmailCompose');
-const loadCollaborativeDoc = () => import('./HomepageCollaborativeDoc');
-const loadCrm = () => import('./HomepageCrm');
-const HomepageCrm = lazy(loadCrm);
-const loadSpreadsheet = () => import('./HomepageSpreadsheet');
-
-const HomepagePullRequest = lazy(loadPullRequest);
-const HomepageEmailCompose = lazy(loadEmailCompose);
-const HomepageCollaborativeDoc = lazy(loadCollaborativeDoc);
-const HomepageSpreadsheet = lazy(loadSpreadsheet);
-
-const LaunchPlan = () => (
-  <HomepageMention
-    kind="md"
-    label="Website launch plan"
-    description="The shared launch plan, checklist, and owners. Julia and Gabriel are editing."
-    href="#documents"
-  />
-);
-
-const CustomersSheet = () => (
-  <HomepageMention
-    kind="spreadsheet"
-    label="Customers to reach"
-    description="Top customers this month, compiled from PostHog. The list stays in the spreadsheet."
-    href="#spreadsheet"
-  />
-);
-
-const definitions =
-  siteStyles.match(/@(font-face|property)[^{]*\{[^}]*\}/g)?.join('\n') ?? '';
-const scopedStyles = siteStyles
-  .replace(/@(font-face|property)[^{]*\{[^}]*\}/g, '')
-  .replaceAll(':root', ':scope');
-
-function Feature(props: {
+type Section = {
   id: string;
   title: string;
   description: string;
-  productPages?: readonly { title: string; path: ProductPagePath }[];
-  titleAdornment?: JSX.Element;
-  messages?: readonly HomepageMessage[];
-  children?: JSX.Element;
-  render?: () => JSX.Element;
-}) {
-  const conversation = createMemo(() => props.messages);
+  tutorial: TutorialVideoId;
+  screen: string;
+  alt: string;
+  fit?: 'bleed' | 'full';
+  page?: { title: string; path: ProductPagePath };
+};
+
+// Each product gets one section: its selling point, one app window on its own
+// wallpaper, and a link to its page. "Macro <Product>" names render as links.
+const SECTIONS: readonly Section[] = [
+  {
+    id: 'home',
+    title: 'Macro Mail, Macro Chat and Macro Tasks in one list.',
+    description:
+      'Email, messages, tasks, mentions and agent replies land in one inbox that you clear from the keyboard.',
+    tutorial: 'home',
+    screen: inboxScreen,
+    alt: 'Macro Home with a pull request open beside the list: its description, status and a review request',
+  },
+  {
+    id: 'email',
+    title: 'Macro Mail, organized and prioritized.',
+    description:
+      'Macro Mail tags and prioritizes email from all your accounts, with Superhuman shortcuts and frontier intelligence.',
+    tutorial: 'mail',
+    screen: mailScreen,
+    alt: 'An email open in Macro Mail, with a task just created from it',
+    page: { title: 'Email', path: '/email' },
+  },
+  {
+    id: 'chat',
+    title: 'Macro Chat that is linked to the work.',
+    description:
+      'Integrated with your documents, emails, and tasks. Macro Agents at the ready to take on tasks and catch you up.',
+    tutorial: 'chat',
+    screen: chatScreen,
+    alt: 'The launch-team channel with a thread showing its first replies inline, and a task created from a message',
+    page: { title: 'Chat', path: '/channels' },
+  },
+  {
+    id: 'tasks',
+    title: 'Macro Tasks for people and agents.',
+    description:
+      'Create tasks from Macro Mail and team Macro Chat. Assign people or agents, and keep status in sync with linked pull requests.',
+    tutorial: 'tasks',
+    screen: tasksScreen,
+    alt: 'Tasks as a board grouped by priority',
+    page: { title: 'Tasks', path: '/tasks' },
+  },
+  {
+    id: 'docs',
+    title: 'Macro Docs that link both ways.',
+    description:
+      'Collaborative markdown docs that @link to your Macro Tasks, Macro Mail and calls, and that agents can edit with you.',
+    tutorial: 'docs',
+    screen: docsScreen,
+    alt: 'A requirements doc on the left mentioning a task, with the task open in a split on the right',
+    fit: 'full',
+    page: { title: 'Docs', path: '/documents' },
+  },
+  {
+    id: 'calendar',
+    title: 'Every Macro Calendar in one place.',
+    description:
+      'All your Google and Microsoft calendars in one view. Find time with your team and ask Macro Agents to handle the invites.',
+    tutorial: 'calendar',
+    screen: calendarScreen,
+    alt: 'A week view in Macro Calendar with upcoming events in the sidebar',
+    page: { title: 'Calendar', path: '/calendar' },
+  },
+  {
+    id: 'calls',
+    title: 'Macro Calls that become team memory.',
+    description:
+      'Every call is recorded, transcribed, and summarized into shared memory your team and your Macro Agents can search.',
+    tutorial: 'calls',
+    screen: callsScreen,
+    alt: 'A list of recorded calls, each with a one-line summary',
+    page: { title: 'Calls', path: '/calls' },
+  },
+  {
+    id: 'crm',
+    title: 'Macro CRM that keeps itself up to date.',
+    description:
+      'Macro CRM stays up to date from your Macro Mail and team Macro Chat. No separate tool to maintain.',
+    tutorial: 'crm',
+    screen: crmScreen,
+    alt: 'Companies grouped into Lead, Demo, Customer and Churned, with owner and revenue',
+    page: { title: 'CRM', path: '/crm' },
+  },
+  {
+    id: 'agents',
+    title: 'Macro Agents are teammates, not a sidebar.',
+    description:
+      'AI that works from everything you have — email, messages, tasks, docs, and calls — with your exact permissions.',
+    tutorial: 'agents',
+    screen: agentsScreen,
+    alt: 'A channel where a teammate mentions Cursor and the agent replies with the change it made',
+    page: { title: 'Agents', path: '/agents' },
+  },
+  {
+    id: 'coding',
+    title: 'Merge Macro GitHub pull requests from chat.',
+    description:
+      'GitHub pull requests in your inbox beside email and chat, @mentionable anywhere, with comments synced both ways.',
+    tutorial: 'github',
+    screen: pullRequestScreen,
+    alt: 'An engineering channel with a pull request open in a split: description, review comments and a Merge button',
+    page: { title: 'pull requests', path: '/github' },
+  },
+];
+
+const MODULES = [
+  'Email',
+  'Chat',
+  'Docs',
+  'Tasks',
+  'Calendar',
+  'Calls',
+  'CRM',
+  'Agents',
+  'Booking links',
+  'Search',
+  'Drive',
+  'Sheets',
+];
+
+const CLONE_COMMAND = 'git clone https://github.com/macro-inc/macro';
+
+function Shortcuts() {
   return (
-    <section
-      class="homepage-feature"
-      aria-labelledby={`${props.id}-title`}
-      id={props.id}
-    >
-      <HomepageFeatureHeading
-        id={`${props.id}-title`}
-        title={props.title}
-        description={props.description}
-      >
-        {props.titleAdornment}
-      </HomepageFeatureHeading>
-      <Show when={conversation()}>
-        {(messages) => <HomepageConversation messages={messages()} />}
-      </Show>
-      <DemoInteractionBoundary
-        label={props.title}
-        class="homepage-feature-visual"
-        render={() => (
-          <div
-            class={`homepage-feature-graphic homepage-enter homepage-feature-${props.id}`}
-          >
-            {props.render ? props.render() : props.children}
-          </div>
-        )}
-      />
-      <Show when={props.productPages}>
-        {(pages) => (
-          <div class="homepage-feature-more-group">
-            <For each={pages()}>
-              {(page) => (
-                <HomepageFeatureDetails title={page.title} path={page.path} />
-              )}
-            </For>
-          </div>
-        )}
-      </Show>
-    </section>
+    <ul class="homepage-shortcuts" aria-label="Keyboard shortcuts">
+      <li>
+        <kbd>J</kbd>
+        <kbd>K</kbd>
+        Move
+      </li>
+      <li>
+        <kbd>E</kbd>
+        Done
+      </li>
+      <li>
+        <kbd>⌘</kbd>
+        <kbd>K</kbd>
+        Search
+      </li>
+    </ul>
   );
 }
 
-export function HomepageSections() {
-  let root!: HTMLDivElement;
+function CloneCommand() {
+  const [label, setLabel] = createSignal('Copy');
+  let command!: HTMLElement;
 
-  onMount(() => {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const items = Array.from(
-      root.querySelectorAll<HTMLElement>('.homepage-enter')
-    );
-    // Observe visibility only: no scroll listeners, pinned content, or layout
-    // changes. Each message arrives once, and stays readable when scrolling back.
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          (entry.target as HTMLElement).dataset.reveal = 'visible';
-          observer.unobserve(entry.target);
-        }
-      },
-      { rootMargin: '0px 0px -32px 0px', threshold: 0.08 }
-    );
-    const showAll = () => {
-      if (!reduced.matches) return;
-      observer.disconnect();
-      items.forEach((item) => {
-        item.dataset.reveal = 'visible';
-      });
-    };
-    for (const item of items) {
-      item.dataset.reveal = reduced.matches ? 'visible' : 'waiting';
-      if (!reduced.matches) observer.observe(item);
+  // Clipboard access can be refused; select the command so it can be copied by hand.
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(CLONE_COMMAND);
+      setLabel('Copied');
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(command);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+      setLabel('Selected');
     }
-    // Keyboard navigation must never land in a faded, pending example.
-    const showFocused = (event: FocusEvent) => {
-      if (!(event.target instanceof Element)) return;
-      const item = event.target.closest<HTMLElement>('.homepage-enter');
-      if (item) {
-        item.dataset.reveal = 'visible';
-        observer.unobserve(item);
-      }
-    };
-    root.addEventListener('focusin', showFocused);
-    reduced.addEventListener('change', showAll);
-    onCleanup(() => {
-      observer.disconnect();
-      root.removeEventListener('focusin', showFocused);
-      reduced.removeEventListener('change', showAll);
-    });
-  });
+    setTimeout(() => setLabel('Copy'), 1600);
+  };
 
   return (
-    <div ref={root} class="homepage-sections">
-      <style>{definitions}</style>
-      <style>{`@scope (.homepage-sections) to (.workspace-demo) { ${scopedStyles} }`}</style>
-      <div class="homepage-sections-inner">
-        <HomepageSidebarConnection>
-          <HomepageSidebar showInteractiveDemo={false} />
-        </HomepageSidebarConnection>
-        <Feature
-          id="email"
-          productPages={[
-            { title: 'Email', path: '/email' },
-            { title: 'Chat', path: '/channels' },
-          ]}
-          title="Email and chat"
-          description="Share live email threads in channels. Ask agents to draft from your emails, documents, and calls."
-          messages={emailDraftMessages('#email', '#email')}
-          render={() => (
-            <DeferredDemo
-              preload={loadEmailCompose}
-              fallback={<DemoPlaceholder label="Email draft preview" />}
-            >
-              <HomepageEmailCompose />
-            </DeferredDemo>
-          )}
-        />
-        <Feature
-          id="documents"
-          productPages={[
-            { title: 'Documents', path: '/documents' },
-            { title: 'Tasks', path: '/tasks' },
-          ]}
-          title="Documents and tasks"
-          description="CRDT documents with live agent edits. Create tasks from messages and link them to the specification."
-          messages={[
-            {
-              person: 'peter',
-              side: 'self',
-              text: (
-                <>
-                  Let’s put the plan, owners, and tasks in <LaunchPlan />.
-                  Julia, can you take the announcement? Gabriel, the invite
-                  check?
-                </>
-              ),
-            },
-          ]}
-          render={() => (
-            <figure class="homepage-doc-history" id="tasks">
-              <div id="version-control">
-                <DeferredDemo
-                  preload={loadCollaborativeDoc}
-                  fallback={
-                    <DemoPlaceholder label="Collaborative document and tasks preview" />
-                  }
-                >
-                  <HomepageCollaborativeDoc showHistory={false} />
-                </DeferredDemo>
-              </div>
-            </figure>
-          )}
-        />
-        <Feature
-          id="coding-agents"
-          productPages={[{ title: 'Agents', path: '/agents' }]}
-          title="Agent teammates"
-          titleAdornment={<HomepageAgentLogos />}
-          description="Use your coding agent subscriptions in channels. Read the diff and follow the task through to a pull request."
-          render={() => (
-            <DeferredDemo
-              preload={loadPullRequest}
-              fallback={<DemoPlaceholder label="Agent session preview" />}
-            >
-              <HomepagePullRequest />
-            </DeferredDemo>
-          )}
-        />
-        <Feature
-          id="spreadsheet"
-          title="Sheets and databases"
-          description="Live collaboration with humans and agents. Import your Google Sheets and Notion databases."
-          messages={[
-            {
-              person: 'claude',
-              text: (
-                <>
-                  Checked PostHog. The most active accounts this month are in{' '}
-                  <CustomersSheet />.
-                </>
-              ),
-            },
-          ]}
-          render={() => (
-            <DeferredDemo
-              preload={loadSpreadsheet}
-              fallback={<DemoPlaceholder label="Spreadsheet preview" />}
-            >
-              <HomepageSpreadsheet />
-            </DeferredDemo>
-          )}
-        />
-        <Feature
-          id="crm"
-          productPages={[{ title: 'CRM', path: '/crm' }]}
-          title="Hands-free CRM"
-          description="Companies and contacts created from email. Agents update deal stages and draft customer follow-ups."
-          messages={[
-            {
-              person: 'jacob',
-              text: (
-                <>
-                  <span class="homepage-person-mention">@Claude</span>, update
-                  the CRM from{' '}
-                  <HomepageMention
-                    kind="call"
-                    label="Sales sync"
-                    description="Today’s sales call · Keystone Mechanical asked for a proposal, and Bookend Retail signed."
-                    href="#crm"
-                  />
-                  . Keystone Mechanical asked for a proposal, and Bookend Retail
-                  signed. Update their stages.
-                </>
-              ),
-            },
-          ]}
-          render={() => (
-            <DeferredDemo
-              preload={loadCrm}
-              fallback={<DemoPlaceholder label="CRM pipeline preview" />}
-            >
-              <HomepageCrm />
-            </DeferredDemo>
-          )}
-        />
-        <HomepageTestimonials />
-        <HomepageBlog />
-        <HomepageClosing />
-      </div>
+    <div class="homepage-clone">
+      <code ref={command}>{CLONE_COMMAND}</code>
+      <button type="button" onClick={copy}>
+        {label()}
+      </button>
     </div>
+  );
+}
+
+/** Everything below the homepage introduction: one section per product. */
+export function HomepageSections() {
+  return (
+    <>
+      <For each={SECTIONS}>
+        {(section) => (
+          <FeaturePageSection
+            id={section.id}
+            title={section.title}
+            description={section.description}
+            more={
+              section.page && (
+                <HomepageFeatureDetails
+                  title={section.page.title}
+                  path={section.page.path}
+                />
+              )
+            }
+          >
+            <HomepageScreen
+              tutorial={section.tutorial}
+              src={section.screen}
+              alt={section.alt}
+              fit={section.fit}
+            />
+            {section.id === 'home' && <Shortcuts />}
+          </FeaturePageSection>
+        )}
+      </For>
+      <FeaturePageSection
+        id="pricing"
+        title="$40 a seat, every module included."
+        description="For comparison, Notion, Slack, Linear and Superhuman add up to $84 a seat a month on their business plans, billed annually. List prices checked September 2026."
+        more={<HomepageFeatureDetails title="pricing" path="/pricing" />}
+      >
+        <ul class="homepage-modules" aria-label="Included modules">
+          <For each={MODULES}>{(module) => <li>{module}</li>}</For>
+        </ul>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="open-source"
+        title="Fully open source. Not open core."
+        description="Macro is released under the AGPLv3: a Rust backend and a SolidJS app you can read, fork and host yourself."
+      >
+        <CloneCommand />
+      </FeaturePageSection>
+      <HomepageClosing />
+    </>
   );
 }
