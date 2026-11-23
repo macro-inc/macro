@@ -438,13 +438,13 @@ fn is_json_scalar(value: &Json) -> bool {
 /// Applies an already ordered patch set against effective records and writes
 /// only changed parent fields into `updates`.
 ///
-/// Null parents are always skipped: an absent optional relation cannot be
-/// patched, but does not make the accompanying mutation invalid.
-/// Query-rooted recipes also skip records or fields that have not been cached.
-/// Explicit record-rooted recipes still require their target to exist.
-/// When `skip_not_applicable` is true, stale/missing recipes are ignored. This
-/// mode is used during hydration and successful settlement, where stale query
-/// fields must never be recreated. Returns whether every recipe was applied.
+/// Null parents and missing parent records or fields are always skipped for
+/// both query-rooted and explicit record-rooted recipes. Cache absence cannot
+/// invalidate an authored mutation, and patches never invent missing parents.
+/// Return false so callers can retain the recipe and request targeted repair.
+/// Other structural errors still reject strict patch sets atomically.
+/// When `skip_not_applicable` is true, other stale target errors are ignored
+/// after recipe validation. Returns whether every recipe was applied.
 pub fn apply_link_patches(
     schema: &crate::meta::Schema,
     effective: &mut HashMap<EntityKey<'static>, Record>,
