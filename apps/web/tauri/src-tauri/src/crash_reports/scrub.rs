@@ -4,8 +4,27 @@
 
 const MAX_MESSAGE_CHARS: usize = 300;
 const REDACTED: &str = "…";
-/// Backtick spans kept although they are a single word: std's own messages.
-const CODE_WORDS: &[&str] = &["Err", "None", "Ok", "Some"];
+/// Backtick spans kept verbatim: the code std's own panic messages quote.
+/// Anything else in backticks may be user text (`is not a char boundary`).
+const CODE_SPANS: &[&str] = &[
+    "Err",
+    "None",
+    "Ok",
+    "Some",
+    "Option::unwrap()",
+    "Option::expect()",
+    "Result::unwrap()",
+    "Result::unwrap_err()",
+    "Result::expect()",
+    "Result::expect_err()",
+    "async fn",
+    "left == right",
+    "left != right",
+];
+/// The word after one of these is a credential.
+const CREDENTIAL_SCHEMES: &[&str] = &["basic", "bearer", "token"];
+/// `name=value` pairs whose value is a credential.
+const CREDENTIAL_KEYS: &[&str] = &["auth", "key", "password", "secret", "session", "token"];
 
 /// This user's home directory and login name, replaced wherever they appear.
 #[derive(Clone, Debug, Default)]
@@ -49,16 +68,33 @@ pub(super) fn scrub_message(message: &str, redactions: &Redactions) -> String {
     let unquoted = redact_quotes(&redactions.apply(message));
     let mut scrubbed = String::with_capacity(unquoted.len());
     let mut word = String::new();
+    let mut after_scheme = false;
+    let mut flush = |word: &mut String, scrubbed: &mut String| {
+        if word.is_empty() {
+            return;
+        }
+        let core_after_scheme = word.trim_matches(|c: char| "()[]{},;.'\"".contains(c));
+        if after_scheme && !core_after_scheme.is_empty() {
+            let core = word.trim_matches(|c: char| "()[]{},;.'\"".contains(c));
+            scrubbed.push_str(&word.replacen(core, "<token>", 1));
+        } else {
+            scrubbed.push_str(&redact_word(word));
+        }
+        let core = word.trim_matches(|c: char| !c.is_alphanumeric());
+        after_scheme = CREDENTIAL_SCHEMES
+            .iter()
+            .any(|scheme| core.eq_ignore_ascii_case(scheme));
+        word.clear();
+    };
     for c in unquoted.chars() {
         if c.is_whitespace() {
-            scrubbed.push_str(&redact_word(&word));
-            word.clear();
+            flush(&mut word, &mut scrubbed);
             scrubbed.push(c);
         } else {
             word.push(c);
         }
     }
-    scrubbed.push_str(&redact_word(&word));
+    flush(&mut word, &mut scrubbed);
     truncate(&scrubbed, MAX_MESSAGE_CHARS)
 }
 
@@ -113,13 +149,8 @@ fn redact_quotes(message: &str) -> String {
     out
 }
 
-/// `Result::unwrap()` is code; a bare word may be the text being sliced
-/// (`is not a char boundary`).
 fn is_code(span: &str) -> bool {
-    let charset = span
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || "_:<>()&, ".contains(c));
-    charset && (span.contains("::") || span.contains("()") || CODE_WORDS.contains(&span))
+    CODE_SPANS.contains(&span)
 }
 
 fn redact_word(word: &str) -> String {
@@ -134,6 +165,7 @@ fn redact_word(word: &str) -> String {
         let rest = &core[url + 3..];
         let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
         let host = host.rsplit('@').next().unwrap_or_default();
+        let host = if is_ip_address(host) { "<ip>" } else { host };
         let tail = if host.len() < rest.len() { "/…" } else { "" };
         format!(
             "{}{}://{host}{tail}",
@@ -145,15 +177,47 @@ fn redact_word(word: &str) -> String {
         .is_some_and(|(_, domain)| domain.contains('.'))
     {
         "<email>".to_string()
+    } else if let Some((key, _)) = core.split_once('=').filter(|(key, _)| {
+        let key = key.to_ascii_lowercase();
+        CREDENTIAL_KEYS
+            .iter()
+            .any(|credential| key.contains(credential))
+    }) {
+        format!("{key}={REDACTED}")
     } else if core.contains('/') || core.contains('\\') {
         // A path, or part of one split at a space; module paths use `::`.
         "<path>".to_string()
     } else if core.chars().filter(char::is_ascii_digit).count() >= 7 {
         "<number>".to_string()
+    } else if is_token(core) {
+        "<token>".to_string()
     } else {
         return word.to_string();
     };
     word.replacen(core, &replacement, 1)
+}
+
+/// An IPv4 address (with or without a port) or a bracketed IPv6 one.
+fn is_ip_address(host: &str) -> bool {
+    if host.starts_with('[') {
+        return true;
+    }
+    let address = host.split(':').next().unwrap_or_default();
+    let parts: Vec<_> = address.split('.').collect();
+    parts.len() == 4
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+/// A long run of letters and digits mixed, like an API key or session id.
+fn is_token(word: &str) -> bool {
+    word.len() >= 20
+        && word
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        && word.chars().any(|c| c.is_ascii_digit())
+        && word.chars().any(|c| c.is_ascii_alphabetic())
 }
 
 fn truncate(text: &str, max_chars: usize) -> String {

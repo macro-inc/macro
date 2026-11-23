@@ -12,8 +12,10 @@ import type {
 
 /**
  * How long a sent report stays on disk. PostHog sends without waiting for an
- * answer; a crash in this window resends it at the next start, and the event's
- * fixed uuid and timestamp let PostHog drop the copy.
+ * answer, so the ack is a guess that delivery went through: a crash or quit
+ * within this window resends the report at the next start, and the event's
+ * fixed uuid and timestamp let PostHog drop the copy. A PostHog outage that
+ * lasts past the window loses the report (posthog-js retries only in memory).
  */
 const ACK_DELAY_MS = 15_000;
 

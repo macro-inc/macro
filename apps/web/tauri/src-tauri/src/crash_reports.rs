@@ -312,7 +312,7 @@ fn fold_panic_aborts(found: Vec<Found>) -> Vec<Found> {
             .saturating_sub(PANIC_ABORT_WINDOW_MS)
             ..=dump.report.timestamp_ms + 1000;
         let panic = kept.iter_mut().find(|found| {
-            matches!(found.report.crash, Crash::Panic(_))
+            matches!(&found.report.crash, Crash::Panic(panic) if panic.thread.as_deref() == Some("main"))
                 && window.contains(&found.report.timestamp_ms)
         });
         match panic {
@@ -334,14 +334,22 @@ fn remove_abandoned(path: &Path) {
     }
 }
 
-/// The launch running at `timestamp_ms`: the latest one started by then.
+/// The launch running at `timestamp_ms`, which has whole seconds (a
+/// minidump's time): the latest one started by the end of that second. When
+/// that launch started within the second itself, the crash may belong to the
+/// launch before it, so neither is named.
 #[cfg(any(feature = "cef", test))]
 fn launch_at(launches: &[Launch], timestamp_ms: u64) -> Option<Launch> {
-    launches
+    let second_end = timestamp_ms + 999;
+    let latest = launches
         .iter()
-        .filter(|launch| launch.started_at_ms <= timestamp_ms)
-        .max_by_key(|launch| launch.started_at_ms)
-        .cloned()
+        .filter(|launch| launch.started_at_ms <= second_end)
+        .max_by_key(|launch| launch.started_at_ms)?;
+    let ambiguous = latest.started_at_ms > timestamp_ms
+        && launches
+            .iter()
+            .any(|launch| launch.started_at_ms < latest.started_at_ms);
+    (!ambiguous).then(|| latest.clone())
 }
 
 fn files_in(dir: &Path) -> Vec<PathBuf> {

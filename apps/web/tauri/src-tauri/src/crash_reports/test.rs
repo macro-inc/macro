@@ -59,8 +59,18 @@ fn scrubs_values_out_of_panic_messages() {
         "byte index 3 is not a char boundary; it is inside '…' (bytes 2..4) of `…`"
     );
     assert_eq!(
-        scrub("byte index 10 is out of bounds of `hunter2`"),
-        "byte index 10 is out of bounds of `…`"
+        scrub("byte index 10 is out of bounds of `hunter2` or `hunter2()` or `a::b`"),
+        "byte index 10 is out of bounds of `…` or `…` or `…`"
+    );
+    assert_eq!(
+        scrub(
+            "request failed: Bearer sk-test-secret, api_key=abc, id 4f9c2b7e1a8d4c6f9e2b, key Ab3dEf6hIj9kLm2nOp5q"
+        ),
+        "request failed: Bearer <token>, api_key=…, id <number>, key <token>"
+    );
+    assert_eq!(
+        scrub("GET https://192.168.1.10:8443/private and http://[::1]/x failed"),
+        "GET https://<ip>/… and http://<ip>/… failed"
     );
     assert_eq!(
         scrub(
@@ -244,12 +254,19 @@ fn the_launch_ledger_dates_crashes_and_keeps_the_latest() {
     let launches = read_launches(&dir);
     assert_eq!(launches.len(), MAX_LAUNCHES);
     assert_eq!(launches[0].native_version, "v3");
-    assert_eq!(
-        launch_at(&launches, 5_500).map(|launch| launch.native_version),
-        Some("v5".to_string())
-    );
     assert_eq!(launch_at(&launches, 1_000), None);
     fs::remove_dir_all(dir).unwrap();
+
+    // Minidump times have whole seconds.
+    let launches = [launch(10_500, "old"), launch(20_000, "new")];
+    let version = |at| launch_at(&launches, at).map(|launch| launch.native_version);
+    assert_eq!(version(15_000), Some("old".to_string()));
+    assert_eq!(version(20_000), Some("new".to_string()));
+    // The first launch started during this second: nothing older to confuse.
+    assert_eq!(version(10_000), Some("old".to_string()));
+    // The second launch started during 19_000..20_000; either could have crashed.
+    let launches = [launch(10_500, "old"), launch(19_500, "new")];
+    assert_eq!(launch_at(&launches, 19_000), None);
 }
 
 /// A Crashpad renderer crash in a macOS framework, like CEF writes.

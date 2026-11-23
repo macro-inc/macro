@@ -314,8 +314,9 @@ service, and no crash memory leaves the machine
   location, thread name and backtrace to
   `<app data>/crash-reports/panic-<uuid>.json` before the default hook runs.
   The message is scrubbed first: the user's home directory and login name,
-  quoted values, backtick spans that aren't code, paths, URL paths, email
-  addresses and long numbers are replaced. Release builds carry no debug info,
+  quoted values, backtick spans other than std's own (`Result::unwrap()`),
+  paths, URL paths and IP hosts, email addresses, credentials (`Bearer …`,
+  `token=…`, long mixed tokens) and long numbers are replaced. Release builds carry no debug info,
   so frames have function names but no files or lines. A panic on the main
   thread is `fatal`; on another thread the app usually survives, so `error`.
 - **Chromium crashes** (macOS): `../desktop-cef/crash_reporter.cfg`, bundled
@@ -340,8 +341,10 @@ at a time, oldest first. The frontend sends each at once, with the crash's
 time as the event timestamp and the report's UUID as the event uuid, and acks
 the ones PostHog accepted 15 seconds later; the native app then deletes their
 files. A report not yet acked (the app crashed again, or quit) returns at the
-next launch, and PostHog drops the resent copy. Dev builds, which never start
-PostHog, leave reports on disk. A renderer
+next launch, and PostHog drops the resent copy. Delivery is best effort: the
+ack doesn't wait for PostHog's answer, so a report sent during a PostHog outage
+longer than that is lost. The Vite dev server and builds without
+`VITE_POSTHOG_API_KEY` never start PostHog, so they leave reports on disk. A renderer
 crash is reported by the document that replaces it, without a relaunch.
 
 PostHog properties: `native_crash_kind` (`panic` or `native`),
@@ -361,8 +364,10 @@ A crash reported after the user switched accounts goes to the current
 person; the signature holds no account data.
 
 To try it, crash a renderer from DevTools with `chrome://crash` in the
-desktop-cef dev build (`../desktop-cef/AGENTS.md`), or panic in a command; the
-next webview start sends the report. The wire types are generated with the
+desktop-cef dev build (`../desktop-cef/AGENTS.md`), or panic in a command. A
+dev build against the Vite server only writes the report (check the files
+above). To see it reach PostHog, run a production frontend build made with
+`VITE_POSTHOG_API_KEY` set; its next webview start sends the report. The wire types are generated with the
 diagnostic types (above).
 
 ## Linux rendering diagnostics

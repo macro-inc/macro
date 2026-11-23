@@ -21,9 +21,9 @@ tauri-build = { version = "2.3.1", features = [] }
 tauri = { workspace = true, features = ["test"] }
 # Crash report tests build minidumps on any platform; the app reads them only
 # with the `cef` feature.
-minidump = "0.27"
-minidump-synth = "0.27"
-test-assembler = "0.1.6"
+minidump = { workspace = true }
+minidump-synth = { workspace = true }
+test-assembler = { workspace = true }
 specta = { version = "=2.0.0-rc.25", features = ["derive", "uuid"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
@@ -43,7 +43,7 @@ http = "1"
 log = "0.4"
 logger = { path = "../logger" }
 mime_guess = "2"
-minidump = { version = "0.27", optional = true }
+minidump = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
