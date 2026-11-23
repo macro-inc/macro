@@ -27,6 +27,9 @@ echo "stream: $stream"
 IFS=, read -r codec profile width height b_frames packets <<< "$stream"
 [ "$codec,$profile,$width,$height,$b_frames" = "h264,Constrained Baseline,640,360,0" ]
 [ "$packets" -ge 10 ]
+# A viewer can decode from the first frame.
+first=$(ffprobe -v error -select_streams v:0 -show_entries packet=flags -of csv=p=0 out.mp4 | head -n 1)
+[[ $first == K* ]] || { echo "first frame is not a keyframe: $first" >&2; exit 1; }
 
 python3 - out.mp4 "$packets" <<'PY'
 import struct, sys

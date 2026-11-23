@@ -332,6 +332,29 @@ pkgs.testers.runNixOSTest {
           size = agent.wait_until_succeeds(f"{on_desktop} ${pkgs.python3}/bin/python3 ${./files/test-computer-use.py} {servers}", timeout=120).strip()
           assert int(size) > 1000, size
 
+      with subtest("the screen encoder serves the agent's desktop on loopback, in its sandbox"):
+          agent.wait_for_open_port(5902)
+          listeners = agent.succeed("ss -ltnH 'sport = :5902'")
+          assert listeners.strip() and all(line.split()[3] == "127.0.0.1:5902" for line in listeners.splitlines()), listeners
+          viewer = "${pkgs.python3}/bin/python3 ${./files/test-screen-encoder-client.py}"
+          # A viewer held open while the instance is inspected.
+          agent.succeed(f"{viewer} 5902 '10 640 360 10' 8 /tmp/encoder.mp4 >/tmp/encoder.log 2>&1 &")
+          instance = agent.wait_until_succeeds("systemctl list-units --plain --no-legend --state=running 'macro-agent-screen-encoder@*' | awk '{print $1}' | grep .").split()[0]
+          encoder = agent.succeed(f"systemctl show {instance} --property=MainPID --value").strip()
+          agent.succeed(f"grep -E '^Uid:\\s+1000\\s' /proc/{encoder}/status")
+          agent.succeed(f"[ \"$(stat -c %G /proc/{encoder})\" = macro-agent ]")
+          agent.succeed(f"grep -F macro-agent.slice /proc/{encoder}/cgroup")
+          agent.succeed(f"grep -E '^CapEff:\\s+0+$' /proc/{encoder}/status")
+          agent.wait_until_succeeds("grep -F fragments /tmp/encoder.log", timeout=30)
+          stream = agent.succeed("${pkgs.ffmpeg-headless}/bin/ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,profile,width,height,has_b_frames -of csv=p=0 /tmp/encoder.mp4").strip()
+          assert stream == "h264,Constrained Baseline,640,360,0", stream
+          first = agent.succeed("${pkgs.ffmpeg-headless}/bin/ffprobe -v error -select_streams v:0 -show_entries packet=flags -of csv=p=0 /tmp/encoder.mp4 | head -n 1").strip()
+          assert first.startswith("K"), first
+          # The instance ends with its connection.
+          agent.wait_until_fails(f"systemctl is-active --quiet {instance}")
+          # A bad config line closes the connection with nothing sent.
+          agent.fail(f"{viewer} 5902 '0 640 360 10' 5 /tmp/refused.mp4")
+
       with subtest("the agent rejects a repo URL with credentials"):
           agent.succeed(
               "mkdir -p /srv/git && git init --quiet --bare -b main /srv/git/repo.git"

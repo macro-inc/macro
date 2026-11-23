@@ -290,6 +290,8 @@ in
       requires = [ "macro-home-setup.service" ];
       after = [ "macro-home-setup.service" ];
     };
+    # Only an agent's screen is watched: a person's computer doesn't listen.
+    systemd.sockets.macro-agent-screen-encoder.wantedBy = lib.mkForce [ "macro-agent.target" ];
 
     # The agent's environment arrives over macrod's socket (ApplyAgent): macrod,
     # as macro, stages it in /run/macro-agent-inbox, which macro-restore makes

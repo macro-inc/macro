@@ -188,7 +188,8 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   it) and gets fragmented MP4 of `:1` until it closes: `ftyp` + `moov`, then
   one `moof` + `mdat` per frame, Constrained Baseline H.264, no B-frames,
   starting on a keyframe. The harness reaches it only through the fleet's
-  exec tunnel.
+  exec tunnel. On Firecracker `macro-agent.target` wants the socket, so a
+  person's computer doesn't listen on 5902.
 - `harnessd.service` runs `harnessd serve` as `macro` (socket
   `/run/harnessd/harnessd.sock`, RuntimeDirectory 0700; restarts always) with
   the unwrapped pinned Claude Code. The control plane execs `harnessd` (the
@@ -364,7 +365,11 @@ existing credentials: no new pairing and no Claude login.
   DevTools on loopback only with a profile under its home; the `agent` sink
   and its monitor exist; the clipboard round-trips on `:1`; AT-SPI reports
   `IsEnabled`; computer-use-linux lists Chromium's
-  window, reads its AT-SPI tree and returns a screenshot PNG; the agent rejects a credentialed repo URL without
+  window, reads its AT-SPI tree and returns a screenshot PNG; the screen
+  encoder listens on 127.0.0.1:5902 only, runs each viewer as macro with group
+  `macro-agent` in `macro-agent.slice` with no capabilities, sends Constrained
+  Baseline fMP4 starting on a keyframe, ends with its connection and refuses a
+  bad config line; the agent rejects a credentialed repo URL without
   contacting the repo; a rewritten file restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its
   credentials in its environment or the rest of macro's home in its view;
@@ -399,8 +404,9 @@ existing credentials: no new pairing and no Claude login.
   `block_resize` of the volume grows the mounted `/home`; a
   repeat with the same id is a wake and keeps the machine id and files, another id changes
   it, and a cold boot mounts `/home` at boot. The first identity is a
-  person's (macro has sudo and the Docker socket, no agent units); the second
-  an agent's (no sudo; the agent's desktop runs; an environment macro puts
+  person's (macro has sudo and the Docker socket, no agent units, nothing on
+  5902); the second an agent's (no sudo; the agent's desktop runs and its
+  screen encoder answers with fMP4 starting on a keyframe; an environment macro puts
   in the inbox is installed as `/var/lib/macrod/agent.env`, 0600 macro).
 - `nix build .#checks.x86_64-linux.macro-box-claude-wrapper` runs
   `files/claude-wrapper` against a fake claude: no credential, a credential,
@@ -409,7 +415,7 @@ existing credentials: no new pairing and no Claude login.
   agent screen encoder against Xvfb (`files/test-agent-screen-encoder.sh`):
   bad config lines are refused with no output; a good one gives
   Constrained Baseline H.264 as `ftyp`, `moov`, then one `moof` + `mdat` per
-  frame.
+  frame, the first a keyframe.
 - `nix build .#checks.x86_64-linux.macro-box-boot` runs
   `files/test-start-agent.sh`: start-agent's lock adoption, rollback and
   muppet API check (the code's `muppetApi` against the image's `apiLevel`), and

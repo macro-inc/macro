@@ -148,6 +148,8 @@ pkgs.testers.runNixOSTest {
         machine.fail("test -e /run/macro-agent-inbox")
         machine.fail("systemctl is-active --quiet macro-agent.target")
         machine.fail("systemctl is-active --quiet macro-agent-display.service")
+        machine.fail("systemctl is-active --quiet macro-agent-screen-encoder.socket")
+        machine.fail("ss -ltnH 'sport = :5902' | grep .")
 
     with subtest("a drive the host grows grows its mounted filesystem"):
         # drive1 is the root disk (vda); drive2, the first empty disk, is /dev/vdb.
@@ -172,6 +174,10 @@ pkgs.testers.runNixOSTest {
         machine.wait_for_unit("macro-agent.target")
         machine.wait_for_unit("macro-agent-display.service")
         machine.wait_for_unit("macro-agent-browser.service")
+        machine.wait_for_unit("macro-agent-screen-encoder.socket")
+        machine.succeed("${pkgs.python3}/bin/python3 ${./files/test-screen-encoder-client.py} 5902 '10 640 360 10' 3 /tmp/encoder.mp4")
+        first = machine.succeed("${pkgs.ffmpeg-headless}/bin/ffprobe -v error -select_streams v:0 -show_entries packet=flags -of csv=p=0 /tmp/encoder.mp4 | head -n 1").strip()
+        assert first.startswith("K"), first
 
     with subtest("the service's ApplyAgent reaches the agent through macrod and starts it"):
         # macrod enrolls from MMDS against the fake Macro, which sends
