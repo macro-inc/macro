@@ -41,7 +41,12 @@ foreach ($file in @($app, (Join-Path $installDir 'macrod.exe'))) {
 # be inspected over the DevTools protocol like any Chromium.
 $port = 9222
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port"
-$process = Start-Process -FilePath $app -PassThru
+$env:RUST_BACKTRACE = '1'
+# The app's log and any panic go to its standard streams; keep them to show
+# when the check fails.
+$stdout = Join-Path $env:RUNNER_TEMP 'macro-stdout.log'
+$stderr = Join-Path $env:RUNNER_TEMP 'macro-stderr.log'
+$process = Start-Process -FilePath $app -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 try {
   $page = $null
   $deadline = (Get-Date).AddSeconds(120)
@@ -109,10 +114,18 @@ try {
 
   Start-Sleep -Seconds 5
   if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) after loading" }
+} catch {
+  foreach ($log in @($stdout, $stderr)) {
+    if (Test-Path $log) {
+      Write-Output "--- $log (last 200 lines)"
+      Get-Content -Path $log -Tail 200
+    }
+  }
+  throw
 } finally {
   Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($installDir, [StringComparison]::OrdinalIgnoreCase) } |
     Stop-Process -Force -ErrorAction SilentlyContinue
-  Remove-Item Env:\WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+  Remove-Item Env:\WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS, Env:\RUST_BACKTRACE
 }
 
 # The uninstaller copies itself elsewhere and returns at once, so wait for its work.
