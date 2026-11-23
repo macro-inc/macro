@@ -40,10 +40,12 @@ function CalendarDesktopContent(props: CalendarDesktopPlacementProps) {
       onTogglePin={props.onTogglePin}
       onHeaderPointerDown={props.onHeaderPointerDown}
       optionsToggle={
-        <ComposerOptionsToggle
-          expanded={presentation.expanded()}
-          onToggle={presentation.toggle}
-        />
+        <Show when={!props.pinned}>
+          <ComposerOptionsToggle
+            expanded={presentation.expanded()}
+            onToggle={presentation.toggle}
+          />
+        </Show>
       }
     >
       {fields}
