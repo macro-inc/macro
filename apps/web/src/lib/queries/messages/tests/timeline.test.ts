@@ -3,7 +3,6 @@
  */
 
 import { ThrownResultError } from '@core/util/result';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type {
   MessageCursor,
   MessageListItem,
@@ -43,7 +42,6 @@ vi.mock('../subscription', () => ({
   useMessageSubscription: () => {},
 }));
 
-import { channelKeys } from '../../channel/keys';
 import { normalizeChannelMessageSender } from '../message-sender';
 import {
   buildMessageIndex,
@@ -476,21 +474,8 @@ describe('messageTimelineQueryOptions', () => {
     expect(mocks.timeline).toHaveBeenCalledTimes(1);
   });
 
-  it('revalidates channels even when their list advertises a newer root', async () => {
+  it('revalidates a channel whose latest messages are cached', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
-    testQueryClient.setQueryData(channelKeys.listChannels('viewer').queryKey, [
-      {
-        id: 'channel-1',
-        latest_non_thread_message: {
-          message_id: 'msg-from-list',
-          created_at: '2026-09-10T14:00:00Z',
-          content: 'ahead',
-          mentions: [],
-          sender_id: 'user-1',
-          updated_at: '2026-09-10T14:00:00Z',
-        },
-      },
-    ] as unknown as ApiChannelWithLatest[]);
     mocks.timeline.mockResolvedValueOnce({
       entries: entries([createMessage('msg-delta', '2026-09-10T13:20:00Z')]),
       next_cursor: null,

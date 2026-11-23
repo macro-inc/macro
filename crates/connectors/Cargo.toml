@@ -1,0 +1,57 @@
+[package]
+name = "connectors"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["providers"]
+providers = ["macro_env_var"]
+# `fake::FakeConnectors`: the real services over in-memory sources, for
+# consumers' tests.
+test-fakes = ["rmcp/server", "tokio/io-util"]
+
+[dependencies]
+aes-gcm.workspace = true
+ai_toolset = { path = "../ai_toolset" }
+anyhow.workspace = true
+async-trait.workspace = true
+authentication_service_client = { path = "../authentication_service_client" }
+axum.workspace = true
+base64.workspace = true
+chrono.workspace = true
+connect_client = { path = "../connect_client" }
+feature_flags = { path = "../feature_flags" }
+futures.workspace = true
+http.workspace = true
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var", optional = true }
+macro_user_id = { path = "../macro_user_id" }
+mcp_toolset = { path = "../mcp_toolset" }
+model-error-response = { path = "../model-error-response" }
+oauth2 = { version = "5.0", default-features = false }
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
+reqwest.workspace = true
+rmcp = { workspace = true, features = ["auth", "client", "transport-streamable-http-client-reqwest"] }
+rootcause.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net"] }
+tracing.workspace = true
+url.workspace = true
+utoipa.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
+proptest.workspace = true
+rmcp = { workspace = true, features = ["server"] }
+tokio = { workspace = true, features = ["io-util", "test-util"] }
+tower = { workspace = true }

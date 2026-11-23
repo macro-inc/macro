@@ -35,7 +35,7 @@ where
         keys: &[FeedKey],
     ) -> Result<HashMap<FeedKey, Vec<InboxRowType>>, Report> {
         Ok(self
-            .current(viewer, keys)
+            .current(viewer, keys, CandidateRead::Replica)
             .await?
             .into_iter()
             .filter_map(|(key, group)| {

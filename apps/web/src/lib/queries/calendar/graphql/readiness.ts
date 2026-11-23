@@ -26,6 +26,20 @@ export function calendarCacheAnswered(host: object): boolean {
   return answeredHosts.has(host);
 }
 
+// Viewports REST has answered on this page. Each one shows the server's state
+// at that moment, which a week the cache covered earlier can predate.
+let restAnswers = 0;
+
+/** Records a viewport answered from REST rather than the cache. */
+export function recordCalendarRestAnswer(): void {
+  restAnswers += 1;
+}
+
+/** How many viewports REST has answered on this page so far. */
+export function calendarRestAnswers(): number {
+  return restAnswers;
+}
+
 /** The read's result if it settles within `ms`, else `deadline`. */
 export async function withinDeadline<T>(
   read: PromiseLike<T>,

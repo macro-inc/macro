@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Everyone the viewer knows through a connected inbox, each once. $1 viewer.\n-- One range read of the (user_id, contact_user_id, link_id) primary key; a\n-- contact known through two inboxes is read twice and returned once.\nSELECT DISTINCT contact_user_id AS \"contact!\"\nFROM contact_inbox_members\nWHERE user_id = $1\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6c8f423c3d7bd312246ad4f5188f80698ad870686636e1c51b80219e9b94660a"
+}
