@@ -4,7 +4,7 @@
 //
 // Usage: node run.mjs   (configured by environment variables, see CONFIG)
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { execFileSync as runChild } from 'node:child_process';
+import { execFile, execFileSync as runChild } from 'node:child_process';
 import fs from 'node:fs';
 import { PerformanceObserver } from 'node:perf_hooks';
 import path from 'node:path';
@@ -653,6 +653,15 @@ let OLD_STALE = null;
 // While live copies are compared: each side's cold mount at the same step, so
 // a dumped live difference carries what the server says beside it.
 let FRESH_PAIR = null;
+// ...and the last comparison of the same reader: both live copies and both
+// cold mounts, which the excuses for main's staleness compare with.
+let LAST_PAIR = null;
+function withFresh(kind) {
+  const fresh = FRESH_PAIR ? { freshOld: freshOf(FRESH_PAIR.fo, kind), freshNeu: freshOf(FRESH_PAIR.fn, kind) } : {};
+  if (!LAST_PAIR) return fresh;
+  const { live, cold } = LAST_PAIR;
+  return { ...fresh, lastLiveOld: freshOf(live?.lo, kind), lastLiveNeu: freshOf(live?.ln, kind), lastFreshOld: freshOf(cold?.fo, kind), lastFreshNeu: freshOf(cold?.fn, kind) };
+}
 function freshOf(snap, kind) {
   const caller = /^caller\.(.+)$/.exec(kind);
   if (caller) return snap?.callers?.[caller[1]];
@@ -669,14 +678,14 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   // DUMP_KIND=<regex>: also every equal comparison of a matching kind (within DUMP_LANE, if set)
   if (cls === 'equal' && DUMP_KIND && DUMP_LEFT > 0 && DUMP_KIND.test(kind) && (DUMP_LANE === null || String(here().lane) === DUMP_LANE)) {
     DUMP_LEFT--;
-    const fresh = FRESH_PAIR ? { freshOld: freshOf(FRESH_PAIR.fo, kind), freshNeu: freshOf(FRESH_PAIR.fn, kind) } : {};
+    const fresh = withFresh(kind);
     fs.appendFileSync(path.join(OUT, 'dump.jsonl'), `${JSON.stringify({ level, kind, cls, at: here(), old: a, neu: b, ...fresh, write: LAST_WRITE })}\n`);
   }
   if (cls === 'equal') return;
   // DUMP=n: the first n differences in full, both sides, to out/<run>/dump.jsonl
   if (DUMP_LEFT > 0 && cls !== 'tie-order' && cls !== 'timestamp-format' && (DUMP_LANE !== null ? String(here().lane) === DUMP_LANE : !DUMP_OPEN || cls === 'diff' || cls === 'state')) {
     DUMP_LEFT--;
-    const fresh = FRESH_PAIR ? { freshOld: freshOf(FRESH_PAIR.fo, kind), freshNeu: freshOf(FRESH_PAIR.fn, kind) } : {};
+    const fresh = withFresh(kind);
     fs.appendFileSync(path.join(OUT, 'dump.jsonl'), `${JSON.stringify({ level, kind, cls, at: here(), old: a, neu: b, ...fresh, write: LAST_WRITE })}\n`);
   }
   const ex = (R.examples[`${level}:${cls}`] ??= []);
@@ -1630,7 +1639,10 @@ function inheritedExcuses(key, lo, ln, fo, fn) {
 // write this account made, a copy of main's that moved, or a head showing
 // anything no cold mount showed, still counts. `oldStale.otherWrite` counts
 // the keys no other rule excused.
-const OUT_OF_BAND_OPS = new Set(['sqlRename', 'sqlNullColor']);
+// The SQL steps, and team membership: the owner's removal and the member's
+// join both go through the auth service, which no catalog reader hears of on
+// either page, whichever account the step was drawn for.
+const OUT_OF_BAND_OPS = new Set(['sqlRename', 'sqlNullColor', 'team']);
 function otherWriteExcuses(key, who, lo, ln, fo, fn) {
   const out = new Set();
   const at = here();
@@ -1779,6 +1791,7 @@ async function compareStep(pair, level, op) {
     if (R.mutant) R.mutant.freshNew = freshOut[at + 1] ? null : fn;
     // main's staleness alone is excused only with both cold mounts in hand
     const liveKey = `${account}:${c.seq}`;
+    const lastPair = { live: LAST_LIVE.get(liveKey) ?? null, cold: LAST_FRESH.get(liveKey) ?? null };
     const fresh0 = freshOutHere ? new Set() : oldStaleExcuses(lo, ln, fo, fn, LAST_FRESH.get(liveKey) ?? null);
     const inherited = freshOutHere ? new Set() : inheritedExcuses(liveKey, lo, ln, fo, fn);
     const otherWrite = freshOutHere ? new Set() : otherWriteExcuses(liveKey, who, lo, ln, fo, fn);
@@ -1788,11 +1801,13 @@ async function compareStep(pair, level, op) {
     OLD_STALE = excuses;
     if (!liveOut) LAST_LIVE.set(liveKey, { lo, ln, excused: excuses });
     FRESH_PAIR = freshOutHere ? null : { fo, fn };
+    LAST_PAIR = freshOutHere ? null : lastPair;
     if (freshOutHere) LAST_FRESH.delete(liveKey);
     else LAST_FRESH.set(liveKey, { fo, fn });
     if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected, { account, asOf: liveAsOf });
     OLD_STALE = null;
     FRESH_PAIR = null;
+    LAST_PAIR = null;
     if (R.mutant) R.mutant.freshNew = null;
     if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected, { account, asOf: fresh[at + 1].asOf });
     if (liveOut || freshOutHere) continue;
@@ -2102,7 +2117,7 @@ const res = await write(pair, actor, 'updateTag', { propertyDefinitionId: t.prop
       if (!cat.own.length) return null;
       const d = g.pick(cat.own);
       const v = gen.name();
-      const ok = sqlBoth(pair, `UPDATE property_definitions SET display_name = :'v', updated_at = now() WHERE id = :'id'`, { v, id: d.definition.id }, ['id']);
+      const ok = await sqlBoth(pair, `UPDATE property_definitions SET display_name = :'v', updated_at = now() WHERE id = :'id'`, { v, id: d.definition.id }, ['id']);
       bump(R.ops, 'sqlRename', ok ? 'ok' : 'rejected');
       // a rename to the name it already had changes nothing a reader shows
       if (ok && v !== d.definition.display_name) cover('odd value', 'renamed definition');
@@ -2113,7 +2128,7 @@ const res = await write(pair, actor, 'updateTag', { propertyDefinitionId: t.prop
       // A tag with no color: the API refuses one, but older rows and other writers have them.
       if (!tagOpts.length) return null;
       const t = g.pick(tagOpts);
-      const ok = sqlBoth(pair, `UPDATE property_options SET color = NULL, updated_at = now() WHERE id = :'id'`, { id: t.id }, ['id']);
+      const ok = await sqlBoth(pair, `UPDATE property_options SET color = NULL, updated_at = now() WHERE id = :'id'`, { id: t.id }, ['id']);
       bump(R.ops, 'sqlNullColor', ok ? 'ok' : 'rejected');
       if (ok && t.color != null) cover('odd value', 'null color');
       await readAfterWrite(pair, actor, op, { propertyDefinitionId: t.propertyDefinitionId }, ok ? null : { ok: false }, ok ? null : { ok: false });
@@ -2152,23 +2167,29 @@ const DB_REFUSALS = [
 // The same out-of-band write in both worlds: OLD's rows by their ids, NEW's
 // by their pairs. The worlds hold the same rows, so the database must answer
 // both alike.
-function sqlBoth(pair, statement, vars, idKeys) {
+async function sqlBoth(pair, statement, vars, idKeys) {
   const nvars = { ...vars };
   for (const k of idKeys) nvars[k] = tr(pair, vars[k]);
-  const o = sql(statement, vars);
-  const n = sql(statement, nvars);
+  const o = await sql(statement, vars);
+  const n = await sql(statement, nvars);
   if (o !== n) record('sql', 'out-of-band write', 'diff', { applied: o }, { applied: n });
   return o && n;
 }
 // An out-of-band write. It must change exactly the rows it names: a failed
 // statement or one that matched nothing is a harness failure, not a quiet
 // skip, unless the database refused it for one of the reasons above.
-function sql(statement, vars) {
+// It runs as a child the driver does not wait on: the driver answers every
+// page's API requests, so a synchronous `psql` (up to 3 s under load) held
+// every page's answers and overran other lanes' settles.
+async function sql(statement, vars) {
   let out;
   try {
     const args = ['exec', '-i', CONFIG.pg, 'psql', '-U', 'user', '-d', 'macrodb', '-v', 'ON_ERROR_STOP=1'];
     for (const [k, v] of Object.entries(vars)) args.push('-v', `${k}=${v}`);
-    out = execFileSync('docker', args, { input: `${statement};\n`, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    out = await new Promise((resolve, reject) => {
+      const child = execFile('docker', args, { encoding: 'utf8' }, (e, stdout, stderr) => (e ? reject(Object.assign(e, { stderr })) : resolve(stdout)));
+      child.stdin.end(`${statement};\n`);
+    });
   } catch (e) {
     const refusal = DB_REFUSALS.find(([, re]) => re.test(String(e.stderr ?? '')));
     if (refusal) {

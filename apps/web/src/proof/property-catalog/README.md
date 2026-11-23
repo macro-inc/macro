@@ -145,7 +145,9 @@ retried page load happened.
   from the team. Neither page is told, but the head's live copy already holds
   the last comparison's cold read, through the shared cache, while main's
   never read it and can match the server again by chance. Excused when the
-  write was not this account's, main's live copy has not moved since the
+  write was not this account's (a team membership change counts as no
+  account's: it goes through the auth service, which no catalog reader on
+  either page hears of, whichever account the step was drawn for), main's live copy has not moved since the
   last comparison, the cold mounts agree now, and every place the head
   differs from main shows what both cold mounts showed at the last
   comparison (a whole reader, flags and error too, when more than data
@@ -357,16 +359,15 @@ The counts measure work attempted, not successes, and are not interchangeable:
   numbers and any segment of 24 or more token characters (the write census
   masks only ids and numbers, so distinct routes stay apart).
 - The SQL steps (`sqlRename`, `sqlNullColor`) run `psql` through
-  `docker exec` synchronously (`sql()` in `run.mjs`), which blocks the driver
-  and so every page's API answers until it returns. Under machine load that
-  took up to 3.1 s. No route handler runs while it does, so no request in
-  flight across it is answered before it ends; a cold mount that also needs a
-  retried read (two round trips plus the retry delay) or a token refresh then overruns
-  `SETTLE_MS`. In the final load run every `settle` timeout's `waitedOn` has
-  a `psql` in `driverWork` covering at least 2.6 s of the last 5 s before the
-  call returned, matching a stall in `driverStalls`
-  (`results/settle-timeouts.json`). That is a coincidence in time plus the mechanism,
-  not a trace of each request: `driverWork` is process-wide, and `fetches`
-  shows which of the page's requests were open across it.
+  `docker exec` as a child the driver does not wait on (`sql()` in
+  `run.mjs`). They used to run it synchronously, which blocked the driver, and
+  so every page's API answers, until it returned: up to 4.3 s under load. A
+  cold mount on another lane with a request in flight across it then overran
+  `SETTLE_MS`. In the load run at harness `7322fb3e545`, every one of its 13
+  `fresh mount did not settle` timeouts had a synchronous `psql` in
+  `driverWork` covering 3.3–4.3 s of the 5 s wait, matching a stall of the
+  same length in `driverStalls`; the differences after each were the live
+  comparisons a timed-out cold mount leaves unexcused. Earlier load runs
+  carried the same timeouts (`results/settle-timeouts.json`).
 - `out/` can hold Playwright error dumps with the local session cookie; it is
   gitignored, and nothing from it is published unscanned.
