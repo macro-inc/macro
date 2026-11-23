@@ -14,7 +14,6 @@ import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { Appearance } from '../Appearance';
-import { AppInfo } from '../components/app-info';
 import { SettingsSearchTarget } from '../components/settings-search-target';
 import { SettingsSidebar } from '../components/settings-sidebar';
 import { SignatureForm } from '../components/signature-form';
@@ -22,7 +21,7 @@ import {
   type SettingsSearchResult,
   searchSettings,
 } from '../core/settings-search';
-import { DesktopApp } from '../DesktopApp';
+import { Downloads } from '../Downloads';
 import { MobileSettingsSheet } from '../MobileSettingsSheet';
 import {
   SettingsButton as Button,
@@ -37,7 +36,6 @@ function Fixture() {
   const [tab, setTab] = createSignal<SettingsTab>('Email');
   const [query, setQuery] = createSignal('');
   const [selected, setSelected] = createSignal<SettingsSearchResult>();
-  const [desktop, setDesktop] = createSignal(false);
   const [dark, setDark] = createSignal(false);
   const [narrow, setNarrow] = createSignal(false);
   const [mobile, setMobile] = createSignal(false);
@@ -145,20 +143,7 @@ function Fixture() {
   const content = (page: SettingsTab) => (
     <Show when={page !== 'Appearance'} fallback={<Appearance />}>
       <Show when={page !== 'Shortcuts'} fallback={<Shortcuts />}>
-        <Show
-          when={page !== 'Desktop App'}
-          fallback={
-            <Show when={desktop()} fallback={<DesktopApp />}>
-              <AppInfo
-                title="Desktop App (Alpha)"
-                description="Your installed version of Macro Alpha."
-                version="2.5.0"
-                buildDate={new Date('2026-10-01T16:30:00Z')}
-                bundleDate={new Date('2026-10-27T09:15:00Z')}
-              />
-            </Show>
-          }
-        >
+        <Show when={page !== 'Downloads'} fallback={<Downloads />}>
           {sampleContent(page)}
         </Show>
       </Show>
@@ -176,9 +161,6 @@ function Fixture() {
         </Button>
         <Button size="sm" onClick={() => applyTheme(!dark())}>
           Toggle theme
-        </Button>
-        <Button size="sm" onClick={() => setDesktop(!desktop())}>
-          {desktop() ? 'Preview web app' : 'Preview desktop app'}
         </Button>
         <Button size="sm" onClick={() => setMobile(true)}>
           Mobile settings

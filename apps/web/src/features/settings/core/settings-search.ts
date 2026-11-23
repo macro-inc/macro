@@ -354,14 +354,16 @@ const SETTINGS: Setting[] = [
     keywords: 'agent manager token access revoke',
   },
   {
-    tab: 'Desktop App',
-    title: 'Desktop app version and download',
-    keywords: 'download mac macos linux version latest release updated',
+    tab: 'Downloads',
+    title: 'Download the desktop app',
+    target: 'Desktop app',
+    keywords: 'download install mac macos linux computer latest release',
   },
   {
-    tab: 'Mobile App',
-    title: 'Mobile app version and download',
-    keywords: 'download phone ios android qr code version build bundle',
+    tab: 'Downloads',
+    title: 'Get the mobile app',
+    target: 'Mobile app',
+    keywords: 'download phone ios android iphone qr code app store play',
   },
 ];
 

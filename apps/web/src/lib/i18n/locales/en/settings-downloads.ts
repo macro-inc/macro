@@ -1,0 +1,20 @@
+export default {
+  title: 'Downloads',
+  description: 'Get Macro on your computer and your phone.',
+  descriptionInDesktopApp: 'Get Macro on your phone.',
+  desktopTitle: 'Desktop app (Alpha)',
+  desktopDownload: 'Download Macro Alpha',
+  macosRequirement:
+    'Requires macOS 13 (Ventura) or later on a Mac with Apple silicon.',
+  linuxRequirement: 'For 64-bit Linux, as an AppImage.',
+  desktopPlatforms: 'Available for macOS and Linux.',
+  downloadForMacos: 'Download for macOS',
+  downloadForLinux: 'Download for Linux',
+  mobileTitle: 'Mobile app',
+  scanDescription: 'Scan the code to get Macro on your phone.',
+  phone: 'Phone',
+  appStorePrompt: 'Download Macro on the App Store',
+  googlePlayPrompt: 'Get Macro on Google Play',
+  copyLink: 'Copy link',
+  copyStoreLink: 'Copy {{store}} link',
+};

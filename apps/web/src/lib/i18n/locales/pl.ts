@@ -740,7 +740,7 @@ export default {
     more: 'Więcej',
     moreOptions: 'Więcej opcji',
     create: 'Utwórz',
-    getMobileApp: 'Pobierz aplikację mobilną',
+    downloads: 'Pobieranie',
     signedInAs: 'Zalogowano jako {{name}}',
     customizeSidebar: 'Dostosuj pasek boczny',
     customizeSidebarDescription:
@@ -805,8 +805,7 @@ export default {
     tabShortcuts: 'Skróty klawiszowe',
     tabUsage: 'Użycie',
     tabBilling: 'Płatności',
-    tabDesktopApp: 'Aplikacja na komputer',
-    tabMobileApp: 'Aplikacja mobilna',
+    tabDownloads: 'Pobieranie',
     tabTags: 'Tagi',
     tabIntegrations: 'Integracje',
     tabRuntimes: 'Maszyny',

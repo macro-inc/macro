@@ -667,7 +667,7 @@ export default {
     more: 'Lainnya',
     moreOptions: 'Opsi lainnya',
     create: 'Buat',
-    getMobileApp: 'Dapatkan aplikasi seluler',
+    downloads: 'Unduhan',
     signedInAs: 'Login sebagai {{name}}',
     customizeSidebar: 'Sesuaikan sidebar',
     customizeSidebarDescription:
@@ -731,8 +731,7 @@ export default {
     tabShortcuts: 'Pintasan keyboard',
     tabUsage: 'Penggunaan',
     tabBilling: 'Penagihan',
-    tabDesktopApp: 'Aplikasi desktop',
-    tabMobileApp: 'Aplikasi seluler',
+    tabDownloads: 'Unduhan',
     tabTags: 'Tag',
     tabIntegrations: 'Integrasi',
     tabRuntimes: 'Mesin',
