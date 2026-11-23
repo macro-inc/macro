@@ -22,7 +22,7 @@ export const DESKTOP_PLATFORM_DETAILS: Record<
   macos: {
     label: 'macOS',
     requirement:
-      'Requires macOS 13 (Ventura) or later on a Mac with Apple silicon.',
+      'Requires macOS 14 (Sonoma) or later on a Mac with Apple silicon.',
   },
   linux: { label: 'Linux', requirement: 'x86_64 AppImage' },
 };

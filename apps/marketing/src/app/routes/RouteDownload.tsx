@@ -137,7 +137,7 @@ export function RouteDownload() {
             Desktop
           </h2>
           <p class="downloads-desktop-only">
-            The macOS app requires macOS 13 (Ventura) or later on a Mac with
+            The macOS app requires macOS 14 (Sonoma) or later on a Mac with
             Apple silicon. The Linux app is an x86_64 AppImage. The desktop app
             updates itself when a new release is published.
           </p>
