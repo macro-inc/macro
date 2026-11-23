@@ -39,7 +39,8 @@ is limited to the floating New row and a small gap.
 Calendar grid boundaries use the theme's quieter tertiary border in both loading
 and live grids. Day/Week have hourly boundaries only, without half-hour sublines;
 Month has only date-cell boundaries, without internal subdivisions. The hover-time
-guide remains a distinct secondary border.
+guide remains a distinct secondary border. Month omits the border beneath its
+weekday header; time grids omit the leading border beside their first day.
 Day, 3 days, Week, and Month page with a shared five-page native scroll-snap ring
 on phone and desktop. A single unhurried arrow animates through native scrolling.
 Rapid arrows accumulate without dropping presses and jump to the latest target;
@@ -65,9 +66,14 @@ centered in both axes. Event chips sit within 1px of the date-cell edges.
 Focused event time uses `button-accent-ink` at full opacity over the accent fill.
 All-day and multi-day segments join across adjacent cells
 while they share a row; continuing events move up when an earlier span ends.
-Timed events stack vertically beneath them, one truncated line per event,
-with the desktop Month chip materials at phone scale: neutral text and calendar
-response dots for timed events, filled spans and out-of-office events. Month
+Timed events stack vertically beneath them, with the desktop Month chip
+materials at phone scale: neutral text and calendar
+response dots for timed events, filled spans and out-of-office events. Times
+follow the shrinking title with the normal inline gap, not an auto margin.
+Desktop grid and overflow use the same event content and 20px all-day / 24px
+timed frames. The desktop overflow uses the next elevated surface step and a
+padded header. Phone rows are 24px; narrow times wrap after the title when needed.
+Month
 weekday headings always use localized short names, including at narrow widths.
 The equal-height week rows fill the space above measured bottom chrome or the
 safe area, without an additional Month-only bottom gap. Complete rows fit the
@@ -79,6 +85,9 @@ event opens its details; the title opens Day and + creates on that date. A day
 tap or sheet dismissal cancels older pending event focus, so late data cannot
 reopen the previous day. Each date announces every event title, including
 hidden events. Dates outside the supported occurrence range are disabled.
+Split and window resizes keep the committed period, re-snap the horizontal pager
+after measuring, and restore the last user hour offset in each time grid.
+The calendar Today navigation uses the shared secondary Button.
 Desktop event creation and editing use one 384px composer, not a second split.
 Anchored, pinned, and agent-draft placements have separate view components over
 shared fields and setup; pinning retains the field tree. The registered legacy
