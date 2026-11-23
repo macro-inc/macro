@@ -2680,6 +2680,161 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('reports a request answered a second after it arrived, split into its wait and its run', async () => {
+    let monotonicNow = 0;
+    let finishWrite!: () => void;
+    const writeQuery = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishWrite = () =>
+            resolve({
+              revision: INITIAL_CACHE_REVISION,
+              changed: [],
+              affectedOps: [],
+              reset: false,
+            });
+        })
+    );
+    const readQuery = vi.fn(async (opId: string) => {
+      if (opId === 'op-3') monotonicNow += 300;
+      return { kind: 'miss' };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ writeQuery, readQuery }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const write = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+    await vi.waitFor(() => expect(writeQuery).toHaveBeenCalledOnce());
+    const readOp = (id: number, opId: string) =>
+      core.handleRequest(port, {
+        id,
+        kind: 'read',
+        opId,
+        query: 'query Read { value }',
+      });
+    monotonicNow = 200;
+    const read = readOp(3, 'op-1');
+    // Joins the queued op-1 read, so its wait counts from 200.
+    monotonicNow = 400;
+    const duplicate = readOp(4, 'op-1');
+    monotonicNow = 700;
+    const behind = readOp(5, 'op-2');
+    monotonicNow = 1_700;
+    finishWrite();
+    await Promise.all([write, read, duplicate, behind]);
+    // Ran 300 ms: not reported.
+    monotonicNow = 2_000;
+    await readOp(6, 'op-3');
+
+    expect(readQuery.mock.calls.map(([opId]) => opId)).toEqual([
+      'op-1',
+      'op-2',
+      'op-3',
+    ]);
+    for (const id of [3, 4, 5, 6]) {
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id, ok: true })
+      );
+    }
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'write',
+        requestKind: 'write',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 0,
+        durationMs: 1_700,
+        queueDepth: 0,
+      },
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'read',
+        requestKind: 'read',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 1_500,
+        durationMs: 0,
+        queueDepth: 1,
+      },
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'read',
+        requestKind: 'read',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 1_000,
+        durationMs: 0,
+        queueDepth: 0,
+      },
+    ]);
+  });
+
+  it('reports a slow request that failed with its error class', async () => {
+    let monotonicNow = 0;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async () => {
+          monotonicNow += 1_200;
+          throw new Error('OPFS read failed');
+        },
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'op-1',
+      query: 'query Read { value }',
+    });
+
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 2, ok: false })
+    );
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        requestKind: 'read',
+        outcome: 'error',
+        errorCode: 'opfs-io',
+        queueWaitMs: 0,
+        durationMs: 1_200,
+      }),
+    ]);
+  });
+
   it('marks compatibility diagnostics unavailable instead of authoritative empty', async () => {
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({ close: vi.fn() }),
@@ -3779,6 +3934,63 @@ describe('CacheWorkerCore', () => {
         { id: 3, ok: false },
         { id: 4, ok: true },
         { id: 2, ok: true },
+      ]);
+    });
+
+    it('reports a slow read that runs between the halves as that read', async () => {
+      let monotonicNow = 0;
+      const { engine, prepareStarted, release } = splitEngine([]);
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          ...engine,
+          readQuery: vi.fn(async (opId: string | undefined) => {
+            monotonicNow += 1_200;
+            if (opId === 'client:fails') throw new Error('read failed');
+            return { kind: 'miss' as const };
+          }),
+        }),
+      });
+      const observations: Array<Record<string, unknown>> = [];
+      const core = new CacheWorkerCore({
+        monotonicNow: () => monotonicNow,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      const port = { postMessage: vi.fn() };
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      monotonicNow = 100;
+      sent.push(
+        core.handleRequest(port, read(3, 'client:fails')),
+        core.handleRequest(port, read(4, 'client:next'))
+      );
+      monotonicNow = 300;
+      release();
+      await Promise.all(sent);
+
+      expect(
+        observations.filter(
+          (observation) =>
+            observation.name === 'graphql_cache.slow_request' &&
+            observation.requestKind === 'read'
+        )
+      ).toEqual([
+        expect.objectContaining({
+          outcome: 'error',
+          queueWaitMs: 200,
+          durationMs: 1_200,
+          queueDepth: 1,
+        }),
+        expect.objectContaining({
+          outcome: 'success',
+          queueWaitMs: 1_400,
+          durationMs: 1_200,
+          queueDepth: 0,
+        }),
       ]);
     });
 

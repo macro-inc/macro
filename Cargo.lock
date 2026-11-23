@@ -3895,10 +3895,11 @@ dependencies = [
 name = "cache-core"
 version = "0.1.0"
 dependencies = [
- "apollo-compiler",
  "apollo-parser",
+ "cache-schema",
  "chrono",
  "database_sql",
+ "item-filter-index",
  "lru 0.16.4",
  "macro_user_id",
  "maybe_send",
@@ -3918,11 +3919,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache-diff-fuzz"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "cache-core",
+ "cache-turso",
+ "clap",
+ "pollster",
+ "predicate-index",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "soup-filter-cache-adapter",
+ "soup-filter-projection",
+ "tokio",
+ "tracing",
+ "turso_core",
+ "uuid",
+]
+
+[[package]]
+name = "cache-schema"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "cache-turso"
 version = "0.1.0"
 dependencies = [
  "cache-core",
  "chrono",
+ "item-filter-index",
  "maybe_send",
  "miniz_oxide",
  "pollster",
@@ -3943,8 +3978,10 @@ version = "0.6.55"
 dependencies = [
  "async-lock",
  "cache-core",
+ "cache-schema",
  "cache-turso",
  "js-sys",
+ "postcard",
  "predicate-index",
  "serde",
  "serde-wasm-bindgen",
@@ -7072,6 +7109,7 @@ dependencies = [
  "task_templates",
  "teams",
  "thiserror 2.0.18",
+ "time_tracking",
  "tokio",
  "tokio-tungstenite 0.27.0",
  "tokio-tungstenite 0.28.0",
@@ -21407,6 +21445,40 @@ checksum = "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215"
 dependencies = [
  "num-conv",
  "time-core",
+]
+
+[[package]]
+name = "time_tracking"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "chrono-tz",
+ "entity_access",
+ "feature_flags",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "system_properties",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

@@ -1068,10 +1068,11 @@ dependencies = [
 name = "cache-core"
 version = "0.1.0"
 dependencies = [
- "apollo-compiler",
  "apollo-parser",
+ "cache-schema",
  "chrono",
  "database_sql",
+ "item-filter-index",
  "lru",
  "macro_user_id",
  "maybe_send",
@@ -1087,10 +1088,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache-schema"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "cache-turso"
 version = "0.1.0"
 dependencies = [
  "cache-core",
+ "item-filter-index",
  "maybe_send",
  "predicate-index",
  "thiserror 2.0.18",

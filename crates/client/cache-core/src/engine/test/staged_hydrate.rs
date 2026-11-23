@@ -247,6 +247,70 @@ fn a_schema_installed_between_the_halves_makes_a_staged_hydrate_stale() {
     });
 }
 
+/// A staged hydrate holds the hot records it merges into until it commits:
+/// a read between the halves finds them in storage, which still has them,
+/// and the commit puts them back. A staged hydrate that is dropped leaves
+/// them in storage only.
+#[test]
+fn a_staged_hydrate_holds_its_hot_records_until_it_commits() {
+    pollster::block_on(async {
+        let variables = serde_json::Map::new();
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let data = json!({"user": {"id": "viewer", "soup": {"items": [
+            {"__typename": "GraphqlSoupDocument", "id": "doc", "name": "Plan"}
+        ]}}});
+        let key = EntityKey::entity("GraphqlSoupDocument", &["doc"]);
+        engine
+            .hydrate_query(QUERY, None, &variables, &data, Some("viewer"))
+            .await
+            .unwrap();
+        assert!(engine.hot.contains(&key));
+        let stored = engine
+            .storage()
+            .get_batch(std::slice::from_ref(&key))
+            .await
+            .unwrap();
+        assert!(stored[0].is_some());
+        let write = || NetworkWrite {
+            query: QUERY,
+            operation_name: None,
+            variables: &variables,
+            data: &data,
+            identity: Some("viewer"),
+        };
+
+        let staged = engine
+            .stage_hydrate(write(), None, &[])
+            .await
+            .unwrap()
+            .expect("stageable");
+        assert!(!engine.hot.contains(&key));
+        assert!(engine.staged_hydrate_current(&staged));
+        engine
+            .commit_staged_hydrate(staged, Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(engine.hot.peek(&key), stored[0].as_ref());
+
+        drop(
+            engine
+                .stage_hydrate(write(), None, &[])
+                .await
+                .unwrap()
+                .expect("stageable"),
+        );
+        assert!(!engine.hot.contains(&key));
+        assert_eq!(
+            engine
+                .storage()
+                .get_batch(std::slice::from_ref(&key))
+                .await
+                .unwrap(),
+            stored
+        );
+    });
+}
+
 /// Binding the account and composing with optimistic layers stay whole.
 #[test]
 fn a_hydrate_that_binds_the_account_is_not_staged() {

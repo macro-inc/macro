@@ -134,6 +134,10 @@ threads, pins, recents, notifications, folders, activity.
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.
 
+- `/time` mounts `crates/time_tracking` (entries and the running timer). Its
+  writes need `enable-time-tracking` for the caller from the shared PostHog
+  client, failing closed; a local stack uses `LocalTimeTracking` instead, so
+  time tracking is on there without a PostHog flag, as Passwords is.
 - Provision required `POSTHOG_API_KEY` before startup; the flag client
   evaluates `enable-programmatic-calls` per caller for the explicit call start,
   join, and leave routes; failures disable those routes.
