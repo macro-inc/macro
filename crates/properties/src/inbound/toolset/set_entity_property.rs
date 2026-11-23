@@ -71,6 +71,7 @@ CRM companies (entity_type='company', entity_id=the company UUID) always have th
 - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
 - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
 Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
+CRM contacts (entity_type='contact', entity_id=the contact UUID) have no system properties of their own; they take the team's custom properties (a phone number, a LinkedIn link, ...) under the same access rules as companies.
 
 Any entity (task, document, call, ...) can be associated with CRM records through these system properties:
 - Companies (00000001-0000-0000-0000-00000000000c): entity, multi. Use entity_refs with entity_type='company' and the company UUID.
