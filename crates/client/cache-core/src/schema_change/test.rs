@@ -300,6 +300,12 @@ fn write_unrecorded_schema() {
 
 #[test]
 fn unrecorded_schema_is_the_last_schema_before_caches_stored_one() {
+    // It was written at epoch 4. A later epoch starts every cache empty, so
+    // no cache it describes survives, and it reads as none.
+    if crate::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH != 4 {
+        assert!(unrecorded_schema().is_none());
+        return;
+    }
     let unrecorded = unrecorded_schema().expect("decodes at this compatibility epoch");
     assert_eq!(
         unrecorded.hash(),
