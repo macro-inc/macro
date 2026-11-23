@@ -137,6 +137,37 @@ impl AgentPermissions for FakePermissions {
     > {
         Err(agent_permissions::domain::model::PermissionError::NotFound)
     }
+    async fn view_team(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: macro_uuid::Uuid,
+    ) -> Result<
+        agent_permissions::domain::model::TeamPermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn set_team(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: macro_uuid::Uuid,
+        _: Vec<agent_permissions::domain::model::Change>,
+    ) -> Result<
+        agent_permissions::domain::model::TeamPermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn reset_team(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: macro_uuid::Uuid,
+    ) -> Result<
+        agent_permissions::domain::model::TeamPermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
     async fn resolve_calls(
         &self,
         _: &SessionPolicy,
@@ -905,6 +936,29 @@ impl agent_permissions::domain::ports::AgentDirectory for NoDirectory {
     }
 }
 
+impl agent_permissions::domain::ports::TeamDirectory for NoDirectory {
+    type Err = std::convert::Infallible;
+    async fn role(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: macro_uuid::Uuid,
+    ) -> Result<Option<agent_permissions::domain::model::TeamRole>, Self::Err> {
+        Ok(None)
+    }
+    async fn teams(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<agent_permissions::domain::model::TeamFacts>, Self::Err> {
+        Ok(Vec::new())
+    }
+    async fn team(
+        &self,
+        _: macro_uuid::Uuid,
+    ) -> Result<Option<agent_permissions::domain::model::TeamFacts>, Self::Err> {
+        Ok(None)
+    }
+}
+
 impl agent_permissions::domain::ports::SessionDirectory for NoDirectory {
     type Err = std::convert::Infallible;
     async fn facts(
@@ -995,6 +1049,7 @@ async fn a_followers_program_is_gated_by_its_sources_rules(pool: sqlx::PgPool) {
     let permissions = Arc::new(
         agent_permissions::domain::service::AgentPermissionsService::new(
             store.clone(),
+            NoDirectory,
             NoDirectory,
             NoDirectory,
             NoDirectory,

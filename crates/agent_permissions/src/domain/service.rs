@@ -19,17 +19,19 @@ use async_trait::async_trait;
 use bot_id::BotId;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 
 use super::model::{
     AgentAccess, AgentFacts, AgentOwner, AgentScope, AppliedTo, Caller, CandidatesFor, Catalog,
     Change, Credential, MAX_CHAIN, OperationKey, Origin, PermissionError, PermissionState,
     PermissionsView, PolicyChain, PolicyId, PolicyKind, PolicyOwner, PolicySource, ResolvedCall,
     Rule, SessionFacts, SessionPolicy, SetBy, SourceAgent, SourceCandidate, SourceCandidates,
-    SourceScope, SourceStatus, SourceUnavailable, SourceVia, Tightened, ToolPermissionCatalog,
+    SourceScope, SourceStatus, SourceUnavailable, SourceVia, TeamFacts, TeamPermissionsView,
+    TeamRole, Tightened, ToolPermissionCatalog,
 };
 use super::ports::{
-    AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory, SourceWrite, Write,
-    WriteTo,
+    AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory, SourceWrite,
+    TeamDirectory, Write, WriteTo,
 };
 use super::resolve::{self, Resolver, ViewAccess};
 
@@ -129,6 +131,33 @@ pub trait AgentPermissions: Send + Sync + 'static {
         policy: PolicyId,
     ) -> Result<PermissionsView, PermissionError>;
 
+    /// A team's default permissions, which its agents follow unless they
+    /// pick another source. Its members read them.
+    async fn view_team(
+        &self,
+        caller: &Caller,
+        team: Uuid,
+    ) -> Result<TeamPermissionsView, PermissionError>;
+
+    /// Change a team's default permissions in either direction. A team admin
+    /// or owner, from their own session; every agent following it takes the
+    /// change on its next call.
+    async fn set_team(
+        &self,
+        caller: &Caller,
+        team: Uuid,
+        changes: Vec<Change>,
+    ) -> Result<TeamPermissionsView, PermissionError>;
+
+    /// Delete every setting of a team's default, so everything is always
+    /// allowed for the agents following it. Same caller rule as
+    /// [`AgentPermissions::set_team`].
+    async fn reset_team(
+        &self,
+        caller: &Caller,
+        team: Uuid,
+    ) -> Result<TeamPermissionsView, PermissionError>;
+
     /// What a session's permissions say about each of `calls`. An operation
     /// the registry does not know is `never`. Does not check the rollout:
     /// the caller decides whether permissions apply to the run.
@@ -140,20 +169,24 @@ pub trait AgentPermissions: Send + Sync + 'static {
 }
 
 /// [`AgentPermissions`] over its ports.
-pub struct AgentPermissionsService<Store, Agents, Sessions, Rollout> {
+pub struct AgentPermissionsService<Store, Agents, Teams, Sessions, Rollout> {
     store: Store,
     agents: Agents,
+    teams: Teams,
     sessions: Sessions,
     rollout: Rollout,
     catalog: Arc<Catalog>,
     catalog_view: ToolPermissionCatalog,
 }
 
-impl<Store, Agents, Sessions, Rollout> AgentPermissionsService<Store, Agents, Sessions, Rollout> {
+impl<Store, Agents, Teams, Sessions, Rollout>
+    AgentPermissionsService<Store, Agents, Teams, Sessions, Rollout>
+{
     /// Build the service.
     pub fn new(
         store: Store,
         agents: Agents,
+        teams: Teams,
         sessions: Sessions,
         rollout: Rollout,
         catalog: Arc<Catalog>,
@@ -162,6 +195,7 @@ impl<Store, Agents, Sessions, Rollout> AgentPermissionsService<Store, Agents, Se
         Self {
             store,
             agents,
+            teams,
             sessions,
             rollout,
             catalog,
@@ -230,6 +264,15 @@ fn view_access(
     }
 }
 
+/// Who a source policy is.
+struct SourceIdentity {
+    agent: Option<SourceAgent>,
+    team: Option<TeamFacts>,
+    scope: SourceScope,
+    kind: PolicyKind,
+    facts: Option<AgentFacts>,
+}
+
 /// A built-in persona as a source: Macro, reached as `@macro`.
 fn persona_agent(persona: BotId) -> SourceAgent {
     let system = bot_id::system_bot(persona);
@@ -255,7 +298,10 @@ fn agent_source(facts: &AgentFacts) -> SourceAgent {
 fn owner_scope(owner: &AgentOwner) -> SourceScope {
     match owner {
         AgentOwner::User(_) => SourceScope::Personal,
-        AgentOwner::Team(team) => SourceScope::Team { team_id: *team },
+        AgentOwner::Team(team) => SourceScope::Team {
+            team_id: *team,
+            team_name: None,
+        },
     }
 }
 
@@ -273,10 +319,12 @@ fn validate(catalog: &Catalog, changes: &[Change]) -> Result<(), PermissionError
     }
 }
 
-impl<Store, Agents, Sessions, Rollout> AgentPermissionsService<Store, Agents, Sessions, Rollout>
+impl<Store, Agents, Teams, Sessions, Rollout>
+    AgentPermissionsService<Store, Agents, Teams, Sessions, Rollout>
 where
     Store: PermissionStore,
     Agents: AgentDirectory,
+    Teams: TeamDirectory,
     Sessions: SessionDirectory,
     Rollout: PermissionsRollout,
 {
@@ -385,9 +433,107 @@ where
         }
     }
 
-    /// The id of `owner`'s policy, created when it has none yet.
+    /// The id of `owner`'s policy, created when it has none yet. A new
+    /// owned agent's follows its scope's default: a private agent its
+    /// owner's own Macro policy, a team's agent its team's default. Both are
+    /// roots, so no cycle or depth check is needed. Agents that existed
+    /// before defaults got their own policy by migration, and keep it.
     async fn policy_id(&self, owner: &PolicyOwner) -> Result<PolicyId, PermissionError> {
+        if let Some(id) = self.store.find_policy(owner).await.map_err(internal)? {
+            return Ok(id);
+        }
+        if let PolicyOwner::Agent(agent) = owner
+            && let Some(default) = self.default_source(*agent).await?
+        {
+            let source = self.store.ensure_policy(&default).await.map_err(internal)?;
+            return self
+                .store
+                .ensure_following_policy(*agent, source)
+                .await
+                .map_err(internal);
+        }
         self.store.ensure_policy(owner).await.map_err(internal)
+    }
+
+    /// The policy a new owned agent follows: its scope's default.
+    async fn default_source(&self, agent: BotId) -> Result<Option<PolicyOwner>, PermissionError> {
+        Ok(self.facts(agent).await?.map(|facts| match facts.owner {
+            AgentOwner::User(user) => PolicyOwner::Persona {
+                persona: bot_id::MACRO_NEW_BOT_ID,
+                user,
+            },
+            AgentOwner::Team(team) => PolicyOwner::Team(team),
+        }))
+    }
+
+    async fn team_role(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        team: Uuid,
+    ) -> Result<Option<TeamRole>, PermissionError> {
+        self.teams.role(user, team).await.map_err(internal)
+    }
+
+    async fn team_facts(&self, team: Uuid) -> Result<TeamFacts, PermissionError> {
+        Ok(self
+            .teams
+            .team(team)
+            .await
+            .map_err(internal)?
+            .unwrap_or(TeamFacts {
+                id: team,
+                name: String::new(),
+            }))
+    }
+
+    /// A team's default view for `caller`: a member reads it, an admin or
+    /// owner signed in to Macro may edit it.
+    async fn team_view(
+        &self,
+        caller: &Caller,
+        team: Uuid,
+        role: TeamRole,
+    ) -> Result<TeamPermissionsView, PermissionError> {
+        let policy = self.policy_id(&PolicyOwner::Team(team)).await?;
+        let chain = self
+            .store
+            .chain(policy)
+            .await
+            .map_err(internal)?
+            .ok_or(PermissionError::NotFound)?;
+        let access = ViewAccess {
+            can_edit: caller.credential == Credential::PersonSession && role.edits_default(),
+            can_tighten: false,
+        };
+        let view = resolve::view(
+            &self.catalog,
+            BotId::new_from_uuid(team),
+            PolicyKind::Team,
+            access,
+            &chain,
+            None,
+        );
+        Ok(TeamPermissionsView::new(team, view))
+    }
+
+    /// The team whose default `caller` changes, after checking they may: a
+    /// team admin or owner, from their own session.
+    async fn editable_team(
+        &self,
+        caller: &Caller,
+        team: Uuid,
+    ) -> Result<TeamRole, PermissionError> {
+        let role = self
+            .team_role(&caller.user, team)
+            .await?
+            .ok_or(PermissionError::NotFound)?;
+        if caller.credential != Credential::PersonSession {
+            return Err(PermissionError::NeedsPerson);
+        }
+        if !role.edits_default() {
+            return Err(PermissionError::Forbidden);
+        }
+        Ok(role)
     }
 
     async fn build_view(
@@ -430,35 +576,66 @@ where
         self.agents.facts(agent).await.map_err(internal)
     }
 
-    /// A source policy's agent (for a persona, the persona), whose it is,
-    /// and its facts when it is an agent's.
+    /// Who a source policy is, as a person recognizes it: its agent (for a
+    /// persona, the persona) or its team, whose it is, and its agent's facts.
+    /// `None` when the agents directory no longer knows its agent.
     async fn source_identity(
         &self,
         owner: &PolicyOwner,
-    ) -> Result<Option<(SourceAgent, SourceScope, PolicyKind, Option<AgentFacts>)>, PermissionError>
-    {
+    ) -> Result<Option<SourceIdentity>, PermissionError> {
         match owner {
-            PolicyOwner::Persona { persona, .. } => Ok(Some((
-                persona_agent(*persona),
-                SourceScope::Personal,
-                PolicyKind::Persona,
-                None,
-            ))),
-            PolicyOwner::Agent(bot) => Ok(self.facts(*bot).await?.map(|facts| {
-                (
-                    agent_source(&facts),
-                    owner_scope(&facts.owner),
-                    PolicyKind::Agent,
-                    Some(facts),
-                )
+            PolicyOwner::Persona { persona, .. } => Ok(Some(SourceIdentity {
+                agent: Some(persona_agent(*persona)),
+                team: None,
+                scope: SourceScope::Personal,
+                kind: PolicyKind::Persona,
+                facts: None,
             })),
+            PolicyOwner::Team(team) => {
+                let team = self.team_facts(*team).await?;
+                Ok(Some(SourceIdentity {
+                    agent: None,
+                    scope: SourceScope::Team {
+                        team_id: team.id,
+                        team_name: Some(team.name.clone()),
+                    },
+                    team: Some(team),
+                    kind: PolicyKind::Team,
+                    facts: None,
+                }))
+            }
+            PolicyOwner::Agent(bot) => {
+                let Some(facts) = self.facts(*bot).await? else {
+                    return Ok(None);
+                };
+                let scope = match &facts.owner {
+                    AgentOwner::User(_) => SourceScope::Personal,
+                    AgentOwner::Team(team) => SourceScope::Team {
+                        team_id: *team,
+                        team_name: self
+                            .teams
+                            .team(*team)
+                            .await
+                            .map_err(internal)?
+                            .map(|team| team.name),
+                    },
+                };
+                Ok(Some(SourceIdentity {
+                    agent: Some(agent_source(&facts)),
+                    team: None,
+                    scope,
+                    kind: PolicyKind::Agent,
+                    facts: Some(facts),
+                }))
+            }
         }
     }
 
     /// Whether an agent owned by `follower` may follow `source` (section
-    /// 4.8): a private agent its owner's Macro, their private agents and
-    /// their teams' agents; a team agent its team's agents. Never a persona
-    /// other than Macro, nor a person's policy for a team agent.
+    /// 4.8): a private agent its owner's Macro, their private agents, and
+    /// the defaults and agents of the teams they belong to; a team agent its
+    /// team's default and its team's agents. Never a persona other than
+    /// Macro, nor a person's policy for a team agent.
     async fn in_scope(
         &self,
         follower: &AgentOwner,
@@ -470,6 +647,10 @@ where
                 Ok(*persona == bot_id::MACRO_NEW_BOT_ID && user == owner)
             }
             (AgentOwner::Team(_), PolicyOwner::Persona { .. }) => Ok(false),
+            (AgentOwner::User(owner), PolicyOwner::Team(team)) => {
+                Ok(self.team_role(owner, *team).await?.is_some())
+            }
+            (AgentOwner::Team(team), PolicyOwner::Team(source_team)) => Ok(team == source_team),
             (_, PolicyOwner::Agent(bot)) => {
                 let Some(facts) = source_facts else {
                     return Ok(false);
@@ -491,6 +672,30 @@ where
         }
     }
 
+    /// Whether `caller` may edit the policy `owner` owns, through its own
+    /// routes: the agent's editors, the person for their own persona policy,
+    /// a team's admins and owners for its default. Only from a person's own
+    /// session.
+    async fn may_edit_policy(
+        &self,
+        caller: &Caller,
+        owner: &PolicyOwner,
+    ) -> Result<bool, PermissionError> {
+        if caller.credential != Credential::PersonSession {
+            return Ok(false);
+        }
+        Ok(match owner {
+            PolicyOwner::Persona { user, .. } => *user == caller.user,
+            PolicyOwner::Agent(bot) => {
+                self.access(&caller.user, *bot).await? == AgentAccess::Manageable
+            }
+            PolicyOwner::Team(team) => self
+                .team_role(&caller.user, *team)
+                .await?
+                .is_some_and(TeamRole::edits_default),
+        })
+    }
+
     /// The source a following `chain` shows: who it is, whether it still
     /// applies as itself and is in scope, the caller's own authority over
     /// it, and the rest of the chain.
@@ -505,6 +710,7 @@ where
                 policy_id: None,
                 kind: None,
                 agent: None,
+                team: None,
                 scope: None,
                 status: SourceStatus::Lost,
                 in_scope: false,
@@ -518,50 +724,54 @@ where
             Some(follower) => {
                 let facts = identity
                     .as_ref()
-                    .and_then(|(_, _, _, facts)| facts.as_ref());
+                    .and_then(|identity| identity.facts.as_ref());
                 self.in_scope(&follower.owner, &source.owner, facts).await?
             }
             None => false,
         };
-        let person = caller.credential == Credential::PersonSession;
-        let can_edit = person
-            && match &source.owner {
-                PolicyOwner::Persona { user, .. } => *user == caller.user,
-                PolicyOwner::Agent(bot) => {
-                    self.access(&caller.user, *bot).await? == AgentAccess::Manageable
-                }
-            };
+        let can_edit = self.may_edit_policy(caller, &source.owner).await?;
         let mut via = Vec::new();
         for level in chain.sources().iter().skip(1) {
-            if let Some((agent, ..)) = self.source_identity(&level.owner).await? {
-                via.push(SourceVia {
-                    name: agent.name,
-                    handle: agent.handle,
+            if let Some(identity) = self.source_identity(&level.owner).await? {
+                via.push(match (identity.agent, identity.team) {
+                    (Some(agent), _) => SourceVia {
+                        name: agent.name,
+                        handle: agent.handle,
+                    },
+                    (None, Some(team)) => SourceVia {
+                        name: team.name,
+                        handle: None,
+                    },
+                    (None, None) => continue,
                 });
             }
         }
-        let deleted = identity.as_ref().is_none_or(|(agent, ..)| agent.deleted);
         Ok(match identity {
-            Some((agent, scope, kind, _)) => PolicySource {
-                policy_id: Some(source.id),
-                kind: Some(kind),
-                agent: Some(agent),
-                scope: Some(scope),
-                status: if deleted {
-                    SourceStatus::Deleted
-                } else {
-                    SourceStatus::Live
-                },
-                in_scope,
-                can_edit: can_edit && !deleted,
-                via,
-            },
+            Some(identity) => {
+                let deleted = identity.agent.as_ref().is_some_and(|agent| agent.deleted);
+                PolicySource {
+                    policy_id: Some(source.id),
+                    kind: Some(identity.kind),
+                    agent: identity.agent,
+                    team: identity.team,
+                    scope: Some(identity.scope),
+                    status: if deleted {
+                        SourceStatus::Deleted
+                    } else {
+                        SourceStatus::Live
+                    },
+                    in_scope,
+                    can_edit: can_edit && !deleted,
+                    via,
+                }
+            }
             // The agents directory no longer knows it (its row went with
             // its team): it applies frozen.
             None => PolicySource {
                 policy_id: Some(source.id),
                 kind: Some(PolicyKind::Agent),
                 agent: None,
+                team: None,
                 scope: None,
                 status: SourceStatus::Deleted,
                 in_scope: false,
@@ -606,11 +816,12 @@ where
 }
 
 #[async_trait]
-impl<Store, Agents, Sessions, Rollout> AgentPermissions
-    for AgentPermissionsService<Store, Agents, Sessions, Rollout>
+impl<Store, Agents, Teams, Sessions, Rollout> AgentPermissions
+    for AgentPermissionsService<Store, Agents, Teams, Sessions, Rollout>
 where
     Store: PermissionStore,
     Agents: AgentDirectory,
+    Teams: TeamDirectory,
     Sessions: SessionDirectory,
     Rollout: PermissionsRollout,
 {
@@ -926,7 +1137,7 @@ where
                 }
                 Some(facts)
             }
-            PolicyOwner::Persona { .. } => None,
+            PolicyOwner::Persona { .. } | PolicyOwner::Team(_) => None,
         };
         if !self
             .in_scope(&follower.owner, source_owner, source_facts.as_ref())
@@ -1051,7 +1262,12 @@ where
                 (scope, Some((agent, policy, height, current)))
             }
             CandidatesFor::Private => (AgentScope::Private(caller.user.clone()), None),
-            CandidatesFor::Team(team) => (AgentScope::Team(team), None),
+            CandidatesFor::Team(team) => {
+                if self.team_role(&caller.user, team).await?.is_none() {
+                    return Err(PermissionError::NotFound);
+                }
+                (AgentScope::Team(team), None)
+            }
         };
 
         let mut candidates = Vec::new();
@@ -1066,8 +1282,30 @@ where
             candidates.push(SourceCandidate {
                 policy_id: policy,
                 kind: PolicyKind::Persona,
-                agent: persona_agent(persona),
+                agent: Some(persona_agent(persona)),
+                team: None,
                 scope: SourceScope::Personal,
+                current: false,
+                unavailable: None,
+            });
+        }
+        // Team defaults: each of the person's teams for a private agent, the
+        // agent's own team for a team's.
+        let teams = match &scope {
+            AgentScope::Private(user) => self.teams.teams(user).await.map_err(internal)?,
+            AgentScope::Team(team) => vec![self.team_facts(*team).await?],
+        };
+        for team in teams {
+            let policy = self.policy_id(&PolicyOwner::Team(team.id)).await?;
+            candidates.push(SourceCandidate {
+                policy_id: policy,
+                kind: PolicyKind::Team,
+                agent: None,
+                scope: SourceScope::Team {
+                    team_id: team.id,
+                    team_name: Some(team.name.clone()),
+                },
+                team: Some(team),
                 current: false,
                 unavailable: None,
             });
@@ -1082,16 +1320,58 @@ where
             .collect();
         agents.truncate(MAX_CANDIDATES);
         let ids: Vec<BotId> = agents.iter().map(|facts| facts.id).collect();
-        let policies = self
+        let found = self
             .store
-            .ensure_agent_policies(&ids)
+            .find_agent_policies(&ids)
             .await
             .map_err(internal)?;
+        // Agents no one has used yet get their policies now, following their
+        // own defaults as they would on first use: one batch, after one
+        // policy per distinct default (a person's Macro, a team's default).
+        let mut defaults: Vec<(PolicyOwner, PolicyId)> = Vec::new();
+        let mut missing: Vec<(BotId, PolicyId)> = Vec::new();
+        for (facts, policy) in agents.iter().zip(&found) {
+            if policy.is_some() {
+                continue;
+            }
+            let default = match &facts.owner {
+                AgentOwner::User(user) => PolicyOwner::Persona {
+                    persona: bot_id::MACRO_NEW_BOT_ID,
+                    user: user.clone(),
+                },
+                AgentOwner::Team(team) => PolicyOwner::Team(*team),
+            };
+            let source = match defaults.iter().find(|(owner, _)| *owner == default) {
+                Some((_, source)) => *source,
+                None => {
+                    let source = self.store.ensure_policy(&default).await.map_err(internal)?;
+                    defaults.push((default, source));
+                    source
+                }
+            };
+            missing.push((facts.id, source));
+        }
+        let mut made = self
+            .store
+            .ensure_following_policies(&missing)
+            .await
+            .map_err(internal)?
+            .into_iter();
+        let policies: Vec<PolicyId> = found
+            .into_iter()
+            .map(|policy| policy.or_else(|| made.next()))
+            .collect::<Option<_>>()
+            .ok_or_else(|| {
+                PermissionError::Internal(
+                    rootcause::report!("a candidate's policy was not made").into_dynamic(),
+                )
+            })?;
         for (facts, policy) in agents.iter().zip(policies) {
             candidates.push(SourceCandidate {
                 policy_id: policy,
                 kind: PolicyKind::Agent,
-                agent: agent_source(facts),
+                agent: Some(agent_source(facts)),
+                team: None,
                 scope: owner_scope(&facts.owner),
                 current: false,
                 unavailable: None,
@@ -1099,19 +1379,17 @@ where
         }
 
         if let Some((_, policy, height, current)) = follower {
-            for candidate in &mut candidates {
+            // Every candidate's chain in one read.
+            let ids: Vec<PolicyId> = candidates
+                .iter()
+                .map(|candidate| candidate.policy_id)
+                .collect();
+            let chains = self.store.chain_ids(&ids).await.map_err(internal)?;
+            for (candidate, chain) in candidates.iter_mut().zip(chains) {
                 candidate.current = current == Some(candidate.policy_id);
-                let Some(chain) = self
-                    .store
-                    .chain(candidate.policy_id)
-                    .await
-                    .map_err(internal)?
-                else {
-                    continue;
-                };
-                candidate.unavailable = if chain.levels().any(|level| level.id == policy) {
+                candidate.unavailable = if chain.contains(&policy) {
                     Some(SourceUnavailable::Cycle)
-                } else if height + chain.depth() > MAX_CHAIN {
+                } else if height + chain.len() > MAX_CHAIN {
                     Some(SourceUnavailable::TooDeep)
                 } else {
                     None
@@ -1148,6 +1426,26 @@ where
                 (*persona, PolicyKind::Persona, AgentAccess::Persona)
             }
             PolicyOwner::Persona { .. } => return Err(PermissionError::NotFound),
+            // A team's default reads like its own route's view: members
+            // only, with the team id where an agent's view has its agent.
+            PolicyOwner::Team(team) => {
+                let role = self
+                    .team_role(&caller.user, *team)
+                    .await?
+                    .ok_or(PermissionError::NotFound)?;
+                let view = self.team_view(caller, *team, role).await?;
+                return Ok(resolve::view(
+                    &self.catalog,
+                    BotId::new_from_uuid(*team),
+                    PolicyKind::Team,
+                    ViewAccess {
+                        can_edit: view.can_edit,
+                        can_tighten: false,
+                    },
+                    &chain,
+                    None,
+                ));
+            }
             PolicyOwner::Agent(bot) => match self.access(&caller.user, *bot).await? {
                 AgentAccess::Manageable => (*bot, PolicyKind::Agent, AgentAccess::Manageable),
                 AgentAccess::NotManageable | AgentAccess::NotFound | AgentAccess::Persona => {
@@ -1157,6 +1455,74 @@ where
         };
         self.build_view(caller, agent, access, (policy, owner, kind), None, None)
             .await
+    }
+
+    #[tracing::instrument(
+        name = "agent_permissions.view_team",
+        skip_all,
+        fields(team_id = %team),
+        err(level = "warn")
+    )]
+    async fn view_team(
+        &self,
+        caller: &Caller,
+        team: Uuid,
+    ) -> Result<TeamPermissionsView, PermissionError> {
+        self.ensure_enabled(caller).await?;
+        let role = self
+            .team_role(&caller.user, team)
+            .await?
+            .ok_or(PermissionError::NotFound)?;
+        self.team_view(caller, team, role).await
+    }
+
+    #[tracing::instrument(
+        name = "agent_permissions.set_team",
+        skip_all,
+        fields(team_id = %team, changes = changes.len(), policy_id = tracing::field::Empty),
+        err(level = "warn")
+    )]
+    async fn set_team(
+        &self,
+        caller: &Caller,
+        team: Uuid,
+        changes: Vec<Change>,
+    ) -> Result<TeamPermissionsView, PermissionError> {
+        self.ensure_enabled(caller).await?;
+        validate(&self.catalog, &changes)?;
+        let role = self.editable_team(caller, team).await?;
+        let policy = self.policy_id(&PolicyOwner::Team(team)).await?;
+        tracing::Span::current().record("policy_id", tracing::field::display(policy));
+        let write = Write {
+            policy,
+            session: None,
+            to: WriteTo::Saved,
+            by: &caller.user,
+            set_by: SetBy::Person,
+        };
+        self.store
+            .write(write, |_, _| Ok(resolve::normalize(changes, false)))
+            .await
+            .map_err(internal)??;
+        self.team_view(caller, team, role).await
+    }
+
+    #[tracing::instrument(
+        name = "agent_permissions.reset_team",
+        skip_all,
+        fields(team_id = %team),
+        err(level = "warn")
+    )]
+    async fn reset_team(
+        &self,
+        caller: &Caller,
+        team: Uuid,
+    ) -> Result<TeamPermissionsView, PermissionError> {
+        self.ensure_enabled(caller).await?;
+        let role = self.editable_team(caller, team).await?;
+        let policy = self.policy_id(&PolicyOwner::Team(team)).await?;
+        self.store.reset(policy).await.map_err(internal)?;
+        self.team_view(caller, team, role).await
     }
 
     #[tracing::instrument(

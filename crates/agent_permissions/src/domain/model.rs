@@ -213,6 +213,9 @@ pub enum PolicyOwner {
         /// The person.
         user: MacroUserIdStr<'static>,
     },
+    /// A team's default policy: what its agents follow unless they pick
+    /// another source. A root; its admins and owners edit it.
+    Team(Uuid),
 }
 
 /// The most policies one chain may hold, the policy itself and its root
@@ -476,6 +479,35 @@ pub struct AgentFacts {
     pub deleted: bool,
 }
 
+/// A person's role in a team.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TeamRole {
+    /// A member: reads the team's default permissions.
+    Member,
+    /// An admin: edits them too.
+    Admin,
+    /// The owner: edits them too.
+    Owner,
+}
+
+impl TeamRole {
+    /// Whether the role may edit the team's default permissions.
+    pub fn edits_default(self) -> bool {
+        self >= TeamRole::Admin
+    }
+}
+
+/// A team, as a person recognizes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = ToolPermissionSourceTeam)]
+pub struct TeamFacts {
+    /// The team.
+    pub id: Uuid,
+    /// Its name.
+    pub name: String,
+}
+
 /// Whose agents a follower may follow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentScope {
@@ -597,6 +629,8 @@ pub enum PolicyKind {
     Agent,
     /// A person's own settings for a built-in persona.
     Persona,
+    /// A team's default permissions.
+    Team,
 }
 
 /// Where an effective state comes from.
@@ -713,6 +747,9 @@ pub enum SourceScope {
         /// The team.
         #[serde(rename = "teamId")]
         team_id: Uuid,
+        /// Its name, when it could be read.
+        #[serde(rename = "teamName", skip_serializing_if = "Option::is_none")]
+        team_name: Option<String>,
     },
 }
 
@@ -752,9 +789,13 @@ pub struct PolicySource {
     /// Whose it is; absent once it was lost.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<PolicyKind>,
-    /// Its agent (or persona); absent once it was lost.
+    /// Its agent (or persona); absent for a team's default and once it was
+    /// lost.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent: Option<SourceAgent>,
+    /// The team, for a team's default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team: Option<TeamFacts>,
     /// Whose it is, for the picker's badge; absent once it was lost.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<SourceScope>,
@@ -790,8 +831,12 @@ pub struct SourceCandidate {
     pub policy_id: PolicyId,
     /// Whose it is.
     pub kind: PolicyKind,
-    /// Its agent (or persona).
-    pub agent: SourceAgent,
+    /// Its agent (or persona); absent for a team's default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<SourceAgent>,
+    /// The team, for a team's default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team: Option<TeamFacts>,
     /// Whose it is, for the badge.
     pub scope: SourceScope,
     /// The agent follows it now.
@@ -801,8 +846,8 @@ pub struct SourceCandidate {
     pub unavailable: Option<SourceUnavailable>,
 }
 
-/// The sources the picker offers: the person's own Macro first, then
-/// agents.
+/// The sources the picker offers: the person's own Macro first, then team
+/// defaults, then agents.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[schema(as = ToolPermissionSourceCandidates)]
@@ -866,6 +911,51 @@ pub struct PermissionsView {
     /// restrictions). Read only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherited: Option<Vec<Rule>>,
+}
+
+/// A team's default permissions: what the team's agents follow unless they
+/// pick another source, resolved as a policy that owns its settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = TeamToolPermissions)]
+pub struct TeamPermissionsView {
+    /// The team.
+    pub team_id: Uuid,
+    /// The policy's stable id, to follow.
+    pub policy_id: PolicyId,
+    /// Always `team`.
+    pub kind: PolicyKind,
+    /// The caller may change and reset them: a team admin or owner, signed
+    /// in to Macro.
+    pub can_edit: bool,
+    /// The registry version the resolution used.
+    pub version: String,
+    /// How many operations are not always allowed.
+    pub restricted: u32,
+    /// Each action's default, in display order.
+    pub defaults: Vec<ToolPermissionDefault>,
+    /// The saved settings, hidden ones included.
+    pub rules: Vec<Rule>,
+    /// Every catalog group with an operation, with the actions it has
+    /// operations for.
+    pub groups: Vec<ToolPermissionGroup>,
+}
+
+impl TeamPermissionsView {
+    /// The team's view, from the view `resolve::view` built for its policy.
+    pub fn new(team_id: Uuid, view: PermissionsView) -> Self {
+        Self {
+            team_id,
+            policy_id: view.policy_id,
+            kind: PolicyKind::Team,
+            can_edit: view.can_edit,
+            version: view.version,
+            restricted: view.restricted,
+            defaults: view.defaults,
+            rules: view.rules,
+            groups: view.groups,
+        }
+    }
 }
 
 /// Where a tightening was saved.

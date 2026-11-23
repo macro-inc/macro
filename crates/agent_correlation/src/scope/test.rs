@@ -225,6 +225,8 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("DELETE", "/agents/01a1/tool-permissions"),
         ("PUT", "/agent-harness/agents/01a1/tool-permissions/source"),
         ("POST", "/agents/01a1/tool-permissions/detach"),
+        ("PUT", "/agent-harness/agent-tool-permissions/teams/01a1"),
+        ("DELETE", "/agent-tool-permissions/teams/01a1"),
         ("POST", "/bots"),
         ("PATCH", "/bots/01a1"),
         ("DELETE", "/bots/01a1"),

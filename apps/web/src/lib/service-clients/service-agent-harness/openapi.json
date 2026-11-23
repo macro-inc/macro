@@ -3980,6 +3980,195 @@
         }
       }
     },
+    "/agent-tool-permissions/teams/{team_id}": {
+      "get": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "A team's default tool permissions: what its agents follow unless they\npick another source. Its members read them.",
+        "operationId": "get_team_tool_permissions",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The team",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamToolPermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Off, or not a member of the team",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "Change a team's default tool permissions in either direction, as `PUT\n/agents/{agent_id}/tool-permissions` does for an agent. Only a team admin\nor owner signed in to Macro; every agent following it takes the change\non its next call.",
+        "operationId": "set_team_tool_permissions",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The team",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolPermissionChanges"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamToolPermissions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a team admin or owner, or not a person's own session (needs_person)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "Reset a team's default tool permissions so everything is always allowed\nfor the agents following it. Only a team admin or owner signed in to\nMacro.",
+        "operationId": "reset_team_tool_permissions",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The team",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamToolPermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a team admin or owner, or not a person's own session (needs_person)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-work-registrations": {
       "get": {
         "tags": ["agent-sessions"],
@@ -9926,6 +10115,71 @@
         },
         "additionalProperties": false
       },
+      "TeamToolPermissions": {
+        "type": "object",
+        "description": "A team's default permissions: what the team's agents follow unless they\npick another source, resolved as a policy that owns its settings.",
+        "required": [
+          "teamId",
+          "policyId",
+          "kind",
+          "canEdit",
+          "version",
+          "restricted",
+          "defaults",
+          "rules",
+          "groups"
+        ],
+        "properties": {
+          "canEdit": {
+            "type": "boolean",
+            "description": "The caller may change and reset them: a team admin or owner, signed\nin to Macro."
+          },
+          "defaults": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionDefault"
+            },
+            "description": "Each action's default, in display order."
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionGroup"
+            },
+            "description": "Every catalog group with an operation, with the actions it has\noperations for."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ToolPermissionPolicyKind",
+            "description": "Always `team`."
+          },
+          "policyId": {
+            "$ref": "#/components/schemas/ToolPermissionPolicyId",
+            "description": "The policy's stable id, to follow."
+          },
+          "restricted": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many operations are not always allowed.",
+            "minimum": 0
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionRule"
+            },
+            "description": "The saved settings, hidden ones included."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
+          },
+          "version": {
+            "type": "string",
+            "description": "The registry version the resolution used."
+          }
+        }
+      },
       "TightenToolPermissionsResponse": {
         "type": "object",
         "description": "The result of a tightening.",
@@ -10259,7 +10513,7 @@
       "ToolPermissionPolicyKind": {
         "type": "string",
         "description": "Whether the permissions are an owned agent's or the caller's own for a\nbuilt-in persona.",
-        "enum": ["agent", "persona"]
+        "enum": ["agent", "persona", "team"]
       },
       "ToolPermissionRule": {
         "type": "object",
@@ -10297,7 +10551,7 @@
               },
               {
                 "$ref": "#/components/schemas/ToolPermissionSourceAgent",
-                "description": "Its agent (or persona); absent once it was lost."
+                "description": "Its agent (or persona); absent for a team's default and once it was\nlost."
               }
             ]
           },
@@ -10346,6 +10600,17 @@
             "$ref": "#/components/schemas/ToolPermissionSourceStatus",
             "description": "Whether it still applies as itself."
           },
+          "team": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionSourceTeam",
+                "description": "The team, for a team's default."
+              }
+            ]
+          },
           "via": {
             "type": "array",
             "items": {
@@ -10385,11 +10650,18 @@
       "ToolPermissionSourceCandidate": {
         "type": "object",
         "description": "A policy the picker offers as a source.",
-        "required": ["policyId", "kind", "agent", "scope", "current"],
+        "required": ["policyId", "kind", "scope", "current"],
         "properties": {
           "agent": {
-            "$ref": "#/components/schemas/ToolPermissionSourceAgent",
-            "description": "Its agent (or persona)."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionSourceAgent",
+                "description": "Its agent (or persona); absent for a team's default."
+              }
+            ]
           },
           "current": {
             "type": "boolean",
@@ -10407,6 +10679,17 @@
             "$ref": "#/components/schemas/ToolPermissionSourceScope",
             "description": "Whose it is, for the badge."
           },
+          "team": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionSourceTeam",
+                "description": "The team, for a team's default."
+              }
+            ]
+          },
           "unavailable": {
             "oneOf": [
               {
@@ -10422,7 +10705,7 @@
       },
       "ToolPermissionSourceCandidates": {
         "type": "object",
-        "description": "The sources the picker offers: the person's own Macro first, then\nagents.",
+        "description": "The sources the picker offers: the person's own Macro first, then team\ndefaults, then agents.",
         "required": ["candidates"],
         "properties": {
           "candidates": {
@@ -10460,6 +10743,10 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The team."
+              },
+              "teamName": {
+                "type": ["string", "null"],
+                "description": "Its name, when it could be read."
               }
             }
           }
@@ -10470,6 +10757,22 @@
         "type": "string",
         "description": "Whether a followed source still applies as itself.",
         "enum": ["live", "deleted", "lost"]
+      },
+      "ToolPermissionSourceTeam": {
+        "type": "object",
+        "description": "A team, as a person recognizes it.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name."
+          }
+        }
       },
       "ToolPermissionSourceUnavailable": {
         "type": "string",

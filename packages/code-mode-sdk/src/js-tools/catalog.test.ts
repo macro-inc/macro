@@ -66,6 +66,9 @@ describe('JS tools catalog', () => {
     expect(permissions.map((skip) => skip.operationId)).toEqual([
       'get_agent_tool_permission_policy',
       'get_agent_tool_permission_sources',
+      'get_team_tool_permissions',
+      'set_team_tool_permissions',
+      'reset_team_tool_permissions',
       'set_agent_tool_permissions',
       'reset_agent_tool_permissions',
       'detach_agent_tool_permissions',

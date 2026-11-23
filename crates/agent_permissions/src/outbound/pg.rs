@@ -181,6 +181,17 @@ async fn find_policy(
             .fetch_optional(connection)
             .await?
         }
+        PolicyOwner::Team(team) => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT id FROM agent_permission_policy
+                WHERE team_id = $1
+                "#,
+                team,
+            )
+            .fetch_optional(connection)
+            .await?
+        }
     };
     Ok(id.map(PolicyId::from_uuid))
 }
@@ -222,26 +233,72 @@ async fn insert_policy(
             .fetch_optional(connection)
             .await?
         }
+        PolicyOwner::Team(team) => {
+            sqlx::query_scalar!(
+                r#"
+                INSERT INTO agent_permission_policy (id, kind, team_id)
+                VALUES ($1, 'team', $2)
+                ON CONFLICT (team_id) WHERE team_id IS NOT NULL DO NOTHING
+                RETURNING id
+                "#,
+                id.as_uuid(),
+                team,
+            )
+            .fetch_optional(connection)
+            .await?
+        }
     };
     Ok(inserted.map(PolicyId::from_uuid))
 }
 
+/// Create the owned agent `agent`'s policy under `id`, following `source`,
+/// unless it already has one; `None` when it did.
+async fn insert_following_policy(
+    connection: &mut PgConnection,
+    agent: BotId,
+    id: PolicyId,
+    source: PolicyId,
+) -> Result<Option<PolicyId>, sqlx::Error> {
+    let inserted = sqlx::query_scalar!(
+        r#"
+        INSERT INTO agent_permission_policy (id, kind, bot_id, follows, source_policy_id, source_set_at)
+        VALUES ($1, 'agent', $2, true, $3, now())
+        ON CONFLICT (bot_id) WHERE bot_id IS NOT NULL DO NOTHING
+        RETURNING id
+        "#,
+        id.as_uuid(),
+        agent.as_uuid(),
+        source.as_uuid(),
+    )
+    .fetch_optional(connection)
+    .await?;
+    Ok(inserted.map(PolicyId::from_uuid))
+}
+
 /// Whose policy a stored row is.
-fn owner(
-    kind: &str,
+/// A stored policy row's owner columns.
+struct OwnerColumns {
     bot_id: Option<macro_uuid::Uuid>,
     user_id: Option<String>,
     persona_id: Option<macro_uuid::Uuid>,
-) -> Result<PolicyOwner, PgPermissionStoreError> {
+    team_id: Option<macro_uuid::Uuid>,
+}
+
+fn owner(kind: &str, columns: OwnerColumns) -> Result<PolicyOwner, PgPermissionStoreError> {
     let corrupt = || PgPermissionStoreError::Corrupt(format!("policy owner {kind}"));
-    match (kind, bot_id, user_id, persona_id) {
-        ("agent", Some(bot), None, None) => Ok(PolicyOwner::Agent(BotId::new_from_uuid(bot))),
-        ("persona", None, Some(user), Some(persona)) => Ok(PolicyOwner::Persona {
+    let OwnerColumns {
+        bot_id,
+        user_id,
+        persona_id,
+        team_id,
+    } = columns;
+    match (kind, bot_id, user_id, persona_id, team_id) {
+        ("agent", Some(bot), None, None, None) => Ok(PolicyOwner::Agent(BotId::new_from_uuid(bot))),
+        ("persona", None, Some(user), Some(persona), None) => Ok(PolicyOwner::Persona {
             persona: BotId::new_from_uuid(persona),
             user: MacroUserIdStr::try_from(user).map_err(|_| corrupt())?,
         }),
-        // Team policies have no owner in this code yet, and nothing makes
-        // one.
+        ("team", None, None, None, Some(team)) => Ok(PolicyOwner::Team(team)),
         _ => Err(corrupt()),
     }
 }
@@ -256,19 +313,19 @@ async fn read_chain(
 ) -> Result<Option<PolicyChain>, PgPermissionStoreError> {
     let rows = sqlx::query!(
         r#"
-        WITH RECURSIVE chain (id, kind, bot_id, user_id, persona_id, follows, source_policy_id, depth, path) AS (
-            SELECT p.id, p.kind, p.bot_id, p.user_id, p.persona_id, p.follows, p.source_policy_id,
-                   1, ARRAY[p.id]
+        WITH RECURSIVE chain (id, kind, bot_id, user_id, persona_id, team_id, follows, source_policy_id, depth, path) AS (
+            SELECT p.id, p.kind, p.bot_id, p.user_id, p.persona_id, p.team_id, p.follows,
+                   p.source_policy_id, 1, ARRAY[p.id]
             FROM agent_permission_policy p
             WHERE p.id = $1
           UNION ALL
-            SELECT p.id, p.kind, p.bot_id, p.user_id, p.persona_id, p.follows, p.source_policy_id,
-                   c.depth + 1, c.path || p.id
+            SELECT p.id, p.kind, p.bot_id, p.user_id, p.persona_id, p.team_id, p.follows,
+                   p.source_policy_id, c.depth + 1, c.path || p.id
             FROM chain c
             JOIN agent_permission_policy p ON p.id = c.source_policy_id
             WHERE c.depth <= $2 AND p.id <> ALL (c.path)
         )
-        SELECT c.id AS "id!", c.kind AS "kind!", c.bot_id, c.user_id, c.persona_id,
+        SELECT c.id AS "id!", c.kind AS "kind!", c.bot_id, c.user_id, c.persona_id, c.team_id,
                c.follows AS "follows!", c.source_policy_id, c.depth AS "depth!",
                r.kind AS "rule_kind?", r.target AS "target?", r.state AS "state?",
                r.via_agent AS "via_agent?", r.restriction_only AS "restriction_only?",
@@ -295,7 +352,15 @@ async fn read_chain(
                 row.depth,
                 PolicyLevel {
                     id: PolicyId::from_uuid(row.id),
-                    owner: owner(&row.kind, row.bot_id, row.user_id, row.persona_id)?,
+                    owner: owner(
+                        &row.kind,
+                        OwnerColumns {
+                            bot_id: row.bot_id,
+                            user_id: row.user_id,
+                            persona_id: row.persona_id,
+                            team_id: row.team_id,
+                        },
+                    )?,
                     follows,
                     rules: Vec::new(),
                 },
@@ -592,6 +657,30 @@ impl PermissionStore for PgPermissionStore {
             .ok_or_else(|| PgPermissionStoreError::Corrupt("policy vanished on create".to_owned()))
     }
 
+    #[tracing::instrument(skip_all, err)]
+    async fn find_policy(&self, owner: &PolicyOwner) -> Result<Option<PolicyId>, Self::Err> {
+        let mut connection = self.pool.acquire().await?;
+        Ok(find_policy(&mut connection, owner).await?)
+    }
+
+    #[tracing::instrument(skip_all, fields(agent_id = %agent, source_policy_id = %source), err)]
+    async fn ensure_following_policy(
+        &self,
+        agent: BotId,
+        source: PolicyId,
+    ) -> Result<PolicyId, Self::Err> {
+        let mut connection = self.pool.acquire().await?;
+        if let Some(id) =
+            insert_following_policy(&mut connection, agent, PolicyId::generate(), source).await?
+        {
+            return Ok(id);
+        }
+        // It had one already, perhaps made by a concurrent call.
+        find_policy(&mut connection, &PolicyOwner::Agent(agent))
+            .await?
+            .ok_or_else(|| PgPermissionStoreError::Corrupt("policy vanished on create".to_owned()))
+    }
+
     #[tracing::instrument(skip_all, fields(policy_id = %policy), err)]
     async fn chain(&self, policy: PolicyId) -> Result<Option<PolicyChain>, Self::Err> {
         let mut connection = self.pool.acquire().await?;
@@ -800,24 +889,61 @@ impl PermissionStore for PgPermissionStore {
     }
 
     #[tracing::instrument(skip_all, fields(agents = agents.len()), err)]
-    async fn ensure_agent_policies(&self, agents: &[BotId]) -> Result<Vec<PolicyId>, Self::Err> {
+    async fn find_agent_policies(
+        &self,
+        agents: &[BotId],
+    ) -> Result<Vec<Option<PolicyId>>, Self::Err> {
         if agents.is_empty() {
             return Ok(Vec::new());
         }
         let bots: Vec<macro_uuid::Uuid> = agents.iter().map(|agent| agent.as_uuid()).collect();
+        let mut connection = self.pool.acquire().await?;
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, bot_id AS "bot_id!" FROM agent_permission_policy
+            WHERE bot_id = ANY($1)
+            "#,
+            &bots,
+        )
+        .fetch_all(&mut *connection)
+        .await?;
+        Ok(agents
+            .iter()
+            .map(|agent| {
+                rows.iter()
+                    .find(|row| row.bot_id == agent.as_uuid())
+                    .map(|row| PolicyId::from_uuid(row.id))
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip_all, fields(agents = agents.len()), err)]
+    async fn ensure_following_policies(
+        &self,
+        agents: &[(BotId, PolicyId)],
+    ) -> Result<Vec<PolicyId>, Self::Err> {
+        if agents.is_empty() {
+            return Ok(Vec::new());
+        }
         let ids: Vec<macro_uuid::Uuid> = agents
             .iter()
             .map(|_| PolicyId::generate().as_uuid())
             .collect();
+        let bots: Vec<macro_uuid::Uuid> = agents.iter().map(|(bot, _)| bot.as_uuid()).collect();
+        let sources: Vec<macro_uuid::Uuid> =
+            agents.iter().map(|(_, source)| source.as_uuid()).collect();
         let mut connection = self.pool.acquire().await?;
         sqlx::query!(
             r#"
-            INSERT INTO agent_permission_policy (id, kind, bot_id)
-            SELECT id, 'agent', bot_id FROM UNNEST($1::uuid[], $2::uuid[]) AS agent (id, bot_id)
+            INSERT INTO agent_permission_policy
+                (id, kind, bot_id, follows, source_policy_id, source_set_at)
+            SELECT id, 'agent', bot_id, true, source_policy_id, now()
+            FROM UNNEST($1::uuid[], $2::uuid[], $3::uuid[]) AS agent (id, bot_id, source_policy_id)
             ON CONFLICT (bot_id) WHERE bot_id IS NOT NULL DO NOTHING
             "#,
             &ids,
             &bots,
+            &sources,
         )
         .execute(&mut *connection)
         .await?;
@@ -832,15 +958,52 @@ impl PermissionStore for PgPermissionStore {
         .await?;
         agents
             .iter()
-            .map(|agent| {
+            .map(|(bot, _)| {
                 rows.iter()
-                    .find(|row| row.bot_id == agent.as_uuid())
+                    .find(|row| row.bot_id == bot.as_uuid())
                     .map(|row| PolicyId::from_uuid(row.id))
                     .ok_or_else(|| {
                         PgPermissionStoreError::Corrupt("policy vanished on create".to_owned())
                     })
             })
             .collect()
+    }
+
+    #[tracing::instrument(skip_all, fields(policies = policies.len()), err)]
+    async fn chain_ids(&self, policies: &[PolicyId]) -> Result<Vec<Vec<PolicyId>>, Self::Err> {
+        if policies.is_empty() {
+            return Ok(Vec::new());
+        }
+        let starts: Vec<macro_uuid::Uuid> = policies.iter().map(PolicyId::as_uuid).collect();
+        let mut connection = self.pool.acquire().await?;
+        let rows = sqlx::query!(
+            r#"
+            WITH RECURSIVE chain (start, id, source_policy_id, depth, path) AS (
+                SELECT p.id, p.id, p.source_policy_id, 1, ARRAY[p.id]
+                FROM agent_permission_policy p
+                WHERE p.id = ANY($1)
+              UNION ALL
+                SELECT c.start, p.id, p.source_policy_id, c.depth + 1, c.path || p.id
+                FROM chain c
+                JOIN agent_permission_policy p ON p.id = c.source_policy_id
+                WHERE c.depth <= $2 AND p.id <> ALL (c.path)
+            )
+            SELECT start AS "start!", id AS "id!" FROM chain ORDER BY start, depth
+            "#,
+            &starts,
+            WALK_DEPTH,
+        )
+        .fetch_all(&mut *connection)
+        .await?;
+        Ok(policies
+            .iter()
+            .map(|policy| {
+                rows.iter()
+                    .filter(|row| row.start == policy.as_uuid())
+                    .map(|row| PolicyId::from_uuid(row.id))
+                    .collect()
+            })
+            .collect())
     }
 
     #[tracing::instrument(skip_all, fields(policy_id = %policy), err)]

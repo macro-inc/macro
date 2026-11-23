@@ -39,6 +39,7 @@ fn a_source_scope_serializes_as_its_schema_says() {
         SourceScope::Personal,
         SourceScope::Team {
             team_id: Uuid::nil(),
+            team_name: Some("Team".to_owned()),
         },
     ] {
         let wire = wire_fields(&scope);
@@ -46,9 +47,10 @@ fn a_source_scope_serializes_as_its_schema_says() {
     }
     assert_eq!(
         serde_json::to_value(SourceScope::Team {
-            team_id: Uuid::nil()
+            team_id: Uuid::nil(),
+            team_name: Some("Team".to_owned()),
         })
         .unwrap(),
-        serde_json::json!({ "kind": "team", "teamId": Uuid::nil() })
+        serde_json::json!({ "kind": "team", "teamId": Uuid::nil(), "teamName": "Team" })
     );
 }

@@ -9,6 +9,7 @@ import type { ToolPermissionSourceKind } from './toolPermissionSourceKind';
 import type { ToolPermissionSourcePolicyId } from './toolPermissionSourcePolicyId';
 import type { ToolPermissionSourceScopeProperty } from './toolPermissionSourceScopeProperty';
 import type { ToolPermissionSourceStatus } from './toolPermissionSourceStatus';
+import type { ToolPermissionSourceTeamProperty } from './toolPermissionSourceTeamProperty';
 import type { ToolPermissionSourceVia } from './toolPermissionSourceVia';
 
 /**
@@ -27,6 +28,7 @@ loosens; its editors should pick a source or detach. */
   scope?: ToolPermissionSourceScopeProperty;
   /** Whether it still applies as itself. */
   status: ToolPermissionSourceStatus;
+  team?: ToolPermissionSourceTeamProperty;
   /** The rest of the chain past the source, toward its root. */
   via: ToolPermissionSourceVia[];
 }

@@ -162,6 +162,31 @@ impl AgentPermissions for FakePermissions {
         Err(self.refuse(caller))
     }
 
+    async fn view_team(
+        &self,
+        caller: &Caller,
+        _team: Uuid,
+    ) -> Result<TeamPermissionsView, PermissionError> {
+        Err(self.refuse(caller))
+    }
+
+    async fn set_team(
+        &self,
+        caller: &Caller,
+        _team: Uuid,
+        _changes: Vec<Change>,
+    ) -> Result<TeamPermissionsView, PermissionError> {
+        Err(self.refuse(caller))
+    }
+
+    async fn reset_team(
+        &self,
+        caller: &Caller,
+        _team: Uuid,
+    ) -> Result<TeamPermissionsView, PermissionError> {
+        Err(self.refuse(caller))
+    }
+
     async fn resolve_calls(
         &self,
         _policy: &SessionPolicy,
@@ -223,7 +248,7 @@ async fn send(
     )
 }
 
-const AGENT_ROUTES: [(&str, &str); 10] = [
+const AGENT_ROUTES: [(&str, &str); 13] = [
     ("GET", "/agent-tool-permissions/catalog"),
     (
         "GET",
@@ -258,6 +283,18 @@ const AGENT_ROUTES: [(&str, &str); 10] = [
     (
         "GET",
         "/agent-tool-permissions/policies/00000000-0000-0000-0000-00000000501c",
+    ),
+    (
+        "GET",
+        "/agent-tool-permissions/teams/00000000-0000-0000-0000-0000000007ea",
+    ),
+    (
+        "PUT",
+        "/agent-tool-permissions/teams/00000000-0000-0000-0000-0000000007ea",
+    ),
+    (
+        "DELETE",
+        "/agent-tool-permissions/teams/00000000-0000-0000-0000-0000000007ea",
     ),
 ];
 

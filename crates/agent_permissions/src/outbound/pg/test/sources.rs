@@ -562,3 +562,150 @@ async fn the_policy_table_refuses_a_root_that_follows_and_a_source_without_follo
     // Following a lost source is a state the deletes leave.
     assert!(set(agent_policy, true, None).await.is_ok());
 }
+
+/// Migration `20261123020224` from its backfill on.
+fn existing_agents_backfill() -> &'static str {
+    let migration = include_str!(
+        "../../../../../macro_db_client/migrations/20261123020224_agent_permission_policy_existing_agents.sql"
+    );
+    &migration[migration.find("-- Backfill").expect("the backfill marker")..]
+}
+
+/// A team's default is a root, found and made under its team; a new agent's
+/// policy is made following its default (and a second call keeps the first);
+/// the migration gives every agent without a policy its own and leaves the
+/// rest alone.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("permissions", "sources"))
+)]
+async fn team_defaults_new_agents_and_the_existing_agents_backfill(pool: PgPool) {
+    let team = Uuid::from_u128(0x91000000_0000_0000_0000_0000000007ea);
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Permissions team', $2)",
+        team,
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let store = PgPermissionStore::new(pool.clone());
+    let default = store.ensure_policy(&PolicyOwner::Team(team)).await.unwrap();
+    assert_eq!(
+        store.find_policy(&PolicyOwner::Team(team)).await.unwrap(),
+        Some(default)
+    );
+    assert_eq!(
+        store.ensure_policy(&PolicyOwner::Team(team)).await.unwrap(),
+        default
+    );
+    assert_eq!(
+        chain(&store, default).await.policy().owner,
+        PolicyOwner::Team(team)
+    );
+
+    let follower = store
+        .ensure_following_policy(agent(1), default)
+        .await
+        .unwrap();
+    assert_eq!(ids(&chain(&store, follower).await), [follower, default]);
+    let other = policy(&store, 3).await;
+    assert_eq!(
+        store
+            .ensure_following_policy(agent(1), other)
+            .await
+            .unwrap(),
+        follower
+    );
+    assert_eq!(ids(&chain(&store, follower).await), [follower, default]);
+    // A team policy is a root.
+    assert!(matches!(
+        follow(&store, default, other).await,
+        Err(PermissionError::SourceNotAllowed)
+    ));
+
+    // Agents 0 and 2 have no policy yet (3 got one above): the backfill
+    // gives each its own and leaves the follower following.
+    assert_eq!(
+        store
+            .find_policy(&PolicyOwner::Agent(agent(2)))
+            .await
+            .unwrap(),
+        None
+    );
+    sqlx::raw_sql(existing_agents_backfill())
+        .execute(&pool)
+        .await
+        .unwrap();
+    for index in [0, 2, 4, 5, 6] {
+        let own = store
+            .find_policy(&PolicyOwner::Agent(agent(index)))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(chain(&store, own).await.policy().follows, Follows::Own);
+    }
+    assert_eq!(ids(&chain(&store, follower).await), [follower, default]);
+    let policies = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM agent_permission_policy WHERE kind = 'agent'"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(policies, 7);
+
+    // Deleting the team takes its default; its followers are lost.
+    sqlx::query!("DELETE FROM team WHERE id = $1", team)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        chain(&store, follower).await.policy().follows,
+        Follows::Lost
+    );
+}
+
+/// The picker's batches: missing policies made following their sources in
+/// one insert (one that exists kept as it is), and every candidate's chain
+/// in one read.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("permissions", "sources"))
+)]
+async fn the_pickers_batches_make_following_policies_and_read_chains(pool: PgPool) {
+    let store = PgPermissionStore::new(pool);
+    let persona = store
+        .ensure_policy(&PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OWNER),
+        })
+        .await
+        .unwrap();
+    let existing = policy(&store, 0).await;
+    let made = store
+        .ensure_following_policies(&[
+            (agent(0), persona),
+            (agent(1), persona),
+            (agent(2), persona),
+        ])
+        .await
+        .unwrap();
+    assert_eq!(made[0], existing);
+    assert_eq!(chain(&store, existing).await.policy().follows, Follows::Own);
+    for policy in &made[1..] {
+        assert_eq!(ids(&chain(&store, *policy).await), [*policy, persona]);
+    }
+    follow(&store, existing, made[1]).await.unwrap();
+    let chains = store
+        .chain_ids(&[existing, made[1], PolicyId::generate()])
+        .await
+        .unwrap();
+    assert_eq!(
+        chains,
+        [
+            vec![existing, made[1], persona],
+            vec![made[1], persona],
+            Vec::new()
+        ]
+    );
+}

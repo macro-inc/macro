@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ToolPermissionSourceScopeOneOfThreeKind } from './toolPermissionSourceScopeOneOfThreeKind';
+import type { ToolPermissionSourceScopeOneOfThreeTeamName } from './toolPermissionSourceScopeOneOfThreeTeamName';
 
 /**
  * A team's.
@@ -13,4 +14,6 @@ export type ToolPermissionSourceScopeOneOfThree = {
   kind: ToolPermissionSourceScopeOneOfThreeKind;
   /** The team. */
   teamId: string;
+  /** Its name, when it could be read. */
+  teamName?: ToolPermissionSourceScopeOneOfThreeTeamName;
 };

@@ -39,9 +39,17 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   view's `policyId`), and its settings are rows under that id
   (`agent_permission_rule`). Owned agents have one policy; a built-in persona
   has one per person, and in a session the owner's applies.
-  `PermissionStore::ensure_policy` creates a policy's row on first use (in the
-  gate, before its read-only snapshot), and only after the request passed
-  its access checks. `agent_tool_permission` and `persona_tool_permission`
+  The service creates a policy's row on first use (in the gate, before its
+  read-only snapshot), and only after the request passed its access checks
+  (`policy_id`): a new owned agent's follows its scope's default
+  (`ensure_following_policy`; a private agent its owner's own Macro policy,
+  a team's agent its team's default, both roots), anything else owns its
+  settings (`ensure_policy`). Migration `20261123020224` gave every owned
+  agent that existed before defaults a policy of its own, so they keep
+  their settings. A team's default (`PolicyOwner::Team`, one per team, made
+  on first use, empty: everything Allow) is read by the team's members and
+  edited by its admins and owners from their own session
+  (`/agent-tool-permissions/teams/{teamId}`, `TeamToolPermissions`). `agent_tool_permission` and `persona_tool_permission`
   are the tables from before ids, copied by migration `20261122220100` and no
   longer read; a cleanup after release drops them.
 - An owned agent's policy may follow another policy, its source
@@ -52,8 +60,10 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   above, or asks for everything when its source was hard deleted (`Lost`:
   `follows` with no source); each following level's rows, the policy's own
   included, only restrict (stricter-of), whoever made them; the overlay comes
-  last. A state the chain gave from a source has `Origin::Source`. Persona
-  (and, later, team) policies are roots. A soft-deleted agent's policy stays
+  last. An agent's restrictions on itself (`via_agent` rows) stay its own: a
+  source's never reach its followers (`Layer::as_source`), in the gate, the
+  view and a detach's snapshot alike, as a follower's stay local to it. A state the chain gave from a source has `Origin::Source`. Persona
+  and team policies are roots. A soft-deleted agent's policy stays
   and keeps applying, frozen. The store reads a chain and its rules in one
   statement, and the gate reads it with the overlay in one snapshot
   (`chain_with_session`), so a source edit, a source change or a detach is
@@ -71,8 +81,9 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   stay explicit, local restrictions stay restrictions; session overlays and
   approvals are not copied), in one transaction.
 - Who may follow what (`service.rs` `in_scope`): a private agent its owner's
-  own Macro policy, their other private agents and the agents of teams they
-  belong to; a team agent its team's other agents. Never a person's policy
+  own Macro policy, their other private agents, and the defaults and agents
+  of teams they belong to; a team agent its team's default and its team's
+  other agents. Never a person's policy
   for a team agent, a persona other than Macro, or a deleted agent's policy
   (one already followed stays, frozen). Setting a source and detaching need
   a person who may edit the follower (`NeedsPerson` otherwise); neither
@@ -86,7 +97,8 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   and the rest of the chain in `via`) and what it inherits (`inherited`,
   read only); `canSetSource` says whether the caller may change it. The
   picker (`/agent-tool-permissions/sources`) lists the person's own Macro
-  first (private scope), then the agents in scope (at most
+  first (private scope), then team defaults (the person's teams, or the
+  agent's team), then the agents in scope (at most
   `MAX_CANDIDATES`), marking the current one and those that would make a
   cycle or a chain too long. `ShowPermissions` says "Follows <name>
   (@handle)" (`follows`).
@@ -142,7 +154,7 @@ reads the viewer's. A new surface goes in this table with its flag-off test.
 
 | Surface | Gate | Off | Flag-off test |
 | --- | --- | --- | --- |
-| Routes `/agent-tool-permissions/catalog`, `/agent-tool-permissions/sources`, `/agent-tool-permissions/policies/{id}`, `/agents/{id}/tool-permissions[/tighten\|/source\|/detach]`, `/agent-sessions/{id}/tool-permissions` | `AgentPermissionsService::ensure_enabled` (`PermissionsRollout`) | 404 | `every_route_is_not_found_while_the_feature_is_off`, `with_the_rollout_off_everything_is_disabled` |
+| Routes `/agent-tool-permissions/catalog`, `/agent-tool-permissions/sources`, `/agent-tool-permissions/policies/{id}`, `/agent-tool-permissions/teams/{id}`, `/agents/{id}/tool-permissions[/tighten\|/source\|/detach]`, `/agent-sessions/{id}/tool-permissions` | `AgentPermissionsService::ensure_enabled` (`PermissionsRollout`) | 404 | `every_route_is_not_found_while_the_feature_is_off`, `with_the_rollout_off_everything_is_disabled` |
 | The turn's code-mode kind (`CodeModeKind`, once per turn) and the dialect `ExecuteCode` it picks (no `language`: `source` the dialect, optional TypeScript `module` with no network; schema, `js_tools.md` and `js_tools_permissions.md` text, the call; on with the flag, TypeScript is refused) | `CodeModeService::code_mode_kind` (`JsToolsRollout`), `session_toolset(kind)`, `refuse_other_kind`, the in-process agent's `TurnCodeTools` | `TypeScript`: today's tool, pinned by `toolset/test/without_js_tools.json`; a dialect call or a module refused before a credential | `sessions_see_and_call_js_tools_only_with_the_rollout`, `js_tools_without_the_rollout_is_refused_before_a_credential`, `sessions_without_javascript_tools_see_todays_tools` |
 | Public MCP code tools for an agent session's calls (`ManagedAgentSession`) | `CodeModeSurface::kinds` (the same `CodeModeKinds`) | listed and run as today | `a_dialect_sessions_calls_get_no_typescript_code_mode` |
 | The gate: analysis, never, ask holds, `allowed_operations` | `PermissionGate::check` (`LanguageRollout`) | `None`: the run is unchanged; a JS tools program it did not check is refused unrun | `javascript_and_owners_without_the_rollout_are_not_checked`, `each_language_is_checked_only_with_its_own_rollout_and_analyzer`, `the_gate_follows_the_permissions_flag` |
@@ -175,7 +187,8 @@ the tags when the flag goes.
 
 - Depends on: `agent_permission_registry` (the catalog), ports for the
   agents directory (`bots`' manage rule, an agent's owner and identity, the
-  agents a person may edit) and sessions, both adapted in
+  agents a person may edit), teams (roles, a person's teams, names) and
+  sessions, all adapted in
   `agent_harness_service/src/tool_permissions.rs`.
 - Used by: `agent_harness_service` (routes, the code-mode gate).
 

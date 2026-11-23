@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO agent_permission_policy (id, kind, team_id)\n                VALUES ($1, 'team', $2)\n                ON CONFLICT (team_id) WHERE team_id IS NOT NULL DO NOTHING\n                RETURNING id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a2dc520a93a24b220067582af8dca6150b2ac46d5918106f808c4546a1ffa68e"
+}
