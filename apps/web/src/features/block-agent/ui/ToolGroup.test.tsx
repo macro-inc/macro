@@ -34,10 +34,7 @@ const step = (
   status: ActivityLineStep['status'] = 'completed'
 ): ActivityLineStep => ({ id, label, status });
 
-function mount(overrides?: {
-  live?: boolean;
-  defaultOpen?: boolean;
-}) {
+function mount(overrides?: { live?: boolean; defaultOpen?: boolean }) {
   const [live, setLive] = createSignal(overrides?.live ?? false);
   const [calls, setCalls] = createSignal(['Read', 'Edit', 'Shell']);
   const [steps, setSteps] = createSignal<ActivityLineStep[]>([
@@ -73,7 +70,6 @@ describe('ToolGroup', () => {
     vi.advanceTimersByTime(2000);
     expect(view.queryAllByTestId('call')).toHaveLength(0);
   });
-
 
   it('is one live line naming the running step, and stays closed', () => {
     const view = mount({ live: true });
