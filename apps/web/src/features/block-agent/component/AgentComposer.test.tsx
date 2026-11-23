@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   input: undefined as AgentInputProps | undefined,
   model: undefined as UnifiedModelSelectorState | undefined,
   queued: undefined as QueuedPromptsProps | undefined,
+  approvals: () => [] as { approvalId: string; serverSlug: string }[],
 }));
 
 vi.mock('@app/features/changes/context/changes-controller', () => ({
@@ -60,7 +61,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     displayName: (id: string) => id,
     userId: () => 'viewer',
     interactions: { pending: () => [], canAnswer: () => false },
-    toolApprovals: { pending: () => [] },
+    toolApprovals: { pending: () => mocks.approvals() },
     issue: mocks.issue,
     selectModel: mocks.selectModel,
     loadFailed: () => false,
@@ -86,7 +87,7 @@ vi.mock('../context/AgentSessionContext', () => ({
 vi.mock('../ui', () => ({
   AgentInput: (props: AgentInputProps) => {
     mocks.input = props;
-    return <div>{props.modelControl}</div>;
+    return <div data-testid="input">{props.modelControl}</div>;
   },
   QueuedPrompts: (props: QueuedPromptsProps) => {
     mocks.queued = props;
@@ -101,6 +102,11 @@ vi.mock('@app/features/agents-view/model-selector', () => ({
   },
 }));
 vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
+vi.mock('./ToolApprovalRequest', () => ({
+  ToolApprovalRequest: (props: { request: { approvalId: string } }) => (
+    <div data-testid={`approval-${props.request.approvalId}`} />
+  ),
+}));
 
 beforeEach(() => {
   localStorage.clear();
@@ -108,10 +114,25 @@ beforeEach(() => {
   mocks.turn = () => 'idle';
   mocks.metadata = () => undefined;
   mocks.session = () => ({ canEdit: false });
+  mocks.approvals = () => [];
   mocks.issue.mockResolvedValue({ isErr: () => false });
   setPreferredSpeed('priority');
 });
 afterEach(cleanup);
+
+it('docks a permission hold right above the input, after other held calls', () => {
+  mocks.approvals = () => [
+    { approvalId: 'hold', serverSlug: 'macro-sdk' },
+    { approvalId: 'linear', serverSlug: 'linear' },
+  ];
+  const { getByTestId } = render(() => <AgentComposer />);
+  const hold = getByTestId('approval-hold').parentElement;
+  const linear = getByTestId('approval-linear').parentElement;
+  // The host's 8px gap is the only space between the hold and the input.
+  expect(hold?.nextElementSibling).toBe(getByTestId('input'));
+  expect(hold?.classList.contains('mb-2')).toBe(false);
+  expect(linear?.nextElementSibling).toBe(hold);
+});
 
 it('passes opening context to the composer without issuing it', () => {
   render(() => <AgentComposer />);

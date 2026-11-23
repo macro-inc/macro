@@ -24,8 +24,11 @@ function groupInSentence(groupName: string): string {
     .join(' ');
 }
 
-/** "send email", "edit documents". */
-function thingPhrase(thing: GatedThing): string {
+/**
+ * "send email", "edit documents", with the action and the entity each in an
+ * `<em>` the request card accents.
+ */
+function markedThingPhrase(thing: GatedThing): string {
   const group = groupInSentence(thing.groupName);
   return match(thing.action)
     .with('create', () => t('agentPermissionsChat.createThing', { group }))
@@ -37,16 +40,29 @@ function thingPhrase(thing: GatedThing): string {
     .exhaustive();
 }
 
-/**
- * What the operations let a program do, as one list in the interface
- * language: "send email and edit documents", "delete email, send messages,
- * create tasks and 2 more things".
- */
-export function describeGatedThings(
-  operations: readonly GatedOperation[]
-): string {
+/** A run of a sentence; `accent` for the words a request card colors. */
+export type PhrasePart = { text: string; accent: boolean };
+
+const MARKED = /<em>(.*?)<\/em>/g;
+
+function markedParts(text: string): PhrasePart[] {
+  const parts: PhrasePart[] = [];
+  let last = 0;
+  for (const found of text.matchAll(MARKED)) {
+    if (found.index > last) {
+      parts.push({ text: text.slice(last, found.index), accent: false });
+    }
+    parts.push({ text: found[1], accent: true });
+    last = found.index + found[0].length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last), accent: false });
+  return parts;
+}
+
+/** The things as one marked list: "<em>send</em> <em>email</em> and …". */
+function markedGatedThings(operations: readonly GatedOperation[]): string {
   const things = gatedThings(operations);
-  const named = things.slice(0, MAX_THINGS).map(thingPhrase);
+  const named = things.slice(0, MAX_THINGS).map(markedThingPhrase);
   const rest = things.length - named.length;
   if (rest > 0) {
     named.push(t('agentPermissionsChat.moreThings', { count: rest }));
@@ -57,22 +73,56 @@ export function describeGatedThings(
   }).format(named);
 }
 
-/** "run a program that may send email and edit documents". */
-export function describePermissionRun(
+/**
+ * What the operations let a program do, as one list in the interface
+ * language: "send email and edit documents", "delete email, send messages,
+ * create tasks and 2 more things".
+ */
+export function describeGatedThings(
   operations: readonly GatedOperation[]
 ): string {
-  return t('agentPermissionsChat.runProgram', {
-    things: describeGatedThings(operations),
-  });
+  return markedGatedThings(operations).replace(MARKED, '$1');
 }
 
-/** "Run a program that may send email and edit documents", as a title. */
-export function permissionRunTitle(
+/** "Send email and edit documents", as a row's title. */
+export function gatedThingsTitle(
   operations: readonly GatedOperation[]
 ): string {
-  return t('agentPermissionsChat.runProgramTitle', {
-    things: describeGatedThings(operations),
+  const things = describeGatedThings(operations);
+  return things.charAt(0).toLocaleUpperCase(formatLocale()) + things.slice(1);
+}
+
+// The template's own placeholders, kept as they are so the sentence can be
+// split around them: the agent's name is never read for marks.
+const AGENT_SLOT = '{{agent}}';
+const THINGS_SLOT = '{{things}}';
+const SLOTS = /(\{\{agent\}\}|\{\{things\}\})/;
+
+/**
+ * "Allow Scout to send email and edit documents?", in parts: the agent's
+ * name plain, each action and entity accented.
+ */
+export function permissionRequestParts(
+  agent: string,
+  operations: readonly GatedOperation[]
+): PhrasePart[] {
+  // A hold whose operations this build can't read still asks for something.
+  if (operations.length === 0) {
+    return [
+      { text: t('agentPermissionsChat.allowRun', { agent }), accent: false },
+    ];
+  }
+  const template = t('agentPermissionsChat.allowRequest', {
+    agent: AGENT_SLOT,
+    things: THINGS_SLOT,
   });
+  return template.split(SLOTS).flatMap((piece): PhrasePart[] =>
+    match(piece)
+      .with(AGENT_SLOT, () => [{ text: agent, accent: false }])
+      .with(THINGS_SLOT, () => markedParts(markedGatedThings(operations)))
+      .with('', () => [])
+      .otherwise(() => [{ text: piece, accent: false }])
+  );
 }
 
 /** An action's name beside an operation: "Send", "Delete". */

@@ -62,12 +62,17 @@ export function createToolApprovalController(
   const [answering, setAnswering] = createStore<
     Record<string, true | undefined>
   >({});
+  // Answered here: gone from the dock as soon as the harness accepts the
+  // answer, before the session's own pending list catches up.
+  const [answered, setAnswered] = createStore<Record<string, true | undefined>>(
+    {}
+  );
   const pending = () =>
     source
       .pending()
       .filter(
         (request): request is HeldToolApproval =>
-          request.kind === 'tool_approval'
+          request.kind === 'tool_approval' && !answered[request.approvalId]
       );
   const canApprove = (request?: HeldToolApproval) => {
     // A permission hold names its approver; others answer to the owner.
@@ -99,6 +104,7 @@ export function createToolApprovalController(
         );
         return false;
       }
+      setAnswered(approvalId, true);
       return true;
     } catch {
       source.onFailure("Couldn't send your answer");

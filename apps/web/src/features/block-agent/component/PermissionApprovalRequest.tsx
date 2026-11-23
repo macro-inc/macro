@@ -1,6 +1,7 @@
 import {
-  GatedOperationList,
+  describeGatedThings,
   gatedFocus,
+  permissionRequestParts,
   useAgentPermissionsFlag,
   useOpenAgentPermissions,
   useSessionToolPermissionsQuery,
@@ -8,17 +9,17 @@ import {
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ToolApprovalAnswerDto } from '@service-agent-harness/generated/schemas';
-import { Button } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import type { HeldToolApproval } from '../primitives/create-tool-approval-controller';
 import { parsePermissionHold } from '../state/permission-approval';
-import { ToolApprovalCard } from '../ui/ToolApprovalCard';
+import { PermissionRequestCard } from '../ui/PermissionRequestCard';
 
 /**
- * A program held because operations it may call are set to Ask: what it
- * may do, by group and action, for the person it acts for to approve once,
- * allow for the session, or decline. Everyone else waits, and may cancel.
+ * A program held because operations it may call are set to Ask, docked
+ * above the composer: the person it acts for allows it once, for the
+ * session, or denies it. Everyone else waits, and may cancel. Answered, the
+ * card goes; the program's own row in the transcript says what happened.
  */
 export function PermissionApprovalRequest(props: {
   request: HeldToolApproval;
@@ -33,7 +34,6 @@ export function PermissionApprovalRequest(props: {
     () => permissionsFlag() && Boolean(session?.sessionId())
   );
   const openPermissions = useOpenAgentPermissions();
-  const [showProgram, setShowProgram] = createSignal(false);
 
   // The pending request carries no arguments; its transcript part does.
   const hold = createMemo(() => {
@@ -61,11 +61,22 @@ export function PermissionApprovalRequest(props: {
       ? (session?.displayName(id) ?? id)
       : t('agentPermissionsChat.theApprover');
   };
-  const canApprove = () => approvals()?.canApprove(props.request) === true;
   const view = () =>
     permissionsQuery.isSuccess
       ? (permissionsQuery.data ?? undefined)
       : undefined;
+
+  const waitingDescription = () =>
+    operations().length > 0
+      ? t('agentPermissionsChat.wantsToWithAccess', {
+          agent: agent(),
+          things: describeGatedThings(operations()),
+          name: approverName(),
+        })
+      : t('agentPermissionsChat.wantsToRunWithAccess', {
+          agent: agent(),
+          name: approverName(),
+        });
 
   const answer = (value: ToolApprovalAnswerDto) =>
     fireAndForget(
@@ -77,131 +88,20 @@ export function PermissionApprovalRequest(props: {
     if (agentId) openPermissions(agentId, gatedFocus(operations()));
   };
 
-  const note = () => {
-    if (!canApprove()) {
-      return approvals()?.canCancel()
-        ? t('agentPermissionsChat.waitingNote', { name: approverName() })
-        : t('agentPermissionsChat.waitingNoteOnly', { name: approverName() });
-    }
-    const message = t('agentPermissionsChat.approverNote', { agent: agent() });
-    const [before, link, after] = message.split(/<link>|<\/link>/);
-    return (
-      <>
-        {before}
-        <Show when={view()?.canEdit} fallback={link}>
-          <button
-            type="button"
-            class="text-ink underline decoration-edge underline-offset-2 outline-none not-touch:hover:decoration-ink focus-visible:decoration-ink"
-            onClick={openSettings}
-          >
-            {link}
-          </button>
-        </Show>
-        {after}
-      </>
-    );
-  };
-
   return (
-    <ToolApprovalCard
-      ariaLabel={t('agentPermissionsChat.approvalLabel')}
-      action=""
-      owner={approverName()}
-      canApprove={canApprove()}
+    <PermissionRequestCard
+      canApprove={approvals()?.canApprove(props.request) === true}
+      request={permissionRequestParts(agent(), operations())}
+      approver={approverName()}
+      waitingDescription={waitingDescription()}
       canCancel={approvals()?.canCancel() === true}
+      canEditPermissions={view()?.canEdit === true}
       disabled={approvals()?.answering(props.request.approvalId)}
-      // Always offered: this remembers the asked operations for the session.
-      standing="allow"
-      standingNote={null}
-      title={
-        canApprove()
-          ? t('agentPermissionsChat.approvalNeeded')
-          : t('agentPermissionsChat.waitingFor', { name: approverName() })
-      }
-      description={
-        canApprove()
-          ? t('agentPermissionsChat.wantsToRun', { agent: agent() })
-          : t('agentPermissionsChat.wantsToRunAs', {
-              agent: agent(),
-              name: approverName(),
-            })
-      }
-      details={
-        <>
-          <Show when={operations().length > 0}>
-            <GatedOperationList operations={operations()} />
-          </Show>
-          <p class="mt-2 text-xs leading-4 text-ink-muted [overflow-wrap:anywhere]">
-            {note()}
-          </p>
-          <Show when={hold()?.source}>
-            {(source) => (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  class="mt-1.5 -ml-2 self-start"
-                  aria-expanded={showProgram()}
-                  onClick={() => setShowProgram((open) => !open)}
-                >
-                  {showProgram()
-                    ? t('agentPermissionsChat.hideProgram')
-                    : t('agentPermissionsChat.viewProgram')}
-                </Button>
-                <Show when={showProgram()}>
-                  <Show
-                    when={hold()?.module}
-                    fallback={<ProgramText text={source()} />}
-                  >
-                    {(module) => (
-                      <>
-                        <ProgramPartLabel>
-                          {t('agentPermissionsChat.programPart')}
-                        </ProgramPartLabel>
-                        <ProgramText text={source()} />
-                        <ProgramPartLabel>
-                          {t('agentPermissionsChat.modulePart')}
-                        </ProgramPartLabel>
-                        <ProgramText text={module()} />
-                      </>
-                    )}
-                  </Show>
-                </Show>
-              </>
-            )}
-          </Show>
-        </>
-      }
-      labels={{
-        decline: t('agentPermissionsChat.decline'),
-        approveAlways: t('agentPermissionsChat.allowForSession'),
-        approve: t('agentPermissionsChat.approve'),
-        cancel: t('agentPermissionsChat.cancel'),
-      }}
-      onApprove={() => answer('approve')}
-      onApproveAlways={() => answer('approve_and_remember')}
+      onApproveOnce={() => answer('approve')}
+      onAllowInSession={() => answer('approve_and_remember')}
       onDeny={() => answer('deny')}
+      onEditPermissions={openSettings}
       onCancel={() => answer('cancel')}
     />
-  );
-}
-
-/**
- * One part of a held program. Long lines wrap: the person approves all of
- * it, so none of it may sit past the card's edge.
- */
-function ProgramText(props: { text: string }) {
-  return (
-    <pre class="mt-1 max-h-60 overflow-y-auto rounded-lg bg-ink/3 p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-ink-muted [overflow-wrap:anywhere]">
-      {props.text}
-    </pre>
-  );
-}
-
-/** Names a part of a program that has two: what it runs, and its module. */
-function ProgramPartLabel(props: { children: string }) {
-  return (
-    <p class="mt-2 text-xs font-medium text-ink-muted">{props.children}</p>
   );
 }

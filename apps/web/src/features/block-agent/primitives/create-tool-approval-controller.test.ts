@@ -105,6 +105,23 @@ describe('createToolApprovalController', () => {
     dispose();
   });
 
+  it('clears an answered call at once, before the session lists it gone', async () => {
+    const { controller, dispose } = setup('macro|wolf@macro.com');
+    await controller.answer('approval-1', 'deny');
+    expect(controller.pending()).toEqual([]);
+    dispose();
+  });
+
+  it('keeps a call whose answer failed, to answer again', async () => {
+    const { controller, dispose, answer } = setup('macro|wolf@macro.com');
+    answer.mockResolvedValueOnce(
+      err([{ code: 'NETWORK_ERROR' as never, message: 'offline' }])
+    );
+    await controller.answer('approval-1', 'approve');
+    expect(controller.pending()).toEqual([held]);
+    dispose();
+  });
+
   it('says so when somebody answered first', async () => {
     const { controller, dispose, answer, onFailure } = setup(
       'macro|wolf@macro.com'

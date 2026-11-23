@@ -7,8 +7,8 @@ import {
 } from '../tests/gated-fixtures';
 import {
   describeGatedThings,
-  describePermissionRun,
-  permissionRunTitle,
+  gatedThingsTitle,
+  permissionRequestParts,
 } from './gated-phrases';
 
 describe('gated phrases', () => {
@@ -18,11 +18,38 @@ describe('gated phrases', () => {
 
   it('joins things as a list, once per group and action', () => {
     expect(
-      describePermissionRun([SEND_MESSAGE, EDIT_DOCUMENT, RENAME_DOCUMENT])
-    ).toBe('run a program that may send email and edit documents');
-    expect(permissionRunTitle([SEND_MESSAGE])).toBe(
-      'Run a program that may send email'
-    );
+      describeGatedThings([SEND_MESSAGE, EDIT_DOCUMENT, RENAME_DOCUMENT])
+    ).toBe('send email and edit documents');
+    expect(gatedThingsTitle([SEND_MESSAGE])).toBe('Send email');
+  });
+
+  it('asks with the agent plain and each action and entity accented', () => {
+    expect(
+      permissionRequestParts('Scout', [SEND_MESSAGE, EDIT_DOCUMENT])
+    ).toEqual([
+      { text: 'Allow ', accent: false },
+      { text: 'Scout', accent: false },
+      { text: ' to ', accent: false },
+      { text: 'send', accent: true },
+      { text: ' ', accent: false },
+      { text: 'email', accent: true },
+      { text: ' and ', accent: false },
+      { text: 'edit', accent: true },
+      { text: ' ', accent: false },
+      { text: 'documents', accent: true },
+      { text: '?', accent: false },
+    ]);
+  });
+
+  it('never reads marks in the agent’s name', () => {
+    const parts = permissionRequestParts('<em>Scout</em>', [SEND_MESSAGE]);
+    expect(parts[1]).toEqual({ text: '<em>Scout</em>', accent: false });
+  });
+
+  it('still asks when it can’t read the operations', () => {
+    expect(permissionRequestParts('Scout', [])).toEqual([
+      { text: 'Allow Scout to run a program?', accent: false },
+    ]);
   });
 
   it('keeps acronyms in group names', () => {
