@@ -32,10 +32,6 @@ import {
   UpdateTimeEntryDocument,
   type UpdateTimeEntryMutation,
 } from '@service-storage/graphql/generated/graphql';
-import {
-  getGraphqlCacheHost,
-  getGraphqlSoupClient,
-} from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import { v5 as uuidv5, v7 as uuidv7 } from 'uuid';
@@ -77,7 +73,7 @@ function pageOf(
  */
 export function createTaskTimeEntriesQuery(
   taskId: Accessor<string | undefined>,
-  client: () => Client = getGraphqlSoupClient
+  client: Accessor<Client>
 ) {
   const query = createLiveQuery(
     TaskTimeEntriesDocument,
@@ -107,7 +103,7 @@ export function createTaskTimeEntriesQuery(
 export function createTaskTimeEntriesAfterQuery(
   taskId: Accessor<string | undefined>,
   after: Accessor<string | undefined>,
-  client: () => Client = getGraphqlSoupClient
+  client: Accessor<Client>
 ) {
   const query = createLiveQuery(
     TaskTimeEntriesAfterDocument,
@@ -317,9 +313,11 @@ export function timeEntryEditUuid(entryId: string): string {
   );
 }
 
-type WriteDependencies = {
-  client?: Client;
-  host?: TimeLoggedHost;
+/** The GraphQL client a write goes through and the cache its prediction reads. */
+export type TimeWriteDependencies = {
+  client: Client;
+  /** Absent when the app runs without the normalized cache: nothing is predicted. */
+  host: TimeLoggedHost | undefined;
   now?: () => Date;
 };
 
@@ -335,10 +333,9 @@ export async function logTime(
     values: TimeEntryValues;
     id?: string;
   },
-  dependencies: WriteDependencies = {}
+  dependencies: TimeWriteDependencies
 ): Promise<TimeWriteResult> {
-  const client = dependencies.client ?? getGraphqlSoupClient();
-  const host = dependencies.host ?? getGraphqlCacheHost();
+  const { client, host } = dependencies;
   const id = args.id ?? uuidv7();
   const now = (dependencies.now?.() ?? new Date()).toISOString();
   const cached = await readCachedTimeTask(host, args.taskId);
@@ -370,10 +367,9 @@ export async function logTime(
  */
 export async function updateTimeEntry(
   args: { entry: TimeEntryFieldsFragment; values: TimeEntryValues },
-  dependencies: WriteDependencies = {}
+  dependencies: TimeWriteDependencies
 ): Promise<TimeWriteResult> {
-  const client = dependencies.client ?? getGraphqlSoupClient();
-  const host = dependencies.host ?? getGraphqlCacheHost();
+  const { client, host } = dependencies;
   const { entry, values } = args;
   const now = (dependencies.now?.() ?? new Date()).toISOString();
   const cached = await readCachedTimeTask(host, entry.taskId);
@@ -396,10 +392,9 @@ export async function updateTimeEntry(
 /** Delete one's own entry; it leaves the list and the total at once. */
 export async function deleteTimeEntry(
   args: { entry: TimeEntryFieldsFragment },
-  dependencies: WriteDependencies = {}
+  dependencies: TimeWriteDependencies
 ): Promise<TimeWriteResult> {
-  const client = dependencies.client ?? getGraphqlSoupClient();
-  const host = dependencies.host ?? getGraphqlCacheHost();
+  const { client, host } = dependencies;
   const { entry } = args;
   const cached = await readCachedTimeTask(host, entry.taskId);
   const optimisticData: OptimisticResponse<DeleteTimeEntryMutation> = {

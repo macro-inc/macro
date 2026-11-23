@@ -9,7 +9,6 @@ import {
   type StopTimerMutation,
   type TimeTrackingFieldsFragment,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
@@ -32,7 +31,7 @@ function timeTrackingOf(data: RunningTimerQuery): TimeTrackingFieldsFragment {
  */
 export function createRunningTimerQuery(
   enabled: Accessor<boolean>,
-  client: () => Client = getGraphqlSoupClient
+  client: Accessor<Client>
 ) {
   const query = createLiveQuery(
     RunningTimerDocument,
@@ -58,7 +57,8 @@ function deviceTimeZone(): string | undefined {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
 }
 
-type TimerDependencies = { client?: Client };
+/** The GraphQL client a timer write goes through. */
+export type TimerDependencies = { client: Client };
 
 /**
  * Start timing a task. A timer running on another task stops and saves its
@@ -67,9 +67,9 @@ type TimerDependencies = { client?: Client };
  */
 export async function startTimer(
   args: { taskId: string; startedAt?: string },
-  dependencies: TimerDependencies = {}
+  dependencies: TimerDependencies
 ): Promise<TimeWriteResult<StartTimerMutation['startTimer']>> {
-  const client = dependencies.client ?? getGraphqlSoupClient();
+  const { client } = dependencies;
   const result = await client
     .mutation(StartTimerDocument, {
       input: {
@@ -90,9 +90,9 @@ export async function startTimer(
  */
 export async function stopTimer(
   args: { timerId: string; endedAt?: string; logAll?: boolean },
-  dependencies: TimerDependencies = {}
+  dependencies: TimerDependencies
 ): Promise<TimeWriteResult<StopTimerMutation['stopTimer']>> {
-  const client = dependencies.client ?? getGraphqlSoupClient();
+  const { client } = dependencies;
   const result = await client
     .mutation(StopTimerDocument, {
       input: {
@@ -109,9 +109,9 @@ export async function stopTimer(
 /** Discard the viewer's timer without saving anything. */
 export async function discardTimer(
   args: { timerId: string },
-  dependencies: TimerDependencies = {}
+  dependencies: TimerDependencies
 ): Promise<TimeWriteResult<null>> {
-  const client = dependencies.client ?? getGraphqlSoupClient();
+  const { client } = dependencies;
   const result = await client
     .mutation(DiscardTimerDocument, { timerId: args.timerId })
     .toPromise();
