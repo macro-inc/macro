@@ -40,6 +40,7 @@ pub mod link_manager;
 pub mod live_pass;
 pub mod progress;
 pub mod projection;
+pub mod projection_recovery;
 pub mod provider_repair;
 pub mod reimport;
 mod retry;

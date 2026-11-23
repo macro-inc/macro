@@ -21,6 +21,7 @@ mod ingest;
 mod lifecycle;
 mod progress;
 mod projection;
+pub mod projection_recovery;
 mod purge;
 mod reimport;
 mod settings;
@@ -666,6 +667,7 @@ impl PgMailboxSync {
         let enumerated = state.catalog_complete && !state.streams_incomplete;
         // All correspondence is now ingested, regardless of folder/page delivery order.
         if enumerated && state.recheck_pending && !state.queued {
+            // Rechecks read current state and claim uploads, so their relative order is immaterial.
             sqlx::query!(r#"
                 INSERT INTO email_projection_outbox(id,link_id,generation,payload)
                 SELECT gen_random_uuid(),m.link_id,$2,jsonb_build_object('kind','attachment_recheck','message_id',m.id)

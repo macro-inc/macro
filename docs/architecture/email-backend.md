@@ -50,13 +50,22 @@ The [private engine architecture](imap-engine.md) covers protocol, credential,
 connection ownership and deployment boundaries.
 
 IMAP uses the existing durable folder-stream, reconciliation, command, draft
-and projection workflows. Each `PgMailboxSync` worker instance is explicitly
-bound to one provider: an Outlook gateway can never claim IMAP work. Gmail's
-legacy history and queue path stays separate. IMAP skips OAuth token acquisition,
+and projection workflows. Protocol workers bind `PgMailboxSync` to one provider:
+an Outlook gateway can never claim IMAP work. Projection uses one shared claimer
+across providers and routes attachment reads through `ProviderAttachmentBytes`
+using the current link provider. Gmail's legacy history ingestion stays separate.
+IMAP skips OAuth token acquisition,
 Graph watches, address-book streams and calendar grants. The engine posts committed
 change or credential-failure hints to `/internal/imap/notifications`; the domain
 ignores stale generations, wakes folder work, and records reconnect state once.
 Periodic polling recovers lost hints.
+
+The projection claim locks at most 64 due rows, then checks unfinished heads in
+a fresh READ COMMITTED statement. This preserves FIFO per serialized producer
+without losing a concurrent finish's successor wake. Local blocking and real
+retry times remain separate; finishes serialize per link and wake one successor.
+Inactive work parks outside the due index and a bounded recovery sweep visits
+parked links rather than their whole backlogs.
 
 The email domain's `ImapConnectionService` accepts only the actor's independently
 verified sign-in address. Logging in to an arbitrary mail server does not prove

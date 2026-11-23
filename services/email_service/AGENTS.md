@@ -471,6 +471,16 @@ Forward its optional typed phase/class/recipient position unchanged into the
 durable send_rejected detail; never infer the phase from sanitized prose or put
 an address in logs. Keep AccountBusy local and preserve provider retry hints.
 
+The pubsub worker also runs projection parking recovery on the shared projection
+pool, with its own singleton cursor lock and an absolute two-second page budget.
+Each link probe commits its cursor independently. Timed-out unpark attempts halve
+their row budget in fresh savepoints down to one row; a link still failing is
+skipped until wrap, with consecutive skips visible on the recovery span.
+It never borrows the IMAP catch-up or provider repair maintenance connection.
+Connect/reconnect adapters clear one FIFO parking page after their parent update
+and finish bounded pages after commit; the periodic sweep recovers interrupted
+tails and old-binary activations without changing retry or provider due times.
+
 The pubsub worker alone runs IMAP host catch-up (`imap_runtime::catch_up`), through
 the domain service and a dedicated one-connection pool. This adds one database
 connection per worker replica; API replicas do not start fleet scans. One global

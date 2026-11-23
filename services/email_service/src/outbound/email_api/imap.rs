@@ -286,10 +286,14 @@ impl email::domain::mailbox::commands::MailboxCommandGateway for ImapMailboxGate
 impl MailboxAttachmentAccess for ImapMailboxGateway {
     async fn download(
         &self,
+        provider: models_email::service::link::UserProvider,
         mailbox: MailboxKey,
         message_id: &str,
         attachment_id: &str,
     ) -> Result<Vec<u8>, email::domain::mailbox::MailboxError> {
+        if provider != models_email::service::link::UserProvider::Imap {
+            return Err(email::domain::mailbox::MailboxError::Stale);
+        }
         let result = self
             .client
             .attachment(binding(mailbox), message_id, attachment_id)

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT link_id FROM email_projection_outbox\n                WHERE parked_at IS NOT NULL AND link_id>$1\n                ORDER BY link_id LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f37252eeb2b1259ff830f70c9ca697d2b651764cb44205071fb32ed671be4ed5"
+}

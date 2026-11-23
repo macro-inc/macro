@@ -102,6 +102,21 @@ pub struct ProjectionLease {
     pub unfinished_claims: i32,
 }
 
+#[derive(strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum ProjectionClaim {
+    Acquired(Box<ProjectionLease>),
+    Progress,
+    Idle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectionTick {
+    Projected,
+    Progress,
+    Idle,
+}
+
 pub struct ProjectedMessage {
     pub message: Message,
     pub in_inbox: bool,
@@ -156,7 +171,7 @@ pub trait MailboxProjectionRepository: Send + Sync + 'static {
     fn claim_projection(
         &self,
         lease_id: Uuid,
-    ) -> impl Future<Output = Result<Option<ProjectionLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<ProjectionClaim, MailboxError>> + Send;
     fn projection_context(
         &self,
         lease: &ProjectionLease,
@@ -229,6 +244,7 @@ pub trait MailboxProjectionEffects: Send + Sync + 'static {
 pub trait MailboxAttachmentAccess: Send + Sync + 'static {
     fn download(
         &self,
+        provider: models_email::service::link::UserProvider,
         mailbox: MailboxKey,
         message_id: &str,
         attachment_id: &str,
@@ -283,14 +299,16 @@ impl<R, E> MailboxProjectionService<R, E> {
     }
 }
 impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProjectionService<R, E> {
-    pub async fn project_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
+    pub async fn project_once(&self) -> Result<ProjectionTick, MailboxError> {
+        let lease = match self
             .repo
             .claim_projection(macro_uuid::generate_uuid_v7())
             .await
             .map_err(|error| claim_failed("project", error))?
-        else {
-            return Ok(false);
+        {
+            ProjectionClaim::Acquired(lease) => lease,
+            ProjectionClaim::Progress => return Ok(ProjectionTick::Progress),
+            ProjectionClaim::Idle => return Ok(ProjectionTick::Idle),
         };
         let span = tracing::info_span!(
             "outlook.sync.project",
@@ -311,10 +329,15 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         );
         let correlation = lease.event.agent_correlation_id();
         if lease.unfinished_claims >= UNFINISHED_CLAIM_LIMIT {
-            return self.abandon_unfinished(&lease).instrument(span).await;
+            return self
+                .abandon_unfinished(&lease)
+                .instrument(span)
+                .await
+                .map(|_| ProjectionTick::Projected);
         }
         agent_correlation::context::scope(correlation, self.project_leased(&lease).instrument(span))
             .await
+            .map(|_| ProjectionTick::Projected)
     }
 
     /// Gives up on an event without projecting it, since projecting it is the

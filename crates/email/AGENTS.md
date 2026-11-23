@@ -718,6 +718,43 @@ tools — hexagonal, heavily feature-gated.
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) or a lock timeout once its backoff is at 30 minutes, so a provider
   outage or a busy mailbox never abandons a message.
+- Claim projections once across providers, routing attachment downloads by the
+  current link provider. Bound the due walk to 64 rows; require the earliest
+  unfinished event per link in `(seq NULLS FIRST, id)` order for each serialized
+  producer (sequence allocation does not order independent producer commits), including backed-off
+  or row-locked predecessors. Legacy v7 ids do not define inter-process order
+  within a millisecond; only the draining NULL-sequence cohort has that caveat.
+  Park inactive links separately from due times and preserve retry backoff.
+  Use the exact indexed expression `GREATEST(available_at, COALESCE(blocked_until,
+  '-infinity'))` for both the due predicate and order. Keep the old due index until
+  older binaries retire. Lock the window first, then check eligibility in a fresh
+  READ COMMITTED statement over those locked ids, so a finish cannot lose its wake.
+  The outbox has seven indexes; queue transitions are
+  non-HOT, so measure row writes as well as buffers. Each window locks at most
+  64 work rows plus 64 inactive parent rows; both bounds are fleet-independent.
+  Validate both claim statements together: at most 3,500 buffers on vacuumed
+  tables, 4,000 in the unvacuumed stale-statistics case, 2x growth across
+  1k–100k links, 128 row locks and no timeouts, including parked-heavy cases.
+  Attribute the window, 64-row primary-key reread, head probes, parent checks,
+  deferral updates and final claim separately. The 64 non-HOT deferral updates
+  dominate at about 1,500–1,900 buffers; each waiting row pays this on encounter,
+  rather than on every head completion (the jittered backstop can revisit it).
+  A bounded deferral returns `Progress`; poll again without the idle sleep,
+  yielding every 32 pages and checking cancellation. Store FIFO deferral in
+  `blocked_until`, preserving real retry times in `available_at`. Finish and
+  release take the link advisory lock before child locks and wake exactly the
+  next event atomically; a jittered one-to-two-hour deadline rechecks
+  successors whose head was finished by an old binary without a wake. Activation clears one FIFO page atomically,
+  then bounded pages after commit. The separately fenced projection recovery
+  sweep walks parked links every five minutes, including old-binary activations;
+  dead-link cost is one index probe per cycle, independent of backlog size.
+  Commit its cursor per probe; isolate known-link work with a short timeout and
+  halve timed-out unpark pages down to one row before skipping a failed link
+  until wrap, recording failed probes, consecutive skips and no progress.
+  On discovery timeout advance by one parent-key probe; capture attempt fields
+  on drop so cancellation retains the last attempted budget.
+  An active link whose parked rows are all locked is skipped until the next
+  wrap, up to five minutes; page limits grow back after a successful retry.
 - A projection event that keeps failing is given up as a message read is:
   `MailboxProjectionService::project_leased` decides with `message_retry`
   (backoff included), and `finish_projection` gives an uncounted claim back to

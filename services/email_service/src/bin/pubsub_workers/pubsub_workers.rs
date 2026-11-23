@@ -541,7 +541,9 @@ async fn main() -> anyhow::Result<()> {
                     imap: imap_gateway.clone(),
                     s3: s3_client.clone(),
                     bucket: config.attachment_bucket.to_string(),
-                    gmail: email_api_live.clone(),
+                    gmail: email_service::outbound::email_api::GmailAttachmentGateway(
+                        email_api_live.clone(),
+                    ),
                     outlook: email_service::outbound::email_api::ProviderMailboxGateway(
                         outlook_api.clone(),
                     ),
@@ -660,23 +662,11 @@ async fn main() -> anyhow::Result<()> {
         ),
         worker_cancellation_token.clone(),
     ));
-    worker_tracker.spawn(email_service::mailbox_sync_worker::run_projections(
-        email::domain::mailbox::projection::MailboxProjectionService::new(
-            imap_repository.clone(),
-            email_service::outbound::mailbox_projection::MailboxEffects {
-                db: db.clone(),
-                attachments: imap_ingestion.clone(),
-                invitations: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
-                broker: macro_event_broker.clone(),
-                notification: notification_ingress_service.clone(),
-                contacts: contacts_ingress.clone(),
-                queue: sqs_client.clone(),
-                gateway: connection_gateway_client.clone(),
-                dss: dss_client.clone(),
-                sfs: sfs_client.clone(),
-                properties: system_properties_service.clone(),
-                notifications_enabled: config.notifications_enabled,
-            },
+    // Separate singleton cursor and shared projection pool: recovery never owns
+    // the startup-critical IMAP catch-up or rollout repair connection.
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_projection_recovery(
+        email::domain::mailbox::projection_recovery::ProjectionRecoveryService(
+            mailbox_repository.clone(),
         ),
         worker_cancellation_token.clone(),
     ));
@@ -685,9 +675,17 @@ async fn main() -> anyhow::Result<()> {
             mailbox_repository,
             email_service::outbound::mailbox_projection::MailboxEffects {
                 db: db.clone(),
-                attachments: email_service::outbound::email_api::ProviderMailboxGateway(
-                    outlook_api,
-                ),
+                attachments: email_service::outbound::attachment_access::ProviderAttachmentBytes {
+                    imap: imap_ingestion.clone(),
+                    outlook: email_service::outbound::email_api::ProviderMailboxGateway(
+                        outlook_api,
+                    ),
+                    gmail: email_service::outbound::email_api::GmailAttachmentGateway(
+                        email_api_live.clone(),
+                    ),
+                    s3: s3_client.clone(),
+                    bucket: config.attachment_bucket.to_string(),
+                },
                 invitations: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
                 broker: macro_event_broker.clone(),
                 notification: notification_ingress_service.clone(),

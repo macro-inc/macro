@@ -24,7 +24,13 @@ impl Downloads {
 }
 
 impl MailboxAttachmentAccess for Downloads {
-    async fn download(&self, _: MailboxKey, _: &str, _: &str) -> Result<Vec<u8>, MailboxError> {
+    async fn download(
+        &self,
+        _: UserProvider,
+        _: MailboxKey,
+        _: &str,
+        _: &str,
+    ) -> Result<Vec<u8>, MailboxError> {
         self.count.fetch_add(1, Ordering::SeqCst);
         self.answer.clone().map_err(MailboxError::Provider)
     }
@@ -284,7 +290,13 @@ struct OvertakenDownload<E> {
 }
 
 impl<E: MailboxProjectionEffects> MailboxAttachmentAccess for OvertakenDownload<E> {
-    async fn download(&self, _: MailboxKey, _: &str, _: &str) -> Result<Vec<u8>, MailboxError> {
+    async fn download(
+        &self,
+        _: UserProvider,
+        _: MailboxKey,
+        _: &str,
+        _: &str,
+    ) -> Result<Vec<u8>, MailboxError> {
         sqlx::query!(
             "UPDATE email_attachments SET upload_claimed_at = now() - interval '4 minutes'
             WHERE id = $1",
@@ -558,7 +570,13 @@ struct LockedRowDownload {
 }
 
 impl MailboxAttachmentAccess for LockedRowDownload {
-    async fn download(&self, _: MailboxKey, _: &str, _: &str) -> Result<Vec<u8>, MailboxError> {
+    async fn download(
+        &self,
+        _: UserProvider,
+        _: MailboxKey,
+        _: &str,
+        _: &str,
+    ) -> Result<Vec<u8>, MailboxError> {
         let mut lock = self.db.begin().await.unwrap();
         sqlx::query!(
             "SELECT id FROM email_attachments WHERE id = $1 FOR UPDATE",

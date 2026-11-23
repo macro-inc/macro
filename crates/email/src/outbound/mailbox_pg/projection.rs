@@ -6,7 +6,7 @@ use std::collections::HashSet;
 impl MailboxProjectionRepository for PgMailboxSync {
     async fn renew_projection(&self, lease: &ProjectionLease) -> Result<(), MailboxError> {
         let updated = sqlx::query!(r#"
-            UPDATE email_projection_outbox o SET lease_until = now() + interval '3 minutes'
+            UPDATE email_projection_outbox o SET lease_until = now() + interval '3 minutes', blocked_until = now() + interval '3 minutes'
             FROM email_links l WHERE o.id = $1 AND o.lease_id = $2 AND o.lease_until > now()
                 AND l.id = o.link_id AND l.is_sync_active AND l.sync_generation = $3 AND l.grant_generation = $4
         "#,lease.id,lease.lease_id,lease.mailbox.sync_generation,lease.mailbox.grant_generation)
@@ -16,10 +16,7 @@ impl MailboxProjectionRepository for PgMailboxSync {
         }
         Ok(())
     }
-    async fn claim_projection(
-        &self,
-        lease_id: Uuid,
-    ) -> Result<Option<ProjectionLease>, MailboxError> {
+    async fn claim_projection(&self, lease_id: Uuid) -> Result<ProjectionClaim, MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         sqlx::query!(
             r#"
@@ -29,90 +26,14 @@ impl MailboxProjectionRepository for PgMailboxSync {
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-        let row = sqlx::query!(
-            r#"
-            WITH candidate AS (
-                SELECT
-                    due.id
-                FROM
-                    email_links l
-                    CROSS JOIN LATERAL (
-                        SELECT
-                            o.id,
-                            o.available_at
-                        FROM
-                            email_projection_outbox o
-                        WHERE
-                            o.link_id = l.id
-                            AND o.available_at <= now()
-                            AND (o.lease_until IS NULL
-                                OR o.lease_until < now())
-                        ORDER BY
-                            o.available_at,
-                            o.id
-                        LIMIT 1
-                        FOR UPDATE
-                            OF o SKIP LOCKED) due
-                    WHERE
-                        l.is_sync_active
-                        AND l.provider = $2::text::email_user_provider_enum
-                    ORDER BY
-                        due.available_at,
-                        due.id
-                    LIMIT 1)
-            -- Every recorded outcome deletes the entry or clears its lease, so a
-            -- lease still set here expired under a worker that stopped.
-            UPDATE
-                email_projection_outbox o
-            SET
-                lease_id = $1,
-                lease_until = now() + interval '3 minutes',
-                attempts = attempts + 1,
-                unfinished_claims = CASE WHEN o.lease_id IS NULL THEN
-                    0
-                ELSE
-                    o.unfinished_claims + 1
-                END
-            FROM
-                candidate c,
-                email_links l
-            WHERE
-                o.id = c.id
-                AND l.id = o.link_id
-            RETURNING
-                o.id,
-                o.link_id,
-                o.generation,
-                o.payload,
-                o.attempts,
-                o.unfinished_claims,
-                l.sync_generation,
-                l.grant_generation
-            "#,
-            lease_id,
-            self.provider.as_str(),
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_error)?;
+        let ids = self.lock_projection_window(&mut tx).await?;
+        if ids.is_empty() {
+            tx.commit().await.map_err(db_error)?;
+            return Ok(ProjectionClaim::Idle);
+        }
+        let result = self.claim_locked_projection(&mut tx, lease_id, &ids).await;
         tx.commit().await.map_err(db_error)?;
-        row.map(|row| {
-            Ok(ProjectionLease {
-                id: row.id,
-                lease_id,
-                mailbox: MailboxKey {
-                    link_id: row.link_id,
-                    sync_generation: row.sync_generation,
-                    grant_generation: row.grant_generation,
-                },
-                event: serde_json::from_value(row.payload)
-                    .map_err(|_| MailboxError::Persistence)?,
-                from_current_generation: row.generation == row.sync_generation,
-                attempts: row.attempts,
-                unfinished_claims: row.unfinished_claims,
-            })
-        })
-        .transpose()
+        result
     }
 
     async fn projection_context(
@@ -159,19 +80,28 @@ impl MailboxProjectionRepository for PgMailboxSync {
         lease: &ProjectionLease,
         retry: Option<MessageRetry>,
     ) -> Result<(), MailboxError> {
-        match retry {
+        let mut tx = self.begin().await.map_err(db_error)?;
+        sqlx::query!(
+            "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1::uuid::text,0))",
+            lease.mailbox.link_id
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_error)?;
+        let changed = match retry {
             None | Some(MessageRetry::Abandon) => {
                 let deleted = sqlx::query!("DELETE FROM email_projection_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",lease.id,lease.lease_id)
-                    .execute(&self.db).await.map_err(db_error)?;
+                    .execute(&mut *tx).await.map_err(db_error)?;
                 // An abandonment is logged once, by the worker whose lease
                 // deleted the entry; one that lost its lease reports it lost.
                 if matches!(retry, Some(MessageRetry::Abandon)) && deleted.rows_affected() != 1 {
                     return Err(MailboxError::Stale);
                 }
+                deleted.rows_affected()
             }
             Some(MessageRetry::After { seconds, counted }) => {
                 sqlx::query!(
-                    r#"UPDATE email_projection_outbox SET lease_id = NULL,lease_until = NULL,
+                    r#"UPDATE email_projection_outbox SET lease_id = NULL,lease_until = NULL,blocked_until = NULL,
                     available_at = now() + make_interval(secs => $3),
                     attempts = attempts - CASE WHEN $4 THEN 0 ELSE 1 END
                     WHERE id = $1 AND lease_id = $2 AND lease_until > now()"#,
@@ -180,16 +110,207 @@ impl MailboxProjectionRepository for PgMailboxSync {
                     f64::from(seconds),
                     counted
                 )
-                .execute(&self.db)
+                .execute(&mut *tx)
                 .await
-                .map_err(db_error)?;
+                .map_err(db_error)?.rows_affected()
             }
+        };
+        if changed == 1 {
+            // Wake exactly the successor, atomically with the fenced outcome.
+            // Its own retry floor stays intact. A released head still blocks it
+            // through the unfinished-sibling check until that head completes.
+            sqlx::query!(
+                r#"
+                WITH successor AS MATERIALIZED (
+                    SELECT id FROM email_projection_outbox
+                    WHERE link_id=$1 AND id<>$2
+                    ORDER BY seq NULLS FIRST,id LIMIT 1 FOR UPDATE
+                )
+                UPDATE email_projection_outbox o SET blocked_until=NULL
+                FROM successor s WHERE o.id=s.id
+                "#,
+                lease.mailbox.link_id,
+                lease.id
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
         }
+        tx.commit().await.map_err(db_error)?;
         Ok(())
     }
 }
 
 impl PgMailboxSync {
+    /// Hold the bounded window before the eligibility statement takes its
+    /// fresh READ COMMITTED snapshot. A concurrent finish either commits before
+    /// that snapshot or waits on these locks and overwrites the deferral later.
+    pub(super) async fn lock_projection_window(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<Vec<Uuid>, MailboxError> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT o.id FROM email_projection_outbox o
+            WHERE o.parked_at IS NULL
+                AND GREATEST(o.available_at, COALESCE(o.blocked_until, '-infinity'::timestamptz)) <= now()
+            ORDER BY GREATEST(o.available_at, COALESCE(o.blocked_until, '-infinity'::timestamptz)),o.id
+            LIMIT 64 FOR UPDATE OF o SKIP LOCKED
+            "#
+        ).fetch_all(&mut **tx).await.map_err(db_error)
+    }
+
+    /// The caller must already hold every id's window lock in this transaction.
+    pub(super) async fn claim_locked_projection(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        lease_id: Uuid,
+        ids: &[Uuid],
+    ) -> Result<ProjectionClaim, MailboxError> {
+        // The expression index serves both the due range and its order; the
+        // legacy available_at-only index cannot provide this ordering.
+        // New events use FIFO per serialized producer. Legacy UUIDv7 ids have no defined
+        // inter-process order within a millisecond; that window ends when the
+        // NULL sequence cohort drains. Order-independent legacy rechecks may be v4.
+        // Each claim inspects at most 64 rows; an unfinished predecessor blocks
+        // even while backed off or locked before its lease has committed.
+        let row = sqlx::query!(
+            r#"
+            WITH due AS MATERIALIZED (
+                SELECT o.id, o.link_id, o.available_at, o.lease_until,
+                    GREATEST(o.available_at, COALESCE(o.blocked_until, '-infinity'::timestamptz)) AS eligible_at
+                FROM email_projection_outbox o
+                WHERE o.id=ANY($2::uuid[])
+            ), ordered AS MATERIALIZED (
+                SELECT d.*, first.id AS first_id
+                FROM due d
+                CROSS JOIN LATERAL (
+                    SELECT earlier.id
+                    FROM email_projection_outbox earlier
+                    WHERE earlier.link_id = d.link_id
+                    ORDER BY earlier.seq NULLS FIRST, earlier.id
+                    LIMIT 1
+                ) first
+            ), links AS MATERIALIZED (
+                SELECT l.id, l.is_sync_active
+                FROM email_links l
+                JOIN (SELECT DISTINCT link_id FROM due) d ON d.link_id = l.id
+            ), inactive AS MATERIALIZED (
+                SELECT l.id
+                FROM email_links l
+                JOIN (SELECT DISTINCT link_id FROM due) d ON d.link_id = l.id
+                WHERE NOT l.is_sync_active
+                FOR SHARE OF l SKIP LOCKED
+            ), deferred AS (
+                UPDATE email_projection_outbox o
+                SET parked_at = CASE WHEN inactive.id IS NOT NULL THEN clock_timestamp() ELSE o.parked_at END,
+                    blocked_until = CASE WHEN d.first_id <> d.id THEN now() + interval '1 hour' * (1 + random())
+                        WHEN d.lease_until > now() THEN d.lease_until
+                        ELSE now() + interval '1 second' END
+                FROM ordered d JOIN links l ON l.id = d.link_id
+                    LEFT JOIN inactive ON inactive.id = d.link_id
+                WHERE o.id = d.id
+                    AND (NOT l.is_sync_active OR d.lease_until > now() OR d.first_id <> d.id)
+                RETURNING o.id
+            ), candidate AS (
+                SELECT d.id
+                FROM ordered d JOIN links l ON l.id = d.link_id
+                WHERE l.is_sync_active
+                    AND (d.lease_until IS NULL OR d.lease_until <= now())
+                    AND d.id = d.first_id
+                ORDER BY d.eligible_at, d.id
+                LIMIT 1
+            )
+            , claimed AS (
+            -- Every recorded outcome deletes the entry or clears its lease, so a
+            -- lease still set here expired under a worker that stopped.
+            UPDATE
+                email_projection_outbox o
+            SET
+                lease_id = $1,
+                lease_until = now() + interval '3 minutes',
+                blocked_until = now() + interval '3 minutes',
+                attempts = attempts + 1,
+                unfinished_claims = CASE WHEN o.lease_id IS NULL THEN
+                    0
+                ELSE
+                    o.unfinished_claims + 1
+                END
+            FROM
+                candidate c,
+                email_links l
+            WHERE
+                o.id = c.id
+                AND l.id = o.link_id
+            RETURNING
+                o.id,
+                o.link_id,
+                o.generation,
+                o.payload,
+                o.attempts,
+                o.unfinished_claims,
+                l.sync_generation,
+                l.grant_generation
+            )
+            SELECT
+                claimed.id AS "id?", claimed.link_id AS "link_id?",
+                claimed.generation AS "generation?", claimed.payload AS "payload?",
+                claimed.attempts AS "attempts?", claimed.unfinished_claims AS "unfinished_claims?",
+                claimed.sync_generation AS "sync_generation?", claimed.grant_generation AS "grant_generation?",
+                (SELECT count(*) FROM deferred) AS "deferred!"
+            FROM (VALUES (1)) anchor(value)
+            LEFT JOIN claimed ON true
+            "#,
+            lease_id,
+            ids,
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        if row.id.is_none() {
+            return Ok(if row.deferred > 0 {
+                ProjectionClaim::Progress
+            } else {
+                ProjectionClaim::Idle
+            });
+        }
+        let (
+            Some(id),
+            Some(link_id),
+            Some(generation),
+            Some(payload),
+            Some(attempts),
+            Some(unfinished_claims),
+            Some(sync_generation),
+            Some(grant_generation),
+        ) = (
+            row.id,
+            row.link_id,
+            row.generation,
+            row.payload,
+            row.attempts,
+            row.unfinished_claims,
+            row.sync_generation,
+            row.grant_generation,
+        )
+        else {
+            return Err(MailboxError::Persistence);
+        };
+        Ok(ProjectionClaim::Acquired(Box::new(ProjectionLease {
+            id,
+            lease_id,
+            mailbox: MailboxKey {
+                link_id,
+                sync_generation,
+                grant_generation,
+            },
+            event: serde_json::from_value(payload).map_err(|_| MailboxError::Persistence)?,
+            from_current_generation: generation == sync_generation,
+            attempts,
+            unfinished_claims,
+        })))
+    }
+
     async fn projected_message(
         &self,
         link_id: Uuid,

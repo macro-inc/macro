@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::projection::ProjectionClaim;
 use email_api_client::domain::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -15,6 +16,8 @@ mod no_mailbox;
 mod notified_reads;
 mod outlook_import;
 mod outlook_subscriptions;
+mod projection_concurrency;
+mod projection_order;
 mod projection_retries;
 mod provider_routing;
 mod retries;
@@ -467,11 +470,13 @@ async fn projection_ack_keeps_version_watermark_and_exposes_normalized_state(db:
     )
     .await
     .unwrap();
-    let event = repo
+    let ProjectionClaim::Acquired(event) = repo
         .claim_projection(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
-        .unwrap();
+    else {
+        panic!("expected a projection lease");
+    };
     let context = repo.projection_context(&event).await.unwrap().unwrap();
     let message = context.message.unwrap();
     assert!(message.in_inbox);
@@ -488,12 +493,12 @@ async fn projection_ack_keeps_version_watermark_and_exposes_normalized_state(db:
     )
     .await
     .unwrap();
-    assert!(
+    assert!(matches!(
         repo.claim_projection(macro_uuid::generate_uuid_v7())
             .await
-            .unwrap()
-            .is_none()
-    );
+            .unwrap(),
+        ProjectionClaim::Idle | ProjectionClaim::Progress
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -510,17 +515,21 @@ async fn projection_crash_reclaims_work_and_old_worker_cannot_ack_successor(db: 
     .execute(&db)
     .await
     .unwrap();
-    let old = repo
+    let ProjectionClaim::Acquired(old) = repo
         .claim_projection(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
-        .unwrap();
-    sqlx::query!("UPDATE email_projection_outbox SET lease_until = now() - interval '1 second' WHERE id = $1",old.id).execute(&db).await.unwrap();
-    let successor = repo
+    else {
+        panic!("expected a projection lease");
+    };
+    sqlx::query!("UPDATE email_projection_outbox SET lease_until = now() - interval '1 second', blocked_until = now() - interval '1 second' WHERE id = $1",old.id).execute(&db).await.unwrap();
+    let ProjectionClaim::Acquired(successor) = repo
         .claim_projection(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
-        .unwrap();
+    else {
+        panic!("expected a projection lease");
+    };
     assert!(matches!(
         repo.renew_projection(&old).await,
         Err(MailboxError::Stale)

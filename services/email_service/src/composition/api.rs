@@ -224,7 +224,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
                     imap: imap_gateway.clone(),
                     s3: s3_client.clone(),
                     bucket: config.attachment_bucket.to_string(),
-                    gmail: email_api.clone(),
+                    gmail: crate::outbound::email_api::GmailAttachmentGateway(email_api.clone()),
                     outlook: crate::outbound::email_api::ProviderMailboxGateway(
                         outlook_api.clone(),
                     ),
@@ -430,7 +430,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
                 imap: imap_gateway.clone(),
                 s3: s3_client.clone(),
                 bucket: config.attachment_bucket.to_string(),
-                gmail: email_api.clone(),
+                gmail: crate::outbound::email_api::GmailAttachmentGateway(email_api.clone()),
                 outlook: crate::outbound::email_api::ProviderMailboxGateway(outlook_api),
             },
             files: crate::outbound::attachment_access::MailAttachmentFiles {

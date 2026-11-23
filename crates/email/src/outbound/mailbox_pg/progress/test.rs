@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::mailbox::progress::MailboxProgressService;
+use crate::domain::mailbox::projection::ProjectionClaim;
 use crate::domain::mailbox::projection::{MailboxProjectionRepository, ProjectionEvent};
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
@@ -145,20 +146,22 @@ async fn import_completes_once_when_its_last_import_row_settles(db: PgPool) {
     assert_eq!(reconciled[0]["outlook.is_import"], "true");
     assert_eq!(reconciled[0]["outlook.attempts"], "1");
     assert_eq!(reconciled[0]["outlook.graph_calls"], "2");
-    let completion = repo
+    let ProjectionClaim::Acquired(completion) = repo
         .claim_projection(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
-        .expect("completion survives the ingestion transaction");
+    else {
+        panic!("expected a projection lease");
+    };
     assert!(matches!(completion.event, ProjectionEvent::ImportCompleted));
     assert_eq!(completion.mailbox.link_id, link);
     assert!(completion.from_current_generation);
-    assert!(
+    assert!(matches!(
         repo.claim_projection(macro_uuid::generate_uuid_v7())
             .await
-            .unwrap()
-            .is_none()
-    );
+            .unwrap(),
+        ProjectionClaim::Idle | ProjectionClaim::Progress
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -193,12 +196,12 @@ async fn an_empty_import_persists_one_completion_and_rolls_it_back_with_the_impo
             .is_some()
     );
     tx.rollback().await.unwrap();
-    assert!(
+    assert!(matches!(
         repo.claim_projection(macro_uuid::generate_uuid_v7())
             .await
-            .unwrap()
-            .is_none()
-    );
+            .unwrap(),
+        ProjectionClaim::Idle | ProjectionClaim::Progress
+    ));
 
     let mut tx = db.begin().await.unwrap();
     assert!(
@@ -214,19 +217,21 @@ async fn an_empty_import_persists_one_completion_and_rolls_it_back_with_the_impo
             .is_none()
     );
     tx.commit().await.unwrap();
-    let completion = repo
+    let ProjectionClaim::Acquired(completion) = repo
         .claim_projection(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
-        .unwrap();
+    else {
+        panic!("expected a projection lease");
+    };
     assert!(matches!(completion.event, ProjectionEvent::ImportCompleted));
     assert_eq!(completion.mailbox.link_id, link);
-    assert!(
+    assert!(matches!(
         repo.claim_projection(macro_uuid::generate_uuid_v7())
             .await
-            .unwrap()
-            .is_none()
-    );
+            .unwrap(),
+        ProjectionClaim::Idle | ProjectionClaim::Progress
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

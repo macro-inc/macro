@@ -4,6 +4,7 @@
 use super::{fixture, page, snapshot};
 use crate::domain::events::EmailMacroEvent;
 use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::projection::ProjectionClaim;
 use crate::domain::mailbox::projection::*;
 use crate::domain::mailbox::{
     MailboxError, MailboxIngest, MailboxKey, MailboxSyncRepository, MessageRetry,
@@ -155,7 +156,10 @@ async fn a_projection_that_keeps_failing_is_deleted_at_the_bound_and_logged_once
     assert!(service.project_once().await.is_err());
 
     assert_eq!(attempts(&db, id).await, None);
-    assert!(!service.project_once().await.unwrap());
+    assert!(matches!(
+        service.project_once().await.unwrap(),
+        ProjectionTick::Idle | ProjectionTick::Progress
+    ));
     assert_eq!(
         outcomes(&telemetry),
         [
@@ -212,8 +216,10 @@ async fn throttling_never_moves_a_projection_toward_abandonment(db: PgPool) {
 
 /// Ends the current claim as a worker that stopped would: its lease runs out.
 async fn expire_lease(db: &PgPool, id: Uuid) {
+    // Advance both representations of the same lease deadline; real retry
+    // availability stays unchanged.
     sqlx::query!(
-        "UPDATE email_projection_outbox SET lease_until = now() - interval '1 second' WHERE id = $1",
+        "UPDATE email_projection_outbox SET lease_until = now() - interval '1 second', blocked_until = now() - interval '1 second' WHERE id = $1",
         id
     )
     .execute(db)
@@ -228,11 +234,10 @@ async fn a_projection_whose_claims_keep_ending_unfinished_is_abandoned_unproject
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
     for claimed_after in 0..5 {
-        let lease = repo
-            .claim_projection(Uuid::now_v7())
-            .await
-            .unwrap()
-            .unwrap();
+        let ProjectionClaim::Acquired(lease) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+        else {
+            panic!("expected a projection lease");
+        };
         assert_eq!(lease.unfinished_claims, claimed_after);
         expire_lease(&db, id).await;
     }
@@ -266,18 +271,17 @@ async fn a_worker_that_lost_its_lease_cannot_abandon_the_entry_a_second_time(db:
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
     for _ in 0..5 {
-        repo.claim_projection(Uuid::now_v7())
-            .await
-            .unwrap()
-            .unwrap();
+        assert!(matches!(
+            repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+            ProjectionClaim::Acquired(_)
+        ));
         expire_lease(&db, id).await;
     }
     // This worker claims the entry to give it up, then pauses past its lease.
-    let paused = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(paused) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     expire_lease(&db, id).await;
     let next_worker = MailboxProjectionService::new(repo.clone(), FailingRefresh::new(downstream));
     assert!(matches!(
@@ -298,17 +302,17 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
     for _ in 0..3 {
-        repo.claim_projection(Uuid::now_v7())
-            .await
-            .unwrap()
-            .unwrap();
+        assert!(matches!(
+            repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+            ProjectionClaim::Acquired(_)
+        ));
         expire_lease(&db, id).await;
     }
-    let unfinished = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(unfinished) =
+        repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     assert_eq!(unfinished.unfinished_claims, 3);
 
     repo.finish_projection(
@@ -322,11 +326,10 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
     .unwrap();
     make_due(&db, id).await;
 
-    let next = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(next) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     assert_eq!(next.unfinished_claims, 0);
 }
 
@@ -334,11 +337,10 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
 async fn a_retry_recorded_after_the_lease_ran_out_still_counts_as_unfinished(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
-    let late = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(late) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     expire_lease(&db, id).await;
 
     repo.finish_projection(
@@ -352,11 +354,10 @@ async fn a_retry_recorded_after_the_lease_ran_out_still_counts_as_unfinished(db:
     .unwrap();
 
     // The late retry neither cleared the lease nor gave its claim back.
-    let next = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(next) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     assert_eq!((next.attempts, next.unfinished_claims), (2, 1));
 }
 
@@ -378,11 +379,10 @@ async fn failed_refresh_preserves_independent_message_effects_and_durable_retry(
     )
     .await
     .unwrap();
-    let event = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(event) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     assert!(matches!(event.event, ProjectionEvent::Message { .. }));
     repo.finish_projection(
         &event,

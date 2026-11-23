@@ -332,6 +332,7 @@ where
                 let data = self
                     .attachments
                     .download(
+                        context.link.provider,
                         mailbox,
                         &attachment.email_provider_id,
                         &attachment.provider_attachment_id,

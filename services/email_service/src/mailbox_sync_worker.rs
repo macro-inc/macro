@@ -193,6 +193,62 @@ pub async fn run_drafts<R, G, M>(
     }
 }
 
+/// Recover parked links independently of provider sync and startup catch-up.
+pub async fn run_projection_recovery<R>(
+    service: email::domain::mailbox::projection_recovery::ProjectionRecoveryService<R>,
+    cancellation: CancellationToken,
+) where
+    R: email::domain::mailbox::projection_recovery::ProjectionRecoveryRepository,
+{
+    let mut pages = 0u8;
+    let mut limit = 64u32;
+    let mut consecutive_skips = 0u32;
+    let mut cycle_had_skips = false;
+    loop {
+        let result = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            result = service.tick(limit, consecutive_skips) => result,
+        };
+        let progressing = match result {
+            Ok(Some(page)) => {
+                if page.failed_probes > 0 {
+                    consecutive_skips = consecutive_skips.saturating_add(page.failed_probes);
+                    cycle_had_skips = true;
+                }
+                if page.complete {
+                    if !cycle_had_skips {
+                        consecutive_skips = 0;
+                    }
+                    cycle_had_skips = false;
+                }
+                limit = (limit * 2).min(64);
+                !page.complete
+            }
+            Ok(None) => false,
+            Err(error) => {
+                limit = (limit / 2).max(1);
+                tracing::warn!(?error, "projection recovery page deferred");
+                false
+            }
+        };
+        if progressing {
+            pages += 1;
+            if pages == 32 {
+                pages = 0;
+                tokio::task::yield_now().await;
+            }
+        } else {
+            pages = 0;
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => return,
+                _ = tokio::time::sleep(Duration::from_secs(5)) => {},
+            }
+        }
+    }
+}
+
 /// Run downstream projections independently so slow uploads do not hold sync pages.
 pub async fn run_projections<R, E>(
     service: email::domain::mailbox::projection::MailboxProjectionService<R, E>,
@@ -201,12 +257,28 @@ pub async fn run_projections<R, E>(
     R: email::domain::mailbox::projection::MailboxProjectionRepository,
     E: email::domain::mailbox::projection::MailboxProjectionEffects,
 {
+    use email::domain::mailbox::projection::ProjectionTick;
+    let mut progress_polls = 0u8;
     loop {
-        let worked = tokio::select! {
+        let tick = tokio::select! {
             biased;
             _ = cancellation.cancelled() => return,
-            result = service.project_once() => reported(result),
+            result = service.project_once() => result,
         };
+        let progress = matches!(&tick, Ok(ProjectionTick::Progress));
+        let worked = reported(tick.map(|tick| match tick {
+            ProjectionTick::Projected | ProjectionTick::Progress => true,
+            ProjectionTick::Idle => false,
+        }));
+        if progress {
+            progress_polls += 1;
+            if progress_polls == 32 {
+                progress_polls = 0;
+                tokio::task::yield_now().await;
+            }
+        } else {
+            progress_polls = 0;
+        }
         if !worked {
             tokio::select! {
                 biased;

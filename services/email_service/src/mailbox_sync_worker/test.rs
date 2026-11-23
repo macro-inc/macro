@@ -11,6 +11,63 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use uuid::Uuid;
 
+struct RecoveryBudget {
+    limits: Arc<Mutex<Vec<u32>>>,
+    cancellation: CancellationToken,
+}
+
+impl email::domain::mailbox::projection_recovery::ProjectionRecoveryRepository for RecoveryBudget {
+    async fn recover_page(
+        &self,
+        limit: u32,
+    ) -> Result<
+        Option<email::domain::mailbox::projection_recovery::ProjectionRecoveryPage>,
+        MailboxError,
+    > {
+        let count = {
+            let mut limits = self.limits.lock().unwrap();
+            limits.push(limit);
+            limits.len()
+        };
+        if count <= 6 {
+            return Err(MailboxError::Persistence);
+        }
+        if count == 13 {
+            self.cancellation.cancel();
+        }
+        Ok(Some(
+            email::domain::mailbox::projection_recovery::ProjectionRecoveryPage {
+                links_scanned: limit,
+                rows_unparked: 0,
+                failed_probes: 0,
+                complete: false,
+            },
+        ))
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn projection_recovery_restores_its_budget_and_stops_during_progress() {
+    let cancellation = CancellationToken::new();
+    let limits = Arc::new(Mutex::new(Vec::new()));
+    let service =
+        email::domain::mailbox::projection_recovery::ProjectionRecoveryService(RecoveryBudget {
+            limits: limits.clone(),
+            cancellation: cancellation.clone(),
+        });
+    let before = tokio::time::Instant::now();
+    run_projection_recovery(service, cancellation).await;
+    assert_eq!(
+        *limits.lock().unwrap(),
+        vec![64, 32, 16, 8, 4, 2, 1, 2, 4, 8, 16, 32, 64]
+    );
+    assert_eq!(
+        before.elapsed(),
+        Duration::from_secs(30),
+        "only failed pages sleep; Progress must re-poll immediately"
+    );
+}
+
 /// Logs every read. An importing folder always has another page; the synced
 /// folder's page reaches a checkpoint, and no message is found.
 #[derive(Clone, Default)]
@@ -124,4 +181,118 @@ async fn new_mail_in_a_synced_folder_waits_behind_one_queued_import_message_not_
     let reads = provider.reads.lock().unwrap().clone();
     let before_synced: Vec<_> = reads.iter().take_while(|read| *read != "synced").collect();
     assert_eq!(before_synced, ["importing", "message"], "{reads:?}");
+}
+
+struct ProgressOnly {
+    calls: Arc<std::sync::atomic::AtomicUsize>,
+    cancel_at: usize,
+    cancellation: CancellationToken,
+}
+
+impl email::domain::mailbox::projection::MailboxProjectionRepository for ProgressOnly {
+    async fn claim_projection(
+        &self,
+        _: Uuid,
+    ) -> Result<email::domain::mailbox::projection::ProjectionClaim, MailboxError> {
+        let calls = self
+            .calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+        if calls == self.cancel_at {
+            self.cancellation.cancel();
+        }
+        Ok(email::domain::mailbox::projection::ProjectionClaim::Progress)
+    }
+    async fn renew_projection(
+        &self,
+        _: &email::domain::mailbox::projection::ProjectionLease,
+    ) -> Result<(), MailboxError> {
+        panic!("progress must not renew a projection lease")
+    }
+    async fn projection_context(
+        &self,
+        _: &email::domain::mailbox::projection::ProjectionLease,
+    ) -> Result<Option<email::domain::mailbox::projection::ProjectionContext>, MailboxError> {
+        panic!("progress must not read a projection context")
+    }
+    async fn finish_projection(
+        &self,
+        _: &email::domain::mailbox::projection::ProjectionLease,
+        _: Option<email::domain::mailbox::MessageRetry>,
+    ) -> Result<(), MailboxError> {
+        panic!("progress must not finish a projection lease")
+    }
+}
+
+struct NoProjectionEffects;
+impl email::domain::mailbox::projection::MailboxProjectionEffects for NoProjectionEffects {
+    async fn publish(&self, _: email::domain::events::EmailMacroEvent) -> Result<(), MailboxError> {
+        panic!("progress must not emit effects")
+    }
+    async fn refresh(
+        &self,
+        _: Uuid,
+        _: &std::collections::HashSet<macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        panic!("progress must not emit effects")
+    }
+    async fn import_completed(
+        &self,
+        _: Uuid,
+        _: &std::collections::HashSet<macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        panic!("progress must not emit effects")
+    }
+    async fn notify(
+        &self,
+        _: email::domain::mailbox::projection::MailboxNotification,
+    ) -> Result<(), MailboxError> {
+        panic!("progress must not emit effects")
+    }
+    async fn contacts(
+        &self,
+        _: email::domain::mailbox::projection::CorrespondenceProjection,
+    ) -> Result<(), MailboxError> {
+        panic!("progress must not emit effects")
+    }
+    async fn attachments(
+        &self,
+        _: MailboxKey,
+        _: &email::domain::mailbox::projection::ProjectionContext,
+        _: bool,
+    ) -> Result<(), MailboxError> {
+        panic!("progress must not emit effects")
+    }
+    async fn invitations(
+        &self,
+        _: Uuid,
+        _: &[email::domain::models::calendar_invitation::CalendarInvitation],
+    ) -> Result<(), MailboxError> {
+        panic!("progress must not emit effects")
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn projection_progress_repolls_without_idle_sleep_and_honors_cancellation() {
+    for cancel_at in [3, 67] {
+        let cancellation = CancellationToken::new();
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let service = email::domain::mailbox::projection::MailboxProjectionService::new(
+            ProgressOnly {
+                calls: calls.clone(),
+                cancel_at,
+                cancellation: cancellation.clone(),
+            },
+            NoProjectionEffects,
+        );
+        let started = tokio::time::Instant::now();
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            run_projections(service, cancellation),
+        )
+        .await
+        .expect("progress polling must remain cancellable without idle sleeps");
+        assert_eq!(started.elapsed(), Duration::ZERO);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), cancel_at);
+    }
 }

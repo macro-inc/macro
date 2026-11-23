@@ -399,6 +399,9 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
             RETURNING l.sync_generation,previous.mailbox_unavailable_at IS NOT NULL AS "had_no_mailbox!"
         "#,link_id,grant.id,grant.generation,grant.owner.to_string(),grant.email,restart,current.existing.is_some())
             .fetch_one(&mut *tx).await.map_err(unavailable)?;
+        email::outbound::mailbox_pg::projection_recovery::unpark_link_page(&mut tx, link_id, 64)
+            .await
+            .map_err(unavailable)?;
         if link.had_no_mailbox && !restart {
             // The same grant, so no new generation resets the work the mark
             // held: wake it without moving earlier than a provider retry floor,
@@ -532,6 +535,7 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         if restart {
             email::domain::mailbox::progress::log_import_started(link_id, link.sync_generation);
         }
+        email::outbound::mailbox_pg::projection_recovery::resume_link(&self.0, link_id).await;
         Ok(link_id)
     }
 }

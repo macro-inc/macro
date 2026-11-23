@@ -1,5 +1,5 @@
 //! Provider download and file-storage adapters for authorized attachment reads.
-use super::email_api::GmailApi;
+use super::email_api::GmailAttachmentGateway;
 use email::domain::{
     attachment_access::*,
     draft_attachments::AttachmentError,
@@ -19,14 +19,23 @@ use std::{
 };
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
-pub struct ProviderAttachmentBytes<A> {
+pub struct ProviderAttachmentBytes<
+    A,
+    G = GmailAttachmentGateway,
+    I = super::email_api::imap::ImapMailboxGateway,
+> {
     pub s3: s3_client::S3,
     pub bucket: String,
-    pub gmail: GmailApi,
-    pub imap: super::email_api::imap::ImapMailboxGateway,
+    pub gmail: G,
+    pub imap: I,
     pub outlook: A,
 }
-impl<A: MailboxAttachmentAccess> AttachmentBytes for ProviderAttachmentBytes<A> {
+impl<A, G, I> AttachmentBytes for ProviderAttachmentBytes<A, G, I>
+where
+    A: MailboxAttachmentAccess,
+    G: MailboxAttachmentAccess,
+    I: MailboxAttachmentAccess,
+{
     async fn bytes(&self, record: &AttachmentReadRecord) -> Result<Vec<u8>, AttachmentError> {
         if record.attachment.reference_url.is_some() {
             return Err(AttachmentError::Invalid(
@@ -52,31 +61,53 @@ impl<A: MailboxAttachmentAccess> AttachmentBytes for ProviderAttachmentBytes<A> 
             .provider_id
             .as_deref()
             .ok_or(AttachmentError::NotFound)?;
-        match record.link.provider {
-            UserProvider::Gmail => self
-                .gmail
-                .get_attachment(record.link.id, &record.message_provider_id, id)
-                .await
-                .map_err(provider_error),
-            UserProvider::Imap => self
-                .imap
-                .download(record.mailbox, &record.message_provider_id, id)
-                .await
-                .map_err(|error| match error {
-                    MailboxError::Provider(error) => provider_error(error),
-                    _ => AttachmentError::Infrastructure,
-                }),
-            UserProvider::Outlook => self
-                .outlook
-                .download(record.mailbox, &record.message_provider_id, id)
-                .await
-                .map_err(|e| match e {
-                    MailboxError::Provider(e) => provider_error(e),
-                    _ => AttachmentError::Infrastructure,
-                }),
+        self.download(
+            record.link.provider,
+            record.mailbox,
+            &record.message_provider_id,
+            id,
+        )
+        .await
+        .map_err(|error| match error {
+            MailboxError::Provider(error) => provider_error(error),
+            _ => AttachmentError::Infrastructure,
+        })
+    }
+}
+// Both authorized reads and durable projections share this provider routing.
+impl<A, G, I> MailboxAttachmentAccess for ProviderAttachmentBytes<A, G, I>
+where
+    A: MailboxAttachmentAccess,
+    G: MailboxAttachmentAccess,
+    I: MailboxAttachmentAccess,
+{
+    async fn download(
+        &self,
+        provider: UserProvider,
+        mailbox: email::domain::mailbox::MailboxKey,
+        message_id: &str,
+        attachment_id: &str,
+    ) -> Result<Vec<u8>, MailboxError> {
+        match provider {
+            UserProvider::Gmail => {
+                self.gmail
+                    .download(provider, mailbox, message_id, attachment_id)
+                    .await
+            }
+            UserProvider::Imap => {
+                self.imap
+                    .download(provider, mailbox, message_id, attachment_id)
+                    .await
+            }
+            UserProvider::Outlook => {
+                self.outlook
+                    .download(provider, mailbox, message_id, attachment_id)
+                    .await
+            }
         }
     }
 }
+
 fn provider_error(error: EmailApiError) -> AttachmentError {
     match error {
         EmailApiError::NotFound => AttachmentError::NotFound,
