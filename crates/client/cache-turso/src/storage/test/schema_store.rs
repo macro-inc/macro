@@ -1302,7 +1302,7 @@ fn a_previous_formats_cache_keeps_its_identity_authority_and_aliases() {
 
         // The open rewrites what a reset keeps in this format, and the
         // adoption after it resets the rest.
-        let mut storage = database.open("scope").unwrap();
+        let storage = database.open("scope").unwrap();
         assert_eq!(storage.get_batch(&kept).await.unwrap(), before);
         assert_eq!(count(&storage, "SELECT count(*) FROM records"), 4);
         let adoption = adopt(&storage, OLD, &ProjectionInputs::none());

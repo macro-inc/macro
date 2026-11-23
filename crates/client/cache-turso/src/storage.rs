@@ -2,7 +2,7 @@ use crate::driver::{self, Db, WalCheckpoint, WalPosition};
 use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
-    CACHE_FORMAT_VERSION, MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace, cache_namespace_at,
+    CACHE_FORMAT_VERSION, MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace,
     decode_format_3_record, decode_record, decode_record_updates, encode_record,
     encode_record_updates, namespace_versions,
 };
@@ -3596,10 +3596,10 @@ fn sql_bound(bound: RangeBound, lower: bool) -> (&'static str, i64) {
 
 /// Carry a cache written by a migratable older format forward.
 ///
-/// Records and the derived rows they feed are refetchable, so they are dropped,
-/// except what a reset keeps: the identity and authority records and the
-/// identity metadata of the records queued writes name, read in that format and
-/// rewritten in this one. Queued mutations and their optimistic layers are kept,
+/// Records and the derived rows they feed are refetchable, so they are dropped
+/// as a reset drops them, table by table, except what a reset keeps: the
+/// identity and authority records and the identity metadata of the records
+/// queued writes name, read in that format and rewritten in this one. Queued mutations and their optimistic layers are kept,
 /// which is why this is not a physical reset. The stored schema is made
 /// unreadable, so the adoption after the open resets the cache in place and
 /// takes the projections the previous format composed. The namespace moves to
@@ -3622,11 +3622,7 @@ fn migrate_previous_format(
         // the shadows and overlays the previous format composed too.
         schema_store::mark_unreadable(connection)?;
         let identity = schema_store::keep_identity(connection, decode)?;
-        driver::execute(connection, "DELETE FROM search_documents", Vec::new())?;
-        // Facts cascade from their index documents.
-        driver::execute(connection, "DELETE FROM index_documents", Vec::new())?;
-        driver::execute(connection, "DELETE FROM records", Vec::new())?;
-        calendar::clear(connection)?;
+        schema_store::clear_records(connection)?;
         schema_store::restore_kept_identity(connection, &identity)?;
         driver::execute(
             connection,

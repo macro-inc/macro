@@ -728,7 +728,8 @@ pub(super) fn keep_identity(
     })
 }
 
-/// Writes back what [`keep_identity`] read, once the records are gone.
+/// Writes back what [`keep_identity`] read, once the records are gone,
+/// over the copies [`clear_records`] keeps as they were.
 pub(super) fn restore_kept_identity(
     connection: &Db,
     identity: &KeptIdentity,
@@ -736,7 +737,7 @@ pub(super) fn restore_kept_identity(
     for (typename, id, record) in &identity.kept {
         driver::execute(
             connection,
-            RECORD_RESTORE,
+            RECORD_UPSERT,
             vec![
                 text(typename),
                 text(id),
@@ -854,7 +855,7 @@ fn recompose_queued_shadows(
 /// Empties the records, but for [`KEPT_RECORDS`], and every table derived
 /// from them, by dropping each table and creating it again from the SQL the
 /// file stores for it and its indexes. Returns how many records it dropped.
-fn clear_records(connection: &Db) -> Result<u64, TursoStorageError> {
+pub(super) fn clear_records(connection: &Db) -> Result<u64, TursoStorageError> {
     let count = count(connection, RECORD_COUNT, Vec::new())?;
     let kept = driver::query(connection, KEPT_RECORDS, Vec::new())?;
     let tables = DERIVED_TABLES

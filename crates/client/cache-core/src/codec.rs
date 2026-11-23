@@ -145,9 +145,15 @@ fn may_deflate(len: usize) -> bool {
 }
 
 /// Decodes a record as cache format 3 stored it: [`encode_record`]'s raw
-/// payload, without the encoding tag format 4 added.
+/// payload, without the encoding tag format 4 added. Bytes that are not one
+/// whole format 3 record are read as this format's, which a file another
+/// build wrote into may hold: a raw record's tag would otherwise read as an
+/// empty record.
 pub fn decode_format_3_record(bytes: &[u8]) -> Result<Record, CodecError> {
-    decode(bytes)
+    match postcard::take_from_bytes::<Record>(bytes) {
+        Ok((record, [])) => Ok(record),
+        _ => decode_record(bytes),
+    }
 }
 
 /// Decodes a normalized record written by [`encode_record`].
@@ -363,6 +369,21 @@ mod tests {
         let bytes = encode_record(&record);
         let decoded = decode_record(&bytes).unwrap();
         assert_eq!(decoded, record);
+    }
+
+    #[test]
+    fn a_format_3_read_takes_this_formats_records_too() {
+        for body in [
+            "short body".to_owned(),
+            "review comment line\n".repeat(2_000),
+        ] {
+            let record = record_with_body(&body);
+            assert_eq!(decode_format_3_record(&encode(&record)).unwrap(), record);
+            assert_eq!(
+                decode_format_3_record(&encode_record(&record)).unwrap(),
+                record
+            );
+        }
     }
 
     #[test]

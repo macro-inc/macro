@@ -25,6 +25,7 @@ mod search_projection;
 mod search_streaming;
 mod startup;
 mod wal_checkpoint;
+use cache_core::codec::cache_namespace_at;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
