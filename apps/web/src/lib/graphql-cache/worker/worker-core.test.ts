@@ -3831,6 +3831,60 @@ describe('CacheWorkerCore', () => {
       }
     );
 
+    it('runs the reads sent during each projection pass before the next', async () => {
+      const order: string[] = [];
+      const { engine, release } = splitEngine(order);
+      const passes = [
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+      ];
+      const passStarted = [
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+      ];
+      let pass = 0;
+      const stepped = {
+        ...engine,
+        stepHydrate: vi.fn(async () => {
+          const current = pass;
+          pass += 1;
+          if (current >= passes.length) {
+            order.push('step:none');
+            return false;
+          }
+          order.push(`step:${current}`);
+          passStarted[current]?.resolve();
+          await passes[current]?.promise;
+          return true;
+        }),
+        stageHydrate: vi.fn(async () => {
+          order.push('stage');
+        }),
+      };
+      const { core, port } = await start(stepped);
+      release();
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await passStarted[0]?.promise;
+      sent.push(core.handleRequest(port, read(3, 'client:visible')));
+      passes[0]?.resolve();
+      await passStarted[1]?.promise;
+      sent.push(core.handleRequest(port, read(4, 'client:visible')));
+      passes[1]?.resolve();
+      await Promise.all(sent);
+
+      expect(order).toEqual([
+        'prepare:first',
+        'step:0',
+        'read:client:visible',
+        'step:1',
+        'read:client:visible',
+        'step:none',
+        'stage',
+        'commit',
+      ]);
+    });
+
     it('writes with hydrateQuery when the engine cannot split a hydrate', async () => {
       const order: string[] = [];
       const { engine } = splitEngine(order);

@@ -21,7 +21,8 @@ use cache_core::queue::{
 };
 use cache_core::search::{
     QUICK_ACCESS_PROJECTION_VERSION, QUICK_ACCESS_TYPENAMES, SearchCursor, SearchDocument,
-    SearchDocumentRef, SearchProfile, SearchQuery, project_search_documents,
+    SearchDocumentRef, SearchProfile, SearchQuery, project_encoded_search_documents,
+    project_search_documents,
 };
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
@@ -770,6 +771,17 @@ fn remove_native_file(path: &Path) -> Result<(), TursoStorageError> {
     }
 }
 
+/// Pages the native connection keeps in Turso's page cache, about 31 MiB at the
+/// default 4 KiB page size.
+///
+/// Turso's native default is 2,000 pages. On a large database a typed search
+/// reads a browse index of nearly that many pages, and a Home refresh touches more, so
+/// each evicted the other's pages and read them back from the file on the next
+/// call. Clean pages past the cap are read again; dirty ones spill to the WAL,
+/// which native Turso does by default.
+#[cfg(not(target_arch = "wasm32"))]
+const NATIVE_PAGE_CACHE_PAGES: i64 = 8_000;
+
 #[cfg(not(target_arch = "wasm32"))]
 fn open_native_database(
     io: Arc<dyn IO>,
@@ -789,6 +801,16 @@ fn open_native_database(
     // each, and one filtered read can open several. The browser build always
     // keeps them in memory; the native build now does the same.
     connection.set_temp_store(TempStore::Memory);
+    if let Err(error) = connection.execute(format!("PRAGMA cache_size = {NATIVE_PAGE_CACHE_PAGES}"))
+    {
+        if connection.close().is_err() {
+            return Err(TursoStorageError::reset(
+                PhysicalResetReason::TransactionOutcomeUncertain,
+            ));
+        }
+        let error = TursoStorageError::turso(error);
+        return Err(if fresh { error } else { error.initialization() });
+    }
     let migrated = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
         Ok(migrated) => migrated,
         Err(error) => {
@@ -920,10 +942,9 @@ impl TursoStorage {
             .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
     }
 
-    /// The end of the WAL as this storage's connection sees it. A caller
-    /// that computed something from storage compares two positions to learn
-    /// whether this storage committed a write in between. A write through
-    /// another connection may not show until this one next reads.
+    /// The end of the WAL. A caller that computed something from storage
+    /// compares two positions to learn whether anything was committed to the
+    /// file in between, through this connection or another.
     pub fn wal_position(&self) -> Result<WalPosition, TursoStorageError> {
         self.require_healthy()?;
         self.connection.wal_position()
@@ -961,6 +982,11 @@ impl TursoStorage {
 
 impl Storage for TursoStorage {
     type Error = TursoStorageError;
+
+    /// The end of the WAL, which every commit to the file moves.
+    fn write_position(&self) -> Option<cache_core::store::WritePosition> {
+        self.wal_position().ok().map(Into::into)
+    }
 
     async fn projection_keys(
         &self,
@@ -5066,10 +5092,11 @@ fn prepare_records(
     entries
         .into_iter()
         .map(|(key, record)| {
+            let value = encode_record(&record);
             Ok(EncodedRecord {
                 key: RecordKey::from_entity(&key)?,
-                value: encode_record(&record),
-                search_documents: project_search_documents(&key, &record),
+                search_documents: project_encoded_search_documents(&key, &record, &value),
+                value,
                 calendar_range: cache_core::calendar::project_calendar_range(&key, &record),
                 contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
                     fields: record

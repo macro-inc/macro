@@ -897,9 +897,10 @@ fn a_staged_native_hydrate_writes_and_reports_what_a_whole_one_does() {
     let (whole, none_staged, no_yields) = run(false);
     let (staged, staged_commits, yields) = run(true);
     assert_eq!((none_staged, no_yields), (0, 0));
-    // Reads may run after the projections and after staging; the binding
-    // hydrate yields once, after its projections, and then runs whole.
-    assert_eq!((staged_commits, yields), (5, 11));
+    // Reads may run after the authoritative rows, after each of the three
+    // projection passes and after staging: 5 times a staged hydrate. The
+    // binding hydrate yields 4 times, up to staging, and then runs whole.
+    assert_eq!((staged_commits, yields), (5, 5 * 5 + 4));
     assert_eq!(staged, whole);
 }
 

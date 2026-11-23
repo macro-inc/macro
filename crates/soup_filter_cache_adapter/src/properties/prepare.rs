@@ -1,5 +1,6 @@
 use super::*;
 use crate::parsed_document::parsed_document;
+use cache_core::store::DurableRead;
 use cache_core::{
     document::{OperationKind, resolve_args},
     predicate::PredicateIndexStorage,
@@ -270,7 +271,7 @@ fn mutation_owners(
     Ok(owners)
 }
 
-async fn owners<S: PredicateIndexStorage>(
+async fn owners<S: DurableRead>(
     storage: &S,
     property: &EntityKey<'_>,
     definition: Uuid,
@@ -314,6 +315,7 @@ async fn owners<S: PredicateIndexStorage>(
         .map_err(error)?;
         result.extend(
             storage
+                .storage()
                 .reconcile_predicate_index(&query, &[])
                 .await
                 .map_err(ProjectionError::Storage)?
@@ -328,7 +330,7 @@ async fn owners<S: PredicateIndexStorage>(
     Ok(result)
 }
 
-pub(super) async fn prepare<S: PredicateIndexStorage>(
+pub(super) async fn prepare<S: DurableRead>(
     storage: &S,
     response: &WriteResponse<'_>,
     reuse: bool,
@@ -392,7 +394,7 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
         }
         let mut record = if reuse {
             storage
-                .get_batch(std::slice::from_ref(key))
+                .read_records(std::slice::from_ref(key))
                 .await
                 .map_err(ProjectionError::Storage)?
                 .pop()
@@ -426,7 +428,7 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
     Ok(result)
 }
 
-pub(super) async fn deletion_updates<S: PredicateIndexStorage>(
+pub(super) async fn deletion_updates<S: DurableRead>(
     storage: &S,
     keys: &[String],
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
@@ -437,7 +439,7 @@ pub(super) async fn deletion_updates<S: PredicateIndexStorage>(
     {
         let key = EntityKey(key.clone().into());
         let Some(record) = storage
-            .get_batch(std::slice::from_ref(&key))
+            .read_records(std::slice::from_ref(&key))
             .await
             .map_err(ProjectionError::Storage)?
             .pop()
@@ -450,7 +452,7 @@ pub(super) async fn deletion_updates<S: PredicateIndexStorage>(
         };
         for parent in owners(storage, &key, definition).await? {
             let Some(state) = storage
-                .load_projection_states(std::slice::from_ref(&parent))
+                .read_projection_states(std::slice::from_ref(&parent))
                 .await
                 .map_err(ProjectionError::Storage)?
                 .pop()

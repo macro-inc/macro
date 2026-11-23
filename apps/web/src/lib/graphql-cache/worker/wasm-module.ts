@@ -192,6 +192,12 @@ export interface CacheEngine {
     hydrationScope?: HydrationScope
   ): Promise<void>;
   /**
+   * Optional, after `prepareHydrate`: runs the kept hydrate's next projection
+   * pass without writing, and resolves whether one ran. Reads may run after
+   * each; `stageHydrate` and `commitHydrate` run the passes left.
+   */
+  stepHydrate?(): Promise<boolean>;
+  /**
    * Optional, between the halves: computes the kept hydrate's write without
    * writing, so `commitHydrate` only writes. Reads may run before and after.
    * Rejects when staging fails, keeping nothing to commit: the hydrate fails
