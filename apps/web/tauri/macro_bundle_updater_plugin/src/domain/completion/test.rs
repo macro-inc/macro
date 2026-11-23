@@ -44,6 +44,8 @@ fn truncated_or_malformed_records_are_rejected() {
     for contents in [
         "",
         "not-a-build",
+        "42\n",
+        "42\nfiles 2\n120 index.html",
         "42\nfiles 2\n120 index.html\n",
         "42\nfiles 1\n120 index.html\n7 extra.js\n",
         "42\nfiles 1\n120\n",

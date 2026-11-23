@@ -18,8 +18,8 @@ pub struct BundleFile {
 /// startup can tell a bundle that lost files since (to storage cleanup, for
 /// example) from an intact one. The format is the build on the first line,
 /// `files <count>` on the second, then one `<size> <path>` line per file.
-/// Records from releases before the file list hold only the build line; they
-/// still mark a completed extraction, without a list to check.
+/// Records from releases before the file list hold only the build, with no
+/// newline; they still mark a completed extraction, without a list to check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompletionRecord {
     pub(crate) bundle_build: u64,
@@ -59,19 +59,20 @@ impl CompletionRecord {
 
     /// Parse a record, returning `None` when it is malformed or truncated.
     pub(crate) fn parse(contents: &str) -> Option<Self> {
-        let mut lines = contents.strip_suffix('\n').unwrap_or(contents).split('\n');
-        let bundle_build = lines.next()?.parse().ok()?;
-
-        let Some(count_line) = lines.next() else {
+        // Older releases wrote the build alone, without a newline. A record
+        // that ends after its build line is one cut short while it was written.
+        let Some(listed) = contents.strip_suffix('\n') else {
             return Some(Self {
-                bundle_build,
+                bundle_build: contents.parse().ok()?,
                 files: None,
             });
         };
+        let mut lines = listed.split('\n');
+        let bundle_build = lines.next()?.parse().ok()?;
 
         // The count guards against a record cut short while it was written:
         // a shorter list would leave the missing files unchecked.
-        let count: usize = count_line.strip_prefix(FILES_PREFIX)?.parse().ok()?;
+        let count: usize = lines.next()?.strip_prefix(FILES_PREFIX)?.parse().ok()?;
         let mut files = Vec::with_capacity(count);
         for line in lines {
             let (size, path) = line.split_once(' ')?;
