@@ -1375,8 +1375,9 @@ function PropertyValueEditor(props: {
     const property = resolvedProperty();
     if (props.properties || !singleEntity()) return 'known';
     if (property && 'value' in property) return 'known';
-    if (entityPropertiesQuery.data !== undefined) return 'known';
-    return entityPropertiesQuery.error ? 'failed' : 'loading';
+    // A refused project read answers with an empty list and an error.
+    if (entityPropertiesQuery.error) return 'failed';
+    return entityPropertiesQuery.data === undefined ? 'loading' : 'known';
   };
 
   const handleSubmit = (

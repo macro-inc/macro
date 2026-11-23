@@ -273,6 +273,16 @@ describe('link property editor', () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it('adds nothing when the item could not be read, even with an empty answer', () => {
+    savedProperties.read = { data: [], error: new Error('FORBIDDEN') };
+    const { onSave, field } = setup({ ...NEW_LINKEDIN, isMultiSelect: true });
+
+    type(field, 'example.com/two');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it('sets one link on every selected item', () => {
     const { onSave, field } = setup(
       { ...LINKEDIN, isMultiSelect: true, value: ['https://example.com/one'] },
