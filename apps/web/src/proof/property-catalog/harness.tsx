@@ -955,6 +955,22 @@ window.__h = {
   settle: (boundMs = 5000) => settle(queryClient, registry, boundMs),
   snapshot: () => snapshot(registry),
   fresh,
+  // The same-user load's reads (`startSameUserLoad` in run.mjs): the whole
+  // catalog as the head's readers and main's REST client ask for it. The
+  // runner sends them from outside the page, so a settle here never waits on
+  // them.
+  async loadRequests() {
+    const graphql = new URL(`${propertiesHost}/items/soup/graphql`, location.href).href;
+    const rest = (op: string, args: Record<string, unknown>) =>
+      new URL(`${propertiesHost}${REST[op].path(args)}`, location.href).href;
+    const query = async (key: Key) => JSON.stringify(await readerQuery(key));
+    return [
+      { method: 'POST', url: graphql, body: await query({ k: 'defs', scope: 'all', includeOptions: true }) },
+      { method: 'GET', url: rest('listProperties', { scope: 'all', include_options: true }) },
+      { method: 'POST', url: graphql, body: await query({ k: 'tags' }) },
+      { method: 'GET', url: rest('listTags', {}) },
+    ];
+  },
   async mutate(name: string, vars: unknown) {
     const m = mutations[name];
     toasts = [];

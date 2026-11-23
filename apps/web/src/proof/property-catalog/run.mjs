@@ -951,11 +951,6 @@ async function openSide(storageState, side, label) {
   // (a write window: every write the page sends is counted in `window`)
   const tap = { mode: 'pass', window: [], stray: [], mutantArmed: false };
   const sameUserLoad = CONFIG.load > 0 && side === 'neu' && /^L\d/.test(label);
-  if (sameUserLoad)
-    await bctx.exposeBinding('__sameUserTick', (_src, ok) => {
-      R.load.sameUserReads++;
-      if (!ok) R.load.sameUserErrors++;
-    });
   const old = side === 'old' || CONFIG.control;
   if (old)
     await bctx.route(oldModule, async (r) => {
@@ -2394,20 +2389,32 @@ async function startLoad() {
     }, CONFIG.seed + i);
   }
 }
-// The fuzzed user's own NEW page reads both catalogs in the background, so
-// the server answers that user's comparisons while serving that user's other
-// reads. Restarted after every page load; counted through a binding.
+// The fuzzed user's NEW side reads both catalogs in the background, by
+// GraphQL and by REST, so the server answers that user's comparisons while
+// serving that user's other reads. The runner sends them over the side's
+// browser context, with its cookies, not from the page: a settle waits for
+// every catalog fetch the page makes, so a loop inside the page kept it from
+// ever settling. Started once per context; it ends when the context closes.
 async function startSameUserLoad(s) {
-  await s.page.evaluate(() => {
-    const h = window.__h;
-    (async () => {
-      for (let i = 0; !window.__stopLoad; i++) {
-        const r = await [() => h.raw.neu.list({ scope: 'all', includeOptions: true }), () => h.setup.rest('listProperties', { scope: 'all', include_options: true }), () => h.raw.neu.tags(), () => h.setup.rest('listTags')][i % 4]();
-        await window.__sameUserTick(r.ok);
-        await new Promise((res) => setTimeout(res, 25));
+  if (s.sameUserStarted) return;
+  s.sameUserStarted = true;
+  const reqs = await ev(s, 'loadRequests');
+  (async () => {
+    for (let i = 0; ; i++) {
+      const r = reqs[i % reqs.length];
+      let ok = false;
+      try {
+        const res = await s.ctx.request.fetch(r.url, { method: r.method, ...(r.body ? { headers: { 'content-type': 'application/json' }, data: r.body } : {}), failOnStatusCode: false, timeout: 30000 });
+        ok = res.ok() && (!r.body || !(await res.json()).errors);
+        await res.dispose();
+      } catch (e) {
+        if (/closed|disposed/i.test(firstLine(e))) break;
       }
-    })();
-  });
+      R.load.sameUserReads++;
+      if (!ok) R.load.sameUserErrors++;
+      await new Promise((res) => setTimeout(res, 25));
+    }
+  })().catch((e) => harnessError(`${s.label}: same-user load: ${firstLine(e)}`));
 }
 async function stopLoad() {
   for (const s of loadPages) {

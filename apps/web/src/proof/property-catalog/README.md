@@ -212,7 +212,10 @@ retried page load happened.
   ends with a reload, so its fallout stays inside it). `CONTROL=1` runs OLD
   against OLD.
 - `LOAD=n` adds `n` other accounts writing and reading on the server, and has
-  each fuzzed account's NEW page read both catalogs in the background.
+  each fuzzed account's NEW side read both catalogs in the background, by
+  GraphQL and REST. The runner sends those reads over the side's browser
+  context (its cookies), not from the page, since a settle waits for every
+  catalog fetch the page makes.
 - An uncaught page error seen on one fuzzed side only is a `diff` at level
   `page-errors` (a load page's errors count in `harnessErrors`).
 - `node summarize.mjs` rolls every `out/*/results.json` into `out/summary.json`
