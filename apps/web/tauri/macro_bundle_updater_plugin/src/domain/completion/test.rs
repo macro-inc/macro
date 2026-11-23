@@ -51,6 +51,7 @@ fn truncated_or_malformed_records_are_rejected() {
         "42\nfiles 1\n120\n",
         "42\nfiles 1\nabc index.html\n",
         "42\nfiles x\n",
+        "42\nfiles 18446744073709551615\n120 index.html\n",
         "42\n120 index.html\n",
     ] {
         assert_eq!(CompletionRecord::parse(contents), None, "{contents:?}");

@@ -73,7 +73,7 @@ impl CompletionRecord {
         // The count guards against a record cut short while it was written:
         // a shorter list would leave the missing files unchecked.
         let count: usize = lines.next()?.strip_prefix(FILES_PREFIX)?.parse().ok()?;
-        let mut files = Vec::with_capacity(count);
+        let mut files = Vec::new();
         for line in lines {
             let (size, path) = line.split_once(' ')?;
             if path.is_empty() {
