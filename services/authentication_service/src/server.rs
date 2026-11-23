@@ -371,18 +371,24 @@ async fn run_server() -> anyhow::Result<()> {
                     api_secret: api_secret.to_string(),
                 }
             }),
-        meta: config
-            .meta_pixel_id
-            .value()
-            .zip(config.meta_access_token.value())
-            .map(|(pixel_id, access_token)| {
-                tracing::info!("configuring Meta Conversions API");
-                MetaConfig {
-                    pixel_id: pixel_id.to_string(),
-                    access_token: access_token.to_string(),
-                    test_event_code: config.meta_test_event_code.value().map(str::to_string),
-                }
-            }),
+        meta: match config.environment {
+            Environment::Production => config
+                .meta_pixel_id
+                .value()
+                .zip(config.meta_access_token.value())
+                .map(|(pixel_id, access_token)| {
+                    tracing::info!("configuring Meta Conversions API");
+                    MetaConfig {
+                        pixel_id: pixel_id.to_string(),
+                        access_token: access_token.to_string(),
+                        test_event_code: config.meta_test_event_code.value().map(str::to_string),
+                    }
+                }),
+            Environment::Develop | Environment::Local => {
+                tracing::info!("skipping Meta Conversions API outside production");
+                None
+            }
+        },
         posthog: config.posthog_api_key().map(|api_key| {
             tracing::info!("configuring PostHog");
             PostHogConfig {

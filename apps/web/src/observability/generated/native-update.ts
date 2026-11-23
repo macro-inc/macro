@@ -57,6 +57,13 @@ export type Outcome =
 { kind: "up_to_date" } |
 /**  The feed offers a newer version; its download starts now. */
 { kind: "update_found"; target_version: string } |
+/**
+ *  The feed offers a newer version built for a newer OS than this
+ *  computer runs, so it is not downloaded.
+ */
+{ kind: "needs_newer_os"; target_version: string;
+/**  The feed's `minimumSystemVersion` for this platform. */
+minimum_system_version: string } |
 /**  The update downloaded and its signature verified. It installs on quit. */
 { kind: "downloaded"; target_version: string; download_ms: number;
 /**  The update's size, including any `resumed_bytes`. */

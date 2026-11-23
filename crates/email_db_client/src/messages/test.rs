@@ -599,3 +599,147 @@ async fn get_message_sender_and_pretty_sender_skips_messages_without_sender_cont
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
+)]
+async fn parsed_search_messages_are_excluded_by_their_mailbox_facts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::messages::get_parsed_search::{
+        get_paginated_parsed_search_messages_by_thread_id, get_parsed_search_message_by_id,
+        get_parsed_search_messages_by_thread_ids,
+    };
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000301")?;
+    let trash_label = Uuid::parse_str("00000000-0000-0000-0000-0000000a0001")?;
+    let gmail_trash = Uuid::parse_str("00000000-0000-0000-0000-0000000e0630")?;
+    let outlook_trash = Uuid::parse_str("00000000-0000-0000-0000-0000000e0631")?;
+    let outlook_junk_pending = Uuid::parse_str("00000000-0000-0000-0000-0000000e0632")?;
+    let outlook_missing = Uuid::parse_str("00000000-0000-0000-0000-0000000e0633")?;
+    let outlook_restore_pending = Uuid::parse_str("00000000-0000-0000-0000-0000000e0634")?;
+    let command_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0001")?;
+
+    // A Gmail message in Trash by its label; Outlook messages by their folder
+    // state, confirmed or still pending an organization command.
+    for (id, state) in [
+        (gmail_trash, None),
+        (outlook_trash, Some(r#"{"in_inbox":false,"in_trash":true}"#)),
+        (
+            outlook_junk_pending,
+            Some(r#"{"in_inbox":true,"in_junk":false}"#),
+        ),
+        (
+            outlook_missing,
+            Some(r#"{"in_inbox":true,"provider_missing":true}"#),
+        ),
+        (
+            outlook_restore_pending,
+            Some(r#"{"in_inbox":false,"in_trash":true}"#),
+        ),
+    ] {
+        sqlx::query!(
+            r#"
+            INSERT INTO email_messages (id, thread_id, link_id, is_draft, is_sent, mailbox_state)
+            VALUES ($1, $2, $3, false, false, $4::text::jsonb)
+            "#,
+            id,
+            thread_id,
+            link_id,
+            state
+        )
+        .execute(&pool)
+        .await?;
+    }
+    sqlx::query!(
+        "INSERT INTO email_message_labels (message_id, label_id) VALUES ($1, $2)",
+        gmail_trash,
+        trash_label
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_commands (id, link_id, generation, actor_id, intent, status)
+        VALUES ($1, $2, 0, 'macro|owner@example.com', '{"kind":"junk","value":true}', 'pending')
+        "#,
+        command_id,
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+    for (id, attribute, desired) in [
+        (outlook_junk_pending, "in_junk", "true"),
+        (outlook_restore_pending, "in_trash", "false"),
+    ] {
+        sqlx::query!(
+            r#"
+            INSERT INTO email_pending_mailbox_state (message_id, attribute, command_id, desired)
+            VALUES ($1, $2, $3, $4::text::jsonb)
+            "#,
+            id,
+            attribute,
+            command_id,
+            desired
+        )
+        .execute(&pool)
+        .await?;
+    }
+
+    let expected = std::collections::HashSet::from([
+        gmail_trash,
+        outlook_trash,
+        outlook_junk_pending,
+        outlook_missing,
+    ]);
+    let excluded = |messages: Vec<models_email::service::message::ParsedSearchMessage>| {
+        messages
+            .into_iter()
+            .filter(|message| message.excluded_from_search)
+            .map(|message| message.db_id)
+            .collect::<std::collections::HashSet<_>>()
+    };
+    assert_eq!(
+        excluded(
+            get_paginated_parsed_search_messages_by_thread_id(&pool, thread_id, 0, 100).await?
+        ),
+        expected,
+        "a page of a thread"
+    );
+    assert_eq!(
+        excluded(get_parsed_search_messages_by_thread_ids(&pool, &[thread_id]).await?),
+        expected,
+        "a batch of threads"
+    );
+    for id in [
+        gmail_trash,
+        outlook_trash,
+        outlook_junk_pending,
+        outlook_missing,
+    ] {
+        let message = get_parsed_search_message_by_id(&pool, &id)
+            .await?
+            .expect("the message exists");
+        assert!(message.excluded_from_search, "{id} read by id");
+    }
+    let restored = get_parsed_search_message_by_id(&pool, &outlook_restore_pending)
+        .await?
+        .expect("the message exists");
+    assert!(
+        !restored.excluded_from_search,
+        "a pending move out of Trash counts before Outlook confirms it"
+    );
+
+    let deleted = Uuid::parse_str("00000000-0000-0000-0000-0000000e0635")?;
+    assert_eq!(
+        crate::messages::get_parsed_search::fetch_excluded_from_search(
+            &pool,
+            &[outlook_restore_pending, deleted]
+        )
+        .await?,
+        std::collections::HashSet::from([deleted]),
+        "a message deleted after the loader read it is left out"
+    );
+    Ok(())
+}

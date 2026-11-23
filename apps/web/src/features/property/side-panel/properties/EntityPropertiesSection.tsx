@@ -118,7 +118,12 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.entityType,
     props.includeMetadata ?? false
   );
-  const allProperties = useAllProperties();
+  // The definitions this entity can take: the same list Add property asks for,
+  // so it is already loaded when the picker opens.
+  const allProperties = useAllProperties(
+    () => true,
+    () => props.entityType
+  );
   const [pendingDefinitionIds, setPendingDefinitionIds] = createSignal<
     Set<string>
   >(new Set());
@@ -171,6 +176,11 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     // Pins control the title row only. The panel lists every assigned property.
     const visible = mergedProperties().filter((property) => {
       if (tagDefinitionIds().has(property.propertyDefinitionId)) {
+        return false;
+      }
+      // Time logged is the sum of a task's entries: the Time pill shows and
+      // changes it, never a generic number row.
+      if (property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.TIME_LOGGED) {
         return false;
       }
       if (props.propertyFilter && !props.propertyFilter(property)) {

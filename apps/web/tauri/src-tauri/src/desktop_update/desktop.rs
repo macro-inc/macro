@@ -354,6 +354,22 @@ async fn check<R: Runtime>(
         publish(app, coordinator, Status::Idle);
         return Ok(true);
     };
+    // Installing a release built for a newer macOS would leave an app that
+    // macOS refuses to open, so stay on this one.
+    if let Some(minimum) = unsupported_minimum(&update.raw_json, os_version()) {
+        tracing::info!(version = %update.version, minimum, "native update needs a newer OS");
+        report(
+            app,
+            coordinator,
+            timing,
+            Outcome::NeedsNewerOs {
+                target_version: update.version.clone(),
+                minimum_system_version: minimum,
+            },
+        );
+        publish(app, coordinator, Status::Idle);
+        return Ok(true);
+    }
     let version = update.version.clone();
     report(
         app,
@@ -408,6 +424,46 @@ async fn check<R: Runtime>(
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update ready"))
         .ok();
     Ok(true)
+}
+
+/// This platform's minimum OS version in the feed (`minimumSystemVersion`,
+/// written by `desktop-release.mjs`) when this computer's `current` version is
+/// older. A minimum that doesn't parse counts as unsupported.
+///
+/// The feed keys platforms by `target()` ("darwin-aarch64"), not by
+/// `Update::target`, which is only the OS ("darwin").
+fn unsupported_minimum(raw_json: &serde_json::Value, current: Option<[u64; 3]>) -> Option<String> {
+    let current = current?;
+    let target = tauri_plugin_updater::target()?;
+    let minimum = raw_json["platforms"][target.as_str()]["minimumSystemVersion"].as_str()?;
+    let mut required = [0; 3];
+    let mut parts = minimum.split('.');
+    for (index, part) in parts.by_ref().take(3).enumerate() {
+        match part.parse() {
+            Ok(number) => required[index] = number,
+            Err(_) => return Some(minimum.to_owned()),
+        }
+    }
+    if parts.next().is_some() {
+        return Some(minimum.to_owned());
+    }
+    (current < required).then(|| minimum.to_owned())
+}
+
+#[cfg(target_os = "macos")]
+fn os_version() -> Option<[u64; 3]> {
+    let version = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
+    Some([
+        u64::try_from(version.majorVersion).ok()?,
+        u64::try_from(version.minorVersion).ok()?,
+        u64::try_from(version.patchVersion).ok()?,
+    ])
+}
+
+/// Only the macOS feed entry carries a minimum.
+#[cfg(not(target_os = "macos"))]
+fn os_version() -> Option<[u64; 3]> {
+    None
 }
 
 pub fn restart<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {

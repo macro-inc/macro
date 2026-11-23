@@ -172,3 +172,26 @@ it('keeps up-to-date checks free of version targets and failures', () => {
     native_update_duration_ms: 500,
   });
 });
+
+it('reports an update this OS cannot run as a check with its minimum', () => {
+  reportNativeUpdate(
+    report({
+      kind: 'needs_newer_os',
+      target_version: '2026.1119.1',
+      minimum_system_version: '14.0',
+    })
+  );
+  const [check] = telemetry.spans;
+  expect(telemetry.spans).toHaveLength(1);
+  expect(check?.name).toBe('native.update.check');
+  expect(check?.error).not.toHaveBeenCalled();
+  expect(check?.end).toHaveBeenCalledWith(1_500);
+  expect(telemetry.track).toHaveBeenCalledWith(
+    NATIVE_UPDATE_EVENT,
+    expect.objectContaining({
+      native_update_outcome: 'needs_newer_os',
+      native_update_target_version: '2026.1119.1',
+      native_update_minimum_system_version: '14.0',
+    })
+  );
+});
