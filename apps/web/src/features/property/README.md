@@ -111,6 +111,14 @@ the property (`entityActions.toastPropertySet`: "Companies set", or "Companies
 set on 3 items" for several). Tag assignment shows no toast, and the composer
 writes to its draft without one.
 
+A Link property takes its URL in the editor's search field
+(`editor/link-property-editor.tsx`): Enter sets it, or adds it when the
+property holds several links, and the item's links are listed below to remove
+one at a time, with **Clear all** once there are two. It validates and saves
+exactly as the property row's link editor does (`utils/linkValues.ts`). With
+several items selected no links are listed, and a URL replaces each item's
+value.
+
 ## Creating a property
 
 `CreatePropertyModal` names the built-in property when the typed name duplicates
