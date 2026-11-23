@@ -15,18 +15,19 @@ import { CombinedError, createRequest } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
-/** Failures that reached fireAndForget's report. */
-const unhandled = vi.hoisted(() => [] as unknown[]);
+/** How each detached task ended: the error fireAndForget would report, or none. */
+const DETACHED = vi.hoisted(() => [] as Promise<unknown>[]);
 vi.mock('@core/util/fireAndForget', () => ({
   fireAndForget: (work: Promise<unknown>) => {
-    const watch = async () => {
+    const outcome = async () => {
       try {
         await work;
+        return undefined;
       } catch (error: unknown) {
-        unhandled.push(error);
+        return error;
       }
     };
-    return watch();
+    DETACHED.push(outcome());
   },
 }));
 
@@ -583,7 +584,7 @@ describe('catalog mutations', () => {
 
   it('reports a callback that fails after mutate, but not the refusal onError had', async () => {
     await createRoot(async (dispose) => {
-      unhandled.length = 0;
+      DETACHED.length = 0;
       const broken = new Error('callback failed');
       const onError = vi.fn();
       const saves = createCatalogMutation(async () => 1, {
@@ -592,15 +593,26 @@ describe('catalog mutations', () => {
         },
       });
       saves.mutate(undefined);
-      await vi.waitFor(() => expect(unhandled).toEqual([broken]));
       const refused = new CatalogMutationError('taken', 'CONFLICT');
-      const refuses = createCatalogMutation(() => Promise.reject(refused), {
-        onError,
-      });
-      refuses.mutate(undefined);
-      await vi.waitFor(() => expect(onError).toHaveBeenCalled());
-      await Promise.resolve();
-      expect(unhandled).toEqual([broken]);
+      // Refused once, then saved, after which a callback throws the error
+      // the first call's write failed with.
+      let attempt = 0;
+      const retries = createCatalogMutation(
+        async () => {
+          if (attempt++ === 0) throw refused;
+          return 1;
+        },
+        {
+          onError,
+          onSettled: (data) => {
+            if (data === 1) throw refused;
+          },
+        }
+      );
+      retries.mutate(undefined);
+      retries.mutate(undefined);
+      expect(await Promise.all(DETACHED)).toEqual([broken, undefined, refused]);
+      expect(onError).toHaveBeenCalledTimes(1);
       dispose();
     });
   });

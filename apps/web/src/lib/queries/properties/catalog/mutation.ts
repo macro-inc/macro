@@ -44,8 +44,6 @@ export function createCatalogMutation<TVars, TData>(
   callbacks?: CatalogMutationCallbacks<TData, TVars>
 ): CatalogMutation<TData, TVars> {
   const [pending, setPending] = createSignal(0);
-  // Failures of the write itself, which onError has already been given.
-  const reported = new WeakSet<Error>();
   let disposed = false;
   if (getOwner()) onCleanup(() => (disposed = true));
   // Runs one callback on each layer in order. Disposal is checked before the
@@ -61,9 +59,11 @@ export function createCatalogMutation<TVars, TData>(
     }
   };
 
+  // `writeFailed` hears a failure of the write itself, before its callbacks.
   const execute = async (
     vars: TVars,
-    call?: CatalogMutationCallbacks<TData, TVars>
+    call?: CatalogMutationCallbacks<TData, TVars>,
+    writeFailed?: (error: Error) => void
   ): Promise<TData> => {
     // Callbacks run in the caller's trace even after the write's awaits.
     const parent: TraceContext = Telemetry.captureContext();
@@ -74,7 +74,7 @@ export function createCatalogMutation<TVars, TData>(
         data = await run(vars);
       } catch (cause) {
         const error = asError(cause);
-        reported.add(error);
+        writeFailed?.(error);
         await eachLayer(call, parent, (layer) => layer.onError?.(error, vars));
         await eachLayer(call, parent, (layer) =>
           layer.onSettled?.(undefined, error, vars)
@@ -97,10 +97,11 @@ export function createCatalogMutation<TVars, TData>(
     vars: TVars,
     call?: CatalogMutationCallbacks<TData, TVars>
   ): Promise<void> => {
+    let failure: Error | undefined;
     try {
-      await execute(vars, call);
+      await execute(vars, call, (error) => (failure = error));
     } catch (error: unknown) {
-      if (!(error instanceof Error && reported.has(error))) throw error;
+      if (error !== failure) throw error;
     }
   };
 
@@ -108,7 +109,7 @@ export function createCatalogMutation<TVars, TData>(
     mutate(vars, call) {
       fireAndForget(executeReported(vars, call), 'property-catalog');
     },
-    mutateAsync: execute,
+    mutateAsync: (vars, call) => execute(vars, call),
     get isPending() {
       return pending() > 0;
     },
