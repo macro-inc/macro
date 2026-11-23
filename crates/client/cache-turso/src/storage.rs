@@ -48,7 +48,7 @@ use std::sync::Mutex;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::AtomicU64;
 #[cfg(not(target_arch = "wasm32"))]
-use turso_core::{Database, IO, MemoryIO, OpenOptions, PlatformIO, SqliteDialect};
+use turso_core::{Database, IO, MemoryIO, OpenOptions, PlatformIO, SqliteDialect, TempStore};
 #[cfg(target_arch = "wasm32")]
 use turso_opfs::{
     CloseFailure, ClosedSession, ConnectedOpfsSession, OpenDisposition, OpfsError, OpfsOwner,
@@ -784,6 +784,11 @@ fn open_native_database(
         .connect()
         .map_err(TursoStorageError::turso)
         .map_err(|error| if fresh { error } else { error.initialization() })?;
+    // Natively, Turso's default puts every ephemeral table and spilled sort in
+    // a new temporary directory and file, several syscalls and a page write
+    // each, and one filtered read can open several. The browser build always
+    // keeps them in memory; the native build now does the same.
+    connection.set_temp_store(TempStore::Memory);
     let migrated = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
         Ok(migrated) => migrated,
         Err(error) => {
