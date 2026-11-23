@@ -99,23 +99,29 @@ retain Web Share until the next native release; see
 ## iOS Share Extension
 
 `gen/apple/ShareExtension` puts Macro in the iOS share sheet for images,
-videos, and one web URL. It saves each item into the `group.com.macro.app.prod`
-App Group as `share_<UUID>.<ext>`, stamps the file's modification time, and
-opens `macro://share?files=…`. The app (`src/share_target`) moves the files into
-its cache and the web `ShareTargetProvider` opens the Share to Macro sheet.
+videos, and one web URL. It writes each item into an `incoming/` folder of the
+`group.com.macro.app.prod` App Group, then stamps its modification time and
+moves it to `share_<UUID>.<ext>` at the container's top level, so the app only
+ever sees finished files. Then it opens `macro://share?files=…`. The app
+(`src/share_target`) moves the files into its cache and the web
+`ShareTargetProvider` opens the Share to Macro sheet.
 
 - iOS has no supported API for a share extension to open its app. The
   extension calls `UIApplication.open` reached through the responder chain
   (`extensionContext.open` when there is none) and finishes only once iOS
   reports the result: finishing first can tear the process down before the
-  open happens. When iOS refuses, or says nothing within 5 seconds, the
-  extension shows "Saved. Open Macro to finish sharing." with a Done button.
-- `get_pending_share_filenames` returns the link's files plus any other
-  `share_*` file saved in the last 24 hours, so a share whose link never
-  arrived opens the next time Macro comes to the foreground. Older files are
-  deleted. The web provider asks on mount, on `share-files-ready`, and on every
-  return to the foreground, one request at a time; `pop_shared_files` takes the
-  files it returns out of the pending set.
+  open happens. When iOS refuses, or says nothing within 5 seconds while the
+  host app stays in front and the files stay put, the extension shows "Saved.
+  Open Macro to finish sharing." with a Done button. Items that take over 30
+  seconds to load are dropped with "Macro couldn't read this item."
+- `get_pending_share_filenames` returns the files the latest link names. When
+  none of those is left, it returns the `share_*` files saved in the last 24
+  hours instead (a share whose link never arrived) and deletes older ones; the
+  two are never mixed into one batch. A link replaces the open share; the share
+  sheet's pickup, on mount and on every return to the foreground, loads a
+  waiting share only when none is open. The sheet mounts only when signed in.
+  Loads run one at a time; `pop_shared_files` takes what it returns out of the
+  pending set.
 - The extension logs counts and outcomes (never content or names) under
   subsystem `com.macro.app.prod.ShareExtension`, category `share`. Filter a
   device's Console on that subsystem to see where a share stopped.

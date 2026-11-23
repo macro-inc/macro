@@ -13,9 +13,17 @@ class ShareViewController: UIViewController {
     /// How long to wait for iOS to report whether it opened Macro before
     /// telling the person to open it themselves.
     private let openResultTimeout: TimeInterval = 5
+    /// Files are written here first and get their `share_` name in the
+    /// container only once complete, so the app never sees a partial file.
+    private let incomingDirectoryName = "incoming"
     private var timeoutWorkItem: DispatchWorkItem?
     private var didComplete = false
+    private var didAbandon = false
     private var didFinishOpening = false
+    private var hostEnteredBackground = false
+    private var handedOffFilenames: [String] = []
+    private var writtenFilenames: [String] = []
+    private let writtenLock = NSLock()
 
     // MARK: - Lifecycle
 
@@ -24,6 +32,14 @@ class ShareViewController: UIViewController {
         // A fully transparent view can cause the system to dismiss the extension
         // before it has a chance to do anything. Use a near-transparent scrim instead.
         view.backgroundColor = UIColor.black.withAlphaComponent(0.01)
+
+        // The host app goes to the background when Macro takes the foreground.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(hostDidEnterBackground),
+            name: .NSExtensionHostDidEnterBackground,
+            object: nil
+        )
 
         scheduleTimeout()
         processSharedItems()
@@ -79,20 +95,18 @@ class ShareViewController: UIViewController {
 
         group.notify(queue: .main) { [weak self] in
             guard let self = self else { return }
-            let orderedFilenames = savedFilenames.compactMap { $0 }
+            guard !self.didAbandon else {
+                self.removeWrittenFiles()
+                return
+            }
+            let handedOff = self.handOff(savedFilenames.compactMap { $0 })
             log.info(
-                "share saved files=\(orderedFilenames.count, privacy: .public) of \(attachments.count, privacy: .public)"
+                "share saved files=\(handedOff.count, privacy: .public) of \(attachments.count, privacy: .public)"
             )
-            if orderedFilenames.isEmpty {
-                self.showMessage(
-                    NSLocalizedString(
-                        "Macro couldn't read this item.",
-                        comment: "Share extension: nothing could be saved from the shared item"
-                    )
-                )
+            if handedOff.isEmpty {
+                self.showCouldNotRead()
             } else {
-                orderedFilenames.forEach(self.markSavedNow)
-                self.openMainApp(filenames: orderedFilenames)
+                self.openMainApp(filenames: handedOff)
             }
         }
     }
@@ -232,6 +246,11 @@ class ShareViewController: UIViewController {
             return
         }
 
+        // Saving is done; from here only the open's own timeout applies.
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
+        handedOffFilenames = filenames
+
         // There is no public API for a share extension to open its app.
         // `UIApplication` reached through the responder chain is what works in
         // practice; `extensionContext.open` is documented for other extension
@@ -265,10 +284,16 @@ class ShareViewController: UIViewController {
 
     /// The files stay in the App Group container, so when iOS won't open Macro
     /// the share still appears the next time the person opens it.
-    private func finishOpening(opened: Bool, via route: String) {
+    private func finishOpening(opened reportedOpened: Bool, via route: String) {
         guard !didFinishOpening else { return }
         didFinishOpening = true
-        log.info("open macro opened=\(opened, privacy: .public) via=\(route, privacy: .public)")
+        // Without an answer, Macro still counts as opened when the host app
+        // went to the background or Macro already took the files: a card here
+        // would sit over the share sheet saying the opposite.
+        let opened = reportedOpened || hostEnteredBackground || macroTookFiles()
+        log.info(
+            "open macro opened=\(opened, privacy: .public) reported=\(reportedOpened, privacy: .public) via=\(route, privacy: .public)"
+        )
         if opened {
             complete()
         } else {
@@ -335,8 +360,21 @@ class ShareViewController: UIViewController {
         }
     }
 
+    private func showCouldNotRead() {
+        showMessage(
+            NSLocalizedString(
+                "Macro couldn't read this item.",
+                comment: "Share extension: nothing could be saved from the shared item"
+            )
+        )
+    }
+
     @objc private func doneTapped() {
         complete()
+    }
+
+    @objc private func hostDidEnterBackground() {
+        hostEnteredBackground = true
     }
 
     // MARK: - Helpers
@@ -543,31 +581,72 @@ class ShareViewController: UIViewController {
         }
     }
 
+    /// A new file in the incoming folder; `handOff` gives it to the app.
     private func makeAppGroupFileURL(ext: String) -> (filename: String, url: URL)? {
-        guard let container = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: appGroupId
-        ) else {
+        guard let container = appGroupContainer() else {
+            return nil
+        }
+        let incoming = container.appendingPathComponent(incomingDirectoryName, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: incoming, withIntermediateDirectories: true)
+        } catch {
             return nil
         }
 
         let normalizedExt = normalizedFilenameExtension(ext)
         let filename = "share_\(UUID().uuidString).\(normalizedExt)"
-        return (filename, container.appendingPathComponent(filename))
+        writtenLock.withLock { writtenFilenames.append(filename) }
+        return (filename, incoming.appendingPathComponent(filename))
     }
 
-    /// The app ignores shared files older than a day. A copied file keeps its
-    /// source's modification time, so stamp the time it was shared.
-    private func markSavedNow(_ filename: String) {
-        guard let container = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: appGroupId
-        ) else {
-            return
+    private func appGroupContainer() -> URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId)
+    }
+
+    /// Moves finished files from the incoming folder to their `share_` names,
+    /// stamping each with the time it was shared: the app ignores shared files
+    /// older than a day, and a copy keeps its source's modification time.
+    /// Returns the files the app can now see, in order.
+    private func handOff(_ filenames: [String]) -> [String] {
+        guard let container = appGroupContainer() else { return [] }
+        let incoming = container.appendingPathComponent(incomingDirectoryName, isDirectory: true)
+        let fileManager = FileManager.default
+        var handedOff: [String] = []
+        for filename in filenames {
+            let source = incoming.appendingPathComponent(filename)
+            do {
+                try fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: source.path)
+                try fileManager.moveItem(at: source, to: container.appendingPathComponent(filename))
+                handedOff.append(filename)
+            } catch {
+                log.error("failed to hand off a shared file")
+                try? fileManager.removeItem(at: source)
+            }
         }
-        let path = container.appendingPathComponent(filename).path
-        do {
-            try FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
-        } catch {
-            log.error("failed to stamp shared file time")
+        writtenLock.withLock { writtenFilenames.removeAll() }
+        return handedOff
+    }
+
+    /// True once the app has moved every handed-off file out of the container.
+    private func macroTookFiles() -> Bool {
+        guard let container = appGroupContainer(), !handedOffFilenames.isEmpty else {
+            return false
+        }
+        return handedOffFilenames.allSatisfy { filename in
+            !FileManager.default.fileExists(atPath: container.appendingPathComponent(filename).path)
+        }
+    }
+
+    private func removeWrittenFiles() {
+        guard let container = appGroupContainer() else { return }
+        let incoming = container.appendingPathComponent(incomingDirectoryName, isDirectory: true)
+        let filenames = writtenLock.withLock { () -> [String] in
+            let filenames = writtenFilenames
+            writtenFilenames.removeAll()
+            return filenames
+        }
+        for filename in filenames {
+            try? FileManager.default.removeItem(at: incoming.appendingPathComponent(filename))
         }
     }
 
@@ -653,9 +732,15 @@ class ShareViewController: UIViewController {
         }
     }
 
+    /// Gives up on items that take too long to load. Nothing written so far
+    /// reaches the app, and the person is told rather than left guessing.
     private func scheduleTimeout() {
         let workItem = DispatchWorkItem { [weak self] in
-            self?.complete()
+            guard let self = self else { return }
+            log.error("share timed out loading items")
+            self.didAbandon = true
+            self.removeWrittenFiles()
+            self.showCouldNotRead()
         }
         timeoutWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: workItem)
