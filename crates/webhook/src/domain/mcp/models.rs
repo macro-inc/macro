@@ -34,6 +34,104 @@ pub const MAX_FILTER_BYTES: usize = 4 * 1024;
 pub const MCP_EVENT_QUEUE_MESSAGE_VERSION: u8 = 1;
 /// Prefix of a delivery's `webhook-id`.
 const MESSAGE_ID_PREFIX: &str = "msg_";
+/// How long deliveries stay signed with a subscription's previous secret
+/// after a refresh replaces it, so a receiver that still holds the old one
+/// accepts them.
+pub const SECRET_ROTATION_WINDOW: Duration = Duration::minutes(10);
+/// Largest delivery body ChatGPT accepts; a larger one is never sent, to any
+/// endpoint (a receiver answers 413, which is not retried either).
+pub const MAX_DELIVERY_BYTES: usize = 256 * 1024;
+
+/// Whose conventions a subscription's deliveries follow.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    strum::Display,
+    strum::EnumString,
+    strum::AsRefStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub enum McpDeliveryProfile {
+    /// MCP Events as specified: `webhook-id` names the delivered message and
+    /// `eventId` the upstream event, and `data` is the broker envelope.
+    #[default]
+    Mcp,
+    /// ChatGPT's MCP Events integration, which follows an earlier draft:
+    /// `webhook-id` equals the body's `eventId`, so `eventId` is the
+    /// delivery's own id (the event's is in `data.event_id`), and `data`
+    /// names no person by user id or email (see [`without_people`]), as
+    /// ChatGPT's tools never do.
+    Chatgpt,
+}
+
+impl McpDeliveryProfile {
+    /// Whether this is the default, which the subscribe body leaves out.
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        *self == Self::Mcp
+    }
+}
+
+/// What `data` says in place of the subscriber's own user id or email under
+/// [`McpDeliveryProfile::Chatgpt`]; subscription arguments take the same word.
+pub const SUBSCRIBER_PLACEHOLDER: &str = "me";
+/// What `data` says in place of anyone else's.
+pub const PERSON_PLACEHOLDER: &str = "someone";
+
+/// `value` with every user id and email address in its strings replaced: the
+/// subscriber's own by [`SUBSCRIBER_PLACEHOLDER`], anyone else's by
+/// [`PERSON_PLACEHOLDER`]. Object keys are kept.
+#[must_use]
+pub fn without_people(
+    value: &serde_json::Value,
+    subscriber: &MacroUserIdStr<'_>,
+) -> serde_json::Value {
+    let subscriber_id: &str = subscriber.as_ref();
+    let subscriber_email = subscriber_id
+        .strip_prefix("macro|")
+        .unwrap_or(subscriber_id);
+    // `macro|<email>` or a bare email address, anywhere in a string: the
+    // pattern ChatGPT's tools hide people by (`mcp-chatgpt-worker`'s person
+    // tokens).
+    let hide = |text: &str| -> String {
+        lazy_regex::regex_replace_all!(
+            r"(macro\|)?([A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})",
+            text,
+            |_, _, email: &str| if email.eq_ignore_ascii_case(subscriber_email) {
+                SUBSCRIBER_PLACEHOLDER
+            } else {
+                PERSON_PLACEHOLDER
+            }
+        )
+        .into_owned()
+    };
+    match value {
+        serde_json::Value::String(text) => serde_json::Value::String(hide(text)),
+        serde_json::Value::Array(items) => serde_json::Value::Array(
+            items
+                .iter()
+                .map(|item| without_people(item, subscriber))
+                .collect(),
+        ),
+        serde_json::Value::Object(fields) => serde_json::Value::Object(
+            fields
+                .iter()
+                .map(|(key, field)| (key.clone(), without_people(field, subscriber)))
+                .collect(),
+        ),
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {
+            value.clone()
+        }
+    }
+}
 
 /// The server-derived handle of a webhook subscription: `sub_` and 32 hex
 /// digits of a SHA-256 over the subscription key. A routing handle, not a
@@ -221,6 +319,11 @@ pub struct McpEventSubscription {
     pub endpoint_url: String,
     /// The signing secret, encrypted.
     pub secret: McpSecretCiphertext,
+    /// The secret a refresh replaced, while deliveries are still signed with
+    /// it too.
+    pub previous_secret: Option<McpPreviousSecret>,
+    /// Whose conventions its deliveries follow.
+    pub profile: McpDeliveryProfile,
     /// When the subscription lapses unless refreshed.
     pub expires_at: DateTime<Utc>,
 }
@@ -231,6 +334,24 @@ impl McpEventSubscription {
     pub fn is_live(&self, now: DateTime<Utc>) -> bool {
         self.expires_at > now
     }
+
+    /// The previous secret, if deliveries at `now` are still signed with it.
+    #[must_use]
+    pub fn signing_previous_secret(&self, now: DateTime<Utc>) -> Option<&McpSecretCiphertext> {
+        self.previous_secret
+            .as_ref()
+            .filter(|previous| previous.expires_at > now)
+            .map(|previous| &previous.secret)
+    }
+}
+
+/// A signing secret a refresh replaced, kept for [`SECRET_ROTATION_WINDOW`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpPreviousSecret {
+    /// The replaced secret, encrypted.
+    pub secret: McpSecretCiphertext,
+    /// When deliveries stop signing with it.
+    pub expires_at: DateTime<Utc>,
 }
 
 /// A subscription to create or refresh: the body of the internal subscribe
@@ -259,6 +380,10 @@ pub struct McpSubscribeRequest {
     pub secret_ciphertext: McpSecretCiphertext,
     /// The suggested lifetime.
     pub ttl: McpTtlRequest,
+    /// Whose conventions deliveries follow; absent means MCP's. A refresh
+    /// sets it again.
+    #[serde(default, skip_serializing_if = "McpDeliveryProfile::is_default")]
+    pub profile: McpDeliveryProfile,
 }
 
 mod whsec_secret {
@@ -389,14 +514,30 @@ pub struct McpEventOccurrence {
 }
 
 impl McpEventOccurrence {
-    /// The occurrence of `event` for a subscription to `name`.
+    /// The occurrence of `event` for a subscription to `name`, as the
+    /// subscription's profile shapes it: under MCP's, the event's own id and
+    /// envelope; under ChatGPT's, the delivery's id `message_id` (which is
+    /// also its `webhook-id`) and the envelope without people's ids.
     #[must_use]
-    pub fn new(name: &str, event: &NormalizedWebhookEvent) -> Self {
+    pub fn new(
+        name: &str,
+        event: &NormalizedWebhookEvent,
+        profile: McpDeliveryProfile,
+        message_id: &str,
+        subscriber: &MacroUserIdStr<'_>,
+    ) -> Self {
+        let (event_id, data) = match profile {
+            McpDeliveryProfile::Mcp => (event.event_id.clone(), event.broker_envelope.clone()),
+            McpDeliveryProfile::Chatgpt => (
+                message_id.to_owned(),
+                without_people(&event.broker_envelope, subscriber),
+            ),
+        };
         Self {
-            event_id: event.event_id.clone(),
+            event_id,
             name: name.to_owned(),
             timestamp: event.occurred_at,
-            data: event.broker_envelope.clone(),
+            data,
             cursor: None,
         }
     }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::mcp::models::McpSubscriptionKey;
+use crate::domain::mcp::models::{McpDeliveryProfile, McpPreviousSecret, McpSubscriptionKey};
 use crate::domain::mcp::service::SWEEP_BATCH;
 use chrono::Duration;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -63,6 +63,8 @@ fn upsert(
             kms_key_id: "alias/key".to_owned(),
             encryption_version: 1,
         },
+        previous_secret: None,
+        profile: McpDeliveryProfile::Mcp,
         expires_at: Utc::now() + expires_in,
     }
 }
@@ -128,9 +130,23 @@ async fn store_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<(
     refresh.secret.ciphertext = vec![9];
     refresh.filter = McpEventFilter::for_events(vec!["message.posted".to_owned()], None);
     refresh.expires_at = Utc::now() + Duration::hours(2);
+    let previous = McpPreviousSecret {
+        secret: first.secret.clone(),
+        expires_at: Utc::now() + Duration::minutes(10),
+    };
+    refresh.previous_secret = Some(previous.clone());
+    refresh.profile = McpDeliveryProfile::Chatgpt;
     let refreshed = store(&repo, refresh.clone()).await?;
     assert_eq!(refreshed.id, first.id, "the row keeps its id");
     assert_eq!(refreshed.secret.ciphertext, vec![9]);
+    assert_eq!(refreshed.profile, McpDeliveryProfile::Chatgpt);
+    let stored_previous = refreshed.previous_secret.clone().expect("kept");
+    assert_eq!(stored_previous.secret, previous.secret);
+    assert_eq!(
+        stored_previous.expires_at.timestamp_micros(),
+        previous.expires_at.timestamp_micros()
+    );
+    assert_eq!(repo.get_live(first.id).await?, Some(refreshed.clone()));
     assert_eq!(refreshed.filter, refresh.filter);
     assert!(refreshed.expires_at > stored.expires_at);
 

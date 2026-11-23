@@ -175,6 +175,7 @@ async fn deliveries_are_signed_with_the_message_id() {
         .deliver(
             &server.uri(),
             &secret(),
+            None,
             &subscription_id(),
             "msg_fixed",
             br#"{"eventId":"e"}"#.to_vec(),
@@ -204,6 +205,7 @@ async fn delivery_outcomes_follow_the_status() {
             .deliver(
                 &server.uri(),
                 &secret(),
+                None,
                 &subscription_id(),
                 "msg_1",
                 Vec::new(),
@@ -218,6 +220,7 @@ async fn delivery_outcomes_follow_the_status() {
             .deliver(
                 "http://example.com/hook",
                 &secret(),
+                None,
                 &subscription_id(),
                 "msg_1",
                 Vec::new()
@@ -225,4 +228,42 @@ async fn delivery_outcomes_follow_the_status() {
             .await,
         McpDeliveryOutcome::Permanent
     );
+}
+
+#[tokio::test]
+async fn a_rotating_delivery_carries_both_signatures() {
+    let previous =
+        SigningSecret::parse("whsec_C2FVsBQIhrscChlQIMV+b5sSYspob7oD").expect("valid secret");
+    let server = server_answering(ResponseTemplate::new(204)).await;
+    let outcome = client()
+        .deliver(
+            &server.uri(),
+            &secret(),
+            Some(&previous),
+            &subscription_id(),
+            "msg_rotating",
+            br#"{"eventId":"msg_rotating"}"#.to_vec(),
+        )
+        .await;
+    assert_eq!(outcome, McpDeliveryOutcome::Delivered);
+    let requests = server.received_requests().await.expect("recorded");
+    let request = &requests[0];
+    assert_eq!(
+        header_value(request, SIGNATURE_HEADER).split(' ').count(),
+        2
+    );
+    let timestamp = header_value(request, TIMESTAMP_HEADER)
+        .parse::<i64>()
+        .expect("timestamp");
+    for key in [secret(), previous] {
+        assert!(
+            key.verify(
+                "msg_rotating",
+                timestamp,
+                &request.body,
+                header_value(request, SIGNATURE_HEADER)
+            ),
+            "a receiver holding either secret accepts it"
+        );
+    }
 }

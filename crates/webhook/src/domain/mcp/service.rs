@@ -7,8 +7,9 @@ mod test;
 
 use super::live_subscribers::McpLiveSubscribers;
 use super::models::{
-    MAX_ARGUMENTS_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome, McpEventOccurrence,
-    McpEventQueueMessage, McpSubscribeRequest, McpSubscribeResult, McpSubscriptionKey,
+    MAX_ARGUMENTS_BYTES, MAX_DELIVERY_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome,
+    McpEventOccurrence, McpEventQueueMessage, McpEventSubscription, McpPreviousSecret,
+    McpSubscribeRequest, McpSubscribeResult, McpSubscriptionKey, SECRET_ROTATION_WINDOW,
 };
 use super::ports::{
     McpEndpointClient, McpEndpointVerifyError, McpEventDeliveryService, McpEventEnqueuer,
@@ -17,11 +18,12 @@ use super::ports::{
 };
 use crate::domain::delivery::{MAX_HTTP_ATTEMPTS, retry_delay};
 use crate::domain::models::{NormalizedWebhookEvent, WebhookWorkerDisposition};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::time::Duration;
 use uuid::Uuid;
+use webhook_signature::standard::SigningSecret;
 
 /// Redelivery delay after a failure that is ours, not the endpoint's.
 const INTERNAL_RETRY_DELAY: Duration = Duration::from_secs(30);
@@ -72,31 +74,75 @@ fn holds_nul(value: &serde_json::Value) -> bool {
 
 /// Subscribe and unsubscribe.
 #[derive(Clone)]
-pub struct McpEventSubscriptionServiceImpl<R, E> {
+pub struct McpEventSubscriptionServiceImpl<R, E, X> {
     repo: R,
     endpoint: E,
+    cipher: X,
 }
 
-impl<R, E> McpEventSubscriptionServiceImpl<R, E> {
-    /// Create the service.
-    pub fn new(repo: R, endpoint: E) -> Self {
-        Self { repo, endpoint }
+impl<R, E, X> McpEventSubscriptionServiceImpl<R, E, X> {
+    /// Create the service. `cipher` opens a refreshed subscription's stored
+    /// secret, to tell whether the refresh replaces it.
+    pub fn new(repo: R, endpoint: E, cipher: X) -> Self {
+        Self {
+            repo,
+            endpoint,
+            cipher,
+        }
     }
 }
 
-impl<R, E> McpEventSubscriptionService for McpEventSubscriptionServiceImpl<R, E>
+impl<R, E, X> McpEventSubscriptionServiceImpl<R, E, X>
+where
+    X: McpSecretCipher,
+{
+    /// The secret deliveries are also signed with after `row` is refreshed
+    /// with `secret`: its current one when the refresh replaces it, else any
+    /// earlier replaced one whose window is still open. A stored secret that
+    /// cannot be opened is replaced without overlap: deliveries are then
+    /// signed with the new secret alone, which is what the client sent.
+    async fn previous_secret(
+        &self,
+        row: &McpEventSubscription,
+        secret: &SigningSecret,
+        now: DateTime<Utc>,
+    ) -> Option<McpPreviousSecret> {
+        match self.cipher.decrypt(&row.user_id, &row.secret).await {
+            Ok(stored) if stored.same_key(secret) => row
+                .previous_secret
+                .clone()
+                .filter(|previous| previous.expires_at > now),
+            Ok(_) => {
+                tracing::Span::current().record("secret_rotated", true);
+                Some(McpPreviousSecret {
+                    secret: row.secret.clone(),
+                    expires_at: now + SECRET_ROTATION_WINDOW,
+                })
+            }
+            Err(error) => {
+                tracing::warn!(error = ?error, "failed to open a refreshed mcp subscription's secret");
+                None
+            }
+        }
+    }
+}
+
+impl<R, E, X> McpEventSubscriptionService for McpEventSubscriptionServiceImpl<R, E, X>
 where
     R: McpSubscriptionRepo,
     E: McpEndpointClient,
+    X: McpSecretCipher,
 {
     #[tracing::instrument(
         name = "mcp_events.subscribe",
         skip_all,
         fields(
             event_type = %request.event_type,
+            profile = %request.profile,
             subscription_id = tracing::field::Empty,
             verified = tracing::field::Empty,
             refreshed = tracing::field::Empty,
+            secret_rotated = tracing::field::Empty,
         ),
         err
     )]
@@ -121,8 +167,8 @@ where
             .get(&key.user_id, &subscription_id)
             .await
             .map_err(McpSubscriptionError::internal)?;
-        let refreshed = existing.is_some_and(|row| row.is_live(now));
-        span.record("refreshed", refreshed);
+        let live = existing.filter(|row| row.is_live(now));
+        span.record("refreshed", live.is_some());
 
         let filter = request.filter;
         filter
@@ -158,6 +204,14 @@ where
                 })?;
         }
 
+        // A refresh may replace the secret; deliveries then carry both
+        // signatures for a while, so a receiver still on the old one accepts
+        // them.
+        let previous_secret = match &live {
+            Some(row) => self.previous_secret(row, &request.secret, now).await,
+            None => None,
+        };
+
         // The quota is checked again where the row is written, under a
         // per-user lock, so concurrent subscribes cannot pass it together.
         let stored = self
@@ -169,6 +223,8 @@ where
                     subscription_id,
                     filter,
                     secret: request.secret_ciphertext,
+                    previous_secret,
+                    profile: request.profile,
                     expires_at: request.ttl.grant(now),
                 },
                 MAX_SUBSCRIPTIONS_PER_USER,
@@ -396,6 +452,9 @@ where
             event_name = %message.event.event_name,
             attempt = receive_count,
             outcome = tracing::field::Empty,
+            profile = tracing::field::Empty,
+            dual_signed = tracing::field::Empty,
+            body_bytes = tracing::field::Empty,
         )
     )]
     async fn deliver(
@@ -463,7 +522,29 @@ where
                 return Attempt::Retry(INTERNAL_RETRY_DELAY);
             }
         };
-        let occurrence = McpEventOccurrence::new(&subscription.event_type, &message.event);
+        // During a rotation the previous secret signs too; one that cannot
+        // be opened is left out, as the new one is what the client sent last.
+        let previous = match subscription.signing_previous_secret(Utc::now()) {
+            Some(previous) => self
+                .cipher
+                .decrypt(&subscription.user_id, previous)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, "failed to decrypt mcp subscription's previous secret");
+                })
+                .ok(),
+            None => None,
+        };
+        let span = tracing::Span::current();
+        span.record("profile", subscription.profile.as_ref());
+        span.record("dual_signed", previous.is_some());
+        let occurrence = McpEventOccurrence::new(
+            &subscription.event_type,
+            &message.event,
+            subscription.profile,
+            &message.webhook_message_id,
+            &subscription.user_id,
+        );
         let body = match serde_json::to_vec(&occurrence) {
             Ok(body) => body,
             Err(error) => {
@@ -471,11 +552,21 @@ where
                 return Attempt::Permanent;
             }
         };
+        span.record("body_bytes", body.len());
+        // ChatGPT refuses a larger body with a 413, which is not retried.
+        if body.len() > MAX_DELIVERY_BYTES {
+            tracing::warn!(
+                body_bytes = body.len(),
+                "mcp event delivery is too large to send"
+            );
+            return Attempt::Permanent;
+        }
         match self
             .endpoint
             .deliver(
                 &subscription.endpoint_url,
                 &secret,
+                previous.as_ref(),
                 &subscription.subscription_id,
                 &message.webhook_message_id,
                 body,

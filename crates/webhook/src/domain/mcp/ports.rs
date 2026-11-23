@@ -2,9 +2,9 @@
 
 use super::filter::McpEventFilter;
 use super::models::{
-    McpDeliveryOutcome, McpEndpointFailure, McpEventQueueMessage, McpEventSubscription,
-    McpMatchCandidate, McpSecretCiphertext, McpSubscribeRequest, McpSubscribeResult,
-    McpSubscriptionId, McpSubscriptionKey,
+    McpDeliveryOutcome, McpDeliveryProfile, McpEndpointFailure, McpEventQueueMessage,
+    McpEventSubscription, McpMatchCandidate, McpPreviousSecret, McpSecretCiphertext,
+    McpSubscribeRequest, McpSubscribeResult, McpSubscriptionId, McpSubscriptionKey,
 };
 use crate::domain::models::{NormalizedWebhookEvent, WebhookWorkerDisposition};
 use chrono::{DateTime, Utc};
@@ -27,6 +27,11 @@ pub struct McpSubscriptionUpsert {
     pub filter: McpEventFilter,
     /// The new encrypted secret.
     pub secret: McpSecretCiphertext,
+    /// The secret this refresh replaced, or the one an earlier refresh
+    /// replaced while its window lasts.
+    pub previous_secret: Option<McpPreviousSecret>,
+    /// Whose conventions its deliveries follow.
+    pub profile: McpDeliveryProfile,
     /// The granted expiry.
     pub expires_at: DateTime<Utc>,
 }
@@ -58,7 +63,8 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<Option<McpEventSubscription>, Self::Err>> + Send;
 
-    /// Insert, or refresh the secret, filter and expiry of the existing row,
+    /// Insert, or refresh the secrets, profile, filter and expiry of the
+    /// existing row,
     /// unless the user would then hold more than `max` live subscriptions.
     /// Expired rows do not count. Serialized per user, so
     /// concurrent subscribes cannot pass the limit together.
@@ -136,11 +142,13 @@ pub trait McpEndpointClient: Clone + Send + Sync + 'static {
         subscription_id: &McpSubscriptionId,
     ) -> impl Future<Output = Result<(), McpEndpointVerifyError>> + Send;
 
-    /// POST one signed delivery.
+    /// POST one delivery, signed with `secret` and, during a rotation, also
+    /// with `previous` (Standard Webhooks' space-separated signatures).
     fn deliver(
         &self,
         endpoint_url: &str,
         secret: &SigningSecret,
+        previous: Option<&SigningSecret>,
         subscription_id: &McpSubscriptionId,
         message_id: &str,
         body: Vec<u8>,

@@ -130,7 +130,13 @@ fn message_ids_are_fresh_per_message() {
 #[test]
 fn occurrence_carries_the_envelope_and_a_null_cursor() {
     let event = event();
-    let occurrence = McpEventOccurrence::new("macro.events", &event);
+    let occurrence = McpEventOccurrence::new(
+        "macro.events",
+        &event,
+        McpDeliveryProfile::Mcp,
+        "msg_1",
+        &subscriber(),
+    );
     let json = serde_json::to_value(&occurrence).expect("serializable");
     assert_eq!(json["eventId"], event.event_id.as_str());
     assert_eq!(json["name"], "macro.events");
@@ -161,5 +167,93 @@ fn ciphertext_travels_as_base64() {
     assert_eq!(
         serde_json::from_value::<McpSecretCiphertext>(json).expect("round trip"),
         ciphertext
+    );
+}
+
+fn subscriber() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from("macro|Me@Example.com".to_owned()).expect("valid user id")
+}
+
+#[test]
+fn chatgpt_occurrence_carries_the_delivery_id_and_no_people() {
+    let mut event = event();
+    event.broker_envelope = serde_json::json!({
+        "event_id": event.event_id,
+        "event_type": "message.mentioned",
+        "metadata": {
+            "sender": "macro|other@example.com",
+            "mentioned": { "entity_type": "user", "entity_id": "macro|me@example.com" },
+            "content": "ping other@example.org and ME@example.com",
+            "count": 2,
+            "macro|other@example.com": true
+        }
+    });
+    let occurrence = McpEventOccurrence::new(
+        "message.mentioned",
+        &event,
+        McpDeliveryProfile::Chatgpt,
+        "msg_1",
+        &subscriber(),
+    );
+    let json = serde_json::to_value(&occurrence).expect("serializable");
+    assert_eq!(
+        json["eventId"], "msg_1",
+        "ChatGPT's webhook-id is the eventId"
+    );
+    assert_eq!(json["data"]["event_id"], event.event_id.as_str());
+    assert_eq!(
+        json["data"]["metadata"],
+        serde_json::json!({
+            "sender": "someone",
+            "mentioned": { "entity_type": "user", "entity_id": "me" },
+            "content": "ping someone and me",
+            "count": 2,
+            "macro|other@example.com": true
+        }),
+        "values lose people, keys are kept"
+    );
+}
+
+#[test]
+fn the_default_profile_is_left_out_of_the_subscribe_body() {
+    assert!(McpDeliveryProfile::Mcp.is_default());
+    assert_eq!(
+        "chatgpt".parse::<McpDeliveryProfile>().expect("parses"),
+        McpDeliveryProfile::Chatgpt
+    );
+    assert_eq!(McpDeliveryProfile::Chatgpt.as_ref(), "chatgpt");
+}
+
+#[test]
+fn a_previous_secret_signs_until_its_window_closes() {
+    let now = Utc::now();
+    let ciphertext = McpSecretCiphertext {
+        ciphertext: vec![1],
+        kms_key_id: "alias/key".to_owned(),
+        encryption_version: 1,
+    };
+    let row = McpEventSubscription {
+        id: Uuid::now_v7(),
+        user_id: subscriber(),
+        subscription_id: McpSubscriptionId::from_stored("sub_1".to_owned()),
+        event_type: "macro.events".to_owned(),
+        arguments: serde_json::json!({}),
+        filter: crate::domain::mcp::filter::McpEventFilter::for_events(
+            vec!["message.mentioned".to_owned()],
+            None,
+        ),
+        endpoint_url: "https://hooks.example.com/a".to_owned(),
+        secret: ciphertext.clone(),
+        previous_secret: Some(McpPreviousSecret {
+            secret: ciphertext.clone(),
+            expires_at: now + Duration::minutes(1),
+        }),
+        profile: McpDeliveryProfile::Mcp,
+        expires_at: now + Duration::hours(1),
+    };
+    assert_eq!(row.signing_previous_secret(now), Some(&ciphertext));
+    assert_eq!(
+        row.signing_previous_secret(now + Duration::minutes(2)),
+        None
     );
 }

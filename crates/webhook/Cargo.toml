@@ -66,6 +66,7 @@ kms = ["dep:cursor_api_key", "ports"]
 ports = [
   "dep:futures",
   "dep:hex",
+  "dep:lazy-regex",
   "dep:serde_json",
   "dep:sha2",
   "dep:url",
@@ -105,6 +106,7 @@ futures = { workspace = true, optional = true }
 genai_telemetry = { path = "../genai_telemetry", optional = true }
 hex = { workspace = true, optional = true }
 kafka_util = { path = "../kafka_util", optional = true }
+lazy-regex = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
 ] }

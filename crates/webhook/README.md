@@ -370,7 +370,7 @@ encrypts the secret before calling it.
 - **Storage.** `mcp_event_subscription`, one row per (user, endpoint URL,
   event type, canonical arguments). The MCP subscription id (`sub_…`) is a
   digest of that key, so subscribing again refreshes the row in place: a new
-  expiry and secret, the same filter. Rows expire (`expires_at`; default 1 h,
+  expiry, secret and delivery profile, the same filter. Rows expire (`expires_at`; default 1 h,
   1 min to 24 h) and are deleted outright on unsubscribe. Expired rows stop
   matching at once and are deleted by `McpSubscriptionSweeper`, which
   `document_storage_service` runs every minute (batches of 500, the limit
@@ -430,7 +430,9 @@ encrypts the secret before calling it.
   webhooks again. The webhook
   worker tells the two message kinds apart by shape. Each POST is a Standard
   Webhooks signed `{eventId, name, timestamp, data, cursor: null}` with
-  `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. Attempts follow the
+  `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. A body
+  over 256 KiB (ChatGPT's limit) is dropped with a warning, for every
+  profile. Attempts follow the
   webhook retry schedule, counted by SQS's receive count (5 attempts; a later receipt is acknowledged
   without a POST). A receipt that fails inside this service (the database or
   KMS) counts too, since nothing is stored per delivery: an outage longer than
@@ -445,7 +447,23 @@ encrypts the secret before calling it.
   ingested event.
 - **Secret.** The client supplies the `whsec_` secret. The MCP server
   encrypts it with its KMS key (purpose `mcp-event-subscription-secret`,
-  bound to the user); this service only decrypts it, per delivery.
+  bound to the user); this service only decrypts it: per delivery, and on a
+  refresh to tell whether the secret changed. A refresh with a new secret
+  keeps the old one in `previous_secret_*` for 10 minutes
+  (`SECRET_ROTATION_WINDOW`), and deliveries in that window carry both
+  signatures (space-separated in `webhook-signature`), so a receiver still
+  holding the old secret accepts them. A stored secret that cannot be
+  decrypted is replaced without overlap.
+- **Delivery profiles.** `delivery_profile` says whose conventions a row's
+  deliveries follow; the subscribe body names it (`profile`, left out for
+  the default). `mcp`, the default, follows the MCP Events specification:
+  `webhook-id` is the delivery's `msg_…` id and `eventId` the event's.
+  `chatgpt` is set by the MCP server for ChatGPT, whose integration follows
+  an earlier draft: `eventId` equals `webhook-id` (the event's own id stays
+  in `data.event_id`), and `data` names no person: every `macro|<email>`
+  user id and email address in its string values becomes `me` (the
+  subscriber) or `someone` (`McpEventOccurrence::new`, `without_people`),
+  as ChatGPT's tools never show people's emails.
 - **Stream mode.** `events/stream` stores nothing here: the MCP server reads
   this service's live event stream (`GET /webhook/events/stream`, scope
   `user`) as the subscriber, one connection per `stream_groups` entry, and
@@ -457,7 +475,9 @@ encrypts the secret before calling it.
   Every subscribe carries its filter, which the MCP server derives from the
   arguments (a `macro.events` filter is one the caller confirmed and sent
   back), so a refresh sends the same one.
-- **Rolling deploys.** A worker from before this change acknowledges an MCP
+- **Rolling deploys.** The subscribe body carries `profile` only when it is
+  `chatgpt`, and the internal route refuses unknown fields, so roll this
+  service out before the MCP server sends ChatGPT subscriptions. A worker from before this change acknowledges an MCP
   queue message as malformed and deletes it. Rows are created only through the
   internal subscribe call, whose one caller is the MCP server, so roll this
   service out to every task before the MCP server: until a row exists, fan-out

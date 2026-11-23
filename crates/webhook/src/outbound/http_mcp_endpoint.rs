@@ -91,10 +91,11 @@ impl ReqwestWebhookValidationClient {
         .await
     }
 
+    /// POST `body` signed with each of `secrets`.
     async fn post_signed(
         &self,
         url: Url,
-        secret: &SigningSecret,
+        secrets: &[&SigningSecret],
         subscription_id: &McpSubscriptionId,
         message_id: &str,
         body: Vec<u8>,
@@ -102,8 +103,7 @@ impl ReqwestWebhookValidationClient {
         let timestamp = chrono::Utc::now().timestamp();
         // HMAC-SHA256 takes any key length, so this never fails in practice;
         // a refusal still must not send an unsigned request.
-        let signature = secret
-            .sign(message_id, timestamp, &body)
+        let signature = SigningSecret::sign_all(secrets, message_id, timestamp, &body)
             .ok_or(McpEndpointFailure::ConnectionRefused)?;
         let request = self
             .client
@@ -153,7 +153,7 @@ impl McpEndpointClient for ReqwestWebhookValidationClient {
         let response = self
             .post_signed(
                 url,
-                secret,
+                &[secret],
                 subscription_id,
                 &verification_message_id(),
                 body,
@@ -186,6 +186,7 @@ impl McpEndpointClient for ReqwestWebhookValidationClient {
         &self,
         endpoint_url: &str,
         secret: &SigningSecret,
+        previous: Option<&SigningSecret>,
         subscription_id: &McpSubscriptionId,
         message_id: &str,
         body: Vec<u8>,
@@ -202,7 +203,16 @@ impl McpEndpointClient for ReqwestWebhookValidationClient {
             }
         };
         let response = match self
-            .post_signed(url, secret, subscription_id, message_id, body)
+            .post_signed(
+                url,
+                &[Some(secret), previous]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>(),
+                subscription_id,
+                message_id,
+                body,
+            )
             .await
         {
             Ok(response) => response,

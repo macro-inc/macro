@@ -952,6 +952,7 @@ pub(crate) type DssMcpSubscriptionService =
     webhook::domain::mcp::service::McpEventSubscriptionServiceImpl<
         webhook::outbound::PgMcpSubscriptionRepository,
         ReqwestWebhookValidationClient,
+        webhook::outbound::KmsMcpSecretCipher<cursor_api_key::cipher::AwsKmsCiphertexts>,
     >;
 
 /// Type alias for the internal MCP Events subscription router state.

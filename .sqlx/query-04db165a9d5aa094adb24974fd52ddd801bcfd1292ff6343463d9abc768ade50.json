@@ -1,0 +1,127 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO mcp_event_subscription (\n                id, user_id, subscription_id, event_type, arguments, filter,\n                endpoint_url, secret_ciphertext, secret_kms_key_id,\n                secret_encryption_version, previous_secret_ciphertext,\n                previous_secret_kms_key_id, previous_secret_encryption_version,\n                previous_secret_expires_at, delivery_profile, expires_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)\n            ON CONFLICT (user_id, subscription_id) DO UPDATE SET\n                filter = EXCLUDED.filter,\n                secret_ciphertext = EXCLUDED.secret_ciphertext,\n                secret_kms_key_id = EXCLUDED.secret_kms_key_id,\n                secret_encryption_version = EXCLUDED.secret_encryption_version,\n                previous_secret_ciphertext = EXCLUDED.previous_secret_ciphertext,\n                previous_secret_kms_key_id = EXCLUDED.previous_secret_kms_key_id,\n                previous_secret_encryption_version = EXCLUDED.previous_secret_encryption_version,\n                previous_secret_expires_at = EXCLUDED.previous_secret_expires_at,\n                delivery_profile = EXCLUDED.delivery_profile,\n                expires_at = EXCLUDED.expires_at,\n                updated_at = now()\n            RETURNING id, user_id, subscription_id, event_type, arguments, filter,\n                endpoint_url, secret_ciphertext, secret_kms_key_id,\n                secret_encryption_version, previous_secret_ciphertext,\n                previous_secret_kms_key_id, previous_secret_encryption_version,\n                previous_secret_expires_at, delivery_profile, expires_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "subscription_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "arguments",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "filter",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "endpoint_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "secret_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "secret_kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "secret_encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 10,
+        "name": "previous_secret_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 11,
+        "name": "previous_secret_kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "previous_secret_encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 13,
+        "name": "previous_secret_expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "delivery_profile",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Bytea",
+        "Text",
+        "Int2",
+        "Bytea",
+        "Text",
+        "Int2",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "04db165a9d5aa094adb24974fd52ddd801bcfd1292ff6343463d9abc768ade50"
+}
