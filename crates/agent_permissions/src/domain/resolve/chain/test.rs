@@ -485,7 +485,7 @@ fn detach_snapshot_keeps_every_state() {
         let snapshot = materialize(&catalog, &chain);
         for rule in &snapshot {
             // What the tables accept.
-            assert!(!(rule.via_agent && !rule.restriction_only), "{rule:?}");
+            assert!(!rule.via_agent || rule.restriction_only, "{rule:?}");
             assert!(
                 !(matches!(rule.target, Target::Action { .. }) && rule.state == Always),
                 "{rule:?}"

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE chain (id, source_policy_id, depth, path) AS (\n            SELECT p.id, p.source_policy_id, 1, ARRAY[p.id]\n            FROM agent_permission_policy p\n            WHERE p.id = $1\n          UNION ALL\n            SELECT p.id, p.source_policy_id, c.depth + 1, c.path || p.id\n            FROM chain c\n            JOIN agent_permission_policy p ON p.id = c.source_policy_id\n            WHERE c.depth <= $2 AND p.id <> ALL (c.path)\n        )\n        SELECT id AS \"id!\" FROM chain ORDER BY depth\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7b2be475796b819b99c5358fd3a682d3a60684e34c473b88ce3fbb23b6fd8080"
+}

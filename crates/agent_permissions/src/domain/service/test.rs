@@ -1292,3 +1292,145 @@ async fn an_agent_in_someone_elses_session_restricts_a_default_for_that_session(
         (PermissionState::Ask, Origin::Session)
     );
 }
+
+/// `BotId::TEST_A`'s policy made to follow the owner's own Macro policy, as
+/// a source change would leave it.
+async fn follow_owners_macro(fixture: &Fixture) -> PolicyId {
+    let follower = fixture
+        .store
+        .ensure_policy(&PolicyOwner::Agent(BotId::TEST_A))
+        .await
+        .unwrap();
+    let source = fixture
+        .store
+        .ensure_policy(&PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OWNER),
+        })
+        .await
+        .unwrap();
+    let owner = user(OWNER);
+    fixture
+        .store
+        .set_source(
+            SourceWrite {
+                policy: follower,
+                by: &owner,
+            },
+            source,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    source
+}
+
+#[tokio::test]
+async fn a_follower_resolves_through_its_source_live() {
+    let fixture = fixture();
+    follow_owners_macro(&fixture).await;
+    let before = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(
+        (before[0].state, before[0].origin),
+        (PermissionState::Always, Origin::Source)
+    );
+
+    // The owner changes their own Macro settings: the follower's next call
+    // takes them, and its view says the same.
+    fixture
+        .service
+        .set(&person(OWNER), MACRO_NEW_BOT_ID, never_send())
+        .await
+        .unwrap();
+    let after = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(
+        (after[0].state, after[0].origin),
+        (PermissionState::Never, Origin::Source)
+    );
+    let view = fixture
+        .service
+        .view_agent(&person(OWNER), BotId::TEST_A)
+        .await
+        .unwrap();
+    let email = view
+        .groups
+        .iter()
+        .find(|group| group.group == "email")
+        .unwrap();
+    assert_eq!(
+        (email.actions[0].state, email.actions[0].origin),
+        (PermissionState::Never, Origin::Source)
+    );
+    assert!(view.rules.is_empty());
+}
+
+#[tokio::test]
+async fn an_agent_tightens_a_follower_but_cannot_loosen_its_source() {
+    let fixture = fixture();
+    follow_owners_macro(&fixture).await;
+    fixture
+        .service
+        .set(&person(OWNER), MACRO_NEW_BOT_ID, never_send())
+        .await
+        .unwrap();
+    let agent = agent_caller(OWNER, BotId::TEST_A, None);
+    // Asking for always on what the source sets to never is refused.
+    let loosen = vec![Change {
+        target: Target::Tool {
+            service: "email".to_owned(),
+            operation: "send_email".to_owned(),
+        },
+        state: Some(PermissionState::Always),
+    }];
+    assert!(matches!(
+        fixture
+            .service
+            .tighten(&agent, BotId::TEST_A, loosen)
+            .await,
+        Err(PermissionError::WouldLoosen(_))
+    ));
+    // A stricter local default is saved on the follower, not the source.
+    let stricter = vec![Change {
+        target: Target::Action {
+            action: Action::Destroy,
+        },
+        state: Some(PermissionState::Ask),
+    }];
+    let tightened = fixture
+        .service
+        .tighten(&agent, BotId::TEST_A, stricter)
+        .await
+        .unwrap();
+    assert_eq!(tightened.applied_to, AppliedTo::Agent);
+    assert_eq!(tightened.permissions.rules.len(), 1);
+    let resolved = fixture
+        .service
+        .resolve_calls(
+            &owner_policy(),
+            &[OperationKey {
+                service: "storage".to_owned(),
+                operation: "delete_document".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (resolved[0].state, resolved[0].origin),
+        (PermissionState::Ask, Origin::Action)
+    );
+    assert_eq!(
+        fixture
+            .store
+            .read(&Key::Persona(MACRO_NEW_BOT_ID, OWNER.to_owned()))
+            .len(),
+        1
+    );
+}

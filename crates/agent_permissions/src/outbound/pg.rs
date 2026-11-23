@@ -136,6 +136,15 @@ const WALK_DEPTH: i32 = MAX_CHAIN as i32;
 /// Read only, so it never blocks a writer.
 const SNAPSHOT: &str = "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY";
 
+/// A source change walks the policy's followers, whose count grows with how
+/// many agents follow it (about 12 ms for ten thousand); bound it anyway.
+async fn bound_source_walk(connection: &mut PgConnection) -> Result<(), sqlx::Error> {
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(connection)
+        .await?;
+    Ok(())
+}
+
 async fn lock(connection: &mut PgConnection, key: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key,)
         .fetch_one(connection)
@@ -672,6 +681,7 @@ impl PermissionStore for PgPermissionStore {
         source: PolicyId,
     ) -> Result<Result<(), PermissionError>, Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        bound_source_walk(&mut transaction).await?;
         // Sources first, then the policy: nothing takes the sources lock
         // after a policy's, so no two writers wait on each other.
         lock(&mut transaction, SOURCES_LOCK).await?;
@@ -723,6 +733,7 @@ impl PermissionStore for PgPermissionStore {
         Plan: FnOnce(&PolicyChain) -> Result<Vec<Rule>, PermissionError> + Send,
     {
         let mut transaction = self.pool.begin().await?;
+        bound_source_walk(&mut transaction).await?;
         lock(&mut transaction, SOURCES_LOCK).await?;
         lock(&mut transaction, &lock_key(Some(write.policy), None)).await?;
 
@@ -780,7 +791,10 @@ impl PermissionStore for PgPermissionStore {
 
     #[tracing::instrument(skip_all, fields(policy_id = %policy), err)]
     async fn followers_height(&self, policy: PolicyId) -> Result<usize, Self::Err> {
-        let mut connection = self.pool.acquire().await?;
-        Ok(read_followers_height(&mut connection, policy).await?)
+        let mut transaction = self.pool.begin().await?;
+        bound_source_walk(&mut transaction).await?;
+        let height = read_followers_height(&mut transaction, policy).await?;
+        transaction.commit().await?;
+        Ok(height)
     }
 }

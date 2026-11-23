@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE tree (id, depth) AS (\n            SELECT p.id, 1\n            FROM agent_permission_policy p\n            WHERE p.id = $1\n          UNION ALL\n            SELECT p.id, t.depth + 1\n            FROM tree t\n            JOIN agent_permission_policy p ON p.source_policy_id = t.id\n            WHERE t.depth <= $2\n        )\n        SELECT max(depth) FROM tree\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5a8ba5491f242c21d10946d518998d853f6edc7933016a803e26e2ee3d40e0c7"
+}
