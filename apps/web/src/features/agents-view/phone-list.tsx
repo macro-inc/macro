@@ -2,7 +2,6 @@ import { createListController } from '@app/components/list';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { ChannelPinGrid } from '@app/features/channels-view/components/ChannelPins';
 import { toEntityActionListState } from '@app/features/next-soup/actions';
-import { soupNavigationTouchHighlight } from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import EmptyStateAi from '@app/lib/design/empty-state-ai.svg';
 import { t } from '@app/lib/i18n';
@@ -130,15 +129,10 @@ export function PhoneAgentsList(props: {
     isSelectable: () => false,
   });
   const list = toEntityActionListState({ controller, getEntity: (row) => row });
-  let clearPress: (() => void) | undefined;
   const renderRows = (rows: AgentConversationEntity[], waiting = false) => (
     <For each={rows}>
       {(row) => (
-        <ConversationContextMenu
-          conversation={row}
-          list={list}
-          onOpenChange={() => clearPress?.()}
-        >
+        <ConversationContextMenu conversation={row} list={list}>
           <PhoneConversationRow
             archived={
               Boolean(props.search) &&
@@ -175,12 +169,15 @@ export function PhoneAgentsList(props: {
       >
         <MaybeSoupEntityActionDrawerManager>
           <div
-            ref={(element) => {
-              clearPress = soupNavigationTouchHighlight(element);
-            }}
-            class="flex min-h-0 flex-1 flex-col overflow-auto pt-(--mobile-content-inset-top)"
+            class="flex min-h-0 flex-1 flex-col overflow-auto"
             onScroll={(event) => listState.loadMoreNearEnd(event.currentTarget)}
           >
+            {/* Keep the scrollport unpadded: sticky top is measured from its
+                padding edge. Reserve the islands in content, not a second offset. */}
+            <div
+              aria-hidden="true"
+              class="h-(--mobile-content-inset-top) shrink-0"
+            />
             <Show
               when={!props.archived && !props.rosterLoading && !props.search}
             >

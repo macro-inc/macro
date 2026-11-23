@@ -9,10 +9,32 @@ import {
 import type { AgentConversationEntity } from './core/recent-conversations';
 import { PhoneAgentsList } from './phone-list';
 
+const headerMeasurement = vi.hoisted(() => ({
+  height: 60,
+  notify: undefined as (() => void) | undefined,
+}));
+
 vi.stubGlobal(
   'ResizeObserver',
   class {
-    observe() {}
+    constructor(private callback: ResizeObserverCallback) {}
+    observe(element: HTMLElement) {
+      if (element.hasAttribute('data-mobile-list-header')) {
+        headerMeasurement.notify = () =>
+          this.callback(
+            [
+              {
+                target: element,
+                contentRect: element.getBoundingClientRect(),
+                borderBoxSize: [],
+                contentBoxSize: [],
+                devicePixelContentBoxSize: [],
+              },
+            ],
+            this
+          );
+      }
+    }
     unobserve() {}
     disconnect() {}
   }
@@ -61,11 +83,12 @@ vi.mock('./views/shared/phone-conversation-row/phone-conversation-row', () => ({
 vi.mock('./views/mobile/filters/filters', () => ({
   ConversationFiltersDrawer: () => <button>Filter conversations</button>,
 }));
-vi.mock(
-  '@app/features/next-soup/soup-view/soup-navigation-touch-highlight',
-  () => ({ soupNavigationTouchHighlight: () => () => {} })
-);
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  headerMeasurement.height = 60;
+  headerMeasurement.notify = undefined;
+});
 
 function Harness(props: {
   archived?: boolean;
@@ -114,6 +137,49 @@ function Harness(props: {
 }
 
 describe('phone Agents list', () => {
+  it.each([false, true])(
+    'reserves the measured island row once before the sticky heading (archived=%s)',
+    (archived) => {
+      vi.spyOn(
+        HTMLElement.prototype,
+        'getBoundingClientRect'
+      ).mockImplementation(function (this: HTMLElement) {
+        return new DOMRect(
+          0,
+          0,
+          390,
+          this.hasAttribute('data-mobile-list-header')
+            ? headerMeasurement.height
+            : 844
+        );
+      });
+      const { container } = render(() => <Harness archived={archived} />);
+      const layout = container.querySelector<HTMLElement>(
+        '[data-mobile-list-layout]'
+      )!;
+      const heading = screen
+        .getByRole('heading', {
+          name: archived ? 'Archived' : 'Conversations',
+        })
+        .closest('header')!;
+      const scroller = heading.parentElement!;
+      const spacer = scroller.firstElementChild!;
+      expect(layout.style.getPropertyValue('--mobile-content-inset-top')).toBe(
+        '60px'
+      );
+      expect(spacer.getAttribute('aria-hidden')).toBe('true');
+      expect(spacer.className).toContain('h-(--mobile-content-inset-top)');
+      expect(spacer.className).toContain('shrink-0');
+      expect(scroller.className).not.toContain('pt-');
+      expect(heading.className).toContain('top-(--mobile-content-inset-top)');
+
+      headerMeasurement.height = 76;
+      headerMeasurement.notify?.();
+      expect(layout.style.getPropertyValue('--mobile-content-inset-top')).toBe(
+        '76px'
+      );
+    }
+  );
   it('shows the conversation empty panel after the bubbles and sticky heading, and focuses the existing composer', () => {
     const focus = vi.fn();
     render(() => <Harness focus={focus} />);
@@ -187,8 +253,8 @@ describe('phone Agents list', () => {
     );
     expect(sticky?.className).toContain('bg-panel');
     expect(heading.className).toContain('text-[20px]/[26px]');
-    expect(sticky?.parentElement?.className).toContain(
-      'pt-(--mobile-content-inset-top)'
+    expect(sticky?.parentElement?.firstElementChild?.className).toContain(
+      'h-(--mobile-content-inset-top)'
     );
     expect(sticky?.parentElement?.className).not.toContain('calc');
     expect(
@@ -277,8 +343,8 @@ describe('phone Agents list', () => {
     const heading = screen.getByRole('heading', { name: 'Archived' });
     const header = heading.closest('header');
     expect(header?.classList.contains('px-3')).toBe(true);
-    expect(header?.parentElement?.className).toContain(
-      'pt-(--mobile-content-inset-top)'
+    expect(header?.parentElement?.firstElementChild?.className).toContain(
+      'h-(--mobile-content-inset-top)'
     );
     expect(header?.closest('[data-mobile-list-header]')).toBeNull();
     expect(screen.getAllByRole('heading', { name: 'Archived' })).toHaveLength(

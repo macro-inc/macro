@@ -296,7 +296,7 @@ right preview instead of a standalone split. The Agents sidebar stays left and c
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The phone collection uses one measured floating header. Its single 20/26 heading follows the bubbles and pins below the islands while rows scroll beneath it; Archived shares the heading and inset without an extra top gap.
+The phone collection uses one measured floating header. An initial nonshrinking spacer inside the unpadded list scroller reserves the island row; its single 20/26 heading follows the bubbles and sticks at that same measured inset while rows scroll beneath it. Archived shares this layout, with its heading immediately below the islands.
 The phone list shows startable custom agents as bubbles above a sticky **Conversations** heading, followed by Waiting on you, Favorites, and the remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
@@ -2666,10 +2666,16 @@ the caret after them, waiting for what to change.
 Ask the AI to find or reuse an existing booking link before creating another.
 `ListBookingLinks` returns personal links, current team IDs, full settings and
 shareable URLs (including paused links). It also supplies the revision used to
-protect edits from concurrent settings changes.
+protect edits from concurrent settings changes, and the connected accounts a
+personal link can book on: a draft's `emailLinkId` puts its bookings on that
+account's calendar, with invitations from its address. Saving refuses a newly
+chosen account you can't book on, and Google Meet newly asked of an account that
+can't add a video meeting; an unchanged choice whose account was removed since
+still saves, and that link takes no bookings until another account is chosen.
 
 Booking links are confirmed in conversation, with no special booking form. The AI
-first explains the proposed meeting details, ownership and named hosts, time zone,
+first explains the proposed meeting details, ownership and named hosts, the
+calendar account when it is not the primary one, time zone,
 availability and date exceptions, booking rules, guest questions and whether the
 link accepts bookings. It asks whether to proceed and waits for your reply before
 calling `CreateBookingLink` or `EditBookingLink`. An initial request to create a

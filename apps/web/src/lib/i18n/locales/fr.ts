@@ -721,7 +721,7 @@ export default {
     more: 'Plus',
     moreOptions: 'Plus d’options',
     create: 'Créer',
-    getMobileApp: 'Obtenir l’app mobile',
+    downloads: 'Téléchargements',
     signedInAs: 'Connecté en tant que {{name}}',
     customizeSidebar: 'Personnaliser la barre latérale',
     customizeSidebarDescription:
@@ -787,8 +787,7 @@ export default {
     tabShortcuts: 'Raccourcis clavier',
     tabUsage: 'Utilisation',
     tabBilling: 'Facturation',
-    tabDesktopApp: 'App de bureau',
-    tabMobileApp: 'App mobile',
+    tabDownloads: 'Téléchargements',
     tabTags: 'Tags',
     tabIntegrations: 'Intégrations',
     tabRuntimes: 'Machines',

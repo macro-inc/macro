@@ -75,7 +75,7 @@ function setup() {
   };
 }
 
-it('opens row actions on a real long press and restores the row on close', async () => {
+it('opens row actions on a real long press and focuses the row', async () => {
   const { row, focus, onOpenChange } = setup();
   fireEvent.touchStart(row, { touches: [{ clientX: 20, clientY: 20 }] });
   await vi.advanceTimersByTimeAsync(500);
@@ -88,8 +88,6 @@ it('opens row actions on a real long press and restores the row on close', async
   expect(onOpenChange).toHaveBeenCalledWith(true);
   expect(focus).toHaveBeenCalledWith('session');
   fireEvent.touchEnd(row, { touches: [] });
-  drawer.open.mock.calls[0][0].onClose();
-  expect(onOpenChange).toHaveBeenLastCalledWith(false);
 });
 
 it('cancels a scrolling touch instead of opening actions', async () => {

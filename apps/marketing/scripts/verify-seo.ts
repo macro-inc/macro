@@ -32,7 +32,7 @@ const updatedTitles: Record<string, string> = {
   '/calls': 'Macro Calls — Team-level memory',
   '/channels': 'Macro Chat — Focused team chat',
   '/documents': 'Macro Docs | Write With Your Team and Your Agents',
-  '/download': 'Download Macro',
+  '/download': 'Download Macro Alpha',
   '/tasks': 'Macro Tasks — Task management for people and agents',
 };
 

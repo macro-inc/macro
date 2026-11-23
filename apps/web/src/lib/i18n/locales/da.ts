@@ -690,7 +690,7 @@ export default {
     more: 'Mere',
     moreOptions: 'Flere muligheder',
     create: 'Opret',
-    getMobileApp: 'Hent mobilappen',
+    downloads: 'Downloads',
     signedInAs: 'Logget ind som {{name}}',
     customizeSidebar: 'Tilpas sidepanelet',
     customizeSidebarDescription:
@@ -754,8 +754,7 @@ export default {
     tabShortcuts: 'Tastaturgenveje',
     tabUsage: 'Forbrug',
     tabBilling: 'Fakturering',
-    tabDesktopApp: 'Skrivebordsapp',
-    tabMobileApp: 'Mobilapp',
+    tabDownloads: 'Downloads',
     tabTags: 'Tags',
     tabIntegrations: 'Integrationer',
     tabRuntimes: 'Maskiner',
