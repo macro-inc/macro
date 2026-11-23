@@ -19,6 +19,7 @@ import { useQueryAccount } from '@queries/auth/use-query-account';
 import { batch, createMemo, createSignal, on, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { TaskDateRangeDraft } from '../components/task-due-date-range-dialog';
+import { taskStartDateBucketLabel } from '../constants';
 import {
   isTaskDueDateBucket,
   isTaskStartDateBucket,
@@ -205,7 +206,10 @@ export function useTaskFilters() {
               defaultOptionId: 'any',
               options: [
                 { id: 'any', label: t('viewMenus.anyStartDate') },
-                ...TASK_START_DATE_BUCKETS,
+                ...TASK_START_DATE_BUCKETS.map((bucket) => ({
+                  id: bucket.id,
+                  label: taskStartDateBucketLabel(bucket.id),
+                })),
                 { id: 'has_start_date', label: t('viewMenus.hasStartDate') },
                 {
                   id: 'range',

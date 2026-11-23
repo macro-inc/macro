@@ -10,6 +10,8 @@ import type { TaskEntityWithProperties } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { PropertyDefinitionDomain } from '@property/types';
 import { propertyDateSortKey, propertySortKey } from '@property/utils/sort';
+import { match } from 'ts-pattern';
+import type { TaskStartDateBucket } from './core/task-due-date';
 import type { ProjectTab, TaskGroupBy, TaskSortId, TasksTab } from './types';
 
 export type TaskTabItem = {
@@ -173,7 +175,9 @@ export const TASK_SORT_OPTIONS: {
   },
   {
     id: 'start_date_earliest',
-    label: 'Starts soonest',
+    get label() {
+      return t('viewMenus.sortStartsSoonest');
+    },
     property: {
       propertyDefinitionId: SYSTEM_PROPERTY_IDS.START_DATE,
       direction: 'asc',
@@ -181,13 +185,27 @@ export const TASK_SORT_OPTIONS: {
   },
   {
     id: 'start_date_latest',
-    label: 'Starts furthest away',
+    get label() {
+      return t('viewMenus.sortStartsFurthestAway');
+    },
     property: {
       propertyDefinitionId: SYSTEM_PROPERTY_IDS.START_DATE,
       direction: 'desc',
     },
   },
 ];
+
+/** A Start date group or filter choice as the interface language reads it. */
+export function taskStartDateBucketLabel(bucket: TaskStartDateBucket): string {
+  return match(bucket)
+    .with('started', () => t('viewMenus.startDateStarted'))
+    .with('today', () => t('viewMenus.startDateToday'))
+    .with('tomorrow', () => t('viewMenus.startDateTomorrow'))
+    .with('next_7_days', () => t('viewMenus.startDateNext7Days'))
+    .with('later', () => t('viewMenus.startDateLater'))
+    .with('no_start_date', () => t('viewMenus.noStartDate'))
+    .exhaustive();
+}
 
 const START_DATE_SORTS: readonly TaskSortId[] = [
   'start_date_earliest',
