@@ -6,7 +6,10 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { enableTimeTracking } from '@core/constant/featureFlags';
-import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
+import {
+  appNavigationAttribute,
+  hotkeyScopeNeutralAttribute,
+} from '@core/dom-selectors';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
@@ -112,7 +115,11 @@ export const SidebarRail = () => {
       <SidebarRailCreateButton />
       <SearchRailButton />
 
-      <nav ref={nav} class="min-h-0 overflow-y-auto pt-4">
+      <nav
+        ref={nav}
+        {...appNavigationAttribute}
+        class="min-h-0 overflow-y-auto pt-4"
+      >
         <ul class="flex flex-col items-center gap-1">
           <For each={railItems()}>
             {(item) => (

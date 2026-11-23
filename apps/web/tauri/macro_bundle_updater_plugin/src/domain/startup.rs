@@ -21,6 +21,11 @@ pub struct BundleStartup {
     /// Numbered bundle directories startup cleanup deleted.
     #[cfg_attr(test, specta(type = specta_typescript::Number))]
     pub bundle_dirs_removed: usize,
+    /// Milliseconds startup spent checking the saved OTA bundle, including
+    /// that every file its completion record lists is present. Unset when no
+    /// OTA bundle was saved.
+    #[cfg_attr(test, specta(type = Option<specta_typescript::Number>))]
+    pub saved_bundle_check_ms: Option<u64>,
 }
 
 /// The bundle startup selected.
@@ -62,6 +67,8 @@ pub enum BundleRejection {
     ManifestInvalid,
     /// Its completion record is missing or names another build.
     ExtractionIncomplete,
+    /// A file its completion record lists is missing or changed size.
+    FilesMissing,
     /// It is older than the embedded bundle.
     OlderThanEmbedded,
     /// It requires a newer native build.

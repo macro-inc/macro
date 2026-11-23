@@ -229,7 +229,11 @@ header, `Tabs` and list controller, in a wide and a 700px split (stand-in
 panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
 header's tabs from its list, are focus order on a header button, leave an
 open item that replaced the list open, and leave a thread beside the list
-open after a click on its text.
+open after a click on its text. Its `?sidebar` page adds a real `ViewSidebar`
+and a stand-in rail: a folder clicked there, a project whose tabs mount only
+once it opens, or the rail after it, leaves Tab to the header's tabs; the keyboard walks the sidebar in focus
+order, and a folder's disclosure caret or a control there that opens a menu
+or a dialog chooses nothing.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -1034,6 +1038,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Match record metadata to the 24px property-control scale while reserving separate
   44px touch targets; see the CRM README for the visible-face and hit-area contract.
   Keep explanations on the chip and retain company-only Email sharing controls.
+  Order both information panels with `RECORD_PANEL_ORDER` (References last) and
+  lay Record details on `SidePanel.Grid`/`SidePanel.Row`, like Properties.
   Use the explicit Visible/Archived filter for People, Companies and company Team;
   reset its admin-only choice on account/team/role/list changes and preserve search.
   Apply confirmed visibility changes to detail, list and normalized search caches;
@@ -1285,7 +1291,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Desktop native crashes (Rust panics, Chromium crash dumps on macOS) reach PostHog as `$exception` with `native_crash_*` properties from the next webview start; a dump never leaves the machine, only its signature. Keep panic messages scrubbed and send nothing else from a dump. See `tauri/src-tauri/README.md#native-crash-reports`.
 - Diagnose desktop native updates with `native_update_outcome` and the `native.update.*` spans (`observability/native-update.ts`), which the page sends from the host's reports; keep their schema closed (versions, code-defined kinds), never error text or paths. See [update telemetry](tauri/src-tauri/README.md#update-telemetry).
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
-- Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
+- Store mobile OTA bundles and markers outside purgeable caches: iOS in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup, and Android in `<app data>/bundle-updates`; ignore legacy cache contents rather than migrating them. Desktop keeps the updater's existing cache location. Startup serves a saved bundle only when every file its completion record lists is present. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` calls join their segment's tool group as their SDK
