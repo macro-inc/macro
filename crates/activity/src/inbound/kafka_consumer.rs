@@ -117,11 +117,11 @@ where
                         }
                     };
                     let kafka_message = message.inner();
-                    let span = tracing::info_span!(
-                        "activity_source_event",
-                        topic = kafka_message.topic(),
-                        partition = kafka_message.partition(),
-                        offset = kafka_message.offset(),
+                    // Continues the trace of the write that produced the event,
+                    // so its materialization and realtime delivery join it.
+                    let span = kafka_util::consumer_span(
+                        kafka_message,
+                        ActivityConsumerGroup::GROUP_NAME,
                     );
                     let decoded = {
                         let _guard = span.enter();
