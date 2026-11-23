@@ -2087,6 +2087,21 @@ and viewer actions; focusing Download explicitly still allows keyboard downloads
 With the video focused, Escape closes the viewer and returns focus to the
 thumbnail that opened it.
 
+## Channels kept on the device
+
+Behind `enable-channel-local-sync` (`VITE_ENABLE_CHANNEL_LOCAL_SYNC=true` in a local
+bundle), a channel opens from the device: its history and threads show without a
+request once the device holds them, and opening the same channel again reads
+nothing from the server. Sends, edits, deletes and reactions go through the
+durable cache mutation queue as `SendChannelMessage`, `EditChannelMessage`,
+`DeleteChannelMessage` and `ReactToChannelMessage`, and go out when the
+connection returns. Five seconds after start, while you leave the app alone,
+the 40 newest unread and 20 most recently viewed channels are fetched ahead;
+channels unopened for 30 days are dropped. Verify a change both ways: flag off
+must behave as REST always has. The code and its gotchas are in
+`apps/web/src/lib/queries/messages/local/AGENTS.md`; the end-to-end suite is
+`tests/channels-e2e/README.md`.
+
 ## Pending message drafts
 
 Sending clears the composer immediately while delivery is pending. If delivery
