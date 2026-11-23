@@ -103,6 +103,7 @@ import {
   EmailFocusScore,
 } from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
+import { EmailSearchLocation } from './EmailSearchLocation';
 
 type EmailActionRow = {
   entity: WithNotification<EntityData>;
@@ -146,8 +147,21 @@ export function EmailList(props: EmailListProps) {
     openThread,
     selectedThread,
     filterByTag,
+    parsedSearch,
   } = useEmailView();
   const analytics = useAnalytics();
+  // Results of a search that reaches beyond the inbox say which are archived.
+  const searchReachesArchived = () => {
+    const search = parsedSearch();
+    if (!canSearchEmailTab(state.tab) || !search.query) return false;
+
+    // The inbox views hold no archived mail, and in Archived it all is.
+    const scope = search.scope;
+    return (
+      scope === undefined ||
+      !['inbox', 'focus', 'signal', 'noise', 'archived'].includes(scope)
+    );
+  };
   usePending('email.list.items', () => source.isLoading());
   // The wait is still a wait when the previous rows stay on screen for it.
   const showsPreviousRows = () => source.showsPreviousRows?.() ?? false;
@@ -912,9 +926,15 @@ export function EmailList(props: EmailListProps) {
                                       }
                                       onFilterByTag={filterByTag}
                                       meta={
-                                        <EmailFocusReason
-                                          entity={entityRow().entity}
-                                        />
+                                        <>
+                                          <EmailSearchLocation
+                                            entity={entityRow().entity}
+                                            reachesArchived={searchReachesArchived()}
+                                          />
+                                          <EmailFocusReason
+                                            entity={entityRow().entity}
+                                          />
+                                        </>
                                       }
                                       metaEnd={
                                         <EmailFocusScore

@@ -2,6 +2,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, cn } from '@ui';
 import {
+  children,
   createEffect,
   createSignal,
   type JSX,
@@ -62,9 +63,20 @@ export function ListHeaderSearch(props: {
   onOpenChange?: (open: boolean) => void;
   onFocusChange?: (focused: boolean) => void;
   suggestions?: ListSearchSuggestions;
+  /**
+   * Shown in the field before the text, such as the filter the search is
+   * narrowed to. While it shows, an empty field stays open.
+   */
+  leading?: JSX.Element;
+  /** Empties the field and whatever `leading` holds; defaults to the text. */
+  onClear?: () => void;
+  /** Runs before the field's own keys; `preventDefault` skips them. */
+  onKeyDown?: (event: KeyboardEvent) => void;
   ref?: (element: HTMLDivElement) => void;
 }) {
-  const [expanded, setExpandedState] = createSignal(Boolean(props.value));
+  const leading = children(() => props.leading);
+  const hasContent = () => Boolean(props.value.trim() || leading());
+  const [expanded, setExpandedState] = createSignal(hasContent());
   const setExpanded = (open: boolean) => {
     if (open === expanded()) return;
 
@@ -81,7 +93,8 @@ export function ListHeaderSearch(props: {
     });
   };
   const clear = () => {
-    props.onValueChange('');
+    if (props.onClear) props.onClear();
+    else props.onValueChange('');
     setExpanded(false);
   };
   const close = () => {
@@ -114,7 +127,7 @@ export function ListHeaderSearch(props: {
     on(
       () => props.value,
       (value) => {
-        if (!props.wide || value.trim()) return;
+        if (!props.wide || value.trim() || leading()) return;
         if (document.activeElement !== input) setExpanded(false);
       },
       { defer: true }
@@ -159,12 +172,16 @@ export function ListHeaderSearch(props: {
           autocomplete="off"
           aria-controls={props.suggestions?.listId}
           aria-activedescendant={props.suggestions?.activeId?.()}
+          leading={leading()}
           onClose={close}
-          onKeyDown={keys.onKeyDown}
+          onKeyDown={(event) => {
+            props.onKeyDown?.(event);
+            if (!event.defaultPrevented) keys.onKeyDown(event);
+          }}
           onFocus={() => props.onFocusChange?.(true)}
           onBlur={() => {
             props.onFocusChange?.(false);
-            if (props.wide && !props.value.trim()) setExpanded(false);
+            if (props.wide && !hasContent()) setExpanded(false);
           }}
           onEscape={keys.onEscape}
         />

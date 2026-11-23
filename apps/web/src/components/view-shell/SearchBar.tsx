@@ -21,6 +21,8 @@ export type SearchBarProps = Omit<
   onEscape?: () => void;
   /** Replaces the clear action with a close action in collapsible search fields. */
   onClose?: () => void;
+  /** Shown before the input, such as the filter a search is narrowed to. */
+  leading?: JSXElement;
   /** Controls shown after the input and before its clear or close action. */
   actions?: JSXElement;
   size?: 'sm' | 'md';
@@ -36,6 +38,7 @@ export function SearchBar(props: SearchBarProps) {
     'hotkey',
     'onEscape',
     'onClose',
+    'leading',
     'actions',
     'size',
     'class',
@@ -98,6 +101,7 @@ export function SearchBar(props: SearchBarProps) {
             local.size === 'sm' ? 'size-3.5' : 'size-4'
           )}
         />
+        {local.leading}
         <div class="relative min-w-0 flex-1">
           <TextField.Input
             {...inputProps}

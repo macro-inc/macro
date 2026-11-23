@@ -3,8 +3,8 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createEmailSearchSuggestions } from '../../search/create-email-search-suggestions';
 import {
-  EmailMobileRecentSearches,
   EmailMobileSearchField,
+  EmailMobileSearchSuggestions,
 } from './email-search';
 
 afterEach(cleanup);
@@ -26,6 +26,7 @@ function renderPage(initialSearch = '') {
       userId: () => 'user-a',
       search,
       setSearch,
+      scopeAvailable: () => true,
     });
     return (
       <>
@@ -38,7 +39,7 @@ function renderPage(initialSearch = '') {
           suggestions={suggestions}
           onCancel={onCancel}
         />
-        <EmailMobileRecentSearches
+        <EmailMobileSearchSuggestions
           suggestions={suggestions}
           onPicked={() => input?.blur()}
         />
@@ -99,6 +100,25 @@ it('clears the field without leaving it, and Cancel or Escape leaves the page', 
   // Android Back arrives as this Escape; it must be marked handled.
   expect(fireEvent.keyDown(field, { key: 'Escape' })).toBe(false);
   expect(onCancel).toHaveBeenCalledTimes(2);
+});
+
+it('turns a picked view into a chip, keeps the keyboard up, and Backspace takes it off', () => {
+  const { field, search } = renderPage();
+  field.focus();
+  fireEvent.input(field, { target: { value: 'invoice in:se' } });
+
+  fireEvent.click(screen.getByRole('option', { name: /^Sent/ }));
+  expect(search()).toBe('in:sent invoice');
+  expect(document.activeElement).toBe(field);
+  expect((field as HTMLInputElement).value).toBe('invoice');
+  expect(screen.getByRole('group', { name: 'In' }).textContent).toContain(
+    'Sent'
+  );
+
+  (field as HTMLInputElement).setSelectionRange(0, 0);
+  fireEvent.keyDown(field, { key: 'Backspace' });
+  expect(search()).toBe('invoice');
+  expect(screen.queryByRole('group', { name: 'In' })).toBeNull();
 });
 
 it('remembers the search it is left with', () => {

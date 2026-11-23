@@ -1,23 +1,41 @@
 import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import {
+  type EmailSearchScopeId,
+  emailSearchScopesStartingWith,
+  formatEmailSearch,
+  parseEmailSearch,
+  splitEmailSearchField,
+} from './email-search-scope';
+import {
   createRecentEmailSearches,
   matchRecentSearches,
 } from './recent-searches';
 
-export const RECENT_SEARCHES_LIST_ID = 'email-recent-searches';
-export const recentSearchOptionId = (index: number) =>
-  `${RECENT_SEARCHES_LIST_ID}-${index}`;
+export const SEARCH_SUGGESTIONS_LIST_ID = 'email-search-suggestions';
+export const searchSuggestionOptionId = (index: number) =>
+  `${SEARCH_SUGGESTIONS_LIST_ID}-${index}`;
 
 /** A handful stays above the results without pushing them off screen. */
 const MAX_LISTED = 5;
+
+/** An `in:` being typed at the end of the field: the view's name so far. */
+const TYPED_FILTER = /(?:^|\s)in:(\S*)$/i;
+
+/** A row under the search field. */
+export type EmailSearchSuggestion =
+  | { kind: 'recent'; search: string }
+  | { kind: 'view'; scope: EmailSearchScopeId };
 
 export type EmailSearchSuggestions = ListSearchSuggestions & {
   /** The header's search field is open, so it owns the header. */
   open: Accessor<boolean>;
   setOpen: (open: boolean) => void;
-  /** Recent searches to list: only while the field has focus. */
-  listed: Accessor<string[]>;
+  /**
+   * Rows to list, only while the field has focus: the views an `in:` being
+   * typed can name, otherwise recent searches.
+   */
+  listed: Accessor<EmailSearchSuggestion[]>;
   setFocused: (focused: boolean) => void;
   /**
    * A picked search has no results yet when the keyboard moves to the list,
@@ -28,13 +46,16 @@ export type EmailSearchSuggestions = ListSearchSuggestions & {
 };
 
 /**
- * Recent searches offered under Email's search field. A search is remembered
- * once the field is left with it, not on every keystroke.
+ * The rows offered under Email's search field. A search is remembered once
+ * the field is left with words in it, not on every keystroke, and with its
+ * `in:` filter.
  */
 export function createEmailSearchSuggestions(options: {
   userId: Accessor<string | undefined>;
   search: Accessor<string>;
   setSearch: (search: string) => void;
+  /** Whether the person has the view, such as Focus behind its flag. */
+  scopeAvailable: (scope: EmailSearchScopeId) => boolean;
 }): EmailSearchSuggestions {
   const recent = createRecentEmailSearches(options.userId);
   const [open, setOpen] = createSignal(false);
@@ -42,14 +63,32 @@ export function createEmailSearchSuggestions(options: {
   const [active, setActive] = createSignal(-1);
   const [awaitsPickedResults, setAwaitsPickedResults] = createSignal(false);
 
-  const listed = createMemo(() =>
-    focused()
-      ? matchRecentSearches(recent.recent(), options.search()).slice(
-          0,
-          MAX_LISTED
-        )
-      : []
-  );
+  // The text after the chip, split at an `in:` being typed at its end.
+  const typedFilter = () => {
+    const field = splitEmailSearchField(options.search());
+    const typed = TYPED_FILTER.exec(field.text);
+    if (!typed) return undefined;
+
+    return {
+      before: field.text.slice(0, typed.index),
+      prefix: typed[1] ?? '',
+    };
+  };
+
+  const listed = createMemo((): EmailSearchSuggestion[] => {
+    if (!focused()) return [];
+
+    const typing = typedFilter();
+    if (typing) {
+      return emailSearchScopesStartingWith(typing.prefix)
+        .filter(options.scopeAvailable)
+        .map((scope) => ({ kind: 'view', scope }));
+    }
+
+    return matchRecentSearches(recent.recent(), options.search())
+      .slice(0, MAX_LISTED)
+      .map((search) => ({ kind: 'recent', search }));
+  });
 
   return {
     open,
@@ -57,25 +96,35 @@ export function createEmailSearchSuggestions(options: {
     listed,
     setFocused: (next) => {
       if (next) setAwaitsPickedResults(false);
-      else recent.add(options.search());
+      else if (parseEmailSearch(options.search()).query)
+        recent.add(options.search());
 
       setActive(-1);
       setFocusedState(next);
     },
-    listId: RECENT_SEARCHES_LIST_ID,
+    listId: SEARCH_SUGGESTIONS_LIST_ID,
     activeId: () => {
       const index = Math.min(active(), listed().length - 1);
-      return index < 0 ? undefined : recentSearchOptionId(index);
+      return index < 0 ? undefined : searchSuggestionOptionId(index);
     },
     count: () => listed().length,
     // Typing can shorten the list under the active row.
     active: () => Math.min(active(), listed().length - 1),
     setActive,
+    editsQuery: (index) => listed()[index]?.kind === 'view',
     pick: (index) => {
-      const query = listed()[index];
-      if (query === undefined) return;
+      const suggestion = listed()[index];
+      if (!suggestion) return;
 
-      options.setSearch(query);
+      if (suggestion.kind === 'view') {
+        options.setSearch(
+          formatEmailSearch(suggestion.scope, typedFilter()?.before ?? '')
+        );
+        setActive(-1);
+        return;
+      }
+
+      options.setSearch(suggestion.search);
       setAwaitsPickedResults(true);
     },
     awaitsPickedResults,

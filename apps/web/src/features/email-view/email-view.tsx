@@ -49,7 +49,7 @@ import { EmailFilterDrawer } from './components/EmailFilterDrawer';
 import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailReader, EmailReaderEmpty } from './components/EmailReader';
-import { EmailRecentSearches } from './components/EmailRecentSearches';
+import { EmailSearchSuggestionList } from './components/EmailSearchSuggestionList';
 import { EmailSidebar } from './components/EmailSidebar';
 import {
   canSearchEmailTab,
@@ -63,6 +63,7 @@ import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import { createEmailMobileSearch } from './primitives/create-email-mobile-search';
 import type { EmailListPane } from './reader-pane';
 import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
+import { useEmailSearchScopeAvailability } from './tab-availability';
 import { emailTour } from './tour';
 import type { EmailViewStateOptions } from './types';
 import { useEmailSearchHotkeys } from './use-email-search-hotkeys';
@@ -78,8 +79,8 @@ import {
   EmailSavedViewWarning,
 } from './views/email-saved-views';
 import {
-  EmailMobileRecentSearches,
   EmailMobileSearchField,
+  EmailMobileSearchSuggestions,
 } from './views/mobile/email-search';
 
 export type EmailViewProps = {
@@ -135,6 +136,7 @@ function DesktopEmailPanes(props: {
     userId,
     search: () => state.search,
     setSearch: (query) => setState('search', query),
+    scopeAvailable: useEmailSearchScopeAvailability(),
   });
   const pickedResultsArrived = () =>
     recentSearches.awaitsPickedResults() &&
@@ -171,11 +173,12 @@ function DesktopEmailPanes(props: {
       />
       <Show when={searchSuggestions()}>
         {(suggestions) => (
-          <EmailRecentSearches
+          <EmailSearchSuggestionList
             suggestions={suggestions()}
             onPick={(index) => {
+              const editsQuery = suggestions().editsQuery?.(index) ?? false;
               suggestions().pick(index);
-              props.focusSearchResults();
+              if (!editsQuery) props.focusSearchResults();
             }}
           />
         )}
@@ -328,6 +331,7 @@ function EmailMobileLayout(props: ParentProps) {
     userId,
     search: () => state.search,
     setSearch: (query) => setState('search', query),
+    scopeAvailable: useEmailSearchScopeAvailability(),
   });
   let searchInput: HTMLInputElement | undefined;
   const mobileSearch = createEmailMobileSearch({
@@ -420,7 +424,7 @@ function EmailMobileLayout(props: ParentProps) {
       }
     >
       <Show when={searching()}>
-        <EmailMobileRecentSearches
+        <EmailMobileSearchSuggestions
           suggestions={suggestions}
           onPicked={() => searchInput?.blur()}
         />

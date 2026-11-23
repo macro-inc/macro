@@ -4,8 +4,13 @@ import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, CommandMenuSearchInput } from '@ui';
 import { onCleanup, onMount, Show } from 'solid-js';
-import { EmailRecentSearches } from '../../components/EmailRecentSearches';
+import { EmailSearchScopeChip } from '../../components/EmailSearchScopeChip';
+import { EmailSearchSuggestionList } from '../../components/EmailSearchSuggestionList';
 import type { EmailSearchSuggestions } from '../../search/create-email-search-suggestions';
+import {
+  editEmailSearchField,
+  splitEmailSearchField,
+} from '../../search/email-search-scope';
 
 /**
  * The field and Cancel of Email's search page on touch, in place of the list
@@ -42,6 +47,9 @@ export function EmailMobileSearchField(props: {
 
   // Keeps the keyboard up for presses on the field's own controls.
   const keepFocus = (event: Event) => event.preventDefault();
+  // An `in:` filter shows as a chip before the text, as on desktop.
+  const field = () => splitEmailSearchField(props.search);
+  const removeScope = () => props.setSearch(field().text);
 
   return (
     <div class="flex w-full min-w-0 items-center gap-2">
@@ -50,6 +58,11 @@ export function EmailMobileSearchField(props: {
           aria-hidden="true"
           class="size-4 shrink-0 text-ink-extra-muted"
         />
+        <Show when={field().scope}>
+          {(scope) => (
+            <EmailSearchScopeChip scope={scope()} onRemove={removeScope} />
+          )}
+        </Show>
         <CommandMenuSearchInput
           ref={(element: HTMLInputElement) => {
             input = element;
@@ -61,16 +74,30 @@ export function EmailMobileSearchField(props: {
           aria-label={t('emailViews.searchEmail')}
           aria-controls={props.suggestions.listId}
           aria-activedescendant={props.suggestions.activeId?.()}
-          placeholder={t('emailViews.searchEmail')}
+          placeholder={t('emailViews.searchAllMail')}
           class="text-base text-ink [&::-webkit-search-cancel-button]:hidden"
-          value={props.search}
-          onInput={(event) => props.setSearch(event.currentTarget.value)}
+          value={field().text}
+          onInput={(event) =>
+            props.setSearch(
+              editEmailSearchField(field().scope, event.currentTarget.value)
+            )
+          }
           onFocus={() => props.suggestions.setFocused(true)}
           onBlur={() => props.suggestions.setFocused(false)}
           onKeyDown={(event) => {
             if (isComposing(event)) return;
             // Search drops the keyboard to show the results.
             if (event.key === 'Enter') input?.blur();
+            // Backspace at the start of the text takes the chip back off.
+            if (
+              event.key === 'Backspace' &&
+              field().scope &&
+              event.currentTarget.selectionStart === 0 &&
+              event.currentTarget.selectionEnd === 0
+            ) {
+              event.preventDefault();
+              removeScope();
+            }
           }}
         />
         <Show when={props.search}>
@@ -95,8 +122,11 @@ export function EmailMobileSearchField(props: {
   );
 }
 
-/** Recent searches below the search field while it has focus. */
-export function EmailMobileRecentSearches(props: {
+/**
+ * The views an `in:` being typed can name, or recent searches, below the
+ * search field while it has focus.
+ */
+export function EmailMobileSearchSuggestions(props: {
   suggestions: EmailSearchSuggestions;
   /** Drops the keyboard to show the picked search's results. */
   onPicked: () => void;
@@ -104,11 +134,13 @@ export function EmailMobileRecentSearches(props: {
   return (
     <Show when={props.suggestions.listed().length > 0}>
       <div class="shrink-0 pt-(--mobile-content-inset-top)">
-        <EmailRecentSearches
+        <EmailSearchSuggestionList
           suggestions={props.suggestions}
           onPick={(index) => {
+            const editsQuery = props.suggestions.editsQuery?.(index) ?? false;
             props.suggestions.pick(index);
-            props.onPicked();
+            // A view picked keeps the keyboard up to type the words.
+            if (!editsQuery) props.onPicked();
           }}
         />
       </div>
