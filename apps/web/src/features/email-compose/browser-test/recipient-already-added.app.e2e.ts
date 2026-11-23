@@ -105,3 +105,27 @@ for (const label of ['To', 'Cc', 'Bcc']) {
     await expect(chips(page, label)).toHaveCount(0);
   });
 }
+
+// When this fails, a name that at first matches only someone already added
+// leaves the list with no highlight once another match loads, so Enter adds
+// no one.
+test('a match that loads after an added one takes the highlight', async ({
+  page,
+}) => {
+  await open(page, 'reply');
+  await field(page, 'To').click();
+  await page.keyboard.type('thread');
+  const added = page
+    .getByRole('option')
+    .filter({ hasText: 'sender@example.com' });
+  const late = page.getByRole('option').filter({ hasText: 'Thread Keeper' });
+  await expect(added).toHaveAttribute('aria-disabled', 'true');
+  await expect(late).toHaveCount(0);
+  await expect(late).toHaveAttribute('data-highlighted', '');
+  await page.keyboard.press('Enter');
+  await expect(chips(page, 'To')).toHaveCount(2);
+  await expect(chips(page, 'To').first()).toContainText('sender@example.com');
+  await expect(chips(page, 'To').last()).toContainText(
+    'thread.keeper@example.com'
+  );
+});
