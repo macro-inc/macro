@@ -16,6 +16,8 @@ separately from Soup's thread-root projection.
   `deleteChannelMessage`, `reactToChannelMessage` for the web client's durable
   mutation queue; each returns a `GraphqlChannelMessageWrite`: the written
   message, and for a reply its root with the thread summary that counts it.
+- `src/subscription.rs`: `channelTimelineUpdates`, the viewer's live channel
+  changes in the `channelChanges` shape, streamed from request data.
 - `src/lib.rs`: channel activity mutation and typed read errors.
 
 ## Boundaries
@@ -27,6 +29,8 @@ separately from Soup's thread-root projection.
 - Message mutations need a `ChannelWriteActor`, which DSS inserts on HTTP
   requests only, and a personal session: agents, bots and API tokens post
   through REST, where their attribution is decided.
+- DSS inserts `ChannelTimelineSubscriptions` over its process-local
+  `ChannelTimelineFanout`; the subscription resolver reads no database.
 
 ## Checks
 
@@ -51,6 +55,8 @@ separately from Soup's thread-root projection.
   root that cannot be read back answers `SERVICE_UNAVAILABLE`, so the queue
   replays the write rather than cache a root without its summary.
 - `MessageError::Contended` maps to `SERVICE_UNAVAILABLE`; the client keeps the write queued and retries it without counting a failure.
+- Map messages with `GraphqlChannelMessage::from_change` in both the changes
+  page and the live update, so the two never diverge.
 - Keep `id` for global identities; thread metadata and attachment references are embedded.
 
 ## Related

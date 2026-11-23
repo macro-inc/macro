@@ -6,12 +6,16 @@
 mod inputs;
 mod objects;
 mod reads;
+mod subscription;
 mod user_query;
 mod writes;
 
 pub use inputs::{ChannelChangesInput, ChannelThreadInput, ChannelTimelineInput};
 pub use objects::*;
 pub use reads::ChannelGraphqlContext;
+pub use subscription::{
+    ChannelTimelineSubscriptionRoot, ChannelTimelineSubscriptions, GraphqlChannelTimelineUpdate,
+};
 pub use user_query::GraphqlChannelQuery;
 pub use writes::{
     ChannelAttachmentInput, ChannelMentionInput, ChannelMessageMutationRoot, ChannelWriteActor,

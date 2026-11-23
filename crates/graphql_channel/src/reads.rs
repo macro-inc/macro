@@ -6,7 +6,6 @@ use entity_access::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::{MessageCommands, MessageReader},
-    changes::ChannelMessageChange,
     service::{MessageView, MessageWrite},
 };
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -239,14 +238,7 @@ impl ChannelGraphqlContext {
             messages: changes
                 .messages
                 .into_iter()
-                .map(|change| match change {
-                    ChannelMessageChange::Root { message, call } => {
-                        crate::GraphqlChannelMessage::from_item(*message, channel_id, call)
-                    }
-                    ChannelMessageChange::Reply { message } => {
-                        crate::GraphqlChannelMessage::from_message(*message, channel_id)
-                    }
-                })
+                .map(|change| crate::GraphqlChannelMessage::from_change(change, channel_id))
                 .collect(),
             activities: changes
                 .activities

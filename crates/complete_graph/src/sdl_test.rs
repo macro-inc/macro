@@ -1153,3 +1153,33 @@ fn channel_reads_hang_off_the_authenticated_user() {
         assert!(!root.fields.contains_key(field));
     }
 }
+
+#[test]
+fn channel_timeline_updates_carry_the_changes_page_types() {
+    use apollo_compiler::schema::ExtendedType;
+    let sdl = crate::build_schema().sdl();
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    let ExtendedType::Object(root) = &schema.types["CompleteSubscriptionRoot"] else {
+        panic!("expected subscription root");
+    };
+    let field = &root.fields["channelTimelineUpdates"];
+    assert_eq!(field.ty.to_string(), "GraphqlChannelTimelineUpdate!");
+    assert!(field.arguments.is_empty());
+
+    let ExtendedType::Object(update) = &schema.types["GraphqlChannelTimelineUpdate"] else {
+        panic!("expected update object");
+    };
+    let changes = |name: &str| {
+        let ExtendedType::Object(changes) = &schema.types["GraphqlChannelChanges"] else {
+            panic!("expected changes page");
+        };
+        changes.fields[name].ty.to_string()
+    };
+    for name in ["seq", "messages", "activities", "removedIds"] {
+        assert_eq!(update.fields[name].ty.to_string(), changes(name), "{name}");
+    }
+    assert_eq!(update.fields["channelId"].ty.to_string(), "ID!");
+    // Not a cache entity: each update is applied, not stored by identity.
+    assert!(!update.fields.contains_key("id"));
+}
