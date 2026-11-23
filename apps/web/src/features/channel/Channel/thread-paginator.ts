@@ -1,4 +1,3 @@
-import type { UseInfiniteQueryResult } from '@tanstack/solid-query';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
 import type { Store } from 'solid-js/store';
 
@@ -38,23 +37,29 @@ function createPaginateDirectionState(
   };
 }
 
-export function createThreadPaginator<T>(
-  query: UseInfiniteQueryResult<T>
-): ThreadPaginator {
+/** The paging a timeline offers in each direction, whichever path reads it. */
+export type TimelinePaging = {
+  hasOlder: Accessor<boolean>;
+  hasNewer: Accessor<boolean>;
+  isLoadingOlder: Accessor<boolean>;
+  isLoadingNewer: Accessor<boolean>;
+  loadOlder: () => Promise<void>;
+  loadNewer: () => Promise<void>;
+};
+
+export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
   const prependPaginateState = createPaginateDirectionState('prepend');
   const shiftPaginateState = createPaginateDirectionState('shift');
 
   const paginate = async (state: PaginateDirectionState) => {
     const hasMore = () =>
-      state.direction === 'shift' ? query.hasNextPage : query.hasPreviousPage;
+      state.direction === 'shift' ? paging.hasOlder() : paging.hasNewer();
     const isFetching = () =>
       state.direction === 'shift'
-        ? query.isFetchingNextPage
-        : query.isFetchingPreviousPage;
+        ? paging.isLoadingOlder()
+        : paging.isLoadingNewer();
     const paginateFn =
-      state.direction === 'shift'
-        ? query.fetchNextPage
-        : query.fetchPreviousPage;
+      state.direction === 'shift' ? paging.loadOlder : paging.loadNewer;
 
     state.setMore(hasMore());
 

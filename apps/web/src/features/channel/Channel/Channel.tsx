@@ -40,10 +40,7 @@ import { FloatRegions } from '@components/app/mobile/float-regions/float-region-
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import {
-  EntityLoadGate,
-  toEntityLoadError,
-} from '@core/component/EntityLoadGate';
+import { EntityLoadGate } from '@core/component/EntityLoadGate';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -73,7 +70,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
 import { recordChannelViewWhenIdle } from '@queries/channel/activity';
 import { queryClient } from '@queries/client';
-import { queryReadyGate } from '@queries/gate';
+import { useChannelTimelineSource } from '@queries/messages/channel-timeline-source';
 import {
   newMessageId,
   useDeleteMessageMutation,
@@ -85,13 +82,7 @@ import {
   useRemoveReactionMutation,
 } from '@queries/messages/reactions';
 import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
-import {
-  createMessageIndex,
-  getMessageTimelineQueryKey,
-  isMissingMessageError,
-  type MessageTimelineData,
-  useMessageTimelineQuery,
-} from '@queries/messages/timeline';
+import { createMessageIndex } from '@queries/messages/timeline';
 import { timelineEntryKey } from '@queries/messages/timeline-entries';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { ChannelTypeEnum } from '@service-storage/client';
@@ -273,50 +264,35 @@ export function Channel(props: ChannelProps) {
   const [channelInputHandle, setChannelInputHandle] =
     createSignal<InputHandle>();
 
-  const messagesQuery = useMessageTimelineQuery(
+  const timeline = useChannelTimelineSource(
     () => ({ type: 'channel', id: (() => props.channelId)() }),
     targetMessageController.loadAroundMessageId
   );
-  usePending('channel.messages', () => messagesQuery.isLoading);
-  const isTargetMessageMissing = () =>
-    targetMessageController.loadAroundMessageId() !== undefined &&
-    isMissingMessageError(messagesQuery.error);
+  usePending('channel.messages', timeline.isLoading);
   const messagesLoadResult = {
-    data: () => messagesQuery.data,
+    data: timeline.data,
     // Pagination and background-refresh errors should not replace content that
     // has already loaded. Only initial-loading errors belong to the gate.
-    error: () =>
-      messagesQuery.isLoadingError && !isTargetMessageMissing()
-        ? toEntityLoadError(messagesQuery.error)
-        : undefined,
+    error: timeline.loadError,
     // Keep the loading view mounted while the missing-target handler switches
     // the query back to the latest page.
-    isPending: () => messagesQuery.isPending || isTargetMessageMissing(),
+    isPending: () => timeline.isPending() || timeline.isMissingTarget(),
   };
 
   createEffect(
-    on(
-      [targetMessageController.loadAroundMessageId, () => messagesQuery.error],
-      ([loadAroundMessageId, error]) => {
-        if (!loadAroundMessageId || !isMissingMessageError(error)) return;
+    on(timeline.isMissingTarget, (missing) => {
+      if (!missing) return;
 
-        toast.alert('Message no longer available', {
-          subtext: 'Showing the latest messages instead.',
-        });
-        clearStaleRestoredChannelData(props.channelId);
-        targetMessageController.reset();
-      }
-    )
+      toast.alert('Message no longer available', {
+        subtext: 'Showing the latest messages instead.',
+      });
+      clearStaleRestoredChannelData(props.channelId);
+      targetMessageController.reset();
+    })
   );
 
   // The index reads immediately, before EntityLoadGate's boundary exists.
-  const messageIndex = createMessageIndex(
-    () =>
-      queryReadyGate(messagesQuery)
-        ? (messagesQuery.data as MessageTimelineData)
-        : undefined,
-    mergesSystemActivity
-  );
+  const messageIndex = createMessageIndex(timeline.data, mergesSystemActivity);
 
   const messageById = () => messageIndex.byId;
   // Loaded messages, oldest first; activity rows are not unread targets.
@@ -359,7 +335,7 @@ export function Channel(props: ChannelProps) {
   let entryViewRecorded = false;
   createEffect(
     on(
-      () => queryReadyGate(messagesQuery) && lastViewed().status !== 'pending',
+      () => timeline.isReady() && lastViewed().status !== 'pending',
       (loaded) => {
         // The panel hides what's new in the channel, so it hasn't been seen.
         if (callPanel || !loaded || entryViewRecorded) return;
@@ -385,11 +361,11 @@ export function Channel(props: ChannelProps) {
       () =>
         !!callPanel &&
         !messageById().has(callPanel.rootId) &&
-        messagesQuery.hasNextPage &&
-        !messagesQuery.isFetchingNextPage,
+        timeline.hasOlder() &&
+        !timeline.isLoadingOlder(),
       (shouldLoadOlder) => {
         if (shouldLoadOlder) {
-          fireAndForget(messagesQuery.fetchNextPage(), 'channel-call');
+          fireAndForget(timeline.loadOlder(), 'channel-call');
         }
       }
     )
@@ -469,7 +445,7 @@ export function Channel(props: ChannelProps) {
     prepareTargetReply(props.targetMessageId);
   }
 
-  const threadPaginator = createThreadPaginator(messagesQuery);
+  const threadPaginator = createThreadPaginator(timeline);
   const messageEditor = createMessageEditor({
     parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
 
@@ -494,7 +470,7 @@ export function Channel(props: ChannelProps) {
       activityTracker.isNewMessage,
       // Once there are no older pages left to fetch, the oldest loaded message
       // (index 0) is the true first message in the channel.
-      !messagesQuery.hasNextPage,
+      !timeline.hasOlder(),
       // Only an inline composer extends the rail before a reply exists.
       (message) =>
         !usesUnifiedInput() &&
@@ -723,13 +699,13 @@ export function Channel(props: ChannelProps) {
   const finishLatestNavigation = () => {
     if (
       pendingLatest?.phase !== 'waiting-for-layout' ||
-      messagesQuery.isPending ||
-      messagesQuery.hasPreviousPage
+      timeline.isPending() ||
+      timeline.hasNewer()
     )
       return;
     // Retained data is usable after a pagination error. Wait only if the query
     // has no data yet or the message index still contains the old page.
-    const latestEntry = messagesQuery.data?.pages[0]?.entries[0];
+    const latestEntry = timeline.latestEntry();
     if (
       latestEntry !== undefined &&
       messageIndex.entryKeys.at(-1) === timelineEntryKey(latestEntry) &&
@@ -746,20 +722,9 @@ export function Channel(props: ChannelProps) {
     pendingLatest = request;
     try {
       const needsLatestPage =
-        messagesQuery.hasPreviousPage ||
-        !!targetMessageController.loadAroundMessageId();
+        timeline.hasNewer() || !!targetMessageController.loadAroundMessageId();
       targetMessageController.reset();
-      if (needsLatestPage) {
-        await queryClient.resetQueries(
-          {
-            queryKey: getMessageTimelineQueryKey(
-              { type: 'channel', id: props.channelId },
-              null
-            ),
-          },
-          { throwOnError: true }
-        );
-      }
+      if (needsLatestPage) await timeline.toLatest();
       if (pendingLatest !== request) return;
       request.phase = 'waiting-for-layout';
       finishLatestNavigation();
@@ -903,13 +868,11 @@ export function Channel(props: ChannelProps) {
         result={messagesLoadResult}
         loadingFallback={<ChannelLoading />}
         loadErrorTitle="Unable to load this channel"
-        onRetry={() => fireAndForget(messagesQuery.refetch(), 'channel')}
+        onRetry={() => fireAndForget(timeline.retry(), 'channel')}
         unauthorized={
           <ChannelAccessDenied
             channelId={props.channelId}
-            onRefreshChannel={() =>
-              fireAndForget(messagesQuery.refetch(), 'channel')
-            }
+            onRefreshChannel={() => fireAndForget(timeline.retry(), 'channel')}
           />
         }
       >
@@ -942,7 +905,7 @@ export function Channel(props: ChannelProps) {
                       fallback={
                         <Show
                           when={
-                            messagesQuery.isSuccess &&
+                            timeline.isReady() &&
                             channelType() === ChannelTypeEnum.DirectMessage &&
                             !channel()?.agentDm
                           }
@@ -979,7 +942,7 @@ export function Channel(props: ChannelProps) {
                                   : undefined
                               }
                               insets={threadListScrollInsets()}
-                              followOnAppend={!messagesQuery.hasPreviousPage}
+                              followOnAppend={!timeline.hasNewer()}
                               onScrollNearTop={threadPaginator.shiftPaginate}
                               onScrollNearBottom={
                                 threadPaginator.prependPaginate
