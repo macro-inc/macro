@@ -1,0 +1,19 @@
+crates/agent_inmem/src/domain/agent.rs
+  s_b6e2032407f232::t_aa1f67f2236d3e 652,654
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "60a524880c9c2f097187e1e1b4d18ac90ce7abd7",
+  "prompts": {},
+  "sessions": {
+    "s_b6e2032407f232": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a821cdcf-505c-4d83-9ab7-42b78ab94514",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
