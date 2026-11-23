@@ -13,6 +13,8 @@ import {
 import { StartDueSelector } from '../selectors/StartDueSelector';
 import { EditorPopover } from './EditorPopover';
 
+const ENDS: DateField[] = ['start', 'due'];
+
 export type StartDueEditorProps = {
   /** Which end the pill or row that opens the picker shows. */
   field: DateField;
@@ -121,7 +123,13 @@ function StartDueEditorBody(
         start: restore.includes('start') ? saved.start : shown.start,
         due: restore.includes('due') ? saved.due : shown.due,
         timed: restore.length > 0 ? saved.timed : shown.timed,
-        wholeDay: restore.length > 0 ? saved.wholeDay : shown.wholeDay,
+        // Only a restored end takes back its saved precision; a newer edit
+        // of the other end keeps its own.
+        wholeDay: ENDS.find((end) =>
+          restore.includes(end)
+            ? saved.wholeDay === end
+            : shown.wholeDay === end
+        ),
       }));
       return;
     }
