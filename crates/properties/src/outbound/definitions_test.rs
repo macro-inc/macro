@@ -194,6 +194,61 @@ async fn get_property_definition_with_owner_checks_ownership(
     Ok(())
 }
 
+/// Both listings order names by their Rust lowercase, so a name with a
+/// leading space, underscore or emoji sits in the same place in each. A
+/// non-C database collation skips those characters when it sorts.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn listings_order_names_alike(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let user = user_3();
+    for name in [
+        "Zeta",
+        " leading space",
+        "_under",
+        "alpha",
+        "\u{1F680} launch",
+        "Mixed",
+    ] {
+        repo.create_property_definition(
+            PropertyDefinitionOwner::User(&user),
+            name,
+            DataType::String,
+            false,
+            None,
+            Vec::new(),
+        )
+        .await?;
+    }
+
+    let plain: Vec<String> = repo
+        .list_property_definitions(None, Some(&user), false)
+        .await?
+        .into_iter()
+        .map(|d| d.display_name)
+        .collect();
+    let with_options: Vec<String> = repo
+        .list_property_definitions_with_options(None, Some(&user), false)
+        .await?
+        .into_iter()
+        .map(|d| d.definition.display_name)
+        .collect();
+
+    let expected = [
+        " leading space",
+        "_under",
+        "alpha",
+        "Mixed",
+        "Zeta",
+        "\u{1F680} launch",
+    ];
+    assert_eq!(plain, expected);
+    assert_eq!(with_options, expected);
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
