@@ -317,9 +317,6 @@ test('keeps the reading position and unsaved input when the text size changes', 
   await page.getByRole('button', { name: 'New group', exact: true }).click();
   const name = page.getByLabel('New group name');
   await name.fill('Renewals');
-  // On a slow device the virtualizer's scroll-end timer from the scroll above
-  // can fire after the text grows: it must not take the board back.
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
   await cdp.send('Page.setFontSizes', { fontSizes: { standard: 20 } });
   await expect
     .poll(() =>
@@ -331,7 +328,93 @@ test('keeps the reading position and unsaved input when the text size changes', 
   });
   await expect(name).toBeFocused();
   await expect(name).toHaveValue('Renewals');
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  await cdp.detach();
+});
+
+type ScrollEndWindow = Window & {
+  holdScrollEnds?: boolean;
+  deliverScrollEnds?: () => void;
+};
+
+test('keeps lanes mounted when a scroll ends just as the text size changes', async ({
+  page,
+}) => {
+  // The virtualizer reports the end of a scroll 150ms after the last scroll
+  // event, with the offset that event read. Hold those reports, then deliver
+  // them right after the board resizes its lanes and before the browser's
+  // next scroll event, as a slow device can.
+  await page.addInitScript(() => {
+    const target = window as ScrollEndWindow;
+    const held = new Map<number, () => void>();
+    const setTimer = window.setTimeout.bind(window);
+    const clearTimer = window.clearTimeout.bind(window);
+    window.setTimeout = ((handler: TimerHandler, delay?: number) => {
+      if (!target.holdScrollEnds || delay !== 150) {
+        return setTimer(handler, delay);
+      }
+      const id = setTimer(() => {}, 2 ** 31 - 1);
+      if (typeof handler === 'function') held.set(id, () => handler());
+      return id;
+    }) as typeof window.setTimeout;
+    window.clearTimeout = (id) => {
+      if (id !== undefined) held.delete(Number(id));
+      clearTimer(id);
+    };
+    target.deliverScrollEnds = () => {
+      for (const [id, run] of held) {
+        held.delete(id);
+        run();
+      }
+    };
+  });
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  await page.evaluate(() => {
+    (window as ScrollEndWindow).holdScrollEnds = true;
+  });
+  await viewport.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await page.getByRole('button', { name: 'New group', exact: true }).click();
+  const name = page.getByLabel('New group name');
+  await name.fill('Renewals');
+  // Created after the board's own observers, so it runs after them.
+  await page.evaluate(() => {
+    const end = document.querySelector('[data-kanban-board-column="-1"]');
+    if (!end) throw new Error('end column not rendered');
+    new ResizeObserver(() =>
+      (window as ScrollEndWindow).deliverScrollEnds?.()
+    ).observe(end);
+  });
+  const setRoot = async (size: number) => {
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: size } });
+    await expect
+      .poll(() =>
+        page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+      )
+      .toBe(`${size}px`);
+  };
+  await setRoot(20);
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('Renewals');
+  // Shrinking at the end: the browser clamps the offset itself while the
+  // board re-measures, and a report from before must still not move it.
+  await name.press('Escape');
+  const lane = page.locator(
+    '[data-kanban-lane="option:00000000-0000-0000-0001-000000000018"]'
+  );
+  const control = lane.getByRole('button').first();
+  // Without scrolling, so the board stays at its end.
+  await control.evaluate((element) =>
+    (element as HTMLElement).focus({ preventScroll: true })
+  );
+  await setRoot(16);
+  await expect(control).toBeFocused();
+  await expect(control).toBeInViewport({ ratio: 1 });
   await cdp.detach();
 });
 
