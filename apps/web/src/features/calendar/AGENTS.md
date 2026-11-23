@@ -35,6 +35,7 @@ host lives in `../block-calendar/`.
   `create-pinned-composer-selection.ts` and `replacePinned`; resolve selection again after discard approval.
   During drag, hide sidebar contents behind its dashed target. Preserve the floating
   card's natural height and move it up to fit; cap only at viewport height.
+  Gate composer pinning on its host container: reserve 384px for the dock, 520px for the grid, and 24px for its margins, and preserve the requested pin while temporarily floating below that width.
   Keep replaced form and split components unwired for reference.
 - `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
   the optional metadata argument to `useEventEditor.save` preserves legacy callers.
@@ -63,9 +64,9 @@ host lives in `../block-calendar/`.
   adapters in `queries/`, and host composition in `views/`.
 - Keep presentation components independent of production services; use the
   [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
+- Use semantic hover/active/selected fills and the shared type scale throughout calendar views and controls.
 - Share date/time arithmetic and typed-clock parsing through `../../components/date-time-range/`.
-  Active composer When layouts are `DesktopWhen` (D1) and `PhoneWhen` (P4), under
-  `ComposerWhenRoot`. The shared `create-composer-when.ts` owns picker exclusion,
+  Calendar-owned desktop fields use `desktop/DesktopComposerFields.tsx` with session-local, one-way summary groups and `DesktopDateGroup`; the phone uses `PhoneWhen` (P4). The shared `create-composer-when.ts` owns picker exclusion,
   selected-end intent, range validation, and day-specific end options; detail
   resets invalidate intent through the controller's `detailsRevision`.
   `WhenMonth` keeps six-week Corvu keyboard semantics at two sizes. Phone dates
@@ -96,16 +97,19 @@ host lives in `../block-calendar/`.
 - `primitives/create-agent-composer.ts` keeps one validated review decision; the
   agent host selects `AgentComposer` or `MobileAgentComposer` over that model.
   `create-calendar-composer-setup.ts` constructs the shared controller/model;
-  normal and agent hosts supply transport and lifecycle callbacks. Anchored and
-  pinned views share one mounted `DesktopComposer` field tree and own their chrome.
-  Show the options disclosure only when the placement can collapse its fields.
+  normal and agent hosts supply transport and lifecycle callbacks. Calendar placements
+  share one mounted F3 field tree in a 476px floating surface or the responsive dock.
+  Keep summaries and groups session-local, preserve comma-joined date/time text, and
+  leave replaced desktop and agent compositions independent. Use one guest multiselect
+  and one reminder multiselect; preserve protected guests and non-popup reminder methods.
+  Cap desktop description/location at spacing-token heights with internal scrolling.
+  Use `bg-control` for input/select fields, `bg-hover` for hover, `bg-active` for focus/pressed,
+  and `bg-selected` for checked states; do not introduce ink/accent opacity fills.
+  Calendar placements omit the options disclosure; the agent retains its existing one.
   The legacy `EventComposerSplit` route delegates to `StandaloneComposer`.
-  Both layouts use creation-only Event/Out of office choices below the title,
-  with the agent mark in the title icon column. Creation choices use 24px faces
-  with 12px text on desktop and 28px faces with 13px text inside 44px touch
-  targets; leave 6px below the title. Pass explicit time-zone metadata through
-  the tool adapter and keep unsupported visibility read-only; the tool accepts one time, not alternatives.
-  Feed the same validated time and recurrence snapshot to the preview and submission.
+  Pass explicit time-zone metadata through the tool adapter and keep unsupported visibility
+  read-only; the tool accepts one time, not alternatives. Feed the same validated time
+  and recurrence snapshot to the preview and submission.
 - Visibility offers Calendar default/Public/Private, displays synced confidential
   as Private, and preserves the original value until an explicit change.
 - Stage custom recurrence in the shared Dialog on desktop and the Custom page
@@ -118,11 +122,9 @@ host lives in `../block-calendar/`.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,
   `?ui=calendar-swatch`, `?ui=busy-indicator`, `?ui=value-pill`, and `?ui=time-input`; sheet parts use
   `?ui=mobile-sheet-parts` and `?ui=wheel-picker`.
-- The desktop month picker composes `components/month-picker/` parts and keeps
-  its temporary year/date state in `primitives/create-month-picker.ts`; navigation
-  uses the workspace navigation context. Keep grid paging and scroll timing in
+- Compose the desktop `MonthYearPicker` from Header, Grid and Footer parts, inline or inside its 296px popover. Keep browsing, year pages and date search in `primitives/create-month-picker.ts`; only explicit picks reach the host. Share the popover between the toolbar and mini through Calendar's optional month-control slot, leaving every other date picker unchanged. Today and grid T only reset browsing; stop T before app navigation. Bind Go to date to Y under `TOKENS.calendar.goToDate`, never the app's G navigation leader. Keep grid paging and scroll timing in
   `CalendarPagerContext.tsx`; `SnapPager` owns native horizontal scrolling on phone
-  and desktop. Disable snapping during native momentum; align smoothly after
+  and desktop. Desktop horizontal-dominant wheel bursts jump one period instantly, re-arming after 180ms of quiet; button bursts use a 300ms animation re-arm and one aggregate settlement. Keep phone swipes native. Disable snapping during native momentum; align smoothly after
   `scrollend`, then recycle pages and resume queued FullCalendar work. Slow drags
   require half a page; clear flicks can commit sooner. Retain native scrolling
   on old engines with a 350ms quiet fallback. Share active vertical scroll with all
@@ -138,10 +140,10 @@ host lives in `../block-calendar/`.
   measured width and restore the last user hour position after FullCalendar resizes.
   Phone `/calendar/search` uses the shared search control without a grid navigation
   provider; its header owns the input mount. Keep desktop search in the popover.
-- Compose the desktop date-navigation/tabs/search row above the 22px month title
+- Compose the desktop date-navigation/tabs/search row above the scale-sized month title
   and creation actions; the touch header uses separate shell menu, month,
   Today, and circular Search islands. Keep its loading skeleton aligned. The desktop month
-  picker uses 304px width and 64×40px choices.
+  picker uses four columns of 36px choices and a 12-year mode, with no selected dot.
 - Wrap the desktop content card in `Layer offset={1}` and use `bg-surface`, with
   12px gaps and clipped rounded corners; keep Agenda headers opaque at the same
   depth. Keep navigation outside and the opening hour label inside the viewport.
