@@ -238,7 +238,7 @@ new fields needs the regenerated SDL in the same change.
   rejects the whole document.
 - Additive fields keep existing client caches. An incompatible change to identity
   or field shape needs a bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in
-  `crates/client/cache-core/src/codec.rs` and a native release, because the
+  `crates/client/cache-schema/src/lib.rs` and a native release, because the
   native cache retains old definitions and rejects conflicting ones (see
   [`crates/client/README.md`](../../crates/client/README.md)). Prefer a new field.
 

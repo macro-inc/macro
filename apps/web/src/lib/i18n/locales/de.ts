@@ -786,7 +786,6 @@ export default {
       'Keine Einstellungen gefunden. Versuchen Sie „Signatur“, „Design“ oder „Kalender“.',
     backToSettings: 'Zurück zu den Einstellungen',
     closeSettings: 'Einstellungen schließen',
-    goToTab: 'Zu Einstellungs-Tab {{number}} wechseln',
     editProfile: 'Profil bearbeiten',
     logOut: 'Abmelden',
     yourAccount: 'Ihr Konto',

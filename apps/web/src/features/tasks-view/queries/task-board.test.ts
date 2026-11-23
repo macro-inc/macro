@@ -111,6 +111,23 @@ describe('board query projection', () => {
     expect(taskDueDateUrgency(undefined, false, calendar)).toBeUndefined();
   });
 
+  it('marks a due date with a time overdue once that moment passes', () => {
+    const calendar = createDateBucketBoundaries(
+      new Date('2025-03-09T18:00:00Z'),
+      'America/New_York'
+    );
+    const timed = { now: Date.parse('2025-03-09T18:00:00Z') };
+    expect(
+      taskDueDateUrgency('2025-03-09T17:00:00Z', false, calendar, timed)
+    ).toBe('danger');
+    expect(
+      taskDueDateUrgency('2025-03-09T19:00:00Z', false, calendar, timed)
+    ).toBe('warning');
+    expect(taskDueDateUrgency('2025-03-09T17:00:00Z', false, calendar)).toBe(
+      'warning'
+    );
+  });
+
   it('keeps completed and canceled board tasks neutral', () => {
     for (const status of [
       PROPERTY_OPTION_IDS.STATUS.COMPLETED,

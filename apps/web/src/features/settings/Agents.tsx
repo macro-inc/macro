@@ -20,7 +20,7 @@ import {
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -54,8 +54,8 @@ import {
   useAgentModelsQueries,
 } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
+import { useConnectors } from '@queries/connectors';
 import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
-import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import {
   useCurrentTeamQuery,
   useIsTeamAdmin,
@@ -86,6 +86,7 @@ import {
   agentSettingsRequest,
   consumeAgentSettingsRequest,
 } from './agentSettingsState';
+import { ConnectorAppPicker } from './ConnectorAppPicker';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
 import { AutoArchiveSetting } from './components/auto-archive-setting';
@@ -102,7 +103,6 @@ import {
   apiKeyProviderName,
   apiKeyProviderOf,
 } from './core/agent-api-key';
-import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
   SettingsCard,
@@ -201,7 +201,7 @@ export function Agents(props: {
   };
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
-  const channelsContext = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const currentUserId = useUserId();
   const agentsQuery = useAgentsQuery();
   const createAgentMutation = useCreateAgentMutation();
@@ -269,7 +269,7 @@ export function Agents(props: {
     );
   };
   const channelOptions = createMemo(() =>
-    botAssignableChannelOptions(channelsContext.channels())
+    botAssignableChannelOptions(channelDirectory.channels())
   );
   const currentTeamId = () =>
     currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
@@ -849,7 +849,7 @@ function AgentEditorPage(props: {
   const [share, setShare] = createSignal<AgentShare>(
     props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
   );
-  const connections = usePipedreamConnectedSlugs();
+  const connections = useConnectors();
   const [mcp, setMcp] = createSignal<AgentMcpServers>(
     props.agent?.mcp ?? { scope: 'owner_connections' }
   );
@@ -1660,10 +1660,10 @@ function AgentEditorPage(props: {
 
                       <Show when={mcp().scope === 'selected'}>
                         <div class="mt-3 border-t border-edge-muted pt-3">
-                          <PipedreamAppPicker
+                          <ConnectorAppPicker
                             selected={selectedMcpServers()}
                             onChange={setSelectedMcpServers}
-                            connectedSlugs={connections.slugs}
+                            connectedSlugs={connections.connectedApps}
                             connectionsReady={connections.ready}
                             connectContainer={() => pageContentRef}
                           />

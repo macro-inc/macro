@@ -1,9 +1,13 @@
 import { Dialog } from '@app/components/ui/components/Dialog';
 import { focusPopoverInput } from '@components/app/split-layout/utils/focusPopoverInput';
 import type { EditorControls } from '@core/component/LexicalMarkdown/builder/types';
+import type { StartDueEditorProps } from '@property/editors/popover/StartDueEditor';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
+import { formatStartDue } from '@property/utils/start-due';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { type ComponentProps, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   type ProjectsContext,
@@ -32,17 +36,41 @@ vi.mock('@property/component/PropertyValuePill', () => ({
       typeof import('@property/component/PropertyValuePill').PropertyValuePill
     >
   ) => (
+    <>
+      <button
+        type="button"
+        disabled={!props.canEdit}
+        onClick={() =>
+          props.onSave?.(props.property, {
+            valueType: 'DATE',
+            value: new Date('2026-10-01T00:00:00Z'),
+          })
+        }
+      >
+        Set due date
+      </button>
+      <output aria-label="Pill text">{props.valueText}</output>
+      <Show when={props.editor}>
+        {(editor) => <Dynamic component={editor()} />}
+      </Show>
+    </>
+  ),
+}));
+vi.mock('@property/editors/popover/PopoverEditor', () => ({
+  PopoverEditor: () => null,
+}));
+vi.mock('@property/editors/popover/StartDueEditor', () => ({
+  StartDueEditor: (props: StartDueEditorProps) => (
     <button
       type="button"
-      disabled={!props.canEdit}
       onClick={() =>
-        props.onSave?.(props.property, {
+        props.saveOther(props.other(), {
           valueType: 'DATE',
-          value: new Date('2026-10-01T00:00:00Z'),
+          value: new Date('2026-09-21T00:00:00Z'),
         })
       }
     >
-      Set due date
+      Set start date
     </button>
   ),
 }));
@@ -123,7 +151,8 @@ function commands() {
 function setup(
   service = commands(),
   initialDraft?: ProjectComposerDraft,
-  popover = false
+  popover = false,
+  dates: { properties?: Property[]; startDatesEnabled?: boolean } = {}
 ) {
   const unused = (): never => {
     throw new Error('Unused capability');
@@ -134,11 +163,12 @@ function setup(
     createProjectSource: unused,
     createProjectIdentitySource: unused,
     createPropertyDefinitionsSource: () => ({
-      properties: () => [dueDate],
+      properties: () => dates.properties ?? [dueDate],
       loading: () => false,
       error: () => undefined,
     }),
     createCommands: () => service,
+    startDatesEnabled: () => dates.startDatesEnabled ?? false,
   };
   const onSubmit = vi.fn((_submission: ProjectComposerSubmission) => {});
   const onClose = vi.fn();
@@ -217,6 +247,50 @@ it('hands its draft and one create with the drafted values to the host the momen
   // The host closes the composer; the view never waits for the server.
   expect(onClose).not.toHaveBeenCalled();
   expect(await submission.result).toBe(project);
+});
+
+const systemDueDate: Property = {
+  ...dueDate,
+  propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+  propertyDefinitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+};
+
+it('drafts a start from the due date pill and creates the project with both dates', () => {
+  const { service } = setup(commands(), undefined, false, {
+    properties: [systemDueDate],
+    startDatesEnabled: true,
+  });
+  fireEvent.input(screen.getByRole('textbox', { name: 'Project name' }), {
+    target: { value: 'Launch' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Set due date' }));
+  expect(screen.getByLabelText('Pill text').textContent).toBe('');
+  fireEvent.click(screen.getByRole('button', { name: 'Set start date' }));
+  const start = new Date('2026-09-21T00:00:00Z');
+  expect(screen.getByLabelText('Pill text').textContent).toBe(
+    formatStartDue({ start, due: dueValue.value })
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Create Project/ }));
+  expect(service.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      properties: [
+        { property: systemDueDate, value: dueValue },
+        {
+          property: expect.objectContaining({
+            propertyDefinitionId: SYSTEM_PROPERTY_IDS.START_DATE,
+          }),
+          value: { valueType: 'DATE', value: start },
+        },
+      ],
+    })
+  );
+});
+
+it('keeps the plain due date pill while start dates are off', () => {
+  setup(commands(), undefined, false, { properties: [systemDueDate] });
+  fireEvent.click(screen.getByRole('button', { name: 'Set due date' }));
+  expect(screen.queryByRole('button', { name: 'Set start date' })).toBeNull();
+  expect(screen.getByLabelText('Pill text').textContent).toBe('');
 });
 
 it('shows a reopened creation failure and resubmits the same draft', () => {

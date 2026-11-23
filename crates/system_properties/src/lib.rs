@@ -44,6 +44,9 @@ pub mod domain;
 /// Outbound adapters for database implementations.
 pub mod outbound;
 
+/// The Time logged total on a task, written inside the time tracking repository's transactions.
+pub mod time_logged;
+
 // Re-export commonly used types for convenience
 pub use domain::model::PropertyRow;
 pub use domain::model::{

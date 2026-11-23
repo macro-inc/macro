@@ -5,10 +5,11 @@ use crate::document::{
     FieldNode, MissingVariable, Operation, OperationKind, Selection, resolve_args, resolve_args_key,
 };
 use crate::entity_resolver::EntityResolverLookup;
-use crate::meta::{FieldKind, TypeKind};
+use crate::meta::{FieldKind, FieldMeta, TypeKind};
 use crate::value::{CacheValue, EntityKey, Record, field_key};
 use serde_json::Value as Json;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -68,10 +69,47 @@ impl DependencyCapture<'_> {
     }
 }
 
-struct WriteContext<'a, 'resolver> {
+struct WriteContext<'a, 'resolver, 'op, 'schema> {
     variables: &'a serde_json::Map<String, Json>,
     records: &'a mut RecordUpdates,
     dependencies: &'a mut DependencyCapture<'resolver>,
+    plans: WritePlans<'op, 'schema>,
+}
+
+type PlannedFields<'op, 'schema> = Arc<[(&'op FieldNode, Option<FieldMeta<'schema>>)]>;
+
+/// The fields one selection set applies to a concrete type, with their schema
+/// shapes, found once per normalization instead of once per response object.
+#[derive(Default)]
+struct WritePlans<'op, 'schema> {
+    // The address identifies a selection slice of the prepared operation, which
+    // stays alive and unchanged for the whole normalization.
+    selections: HashMap<(usize, usize), HashMap<String, PlannedFields<'op, 'schema>>>,
+}
+
+impl<'op, 'schema> WritePlans<'op, 'schema> {
+    fn fields(
+        &mut self,
+        schema: &'schema crate::meta::Schema,
+        selections: &'op [Selection],
+        concrete: &str,
+    ) -> PlannedFields<'op, 'schema> {
+        let types = self
+            .selections
+            .entry((selections.as_ptr() as usize, selections.len()))
+            .or_default();
+        if let Some(fields) = types.get(concrete) {
+            return Arc::clone(fields);
+        }
+        let mut nodes = Vec::new();
+        collect_fields(schema, selections, concrete, &mut nodes);
+        let fields: PlannedFields<'op, 'schema> = nodes
+            .into_iter()
+            .map(|node| (node, schema.field_meta(concrete, &node.name)))
+            .collect();
+        types.insert(concrete.to_owned(), Arc::clone(&fields));
+        fields
+    }
 }
 
 /// Normalizes a response's `data` object into record updates.
@@ -133,6 +171,7 @@ pub(crate) fn normalize_with_dependencies(
             variables,
             records: &mut records,
             dependencies: &mut dependencies,
+            plans: WritePlans::default(),
         },
     )?;
     if let Some(root_key) = root_key {
@@ -311,14 +350,14 @@ fn collect_fields<'a>(
 /// Writes the selected fields of one response object into `target` (a
 /// record's or embedded object's field map), normalizing children into
 /// `records`.
-fn write_object_fields(
-    schema: &crate::meta::Schema,
-    selections: &[Selection],
+fn write_object_fields<'op, 'schema>(
+    schema: &'schema crate::meta::Schema,
+    selections: &'op [Selection],
     type_name: &str,
     data: &serde_json::Map<String, Json>,
     target: &mut BTreeMap<String, CacheValue>,
     owner: Option<&EntityKey<'static>>,
-    context: &mut WriteContext<'_, '_>,
+    context: &mut WriteContext<'_, '_, 'op, 'schema>,
 ) -> Result<(), NormalizeError> {
     // The concrete type: trust __typename in the response when present.
     let concrete = match selected_typename(selections, data) {
@@ -337,20 +376,16 @@ fn write_object_fields(
         CacheValue::String(concrete.to_string()),
     );
 
-    let mut fields = Vec::new();
-    collect_fields(schema, selections, concrete, &mut fields);
+    let fields = context.plans.fields(schema, selections, concrete);
 
-    for f in fields {
+    for &(f, fmeta) in fields.iter() {
         if f.name == "__typename" {
             continue; // handled above
         }
-        let fmeta =
-            schema
-                .field_meta(concrete, &f.name)
-                .ok_or_else(|| NormalizeError::UnknownField {
-                    type_name: concrete.to_string(),
-                    field: f.name.clone(),
-                })?;
+        let fmeta = fmeta.ok_or_else(|| NormalizeError::UnknownField {
+            type_name: concrete.to_string(),
+            field: f.name.clone(),
+        })?;
         let args = resolve_args_key(f, context.variables)?;
         let storage_key = field_key(&f.name, args.as_deref());
         if let Some(owner) = owner {
@@ -409,14 +444,14 @@ fn write_object_fields(
 /// Converts one response value. Outer `Result` is shape errors (with static
 /// detail); inner carries nested structured errors.
 #[allow(clippy::type_complexity)]
-fn write_value(
-    schema: &crate::meta::Schema,
-    field: &FieldNode,
+fn write_value<'op, 'schema>(
+    schema: &'schema crate::meta::Schema,
+    field: &'op FieldNode,
     named_type: &str,
     kind: FieldKind,
     value: &Json,
     owner: Option<&EntityKey<'static>>,
-    context: &mut WriteContext<'_, '_>,
+    context: &mut WriteContext<'_, '_, 'op, 'schema>,
 ) -> Result<Result<CacheValue, NormalizeError>, &'static str> {
     Ok(match value {
         Json::Null => Ok(CacheValue::Null),
@@ -460,13 +495,13 @@ fn write_value(
 
 /// Normalizes a composite response object: either into its own record
 /// (keyable → `Ref`) or an embedded object value.
-fn normalize_object(
-    schema: &crate::meta::Schema,
-    field: &FieldNode,
+fn normalize_object<'op, 'schema>(
+    schema: &'schema crate::meta::Schema,
+    field: &'op FieldNode,
     named_type: &str,
     obj: &serde_json::Map<String, Json>,
     owner: Option<&EntityKey<'static>>,
-    context: &mut WriteContext<'_, '_>,
+    context: &mut WriteContext<'_, '_, 'op, 'schema>,
 ) -> Result<CacheValue, NormalizeError> {
     let named_meta = schema
         .type_meta(named_type)
@@ -489,9 +524,9 @@ fn normalize_object(
         Some(key_fields) => {
             let mut key_values = Vec::with_capacity(key_fields.len());
             for kf in key_fields {
-                let mut selected = Vec::new();
-                collect_fields(schema, &field.selection_set, concrete, &mut selected);
                 let key_value = obj.get(kf).or_else(|| {
+                    let mut selected = Vec::new();
+                    collect_fields(schema, &field.selection_set, concrete, &mut selected);
                     selected
                         .iter()
                         .find(|field| field.name == *kf)

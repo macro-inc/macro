@@ -1,3 +1,7 @@
+import {
+  enableNamedContactSearch,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { IUser } from '@core/user/types';
 import { normalizeNameText, startsWordsOf } from '@core/util/name-match-score';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -7,12 +11,14 @@ import {
   type PeopleSearch,
   type PeopleSearchResult,
 } from '@graphql-cache/people/generated';
+import type { PeopleCache } from '@graphql-cache/people/host';
 import { isStaleHydrationScopeError } from '@graphql-cache/protocol';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { ContactDirectoryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import {
   fetchContactDirectoryByIds,
   fetchContactDirectoryPage,
+  fetchContactNamedPeople,
   fetchContactReferencePage,
 } from '@service-storage/graphql-contacts';
 import { hashKey } from '@tanstack/solid-query';
@@ -23,6 +29,7 @@ import {
   readContactCacheScope,
 } from './cache-scope';
 import { canonicalContactUserId } from './contact-user-id';
+import type { ContactListPriority } from './list-priority';
 
 export { ContactDirectoryScopeError } from './cache-scope';
 export const CONTACT_WINDOW_SIZE = 50;
@@ -57,8 +64,13 @@ export type ContactDirectoryCursor =
     };
 export type ContactPeoplePolicy = Pick<
   PeopleSearch,
-  'mode' | 'excluded' | 'senderDomain'
->;
+  'mode' | 'excluded' | 'senderDomain' | 'onlyListed'
+> & {
+  /** Orders people by contact list within each name stage; see
+   * `PeopleSearch.listPriority`. Only a host on policy 7 or later reads it:
+   * older hosts keep their order, and `onlyListed` drops nobody there. */
+  listPriority?: ContactListPriority;
+};
 export type RankedPerson = Extract<
   PeopleSearchResult,
   { kind: 'page' }
@@ -191,7 +203,26 @@ function isBoundedWindow(
     bytes(query) <= 512 &&
     policy.excluded.length <= 500 &&
     policy.excluded.every((id) => bytes(id) <= 1024) &&
-    (policy.senderDomain == null || bytes(policy.senderDomain) <= 255)
+    (policy.senderDomain == null || bytes(policy.senderDomain) <= 255) &&
+    isBoundedListPriority(policy.listPriority ?? [], bytes)
+  );
+}
+
+/** The cache-core host's bounds for a list order (`people.rs`): it refuses
+ * the whole search past them. */
+const MAX_LIST_GROUPS = 16;
+const MAX_LIST_KEYS = 64;
+const MAX_LIST_KEY_BYTES = 128;
+
+function isBoundedListPriority(
+  groups: ContactListPriority,
+  bytes: (value: string) => number
+): boolean {
+  const keys = groups.flat();
+  return (
+    groups.length <= MAX_LIST_GROUPS &&
+    keys.length <= MAX_LIST_KEYS &&
+    keys.every((key) => key.length > 0 && bytes(key) <= MAX_LIST_KEY_BYTES)
   );
 }
 
@@ -287,6 +318,65 @@ async function readLocalWithinBudget(
   return 'failed';
 }
 
+/** The list fields of a people search, present only when a policy sets them. */
+type ListOrder = Pick<PeopleSearch, 'listPriority' | 'onlyListed'>;
+
+/** The first people policy that reads a list order. */
+const LIST_ORDER_POLICY_VERSION = 7;
+
+/** The people policy each cache host last answered a search with. A host
+ * tells its policy only in its answers, and hosts on policy 5 and 6 (native
+ * builds before the release that brings 7) refuse any search carrying list
+ * fields, so a list order is sent only to a host that has answered with 7 or
+ * later. A page's host keeps its policy for the life of the page. */
+const answeredPolicies = new WeakMap<PeopleCache, number>();
+
+function listOrder(policy: ContactPeoplePolicy): ListOrder | undefined {
+  const groups = policy.listPriority ?? [];
+  if (!groups.length && !policy.onlyListed) return undefined;
+  return {
+    ...(groups.length
+      ? { listPriority: groups.map((group) => [...group]) }
+      : {}),
+    ...(policy.onlyListed ? { onlyListed: true } : {}),
+  };
+}
+
+/** Searches with the policy's list order when the host reads one. The first
+ * search on a host whose policy is not yet known goes without it; if the host
+ * answers with policy 7 or later, the search is sent again with the order, so
+ * the first window a picker shows is already ordered by list. */
+async function searchWithListOrder(
+  people: PeopleCache,
+  policy: ContactPeoplePolicy,
+  search: (lists: ListOrder | undefined) => ReturnType<PeopleCache['search']>,
+  span: Span
+): ReturnType<PeopleCache['search']> {
+  const lists = listOrder(policy);
+  const known = answeredPolicies.get(people) ?? 0;
+  const sendsLists = !!lists && known >= LIST_ORDER_POLICY_VERSION;
+  const first = await search(sendsLists ? lists : undefined);
+  const resend =
+    !!lists &&
+    !sendsLists &&
+    first.kind === 'page' &&
+    first.policyVersion >= LIST_ORDER_POLICY_VERSION;
+  const result = resend ? await search(lists) : first;
+  if (result.kind === 'page') {
+    answeredPolicies.set(people, result.policyVersion);
+    span.setAttr('contacts.policy_version', result.policyVersion);
+  }
+  if (lists) {
+    // A host that has not answered with a page has told no policy yet.
+    let outcome = 'unknown';
+    if (sendsLists || resend) outcome = 'sent';
+    else if (result.kind === 'page') outcome = 'unsupported';
+    span.setAttr('contacts.list_order', outcome);
+    span.setAttr('contacts.list_order_resent', resend);
+  }
+  return result;
+}
+
 /** Reads the local ranked projection. Returns undefined when this tab has no
  * usable cache for the viewer: no host, a retired or unsupported host, an
  * unbound viewer, a pending context, or an older people policy. */
@@ -316,17 +406,22 @@ async function readLocalWindow(
   )
     throw new ContactDirectoryScopeError();
 
+  const search = (lists: ListOrder | undefined) =>
+    people.search({
+      mode: policy.mode,
+      excluded: policy.excluded,
+      senderDomain: policy.senderDomain,
+      ...lists,
+      scope: { identity: viewer, storageGeneration: generation },
+      query: request.query,
+      limit,
+      nowMs: Date.now(),
+      cursor: request.cursor?.after,
+    });
   let result: Awaited<ReturnType<typeof people.search>>;
   try {
     result = await span.span('contacts.read_cached_window', () =>
-      people.search({
-        ...policy,
-        scope: { identity: viewer, storageGeneration: generation },
-        query: request.query,
-        limit,
-        nowMs: Date.now(),
-        cursor: request.cursor?.after,
-      })
+      searchWithListOrder(people, policy, search, span)
     );
   } catch (error) {
     if (
@@ -446,23 +541,67 @@ function answeredRows<Answer>(
   return found.length > bound ? undefined : found;
 }
 
+/** The people the server finds by the typed text's names. With
+ * `enable-named-contact-search` it reads the whole directory, ranked by list
+ * group and then exact names, and the local ranking's rules classify each
+ * person. Without it, it reads the exact name matches of a scan of the first
+ * 2,000 contacts, listed as exact. */
+async function readServerNames({
+  request,
+  limit,
+  signal,
+  span,
+}: WindowInput): Promise<{
+  viewer: string;
+  rows: readonly ContactDirectoryFieldsFragment[];
+  exact: boolean;
+}> {
+  const wholeDirectory = isFeatureEnabled(enableNamedContactSearch);
+  span.setAttr(
+    'contacts.named_read',
+    wholeDirectory ? 'whole_directory' : 'exact_scan'
+  );
+  if (wholeDirectory) {
+    const answer = await span.span('contacts.read_server_named_by', () =>
+      fetchContactNamedPeople({ search: request.query, limit }, signal)
+    );
+    return {
+      viewer: answer.user.id,
+      rows: answer.user.contactsNamedBy,
+      exact: false,
+    };
+  }
+  const answer = await span.span('contacts.read_server_exact', () =>
+    fetchContactReferencePage(
+      { limit, search: request.query, matching: 'ANY_NAME' },
+      signal
+    )
+  );
+  return {
+    viewer: answer.user.id,
+    rows: answer.user.contacts.nodes,
+    exact: true,
+  };
+}
+
 /** Reads the people typed text may name, for the first server page: the
- * server's exact name matches, and by ID a whole typed address or the viewer's
- * teammates (the first 500). The exact search scans only the first 2,000
- * contacts; a lookup by ID finds a person however large the directory is.
- * Each read only adds people to rank, so one that fails, or has not answered
- * when the page's own rows are in and the budget is spent, costs the page
- * those people and nothing else: the other read's people and the page's own
- * rows are still ranked. */
+ * server's people named by the text (`readServerNames`), and by ID a whole
+ * typed address or the viewer's teammates (the first 500); a lookup by ID
+ * finds a person however large the directory is. Each read only adds people
+ * to rank, so one that fails, or has not answered when the page's own rows
+ * are in and the budget is spent, costs the page those people and nothing
+ * else: the other read's people and the page's own rows are still ranked. */
 async function readNamedPeople(
   typed: TypedText,
-  { viewer, request, limit, signal, span }: WindowInput,
+  input: WindowInput,
   page: Promise<unknown>
 ): Promise<{
   exact: readonly ContactDirectoryFieldsFragment[];
+  named: readonly ContactDirectoryFieldsFragment[];
   lookedUp: readonly ContactDirectoryFieldsFragment[];
 }> {
-  if (!typed.text) return { exact: [], lookedUp: [] };
+  const { viewer, request, limit, signal, span } = input;
+  if (!typed.text) return { exact: [], named: [], lookedUp: [] };
 
   // A whole address names one person; any other text may name a teammate.
   const lookupIds = new Set<string>();
@@ -481,18 +620,11 @@ async function readNamedPeople(
     await Promise.allSettled([page, budget]);
     return 'late';
   })();
-  const [exact, lookedUp] = await Promise.all([
+  const [names, lookedUp] = await Promise.all([
     extraRead(
       // No name is an address: a whole one is looked up by ID, and nothing
-      // equals part of one.
-      typed.text.includes('@')
-        ? undefined
-        : span.span('contacts.read_server_exact', () =>
-            fetchContactReferencePage(
-              { limit, search: request.query, matching: 'ANY_NAME' },
-              signal
-            )
-          ),
+      // names part of one.
+      typed.text.includes('@') ? undefined : readServerNames(input),
       deadline
     ),
     extraRead(
@@ -507,33 +639,40 @@ async function readNamedPeople(
   clearTimeout(timer);
   // A superseded read ends here, whatever its reads answered.
   signal.throwIfAborted();
-  for (const read of [exact, lookedUp]) {
-    const answer = read.state === 'answered' ? read.answer : undefined;
-    if (answer && answer.user.id !== viewer)
-      throw new ContactDirectoryScopeError();
-  }
+  const answeredViewers = [
+    names.state === 'answered' ? names.answer?.viewer : undefined,
+    lookedUp.state === 'answered' ? lookedUp.answer?.user.id : undefined,
+  ];
+  if (answeredViewers.some((id) => id !== undefined && id !== viewer))
+    throw new ContactDirectoryScopeError();
 
-  const named = {
-    exact: answeredRows(exact, (answer) => answer.user.contacts.nodes, limit),
+  const found = {
+    names: answeredRows(names, (answer) => answer.rows, limit),
     lookedUp: answeredRows(
       lookedUp,
       (answer) => answer.user.contactsByUserIds,
       lookupIds.size
     ),
   };
-  if ([exact, lookedUp].some((read) => read.state === 'late'))
+  if ([names, lookedUp].some((read) => read.state === 'late'))
     span.setAttr('contacts.named_late', true);
-  if (!named.exact || !named.lookedUp)
+  if (!found.names || !found.lookedUp)
     span.setAttr('contacts.named_failed', true);
-  return { exact: named.exact ?? [], lookedUp: named.lookedUp ?? [] };
+  const exact = names.state === 'answered' && names.answer?.exact === true;
+  return {
+    exact: exact ? (found.names ?? []) : [],
+    named: exact ? [] : (found.names ?? []),
+    lookedUp: found.lookedUp ?? [],
+  };
 }
 
 /** Lists the people the text names ahead of the rest of the server's page,
  * each person once: the server's exact matches, then everyone read whom the
- * text names exactly, then those it names by a word start, then the page. */
+ * text names exactly, then those it names by a word start, then the page.
+ * `named` people come in the server's rank order, ahead of the other reads. */
 function listNamedFirst(
   typed: TypedText,
-  people: { exact: IUser[]; lookedUp: IUser[]; page: IUser[] }
+  people: { exact: IUser[]; named: IUser[]; lookedUp: IUser[]; page: IUser[] }
 ): { users: IUser[]; named: NonNullable<ContactDirectoryPage['named']> } {
   const listed = new Map<string, IUser>();
   const add = (users: IUser[]) => {
@@ -545,7 +684,7 @@ function listNamedFirst(
     }
     return added;
   };
-  const read = [...people.lookedUp, ...people.page];
+  const read = [...people.named, ...people.lookedUp, ...people.page];
   const named = {
     exact: add([
       ...people.exact,
@@ -600,6 +739,7 @@ async function readServerWindow(
       .filter((user) => !excluded.has(user.id.toLowerCase()));
   const { users, named } = listNamedFirst(typed, {
     exact: eligible(namedPeople.exact),
+    named: eligible(namedPeople.named),
     lookedUp: eligible(namedPeople.lookedUp),
     page: eligible(page.nodes),
   });

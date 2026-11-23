@@ -1,6 +1,9 @@
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
+import {
+  buildStartDateDefaultProperty,
+  buildTaskProjectDefaultProperty,
+} from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import {
@@ -12,9 +15,22 @@ import {
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
 import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
+import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
 import { useEntityProperties } from '@property/hooks';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
-import type { Property, PropertyApiValues } from '@property/types';
+import type {
+  DateProperty,
+  Property,
+  PropertyApiValues,
+} from '@property/types';
+import { isDateProperty } from '@property/utils';
+import {
+  type DateField,
+  dateFieldOf,
+  formatStartDue,
+  startDueOf,
+} from '@property/utils/start-due';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import { Key } from '@solid-primitives/keyed';
@@ -24,6 +40,7 @@ import {
   createSignal,
   Show,
   Suspense,
+  untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createPinnedProperties } from '../primitives/create-pinned-properties';
@@ -142,6 +159,41 @@ export function InlineTaskProperties() {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
+  // A task's start and due dates share one picker, and the due date's pill
+  // reads as their range once a start is set.
+  const startDateEnabled = useStartDateEnabled();
+  const dateEnd = (field: DateField): DateProperty | undefined => {
+    const definitionId =
+      field === 'start'
+        ? SYSTEM_PROPERTY_IDS.START_DATE
+        : SYSTEM_PROPERTY_IDS.DUE_DATE;
+    const property =
+      titleProperties().find(
+        (candidate) => candidate.propertyDefinitionId === definitionId
+      ) ?? (field === 'start' ? buildStartDateDefaultProperty() : undefined);
+    return property && isDateProperty(property) ? property : undefined;
+  };
+  const datesText = (property: Property) => {
+    if (
+      documentKind !== 'task' ||
+      !startDateEnabled() ||
+      property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.DUE_DATE
+    ) {
+      return undefined;
+    }
+    return formatStartDue(startDueOf(dateEnd('start'), property));
+  };
+  const datesEditor = (definitionId: string) => {
+    const field = dateFieldOf(definitionId);
+    if (documentKind !== 'task' || !field) return undefined;
+    return startDueEditorFor({
+      field,
+      enabled: startDateEnabled,
+      other: () => dateEnd(field === 'due' ? 'start' : 'due'),
+      saveOther: (property, value) => saveOne(property, value),
+    });
+  };
+
   return (
     <Suspense>
       <Show when={shouldShowRow()}>
@@ -174,25 +226,33 @@ export function InlineTaskProperties() {
           />
           {/* A placeholder keeps its chip, and a pick in it, when saving assigns its ID. */}
           <Key each={inlineProperties()} by="propertyDefinitionId">
-            {(property) => (
-              <InlinePropertyValue
-                property={property()}
-                entityId={blockId}
-                showLabel={
-                  documentKind === 'task' &&
-                  property().propertyDefinitionId ===
-                    SYSTEM_PROPERTY_IDS.DUE_DATE
-                    ? false
-                    : undefined
-                }
-                canManage={
-                  !property().propertyId.startsWith('pending:') ||
-                  defaultDefinitionIds().includes(
-                    property().propertyDefinitionId
-                  )
-                }
-              />
-            )}
+            {(property) => {
+              // Keyed by definition, so one editor serves the pill throughout.
+              const editor = datesEditor(
+                untrack(() => property().propertyDefinitionId)
+              );
+              return (
+                <InlinePropertyValue
+                  property={property()}
+                  entityId={blockId}
+                  showLabel={
+                    documentKind === 'task' &&
+                    property().propertyDefinitionId ===
+                      SYSTEM_PROPERTY_IDS.DUE_DATE
+                      ? false
+                      : undefined
+                  }
+                  canManage={
+                    !property().propertyId.startsWith('pending:') ||
+                    defaultDefinitionIds().includes(
+                      property().propertyDefinitionId
+                    )
+                  }
+                  valueText={datesText(property())}
+                  editor={editor}
+                />
+              );
+            }}
           </Key>
           <Show when={documentKind === 'document' && canEdit()}>
             <AddPropertyButton variant="secondary" size="xs" class="gap-1.5" />

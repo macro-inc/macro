@@ -31,11 +31,23 @@ const lookedUp = vi.hoisted(() =>
     typeof import('@service-storage/graphql-contacts')['fetchContactDirectoryByIds']
   >()
 );
+const namedBy = vi.hoisted(() =>
+  vi.fn<
+    typeof import('@service-storage/graphql-contacts')['fetchContactNamedPeople']
+  >()
+);
+const flags = vi.hoisted(() => ({ namedContactSearch: false }));
 vi.mock('./backfill', () => ({ loadContactCheckpoint: checkpoint }));
 vi.mock('@service-storage/graphql-contacts', () => ({
   fetchContactDirectoryPage: remote,
   fetchContactReferencePage: named,
   fetchContactDirectoryByIds: lookedUp,
+  fetchContactNamedPeople: namedBy,
+}));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  isFeatureEnabled: (flag: { key?: string }) =>
+    flag.key === 'enable-named-contact-search' && flags.namedContactSearch,
 }));
 const VIEWER = 'macro|viewer@example.com';
 const GENERATION = '00000000-0000-4000-8000-000000000001';
@@ -101,6 +113,9 @@ beforeEach(() => {
   named.mockResolvedValue(contactPage([]));
   lookedUp.mockReset();
   lookedUp.mockResolvedValue({ user: { id: VIEWER, contactsByUserIds: [] } });
+  namedBy.mockReset();
+  namedBy.mockResolvedValue({ user: { id: VIEWER, contactsNamedBy: [] } });
+  flags.namedContactSearch = false;
 });
 
 it.each([true, false])(
@@ -174,6 +189,121 @@ it('keeps an older native host on its local window down to the policy floor', as
     expect.objectContaining({ cursor: 'position' })
   );
   expect(remote).not.toHaveBeenCalled();
+});
+const MENTION_ORDER = [
+  ['teammates'],
+  ['interacted', 'invited'],
+  ['gmail', 'outlook'],
+];
+const listedPolicy = {
+  mode: 'mention' as const,
+  excluded: [],
+  listPriority: MENTION_ORDER,
+};
+function pageAt(policyVersion: number) {
+  return {
+    kind: 'page' as const,
+    policyVersion,
+    people: [person],
+    truncated: true,
+    nextCursor: 'position',
+  };
+}
+function sentLists(cache: ReturnType<typeof host>) {
+  return cache.people.search.mock.calls.map(([request]) => ({
+    listPriority: request.listPriority,
+    onlyListed: request.onlyListed,
+  }));
+}
+it('sends a list order once the host answers with policy 7, from its first window on', async () => {
+  const cache = host();
+  cache.people.search.mockResolvedValue(pageAt(7));
+  const first = await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: '', policy: listedPolicy },
+    signal()
+  );
+  // The host's policy is unknown until it answers, so the first search goes
+  // without the order and is sent again with it.
+  expect(sentLists(cache)).toEqual([
+    { listPriority: undefined, onlyListed: undefined },
+    { listPriority: MENTION_ORDER, onlyListed: undefined },
+  ]);
+  expect(first.source).toBe('cache');
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    {
+      query: '',
+      policy: listedPolicy,
+      cursor: first.nextCursor ?? undefined,
+    },
+    signal()
+  );
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'jo', policy: { ...listedPolicy, onlyListed: true } },
+    signal()
+  );
+  expect(sentLists(cache).slice(2)).toEqual([
+    { listPriority: MENTION_ORDER, onlyListed: undefined },
+    { listPriority: MENTION_ORDER, onlyListed: true },
+  ]);
+  expect(cache.people.search.mock.calls[2][0].cursor).toBe('position');
+});
+it.each([5, 6])(
+  'never sends a list order to a policy %i host, which keeps its window',
+  async (policyVersion) => {
+    const cache = host();
+    cache.people.search.mockResolvedValue(pageAt(policyVersion));
+    for (const query of ['', 'jo']) {
+      const page = await readContactDirectory(
+        VIEWER,
+        cache,
+        { query, policy: listedPolicy },
+        signal()
+      );
+      expect(page.source).toBe('cache');
+      expect(page.users.map((user) => user.id)).toEqual([person.userId]);
+    }
+    expect(sentLists(cache)).toEqual([
+      { listPriority: undefined, onlyListed: undefined },
+      { listPriority: undefined, onlyListed: undefined },
+    ]);
+    expect(remote).not.toHaveBeenCalled();
+  }
+);
+it('sends no list fields without a list order', async () => {
+  const cache = host();
+  for (const policy of [
+    { mode: 'mention' as const, excluded: [] },
+    { mode: 'mention' as const, excluded: [], listPriority: [] },
+  ])
+    await readContactDirectory(VIEWER, cache, { query: '', policy }, signal());
+  expect(cache.people.search).toHaveBeenCalledTimes(2);
+  for (const [request] of cache.people.search.mock.calls) {
+    expect(request).not.toHaveProperty('listPriority');
+    expect(request).not.toHaveProperty('onlyListed');
+  }
+});
+it.each([
+  ['an empty key', [['']]],
+  ['a key over 128 bytes', [['x'.repeat(129)]]],
+  ['17 groups', Array.from({ length: 17 }, (_, index) => [`l${index}`])],
+  ['65 keys', [Array.from({ length: 65 }, (_, index) => `l${index}`)]],
+])('refuses a list order the host would refuse: %s', async (_, groups) => {
+  const cache = host();
+  await expect(
+    readContactDirectory(
+      VIEWER,
+      cache,
+      { query: '', policy: { ...listedPolicy, listPriority: groups } },
+      signal()
+    )
+  ).rejects.toThrow('Invalid contact window');
+  expect(cache.people.search).not.toHaveBeenCalled();
 });
 it.each([
   { pages: 0, completedAt: null },
@@ -519,6 +649,63 @@ it('lists the people a typed search names first on a server page, once each', as
   expect(browsed.named).toBeUndefined();
   expect(named).toHaveBeenCalledOnce();
   expect(lookedUp).not.toHaveBeenCalled();
+});
+it('names people from the whole directory with enable-named-contact-search, in the server order, by the local rules', async () => {
+  flags.namedContactSearch = true;
+  // The scan's page holds only a loose match; the people the text names sort
+  // past the first 2,000 contacts.
+  remote.mockResolvedValue(
+    contactPage([contact('pine@example.com', 'Stero Pine')], 'next')
+  );
+  // Ranked by list group first, so a word start can lead an exact name.
+  namedBy.mockResolvedValue({
+    user: {
+      id: VIEWER,
+      contactsNamedBy: [
+        contact('ann@example.com', 'Ann Teroux'),
+        contact('blake@example.com', 'Tero Blake'),
+        contact('late@example.com', 'Tero Late'),
+      ],
+    },
+  });
+  const page = await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: 'tero' },
+    signal()
+  );
+  expect(page.users.map((user) => user.name)).toEqual([
+    'Tero Blake',
+    'Tero Late',
+    'Ann Teroux',
+    'Stero Pine',
+  ]);
+  expect(page.named).toEqual({
+    exact: ['macro|blake@example.com', 'macro|late@example.com'],
+    wordStart: ['macro|ann@example.com'],
+  });
+  expect(namedBy).toHaveBeenCalledExactlyOnceWith(
+    { search: 'tero', limit: 50 },
+    expect.anything()
+  );
+  expect(named).not.toHaveBeenCalled();
+
+  // An address names nobody by name: it is looked up by ID instead.
+  await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: 'tero@example.com' },
+    signal()
+  );
+  expect(namedBy).toHaveBeenCalledOnce();
+
+  // Another account's answer is never listed.
+  namedBy.mockResolvedValue({
+    user: { id: 'macro|other@example.com', contactsNamedBy: [] },
+  });
+  await expect(
+    readContactDirectory(VIEWER, undefined, { query: 'tero' }, signal())
+  ).rejects.toBeInstanceOf(ContactDirectoryScopeError);
 });
 it('finds the teammates and the whole address a typed search names by ID, wherever they sort in the directory', async () => {
   const teammates = [
