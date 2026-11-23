@@ -18,13 +18,14 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 ## Start here
 
 - `src/engine.rs`: the `CacheEngine` — the crate's entry point, owns queued
-  mutations, watched queries, and optimistic resolution. `with_response_records` composes application sidecars from already-normalized updates into the response transaction.
+  mutations, watched queries, and optimistic resolution. `with_response_records` composes application sidecars from already-normalized updates into the response transaction. `normalize_network` normalizes a response before its write (schema and parsed documents only, no storage) so a host derives its projections from the same records; `write_normalized_query` / `hydrate_normalized_query(_in_scope)` take that result instead of normalizing again, and hydration never installs its dependencies.
 - `src/engine/window_observation.rs`: bounded immutable predicate-window proofs
   over the complete change journal, selected dependencies and catalog input fields;
   unknown evidence never suppresses invalidation.
 - `src/normalize.rs` / `src/denormalize.rs`: GraphQL response ↔ normalized record
   transforms.
 - `src/store.rs`: the `Storage` trait every backend (e.g. `cache-turso`) implements.
+- `src/engine/pass_reads.rs`: reads for a write's projection passes, each stored key once, kept for the write; the write uses them only if `Storage::write_position` has not moved, and otherwise rereads everything it takes from storage in one batch.
 - `src/engine/authority.rs`: an opaque durable policy and one response generation, compared under the owner lock without read admission. Cache the authority alongside the identity in the single-owner engine and invalidate both on reset. Let the application decide whether a transition needs retirement; initial non-denials preserve offline snapshots. Carry an unfinished policy across account-witness binding and keep the closed marker until required application retirement completes; retire projection-only sources and persist rebuilt layers without changing commands or unrelated projection shadows. Generate Rust/TypeScript transport schemas with `bun run gen-cache-authority-schema --rust` from `apps/web`.
 - `src/engine/retirement.rs`: selective record/optimistic cleanup that preserves authored commands, fresh query revalidations, and canonical identity metadata; recompute affected projection shadows from every surviving layer in the same storage transaction.
 - `src/predicate.rs` + `src/record_selection.rs`: the predicate/projection IR

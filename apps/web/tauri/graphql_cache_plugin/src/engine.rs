@@ -14,8 +14,8 @@
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
-    HydrationScope, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
-    RollbackOptimisticWriteResult, WriteResult,
+    HydrationScope, InitialClaimOutcome, NetworkWrite, NormalizedResponse, QueryRegistration,
+    ReadResult, RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -723,6 +723,24 @@ impl EngineHandle {
             let op_id = ops.intern(&registration.op_id);
             (op_id, registration.entity_resolvers)
         });
+        let input = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        let registration =
+            registration
+                .as_ref()
+                .map(|(op_id, entity_resolvers)| QueryRegistration {
+                    op_id: *op_id,
+                    entity_resolvers,
+                });
+        // One normalization serves the projection passes and the write. A
+        // response that fails it takes the path that normalizes twice, which
+        // reports its error where it always has.
+        let normalized = engine.normalize_network(registration, input).ok();
         let projections = soup::write_projections(
             engine,
             &query,
@@ -730,28 +748,27 @@ impl EngineHandle {
             &variables,
             &data,
             identity.as_deref(),
+            normalized.as_ref().map(NormalizedResponse::updates),
         )
         .await?;
-        let result = engine
-            .write_query_with_registration_and_projections(
-                origin,
-                registration
-                    .as_ref()
-                    .map(|(op_id, entity_resolvers)| QueryRegistration {
-                        op_id: *op_id,
-                        entity_resolvers,
-                    }),
-                NetworkWrite {
-                    query: &query,
-                    operation_name: operation_name.as_deref(),
-                    variables: &variables,
-                    data: &data,
-                    identity: identity.as_deref(),
-                },
-                projections,
-            )
-            .await
-            .map_err(|e| e.to_string())?;
+        let result = match normalized {
+            Some(normalized) => {
+                engine
+                    .write_normalized_query(origin, input, normalized, projections)
+                    .await
+            }
+            None => {
+                engine
+                    .write_query_with_registration_and_projections(
+                        origin,
+                        registration,
+                        input,
+                        projections,
+                    )
+                    .await
+            }
+        }
+        .map_err(|e| e.to_string())?;
 
         self.publish_bound_generation(engine);
         Ok(wire_write_result(ops, result))
@@ -771,6 +788,16 @@ impl EngineHandle {
     ) -> Result<HydrationWriteResultWire, String> {
         let mut state = self.snapshot_hydration().await?;
         let EngineState { engine, ops, .. } = &mut *state;
+        let input = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        // One normalization serves the projection passes and the write, as in
+        // `write`.
+        let normalized = engine.normalize_network(None, input).ok();
         let projections = soup::write_projections(
             engine,
             &query,
@@ -778,25 +805,26 @@ impl EngineHandle {
             &variables,
             &data,
             identity.as_deref(),
+            normalized.as_ref().map(NormalizedResponse::updates),
         )
         .await?;
-        let result = match hydration_scope {
-            Some(scope) => {
+        let result = match (hydration_scope, normalized) {
+            (Some(scope), Some(normalized)) => {
                 engine
-                    .hydrate_query_in_scope(
-                        NetworkWrite {
-                            query: &query,
-                            operation_name: operation_name.as_deref(),
-                            variables: &variables,
-                            data: &data,
-                            identity: identity.as_deref(),
-                        },
-                        &scope,
-                        projections,
-                    )
+                    .hydrate_normalized_query_in_scope(input, normalized, &scope, projections)
                     .await
             }
-            None => {
+            (Some(scope), None) => {
+                engine
+                    .hydrate_query_in_scope(input, &scope, projections)
+                    .await
+            }
+            (None, Some(normalized)) => {
+                engine
+                    .hydrate_normalized_query(input, normalized, projections)
+                    .await
+            }
+            (None, None) => {
                 engine
                     .hydrate_query_with_projections(
                         &query,
@@ -1022,6 +1050,7 @@ impl EngineHandle {
                 operation_name.as_deref(),
                 &variables,
                 &data,
+                None,
                 None,
             )
             .await?

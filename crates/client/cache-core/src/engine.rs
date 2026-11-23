@@ -5,9 +5,11 @@
 pub mod authority;
 mod calendar;
 mod hydration;
+mod pass_reads;
 mod people;
 mod retirement;
 pub use hydration::HydrationScope;
+pub use pass_reads::{PassReadSet, PassReads};
 #[cfg(test)]
 mod test;
 
@@ -28,8 +30,8 @@ use crate::link_patch::{
     deduplicate_patches, missing_patch_records,
 };
 use crate::normalize::{
-    DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
-    project_hydration_response,
+    DependencyCompleteness, NormalizeError, NormalizeResult, RecordUpdates, normalize,
+    normalize_with_dependencies, project_hydration_response,
 };
 use crate::predicate::reconciliation::{
     MAX_RECONCILIATION_BASELINE, PredicateBaselineEntry, PredicateReconciliation,
@@ -136,6 +138,10 @@ pub enum EngineError<S: std::error::Error + 'static> {
     /// Membership may only be written after a captured, scoped network read.
     #[error("contact writes require a scoped read fence")]
     UnfencedContactWrite,
+    /// A response normalized by [`Engine::normalize_network`] before another
+    /// schema was installed; normalize it again.
+    #[error("response was normalized under a schema that has since changed")]
+    StaleNormalization,
 }
 
 /// Result of a cache read.
@@ -160,6 +166,33 @@ pub struct NetworkWrite<'a> {
     pub data: &'a Json,
     /// Optional opaque session identity witness.
     pub identity: Option<&'a str>,
+}
+
+/// A network response normalized before its write, so a host can derive its
+/// projections from the same records instead of normalizing the response again.
+/// Made by [`Engine::normalize_network`]; the write that takes it must be given
+/// the same response.
+pub struct NormalizedResponse {
+    result: NormalizeResult,
+    registered: Option<OpId>,
+    /// The schema it was normalized under; a write under another refuses it.
+    schema: std::sync::Arc<crate::meta::Schema>,
+}
+
+impl NormalizedResponse {
+    /// The records the response normalizes to, before the engine adds
+    /// host-derived records or omits hydration pages.
+    pub fn updates(&self) -> &RecordUpdates {
+        &self.result.updates
+    }
+}
+
+/// Whether a write still has to normalize its response.
+enum Normalization<'a> {
+    /// Normalize inside the write, for this registration.
+    Pending(Option<QueryRegistration<'a>>),
+    /// Already normalized by [`Engine::normalize_network`].
+    Done(NormalizedResponse),
 }
 
 /// An active query whose dependencies should be installed by a network write.
@@ -412,6 +445,8 @@ pub struct Engine<S: Storage> {
     /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
     optimistic_hydrated: bool,
+    /// What the last projection passes read, for the write that follows.
+    kept_reads: Option<pass_reads::KeptReads>,
 }
 
 impl<S: Storage> Engine<S> {
@@ -446,6 +481,7 @@ impl<S: Storage> Engine<S> {
             response_records: None,
             optimistic: Vec::new(),
             optimistic_hydrated: false,
+            kept_reads: None,
         }
     }
 
@@ -1415,16 +1451,82 @@ impl<S: Storage> Engine<S> {
         input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
-        self.write_network(origin_op, registration, input, projections, true, false)
-            .await
-            .map(|(result, _)| result)
+        self.write_network(
+            origin_op,
+            input,
+            Normalization::Pending(registration),
+            projections,
+            true,
+            false,
+        )
+        .await
+        .map(|(result, _)| result)
+    }
+
+    /// Normalizes a network response for a later write, capturing the
+    /// dependencies `registration` would install. Reads only the schema and the
+    /// parsed-document cache: no storage, so a host may call it before taking
+    /// whatever it needs for the write.
+    pub fn normalize_network(
+        &mut self,
+        registration: Option<QueryRegistration<'_>>,
+        input: NetworkWrite<'_>,
+    ) -> Result<NormalizedResponse, EngineError<S::Error>> {
+        let entity_resolvers = EntityResolverLookup::compile(
+            &self.schema,
+            registration.map_or(&[][..], |registration| registration.entity_resolvers),
+        )?;
+        let doc = Self::document(&mut self.docs, input.query)?;
+        let op = doc.operation(input.operation_name)?;
+        if registration.is_some() && op.kind != OperationKind::Query {
+            return Err(EngineError::Document(
+                DocumentError::UnsupportedOperationType(format!(
+                    "{:?} (dependency registration is query-only)",
+                    op.kind
+                )),
+            ));
+        }
+        let result = normalize_with_dependencies(
+            &self.schema,
+            op,
+            input.variables,
+            input.data,
+            &entity_resolvers,
+        )?;
+        Ok(NormalizedResponse {
+            result,
+            registered: registration.map(|registration| registration.op_id),
+            schema: std::sync::Arc::clone(&self.schema),
+        })
+    }
+
+    /// Writes a response [`Self::normalize_network`] normalized, installing the
+    /// dependencies of the registration it was normalized for. Refuses one
+    /// normalized before the current schema was installed.
+    pub async fn write_normalized_query(
+        &mut self,
+        origin_op: Option<OpId>,
+        input: NetworkWrite<'_>,
+        normalized: NormalizedResponse,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.write_network(
+            origin_op,
+            input,
+            Normalization::Done(normalized),
+            projections,
+            true,
+            false,
+        )
+        .await
+        .map(|(result, _)| result)
     }
 
     async fn write_network(
         &mut self,
         origin_op: Option<OpId>,
-        registration: Option<QueryRegistration<'_>>,
         input: NetworkWrite<'_>,
+        normalization: Normalization<'_>,
         projections: Vec<ProjectionMutation>,
         retain_pages: bool,
         allow_contacts: bool,
@@ -1438,28 +1540,25 @@ impl<S: Storage> Engine<S> {
             identity,
         } = input;
         self.hydrate_optimistic().await?;
-        let entity_resolvers = EntityResolverLookup::compile(
-            &self.schema,
-            registration.map_or(&[][..], |registration| registration.entity_resolvers),
-        )?;
+        let normalized = match normalization {
+            Normalization::Pending(registration) => self.normalize_network(registration, input)?,
+            Normalization::Done(normalized) => {
+                if !std::sync::Arc::ptr_eq(&normalized.schema, &self.schema) {
+                    return Err(EngineError::StaleNormalization);
+                }
+                normalized
+            }
+        };
+        let registered = normalized.registered;
+        let normalized = normalized.result;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
-        if registration.is_some() && op.kind != OperationKind::Query {
-            return Err(EngineError::Document(
-                DocumentError::UnsupportedOperationType(format!(
-                    "{:?} (dependency registration is query-only)",
-                    op.kind
-                )),
-            ));
-        }
         let is_query = op.kind == OperationKind::Query;
         // A subscription event is a network snapshot of its records like a
         // query response, so the same before/after comparison is exact for it.
         // Leaving it unscoped made every open Quick Access list replay its
         // search on each event, whatever the event touched.
         let reports_search_changes = is_query || op.kind == OperationKind::Subscription;
-        let normalized =
-            normalize_with_dependencies(&self.schema, op, variables, data, &entity_resolvers)?;
         let mut updates = normalized.updates;
         if let Some(records) = self.response_records {
             updates.extend(records(&self.schema, op, variables, data, &updates)?);
@@ -1516,12 +1615,11 @@ impl<S: Storage> Engine<S> {
                     if let Some(origin) = origin_op {
                         affected_ops.remove(&origin);
                     }
-                    if let Some(registration) = registration {
+                    if let Some(op_id) = registered {
                         if normalized.completeness == DependencyCompleteness::Exact {
-                            self.deps
-                                .set_query_deps(registration.op_id, normalized.dependencies);
+                            self.deps.set_query_deps(op_id, normalized.dependencies);
                         } else {
-                            self.deps.set_op_broad(registration.op_id);
+                            self.deps.set_op_broad(op_id);
                         }
                     }
                     return Ok((
@@ -1625,14 +1723,13 @@ impl<S: Storage> Engine<S> {
         if let Some(origin) = origin_op {
             affected_ops.remove(&origin);
         }
-        if let Some(registration) = registration {
+        if let Some(op_id) = registered {
             if normalized.completeness == DependencyCompleteness::Exact
                 && self.optimistic.is_empty()
             {
-                self.deps
-                    .set_query_deps(registration.op_id, normalized.dependencies);
+                self.deps.set_query_deps(op_id, normalized.dependencies);
             } else {
-                self.deps.set_op_broad(registration.op_id);
+                self.deps.set_op_broad(op_id);
             }
         }
         Ok((
@@ -1695,15 +1792,29 @@ impl<S: Storage> Engine<S> {
                 data,
                 identity,
             },
+            Normalization::Pending(None),
             projections,
             None,
         )
         .await
     }
 
+    /// Hydrates a response [`Self::normalize_network`] normalized without a
+    /// registration, atomically maintaining generic projections.
+    pub async fn hydrate_normalized_query(
+        &mut self,
+        input: NetworkWrite<'_>,
+        normalized: NormalizedResponse,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        self.hydrate_query_fenced(input, Normalization::Done(normalized), projections, None)
+            .await
+    }
+
     async fn hydrate_query_fenced(
         &mut self,
         input: NetworkWrite<'_>,
+        normalization: Normalization<'_>,
         projections: Vec<ProjectionMutation>,
         fence: Option<Uuid>,
     ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
@@ -1730,9 +1841,17 @@ impl<S: Storage> Engine<S> {
             }
             project_hydration_response(&self.schema, &op.prepare(variables)?, data)?
         };
+        // Hydration installs no dependencies, whatever the response was
+        // normalized for.
+        let normalization = match normalization {
+            Normalization::Done(normalized) => Normalization::Done(NormalizedResponse {
+                registered: None,
+                ..normalized
+            }),
+            Normalization::Pending(_) => Normalization::Pending(None),
+        };
         let (write_result, search_changed_buckets) = self
             .write_network(
-                None,
                 None,
                 NetworkWrite {
                     query,
@@ -1741,6 +1860,7 @@ impl<S: Storage> Engine<S> {
                     data,
                     identity,
                 },
+                normalization,
                 projections,
                 false,
                 fence.is_some(),
@@ -1773,12 +1893,20 @@ impl<S: Storage> Engine<S> {
         // records mid-merge and overwrite storage with partial updates.
         let mut staging: HashMap<EntityKey<'static>, Record> = HashMap::new();
         let mut missing: Vec<EntityKey<'static>> = Vec::new();
+        let mut kept = self.take_kept_reads();
+        let mut from_kept: Vec<EntityKey<'static>> = Vec::new();
         for key in updates.keys() {
             match self.hot.peek(key) {
                 Some(record) => {
                     staging.insert(key.clone(), record.clone());
                 }
-                None => missing.push(key.clone()),
+                None => match kept.as_mut().and_then(|kept| kept.record(key)) {
+                    Some(record) => {
+                        staging.extend(record.map(|record| (key.clone(), record)));
+                        from_kept.push(key.clone());
+                    }
+                    None => missing.push(key.clone()),
+                },
             }
         }
         if !missing.is_empty() {
@@ -1787,10 +1915,29 @@ impl<S: Storage> Engine<S> {
                 .get_batch(&missing)
                 .await
                 .map_err(EngineError::Storage)?;
-            for (key, record) in missing.into_iter().zip(fetched) {
+            for (key, record) in missing.iter().zip(fetched) {
                 if let Some(r) = record {
-                    staging.insert(key, r);
+                    staging.insert(key.clone(), r);
                 }
+            }
+        }
+        // The kept records stand for reading storage now, alongside the batch
+        // above. Once storage has committed since the passes read them, read
+        // every record this write takes from storage again, in one batch, as
+        // the write does without kept reads.
+        if !from_kept.is_empty() && !kept.as_ref().is_some_and(|kept| self.kept_reads_hold(kept)) {
+            kept = None;
+            from_kept.extend(missing);
+            let fetched = self
+                .storage
+                .get_batch(&from_kept)
+                .await
+                .map_err(EngineError::Storage)?;
+            for (key, record) in from_kept.into_iter().zip(fetched) {
+                match record {
+                    Some(record) => staging.insert(key, record),
+                    None => staging.remove(&key),
+                };
             }
         }
 
@@ -1843,14 +1990,20 @@ impl<S: Storage> Engine<S> {
         // hot-tier eviction. Still apply every projection mutation: a partial
         // response can change projection authority without changing records.
         let revision_advanced = if changed.is_empty() {
-            self.projection_mutations_change(&projections).await?
+            self.projection_mutations_change(&projections, kept.as_ref())
+                .await?
         } else {
             true
         };
-        self.storage
-            .put_batch_with_projections(to_persist, projections)
-            .await
-            .map_err(EngineError::Storage)?;
+        // A refetch that changes no record and no projection authority has
+        // nothing to store. Pending layers still get their shadows rebased in
+        // the storage write, as before.
+        if revision_advanced || !self.optimistic.is_empty() {
+            self.storage
+                .put_batch_with_projections(to_persist, projections)
+                .await
+                .map_err(EngineError::Storage)?;
+        }
         let revision = if revision_advanced {
             self.advance_revision()?
         } else {
@@ -1883,6 +2036,7 @@ impl<S: Storage> Engine<S> {
     async fn projection_mutations_change(
         &self,
         mutations: &[ProjectionMutation],
+        kept: Option<&pass_reads::KeptReads>,
     ) -> Result<bool, EngineError<S::Error>> {
         if mutations.is_empty() {
             return Ok(false);
@@ -1891,19 +2045,49 @@ impl<S: Storage> Engine<S> {
             .iter()
             .map(ProjectionMutation::record_key)
             .cloned()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let states = self
-            .storage
-            .load_projection_states(&keys)
-            .await
-            .map_err(EngineError::Storage)?;
-        let mut projected = keys
-            .into_iter()
-            .zip(states)
-            .filter_map(|(key, state)| state.map(|state| (key, state)))
-            .collect::<HashMap<_, _>>();
+            .collect::<BTreeSet<_>>();
+        let mut projected = HashMap::new();
+        let mut missing = Vec::new();
+        let mut from_kept = Vec::new();
+        for key in keys {
+            match kept.and_then(|kept| kept.state(&key)) {
+                Some(state) => {
+                    projected.extend(state.map(|state| (key.clone(), state)));
+                    from_kept.push(key);
+                }
+                None => missing.push(key),
+            }
+        }
+        if !missing.is_empty() {
+            let states = self
+                .storage
+                .load_projection_states(&missing)
+                .await
+                .map_err(EngineError::Storage)?;
+            projected.extend(
+                missing
+                    .iter()
+                    .cloned()
+                    .zip(states)
+                    .filter_map(|(key, state)| state.map(|state| (key, state))),
+            );
+        }
+        // As for records: the kept states stand for reading storage now, and
+        // once they do not, every state is read again in one batch.
+        if !from_kept.is_empty() && !kept.is_some_and(|kept| self.kept_reads_hold(kept)) {
+            from_kept.extend(missing);
+            let states = self
+                .storage
+                .load_projection_states(&from_kept)
+                .await
+                .map_err(EngineError::Storage)?;
+            for (key, state) in from_kept.into_iter().zip(states) {
+                match state {
+                    Some(state) => projected.insert(key, state),
+                    None => projected.remove(&key),
+                };
+            }
+        }
         let before = projected.clone();
         apply_authoritative_projection_mutations(&mut projected, mutations);
         Ok(projected != before)
@@ -3146,6 +3330,7 @@ impl<S: Storage> Engine<S> {
     pub fn external_reset(&mut self) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
+        self.kept_reads = None;
         self.live_queries = live_query::LiveQueries::default();
         self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
@@ -3236,6 +3421,7 @@ impl<S: Storage> Engine<S> {
         self.storage.clear().await.map_err(EngineError::Storage)?;
         self.contact_fence = Uuid::now_v7();
         self.hot.clear();
+        self.kept_reads = None;
         self.live_queries = live_query::LiveQueries::default();
         self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
