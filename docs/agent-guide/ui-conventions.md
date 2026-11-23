@@ -32,7 +32,7 @@ while the user last pressed or focused something in that pane), so a field,
 an editor, a button, a detail beside the list or an open item without tabs
 keeps normal focus order, at every width and with the sidebar collapsed.
 Sidebar navigation (views, folders, scopes) is not tabs and takes no Tab or
-number keys; tabs atop a list that is the sidebar (Chat's rail, New Home) are
+number keys; tabs atop a list that is the sidebar (Chat's rail) are
 that pane's top bar. Nothing else in a view binds `Tab`. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments

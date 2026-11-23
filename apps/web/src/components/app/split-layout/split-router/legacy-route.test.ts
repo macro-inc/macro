@@ -24,6 +24,7 @@ import {
   homeSplitRoute,
   legacyContentRoute,
   notFoundRoute,
+  notificationsRoute,
 } from '@app/routes/routes';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -62,6 +63,7 @@ const definitions = {
           ],
         },
         legacyContentRoute,
+        notificationsRoute,
         notFoundRoute,
       ],
     },
@@ -108,6 +110,10 @@ afterEach(() => {
 describe('upgradeLegacyPath', () => {
   it('sends the retired Getting Started path to Home', () => {
     expect(upgradeLegacyPath(routes, '/getting-started')).toBe('/home');
+  });
+
+  it('sends the retired New Home path to Notifications', () => {
+    expect(upgradeLegacyPath(routes, '/new-home')).toBe('/notifications');
   });
 });
 

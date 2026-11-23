@@ -838,6 +838,11 @@ same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
 feed takes it, the row below slides up without a jump, Undo restores it, and
 reduced motion skips the fold.
 
+Its `display-options.browser.e2e.ts` checks that desktop Notifications has
+All and Unread and Display options in place of a settings gear, that
+Condensed turns rows into Home's one-line rows and back, and that phones have
+no Display options.
+
 Its `stacks.browser.e2e.ts` runs the same view with a pointer: an open stack's
 row keeps its toggle in place as Hide (beside the Hide under its last
 notification), hovering a row swaps its time for Mark done without moving
