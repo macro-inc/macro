@@ -1,6 +1,7 @@
 import type { UserItem } from '@core/context/quickAccess';
 import type { QuickAccessListOptions } from '@core/context/quickAccess/types';
 import type { IUser } from '@core/user';
+import { MENTION_LIST_PRIORITY } from '@queries/contacts/list-priority';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { sortMobileMentions } from '../utils/mobileSort';
@@ -12,19 +13,27 @@ const mocks = vi.hoisted(() => ({
   error: (): unknown => undefined,
   retry: vi.fn<() => Promise<void>>(),
   loadMore: vi.fn<() => Promise<void>>(),
+  listOptions: [] as QuickAccessListOptions[],
+  contactLists: (): boolean => false,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.contactLists() }),
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
-    useList: (options: QuickAccessListOptions) => ({
-      items: () => (options.enabled?.() === false ? [] : mocks.users()),
-      windowKey: () => 'window',
-      hasMore: () => true,
-      isLoading: () => mocks.loading(),
-      error: () => mocks.error(),
-      retry: mocks.retry,
-      isLoadingMore: () => false,
-      loadMore: mocks.loadMore,
-    }),
+    useList: (options: QuickAccessListOptions) => {
+      mocks.listOptions.push(options);
+      return {
+        items: () => (options.enabled?.() === false ? [] : mocks.users()),
+        windowKey: () => 'window',
+        hasMore: () => true,
+        isLoading: () => mocks.loading(),
+        error: () => mocks.error(),
+        retry: mocks.retry,
+        isLoadingMore: () => false,
+        loadMore: mocks.loadMore,
+      };
+    },
     interactionForUser: (id: string) =>
       mocks.users().find((user) => user.id === id)?.timestamps
         .lastInteraction ?? undefined,
@@ -98,6 +107,8 @@ beforeEach(() => {
   mocks.loading = () => false;
   mocks.error = () => undefined;
   mocks.retry.mockReset();
+  mocks.listOptions = [];
+  mocks.contactLists = () => false;
   mocks.retry.mockResolvedValue(undefined);
   mocks.users = () => [
     userItem(sean),
@@ -666,6 +677,25 @@ it('lists people before @here for a partial alias and @here first once it is typ
     ]);
     setSearchTerm('here');
     expect(mention.usersAndGroups()[0].id).toBe('here');
+    dispose();
+  });
+});
+
+it('orders the personal mention window by contact list only while enable-contact-lists is on', () => {
+  createRoot((dispose) => {
+    const [enabled, setEnabled] = createSignal(false);
+    mocks.contactLists = enabled;
+    useUsersMention({ searchTerm: () => '' });
+    const options = mocks.listOptions.at(-1);
+    expect(options?.peopleMode).toBe('mention');
+    expect(options?.peopleListPriority?.()).toBeUndefined();
+    setEnabled(true);
+    expect(options?.peopleListPriority?.()).toEqual([
+      ['teammates'],
+      ['interacted', 'invited'],
+      ['gmail', 'outlook'],
+    ]);
+    expect(options?.peopleListPriority?.()).toBe(MENTION_LIST_PRIORITY);
     dispose();
   });
 });

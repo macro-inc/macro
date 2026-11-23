@@ -13,27 +13,6 @@
  */
 export type ToolEventRole = 'organizer' | 'guest';
 /**
- * Content of a bash code execution response - either a result or an error
- */
-export type BashCodeExecutionContent =
-  | (BashCodeExecutionResult & {
-      type: 'bash_code_execution_result';
-    })
-  | (BashCodeExecutionToolError & {
-      type: 'bash_code_execution_tool_result_error';
-    });
-/**
- * Error codes for code execution failures
- */
-export type CodeExecutionErrorCode =
-  | 'unavailable'
-  | 'execution_time_exceeded'
-  | 'container_expired'
-  | 'invalid_input'
-  | 'too_many_requests'
-  | 'file_not_found'
-  | 'string_not_found';
-/**
  * Canonical entity type accepted when an AI tool targets an entity's properties.
  * Tasks are targeted as `document`; email threads (type `email` in ListEntities
  * and search results) are targeted as `thread`.
@@ -255,6 +234,14 @@ export type BotOwnerSummary =
       team_id: string;
       type: 'team';
     };
+/**
+ * Where a user stands with an app or server.
+ */
+export type ConnectorStatus =
+  | 'connected'
+  | 'disabled'
+  | 'needsReauth'
+  | 'notConnected';
 /**
  * How search tools match query terms. Restricted to partial/exact — the
  * backend also supports regexp and an internal query mode, but those are not
@@ -1247,9 +1234,7 @@ export type DiscoveryResult =
   | {
       app: DiscoveredApp;
       /**
-       * Whether this caller has an enabled connection. For an app that
-       * connects through its own MCP server, that connection is checked
-       * there, not in Pipedream.
+       * Whether this caller's connection to the app is usable now.
        */
       connected: boolean;
       /**
@@ -4798,22 +4783,6 @@ export type ChannelShareEntityType =
   | 'external_chat'
   | 'chat';
 /**
- * Content of a text editor code execution response - either a result or an error
- */
-export type TextEditorCodeExecutionContent =
-  | (TextEditorCodeExecutionResult & {
-      type: 'text_editor_code_execution_view_result';
-    })
-  | (TextEditorCodeExecutionResult & {
-      type: 'text_editor_code_execution_create_result';
-    })
-  | (TextEditorCodeExecutionResult & {
-      type: 'text_editor_code_execution_str_replace_result';
-    })
-  | (TextEditorCodeExecutionToolError & {
-      type: 'text_editor_code_execution_tool_result_error';
-    });
-/**
  * A share can be disabled or grant a non-owner permission.
  */
 export type SessionShareAccess = 'off' | 'view' | 'comment' | 'edit';
@@ -4954,6 +4923,43 @@ export type ReadThreadReadContent =
       formatted_preview: string;
       type: 'itemPreviews';
     };
+/**
+ * Content of a bash code execution response - either a result or an error
+ */
+export type BashCodeExecutionContent =
+  | (BashCodeExecutionResult & {
+      type: 'bash_code_execution_result';
+    })
+  | (BashCodeExecutionToolError & {
+      type: 'bash_code_execution_tool_result_error';
+    });
+/**
+ * Error codes for code execution failures
+ */
+export type CodeExecutionErrorCode =
+  | 'unavailable'
+  | 'execution_time_exceeded'
+  | 'container_expired'
+  | 'invalid_input'
+  | 'too_many_requests'
+  | 'file_not_found'
+  | 'string_not_found';
+/**
+ * Content of a text editor code execution response - either a result or an error
+ */
+export type TextEditorCodeExecutionContent =
+  | (TextEditorCodeExecutionResult & {
+      type: 'text_editor_code_execution_view_result';
+    })
+  | (TextEditorCodeExecutionResult & {
+      type: 'text_editor_code_execution_create_result';
+    })
+  | (TextEditorCodeExecutionResult & {
+      type: 'text_editor_code_execution_str_replace_result';
+    })
+  | (TextEditorCodeExecutionToolError & {
+      type: 'text_editor_code_execution_tool_result_error';
+    });
 /**
  * One activity action returned to the AI.
  */
@@ -5467,58 +5473,6 @@ export interface CanvasImage {
    * Bounded base64 image bytes, never a remote URL.
    */
   data: string;
-}
-/**
- * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool. Use it only when the user asks to run code, or for a calculation you cannot do reliably in your head.
- */
-export interface BashCodeExecution {
-  /**
-   * The bash command or instruction to execute.
-   */
-  input: string;
-}
-/**
- * Response from bash_code_execution tool
- */
-export interface BashCodeExecutionResponse {
-  tool_use_id: string;
-  content: BashCodeExecutionContent;
-}
-/**
- * Successful bash code execution result
- */
-export interface BashCodeExecutionResult {
-  /**
-   * Standard output from the command
-   */
-  stdout: string;
-  /**
-   * Standard error from the command
-   */
-  stderr: string;
-  /**
-   * Exit code (0 for success, non-zero for failure)
-   */
-  return_code: number;
-  /**
-   * Files generated during execution
-   */
-  content?: CodeExecutionFile[] | null;
-}
-/**
- * A file generated during code execution
- */
-export interface CodeExecutionFile {
-  /**
-   * File ID for retrieval via Files API
-   */
-  file_id: string;
-}
-/**
- * Error from bash code execution
- */
-export interface BashCodeExecutionToolError {
-  error_code: CodeExecutionErrorCode;
 }
 /**
  * Apply one multi-select option delta — most often a tag — to many entities in a single call. Use this instead of calling SetEntityProperty once per entity when the user asks to tag or label a set of items at once (e.g. "tag the last 50 emails as Follow-up"). Provide the property_definition_id (a tag set's propertyDefinitionId from ListTags) and the option ids to add and/or remove (a tag's option id from ListTags). The same add_option_ids/remove_option_ids delta is applied to every entity, composing atomically with concurrent edits per entity.
@@ -6387,23 +6341,16 @@ export interface ConnectMcpServer {
  */
 export interface ConnectMcpServerResponse {
   /**
-   * The server's URL.
+   * The server's URL, normalized.
    */
   url: string;
   /**
-   * The server's display name.
+   * The connector's display name.
    */
   serverName: string;
+  status: ConnectorStatus;
   /**
-   * Whether the user already had this server before the call.
-   */
-  alreadyConnected: boolean;
-  /**
-   * Whether the server holds the user's sign-in.
-   */
-  authenticated: boolean;
-  /**
-   * Whether the server's tools are turned on.
+   * Whether its tools are turned on.
    */
   enabled: boolean;
   /**
@@ -15936,78 +15883,6 @@ export interface ShareWithChannelResponse {
   summary: string;
 }
 /**
- * Use a text editor in a sandboxed environment using Claude's built-in code execution tool. Its files live only in the sandbox: to create a document or file for the user, use CreateDocument, or macro.documents in ExecuteCode where CreateDocument is absent.
- */
-export interface TextEditorCodeExecution {
-  /**
-   * The text editing instruction.
-   */
-  input: string;
-}
-/**
- * Response from text_editor_code_execution tool
- */
-export interface TextEditorCodeExecutionResponse {
-  tool_use_id: string;
-  content: TextEditorCodeExecutionContent;
-}
-/**
- * Result from text editor operations (view, create, str_replace)
- * Fields are optional as different operations return different fields
- */
-export interface TextEditorCodeExecutionResult {
-  /**
-   * Type of file (e.g., "text")
-   */
-  file_type?: string | null;
-  /**
-   * File content (for view operations)
-   */
-  content?: string | null;
-  /**
-   * Number of lines returned
-   */
-  numLines?: number | null;
-  /**
-   * Starting line number
-   */
-  startLine?: number | null;
-  /**
-   * Total lines in file
-   */
-  totalLines?: number | null;
-  /**
-   * Whether the file already existed (true = update, false = create)
-   */
-  is_file_update?: boolean | null;
-  /**
-   * Old content start line
-   */
-  oldStart?: number | null;
-  /**
-   * Number of old lines changed
-   */
-  oldLines?: number | null;
-  /**
-   * New content start line
-   */
-  newStart?: number | null;
-  /**
-   * Number of new lines
-   */
-  newLines?: number | null;
-  /**
-   * Diff lines (prefixed with +/-)
-   */
-  lines?: string[] | null;
-}
-/**
- * Error from text editor code execution
- */
-export interface TextEditorCodeExecutionToolError {
-  error_code: CodeExecutionErrorCode;
-}
-/**
  * Change an agent session's link, team, or channel sharing as its owner. Omitted settings remain unchanged; off revokes that grant. Requires an explicit user request to change sharing. Private persona conversations cannot be shared. Returns the resulting settings.
  */
 export interface UpdateAgentSessionSharing {
@@ -16874,6 +16749,124 @@ export interface Subagent {
 }
 export interface SubagentResponse {
   result: string;
+}
+export interface BashCodeExecution {
+  /**
+   * The bash command or instruction to execute.
+   */
+  input: string;
+}
+/**
+ * Response from bash_code_execution tool
+ */
+export interface BashCodeExecutionResponse {
+  tool_use_id: string;
+  content: BashCodeExecutionContent;
+}
+/**
+ * Successful bash code execution result
+ */
+export interface BashCodeExecutionResult {
+  /**
+   * Standard output from the command
+   */
+  stdout: string;
+  /**
+   * Standard error from the command
+   */
+  stderr: string;
+  /**
+   * Exit code (0 for success, non-zero for failure)
+   */
+  return_code: number;
+  /**
+   * Files generated during execution
+   */
+  content?: CodeExecutionFile[] | null;
+}
+/**
+ * A file generated during code execution
+ */
+export interface CodeExecutionFile {
+  /**
+   * File ID for retrieval via Files API
+   */
+  file_id: string;
+}
+/**
+ * Error from bash code execution
+ */
+export interface BashCodeExecutionToolError {
+  error_code: CodeExecutionErrorCode;
+}
+export interface TextEditorCodeExecution {
+  /**
+   * The text editing instruction.
+   */
+  input: string;
+}
+/**
+ * Response from text_editor_code_execution tool
+ */
+export interface TextEditorCodeExecutionResponse {
+  tool_use_id: string;
+  content: TextEditorCodeExecutionContent;
+}
+/**
+ * Result from text editor operations (view, create, str_replace)
+ * Fields are optional as different operations return different fields
+ */
+export interface TextEditorCodeExecutionResult {
+  /**
+   * Type of file (e.g., "text")
+   */
+  file_type?: string | null;
+  /**
+   * File content (for view operations)
+   */
+  content?: string | null;
+  /**
+   * Number of lines returned
+   */
+  numLines?: number | null;
+  /**
+   * Starting line number
+   */
+  startLine?: number | null;
+  /**
+   * Total lines in file
+   */
+  totalLines?: number | null;
+  /**
+   * Whether the file already existed (true = update, false = create)
+   */
+  is_file_update?: boolean | null;
+  /**
+   * Old content start line
+   */
+  oldStart?: number | null;
+  /**
+   * Number of old lines changed
+   */
+  oldLines?: number | null;
+  /**
+   * New content start line
+   */
+  newStart?: number | null;
+  /**
+   * Number of new lines
+   */
+  newLines?: number | null;
+  /**
+   * Diff lines (prefixed with +/-)
+   */
+  lines?: string[] | null;
+}
+/**
+ * Error from text editor code execution
+ */
+export interface TextEditorCodeExecutionToolError {
+  error_code: CodeExecutionErrorCode;
 }
 /**
  * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.

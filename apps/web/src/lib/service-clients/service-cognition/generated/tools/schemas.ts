@@ -184,74 +184,6 @@ export const CanvasResponse = z.object({
   clarification: z.union([z.string(), z.null()]).optional(),
 });
 
-export const BashCodeExecution = z.object({ input: z.string() });
-
-export const BashCodeExecutionResponse = z.object({
-  tool_use_id: z.string(),
-  content: z.any().superRefine((x, ctx) => {
-    const schemas = [
-      z.intersection(
-        z.object({
-          stdout: z.string(),
-          stderr: z.string(),
-          return_code: z.number().int(),
-          content: z
-            .union([z.array(z.object({ file_id: z.string() })), z.null()])
-            .optional(),
-        }),
-        z.object({ type: z.literal('bash_code_execution_result') })
-      ),
-      z.intersection(
-        z.object({
-          error_code: z.any().superRefine((x, ctx) => {
-            const schemas = [
-              z.literal('unavailable'),
-              z.literal('execution_time_exceeded'),
-              z.literal('container_expired'),
-              z.literal('invalid_input'),
-              z.literal('too_many_requests'),
-              z.literal('file_not_found'),
-              z.literal('string_not_found'),
-            ];
-            const errors = schemas.reduce<z.ZodError[]>(
-              (errors, schema) =>
-                ((result) =>
-                  result.error ? [...errors, result.error] : errors)(
-                  schema.safeParse(x)
-                ),
-              []
-            );
-            if (schemas.length - errors.length !== 1) {
-              ctx.addIssue({
-                path: ctx.path,
-                code: 'invalid_union',
-                unionErrors: errors,
-                message: 'Invalid input: Should pass single schema',
-              });
-            }
-          }),
-        }),
-        z.object({ type: z.literal('bash_code_execution_tool_result_error') })
-      ),
-    ];
-    const errors = schemas.reduce<z.ZodError[]>(
-      (errors, schema) =>
-        ((result) => (result.error ? [...errors, result.error] : errors))(
-          schema.safeParse(x)
-        ),
-      []
-    );
-    if (schemas.length - errors.length !== 1) {
-      ctx.addIssue({
-        path: ctx.path,
-        code: 'invalid_union',
-        unionErrors: errors,
-        message: 'Invalid input: Should pass single schema',
-      });
-    }
-  }),
-});
-
 export const BulkSetEntityPropertyOptions = z.object({
   entities: z.array(
     z.object({
@@ -1349,8 +1281,29 @@ export const ConnectMcpServer = z.object({
 export const ConnectMcpServerResponse = z.object({
   url: z.string(),
   serverName: z.string(),
-  alreadyConnected: z.boolean(),
-  authenticated: z.boolean(),
+  status: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('connected'),
+      z.literal('disabled'),
+      z.literal('needsReauth'),
+      z.literal('notConnected'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
   enabled: z.boolean(),
   summary: z.string(),
 });
@@ -19679,117 +19632,6 @@ export const ShareWithChannelResponse = z.object({
   summary: z.string(),
 });
 
-export const TextEditorCodeExecution = z.object({ input: z.string() });
-
-export const TextEditorCodeExecutionResponse = z.object({
-  tool_use_id: z.string(),
-  content: z.any().superRefine((x, ctx) => {
-    const schemas = [
-      z.intersection(
-        z.object({
-          file_type: z.union([z.string(), z.null()]).optional(),
-          content: z.union([z.string(), z.null()]).optional(),
-          numLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          startLine: z.union([z.number().int().gte(0), z.null()]).optional(),
-          totalLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          is_file_update: z.union([z.boolean(), z.null()]).optional(),
-          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
-          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
-          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          lines: z.union([z.array(z.string()), z.null()]).optional(),
-        }),
-        z.object({ type: z.literal('text_editor_code_execution_view_result') })
-      ),
-      z.intersection(
-        z.object({
-          file_type: z.union([z.string(), z.null()]).optional(),
-          content: z.union([z.string(), z.null()]).optional(),
-          numLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          startLine: z.union([z.number().int().gte(0), z.null()]).optional(),
-          totalLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          is_file_update: z.union([z.boolean(), z.null()]).optional(),
-          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
-          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
-          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          lines: z.union([z.array(z.string()), z.null()]).optional(),
-        }),
-        z.object({
-          type: z.literal('text_editor_code_execution_create_result'),
-        })
-      ),
-      z.intersection(
-        z.object({
-          file_type: z.union([z.string(), z.null()]).optional(),
-          content: z.union([z.string(), z.null()]).optional(),
-          numLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          startLine: z.union([z.number().int().gte(0), z.null()]).optional(),
-          totalLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          is_file_update: z.union([z.boolean(), z.null()]).optional(),
-          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
-          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
-          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
-          lines: z.union([z.array(z.string()), z.null()]).optional(),
-        }),
-        z.object({
-          type: z.literal('text_editor_code_execution_str_replace_result'),
-        })
-      ),
-      z.intersection(
-        z.object({
-          error_code: z.any().superRefine((x, ctx) => {
-            const schemas = [
-              z.literal('unavailable'),
-              z.literal('execution_time_exceeded'),
-              z.literal('container_expired'),
-              z.literal('invalid_input'),
-              z.literal('too_many_requests'),
-              z.literal('file_not_found'),
-              z.literal('string_not_found'),
-            ];
-            const errors = schemas.reduce<z.ZodError[]>(
-              (errors, schema) =>
-                ((result) =>
-                  result.error ? [...errors, result.error] : errors)(
-                  schema.safeParse(x)
-                ),
-              []
-            );
-            if (schemas.length - errors.length !== 1) {
-              ctx.addIssue({
-                path: ctx.path,
-                code: 'invalid_union',
-                unionErrors: errors,
-                message: 'Invalid input: Should pass single schema',
-              });
-            }
-          }),
-        }),
-        z.object({
-          type: z.literal('text_editor_code_execution_tool_result_error'),
-        })
-      ),
-    ];
-    const errors = schemas.reduce<z.ZodError[]>(
-      (errors, schema) =>
-        ((result) => (result.error ? [...errors, result.error] : errors))(
-          schema.safeParse(x)
-        ),
-      []
-    );
-    if (schemas.length - errors.length !== 1) {
-      ctx.addIssue({
-        path: ctx.path,
-        code: 'invalid_union',
-        unionErrors: errors,
-        message: 'Invalid input: Should pass single schema',
-      });
-    }
-  }),
-});
-
 export const UpdateAgentSessionSharing = z
   .object({
     sessionId: z.string().uuid(),
@@ -21070,6 +20912,185 @@ export const ReadResponse = z.object({
 export const Subagent = z.object({ task: z.string() });
 
 export const SubagentResponse = z.object({ result: z.string() });
+
+export const BashCodeExecution = z.object({ input: z.string() });
+
+export const BashCodeExecutionResponse = z.object({
+  tool_use_id: z.string(),
+  content: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.intersection(
+        z.object({
+          stdout: z.string(),
+          stderr: z.string(),
+          return_code: z.number().int(),
+          content: z
+            .union([z.array(z.object({ file_id: z.string() })), z.null()])
+            .optional(),
+        }),
+        z.object({ type: z.literal('bash_code_execution_result') })
+      ),
+      z.intersection(
+        z.object({
+          error_code: z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.literal('unavailable'),
+              z.literal('execution_time_exceeded'),
+              z.literal('container_expired'),
+              z.literal('invalid_input'),
+              z.literal('too_many_requests'),
+              z.literal('file_not_found'),
+              z.literal('string_not_found'),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          }),
+        }),
+        z.object({ type: z.literal('bash_code_execution_tool_result_error') })
+      ),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+});
+
+export const TextEditorCodeExecution = z.object({ input: z.string() });
+
+export const TextEditorCodeExecutionResponse = z.object({
+  tool_use_id: z.string(),
+  content: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.intersection(
+        z.object({
+          file_type: z.union([z.string(), z.null()]).optional(),
+          content: z.union([z.string(), z.null()]).optional(),
+          numLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          startLine: z.union([z.number().int().gte(0), z.null()]).optional(),
+          totalLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          is_file_update: z.union([z.boolean(), z.null()]).optional(),
+          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          lines: z.union([z.array(z.string()), z.null()]).optional(),
+        }),
+        z.object({ type: z.literal('text_editor_code_execution_view_result') })
+      ),
+      z.intersection(
+        z.object({
+          file_type: z.union([z.string(), z.null()]).optional(),
+          content: z.union([z.string(), z.null()]).optional(),
+          numLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          startLine: z.union([z.number().int().gte(0), z.null()]).optional(),
+          totalLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          is_file_update: z.union([z.boolean(), z.null()]).optional(),
+          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          lines: z.union([z.array(z.string()), z.null()]).optional(),
+        }),
+        z.object({
+          type: z.literal('text_editor_code_execution_create_result'),
+        })
+      ),
+      z.intersection(
+        z.object({
+          file_type: z.union([z.string(), z.null()]).optional(),
+          content: z.union([z.string(), z.null()]).optional(),
+          numLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          startLine: z.union([z.number().int().gte(0), z.null()]).optional(),
+          totalLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          is_file_update: z.union([z.boolean(), z.null()]).optional(),
+          oldStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          oldLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newStart: z.union([z.number().int().gte(0), z.null()]).optional(),
+          newLines: z.union([z.number().int().gte(0), z.null()]).optional(),
+          lines: z.union([z.array(z.string()), z.null()]).optional(),
+        }),
+        z.object({
+          type: z.literal('text_editor_code_execution_str_replace_result'),
+        })
+      ),
+      z.intersection(
+        z.object({
+          error_code: z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.literal('unavailable'),
+              z.literal('execution_time_exceeded'),
+              z.literal('container_expired'),
+              z.literal('invalid_input'),
+              z.literal('too_many_requests'),
+              z.literal('file_not_found'),
+              z.literal('string_not_found'),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          }),
+        }),
+        z.object({
+          type: z.literal('text_editor_code_execution_tool_result_error'),
+        })
+      ),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+});
 
 export const ReadActivity = z.object({
   from: z.string().datetime({ offset: true }),

@@ -1,0 +1,12 @@
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+  name: edge-argocd
+spec:
+  serviceRef:
+    name: edge
+    port: 8080
+  targetGroupName: obs-k8s-argocd
+  targetType: ip

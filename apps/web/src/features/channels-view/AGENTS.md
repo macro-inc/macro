@@ -8,11 +8,12 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 
 - `queries.ts` owns the bounded list sources; `channels-view.tsx` composes the shared local channel pool and views.
 - `components/rail/ChannelsRail.tsx` composes section membership, favorites, and referenced-channel hydration.
-- `queries/channel-list-search-pool.ts` adapts the existing account-scoped channel list for initial display, search, and mobile pins.
+- `queries/channel-list-search-pool.ts` adapts the joined channels of the channel directory (`useChannelDirectory`, `lib/queries/channel/directory.ts`) for initial display, search, and mobile pins.
 
 ## Data and loading
 
-- Use the existing persisted channel list only until the corresponding Soup source answers; an empty Soup page replaces the seed.
+- Seed sections from the channel directory only until the corresponding Soup source answers; an empty Soup page replaces the seed.
+- Resolve whole-membership actions (built-in section mute, snooze and read, section ids, scope checks) through `directory.readComplete(signal)`, aborted when the surface goes or the viewer signs in again, or wait for `directory.complete()`: a filling directory holds only some channels.
 - Bound each seeded section to the normal first-page size and preserve membership and sorting; recreate the query graph and reference batches on account-session changes, including same-viewer reauthentication, without rebuilding for sort, cache, or tab changes.
 - Keep Soup's bounded unread projection and live updates authoritative; do not replace them with a full-list fetch.
 - Hydrate only referenced channels missing from the loaded sources.
