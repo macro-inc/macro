@@ -1,0 +1,29 @@
+apps/web/src/features/agent-permissions/components/following-note.tsx
+  s_9aaadd038e8bff::t_00dda51e56db29 15-18,43
+apps/web/src/features/agent-permissions/components/policy-source-card.tsx
+  s_9aaadd038e8bff::t_8c4a47abb10a1e 20,46
+apps/web/src/features/agent-permissions/components/policy-source-picker.tsx
+  s_9aaadd038e8bff::t_e5745b71522804 63
+apps/web/src/features/agent-permissions/components/source-labels.ts
+  s_9aaadd038e8bff::t_c8b7efb1546eee 8-17,20-23
+apps/web/src/features/agent-permissions/views/agent-permissions-form.tsx
+  s_9aaadd038e8bff::t_4f368fec1ad867 253
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_9aaadd038e8bff::t_6af99211118d0b 114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e05719c673d9c6a31e0bee572bf42f4e48f14aa6",
+  "prompts": {},
+  "sessions": {
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
