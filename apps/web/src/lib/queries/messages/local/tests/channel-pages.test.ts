@@ -3,7 +3,7 @@ import {
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
 } from '@graphql-cache/index';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as ChannelNetwork from '../channel-network';
 import {
   CHANNEL_TOUCH_INTERVAL_MS,
@@ -13,7 +13,12 @@ import {
   loadChannelPage,
   serverPageCoverage,
 } from '../channel-pages';
-import { noteChannelReset, noteChannelsEvicted } from '../channel-resets';
+import {
+  noteChannelReset,
+  noteChannelsEvicted,
+  whileNoFills,
+} from '../channel-resets';
+import { fakeLocks } from './fake-locks';
 import {
   CHANNEL_ID,
   devicePage,
@@ -236,6 +241,74 @@ describe('loadChannelPage', () => {
       )
     ).toBe('unsupported');
     expect(fetchPage).not.toHaveBeenCalled();
+  });
+});
+
+describe('loadChannelPage across tabs', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const fill = () => {
+    const { host } = countingHost([
+      devicePage([], { covered: false, seq: null }),
+    ]);
+    let storeRecords!: () => void;
+    const cached = new Promise<void>((resolve) => {
+      storeRecords = resolve;
+    });
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+      page: serverPage(),
+      cached,
+    }));
+    return { host, fetchPage, storeRecords };
+  };
+
+  it('holds off an eviction in another tab until its coverage is sent', async () => {
+    vi.stubGlobal('navigator', { locks: fakeLocks() });
+    const { host, fetchPage, storeRecords } = fill();
+    const loaded = await loadChannelPage(
+      { host, touches: { due: () => undefined }, fetchPage },
+      { channelId: CHANNEL_ID, limit: 50 }
+    );
+    if (loaded === 'unsupported') throw new Error('unexpected');
+
+    // Another tab evicts once the records are stored, before the coverage.
+    const order: string[] = [];
+    const evicted = whileNoFills(async () => {
+      order.push(`evict after ${host.commits.length} commits`);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(order).toEqual([]);
+    storeRecords();
+    expect(await loaded.stored).toEqual({ kind: 'stored', seq: '9' });
+    await evicted;
+
+    expect(order).toEqual(['evict after 1 commits']);
+  });
+
+  it('commits no coverage when a delete in another tab waits as the fetch starts', async () => {
+    vi.stubGlobal('navigator', { locks: fakeLocks() });
+    let finishDelete!: () => void;
+    const deleting = whileNoFills(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDelete = resolve;
+        })
+    );
+    const { host, fetchPage, storeRecords } = fill();
+
+    const loaded = await loadChannelPage(
+      { host, touches: { due: () => undefined }, fetchPage },
+      { channelId: CHANNEL_ID, limit: 50 }
+    );
+    if (loaded === 'unsupported') throw new Error('unexpected');
+    storeRecords();
+
+    expect(await loaded.stored).toEqual({ kind: 'stored', seq: null });
+    expect(host.commits).toEqual([]);
+    finishDelete();
+    await deleting;
   });
 });
 

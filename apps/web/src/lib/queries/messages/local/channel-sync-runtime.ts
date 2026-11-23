@@ -7,7 +7,7 @@ import * as Fiber from 'effect/Fiber';
 import * as Scope from 'effect/Scope';
 import * as Semaphore from 'effect/Semaphore';
 import { channelEntryKeys } from './channel-map';
-import { noteChannelReset } from './channel-resets';
+import { noteChannelReset, whileNoFills } from './channel-resets';
 
 export type ChannelChangesPage = ChannelChangesQuery['user']['channelChanges'];
 
@@ -27,6 +27,8 @@ export const CATCH_UP_DEBOUNCE_MS = 250;
 export const CATCH_UP_JITTER_MS = 250;
 /** Frames held past a gap, waiting for the frames before them. */
 const MAX_HELD_FRAMES = 50;
+/** How long a reset waits for fills in other tabs before it runs anyway. */
+const RESET_FENCE_WAIT_MS = 30_000;
 
 export type ChannelSyncHost = Pick<
   CacheHost,
@@ -118,9 +120,23 @@ export interface ChannelSyncRuntime {
   /** Views of a channel hear every change the runtime applies to it. */
   onChanged(channelId: string, listener: () => void): () => void;
   notifyChanged(channelId: string): void;
+  /**
+   * Forgets channels the device no longer holds, such as after eviction:
+   * their sequence is read again, and a later frame gives them a sync row.
+   */
+  forget(channelIds: readonly string[]): void;
   /** Forgets every channel, such as after a storage reset. */
   forgetAll(): void;
   dispose(): void;
+}
+
+/** What the device held of a channel, dropped: it is read again when needed. */
+function forgetState(state: ChannelState): void {
+  state.seq = undefined;
+  state.current = false;
+  state.held.clear();
+  state.repairFrom = undefined;
+  state.sweepable = false;
 }
 
 const parseSeq = (seq: string | null): bigint | null => {
@@ -222,8 +238,8 @@ export function createChannelSyncRuntime(
   /**
    * A frame stored records for a channel the device does not hold: an empty
    * commit gives it a sync row, untouched, so the next eviction pass takes
-   * those records with it. Once per channel and runtime; a failure only
-   * leaves them until the channel is opened.
+   * those records with it. Once per channel until eviction removes the row;
+   * a failure tries again on the next frame.
    */
   const markSweepable = Effect.fn('channel.sync.mark_sweepable')(function* (
     channelId: string,
@@ -231,8 +247,14 @@ export function createChannelSyncRuntime(
     generation: string
   ) {
     if (state.sweepable) return;
-    state.sweepable = true;
-    yield* commit(channelId, {}, generation).pipe(Effect.ignore);
+    yield* commit(channelId, {}, generation).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          state.sweepable = true;
+        })
+      ),
+      Effect.ignore
+    );
   });
 
   /**
@@ -347,7 +369,18 @@ export function createChannelSyncRuntime(
     // Too far behind to replay: drop what the device holds, and the views
     // read the channel again from the server.
     noteChannelReset(deps.host, channelId);
-    yield* commit(channelId, { reset: true }, generation);
+    // Once no fill in any tab is between its store and its coverage; one
+    // that holds the fence too long cannot keep the channel from resetting.
+    yield* Effect.tryPromise(() =>
+      whileNoFills(
+        () =>
+          deps.host.channelTimelineCommit(
+            { channelId, reset: true },
+            generation
+          ),
+        { orRun: true, waitMs: RESET_FENCE_WAIT_MS }
+      )
+    );
     state.seq = null;
     state.held.clear();
     state.repairFrom = undefined;
@@ -418,7 +451,11 @@ export function createChannelSyncRuntime(
     // Ignored until known held: one device read per channel and session.
     const known = yield* state.lock.withPermits(1)(learnSeq(channelId, state));
     if (known === null) {
-      if (stored) yield* markSweepable(channelId, state, generation);
+      if (stored) {
+        yield* state.lock.withPermits(1)(
+          markSweepable(channelId, state, generation)
+        );
+      }
       return 'not-held';
     }
     return yield* state.lock.withPermits(1)(
@@ -444,7 +481,22 @@ export function createChannelSyncRuntime(
         if (state.held.size < MAX_HELD_FRAMES) {
           state.held.set(seq, { frame, generation });
         }
-        yield* applyHeld(channelId, state);
+        const appliedHeld = yield* applyHeld(channelId, state).pipe(
+          Effect.as(true),
+          Effect.catchCause((cause) =>
+            Effect.sync(() => {
+              Telemetry.error(cause, { surface: 'channel-sync' });
+              return false;
+            })
+          )
+        );
+        // The frame left the held set but did not advance the sequence: a
+        // catch-up replays it.
+        if (!appliedHeld) {
+          state.current = false;
+          scheduleCatchUp(channelId, 'gap');
+          return 'gap';
+        }
         if (state.repairFrom !== undefined) return 'repair';
         if (state.held.size > 0) {
           state.current = false;
@@ -544,14 +596,16 @@ export function createChannelSyncRuntime(
       };
     },
     notifyChanged,
-    forgetAll() {
-      for (const state of channels.values()) {
-        state.seq = undefined;
-        state.current = false;
-        state.held.clear();
-        state.repairFrom = undefined;
-        state.sweepable = false;
+    forget(channelIds) {
+      for (const channelId of channelIds) {
+        const state = channels.get(channelId);
+        if (!state) continue;
+        forgetState(state);
+        if (state.views > 0) notifyChanged(channelId);
       }
+    },
+    forgetAll() {
+      for (const state of channels.values()) forgetState(state);
     },
     dispose() {
       disposed = true;

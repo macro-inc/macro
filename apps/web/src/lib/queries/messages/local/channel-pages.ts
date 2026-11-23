@@ -30,7 +30,11 @@ import {
   mapChannelTimelineEntry,
 } from './channel-map';
 import { cacheSessionChanged, queryChannelNetwork } from './channel-network';
-import { channelResetMark, unchangedSince } from './channel-resets';
+import {
+  channelResetMark,
+  holdAgainstDeletes,
+  unchangedSince,
+} from './channel-resets';
 
 export type ChannelPageHost = Pick<
   CacheHost,
@@ -390,23 +394,34 @@ async function loadPage(
     'page.source',
     device === 'not-ready' ? 'server-cold' : 'server'
   );
+  // Held from before the fetch until its coverage is sent: no other tab's
+  // delete lands between them. Null when one is pending: no coverage then.
+  const hold = await holdAgainstDeletes();
+  const release = () => hold?.release();
   // The device read was awaited: the request joins the page's trace again.
-  const fetched = await fetchOrDevice(
-    span.run(() =>
-      (deps.fetchPage ?? fetchChannelServerPage)(
-        {
-          channelId: request.channelId,
-          limit: request.limit,
-          before: request.before,
-          after: request.after,
-          around: request.aroundMessageId,
-        },
-        signal
-      )
-    ),
-    device === 'not-ready' ? read : undefined
-  );
+  let fetched: Awaited<ReturnType<typeof fetchOrDevice>>;
+  try {
+    fetched = await fetchOrDevice(
+      span.run(() =>
+        (deps.fetchPage ?? fetchChannelServerPage)(
+          {
+            channelId: request.channelId,
+            limit: request.limit,
+            before: request.before,
+            after: request.after,
+            around: request.aroundMessageId,
+          },
+          signal
+        )
+      ),
+      device === 'not-ready' ? read : undefined
+    );
+  } catch (error) {
+    release();
+    throw error;
+  }
   if (fetched.from === 'device') {
+    release();
     span.setAttr('page.source', 'device-offline');
     touchChannel(deps, request.channelId, generation);
     return {
@@ -419,6 +434,13 @@ async function loadPage(
   span.setAttr('page.entries', page.entries.length);
   const coverage = serverPageCoverage(request, page);
   const commit = async (): Promise<string | null> => {
+    try {
+      return await commitPage();
+    } finally {
+      release();
+    }
+  };
+  const commitPage = async (): Promise<string | null> => {
     await cached;
     // A cold host is asked again once it can answer.
     const held = device === 'not-ready' ? await read : device;
@@ -428,9 +450,9 @@ async function loadPage(
     }
     if (held.kind === 'failed') return null;
     markChannelCacheAnswered(host as CacheHost);
-    // Deleted meanwhile: the records the page stored may be gone with it,
-    // and coverage would show them as held.
-    if (!unchangedSince(host, request.channelId, resets)) return null;
+    // Deleted meanwhile, here or in another tab: the records the page stored
+    // may be gone with it, and coverage would show them as held.
+    if (!hold || !unchangedSince(host, request.channelId, resets)) return null;
     const touchedAtMs = deps.touches.due(
       request.channelId,
       (deps.now ?? Date.now)()

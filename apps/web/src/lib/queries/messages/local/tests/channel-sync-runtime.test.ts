@@ -3,7 +3,11 @@ import type {
   ChannelTimelineCommitArgs,
 } from '@graphql-cache/index';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { channelResetMark, unchangedSince } from '../channel-resets';
+import {
+  channelResetMark,
+  holdAgainstDeletes,
+  unchangedSince,
+} from '../channel-resets';
 import {
   CATCH_UP_DEBOUNCE_MS,
   type ChannelChangesPage,
@@ -11,6 +15,7 @@ import {
   createChannelSyncRuntime,
   MAX_CHANGE_PAGES,
 } from '../channel-sync-runtime';
+import { fakeLocks } from './fake-locks';
 import { CHANNEL_ID, devicePage } from './fixtures';
 
 /**
@@ -333,6 +338,93 @@ describe('createChannelSyncRuntime', () => {
     );
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('reset');
     expect(host.seq).toBeNull();
+  });
+
+  it('tries the sync row again when its first commit fails', async () => {
+    const { host, runtime } = setup(null);
+    const commit = host.channelTimelineCommit;
+    let failures = 1;
+    host.channelTimelineCommit = async (args, generation) => {
+      if (failures > 0) {
+        failures -= 1;
+        host.commits.push(args);
+        throw new Error('commit timed out');
+      }
+      return commit(args, generation);
+    };
+    runtime.onFrame(frame(6), true);
+    await waitFor(() => host.commits.length === 1);
+    await settle();
+
+    runtime.onFrame(frame(7), true);
+    await waitFor(() => host.commits.length === 2);
+    await settle();
+    runtime.onFrame(frame(8), true);
+    await settle();
+
+    expect(host.commits).toEqual([
+      { channelId: CHANNEL_ID },
+      { channelId: CHANNEL_ID },
+    ]);
+  });
+
+  it('gives an evicted channel a sync row again', async () => {
+    const { host, runtime } = setup(null);
+    runtime.onFrame(frame(6), true);
+    await waitFor(() => host.commits.length === 1);
+    await settle();
+
+    // Eviction removed the row with the records.
+    runtime.forget([CHANNEL_ID]);
+    runtime.onFrame(frame(7), true);
+    await waitFor(() => host.commits.length === 2);
+
+    expect(host.commits).toEqual([
+      { channelId: CHANNEL_ID },
+      { channelId: CHANNEL_ID },
+    ]);
+    expect(host.heads).toBe(2);
+  });
+
+  it('catches up a channel on screen when a frame fails to commit', async () => {
+    const { host, fetch, runtime, changed } = setup(5n, () => changes(6));
+    runtime.onConnected();
+    const release = runtime.open(CHANNEL_ID);
+    const commit = host.channelTimelineCommit;
+    let failures = 1;
+    host.channelTimelineCommit = async (args, generation) => {
+      if (failures > 0) {
+        failures -= 1;
+        throw new Error('commit timed out');
+      }
+      return commit(args, generation);
+    };
+
+    runtime.onFrame(frame(6), true);
+    await waitFor(() => host.seq === 6n);
+
+    // The records were stored: views reread, and a catch-up moved the
+    // sequence the frame could not.
+    expect(changed).toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '5');
+    release();
+  });
+
+  it('resets a channel only once no fill in another tab is mid-store', async () => {
+    vi.stubGlobal('navigator', { locks: fakeLocks() });
+    const { host, runtime } = setup(5n, () =>
+      changes(5, { resetRequired: true })
+    );
+    const fill = await holdAgainstDeletes();
+
+    const reset = runtime.ensureCurrent(CHANNEL_ID);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(host.commits).toEqual([]);
+
+    fill?.release();
+    await expect(reset).resolves.toBe('reset');
+    expect(host.commits).toEqual([{ channelId: CHANNEL_ID, reset: true }]);
+    vi.unstubAllGlobals();
   });
 
   it('forgets every channel after a storage reset', async () => {

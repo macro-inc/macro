@@ -19,7 +19,7 @@ import {
   type FetchChannelServerPage,
   loadChannelPage,
 } from './channel-pages';
-import { noteChannelsEvicted } from './channel-resets';
+import { noteChannelsEvicted, whileNoFills } from './channel-resets';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 /** Unread channels kept ready on the device, most recently active first. */
@@ -100,7 +100,7 @@ export interface ChannelPrewarmDeps {
   host: ChannelPrewarmHost;
   runtime: Pick<
     ChannelSyncRuntime,
-    'epoch' | 'noteStoredSeq' | 'noteServerRead' | 'ensureCurrent'
+    'epoch' | 'noteStoredSeq' | 'noteServerRead' | 'ensureCurrent' | 'forget'
   >;
   touches: ChannelTouches;
   /** The channels to keep ready, in warming order. */
@@ -215,31 +215,47 @@ export const prewarmChannels = (
 
 /**
  * Removes channels not opened or kept ready for thirty days, with their
- * messages. Completes with the number of channels removed.
+ * messages, and tells the runtime they are gone. Completes with the number
+ * of channels removed. A pass waits for fills in every tab to send their
+ * coverage, and stops for this round when they keep the fence too long.
  */
-export const evictIdleChannels = (
-  host: Pick<CacheHost, 'channelTimelineEvict'>,
-  now: () => number = Date.now
-): Effect.Effect<number, unknown> =>
+export const evictIdleChannels = (deps: {
+  host: Pick<CacheHost, 'channelTimelineEvict'>;
+  runtime: Pick<ChannelSyncRuntime, 'forget'>;
+  now?: () => number;
+  /** How long a pass waits for fills in other tabs. */
+  fenceWaitMs?: number;
+}): Effect.Effect<number, unknown> =>
   Effect.gen(function* () {
+    const { host } = deps;
     const span = Telemetry.span('channel.evict_idle');
     yield* Effect.addFinalizer(() => Effect.sync(() => span.end()));
-    const touchedBeforeMs = now() - CHANNEL_EVICTION_AGE_MS;
+    const touchedBeforeMs = (deps.now ?? Date.now)() - CHANNEL_EVICTION_AGE_MS;
     let evicted = 0;
     for (let pass = 0; pass < MAX_EVICTION_PASSES; pass += 1) {
       const result = yield* Effect.tryPromise({
-        try: () => {
-          // Counted before it is sent: a fill in flight must not cover
-          // what it removes.
-          noteChannelsEvicted(host);
-          return host.channelTimelineEvict({
-            touchedBeforeMs,
-            maxChannels: MAX_EVICTED_CHANNELS,
-          });
-        },
+        try: () =>
+          whileNoFills(
+            () => {
+              // Counted before it is sent: a fill in flight must not cover
+              // what it removes.
+              noteChannelsEvicted(host);
+              return host.channelTimelineEvict({
+                touchedBeforeMs,
+                maxChannels: MAX_EVICTED_CHANNELS,
+              });
+            },
+            { waitMs: deps.fenceWaitMs }
+          ),
         catch: (error) => error,
       });
+      if (result === 'busy') {
+        span.setAttr('evict.busy', true);
+        break;
+      }
       if (result.kind === 'unsupported') break;
+      // Their sync rows are gone: a later frame must give them one again.
+      deps.runtime.forget(result.channelIds);
       evicted += result.channelIds.length;
       if (!result.hasMore) break;
     }
@@ -253,7 +269,7 @@ export const runChannelPrewarmPass = (
 ): Effect.Effect<ChannelPrewarmOutcome, unknown> =>
   Effect.gen(function* () {
     const outcome = yield* prewarmChannels(deps);
-    if (!outcome.unavailable) yield* evictIdleChannels(deps.host, deps.now);
+    if (!outcome.unavailable) yield* evictIdleChannels(deps);
     return outcome;
   });
 
