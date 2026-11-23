@@ -440,6 +440,14 @@ fn mixed(n: u32, timestamp: i64) -> IndexDocument {
     doc
 }
 
+/// `mixed(n)` with its owner swapped between "a" and "b".
+fn reowned(n: u32, timestamp: i64) -> IndexDocument {
+    let mut doc = mixed(n, timestamp);
+    let owner = if n.is_multiple_of(10) { "b" } else { "a" };
+    doc.exact_facts[0].value = ExactValue::utf8(owner).unwrap();
+    doc
+}
+
 #[test]
 fn sparse_filters_widen_to_a_page_and_stop_at_the_cap() {
     block_on(async {
@@ -552,8 +560,9 @@ fn widened_windows_match_the_set_based_plan_on_every_page() {
                 let mut shadows = Vec::new();
                 for n in (0..900u32).step_by(7) {
                     shadows.push(match n % 4 {
-                        // Rescored and re-owned.
-                        0 => complete(mixed(n + 10, i64::from(n % 200))),
+                        // Rescored and re-owned: the shadow flips the key's
+                        // owner between "a" and "b".
+                        0 => complete(reowned(n + 10, i64::from(n % 200))),
                         1 => {
                             let mut moved = mixed(n, i64::from(n / 3));
                             moved.partition = Token::new("other").unwrap();
@@ -583,6 +592,38 @@ fn widened_windows_match_the_set_based_plan_on_every_page() {
                     .enqueue_mutation_with_shadow(queued("Sweep"), shadows)
                     .await
                     .unwrap();
+                // The re-owned keys move between owners: "Thing:00010" from "a"
+                // to "b", "Thing:00066" from "b" to "a".
+                let all_pages = |predicate: PredicateExpr| {
+                    let mut page =
+                        query_with_limit(predicate, SortDirection::Asc, SortDirection::Asc, 100);
+                    let excluded = optimistic_query_status(&storage.connection(), &page)
+                        .unwrap()
+                        .uncertain_ids;
+                    let mut keys = BTreeSet::new();
+                    loop {
+                        let actual = hits(&storage.connection(), &page, &excluded);
+                        let Some((key, value)) = actual.last().cloned() else {
+                            break keys;
+                        };
+                        keys.extend(actual.into_iter().map(|(key, _)| key));
+                        page = page
+                            .after(value, PredicateRecordKey::new(key).unwrap())
+                            .unwrap();
+                    }
+                };
+                let owned_by_a = all_pages(owner("a"));
+                let owned_by_b = all_pages(owner("b"));
+                for (key, new_owner, old_owner) in [
+                    ("Thing:00010", &owned_by_b, &owned_by_a),
+                    ("Thing:00066", &owned_by_a, &owned_by_b),
+                ] {
+                    assert!(new_owner.contains(key), "{key} missing from its new owner");
+                    assert!(
+                        !old_owner.contains(key),
+                        "{key} still listed under its old owner"
+                    );
+                }
             }
             let (mut pages, mut widened) = (0, 0);
             for predicate in &predicates {
