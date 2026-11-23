@@ -103,29 +103,40 @@ fn cold_pages_of_every_size_read_back_whole() {
 }
 
 /// A record written twice in one batch keeps its last value, as it did with
-/// one statement per record.
+/// one statement per record: twice in one multi-row statement, and in two.
 #[test]
 fn a_record_repeated_in_one_batch_keeps_its_last_value() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("cold-page-repeat").unwrap();
-        let mut entries = (0..5)
-            .map(|index| {
-                (
-                    key(&format!("Thing:{index}")),
-                    record(&format!("first-{index}")),
-                )
-            })
-            .collect::<Vec<_>>();
-        entries.push((key("Thing:2"), record("second")));
+        let entry = |id: &str, value: &str| (key(id), record(value));
+        // Statements of 4, 4 and 1 rows.
+        let entries = vec![
+            entry("Thing:0", "first-0"),
+            entry("Thing:1", "first-1"),
+            entry("Thing:2", "first-2"),
+            entry("Thing:1", "second-1"),
+            entry("Thing:3", "first-3"),
+            entry("Thing:3", "second-3"),
+            entry("Thing:4", "first-4"),
+            entry("Thing:5", "first-5"),
+            entry("Thing:0", "second-0"),
+        ];
         storage
             .put_batch_with_projections(entries, Vec::new())
             .await
             .unwrap();
         assert_eq!(
-            storage.get_batch(&[key("Thing:2")]).await.unwrap(),
-            vec![Some(record("second"))]
+            storage
+                .get_batch(&[key("Thing:0"), key("Thing:1"), key("Thing:3")])
+                .await
+                .unwrap(),
+            vec![
+                Some(record("second-0")),
+                Some(record("second-1")),
+                Some(record("second-3"))
+            ]
         );
-        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM records"), 5);
+        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM records"), 6);
     });
 }
 
@@ -240,9 +251,7 @@ fn a_failure_after_any_record_of_a_batch_rolls_back_the_page() {
                 index,
             });
             let (records, mutations, _) = cold_page(0, 70);
-            let result = storage
-                .put_batch_with_projections(records, mutations)
-                .await;
+            let result = storage.put_batch_with_projections(records, mutations).await;
             assert_eq!(result.is_err(), index < 70, "{index}");
             let expected = if index < 70 { 0 } else { 70 };
             assert_eq!(
