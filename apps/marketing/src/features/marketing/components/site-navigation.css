@@ -63,6 +63,9 @@
 @keyframes site-menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .site-header :focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 @media (min-width: 640px) { .site-header { left: 40px; } }
+@media (max-width: 767px) {
+  .site-header-actions > .site-nav-demo { display: none; }
+}
 @media (max-width: 600px) {
   .site-header { top: 14px; left: 16px; right: 16px; align-items: center; }
   .site-menu-trigger { width: 54px; height: 54px; margin-inline: -5px; }

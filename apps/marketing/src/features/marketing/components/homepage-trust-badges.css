@@ -1,7 +1,8 @@
 .homepage-open-source-badges { display: flex; align-items: center; justify-content: center; gap: calc(clamp(24px, 4vw, 56px) + 10px); margin: 44px auto 0; color: var(--color-ink-extra-muted); }
 .homepage-open-source-badges > div { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .homepage-open-source-badges span { font-size: 11px; line-height: 1.5; }
-.homepage-open-source-backing > svg { width: 120px; height: 36px; color: var(--color-ink-muted); }
+.homepage-open-source-backing > svg { width: 120px; height: 36px; }
+.homepage-open-source-backing > svg, .homepage-open-source-security > div, .homepage-github-badge strong { color: var(--color-ink-muted); }
 .homepage-open-source-security > div { display: flex; gap: 14px; }
 .homepage-open-source-security svg { width: 36px; height: 36px; }
 
@@ -24,8 +25,8 @@
 }
 .macro-homepage .homepage-open-source-badges + .feature-page-section::before { display: none; }
 .homepage-github-badge { display: flex; flex-direction: column; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
-.homepage-github-badge strong { display: flex; align-items: center; gap: 5px; height: 36px; color: var(--color-ink-muted); font-size: 20px; font-variant-numeric: tabular-nums; }
-.homepage-github-badge strong svg { width: 25px; height: 25px; margin-right: 2px; }
+.homepage-github-badge strong { display: flex; align-items: center; gap: 5px; height: 36px; font-size: 20px; font-variant-numeric: tabular-nums; }
+.homepage-github-badge strong svg { width: 25px; height: 25px; margin-inline-end: 5px; }
 .homepage-github-badge strong span { font-size: 14px; }
 .homepage-github-badge:hover strong { color: var(--color-ink); }
 @media (max-width: 767px) {
