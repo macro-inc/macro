@@ -213,63 +213,71 @@ test('keeps a card being edited in view when the text size grows', async ({
   await cdp.detach();
 });
 
-test('keeps a focused control in view on a phone when the text grows past the screen', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const cdp = await page.context().newCDPSession(page);
-  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
-  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
-    timeout: 30000,
+test.describe('on a phone', () => {
+  test.use({
+    isMobile: true,
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
   });
-  const viewport = page.locator('[data-kanban-board-viewport]');
-  await viewport.evaluate((element) => {
-    element.scrollLeft = element.scrollWidth;
+
+  test('keeps a focused control in view when the text grows past the screen', async ({
+    page,
+  }) => {
+    expect(await page.evaluate(() => window.innerWidth)).toBe(390);
+    const cdp = await page.context().newCDPSession(page);
+    await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+    await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+      timeout: 30000,
+    });
+    const viewport = page.locator('[data-kanban-board-viewport]');
+    await viewport.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    await page.getByRole('button', { name: 'New group', exact: true }).click();
+    const name = page.getByLabel('New group name');
+    await name.fill('Renewals');
+    // Lanes are now wider than the screen.
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+    await expect
+      .poll(() =>
+        page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+      )
+      .toBe('32px');
+    await expect(name).toBeFocused();
+    await expect(name).toHaveValue('Renewals');
+    // Wider than the screen now, so its start is what must show.
+    const startsInView = async () => {
+      const [field, box] = await Promise.all([
+        name.boundingBox(),
+        viewport.boundingBox(),
+      ]);
+      return field && box ? Math.round(field.x - box.x) : null;
+    };
+    await expect.poll(startsInView).toBeGreaterThanOrEqual(0);
+    await expect.poll(startsInView).toBeLessThan(390 / 2);
+    // A focused control in the first lane stays in view too.
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 16 } });
+    await expect
+      .poll(() =>
+        page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+      )
+      .toBe('16px');
+    await viewport.evaluate((element) => {
+      element.scrollLeft = 0;
+    });
+    const card = page.locator('[data-kanban-card]').first();
+    const move = card.getByRole('button', { name: /^Move / });
+    await move.focus();
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+    await expect
+      .poll(() =>
+        page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+      )
+      .toBe('32px');
+    await expect(move).toBeFocused();
+    await expect(move).toBeInViewport({ ratio: 1 });
+    await cdp.detach();
   });
-  await page.getByRole('button', { name: 'New group', exact: true }).click();
-  const name = page.getByLabel('New group name');
-  await name.fill('Renewals');
-  // Lanes are now wider than the screen.
-  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
-  await expect
-    .poll(() =>
-      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
-    )
-    .toBe('32px');
-  await expect(name).toBeFocused();
-  await expect(name).toHaveValue('Renewals');
-  // Wider than the screen now, so its start is what must show.
-  const startsInView = async () => {
-    const [field, box] = await Promise.all([
-      name.boundingBox(),
-      viewport.boundingBox(),
-    ]);
-    return field && box ? Math.round(field.x - box.x) : null;
-  };
-  await expect.poll(startsInView).toBeGreaterThanOrEqual(0);
-  await expect.poll(startsInView).toBeLessThan(390 / 2);
-  // A focused control in the first lane stays in view too.
-  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 16 } });
-  await expect
-    .poll(() =>
-      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
-    )
-    .toBe('16px');
-  await viewport.evaluate((element) => {
-    element.scrollLeft = 0;
-  });
-  const card = page.locator('[data-kanban-card]').first();
-  const move = card.getByRole('button', { name: /^Move / });
-  await move.focus();
-  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
-  await expect
-    .poll(() =>
-      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
-    )
-    .toBe('32px');
-  await expect(move).toBeFocused();
-  await expect(move).toBeInViewport({ ratio: 1 });
-  await cdp.detach();
 });
 
 test('keeps the reading position and unsaved input when the text size changes', async ({
