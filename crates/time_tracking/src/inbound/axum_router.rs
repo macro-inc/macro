@@ -300,7 +300,7 @@ pub struct ListTimeEntriesQuery {
 
 /// Typed time to log on a task.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LogTimeRequest {
     /// A UUIDv7 chosen by the client, so a retry logs once; generated when omitted.
     #[serde(default)]
@@ -323,7 +323,7 @@ pub struct LogTimeRequest {
 
 /// Changes to one's own entry. Omitted fields stay; `null` clears a note or span.
 #[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateTimeEntryRequest {
     /// A new day, `YYYY-MM-DD`.
     #[serde(default)]
@@ -348,7 +348,7 @@ pub struct UpdateTimeEntryRequest {
 
 /// Start timing a task.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StartTimerRequest {
     /// A UUIDv7 chosen by the client, so a retry starts once; generated when omitted.
     #[serde(default)]
@@ -365,7 +365,7 @@ pub struct StartTimerRequest {
 
 /// Stop the caller's timer.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StopTimerRequest {
     /// The timer to stop.
     pub timer_id: Uuid,
@@ -382,7 +382,7 @@ pub struct StopTimerRequest {
 
 /// Discard the caller's timer.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DiscardTimerRequest {
     /// The timer to discard.
     pub timer_id: Uuid,

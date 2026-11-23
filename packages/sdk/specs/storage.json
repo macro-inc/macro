@@ -42029,7 +42029,8 @@
             "format": "uuid",
             "description": "The timer to discard."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "DocumentAiEditFailed": {
         "type": "object",
@@ -54741,7 +54742,8 @@
             "format": "date-time",
             "description": "When the work started; given with `endedAt` or not at all."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "LoggedTime": {
         "type": "object",
@@ -67193,7 +67195,8 @@
             "type": ["string", "null"],
             "description": "IANA zone whose day a stopped previous timer's entry takes; UTC when omitted."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "StartedTimer": {
         "type": "object",
@@ -67274,7 +67277,8 @@
             "format": "uuid",
             "description": "The timer to stop."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "StoppedTimer": {
         "type": "object",
@@ -69957,7 +69961,8 @@
             "format": "date-time",
             "description": "A new start, or `null` to clear the span; changed with `endedAt`."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "UpdatedPipelineEntry": {
         "type": "object",

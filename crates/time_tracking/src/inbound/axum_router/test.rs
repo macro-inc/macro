@@ -101,7 +101,8 @@ async fn send(
     let json = if bytes.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&bytes).unwrap()
+        serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()))
     };
     (status, json)
 }
@@ -193,6 +194,44 @@ async fn only_the_author_changes_an_entry() {
     assert_eq!(body["entry"]["note"], Value::Null);
     assert_eq!(deleted, StatusCode::OK);
     assert_eq!(total, json!({"totalMinutes": 0}));
+}
+
+#[tokio::test]
+async fn a_misspelled_field_is_refused_and_changes_nothing() {
+    let app = app();
+    let (_, logged) = send(
+        &app,
+        AUTHOR,
+        "POST",
+        &entries_path(),
+        Some(json!({"date": "2026-11-20", "minutes": 45})),
+    )
+    .await;
+    let entry_path = format!("/entries/{}", logged["entry"]["id"].as_str().unwrap());
+
+    let (edit, _) = send(
+        &app,
+        AUTHOR,
+        "PATCH",
+        &entry_path,
+        Some(json!({"minute": 30})),
+    )
+    .await;
+    let (log, _) = send(
+        &app,
+        AUTHOR,
+        "POST",
+        &entries_path(),
+        Some(json!({"date": "2026-11-20", "minutes": 15, "notes": "drafting"})),
+    )
+    .await;
+    let (_, page) = send(&app, AUTHOR, "GET", &entries_path(), None).await;
+
+    assert_eq!(edit, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(log, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(page["totalMinutes"], 45);
+    assert_eq!(page["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(page["entries"][0]["minutes"], 45);
 }
 
 #[tokio::test]
