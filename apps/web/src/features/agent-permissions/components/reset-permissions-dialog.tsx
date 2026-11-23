@@ -11,6 +11,10 @@ import { Show } from 'solid-js';
 export function ResetPermissionsDialog(props: {
   open: boolean;
   agent: string;
+  /** Replaces "Reset <agent>'s permissions?". */
+  title?: string;
+  /** A team's default has no sessions: leave out the session note. */
+  team?: boolean;
   /** Settings the agent made restricting itself. */
   byAgent: number;
   /** What the agent follows, when it follows another's permissions. */
@@ -28,11 +32,12 @@ export function ResetPermissionsDialog(props: {
       tone="danger"
       pending={props.pending}
       title={
-        props.follows
+        props.title ??
+        (props.follows
           ? t('agentPermissions.removeRestrictionsTitle', {
               agent: props.agent,
             })
-          : t('agentPermissions.resetTitle', { agent: props.agent })
+          : t('agentPermissions.resetTitle', { agent: props.agent }))
       }
       confirmLabel={
         props.follows
@@ -58,8 +63,11 @@ export function ResetPermissionsDialog(props: {
           <Show when={props.followed}>
             {' '}
             {t('agentPermissions.resetBodyFollowers')}
-          </Show>{' '}
-          {t('agentPermissions.resetBodyEnd', { agent: props.agent })}
+          </Show>
+          <Show when={!props.team}>
+            {' '}
+            {t('agentPermissions.resetBodyEnd', { agent: props.agent })}
+          </Show>
         </p>
       }
     />

@@ -8,7 +8,10 @@ export {
 export { gatedFocus } from './core/gated-operations';
 export type { PermissionFocus } from './core/model';
 export { useSessionToolPermissionsQuery } from './queries/permissions';
-export { useAgentPermissionsAvailable } from './use-agent-permissions-available';
+export {
+  useAgentPermissionsAvailable,
+  useTeamPermissionsAvailable,
+} from './use-agent-permissions-available';
 export { useAgentPermissionsFlag } from './use-agent-permissions-flag';
 export {
   applyPermissionsDraft,
@@ -21,3 +24,4 @@ export { BlockedPermissionsNotice } from './views/blocked-permissions-notice';
 export { useOpenAgentPermissions } from './views/open-agent-permissions';
 export { refusalMessage } from './views/permission-changes';
 export { ShowPermissionsCard } from './views/show-permissions-card';
+export { TeamPermissionsPanel } from './views/team-permissions-panel';

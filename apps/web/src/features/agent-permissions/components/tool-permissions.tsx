@@ -1,6 +1,5 @@
 import { t } from '@app/lib/i18n';
 import type {
-  AgentToolPermissions,
   PermissionAction,
   ToolPermissionCatalog,
   ToolPermissionChange,
@@ -19,6 +18,7 @@ import {
   followingCount,
   groupActionTarget,
   type PendingLookup,
+  type PolicyView,
   ruleFor,
   type ToolSetting,
   toolSettingsFor,
@@ -35,7 +35,7 @@ import { actionLabel } from './labels';
  */
 export function ToolPermissions(props: {
   catalog: ToolPermissionCatalog;
-  view: AgentToolPermissions;
+  view: PolicyView;
   editable: boolean;
   /** Shows the "Tool permissions" title and its description. */
   heading?: boolean;

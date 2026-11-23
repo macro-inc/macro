@@ -7,8 +7,10 @@ import {
   type PermissionFocus,
   type PermissionsDraft,
   refusalMessage,
+  TeamPermissionsPanel,
   useAgentPermissionsAvailable,
   useAgentPermissionsFlag,
+  useTeamPermissionsAvailable,
 } from '@app/features/agent-permissions';
 import {
   type AgentKind,
@@ -46,6 +48,7 @@ import AgentIcon from '@icon/system/regular/sparkle.svg';
 import TerminalIcon from '@icon/system/regular/terminal-window.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import {
   removeAgentApiKey,
@@ -302,6 +305,8 @@ export function Agents(props: {
   );
   const currentTeamId = () =>
     currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
+  // The team default row shows for members while the API answers for it.
+  const teamPermissions = useTeamPermissionsAvailable(() => currentTeamId());
   const canShareWithTeam = () => currentTeamId() !== undefined;
   const isAgentCreator = (agent: AgentWithHarnessId) =>
     agent.bot.created_by === currentUserId();
@@ -413,6 +418,36 @@ export function Agents(props: {
     )
   );
 
+  const renderAgentRow = (agent: AgentSummary) => (
+    <AgentListRow
+      agent={agent}
+      permissionsAvailable={
+        agent.id === MACRO_AGENT_BOT_ID ? macroPermissions() : permissionsFlag()
+      }
+      onRevealed={clearReveal}
+      permissions={
+        permissionsFor()?.rowId === agent.id ? permissionsFor() : undefined
+      }
+      onTogglePermissions={() => togglePermissions(agent.id)}
+      onMessage={
+        agentDm
+          ? () => fireAndForget(messageAgent(agent.id), 'agent-settings')
+          : undefined
+      }
+      messagePending={agentDm?.pending()}
+      onEdit={
+        agent.editable && agent.persistedAgent
+          ? () => setEditingAgent(agent.persistedAgent)
+          : undefined
+      }
+      onDelete={
+        agent.persistedAgent && canDeleteAgent(agent.persistedAgent)
+          ? () => setDeletingAgent(agent.persistedAgent)
+          : undefined
+      }
+    />
+  );
+
   const createAgent = async (agent: CreateAgentParams) => {
     try {
       const created = await createAgentMutation.mutateAsync(agent);
@@ -499,46 +534,17 @@ export function Agents(props: {
                 </Button>
               </div>
               <SettingsCard>
-                <For each={[...teamAgents(), ...privateAgents()]}>
-                  {(agent) => (
-                    <AgentListRow
-                      agent={agent}
-                      permissionsAvailable={
-                        agent.id === MACRO_AGENT_BOT_ID
-                          ? macroPermissions()
-                          : permissionsFlag()
-                      }
-                      onRevealed={clearReveal}
-                      permissions={
-                        permissionsFor()?.rowId === agent.id
-                          ? permissionsFor()
-                          : undefined
-                      }
-                      onTogglePermissions={() => togglePermissions(agent.id)}
-                      onMessage={
-                        agentDm
-                          ? () =>
-                              fireAndForget(
-                                messageAgent(agent.id),
-                                'agent-settings'
-                              )
-                          : undefined
-                      }
-                      messagePending={agentDm?.pending()}
-                      onEdit={
-                        agent.editable && agent.persistedAgent
-                          ? () => setEditingAgent(agent.persistedAgent)
-                          : undefined
-                      }
-                      onDelete={
-                        agent.persistedAgent &&
-                        canDeleteAgent(agent.persistedAgent)
-                          ? () => setDeletingAgent(agent.persistedAgent)
-                          : undefined
-                      }
+                <For each={teamAgents()}>{renderAgentRow}</For>
+                <Show when={teamPermissions() && currentTeamId()}>
+                  {(teamId) => (
+                    <TeamDefaultRow
+                      teamId={teamId()}
+                      open={permissionsFor()?.rowId === TEAM_DEFAULT_ROW}
+                      onToggle={() => togglePermissions(TEAM_DEFAULT_ROW)}
                     />
                   )}
-                </For>
+                </Show>
+                <For each={privateAgents()}>{renderAgentRow}</For>
                 <RunOnComputerRow />
                 <Show when={agentsQuery.isPending}>
                   <p class="px-6 py-4 text-sm text-ink-muted">
@@ -648,6 +654,63 @@ function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
   if (harness?.computer)
     return `${t('computers.onComputer')} · ${harness.name}`;
   return harness ? `On your machine · ${harness.name}` : 'Disconnected machine';
+}
+
+/** The team default row's id among the rows whose permissions can open. */
+const TEAM_DEFAULT_ROW = 'team-default';
+
+/**
+ * The team's default permissions, which team agents follow unless set
+ * otherwise: a row like an agent's, expanding the same component (team
+ * admins and owners edit it, other members read it).
+ */
+function TeamDefaultRow(props: {
+  teamId: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div>
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-6 py-4 touch:px-4">
+        <div class="flex min-w-0 flex-1 basis-56 items-center gap-4">
+          <Avatar size="lg" class="bg-surface text-accent ring ring-edge-muted">
+            <Avatar.Fallback>
+              <UsersIcon class="size-5" />
+            </Avatar.Fallback>
+          </Avatar>
+          <div class="min-w-0 flex-1">
+            <span class="truncate text-sm font-medium text-ink">
+              {t('agentPermissions.teamDefaultRow')}
+            </span>
+            <p class="mt-0.5 text-xs text-ink-extra-muted">
+              {t('agentPermissions.teamDefaultRowHint')}
+            </p>
+          </div>
+        </div>
+        <div class="ml-auto flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            aria-expanded={props.open}
+            aria-label={t('agentPermissions.teamDefaultToggle')}
+            onClick={() => props.onToggle()}
+          >
+            {t('agentPermissions.permissionsButton')}
+            <CaretDownIcon
+              class="size-3 shrink-0 pointer-events-none transition-transform"
+              classList={{ 'rotate-180': props.open }}
+            />
+          </Button>
+        </div>
+      </div>
+      <Show when={props.open}>
+        <div class="pr-6 pb-5 pl-[4.5rem] touch:px-4">
+          <TeamPermissionsPanel teamId={props.teamId} />
+        </div>
+      </Show>
+    </div>
+  );
 }
 
 /** The row whose permissions are open, and where a link pointed. */

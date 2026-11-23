@@ -1305,6 +1305,16 @@ Editing an agent: Set agent on an agent with its own permissions asks first
 (`Follow @handle?`), and on the second tab **Use my own permissions** copies
 what it follows and stops following.
 
+A team member also sees a **Team default permissions** row (team glyph,
+`Team agents follow these unless set to follow another or use their own.`)
+after the team's agents, with the same **Permissions ⌄** button (accessible
+name `Team default permissions`) expanding the same component for the team's
+default. Team admins and owners edit it (changes save at once; Reset asks
+first); other members see it read-only with `Only team admins and owners can
+change these.` Team agents that follow it pick up changes at once. In the
+Set agent picker it reads `Team default` with `Team · <team>`, and a new
+team agent preselects it.
+
 Below the table, a line counts the visible saved settings by who made them
 (`2 settings changed · 1 set by <agent> itself`), and `Reset permissions`
 asks for confirmation (a drawer on phones) and puts every setting back to
