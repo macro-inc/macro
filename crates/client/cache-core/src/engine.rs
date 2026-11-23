@@ -3115,10 +3115,15 @@ impl<S: Storage> Engine<S> {
                 identities
             }
         };
+        // The bindings left are those that resolved, an ID the server kept
+        // included; one with no response path reads nothing from it.
+        let resolved = bindings
+            .iter()
+            .any(|binding| !binding.response_path.is_empty());
         let mut unwritable = None;
         let mut updates = match normalize(&self.schema, op, variables, data) {
             Ok(updates) => updates,
-            Err(error) if identity_errors.is_empty() || !identities.is_empty() => {
+            Err(error) if identity_errors.is_empty() || resolved => {
                 // The server accepted the write, but no retry of this response
                 // normalizes: the schema dropped a field a write queued under
                 // an older one selects, or the response is malformed. Settle it

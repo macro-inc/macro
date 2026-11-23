@@ -1008,6 +1008,43 @@ fn a_settled_write_keeps_the_identities_that_resolved() {
 }
 
 #[test]
+fn an_id_the_server_kept_counts_as_resolved() {
+    block_on(async {
+        // The server kept the first record's ID and answered the second with
+        // null.
+        let (engine, outcome) = confirm_across_a_dropped_field(
+            "mutation Save { save { __typename id label } other: save { __typename id label } }",
+            &[
+                create_binding("Saved:7", "save"),
+                create_binding("Saved:other", "other"),
+            ],
+            serde_json::json!({
+                "save": { "__typename": "Saved", "id": "7", "label": "pending" },
+                "other": { "__typename": "Saved", "id": "other", "label": "pending" }
+            }),
+            serde_json::json!({
+                "save": { "__typename": "Saved", "id": "7", "label": "accepted" },
+                "other": null
+            }),
+        )
+        .await;
+        let CommitOptimisticWriteResult::Committed(result) = outcome else {
+            panic!("settles: {outcome:?}");
+        };
+        assert_eq!(result.identity_errors.len(), 1, "{result:?}");
+        assert!(result.unwritable_response.is_some(), "{result:?}");
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    });
+}
+
+#[test]
 fn a_response_object_of_another_type_settles_no_identity() {
     block_on(async {
         // The operation selects the type under an alias.
