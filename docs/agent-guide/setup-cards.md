@@ -24,8 +24,13 @@ the server says its connection can be imported from (`importAvailable`),
   view with an unsent prompt. Notion, Linear and Jira open workspace importers
   (`ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`) with “Import my
   <Provider> workspace into Macro.” They read only, ask who should see the import
-  when needed, and present a review before creating anything. Other connectors
-  list candidates and ask which ones to create. No importer writes to its source.
+  when needed, and present a review before creating anything. HubSpot opens
+  the CRM importer (`ImportFromHubspot`) with “Import my HubSpot CRM into
+  Macro.”: its review lists deal pipelines, companies, contacts and deals, with
+  owners matched to teammates and counted losses (deals without a company,
+  unsupported currencies, personal-provider domains) in the totals, and no
+  sharing choice, since CRM records belong to the team. Other connectors list
+  candidates and ask which ones to create. No importer writes to its source.
 - The shared review identifies its source, shows task/project totals for issue
   trackers, and lets the owner exclude objects and change sharing. On phones,
   **Open full review** uses the existing full-height sheet. Approve on the card,
