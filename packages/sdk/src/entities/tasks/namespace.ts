@@ -18,6 +18,10 @@ import { type SimilarTask, Task, type TaskSummary } from './task';
  * Never edit, merge or delete the tasks `findSimilar` matches unless the user asks.
  * When changing both of a task's dates, set the Due Date before the Start Date:
  * a start after the current due date is saved as that due date.
+ * A time of day a person gives for a task's dates is in their own time zone:
+ * write it with the UTC offset of the current time in your context and mark it
+ * as timed (`withTimes`, or `has_time: true` on a date value). When the context
+ * says the time zone is unknown, it is UTC: say which zone you used.
  */
 export class TaskNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -51,7 +55,11 @@ export class TaskNamespace {
     startDate?: Date;
     /**
      * Keeps the time of day of `startDate` and `dueDate`, making each an
-     * exact moment (a 2 to 4 PM block) instead of a whole day.
+     * exact moment (a 2 to 4 PM block) instead of a whole day. A time the
+     * person gives is in their own time zone: build the Date from a timestamp
+     * with the UTC offset of the current time in your context (3 PM in New
+     * York in winter is `new Date('2026-11-30T15:00:00-05:00')`). When the
+     * context says the time zone is unknown, it is UTC: say which zone you used.
      */
     withTimes?: boolean;
     /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
