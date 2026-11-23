@@ -603,6 +603,8 @@ export function createSoupLiveQuery(
 
   /** The chain rebuild in flight, which settles whether or not it read. */
   let repair: Promise<void> | undefined;
+  /** Explicit refreshes waiting for that rebuild; no other starts meanwhile. */
+  let refreshesWaiting = 0;
 
   const refresh = async () => {
     const input = firstPageInput();
@@ -622,8 +624,16 @@ export function createSoupLiveQuery(
       return;
     }
     // A chain rebuild may have started before the caller's write: read after
-    // it rather than share its answer (or its unthrown failure).
-    while (repair) await repair;
+    // it rather than share its answer (or its unthrown failure). The refresh
+    // rebuilds the chain itself, so no further rebuild goes first.
+    if (repair) {
+      refreshesWaiting += 1;
+      try {
+        await repair;
+      } finally {
+        refreshesWaiting -= 1;
+      }
+    }
     // An explicit list refresh rebuilds the cursor chain in order. The
     // notification queue observes isFetching and waits for this to finish.
     await query.refetch({
@@ -659,7 +669,8 @@ export function createSoupLiveQuery(
   // Rebuilds in a row, until the chain agrees; a rebuild that finds it still
   // broken (it shared a read that was ending, or the server moved meanwhile)
   // goes again, up to the bound. A failed one waits for the next network
-  // answer.
+  // answer, checked when a rebuild starts, so one a hidden tab deferred
+  // follows the same rule.
   let repairs = 0;
   let failedAt: number | undefined;
   const rebuildChain = async () => {
@@ -684,23 +695,28 @@ export function createSoupLiveQuery(
     chainRepair.request();
   };
   const repairChain = () => {
-    if (repair || !brokenChain() || repairs >= MAX_CHAIN_REPAIRS) return;
+    if (
+      repair ||
+      refreshesWaiting > 0 ||
+      !brokenChain() ||
+      repairs >= MAX_CHAIN_REPAIRS ||
+      failedAt === untrack(networkAnswers)
+    )
+      return;
     repair = rebuildChain();
     fireAndForget(repair, 'soup-live-query');
   };
   const chainRepair = createHiddenDeferral(repairChain);
   onCleanup(chainRepair.dispose);
   createEffect(
-    on([brokenChain, networkAnswers], ([broken, answers]) => {
-      if (!broken) {
-        if (query.isFetching) return;
-        repairs = 0;
-        failedAt = undefined;
+    on([brokenChain, networkAnswers], ([broken]) => {
+      if (broken) {
+        chainRepair.request();
         return;
       }
-      if (failedAt === answers) return;
+      if (query.isFetching) return;
+      repairs = 0;
       failedAt = undefined;
-      chainRepair.request();
     })
   );
 

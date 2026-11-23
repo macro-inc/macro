@@ -3382,6 +3382,57 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       }
     });
 
+    it('lets a waiting refresh read before the list rebuilds again', async () => {
+      const { fake, query, dispose } = await breakChain();
+      try {
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+        let settledAt: number | undefined;
+        const watch = async () => {
+          await query.refresh();
+          settledAt = fake.executions.length;
+        };
+        const strict = watch();
+        fake.executions[3].next(page('a', 'after-a'));
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(5));
+        fake.executions[4].next(page('b', 'after-b'));
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(6));
+        // A row joins above while the rebuild reads its last page, so the
+        // rebuild ends on a chain that is still broken.
+        fake.executions[3].next(page('new', 'after-new'));
+        fake.executions[5].next(page('c', null));
+        await serve(
+          fake,
+          new Set([0, 1, 2, 3, 4, 5]),
+          () => settledAt !== undefined
+        );
+        await strict;
+        // The refresh's own three pages come next, not another rebuild's.
+        expect(settledAt).toBe(9);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('waits for a later answer after a rebuild that failed while hidden', async () => {
+      const visibility = vi
+        .spyOn(document, 'visibilityState', 'get')
+        .mockReturnValue('visible');
+      const { fake, dispose } = await breakChain();
+      try {
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+        visibility.mockReturnValue('hidden');
+        await failRebuild(fake, 3);
+        await settle();
+        visibility.mockReturnValue('visible');
+        document.dispatchEvent(new Event('visibilitychange'));
+        await settle();
+        expect(fake.executions).toHaveLength(5);
+      } finally {
+        dispose();
+        visibility.mockRestore();
+      }
+    });
+
     it('waits for a hidden tab to show again', async () => {
       const visibility = vi
         .spyOn(document, 'visibilityState', 'get')
