@@ -92,6 +92,7 @@ import { batch, createSignal, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import { filter, pipe } from 'wonka';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
+import { existingChannelSyncRuntime } from '../../queries/messages/local/channel-sync';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createCacheErrorThrottle } from './cache-error-throttle';
@@ -935,6 +936,7 @@ export function getGraphqlSoupClient(): Client {
       // Unsubscribing emits urql teardown operations; keep the cache host
       // available until those best-effort registration removals are issued.
       subscriptionsLifecycle.dispose();
+      if (host) existingChannelSyncRuntime(host)?.dispose();
       lifetime.abort();
       // Retires the host: operations still running on this client, and any
       // caller that captured the host, fall back to the network from here.
@@ -1004,6 +1006,7 @@ export function getGraphqlSoupClient(): Client {
         subscriptionsLifecycle.connected,
         (state) => {
           websocketState = state;
+          if (state === 'disconnected') subscriptionsLifecycle.disconnected();
         }
       );
       websocketClient = graphqlWsClient;
