@@ -4,6 +4,7 @@ import '@fontsource-variable/inter';
 import '../../../../index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BundleUpdateStatus } from '@macro/tauri';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -27,6 +28,7 @@ for (const [key, token] of Object.entries(
   document.documentElement.style.setProperty(key, token);
 document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
 document.documentElement.dataset.themeLight = String(!dark);
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 function bundleStatus(status: string): BundleUpdateStatus {
   if (status === 'UpdateFound')
