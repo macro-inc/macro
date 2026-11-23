@@ -10,6 +10,7 @@ async fn it_should_deserialize_query_params() {
         referral_code: Some("test".to_string()),
         is_mobile: true,
         is_agent: true,
+        session_code_challenge: None,
     };
 
     let json = serde_json::to_string(&sso_state).unwrap();
@@ -31,7 +32,7 @@ async fn it_should_deserialize_query_params() {
 
     assert_matches!(data, OAuthCbParams { code: Some(code), state: Some(container), .. } => {
         assert_eq!(code, "test123");
-        assert_matches!(container.decode().unwrap(), SsoState { original_url: Some(url), is_mobile: true, referral_code: Some(code), is_agent: true } => {
+        assert_matches!(container.decode().unwrap(), SsoState { original_url: Some(url), is_mobile: true, referral_code: Some(code), is_agent: true, session_code_challenge: None } => {
             assert_eq!(url.as_str(), "https://example.com/");
             assert_eq!(code.as_str(), "test");
         })
@@ -109,6 +110,7 @@ async fn it_writes_session_code_to_db() {
             is_mobile: true,
             referral_code: None,
             is_agent: false,
+            session_code_challenge: None,
         }),
         async |x| dummy.cb(x).await,
     )
@@ -135,6 +137,7 @@ async fn it_rejects_disallowed_original_url_without_side_effects() {
             is_mobile: true,
             referral_code: None,
             is_agent: false,
+            session_code_challenge: None,
         }),
         async |x| dummy.cb(x).await,
     )
@@ -152,6 +155,7 @@ async fn it_allows_macro_scheme_original_url() {
             is_mobile: false,
             referral_code: None,
             is_agent: false,
+            session_code_challenge: None,
         }),
         async |x| dummy.cb(x).await,
     )
@@ -204,6 +208,7 @@ async fn redirect_telemetry_carries_no_session_code() {
         is_mobile: true,
         referral_code: None,
         is_agent: false,
+        session_code_challenge: None,
     });
     let (traces, _guard) = crate::api::trace_capture::capture_traces();
     let mut dummy = DummyCb::default();
@@ -241,6 +246,7 @@ fn sso_state(original_url: Option<&str>) -> SsoState {
         is_mobile: false,
         referral_code: None,
         is_agent: false,
+        session_code_challenge: None,
     }
 }
 
@@ -270,4 +276,50 @@ fn sign_in_failure_needs_an_allowed_page_to_return_to() {
     assert!(sign_in_failure_url(Some(&sso_state(None)), ConsentFailure::Failed).is_none());
     let forged = sso_state(Some("https://evil.example.com/phish"));
     assert!(sign_in_failure_url(Some(&forged), ConsentFailure::Failed).is_none());
+}
+
+#[tokio::test]
+async fn the_challenge_rides_the_state_and_old_states_still_decode() {
+    const CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+    let decode = |state: &str| {
+        let mut url: Url = "https://test.com".parse().unwrap();
+        url.query_pairs_mut()
+            .append_pair("code", "test123")
+            .append_pair("state", state);
+        let (mut parts, ()) = Request::builder()
+            .uri(url.as_str())
+            .body(())
+            .unwrap()
+            .into_parts();
+        async move {
+            let extract::Query(data) =
+                extract::Query::<OAuthCbParams>::from_request_parts(&mut parts, &())
+                    .await
+                    .unwrap();
+            data.state.unwrap().decode()
+        }
+    };
+
+    let bound = decode(&format!(
+        r#"{{"original_url":"macro:///login","is_mobile":true,"referral_code":null,"session_code_challenge":"{CHALLENGE}"}}"#
+    ))
+    .await
+    .unwrap();
+    assert_eq!(
+        bound.session_code_challenge.as_ref().map(|c| c.as_str()),
+        Some(CHALLENGE)
+    );
+
+    // A sign-in started by a client that predates the challenge.
+    let old = decode(r#"{"original_url":"macro:///login","is_mobile":true,"referral_code":null}"#)
+        .await
+        .unwrap();
+    assert!(old.session_code_challenge.is_none());
+
+    // A tampered challenge fails the whole state rather than minting an unbound code.
+    assert!(
+        decode(r#"{"original_url":"macro:///login","is_mobile":true,"referral_code":null,"session_code_challenge":"x"}"#)
+            .await
+            .is_err()
+    );
 }

@@ -11,6 +11,7 @@ use crate::api::{
         spawn_first_inbox_provision,
     },
 };
+use crate::session_code_binding::SessionCodeChallenge;
 use axum::{
     Json,
     extract::{self, State},
@@ -118,20 +119,6 @@ pub async fn handler(
         }
     };
 
-    let write_db = async |code: &SessionCode| {
-        ctx.macro_cache_client
-            .set_mobile_login_session(code.0.as_str(), &refresh_token)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(
-                    auth_handoff_failure = "session_code_store_failed",
-                    error=?e,
-                    "unable to store mobile session code"
-                );
-            })
-            .map_err(InnerErr::MacroCacheErr)
-    };
-
     let state: Option<SsoState> = if let Some(state) = params.state {
         Some(
             state
@@ -147,6 +134,26 @@ pub async fn handler(
         )
     } else {
         None
+    };
+
+    // A code minted for a sign-in that sent a challenge redeems only with
+    // that sign-in's verifier.
+    let code_challenge = state
+        .as_ref()
+        .and_then(|state| state.session_code_challenge.as_ref())
+        .map(SessionCodeChallenge::as_str);
+    let write_db = async |code: &SessionCode| {
+        ctx.macro_cache_client
+            .set_mobile_login_session(code.0.as_str(), &refresh_token, code_challenge)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    auth_handoff_failure = "session_code_store_failed",
+                    error=?e,
+                    "unable to store mobile session code"
+                );
+            })
+            .map_err(InnerErr::MacroCacheErr)
     };
 
     let mut redirect_url = get_redirect_url(&state, write_db)
@@ -269,6 +276,7 @@ impl std::fmt::Debug for SessionCode {
     fields(
         has_state = state.is_some(),
         is_mobile = state.as_ref().is_some_and(|state| state.is_mobile),
+        code_bound = state.as_ref().is_some_and(|state| state.session_code_challenge.is_some()),
     )
 )]
 async fn get_redirect_url(
