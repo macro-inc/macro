@@ -2809,6 +2809,7 @@
       "crates/channels",
       "crates/client/cache-bench",
       "crates/client/cache-core",
+      "crates/client/cache-schema",
       "crates/computer_id",
       "crates/connection",
       "crates/connection_gateway_client",
