@@ -563,7 +563,7 @@ ranges — all refetchable — while keeping queued mutations, optimistic layers
 and their projections; a browser opens a new database name instead, as above.
 Native storage then compacts the migrated file with `VACUUM INTO`, so the
 upgrade reclaims the space instead of leaving freed pages behind; a compaction
-that fails keeps the migrated file as it is.
+that fails tries to keep the migrated file as it is.
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
 `MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
