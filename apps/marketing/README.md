@@ -30,10 +30,10 @@ then gives each product one
 `FeaturePageSection` in the feature pages' 640px reading column with an 800px
 graphic. Use the product page's hero heading and two or three sentences above
 the capture, with a “Learn about [feature] →” link where the product has a page.
-Let the heading wrap at its normal size. Follow each capture with about five
-sentences in smaller type that draw on the founder's letter, the repository
-README, and the competitor notes to explain why we built the Block and how it
-works with the others. Use `ProductCopy` for linked Block names. Pricing and
+Let the heading wrap at its normal size. Follow each capture with two short
+sentences in the same type as the introduction. Draw on the founder's letter,
+the repository README, and the competitor notes for the reason we built the
+Block or an example of how we use it. Use `ProductCopy` for linked Block names. Pricing and
 open source use the same copy structure before `HomepageClosing`. The captures
 in `src/assets/homepage/`
 come from the in-app tutorial videos and show demo data. Mount shared UI styles
@@ -54,7 +54,7 @@ Lazy-load the lower `HomepageSections` chunk inside its own Suspense boundary so
 
 Keep legal pages (`/terms`, `/privacy`, `/dpa`, `/partners/terms`, and `/delete-account`) on the shared `RouteLegal.css` layout: centered slab titles and dates, a 640px reading column, Inter body copy, and spaced section rules. Preserve legal wording, clause numbering, and DPA table navigation when changing presentation.
 
-Use quiet text links labeled “Learn about [feature] →” under each homepage section's introduction, matching the small Inter captions: 370 weight, 14px desktop / 13px phone, and 1.65 line height. Scale arrows to the text. Preserve 44px touch targets and direct product-page destinations.
+Use quiet text links labeled “Learn about [feature] →” under each homepage section's introduction, set in Inter at 370 weight, 14px desktop / 13px phone, and 1.65 line height. Scale arrows to the text. Preserve 44px touch targets and direct product-page destinations.
 The hero never intercepts scrolling. The shared website sidebar handles
 navigation; do not add a separate homepage index.
 Hide the homepage Downloads and Links resources rail below 1440px instead of

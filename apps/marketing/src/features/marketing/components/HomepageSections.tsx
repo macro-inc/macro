@@ -42,10 +42,7 @@ const SECTIONS: readonly Section[] = [
       'Home is where you check everything in your workspace. Email, channel messages, task assignments, @mentions, and agent responses all land in one place.',
     caption: [
       'When our last startup grew to twenty people, engineering, sales, and marketing each had their own tools.',
-      'Context was scattered across Slack, email, docs, and meetings.',
-      'We wanted one place to see what needed our attention and pick up work we had already started.',
-      'In Home, a document you recently edited shows up next to a customer email or a GitHub review request.',
-      'Use J and K to move through the list and open the work beside it, in the same window.',
+      'We wanted one place to catch up on a customer email, a doc we’d been editing, or a pull request waiting for review.',
     ],
     tutorial: 'home',
     screen: inboxScreen,
@@ -58,10 +55,7 @@ const SECTIONS: readonly Section[] = [
       'Macro Mail tags and prioritizes email from all your accounts, with Superhuman shortcuts and frontier intelligence. Email lives in the same workspace as your channels, docs, tasks, and code.',
     caption: [
       'We wanted the speed of Superhuman, the multitasking of Outlook, and a single inbox for all our accounts.',
-      'We bring your mail into our own database so that search across accounts, including inside attachments, can run without waiting on Gmail’s API.',
-      'Share a live email thread in Macro Chat and your team can see the replies that come in after you shared it.',
-      'Turn a customer’s email into a linked task, or open the company record in Macro CRM to see the emails and files your team has exchanged with them.',
-      'You can also draft, edit, and send an email from an agent chat, using prior conversations to get the details right.',
+      'When we share a customer’s email in chat, the next reply shows up there too.',
     ],
     tutorial: 'mail',
     screen: mailScreen,
@@ -74,11 +68,8 @@ const SECTIONS: readonly Section[] = [
     description:
       'Macro Chat brings your people and agents together in channels. Share context and work on the same tasks. We wanted agents to be actual participants in the team.',
     caption: [
-      'The problem we had with Slack was that it was where we talked about the work we did in other apps.',
-      'Channels are already the lifeblood of the company, so we built email, docs, tasks, and agents around them.',
-      'The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable.',
-      'Create a task from a message and you can get back to the original discussion from the task.',
-      'Share the customer’s email in the same thread and @mention an agent there to take on the work.',
+      'Slack was where we talked about the work we did in other apps.',
+      'We wanted to share a customer email in a channel, talk it through, and turn the message into a task right there.',
     ],
     tutorial: 'chat',
     screen: chatScreen,
@@ -92,10 +83,7 @@ const SECTIONS: readonly Section[] = [
       'Create tasks from email and team chat. Assign people or agents, and keep task status in sync with linked pull requests.',
     caption: [
       'We used Linear and really tried to keep it up to date, but the conversation that moved the work forward was happening in chat.',
-      'What worked for us was lightweight issues tightly coupled to channels and DMs, so tracking happens where the conversation happens.',
-      'Create a task from a message, a customer email, or a checklist in Macro Docs and the task links back to its source.',
-      'Paste it in a channel and your team can see the assignee, priority, and status.',
-      'Give it to an agent and it can pick up the original context and take the work through to a pull request.',
+      'Now we make the task from the message so whoever picks it up can read the original discussion.',
     ],
     tutorial: 'tasks',
     screen: tasksScreen,
@@ -110,9 +98,6 @@ const SECTIONS: readonly Section[] = [
     caption: [
       'We liked the simplicity of Obsidian, the mentions in Notion, and being able to edit a plain markdown file with our own agents.',
       'We wanted all of that in the same editor with live collaboration.',
-      'When you and an agent type in the same doc, you can see each other’s cursors as you work.',
-      'The whole document lives as a CRDT, so changes merge automatically when you come back online.',
-      'A spec can @mention a support email, the task it created, and the call where the team discussed it, and you can follow those links in either direction.',
     ],
     tutorial: 'docs',
     screen: docsScreen,
@@ -126,11 +111,8 @@ const SECTIONS: readonly Section[] = [
     description:
       'All your Google and Microsoft calendars in one view. Find time with your team and ask agents to handle the invites.',
     caption: [
-      'We built Calendar so you can manage your week right next to where your work is happening.',
-      'Connect your Google and Outlook accounts and check work and personal availability together.',
-      'Tools like Calendly solve the scheduling problem.',
-      'We wanted personal and team booking links alongside the form someone fills out, their company record, and the emails leading up to the call.',
-      'If the discussion is already in Macro Chat, ask an agent in the channel to find a time and send the invite.',
+      'We liked being able to send someone a Calendly link.',
+      'We wanted to see what they wrote on the booking form alongside their company record and the emails leading up to the call.',
     ],
     tutorial: 'calendar',
     screen: calendarScreen,
@@ -144,10 +126,7 @@ const SECTIONS: readonly Section[] = [
       'Call from any channel or DM. Give your team and agents context with recordings and transcripts. A lot of the important context in a company is spoken.',
     caption: [
       'We wanted the ease of a Slack huddle and the option to send a guest a link, like Google Meet.',
-      'We run standups right in our engineering channel, where the work we talk about is already linked.',
-      'Important decisions get made out loud, and a separate recording and sharing step is easy to forget.',
-      'Team and public channel calls share the recording, speaker-labeled transcript, and summary with your team by default, while calls in DMs and private channels start private.',
-      'An agent can read the summary afterward and draft a follow-up, update a document, or create the tasks you agreed on.',
+      'We run standups in our engineering channel so an agent can read the transcript afterward and write up the tasks we agreed on.',
     ],
     tutorial: 'calls',
     screen: callsScreen,
@@ -161,10 +140,7 @@ const SECTIONS: readonly Section[] = [
       'Macro CRM stays up to date from your email and team chat. No separate tool to maintain.',
     caption: [
       'We could open a deal in HubSpot or Salesforce and still have to ask the person working on it what was actually going on.',
-      'The important conversations about the deal were happening in email and Slack.',
-      'In Macro you can @mention a company in the conversation where it comes up, and the record links back to that discussion.',
-      'Open the company to see related emails, files, calls, and tasks together.',
-      'Agents can enrich the record from public sources and help keep it up to date as the team works.',
+      'In Macro we can open the company record and read the emails and call notes ourselves.',
     ],
     tutorial: 'crm',
     screen: crmScreen,
@@ -177,11 +153,8 @@ const SECTIONS: readonly Section[] = [
     description:
       'Macro consolidates email, chats, docs, and CRM into one memory system, aggregated across your whole team. DM an agent, @mention one in a channel, or assign it a task.',
     caption: [
-      'ChatGPT and Claude build memory from your chats.',
-      'We wanted agents to remember what the whole team was doing across email, tasks, documents, and calls.',
-      'An agent can use one search tool across the workspace, then follow the links back to the original work it can access.',
-      'In a customer thread, it can look up earlier emails, read the account’s call notes, and prepare a draft you can review and send.',
-      'You can use a model in Macro or bring your own agent through MCP, with the same workspace tools.',
+      'We wanted to ask an agent about a customer and have it remember the conversations our teammates had with them, too.',
+      'It can read the earlier emails and call notes before it drafts a reply.',
     ],
     tutorial: 'agents',
     screen: agentsScreen,
@@ -194,11 +167,8 @@ const SECTIONS: readonly Section[] = [
     description:
       'Track a fix as a task, review and merge the linked pull request from chat, and get GitHub comments and @mentions in your inbox. The original discussion stays linked to the code.',
     caption: [
-      'We wanted GitHub to fit into the workspace we were already using to talk about the work.',
-      'A comment or mention on a pull request can show up in Home alongside messages, tasks, and important emails.',
-      'Paste the GitHub link in a channel or doc and anyone with access can hover over it to see the status.',
-      'From the task, open the linked pull request in a split to read the diff and discussion without leaving the workspace.',
-      'As the pull request moves through review and merge, the linked task status can follow it.',
+      'We wanted to review a GitHub fix in the channel where someone reported the bug.',
+      'You can open the diff beside the original discussion and merge the pull request from there.',
     ],
     tutorial: 'github',
     screen: pullRequestScreen,
@@ -323,11 +293,8 @@ export function HomepageSections() {
         </ul>
         <SectionCaption
           sentences={[
-            'At our last startup we used Slack, Linear, Notion, HubSpot, and Superhuman.',
+            'At our last startup we paid for Slack, Linear, Notion, HubSpot, and Superhuman.',
             'We liked those tools, but each new subscription came with another place for work to get stuck.',
-            'Macro Pro is $40 per seat per month and includes all AI models, unlimited email accounts, and call recording.',
-            'Your team can share a customer email, turn it into a task, and follow it from the company record without buying seats in separate tools.',
-            'On the pricing page you can compare what Macro costs against the plans and seats you actually use.',
           ]}
         />
       </FeaturePageSection>
@@ -339,11 +306,8 @@ export function HomepageSections() {
         <CloneCommand />
         <SectionCaption
           sentences={[
-            'If we were choosing a system to run our company on, we would want it to be open source.',
-            'You should be able to look at how it works and know you can run it yourself if you need to.',
-            'We also wanted the workspace itself to be programmable.',
-            'Each block is purpose-built, but they share a Rust backend and a bidirectional graph, so a link from a doc to a task works both ways.',
-            'You can extend the system from the code, or use the SDK and MCP to build workflows across the blocks you already use.',
+            'If we were choosing a system to run our company on, we’d want to be able to read the code and run it ourselves.',
+            'We’d also want to change it when our team needed something different.',
           ]}
         />
       </FeaturePageSection>

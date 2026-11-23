@@ -7,9 +7,6 @@
 .macro-homepage .homepage-section-caption {
   width: var(--product-feature-intro-width);
   margin: 22px auto 0;
-  color: var(--feature-copy-color, var(--color-ink-muted));
-  font: 370 14px/1.65 'Inter Variable', Inter, sans-serif;
-  text-wrap: pretty;
 }
 
 .macro-homepage .product-feature-intro .homepage-feature-more {
@@ -107,7 +104,7 @@
 }
 
 @media (max-width: 699px) {
-  .macro-homepage .homepage-section-caption { margin-top: 16px; font-size: 13px; }
+  .macro-homepage .homepage-section-caption { margin-top: 16px; }
   .homepage-shortcuts { gap: 10px 20px; }
   .homepage-modules { width: calc(100% - 16px); column-gap: 24px; }
   .homepage-clone { width: calc(100% - 16px); }
