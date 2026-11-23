@@ -140,10 +140,11 @@ async function expectEmailHeaderFits(
       },
       { timeout: 5000 }
     );
-  } catch {
+  } catch (error) {
     await capture(prefix);
     throw new Error(
-      `Email header controls cut off at ${width}: ${clipped.join('; ')}`
+      `Email header controls cut off at ${width}: ${clipped.join('; ')}`,
+      { cause: error }
     );
   }
   await capture(prefix);

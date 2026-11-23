@@ -132,8 +132,9 @@ export function EmailHeader(props: EmailHeaderProps) {
     }));
   const [inboxTabsElement, setInboxTabsElement] = createSignal<HTMLElement>();
   // A narrow pane (the desktop window has no minimum width) hides the view
-  // options rather than push Search past the header's edge; the reading pane
-  // has no room beside the list there anyway.
+  // options, the Focus sort and the reading pane toggle, rather than push
+  // Search past the header's edge. The reading pane has no room beside the
+  // list there anyway, and Shift+V still toggles it.
   const [actions, setActions] = createSignal<HTMLDivElement>();
   const collapsed = createLabelCollapse(actions, () => HEADER_COLLAPSE_ORDER, {
     watchContent: true,
