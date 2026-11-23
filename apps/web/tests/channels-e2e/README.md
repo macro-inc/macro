@@ -114,8 +114,26 @@ A red run on `main` blocks nothing. Its last job tells the Macro Alerts
 channel when the pushes or the nightly runs turn red, with the failed tests,
 and when they pass again
 ([what to do](../../../../docs/development/ci.md#when-an-email-end-to-end-alert-fires)).
+When a run fails with many tests waiting for a channel to show
+(`harness/channel.ts`, `shown`), look for the line the step prints after the
+ledger: "Postgres refused N statements in an aborted transaction". It is a
+clue, not a verdict: a backend defect, not one of channels, hands a pooled
+connection back inside a transaction, and every later request that gets it
+fails, so pages show "Conversation unavailable". Check a failed test's
+screenshot for that heading before reading the failure as one of channels.
+The run stays red either way.
+
 A failed run keeps the stack's logs (`channels-e2e-stack-logs`) and its
-traces (`channels-e2e-results`).
+traces (`channels-e2e-results`). One that runs out of time keeps the logs too: the
+suite's step stops after 30 minutes, short of the job's 45, so the steps
+after it still run. It has traces and a report only if the tests had
+finished; while the stack starts, the step's log says once a minute what is
+running.
+
+The stack starts with local agent sandboxes off
+(`DEV_DANGEROUS_LOCAL_CONTAINERS=false`): no test starts a sandbox, and
+building its image is uncached and can outlast the job. A test that needs a
+sandbox has to turn them back on and pay for the image.
 
 ## The ledger
 
@@ -126,7 +144,13 @@ whether that is in builds without `VITE_ENABLE_CHANNEL_LOCAL_SYNC` (`off`), with
 (`on`) or `both`; they are marked `knownDefect(...)` and fail the run the day
 the defect is fixed, so the mark gets removed. `ledger/intermittent-defects.tsv`
 lists the tests with a check a defect fails only in some runs, wrapped in
-`failsSometimes`; the checker reports each run in which one showed.
+`failsSometimes`; the checker reports each run in which one showed. When the
+check is that an open page shows what someone else just did, and it has been seen to fail, use `arrivesLive`: it records the miss the same way,
+then reloads the page and requires the check, so a change that is lost still
+fails the run. It takes the locator of what should arrive and excuses only
+its absence; what the message says stays an ordinary check. `missedLive` is
+the same without the reload, for a test that has to do something of its own
+after a miss.
 
 ```sh
 bun tests/channels-e2e/ledger/check.ts                      # ledger against the tests

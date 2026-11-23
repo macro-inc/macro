@@ -3,6 +3,8 @@ import {
   type BrowserContext,
   type BrowserContextOptions,
   test as base,
+  expect,
+  type Locator,
   type Page,
 } from '@playwright/test';
 import { Api } from './api';
@@ -107,7 +109,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   },
 });
 
-export { expect } from '@playwright/test';
+export { expect };
 
 /**
  * Runs a check that a known product defect fails only some of the time, so
@@ -143,4 +145,47 @@ export const LOCAL_SYNC_BUILD =
  */
 export function knownDefect(builds: 'off' | 'on' | 'both'): void {
   test.fail(builds === 'both' || (builds === 'on') === LOCAL_SYNC_BUILD);
+}
+
+/**
+ * Waits for what someone else just did to show on an open page, and says
+ * whether it never did. A known defect on main sometimes keeps a live change
+ * off an open page; the tests it has been seen in are listed in
+ * `ledger/intermittent-defects.tsv`. Only absence is excused and recorded, as
+ * `failsSometimes` records it: when the wait fails with the thing on the
+ * page (twice, or hidden), the test fails.
+ */
+export async function missedLive(arriving: Locator): Promise<boolean> {
+  try {
+    await expect(arriving).toBeVisible();
+    return false;
+  } catch (error) {
+    if ((await arriving.count()) > 0) {
+      // On the page after all: it arrived as the wait ended, or it is there
+      // twice or hidden, which this check then fails for.
+      await expect(arriving).toBeVisible();
+      return false;
+    }
+    await failsSometimes(async () => {
+      throw error;
+    });
+    return true;
+  }
+}
+
+/**
+ * `missedLive`, then a reload that must show what was missed, so a change
+ * that is lost still fails the test. What the arrived thing says and how it
+ * looks stay ordinary checks after this one.
+ */
+export async function arrivesLive(
+  view: { page: Page; shown(): Promise<void> },
+  arriving: Locator
+): Promise<void> {
+  if (!(await missedLive(arriving))) {
+    return;
+  }
+  await view.page.reload();
+  await view.shown();
+  await expect(arriving).toBeVisible();
 }
