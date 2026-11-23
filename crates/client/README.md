@@ -211,9 +211,12 @@ to the rows dropped; a type holding more than half of the documents instead
 keeps the other documents' facts and recreates the fact tables. Reset drops and
 recreates every table records feed, which frees their pages without rewriting
 them. On a
-320 MB cache-bench database (256k records), a compatible open took 7–9 ms
-natively and 15–72 ms in browsers, a Types change 0.5–4.2 s natively and
-0.9–6.3 s in browsers, and a Reset 2.0–2.7 s natively and 0.3–1.6 s in browsers.
+320 MB cache-bench database (256k records), a compatible open took 8–12 ms
+natively and 11–43 ms in browsers; a Types change 0.9–5.8 s natively and
+0.08–5.3 s in browsers, growing with the rows it drops; and a Reset 2.9–3.2 s
+natively and 0.26–1.4 s in browsers. For the same cache, a native file of the
+previous cache format took 2.9–3.8 s to migrate and compact; deleting its rows
+instead of dropping the tables took 40–43 s.
 The ignored `schema_cost` tests in `soup_filter_cache_adapter` (native) and
 `cache-wasm` (browser) measure each tier on a database you supply.
 
