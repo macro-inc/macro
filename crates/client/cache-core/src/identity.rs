@@ -76,11 +76,32 @@ pub fn validate(bindings: &[IdentityBinding]) -> Result<(), String> {
 
 /// Extract bindings only from explicitly declared response objects of the same
 /// type. `selections` are the operation's, which say each key an object's
-/// `__typename` is selected under.
+/// `__typename` is selected under. An object that doesn't state its type is
+/// taken to be of its binding's.
 pub fn resolve(
     bindings: &[IdentityBinding],
     selections: &[Selection],
     data: &Value,
+) -> Result<IdentityMap, String> {
+    resolve_bindings(bindings, selections, data, false)
+}
+
+/// [`resolve`], with each response object required to state its type: what
+/// settlement keeps from a response it can't write, since normalizing it
+/// can't confirm the type a binding assumes.
+pub fn resolve_stated(
+    bindings: &[IdentityBinding],
+    selections: &[Selection],
+    data: &Value,
+) -> Result<IdentityMap, String> {
+    resolve_bindings(bindings, selections, data, true)
+}
+
+fn resolve_bindings(
+    bindings: &[IdentityBinding],
+    selections: &[Selection],
+    data: &Value,
+    stated: bool,
 ) -> Result<IdentityMap, String> {
     let mut result = IdentityMap::new();
     for binding in bindings {
@@ -97,8 +118,11 @@ pub fn resolve(
             .local_key
             .typename()
             .ok_or("invalid local identity")?;
-        let typename =
-            response_typename(selections, &binding.response_path, object)?.unwrap_or(local_type);
+        let typename = match response_typename(selections, &binding.response_path, object)? {
+            Some(typename) => typename,
+            None if stated => return Err("identity response type is not stated".into()),
+            None => local_type,
+        };
         let id = object
             .get("id")
             .and_then(Value::as_str)
@@ -581,6 +605,35 @@ mod tests {
         assert_eq!(
             resolve(&bindings, selections, &response),
             Err("identity response changed entity type".into())
+        );
+    }
+
+    #[test]
+    fn resolve_stated_needs_the_response_to_state_the_type() {
+        let bindings = [binding("Saved:local", &["save", "saved"])];
+        let document = crate::document::Document::parse(
+            "mutation Save { save { saved { ... on Saved { kind: __typename id } \
+             ... on Other { id } } } }",
+        )
+        .unwrap();
+        let selections = &document.operation(None).unwrap().selection_set;
+        // An `Other`, which selects no type name.
+        let response = json!({ "save": { "saved": { "id": "server" } } });
+        assert_eq!(
+            resolve(&bindings, selections, &response),
+            Ok(IdentityMap::from([(
+                EntityKey::entity("Saved", &["local"]),
+                EntityKey::entity("Saved", &["server"])
+            )]))
+        );
+        assert_eq!(
+            resolve_stated(&bindings, selections, &response),
+            Err("identity response type is not stated".into())
+        );
+        let stated = json!({ "save": { "saved": { "kind": "Saved", "id": "server" } } });
+        assert_eq!(
+            resolve_stated(&bindings, selections, &stated),
+            resolve(&bindings, selections, &stated)
         );
     }
 
