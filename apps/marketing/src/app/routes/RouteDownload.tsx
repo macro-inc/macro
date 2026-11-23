@@ -120,13 +120,16 @@ export function RouteDownload() {
           <h2 id="ios">iOS</h2>
           <p>
             <a href={IOS_APP_STORE_URL}>Download Macro from the App Store</a>.
-            You can also open <strong>Settings → Downloads</strong> in Macro and
-            scan the QR code.
           </p>
           <h2 id="android">Android</h2>
           <p>
             <a href={ANDROID_PLAY_STORE_URL}>Download Macro from Google Play</a>
             .
+          </p>
+          <p>
+            On a computer, you can also open{' '}
+            <strong>Settings → Downloads</strong> in Macro and scan the QR code
+            with your phone.
           </p>
           <p>
             The iOS and Android apps don't include splits, keyboard shortcuts,
