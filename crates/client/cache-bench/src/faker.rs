@@ -38,6 +38,9 @@ pub struct Plan<'a> {
     pub viewer_id: &'a str,
     pub link_ids: &'a [String],
     pub body: BodyProfile,
+    /// 0 for the seed; a foreground variant rewrites the same entities, under
+    /// the same ids, with other field values.
+    pub revision: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -199,7 +202,11 @@ impl Faker {
         let mut map = Map::new();
         for (key, group) in &fields {
             let field = group[0];
-            let mut rng = Rng::new(mix(ctx.seed, key));
+            let field_seed = mix(ctx.seed, key);
+            let mut rng = Rng::new(match plan.revision {
+                0 => field_seed,
+                revision => mix(field_seed, &format!("revision{revision}")),
+            });
             let value = match field.name.as_str() {
                 "__typename" => Value::String(concrete.to_string()),
                 "id" => Value::String(id.clone().unwrap_or_default()),

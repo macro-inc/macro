@@ -23,7 +23,7 @@ const MAX_CANDIDATES: usize = 4_096;
 const MAX_GROWTH: usize = 8;
 
 pub(super) fn select(
-    connection: &Arc<Connection>,
+    connection: &Db,
     query: &ValidatedIndexQuery,
     excluded_optimistic: &[i64],
     include_sort: bool,
@@ -202,7 +202,7 @@ impl Window {
     /// Reads the next `count` candidates after the last one read.
     fn extend(
         &mut self,
-        connection: &Arc<Connection>,
+        connection: &Db,
         query: &IndexQuery,
         excluded_optimistic: &[i64],
         count: usize,
@@ -258,7 +258,7 @@ impl Window {
 /// page past the candidates it already read, until every window is exhausted
 /// or reaches past the page's cutoff.
 fn try_select(
-    connection: &Arc<Connection>,
+    connection: &Db,
     query: &ValidatedIndexQuery,
     excluded_optimistic: &[i64],
 ) -> Result<Option<Vec<ReferenceHit>>, TursoStorageError> {

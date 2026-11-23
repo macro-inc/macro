@@ -2180,7 +2180,7 @@ fn fault_storage(io: Arc<FaultIo>) -> TursoStorage {
     let io_trait: Arc<dyn IO> = io;
     let database =
         Database::open(io_trait, &path, OpenOptions::new(Arc::new(SqliteDialect))).unwrap();
-    let connection = database.connect().unwrap();
+    let connection = Db::cached(database.connect().unwrap());
     initialize(&connection, "fault-scope", true).unwrap();
     TursoStorage {
         health: AtomicU8::new(0),

@@ -35,11 +35,7 @@ fn document(n: u32, timestamp: i64) -> IndexDocument {
     doc
 }
 
-fn hits(
-    connection: &Arc<Connection>,
-    query: &ValidatedIndexQuery,
-    excluded: &[i64],
-) -> Vec<(String, i64)> {
+fn hits(connection: &Db, query: &ValidatedIndexQuery, excluded: &[i64]) -> Vec<(String, i64)> {
     select(connection, query, excluded, true)
         .unwrap()
         .iter()
@@ -52,11 +48,7 @@ fn hits(
         .collect()
 }
 
-fn reference(
-    connection: &Arc<Connection>,
-    query: &ValidatedIndexQuery,
-    excluded: &[i64],
-) -> Vec<(String, i64)> {
+fn reference(connection: &Db, query: &ValidatedIndexQuery, excluded: &[i64]) -> Vec<(String, i64)> {
     let (sql, parameters) = compile_predicate_selection(query, excluded, true);
     driver::query(connection, &sql, parameters)
         .unwrap()
@@ -123,8 +115,19 @@ fn dense_pages_have_a_corpus_independent_vm_budget() {
                 );
                 let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
                 let rows = driver::query_prepared(&mut statement, parameters).unwrap();
-                assert_eq!(rows.len(), MIN_CANDIDATES);
-                assert_eq!(required_i64(&rows[0], 1).unwrap(), middle.value);
+                // The window is the 64 values from the middle on, whatever
+                // order the rows come back in.
+                let mut values = rows
+                    .iter()
+                    .map(|row| required_i64(row, 1).unwrap())
+                    .collect::<Vec<_>>();
+                values.sort_unstable();
+                let window = MIN_CANDIDATES as i64;
+                let start = match direction {
+                    SortDirection::Asc => middle.value,
+                    SortDirection::Desc => middle.value - window + 1,
+                };
+                assert_eq!(values, (start..start + window).collect::<Vec<_>>());
                 assert!(
                     statement.metrics().vm_steps < 20_000,
                     "{count} records, continued: {} VM steps",

@@ -30,7 +30,7 @@ fn statement(plan: &PeopleSqlPlan) -> String {
     sql
 }
 
-pub(super) fn viewer(connection: &Arc<Connection>) -> Result<Option<String>, TursoStorageError> {
+pub(super) fn viewer(connection: &Db) -> Result<Option<String>, TursoStorageError> {
     let key = RecordKey::from_entity(&EntityKey(cache_core::engine::IDENTITY_META_KEY.into()))?;
     let rows = driver::query(
         connection,
@@ -58,7 +58,7 @@ pub(super) fn stamp(viewer: Option<&str>) -> String {
 }
 
 fn project(
-    connection: &Arc<Connection>,
+    connection: &Db,
     viewer: &str,
     key: &RecordKey,
     record: &Record,
@@ -74,7 +74,7 @@ fn project(
 
 /// Called inside the caller's transaction. Rebuild only on a profile/account
 /// transition, in bounded record batches, without changing normalized authority.
-fn ensure(connection: &Arc<Connection>, viewer: Option<&str>) -> Result<bool, TursoStorageError> {
+fn ensure(connection: &Db, viewer: Option<&str>) -> Result<bool, TursoStorageError> {
     let stamp = stamp(viewer);
     let versions = driver::query(
         connection,
@@ -125,17 +125,14 @@ fn ensure(connection: &Arc<Connection>, viewer: Option<&str>) -> Result<bool, Tu
     Ok(true)
 }
 
-pub(super) fn open(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn open(connection: &Db) -> Result<(), TursoStorageError> {
     driver::write_transaction(connection, || {
         ensure(connection, viewer(connection)?.as_deref())?;
         Ok(())
     })
 }
 
-pub(super) fn write(
-    connection: &Arc<Connection>,
-    entries: &[EncodedRecord],
-) -> Result<(), TursoStorageError> {
+pub(super) fn write(connection: &Db, entries: &[EncodedRecord]) -> Result<(), TursoStorageError> {
     if !entries.iter().any(|entry| {
         entry.contact.is_some() || entry.key.typename == "__meta" && entry.key.id == "identity"
     }) {
@@ -171,7 +168,7 @@ pub(super) fn write(
 }
 
 fn write_delta(
-    connection: &Arc<Connection>,
+    connection: &Db,
     key: &PredicateRecordKey,
     previous: Option<&ProjectionState>,
     next: Option<&ProjectionState>,
@@ -229,10 +226,7 @@ fn write_delta(
     write_projection_state(connection, key, next)
 }
 
-pub(super) fn delete(
-    connection: &Arc<Connection>,
-    keys: &[RecordKey],
-) -> Result<(), TursoStorageError> {
+pub(super) fn delete(connection: &Db, keys: &[RecordKey]) -> Result<(), TursoStorageError> {
     for key in keys.iter().filter(|key| key.typename == "GraphqlContact") {
         let key = PredicateRecordKey::new(key.clone().into_entity()?.as_ref())
             .map_err(|_| invariant())?;
@@ -242,7 +236,7 @@ pub(super) fn delete(
 }
 
 pub(super) fn read(
-    connection: &Arc<Connection>,
+    connection: &Db,
     identity: &str,
     plan: &PeopleSqlPlan,
 ) -> Result<PeopleSqlResult, TursoStorageError> {

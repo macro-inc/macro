@@ -234,6 +234,7 @@ fn soup_lane(
             viewer_id: &identity.viewer_id,
             link_ids: &identity.link_ids,
             body: tier.body,
+            revision: 0,
         };
         let data = faker.response(&documents[doc], &plan, mix(page as u64, lane));
         let next = (page + 1 < pages).then(|| format!("{lane}:{}", page + 1));
@@ -325,6 +326,7 @@ pub fn seed_ops(
             viewer_id: &identity.viewer_id,
             link_ids: &identity.link_ids,
             body: tier.body,
+            revision: 0,
         };
         let data = faker.response(
             &documents["ContactDirectoryBackfill"],
@@ -344,10 +346,16 @@ pub fn seed_ops(
     Ok(())
 }
 
+/// Variants of the foreground workload: run `n` of a replay writes variant
+/// `n % FOREGROUND_VARIANTS`, so consecutive runs change the rows they write
+/// instead of rewriting identical bytes.
+pub const FOREGROUND_VARIANTS: u64 = 4;
+
 /// Network responses the foreground workload writes: a Home list refresh and
 /// opened email threads.
 pub fn foreground_ops(
     faker: &Faker,
+    variant: u64,
     documents: &BTreeMap<&str, apollo_compiler::ExecutableDocument>,
     identity: &Identity,
     entities: &Entities,
@@ -361,8 +369,9 @@ pub fn foreground_ops(
         viewer_id: &identity.viewer_id,
         link_ids: &identity.link_ids,
         body: tier.body,
+        revision: variant,
     };
-    let data = faker.response(&documents["Soup"], &plan, mix(0, "home"));
+    let data = faker.response(&documents["Soup"], &plan, mix(variant, "home"));
     out(Op {
         lane: "home-refresh",
         op: "write",
@@ -385,8 +394,13 @@ pub fn foreground_ops(
             viewer_id: &identity.viewer_id,
             link_ids: &identity.link_ids,
             body: tier.body,
+            revision: variant,
         };
-        let data = faker.response(&documents["EmailThreadPage"], &plan, mix(0, &thread.id));
+        let data = faker.response(
+            &documents["EmailThreadPage"],
+            &plan,
+            mix(variant, &thread.id),
+        );
         out(Op {
             lane: "thread-open",
             op: "write",
