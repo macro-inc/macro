@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { mergeProps, Show } from 'solid-js';
 import {
   UnifiedModelSelectorRoot,
@@ -14,7 +15,14 @@ export function UnifiedModelSelector(props: {
   const state = mergeProps(() => props.state);
   return (
     <UnifiedModelSelectorRoot state={state}>
-      <Show when={isTouchDevice()} fallback={<DesktopModelSelector />}>
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          // A phone-width desktop window has no room beside the menu, so the
+          // catalog replaces the menu's content, as the touch sheet does.
+          <DesktopModelSelector catalogInPlace={isMobileWidth()} />
+        }
+      >
         <MobileModelSelector />
       </Show>
     </UnifiedModelSelectorRoot>

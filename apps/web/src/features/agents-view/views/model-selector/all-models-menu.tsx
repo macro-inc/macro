@@ -25,7 +25,7 @@ export function AllModelsMenu(props: {
   onMount(() => keepSearchFocused(() => search));
 
   return (
-    <div>
+    <div class="flex min-h-0 flex-1 flex-col">
       <div class="flex h-10 shrink-0 items-center gap-2 px-3.5">
         <Search class="size-4 shrink-0 text-ink-extra-muted" />
         <input
@@ -54,38 +54,41 @@ export function AllModelsMenu(props: {
           class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-extra-muted"
         />
       </div>
-      <Key each={providers()} by="label">
-        {(provider) => (
-          <Dropdown.Group>
-            <Dropdown.GroupLabel>{provider().label}</Dropdown.GroupLabel>
-            <Dropdown.RadioGroup value={props.model}>
-              <Key each={provider().options} by="id">
-                {(option) => (
-                  <Dropdown.RadioItem
-                    value={option().id}
-                    disabled={props.disabled}
-                    closeOnSelect
-                    onSelect={() => props.onSelect(option().id)}
-                  >
-                    <ModelIcon model={option().id} />
-                    <Dropdown.ItemLabel class="min-w-0 flex-1 truncate">
-                      {option().label}
-                    </Dropdown.ItemLabel>
-                    <Dropdown.ItemIndicator>
-                      <Check class="size-3.5 text-accent" />
-                    </Dropdown.ItemIndicator>
-                  </Dropdown.RadioItem>
-                )}
-              </Key>
-            </Dropdown.RadioGroup>
-          </Dropdown.Group>
-        )}
-      </Key>
-      <Show when={providers().length === 0}>
-        <p role="status" class="p-1.5 px-2 text-sm text-ink-extra-muted">
-          {t('agentControls.noMatches')}
-        </p>
-      </Show>
+      {/* The rows scroll under a fixed search field, with room after the last. */}
+      <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1.5">
+        <Key each={providers()} by="label">
+          {(provider) => (
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>{provider().label}</Dropdown.GroupLabel>
+              <Dropdown.RadioGroup value={props.model}>
+                <Key each={provider().options} by="id">
+                  {(option) => (
+                    <Dropdown.RadioItem
+                      value={option().id}
+                      disabled={props.disabled}
+                      closeOnSelect
+                      onSelect={() => props.onSelect(option().id)}
+                    >
+                      <ModelIcon model={option().id} />
+                      <Dropdown.ItemLabel class="min-w-0 flex-1 truncate">
+                        {option().label}
+                      </Dropdown.ItemLabel>
+                      <Dropdown.ItemIndicator>
+                        <Check class="size-3.5 text-accent" />
+                      </Dropdown.ItemIndicator>
+                    </Dropdown.RadioItem>
+                  )}
+                </Key>
+              </Dropdown.RadioGroup>
+            </Dropdown.Group>
+          )}
+        </Key>
+        <Show when={providers().length === 0}>
+          <p role="status" class="p-1.5 px-2 text-sm text-ink-extra-muted">
+            {t('agentControls.noMatches')}
+          </p>
+        </Show>
+      </div>
     </div>
   );
 }

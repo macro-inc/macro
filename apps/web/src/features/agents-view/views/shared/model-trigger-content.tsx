@@ -38,7 +38,9 @@ export function UnifiedModelTriggerContent(props: { mobile?: boolean }) {
           state.effort.options.length > 1
         }
       >
-        <span class="shrink-0 text-ink-extra-muted">
+        {/* When space is short the effort gives way first, so the model's
+            name stays readable instead of shrinking to a letter. */}
+        <span class="min-w-0 shrink-[100] truncate text-ink-extra-muted">
           {
             state.effort?.options.find(
               (choice) =>

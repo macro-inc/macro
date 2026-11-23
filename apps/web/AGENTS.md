@@ -924,7 +924,7 @@ not to account-wide paired machine count; a user can pair several computers.
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
 
-- Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
+- Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets. Menu groups are flex columns: a capped, scrolling one (search results) gets `*:shrink-0`, and catalog rows are `shrink-0`, or rows with an explicit `min-h-*` shrink below their wrapped text. Browser check: `bunx playwright test --config src/lib/core/component/AI/component/input/browser-test/playwright.config.ts`.
 
 - All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
   an excluded preview or timestamp, including synced Macro drafts; Drafts and

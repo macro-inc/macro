@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
@@ -11,7 +12,7 @@ import Plus from '@icon/system/regular/plus.svg';
 import Squares from '@icon/system/regular/squares-four.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createUniqueId, For, Show } from 'solid-js';
 import { AgentIcon } from '../../components/AgentGlyph';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { agentPickerGroups } from '../../core/agent-picker-groups';
@@ -29,6 +30,7 @@ import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
 
 export function MobileModelSelector() {
   const state = useUnifiedModelSelector();
+  const currentModelId = createUniqueId();
   const {
     open,
     query,
@@ -104,7 +106,10 @@ export function MobileModelSelector() {
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label={t('agentControls.modelSelector')}>
+        <MobileDrawer.Content
+          opaque
+          aria-label={t('agentControls.modelSelector')}
+        >
           <MobileDrawer.Handle />
           <Show when={page() !== 'list'}>
             <div class="relative flex h-12 items-center px-3">
@@ -331,9 +336,22 @@ export function MobileModelSelector() {
           >
             <MobileDrawer.Section class="mx-3 mb-3 shrink-0">
               <Show when={options().model}>
-                <MobileDrawer.Item onClick={() => setPage('model')}>
+                {/* Named "Model" for screen readers, with the current model as
+                    its description. */}
+                <MobileDrawer.Item
+                  aria-label={t('agentControls.model')}
+                  aria-describedby={currentModelId}
+                  onClick={() => setPage('model')}
+                >
                   <ModelIcon model={state.model} />
                   <span class="flex-1">{t('agentControls.model')}</span>
+                  <span
+                    id={currentModelId}
+                    class="max-w-32 truncate text-ink-subtle"
+                  >
+                    {state.models.find((option) => option.id === state.model)
+                      ?.label ?? catalogModelLabel(state.model, state.models)}
+                  </span>
                   <CaretRight class="size-4" />
                 </MobileDrawer.Item>
               </Show>
