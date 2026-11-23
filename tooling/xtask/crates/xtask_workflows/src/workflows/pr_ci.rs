@@ -4,6 +4,8 @@
 //! `start` removes the label, so adding it again runs CI again, and checks that
 //! the merge commit GitHub built holds the PR head. The check workflows run as
 //! reusable workflows; the path-filtered ones only when their files changed.
+//! `start` also reads the head's attestations ([`attestation`]) and hands the
+//! accepted ones to the calls, whose attested jobs are skipped.
 //! `CI gate` then sets the [`GATE_CONTEXT`] commit status on the PR head, which
 //! `main` requires: a new push has no status until CI runs on it.
 //!
@@ -23,7 +25,8 @@
 //! their label and sets their status.
 
 use gh_workflow::expr::typed::{
-    Bool, Expr, JobHandle, StepHandle, Str, cancelled, github, needs, steps, to_json, whole_needs,
+    Bool, Expr, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, github, needs, steps,
+    to_json, whole_needs,
 };
 use gh_workflow::{
     CallJob, Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step,
@@ -38,9 +41,10 @@ use crate::workflows::actions::{
     CallSdkCheck, CallTestMacrodUpdate, CallWebAppCheckMain, DornyPathsFilter,
 };
 use crate::workflows::{
-    cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, code_check_conventions, code_check_infra, observability_aws,
-    observability_cluster, observability_image, runners, sdk_check, steps, test_macrod_update,
+    attestation, cargo_deny, cargo_workspace_dependency_check, check_generated,
+    check_node_modules_nix, check_tauri_lockfiles, code_check_conventions, code_check_infra,
+    observability_aws, observability_cluster, observability_image, runners, sdk_check, steps,
+    test_macrod_update,
 };
 
 #[cfg(test)]
@@ -68,28 +72,62 @@ fn pr_number() -> Expr<Str> {
 pub const START_JOB: &str = "Start";
 pub const GATE_JOB: &str = "CI gate";
 
-/// Takes the request and path-filters the calls; its outputs are one flag
-/// per path-filtered call, named by [`output_name`] at run time.
-const START: JobHandle<()> = JobHandle::new("start", ());
+/// What [`START`] decided about the head's attestations
+/// ([`attestation`]).
+struct Attestations<Output> {
+    /// The checks whose jobs this run skips, a JSON list of ids.
+    attested: Output,
+    /// The accepted checks this run runs anyway, a JSON list of ids.
+    audited: Output,
+    /// The tree of the merge commit the run tests.
+    tree: Output,
+}
+
+/// Takes the request, reads the head's attestations and path-filters the
+/// calls. Besides these, its outputs are one flag per path-filtered call,
+/// named by [`output_name`] at run time.
+const START: JobHandle<Attestations<JobOutput<Str>>> = JobHandle::new(
+    "start",
+    Attestations {
+        attested: JobOutput::new("start", "attested"),
+        audited: JobOutput::new("start", "audited"),
+        tree: JobOutput::new("start", "tree"),
+    },
+);
+/// The step of [`START`] that accepts attestations and draws the audits.
+const ATTESTATIONS: StepHandle<Attestations<StepOutput<Str>>> = StepHandle::new(
+    "attestations",
+    Attestations {
+        attested: StepOutput::new("attestations", "attested"),
+        audited: StepOutput::new("attestations", "audited"),
+        tree: StepOutput::new("attestations", "tree"),
+    },
+);
 /// The path filter in [`START`]; one output per path-filtered call.
 const FILTER: StepHandle<()> = StepHandle::new("filter", ());
 
-/// A check workflow `PR CI` calls.
-struct Call {
-    id: &'static str,
-    /// Prefixes the called jobs' check names: `Web App / Typecheck`.
-    name: &'static str,
-    /// A job calling the workflow; [`call_job`] names it and passes secrets.
-    workflow: fn() -> CallJob,
-    /// Files that make it run; `None` runs it on every request.
-    paths: Option<&'static [RepoGlob<'static>]>,
+/// The checks [`START`] accepted, as a call hands them to its workflow.
+fn attested() -> Expr<Str> {
+    START.outputs.attested.read()
 }
 
-const CALLS: &[Call] = &[
+/// A check workflow `PR CI` calls.
+pub(crate) struct Call {
+    pub(crate) id: &'static str,
+    /// Prefixes the called jobs' check names: `Web App / Typecheck`.
+    pub(crate) name: &'static str,
+    /// A job calling the workflow; [`call_job`] names it and passes secrets.
+    /// A workflow with attested jobs is handed [`attested`].
+    pub(crate) workflow: fn() -> CallJob,
+    /// Files that make it run; `None` runs it on every request.
+    pub(crate) paths: Option<&'static [RepoGlob<'static>]>,
+}
+
+pub(crate) const CALLS: &[Call] = &[
     Call {
         id: "cloud-storage",
         name: "Cloud Storage",
-        workflow: || CallCodeCheckCloudStorage::new().job(),
+        workflow: || CallCodeCheckCloudStorage::new().attested(attested()).job(),
         paths: None,
     },
     Call {
@@ -101,13 +139,13 @@ const CALLS: &[Call] = &[
     Call {
         id: "infra",
         name: "Infra",
-        workflow: || CallCodeCheckInfra::new().job(),
+        workflow: || CallCodeCheckInfra::new().attested(attested()).job(),
         paths: Some(code_check_infra::PATHS),
     },
     Call {
         id: "conventions",
         name: "Conventions",
-        workflow: || CallCodeCheckConventions::new().job(),
+        workflow: || CallCodeCheckConventions::new().attested(attested()).job(),
         paths: Some(code_check_conventions::PATHS),
     },
     Call {
@@ -119,19 +157,23 @@ const CALLS: &[Call] = &[
     Call {
         id: "workspace-dependencies",
         name: "Workspace dependencies",
-        workflow: || CallCargoWorkspaceDependencyCheck::new().job(),
+        workflow: || {
+            CallCargoWorkspaceDependencyCheck::new()
+                .attested(attested())
+                .job()
+        },
         paths: Some(cargo_workspace_dependency_check::PATHS),
     },
     Call {
         id: "generated-workflows",
         name: "Generated workflows",
-        workflow: || CallCheckGenerated::new().job(),
+        workflow: || CallCheckGenerated::new().attested(attested()).job(),
         paths: Some(check_generated::PATHS),
     },
     Call {
         id: "node-modules-nix",
         name: "node_modules nix",
-        workflow: || CallCheckNodeModulesNix::new().job(),
+        workflow: || CallCheckNodeModulesNix::new().attested(attested()).job(),
         paths: Some(check_node_modules_nix::PATHS),
     },
     Call {
@@ -143,7 +185,7 @@ const CALLS: &[Call] = &[
     Call {
         id: "sdk",
         name: "SDK",
-        workflow: || CallSdkCheck::new().job(),
+        workflow: || CallSdkCheck::new().attested(attested()).job(),
         paths: Some(sdk_check::PATHS),
     },
     Call {
@@ -155,7 +197,7 @@ const CALLS: &[Call] = &[
     Call {
         id: "observability-image",
         name: "Observability image",
-        workflow: || CallObservabilityImage::new().job(),
+        workflow: || CallObservabilityImage::new().attested(attested()).job(),
         paths: Some(observability_image::PATHS),
     },
     Call {
@@ -167,7 +209,7 @@ const CALLS: &[Call] = &[
     Call {
         id: "macrod-update",
         name: "macrod update",
-        workflow: || CallTestMacrodUpdate::new().job(),
+        workflow: || CallTestMacrodUpdate::new().attested(attested()).job(),
         paths: Some(test_macrod_update::PATHS),
     },
 ];
@@ -254,7 +296,24 @@ fn start() -> Job {
             with_pull_request(gate_step("Take the request", "start"))
                 .add_env(("MERGE_SHA", github().sha())),
         )
-        .add_step(paths_filter());
+        .add_step(
+            with_pull_request(gate_step("Read the head's attestations", "attestations"))
+                .id(ATTESTATIONS.id())
+                .add_env(("MERGE_SHA", github().sha()))
+                .add_env(("ATTESTABLE_CHECKS", start_checks()))
+                .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
+                .add_env(("AUDIT_ONE_IN", attestation::AUDIT_ONE_IN.to_string())),
+        )
+        .add_step(paths_filter())
+        .add_output(
+            START.outputs.attested.name(),
+            ATTESTATIONS.outputs.attested.read(),
+        )
+        .add_output(
+            START.outputs.audited.name(),
+            ATTESTATIONS.outputs.audited.read(),
+        )
+        .add_output(START.outputs.tree.name(), ATTESTATIONS.outputs.tree.read());
 
     CALLS
         .iter()
@@ -317,6 +376,21 @@ fn gate() -> Job {
         })
         .add_step(
             with_pull_request(gate_step("Set the CI gate status", "finish"))
-                .add_env(("NEEDS", to_json(whole_needs()))),
+                .add_env(("NEEDS", to_json(whole_needs())))
+                .add_env(("ATTESTED", START.outputs.attested.read()))
+                .add_env(("AUDITED", START.outputs.audited.read()))
+                .add_env(("TREE", START.outputs.tree.read()))
+                .add_env(("ATTESTABLE_CHECKS", start_checks()))
+                .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
+                .add_env((
+                    "GATE_CHECKS",
+                    attestation::gate_checks().expect("the attested checks render"),
+                ))
+                .add_env(("RUN_ID", github().run_id())),
         )
+}
+
+/// The attestable checks and their fingerprints, for the gate script.
+fn start_checks() -> String {
+    attestation::start_checks().expect("the attested checks render")
 }

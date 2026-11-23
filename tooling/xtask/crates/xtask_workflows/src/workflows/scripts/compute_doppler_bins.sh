@@ -1,6 +1,6 @@
 set -euo pipefail
 
-doppler_config_bins="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- doppler-bins /tmp/changed-files)"
+doppler_config_bins="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- doppler-bins "$RUNNER_TEMP/changed-files")"
 {
   echo 'doppler_config_bins<<__DOPPLER_CONFIG_BINS__'
   if [ -n "$doppler_config_bins" ]; then

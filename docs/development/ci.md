@@ -19,6 +19,86 @@ what each `CI gate` state means, re-runs, and fork PRs. The workflows are
 generated from Rust; see the
 [workflows rule](../../.agents/rules/infra/github-workflows.md).
 
+## Attesting checks from your machine
+
+A `PR CI` check your own machine has already passed doesn't need a runner.
+`cargo x attest run` runs a check's scripts, the same text the workflow holds,
+in your working tree and records what happened. `cargo x attest post` puts the
+recorded passes that apply on the pull request, and a requested `PR CI` run
+skips those jobs and runs the rest as before.
+
+```sh
+cargo x attest list --all               # the checks, and why the other jobs can't be attested
+cargo x attest run all                  # as you work: every check this branch makes PR CI run
+
+git fetch origin main && git merge origin/main && git push
+cargo x attest run all                  # on the pushed commit; skips what already passed on it
+cargo x attest post                     # with the pull request open, before the run-ci label
+```
+
+Use `run` as you work, as you would `just check`: it posts nothing, and it
+skips a check that already passed on the same files.
+
+Merge `main` and push in one go when you are ready for CI. GitHub builds the
+merge commit `PR CI` tests at the push, from `main` as it is then, and keeps
+it when `main` moves later. So the branch must hold `main` as of the push,
+and anything that runs between the merge and the push gives `main` time to
+move. `run` and `post` both say when that happened: merge and push again.
+
+What a pass is for:
+
+- A tree: every file of the commit you ran on. `PR CI` tests GitHub's merge of
+  your head into `main`, and a pass counts when that merge has the same tree,
+  which it has when your branch already holds what `main` has. `post` tells
+  you when `main` has moved on: merge it, run again, push.
+- Committed files. With uncommitted changes a check still runs and tells you
+  the result, and records nothing. Don't edit files while a check runs.
+- The whole check. Where a runner lints or builds the Rust packages a pull
+  request touches, your machine takes them all, so a pass covers whatever a
+  run selects.
+
+It is the whole tree and not the paths a job is triggered by, because those
+paths say when a pull request needs the job, not everything the job reads.
+
+What `PR CI` accepts:
+
+- An `attested/<check>` commit status on the head that names the tree of the
+  merge commit under test and the check's fingerprint. A job whose definition
+  changed since, in the pull request or on `main`, runs on a runner.
+- Only people who can push to the repository can post a status, and only
+  same-repository pull requests have theirs read.
+- Every accepted check has one chance in ten of running on a runner anyway.
+  One that fails there fails the run, `CI gate` reads `Attested but failed
+  here: <checks>`, and the check is withdrawn for that tree: nothing posted
+  for it counts again. Nothing else runs these jobs for a pull request, so
+  treat that as a defect and find why the machine and the runner disagree.
+- `CI gate` reads the statuses again when the run ends, because re-running
+  failed jobs keeps what `Start` decided. A run that relied on an attestation
+  withdrawn meanwhile fails with `No longer attested: <checks>`. Add the label
+  again.
+
+A check that fails on your machine is recorded too, and `post` withdraws a
+pass the commit carries for the same tree.
+
+How a check runs:
+
+- In the working tree, in the repository's Nix dev shell, with the job's
+  environment. `target/` and `node_modules` are your own, so the first run
+  compiles with the flags CI uses.
+- A machine busier or slower than a runner can fail a test that passes there,
+  on a timeout. That costs nothing but the attestation: the job runs in
+  `PR CI`.
+
+`cargo x attest list --all` says why each other job can't be attested. A job
+needs a runner when it needs service containers, secrets, system packages,
+another operating system or the pull request's labels; when its setup or its
+script rewrites tracked files, as the web typecheck, test and generated-code
+jobs and the dependency check do; when it reads something outside the tree,
+as the Biome jobs do with the files changed since `main`, the GraphQL schema
+check with the merge commit's parents, and `cargo deny` with the advisory
+database. Both lists, and how to move a job between them, are in
+`xtask_workflows`' `attestation.rs`.
+
 ## Email end-to-end suites
 
 `PR CI` does not run the email end-to-end suites, and `CI gate` does not

@@ -2,7 +2,12 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/cargo_workspace_dependency_check.rs
 name: cargo workspace dependency check
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      attested:
+        description: JSON list of the checks PR CI accepted an attestation for, by id
+        type: string
+        default: '[]'
 jobs:
   dependency-check:
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
@@ -668,6 +673,7 @@ jobs:
           await seal();
           NODE_SCRIPT
   hakari-and-dep-closures:
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''workspace-dependencies/hakari-and-dep-closures'')'
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     timeout-minutes: 15
     steps:

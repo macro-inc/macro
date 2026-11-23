@@ -1,0 +1,23 @@
+[package]
+description = "xtask attest: run PR CI jobs on this machine and attest their result on the commit"
+edition = "2024"
+name = "xtask_attest"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask_attest"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+hex = { workspace = true }
+nom = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
+
+[dev-dependencies]
+tempfile = { workspace = true }

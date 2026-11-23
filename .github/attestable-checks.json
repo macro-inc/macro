@@ -1,0 +1,575 @@
+{
+  "checks": [
+    {
+      "call": "cloud-storage",
+      "dev_shell": "default",
+      "env": {
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "limited",
+        "CARGO_PROFILE_TEST_DEBUG": "limited",
+        "CARGO_TARGET_REBUILD_ALL": "",
+        "CARGO_TERM_COLOR": "always",
+        "RUSTDOCFLAGS": "-Dwarnings",
+        "RUSTFLAGS": "-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold",
+        "RUST_BACKTRACE": "1",
+        "SQLX_OFFLINE": "true"
+      },
+      "fingerprint": "6f31c40a6484c8cd",
+      "id": "cloud-storage/check",
+      "job": "check",
+      "name": "Cloud Storage / check",
+      "steps": [
+        {
+          "env": {},
+          "name": "Build code-mode assets",
+          "pipefail": false,
+          "run": "set -euo pipefail\n\n# Build the code-mode assets once per SDK state, not once per job. Cache volumes\n# are forks of past jobs, so most jobs miss the store path another job just built.\n# The key is the store path, which covers every input of the build.\nassets=\"$(nix eval --raw .#code-mode-assets.outPath)\"\necho \"CODE_MODE_ASSETS_DIR=$assets\" >> \"$GITHUB_ENV\"\n\nif nix-store --check-validity \"$assets\" 2>/dev/null; then\n  echo \"Code-mode assets already in the store\"\n  exit 0\nfi\n\n# Forks have no remote cache credentials.\nif [ -z \"${SCCACHE_WEBDAV_ENDPOINT:-}\" ]; then\n  nix build --no-link --print-build-logs .#code-mode-assets\n  exit 0\nfi\n\ncache_url=\"$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename \"$assets\").closure.gz\"\n\n# The token goes through a config descriptor so it stays out of curl's arguments.\ncache_request() {\n  curl --fail --silent --show-error --max-time 30 --retry 2 \\\n    -K <(printf 'header = \"Authorization: Bearer %s\"\\n' \"$SCCACHE_WEBDAV_TOKEN\") \"$@\"\n}\n\nif cache_request \"$cache_url\" | gunzip | nix-store --import; then\n  echo \"Code-mode assets restored from the remote cache\"\n  exit 0\nfi\n\n# Installing node_modules is most of a build and changes far less often than the SDK,\n# so it has its own entry.\nmodules=\"$(nix eval --raw .#macro-js-node-modules.outPath)\"\nmodules_url=\"$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename \"$modules\").zst\"\nsave_modules=false\n\nif ! nix-store --check-validity \"$modules\" 2>/dev/null; then\n  # No retries: a retry would restart the stream into the same pipe, and past the limit\n  # a rebuild is faster.\n  if cache_request --retry 0 --max-time 60 \"$modules_url\" | zstd -d | nix-store --import; then\n    echo \"node_modules restored from the remote cache\"\n  else\n    save_modules=true\n  fi\nfi\n\nnix build --no-link --print-build-logs .#code-mode-assets\n\nif [ \"$save_modules\" = true ] \\\n  && ! nix-store --export \"$modules\" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - \"$modules_url\"; then\n  echo \"::warning::Could not save node_modules to the remote cache\"\nfi\n\n# Losing the upload costs the next job a rebuild, not a failure.\nif nix-store --export \"$assets\" | gzip | cache_request --upload-file - \"$cache_url\"; then\n  echo \"Code-mode assets saved to the remote cache\"\nelse\n  echo \"::warning::Could not save code-mode assets to the remote cache\"\nfi\n",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "fmt",
+          "pipefail": false,
+          "run": "cargo fmt --check",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "unused dependencies",
+          "pipefail": false,
+          "run": "cargo shear --format github",
+          "working_directory": null
+        },
+        {
+          "env": {
+            "RUST_PACKAGES": "all"
+          },
+          "name": "clippy",
+          "pipefail": false,
+          "run": "set -euo pipefail\n\n# Mirrors run_tests.sh package selection so clippy only lints the crates this\n# PR can actually affect. `all` keeps the historical workspace invocation,\n# including sync_service's special-cased feature set.\n\npackages=\"${RUST_PACKAGES:-}\"\n\nclippy_sync_service() {\n  cargo clippy -p sync_service -- \\\n    -A clippy::unnecessary_map_or \\\n    -A clippy::collapsible_if\n}\n\n# Most of soup's dependents build it without `outbound` (no features, or\n# `ports` alone), where helpers only the service or the Postgres repository\n# call are dead code that --all-features hides.\nclippy_soup_without_outbound() {\n  cargo clippy -p soup --no-default-features\n  cargo clippy -p soup --no-default-features --features ports\n}\n\nif [ -z \"$packages\" ] || [ \"$packages\" = \"all\" ]; then\n  cargo clippy --workspace --all-features --exclude sync_service\n  clippy_sync_service\n  clippy_soup_without_outbound\n  exit 0\nfi\n\nif [ \"$packages\" = \"none\" ]; then\n  echo \"No Rust packages to lint\"\n  exit 0\nfi\n\nsync=false\nsoup=false\npkg_args=()\nfor p in $packages; do\n  if [ \"$p\" = \"sync_service\" ]; then\n    sync=true\n  else\n    pkg_args+=(-p \"$p\")\n  fi\n  if [ \"$p\" = \"soup\" ]; then\n    soup=true\n  fi\ndone\n\nif [ \"${#pkg_args[@]}\" -gt 0 ]; then\n  cargo clippy --all-features \"${pkg_args[@]}\"\nfi\n\nif [ \"$sync\" = true ]; then\n  clippy_sync_service\nfi\n\nif [ \"$soup\" = true ]; then\n  clippy_soup_without_outbound\nfi\n",
+          "working_directory": null
+        }
+      ],
+      "triggers": [
+        ".cargo",
+        ".config",
+        ".github/actions/setup-nix",
+        ".github/actions/setup-nix-dev-shell",
+        ".github/actions/setup-sccache",
+        ".github/actions/teardown-nix",
+        ".github/services-config.json",
+        ".github/workflows/code_check_cloud_storage.yml",
+        ".sqlx",
+        "Cargo.lock",
+        "Cargo.toml",
+        "Cross.toml",
+        "bun.lock",
+        "clippy.toml",
+        "crates",
+        "deny.toml",
+        "flake.lock",
+        "flake.nix",
+        "nix",
+        "nix-support",
+        "packages/code-mode-sdk",
+        "packages/sdk",
+        "packages/sdk-docs",
+        "rust-toolchain.toml",
+        "services",
+        "static_assets",
+        "tooling/xtask"
+      ],
+      "workflow": "code_check_cloud_storage.yml"
+    },
+    {
+      "call": "cloud-storage",
+      "dev_shell": "default",
+      "env": {
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "CARGO_TARGET_REBUILD_ALL": "",
+        "CARGO_TERM_COLOR": "always",
+        "RUSTFLAGS": "-Dwarnings -C link-arg=-fuse-ld=mold",
+        "RUST_BACKTRACE": "1",
+        "RUST_PACKAGES": "all",
+        "SQLX_OFFLINE": "true"
+      },
+      "fingerprint": "dcadba15d6252538",
+      "id": "cloud-storage/build-service-bins",
+      "job": "build-service-bins",
+      "name": "Cloud Storage / build-service-bins",
+      "steps": [
+        {
+          "env": {},
+          "name": "Build code-mode assets",
+          "pipefail": false,
+          "run": "set -euo pipefail\n\n# Build the code-mode assets once per SDK state, not once per job. Cache volumes\n# are forks of past jobs, so most jobs miss the store path another job just built.\n# The key is the store path, which covers every input of the build.\nassets=\"$(nix eval --raw .#code-mode-assets.outPath)\"\necho \"CODE_MODE_ASSETS_DIR=$assets\" >> \"$GITHUB_ENV\"\n\nif nix-store --check-validity \"$assets\" 2>/dev/null; then\n  echo \"Code-mode assets already in the store\"\n  exit 0\nfi\n\n# Forks have no remote cache credentials.\nif [ -z \"${SCCACHE_WEBDAV_ENDPOINT:-}\" ]; then\n  nix build --no-link --print-build-logs .#code-mode-assets\n  exit 0\nfi\n\ncache_url=\"$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename \"$assets\").closure.gz\"\n\n# The token goes through a config descriptor so it stays out of curl's arguments.\ncache_request() {\n  curl --fail --silent --show-error --max-time 30 --retry 2 \\\n    -K <(printf 'header = \"Authorization: Bearer %s\"\\n' \"$SCCACHE_WEBDAV_TOKEN\") \"$@\"\n}\n\nif cache_request \"$cache_url\" | gunzip | nix-store --import; then\n  echo \"Code-mode assets restored from the remote cache\"\n  exit 0\nfi\n\n# Installing node_modules is most of a build and changes far less often than the SDK,\n# so it has its own entry.\nmodules=\"$(nix eval --raw .#macro-js-node-modules.outPath)\"\nmodules_url=\"$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename \"$modules\").zst\"\nsave_modules=false\n\nif ! nix-store --check-validity \"$modules\" 2>/dev/null; then\n  # No retries: a retry would restart the stream into the same pipe, and past the limit\n  # a rebuild is faster.\n  if cache_request --retry 0 --max-time 60 \"$modules_url\" | zstd -d | nix-store --import; then\n    echo \"node_modules restored from the remote cache\"\n  else\n    save_modules=true\n  fi\nfi\n\nnix build --no-link --print-build-logs .#code-mode-assets\n\nif [ \"$save_modules\" = true ] \\\n  && ! nix-store --export \"$modules\" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - \"$modules_url\"; then\n  echo \"::warning::Could not save node_modules to the remote cache\"\nfi\n\n# Losing the upload costs the next job a rebuild, not a failure.\nif nix-store --export \"$assets\" | gzip | cache_request --upload-file - \"$cache_url\"; then\n  echo \"Code-mode assets saved to the remote cache\"\nelse\n  echo \"::warning::Could not save code-mode assets to the remote cache\"\nfi\n",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "build service binaries",
+          "pipefail": false,
+          "run": "set -euo pipefail\n\n: \"${RUST_PACKAGES:?RUST_PACKAGES is required}\"\n\n# The test job never compiles these services' `run` bodies: each is an `impl\n# Future` polled only by the bin's `main`, and a bin's test target doesn't call\n# `main`. Clippy stops before monomorphization. So a failure only a real build\n# finds, such as a recursion limit overflow while instantiating, shows up here.\nselected=()\nfor service in document_storage_service email_service authentication_service; do\n  if [ \"$RUST_PACKAGES\" = \"all\" ] || [[ \" $RUST_PACKAGES \" == *\" $service \"* ]]; then\n    selected+=(\"$service\")\n  fi\ndone\n\nif [ \"${#selected[@]}\" -eq 0 ]; then\n  echo \"No service binaries were affected\"\n  exit 0\nfi\n\n# The same packages and features as run_tests.sh. Building each service's\n# `service_binary_builds` test target, which nothing runs, makes cargo build the\n# real binaries under the features `cargo test` resolves, so every other unit is\n# one the test job builds too and both jobs share sccache entries. `cargo build`\n# would resolve without dev-dependency features and rebuild most of the workspace.\nif [ \"$RUST_PACKAGES\" = \"all\" ]; then\n  package_args=(--workspace --exclude sync_service)\nelse\n  package_args=()\n  for package in $RUST_PACKAGES; do\n    [ \"$package\" = \"sync_service\" ] || package_args+=(-p \"$package\")\n  done\nfi\n\ncargo test --no-run --locked --all-features \\\n  --config 'profile.dev.package.\"*\".debug=false' \"${package_args[@]}\" \\\n  --test service_binary_builds\n",
+          "working_directory": null
+        }
+      ],
+      "triggers": [
+        ".cargo",
+        ".config",
+        ".github/actions/setup-nix",
+        ".github/actions/setup-nix-dev-shell",
+        ".github/actions/setup-sccache",
+        ".github/actions/teardown-nix",
+        ".github/services-config.json",
+        ".github/workflows/code_check_cloud_storage.yml",
+        ".sqlx",
+        "Cargo.lock",
+        "Cargo.toml",
+        "Cross.toml",
+        "bun.lock",
+        "clippy.toml",
+        "crates",
+        "deny.toml",
+        "flake.lock",
+        "flake.nix",
+        "nix",
+        "nix-support",
+        "packages/code-mode-sdk",
+        "packages/sdk",
+        "packages/sdk-docs",
+        "rust-toolchain.toml",
+        "services",
+        "static_assets",
+        "tooling/xtask"
+      ],
+      "workflow": "code_check_cloud_storage.yml"
+    },
+    {
+      "call": "infra",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "2f22d6c2537a3ae3",
+      "id": "infra/check",
+      "job": "check",
+      "name": "Infra / check",
+      "steps": [
+        {
+          "env": {},
+          "name": "install",
+          "pipefail": false,
+          "run": "bun install --frozen-lockfile",
+          "working_directory": "infra"
+        },
+        {
+          "env": {},
+          "name": "check",
+          "pipefail": false,
+          "run": "bun run check",
+          "working_directory": "infra"
+        }
+      ],
+      "triggers": [
+        ".github/actions/setup-nix-dev-shell",
+        ".github/actions/teardown-nix",
+        ".github/workflows/code_check_infra.yml",
+        "flake.lock",
+        "flake.nix",
+        "infra"
+      ],
+      "workflow": "code_check_infra.yml"
+    },
+    {
+      "call": "conventions",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "98aaa792f547a263",
+      "id": "conventions/ast-grep",
+      "job": "ast-grep",
+      "name": "Conventions / ast-grep Conventions",
+      "steps": [
+        {
+          "env": {},
+          "name": "Run ast-grep",
+          "pipefail": false,
+          "run": "bunx --yes @ast-grep/cli@0.44.1 scan",
+          "working_directory": null
+        }
+      ],
+      "triggers": [
+        ".github/actions/teardown-nix",
+        ".github/workflows/code_check_conventions.yml",
+        "apps/web",
+        "crates",
+        "packages",
+        "rules",
+        "services",
+        "sgconfig.yml",
+        "tooling/xtask"
+      ],
+      "workflow": "code_check_conventions.yml"
+    },
+    {
+      "call": "workspace-dependencies",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "55ffabe27e8e078c",
+      "id": "workspace-dependencies/hakari-and-dep-closures",
+      "job": "hakari-and-dep-closures",
+      "name": "Workspace dependencies / hakari-and-dep-closures",
+      "steps": [
+        {
+          "env": {},
+          "name": "generated dependency artifacts are up to date",
+          "pipefail": false,
+          "run": "cargo run -p xtask --locked -- deps --check\n",
+          "working_directory": null
+        }
+      ],
+      "triggers": [
+        ".config/hakari.toml",
+        ".github/workspace-dep-closures.json",
+        "Cargo.lock",
+        "Cargo.toml",
+        "crates",
+        "services",
+        "tooling/xtask"
+      ],
+      "workflow": "cargo_workspace_dependency_check.yml"
+    },
+    {
+      "call": "generated-workflows",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "d478089ad69ae491",
+      "id": "generated-workflows/check-workflows",
+      "job": "check-workflows",
+      "name": "Generated workflows / check-workflows",
+      "steps": [
+        {
+          "env": {},
+          "name": "verify workflows are up to date",
+          "pipefail": false,
+          "run": "cargo run --manifest-path tooling/xtask/Cargo.toml -- workflows --check",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "verify kafka cluster topics are up to date",
+          "pipefail": false,
+          "run": "cargo run --manifest-path tooling/xtask/Cargo.toml -- kafka-topics --check",
+          "working_directory": null
+        }
+      ],
+      "triggers": [
+        ".github/actionlint.yaml",
+        ".github/actions",
+        ".github/attestable-checks.json",
+        ".github/kafka-cluster-topics.json",
+        ".github/workflows",
+        ".github/zizmor.yml",
+        "crates/macro_event_topics",
+        "nix/patches",
+        "nix/workflow-lint.nix",
+        "tooling/xtask"
+      ],
+      "workflow": "check_generated.yml"
+    },
+    {
+      "call": "generated-workflows",
+      "dev_shell": "workflow-lint",
+      "env": {},
+      "fingerprint": "0eef8bea80ddc00b",
+      "id": "generated-workflows/lint-workflows",
+      "job": "lint-workflows",
+      "name": "Generated workflows / lint-workflows",
+      "steps": [
+        {
+          "env": {},
+          "name": "actionlint",
+          "pipefail": false,
+          "run": "actionlint",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "zizmor",
+          "pipefail": false,
+          "run": "zizmor --offline .github",
+          "working_directory": null
+        }
+      ],
+      "triggers": [
+        ".github/actionlint.yaml",
+        ".github/actions",
+        ".github/attestable-checks.json",
+        ".github/kafka-cluster-topics.json",
+        ".github/workflows",
+        ".github/zizmor.yml",
+        "crates/macro_event_topics",
+        "nix/patches",
+        "nix/workflow-lint.nix",
+        "tooling/xtask"
+      ],
+      "workflow": "check_generated.yml"
+    },
+    {
+      "call": "node-modules-nix",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "c2510c8d6100da4a",
+      "id": "node-modules-nix/check-linux-node-modules-nix",
+      "job": "check-linux-node-modules-nix",
+      "name": "node_modules nix / check Linux node_modules nix",
+      "steps": [
+        {
+          "env": {},
+          "name": "verify js node_modules derivation is up to date",
+          "pipefail": false,
+          "run": "# A fixed-output derivation already in the store is accepted without\n# running it, whatever bun.lock now says, so only then does the check\n# need a rebuild. On a store without it, the first build is the check.\nout=$(nix eval --raw .#js-node-modules.outPath)\nif nix-store --check-validity \"$out\" 2>/dev/null; then\n  nix build .#js-node-modules --no-link --rebuild\nelse\n  nix build .#js-node-modules --no-link\nfi\n",
+          "working_directory": null
+        }
+      ],
+      "triggers": [
+        ".github/workflows/check_node_modules_nix.yml",
+        "apps",
+        "bun.lock",
+        "flake.lock",
+        "flake.nix",
+        "nix-support/node_modules-hashes.json",
+        "nix-support/node_modules.nix",
+        "nix/tauri-desktop.nix",
+        "package.json",
+        "packages",
+        "services",
+        "tooling/scripts/update-node-modules-hash.sh"
+      ],
+      "workflow": "check_node_modules_nix.yml"
+    },
+    {
+      "call": "sdk",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "b61221e4b593e90e",
+      "id": "sdk/check-package",
+      "job": "check-package",
+      "name": "SDK / SDK Package Check",
+      "steps": [
+        {
+          "env": {},
+          "name": "Install dependencies",
+          "pipefail": false,
+          "run": "bun install --frozen-lockfile",
+          "working_directory": "packages/sdk"
+        },
+        {
+          "env": {},
+          "name": "Typecheck SDK",
+          "pipefail": false,
+          "run": "bun run check",
+          "working_directory": "packages/sdk"
+        },
+        {
+          "env": {},
+          "name": "Test SDK",
+          "pipefail": false,
+          "run": "bun test",
+          "working_directory": "packages/sdk"
+        },
+        {
+          "env": {},
+          "name": "Check endpoint coverage",
+          "pipefail": false,
+          "run": "bun run coverage",
+          "working_directory": "packages/sdk"
+        },
+        {
+          "env": {},
+          "name": "Check packed SDK",
+          "pipefail": false,
+          "run": "bun run build && bun run check:pack",
+          "working_directory": "packages/sdk"
+        }
+      ],
+      "triggers": [
+        ".github/workflows/sdk-check.yml",
+        "bun.lock",
+        "packages/sdk"
+      ],
+      "workflow": "sdk-check.yml"
+    },
+    {
+      "call": "observability-image",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "9aaed47ee75d9475",
+      "id": "observability-image/build-image",
+      "job": "build-image",
+      "name": "Observability image / Build observability image",
+      "steps": [
+        {
+          "env": {},
+          "name": "Build the NixOS image",
+          "pipefail": true,
+          "run": "set -euo pipefail\nif [ -e /dev/kvm ]; then\n  echo \"KVM is available\"\nelse\n  echo \"::warning::No /dev/kvm: the image builds under QEMU emulation\"\nfi\nfeatures=\"$(nix config show system-features) kvm\"\ntime nix build . --option system-features \"$features\" --print-build-logs --out-link result\ndu -shL result/*.vhd\n",
+          "working_directory": "infra/stacks/observability"
+        }
+      ],
+      "triggers": [
+        ".github/workflows/observability_image.yml",
+        "infra/stacks/observability/assets",
+        "infra/stacks/observability/flake.lock",
+        "infra/stacks/observability/flake.nix",
+        "infra/stacks/observability/nixos"
+      ],
+      "workflow": "observability_image.yml"
+    },
+    {
+      "call": "macrod-update",
+      "dev_shell": "agent-daemon",
+      "env": {},
+      "fingerprint": "58a428ee54376b50",
+      "id": "macrod-update/linux",
+      "job": "linux",
+      "name": "macrod update / macrod update (linux)",
+      "steps": [
+        {
+          "env": {
+            "AWS_LC_SYS_CMAKE_BUILDER": "1",
+            "CARGO_BUILD": "cargo zigbuild",
+            "SQLX_OFFLINE": "true",
+            "TARGET": "x86_64-unknown-linux-musl"
+          },
+          "name": "Build two tagged releases",
+          "pipefail": true,
+          "run": "crates/coding_agent_worker/e2e/build_releases.sh \"$RUNNER_TEMP/releases\" v2000.1.1.1 v2000.1.1.2",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "Self-update end to end",
+          "pipefail": true,
+          "run": "python3 crates/coding_agent_worker/e2e/update_e2e.py --releases \"$RUNNER_TEMP/releases\" --v1 v2000.1.1.1 --v2 v2000.1.1.2",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "Installer in bash, zsh and fish",
+          "pipefail": true,
+          "run": "nix shell nixpkgs#zsh nixpkgs#fish --command crates/coding_agent_worker/e2e/installer_test.sh \"$RUNNER_TEMP/releases\" v2000.1.1.1",
+          "working_directory": null
+        }
+      ],
+      "triggers": [
+        ".github/workflows/test_macrod_update.yml",
+        "crates/coding_agent_worker"
+      ],
+      "workflow": "test_macrod_update.yml"
+    }
+  ],
+  "comment": "Generated by `cargo x workflows`; do not edit. The PR CI jobs `cargo x attest` can run, with the scripts a runner runs.",
+  "not_attestable": [
+    {
+      "id": "cloud-storage/path-check",
+      "why": "decides what the other jobs run, and they wait for it"
+    },
+    {
+      "id": "cloud-storage/test",
+      "why": "needs service containers on fixed ports"
+    },
+    {
+      "id": "cloud-storage/doppler-config",
+      "why": "reads secrets"
+    },
+    {
+      "id": "cloud-storage/graphql-schema-compat",
+      "why": "compares the schema with the base of the merge commit (`HEAD^1`), which a working tree does not have"
+    },
+    {
+      "id": "web-app/path-check",
+      "why": "decides what the other jobs run, and they wait for it"
+    },
+    {
+      "id": "web-app/typescript",
+      "why": "its setup rewrites `bunfig.toml` and replaces `node_modules`, which a working tree can't take"
+    },
+    {
+      "id": "web-app/generated-code",
+      "why": "its setup rewrites `bunfig.toml` and replaces `node_modules`, which a working tree can't take"
+    },
+    {
+      "id": "web-app/test",
+      "why": "its setup rewrites `bunfig.toml` and replaces `node_modules`, which a working tree can't take"
+    },
+    {
+      "id": "web-app/biome-check",
+      "why": "lints the files changed since `main`, so a ref outside the tree decides what it checks"
+    },
+    {
+      "id": "web-app/cycles",
+      "why": "lints the files changed since `main`, so a ref outside the tree decides what it checks"
+    },
+    {
+      "id": "web-app/build",
+      "why": "reads secrets and deploys a preview"
+    },
+    {
+      "id": "web-app/functional",
+      "why": "needs browsers and system packages a dev shell does not install"
+    },
+    {
+      "id": "web-app/browser",
+      "why": "needs browsers and system packages a dev shell does not install"
+    },
+    {
+      "id": "web-app/android-native-check",
+      "why": "reads the pull request's labels and the app stores' state"
+    },
+    {
+      "id": "web-app/ios-native-check",
+      "why": "reads the pull request's labels and the app stores' state"
+    },
+    {
+      "id": "infra/biome-check",
+      "why": "lints the files changed since `main`, so a ref outside the tree decides what it checks"
+    },
+    {
+      "id": "cargo-deny/cargo-deny",
+      "why": "reads the advisory database of the day it runs, so the tree alone does not decide its verdict"
+    },
+    {
+      "id": "workspace-dependencies/dependency-check",
+      "why": "its script edits `Cargo.toml` in place, which a working tree can't take"
+    },
+    {
+      "id": "node-modules-nix/check-darwin-node-modules-nix",
+      "why": "runs on another operating system"
+    },
+    {
+      "id": "tauri-lockfiles/check-tauri-lockfiles",
+      "why": "decides what the other jobs run, and they wait for it"
+    },
+    {
+      "id": "tauri-lockfiles/check-tauri-vendoring",
+      "why": "waits for `check-tauri-lockfiles`, which decides whether it runs"
+    },
+    {
+      "id": "observability-aws/validate",
+      "why": "validates OpenTofu through the AWS layer's separate Nix flake on CI"
+    },
+    {
+      "id": "observability-cluster/check-manifests",
+      "why": "renders Helm charts and validates manifests through the cluster's separate Nix flake on CI"
+    },
+    {
+      "id": "macrod-update/macos",
+      "why": "runs on another operating system"
+    },
+    {
+      "id": "macrod-update/windows",
+      "why": "runs on another operating system"
+    }
+  ],
+  "status_prefix": "attested/"
+}

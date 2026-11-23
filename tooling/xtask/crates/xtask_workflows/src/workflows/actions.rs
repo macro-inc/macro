@@ -3708,6 +3708,13 @@ impl CallObservabilityImage {
         Self(CallJob::new("./.github/workflows/observability_image.yml"))
     }
 
+    /// JSON list of the checks PR CI accepted an attestation for, by id
+    ///
+    /// Default: `[]`.
+    pub fn attested(self, value: impl Into<Value>) -> Self {
+        self.with("attested", value)
+    }
+
     /// Passes every secret the caller can read (`secrets: inherit`).
     pub fn inherit_secrets(self) -> Self {
         Self(self.0.inherit_secrets())
@@ -3716,6 +3723,10 @@ impl CallObservabilityImage {
     /// The job, to set its name, `needs`, condition or permissions.
     pub fn job(self) -> CallJob {
         self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
     }
 }
 
@@ -3735,6 +3746,13 @@ impl CallTestMacrodUpdate {
         Self(CallJob::new("./.github/workflows/test_macrod_update.yml"))
     }
 
+    /// JSON list of the checks PR CI accepted an attestation for, by id
+    ///
+    /// Default: `[]`.
+    pub fn attested(self, value: impl Into<Value>) -> Self {
+        self.with("attested", value)
+    }
+
     /// Passes every secret the caller can read (`secrets: inherit`).
     pub fn inherit_secrets(self) -> Self {
         Self(self.0.inherit_secrets())
@@ -3743,6 +3761,10 @@ impl CallTestMacrodUpdate {
     /// The job, to set its name, `needs`, condition or permissions.
     pub fn job(self) -> CallJob {
         self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
     }
 }
 
@@ -3856,6 +3878,13 @@ impl CallCodeCheckInfra {
         Self(CallJob::new("./.github/workflows/code_check_infra.yml"))
     }
 
+    /// JSON list of the checks PR CI accepted an attestation for, by id
+    ///
+    /// Default: `[]`.
+    pub fn attested(self, value: impl Into<Value>) -> Self {
+        self.with("attested", value)
+    }
+
     /// Passes every secret the caller can read (`secrets: inherit`).
     pub fn inherit_secrets(self) -> Self {
         Self(self.0.inherit_secrets())
@@ -3864,6 +3893,10 @@ impl CallCodeCheckInfra {
     /// The job, to set its name, `needs`, condition or permissions.
     pub fn job(self) -> CallJob {
         self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
     }
 }
 
@@ -3952,6 +3985,13 @@ impl CallCargoWorkspaceDependencyCheck {
         Self(CallJob::new("./.github/workflows/cargo_workspace_dependency_check.yml"))
     }
 
+    /// JSON list of the checks PR CI accepted an attestation for, by id
+    ///
+    /// Default: `[]`.
+    pub fn attested(self, value: impl Into<Value>) -> Self {
+        self.with("attested", value)
+    }
+
     /// Passes every secret the caller can read (`secrets: inherit`).
     pub fn inherit_secrets(self) -> Self {
         Self(self.0.inherit_secrets())
@@ -3960,6 +4000,10 @@ impl CallCargoWorkspaceDependencyCheck {
     /// The job, to set its name, `needs`, condition or permissions.
     pub fn job(self) -> CallJob {
         self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
     }
 }
 
@@ -3979,6 +4023,13 @@ impl CallCodeCheckCloudStorage {
         Self(CallJob::new("./.github/workflows/code_check_cloud_storage.yml"))
     }
 
+    /// JSON list of the checks PR CI accepted an attestation for, by id
+    ///
+    /// Default: `[]`.
+    pub fn attested(self, value: impl Into<Value>) -> Self {
+        self.with("attested", value)
+    }
+
     /// Passes every secret the caller can read (`secrets: inherit`).
     pub fn inherit_secrets(self) -> Self {
         Self(self.0.inherit_secrets())
@@ -3987,6 +4038,10 @@ impl CallCodeCheckCloudStorage {
     /// The job, to set its name, `needs`, condition or permissions.
     pub fn job(self) -> CallJob {
         self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
     }
 }
 
@@ -4006,6 +4061,13 @@ impl CallCodeCheckConventions {
         Self(CallJob::new("./.github/workflows/code_check_conventions.yml"))
     }
 
+    /// JSON list of the checks PR CI accepted an attestation for, by id
+    ///
+    /// Default: `[]`.
+    pub fn attested(self, value: impl Into<Value>) -> Self {
+        self.with("attested", value)
+    }
+
     /// Passes every secret the caller can read (`secrets: inherit`).
     pub fn inherit_secrets(self) -> Self {
         Self(self.0.inherit_secrets())
@@ -4014,6 +4076,10 @@ impl CallCodeCheckConventions {
     /// The job, to set its name, `needs`, condition or permissions.
     pub fn job(self) -> CallJob {
         self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
     }
 }
 
@@ -4527,6 +4593,13 @@ impl CallCheckNodeModulesNix {
         Self(CallJob::new("./.github/workflows/check_node_modules_nix.yml"))
     }
 
+    /// JSON list of the checks PR CI accepted an attestation for, by id
+    ///
+    /// Default: `[]`.
+    pub fn attested(self, value: impl Into<Value>) -> Self {
+        self.with("attested", value)
+    }
+
     /// Passes every secret the caller can read (`secrets: inherit`).
     pub fn inherit_secrets(self) -> Self {
         Self(self.0.inherit_secrets())
@@ -4535,6 +4608,10 @@ impl CallCheckNodeModulesNix {
     /// The job, to set its name, `needs`, condition or permissions.
     pub fn job(self) -> CallJob {
         self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
     }
 }
 
@@ -4581,6 +4658,13 @@ impl CallCheckGenerated {
         Self(CallJob::new("./.github/workflows/check_generated.yml"))
     }
 
+    /// JSON list of the checks PR CI accepted an attestation for, by id
+    ///
+    /// Default: `[]`.
+    pub fn attested(self, value: impl Into<Value>) -> Self {
+        self.with("attested", value)
+    }
+
     /// Passes every secret the caller can read (`secrets: inherit`).
     pub fn inherit_secrets(self) -> Self {
         Self(self.0.inherit_secrets())
@@ -4589,6 +4673,10 @@ impl CallCheckGenerated {
     /// The job, to set its name, `needs`, condition or permissions.
     pub fn job(self) -> CallJob {
         self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
     }
 }
 
@@ -4635,6 +4723,13 @@ impl CallSdkCheck {
         Self(CallJob::new("./.github/workflows/sdk-check.yml"))
     }
 
+    /// JSON list of the checks PR CI accepted an attestation for, by id
+    ///
+    /// Default: `[]`.
+    pub fn attested(self, value: impl Into<Value>) -> Self {
+        self.with("attested", value)
+    }
+
     /// Passes every secret the caller can read (`secrets: inherit`).
     pub fn inherit_secrets(self) -> Self {
         Self(self.0.inherit_secrets())
@@ -4643,6 +4738,10 @@ impl CallSdkCheck {
     /// The job, to set its name, `needs`, condition or permissions.
     pub fn job(self) -> CallJob {
         self.0
+    }
+
+    fn with(self, name: &str, value: impl Into<Value>) -> Self {
+        Self(self.0.add_with(name, value))
     }
 }
 

@@ -63,6 +63,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | iOS App Store releases, breaking Tauri changes, native build floors | [iOS releases](apps/web/docs/ios-releases.md) |
 | Android Play releases from pull requests | [Android development](docs/development/android.md) |
 | Running CI on a pull request | [CI on pull requests](docs/development/ci.md), `run-ci` skill |
+| Running PR CI checks on your machine instead of a runner | [Attesting checks](docs/development/ci.md#attesting-checks-from-your-machine), `cargo x attest` |
 | Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |
 | Running the frontend or backend on a local machine | [Running locally](docs/development/running-locally.md) |
 | Giving the user a local preview link | `local-preview` skill |

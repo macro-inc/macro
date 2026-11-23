@@ -7,7 +7,7 @@ use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall, ZizmorRule
 use xtask_paths::RepoGlob;
 
 use crate::workflows::actions::ActionsCheckout;
-use crate::workflows::{runners, steps, vars};
+use crate::workflows::{attestation, runners, steps, vars};
 
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
@@ -31,7 +31,8 @@ fn infra_runner() -> String {
 /// Build the workflow.
 pub fn code_check_infra() -> Workflow {
     Workflow::new("infra code check")
-        .on(Event::default().workflow_call(WorkflowCall::default()))
+        .on(Event::default()
+            .workflow_call(attestation::takes_attestations(WorkflowCall::default())))
         .add_job("biome-check", biome_check())
         .add_job("check", check())
 }
@@ -52,6 +53,7 @@ fn biome_check() -> Job {
 
 fn check() -> Job {
     Job::default()
+        .cond(attestation::not_attested("infra/check"))
         .timeout_minutes(15u32)
         .runs_on(infra_runner())
         .add_step(checkout(false))

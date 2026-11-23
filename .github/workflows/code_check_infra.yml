@@ -2,7 +2,12 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_infra.rs
 name: infra code check
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      attested:
+        description: JSON list of the checks PR CI accepted an attestation for, by id
+        type: string
+        default: '[]'
 jobs:
   biome-check:
     name: Biome Check
@@ -37,6 +42,7 @@ jobs:
         if: always()
         uses: ./.github/actions/teardown-nix
   check:
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''infra/check'')'
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 15
     steps:

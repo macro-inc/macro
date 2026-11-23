@@ -44,6 +44,18 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   must print `no semantic changes` from `cargo x workflows diff --base <rev>`.
 - New CI scripts are Rust or TypeScript, never Python. A step with no checkout embeds
   its script with `include_str!` and runs it on the hosted image's Node.
+- Every job `PR CI` runs is in one of two lists in `attestation.rs`: `CHECKS`,
+  with the steps that are the check, or `NOT_ATTESTABLE`, with the reason. A
+  new job goes in one of them or the tests fail. List it in `CHECKS` only when
+  a machine can run it from a working tree: its check steps are plain scripts
+  (no `if`, no expression in the script, no action) that leave tracked files
+  alone, it needs no secrets, service containers or other operating system, no
+  other job needs it, and the commit's files alone decide its verdict: not a
+  ref such as `main`, the merge commit's parents, or anything fetched. A step you add
+  to a listed job goes in its `steps`, or in `RUNNER_STEPS` when it only
+  keeps a runner's caches. A listed job ends its condition with
+  `attestation::not_attested(<id>)`, and its workflow declares the input with
+  `attestation::takes_attestations`; generation fails when either is missing.
 - Pin each third-party action to one SHA (CS-39) in
   `tooling/xtask/crates/xtask_workflows/actions.lock`, then run
   `cargo x workflows actions fetch` and `cargo x workflows`: use the action

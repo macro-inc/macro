@@ -9,9 +9,15 @@ on:
       - packages/sdk/**
       - bun.lock
       - .github/workflows/sdk-check.yml
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      attested:
+        description: JSON list of the checks PR CI accepted an attestation for, by id
+        type: string
+        default: '[]'
 jobs:
   check-package:
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''sdk/check-package'')'
     name: SDK Package Check
     runs-on: ubuntu-latest
     timeout-minutes: 10

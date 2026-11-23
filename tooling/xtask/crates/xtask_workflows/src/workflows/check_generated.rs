@@ -1,5 +1,6 @@
 //! `check generated workflows` — fails a PR if the committed `.github/workflows`
-//! YAML or `.github/kafka-cluster-topics.json` has drifted from its Rust source.
+//! YAML, `.github/attestable-checks.json` or `.github/kafka-cluster-topics.json`
+//! has drifted from its Rust source.
 //! Generated into `check-generated-workflows.yml`. This is what makes "workflows
 //! (and the kafka topics file) are defined in Rust" enforceable rather than
 //! aspirational. A second job lints every workflow with actionlint (shellcheck
@@ -10,13 +11,14 @@
 use gh_workflow::{Event, Job, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
-use crate::workflows::{runners, steps};
+use crate::workflows::{attestation, runners, steps};
 
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("tooling/xtask/**"),
     xtask_paths::repo_glob!("crates/macro_event_topics/**"),
     xtask_paths::repo_glob!(".github/workflows/**"),
+    xtask_paths::repo_glob!(".github/attestable-checks.json"),
     xtask_paths::repo_glob!(".github/actions/**"),
     xtask_paths::repo_glob!(".github/actionlint.yaml"),
     xtask_paths::repo_glob!(".github/zizmor.yml"),
@@ -28,7 +30,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 /// Build the workflow.
 pub fn check_generated_workflows() -> Workflow {
     Workflow::new("check generated workflows")
-        .on(Event::default().workflow_call(WorkflowCall::default()))
+        .on(Event::default()
+            .workflow_call(attestation::takes_attestations(WorkflowCall::default())))
         .add_job("check-workflows", check_workflows())
         .add_job("lint-workflows", lint_workflows())
 }
@@ -36,6 +39,9 @@ pub fn check_generated_workflows() -> Workflow {
 /// Regenerate in `--check` mode and fail on any difference.
 fn check_workflows() -> Job {
     Job::default()
+        .cond(attestation::not_attested(
+            "generated-workflows/check-workflows",
+        ))
         .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
         .add_step(steps::checkout(false, false))
@@ -54,6 +60,9 @@ fn check_workflows() -> Job {
 /// the result depends only on the checkout.
 fn lint_workflows() -> Job {
     Job::default()
+        .cond(attestation::not_attested(
+            "generated-workflows/lint-workflows",
+        ))
         .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
         .add_step(steps::checkout(false, false))

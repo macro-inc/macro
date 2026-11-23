@@ -24533,6 +24533,21 @@ name = "xtask"
 version = "0.1.0"
 
 [[package]]
+name = "xtask_attest"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "hex",
+ "nom 8.0.0",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "workspace-hack",
+]
+
+[[package]]
 name = "xtask_deps"
 version = "0.1.0"
 dependencies = [
@@ -24709,10 +24724,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gh_workflow",
+ "hex",
  "indexmap 2.14.0",
  "indoc",
+ "lazy-regex",
  "serde_json",
  "serde_yaml",
+ "sha2 0.10.9",
  "tempfile",
  "xtask_paths",
 ]
