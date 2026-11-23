@@ -26,8 +26,8 @@ opening the conversation, then send a DM from the other account. The row should
 move into **Last few minutes** and show unread without reloading, whether Home's
 notified-at list is served by REST or by GraphQL Soup (which re-reads it, and
 grouped notified-at lists, after every notification patch: a new
-notification, or one marked seen, done or deleted elsewhere, or the viewer
-leaving a private channel; and again three
+notification, or one marked seen, done or deleted elsewhere; or a Soup
+deletion of a channel the viewer was in; and again three
 seconds after the last one; reads start at least two seconds apart, never two at once,
 and a hidden tab reads when shown; that sort has no local projection).
 Read the DM,
@@ -38,6 +38,11 @@ timestamp. Older in-flight snapshots must not move the delivered row backward.
 Also test a stale response that entirely omits a just-restored, previously done
 row: the row must stay visible. Marking it done again must override that restore,
 and other filter scopes must not inherit the retained membership.
+
+Check leaving a private channel with two accounts too: mark the channel's own
+notifications done on the recipient's Home, share a document in the channel,
+then remove the recipient from it. The thread and document rows that came
+through the channel leave Home within seconds without reloading.
 
 GraphQL-attached notification rows share the global feed's local seen/done
 overrides: Mark Done and Undo reflect local intent without waiting for an older
