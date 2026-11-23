@@ -42,10 +42,16 @@ pub(super) struct StorageUpgradeStep {
 /// Registered steps, oldest first, contiguous, and ending at the current
 /// version. Bumping [`STORAGE_SCHEMA_VERSION`] needs a step here; clearing the
 /// list instead declares that every older file is reset.
-const STEPS: &[StorageUpgradeStep] = &[StorageUpgradeStep {
-    from: 11,
-    apply: &upgrade_11_to_12,
-}];
+const STEPS: &[StorageUpgradeStep] = &[
+    StorageUpgradeStep {
+        from: 11,
+        apply: &upgrade_11_to_12,
+    },
+    StorageUpgradeStep {
+        from: 12,
+        apply: &upgrade_12_to_13,
+    },
+];
 
 const _: () = assert!(
     steps_reach_current_version(),
@@ -162,6 +168,21 @@ fn upgrade_11_to_12(connection: &Db) -> Result<(), TursoStorageError> {
     Ok(())
 }
 
+/// Storage 13 stores the GraphQL schema the records were written under. The
+/// step leaves the table empty: adopting the build's schema after the open
+/// sorts the records against the schema that wrote them
+/// (`storage/schema_store.rs`).
+pub(super) const UPGRADE_12_TO_13: [&str; 1] = [
+    "CREATE TABLE cache_schema (slot INTEGER PRIMARY KEY, hash TEXT NOT NULL, incoming_hash TEXT NOT NULL, artifact BLOB NOT NULL)",
+];
+
+fn upgrade_12_to_13(connection: &Db) -> Result<(), TursoStorageError> {
+    for sql in UPGRADE_12_TO_13 {
+        driver::execute(connection, sql, Vec::new())?;
+    }
+    Ok(())
+}
+
 /// Hooks that stop an upgrade between steps, for tests and the differential
 /// fuzzer. Not part of the production build.
 #[cfg(any(test, feature = "migration-test-hooks"))]
@@ -195,9 +216,25 @@ pub mod test_hooks {
         ];
     }
 
+    /// Rewrites a database of this build as the last storage 12 build left
+    /// it: the inverse of the 12 to 13 step.
+    pub fn rewrite_as_storage_12(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
+        storage.require_healthy()?;
+        let connection = storage.connection();
+        storage.latch_result(driver::write_transaction(&connection, || {
+            for sql in [
+                "DROP TABLE cache_schema",
+                "UPDATE meta SET value = '12' WHERE key = 'storage_schema_version'",
+            ] {
+                driver::execute(&connection, sql, Vec::new())?;
+            }
+            Ok(())
+        }))
+    }
+
     /// Rewrites a database of this build as the last storage 11 build left
     /// it, so a test can open it as a file an older build left behind: the
-    /// inverse of the 11 to 12 step, plus every part of
+    /// inverse of the 11 to 13 steps, plus every part of
     /// [`Storage11DerivedState`], so opening the rewrite rebuilds all three, as
     /// opening a real storage 11 file does. Page compaction then finds pages
     /// already in the newer shape, so the rewrite costs a lower bound of a real
@@ -207,6 +244,7 @@ pub mod test_hooks {
         let connection = storage.connection();
         storage.latch_result(driver::write_transaction(&connection, || {
             for sql in [
+                "DROP TABLE cache_schema",
                 "DROP INDEX records_contacts_cover_idx",
                 "DROP INDEX search_documents_browse_idx",
                 "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",

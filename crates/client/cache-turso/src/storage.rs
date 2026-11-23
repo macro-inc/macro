@@ -57,7 +57,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 12;
+pub const STORAGE_SCHEMA_VERSION: u32 = 13;
 
 const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
 const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
@@ -68,6 +68,7 @@ const SEARCH_REBUILD_RECORDS_AFTER: &str =
 
 #[cfg(feature = "migration-test-hooks")]
 pub use migration::test_hooks as migration_test_hooks;
+pub use schema_store::SchemaAdoption;
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -969,6 +970,39 @@ impl TursoStorage {
     #[must_use]
     pub fn upgraded_from_storage_version(&self) -> Option<u32> {
         self.storage_upgraded_from
+    }
+
+    /// Brings the stored records and queued writes to `incoming`, this
+    /// build's GraphQL schema, whose index projections read `inputs`, and
+    /// returns the schema an engine over this storage runs with
+    /// (`storage/schema_store.rs`). Run it once after opening, before the
+    /// engine. `unrecorded` is what wrote a cache that stores no schema, when
+    /// the host knows better than the bundled guess.
+    pub fn adopt_schema(
+        &self,
+        incoming: &Arc<cache_core::meta::Schema>,
+        inputs: &cache_core::schema_change::ProjectionInputs,
+        unrecorded: Option<Arc<cache_core::meta::Schema>>,
+    ) -> Result<SchemaAdoption, TursoStorageError> {
+        self.require_healthy()?;
+        self.latch_result(schema_store::adopt(
+            &self.connection,
+            incoming,
+            inputs,
+            unrecorded,
+        ))
+    }
+
+    /// Records that the engine over this storage now runs with `merged`: the
+    /// schema [`Self::adopt_schema`] returned with what `incoming`, another
+    /// webview's build, added to it.
+    pub fn record_schema(
+        &self,
+        merged: &cache_core::meta::Schema,
+        incoming: &cache_core::meta::Schema,
+    ) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        self.latch_result(schema_store::record(&self.connection, merged, incoming))
     }
 }
 
@@ -2350,73 +2384,85 @@ fn write_projection_mutations(
         facts.insert(connection)?;
         states
     };
-    if !keys.is_empty() {
-        // Network snapshots and realtime writes must rebase pending member edits
-        // in the same transaction, not leave a shadow based on older authority.
-        let sources = driver::query(connection, QUEUE_SELECT, Vec::new())?
-            .into_iter()
-            .map(|row| {
-                let row = parse_queue_row(&row)?;
-                let source = cache_core::queue::decode_optimistic_source(
-                    &row.optimistic.ok_or_else(invariant)?.optimistic_data_json,
-                )
-                .map_err(|_| invariant())?;
-                Ok((row.id, source))
-            })
-            .collect::<Result<Vec<_>, TursoStorageError>>()?;
-        // With no queued mutation there is no layer to compose and, unless an
-        // older file kept one, no shadow to delete.
-        if sources.is_empty()
-            && driver::query(connection, OPTIMISTIC_INDEX_DOCUMENT_ANY, Vec::new())?.is_empty()
-        {
-            return Ok(());
-        }
-        // Index each pending contribution once per batch. A large retirement
-        // page must not scan the whole queue again for each deleted key.
-        let mut by_key: HashMap<_, BTreeMap<_, Vec<_>>> = HashMap::new();
-        for (owner, source) in sources {
-            for mutation in source.projection_mutations {
-                if keys.binary_search(mutation.record_key()).is_ok() {
-                    by_key
-                        .entry(mutation.record_key().clone())
-                        .or_default()
-                        .entry(owner)
-                        .or_default()
-                        .push(mutation);
-                }
-            }
-        }
-        let mut delete = driver::prepare(connection, OPTIMISTIC_INDEX_DOCUMENT_DELETE)?;
-        for key in keys {
-            let changed = driver::execute_prepared(&mut delete, vec![text(key.as_str())])?;
-            if !(0..=1).contains(&changed) {
-                return Err(invariant());
-            }
-            let layers = by_key
-                .get(&key)
-                .into_iter()
-                .flat_map(|owners| owners.iter())
-                .map(
-                    |(owner, mutations)| cache_core::predicate::ProjectionMutationLayer {
-                        owner: *owner,
-                        mutations,
-                    },
-                )
-                .collect::<Vec<_>>();
-            if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(
-                &key,
-                states.get(&key),
-                &layers,
+    // Network snapshots and realtime writes must rebase pending member edits
+    // in the same transaction, not leave a shadow based on older authority.
+    recompose_shadows(connection, &keys, &states)
+}
+
+/// Composes the shadow of each of `keys`, which are sorted, again: the queued
+/// writes' projection mutations of the key over `states`, the stored
+/// projections they rebase onto (a key missing from it has none).
+fn recompose_shadows(
+    connection: &Db,
+    keys: &[PredicateRecordKey],
+    states: &HashMap<PredicateRecordKey, ProjectionState>,
+) -> Result<(), TursoStorageError> {
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let sources = driver::query(connection, QUEUE_SELECT, Vec::new())?
+        .into_iter()
+        .map(|row| {
+            let row = parse_queue_row(&row)?;
+            let source = cache_core::queue::decode_optimistic_source(
+                &row.optimistic.ok_or_else(invariant)?.optimistic_data_json,
             )
-            .map_err(|_| invariant())?
-            {
-                insert_optimistic_projection(
-                    connection,
-                    mutation_id_to_sql(shadow.owner)?,
-                    shadow.state,
-                    shadow.uncertainty,
-                )?;
+            .map_err(|_| invariant())?;
+            Ok((row.id, source))
+        })
+        .collect::<Result<Vec<_>, TursoStorageError>>()?;
+    // With no queued mutation there is no layer to compose and, unless an
+    // older file kept one, no shadow to delete.
+    if sources.is_empty()
+        && driver::query(connection, OPTIMISTIC_INDEX_DOCUMENT_ANY, Vec::new())?.is_empty()
+    {
+        return Ok(());
+    }
+    // Index each pending contribution once per batch. A large retirement
+    // page must not scan the whole queue again for each deleted key.
+    let mut by_key: HashMap<_, BTreeMap<_, Vec<_>>> = HashMap::new();
+    for (owner, source) in sources {
+        for mutation in source.projection_mutations {
+            if keys.binary_search(mutation.record_key()).is_ok() {
+                by_key
+                    .entry(mutation.record_key().clone())
+                    .or_default()
+                    .entry(owner)
+                    .or_default()
+                    .push(mutation);
             }
+        }
+    }
+    let mut delete = driver::prepare(connection, OPTIMISTIC_INDEX_DOCUMENT_DELETE)?;
+    for key in keys {
+        let changed = driver::execute_prepared(&mut delete, vec![text(key.as_str())])?;
+        if !(0..=1).contains(&changed) {
+            return Err(invariant());
+        }
+        let layers = by_key
+            .get(key)
+            .into_iter()
+            .flat_map(|owners| owners.iter())
+            .map(
+                |(owner, mutations)| cache_core::predicate::ProjectionMutationLayer {
+                    owner: *owner,
+                    mutations,
+                },
+            )
+            .collect::<Vec<_>>();
+        if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(
+            key,
+            states.get(key),
+            &layers,
+        )
+        .map_err(|_| invariant())?
+        {
+            insert_optimistic_projection(
+                connection,
+                mutation_id_to_sql(shadow.owner)?,
+                shadow.state,
+                shadow.uncertainty,
+            )?;
         }
     }
     Ok(())
@@ -3648,7 +3694,7 @@ fn initialize(
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
-            for sql in CREATE_SCHEMA.into_iter().chain(calendar::CREATE_SCHEMA) {
+            for sql in fresh_schema_statements() {
                 driver::execute(connection, sql, Vec::new())?;
             }
             driver::execute(
@@ -3755,9 +3801,17 @@ fn initialize(
 /// The digest of `sqlite_schema` in a database this build creates; see
 /// [`schema_digest`]. `fresh_database_has_the_pinned_schema_digest` fails with
 /// the new value whenever the schema or how turso records it changes.
-const FRESH_SCHEMA_DIGEST: u128 = 0xc05ad605542917515f7a3408e414ed25;
+const FRESH_SCHEMA_DIGEST: u128 = 0xbf85edacdd13396001299b87d74e8894;
 
 /// Whether the database holds exactly the schema this build creates.
+/// Every statement that creates a fresh file's schema, in order.
+fn fresh_schema_statements() -> impl Iterator<Item = &'static str> {
+    CREATE_SCHEMA
+        .into_iter()
+        .chain(calendar::CREATE_SCHEMA)
+        .chain([schema_store::CREATE_TABLE])
+}
+
 fn has_fresh_schema(connection: &Db) -> Result<bool, TursoStorageError> {
     Ok(schema_digest(connection)? == Some(FRESH_SCHEMA_DIGEST))
 }
@@ -4373,6 +4427,7 @@ fn validate_frozen_schema(connection: &Db) -> Result<(), TursoStorageError> {
     validate_table_indexes(connection, "optimistic_layers", &[])?;
     validate_predicate_indexes(connection)?;
     validate_optimistic_predicate_indexes(connection)?;
+    schema_store::validate_schema(connection)?;
     validate_table_indexes(
         connection,
         "optimistic_uncertain_attributes",
@@ -4472,6 +4527,7 @@ fn validate_allowed_schema_objects(connection: &Db) -> Result<(), TursoStorageEr
     let expected = expected
         .into_iter()
         .chain(calendar::TABLES)
+        .chain([schema_store::TABLE])
         .collect::<Vec<_>>();
     let named_indexes = named_indexes
         .into_iter()
@@ -5930,6 +5986,7 @@ mod name_search;
 mod page_retention;
 mod people_sql;
 mod record_batch;
+mod schema_store;
 mod search;
 
 #[cfg(all(test, target_arch = "wasm32"))]

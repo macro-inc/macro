@@ -17,6 +17,7 @@ mod page_retention;
 mod permission_retirement;
 mod predicate_cost;
 mod projection_writes;
+mod schema_store;
 mod search_bucket_cost;
 mod search_options;
 mod search_prefilter;
