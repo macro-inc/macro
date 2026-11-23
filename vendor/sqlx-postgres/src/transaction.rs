@@ -38,7 +38,18 @@ impl TransactionManager for PgTransactionManager {
             // to the next borrower, whose statements silently run inside it. Unwound just below
             // if the BEGIN did not take.
             rollback.conn.inner.transaction_depth += 1;
-            rollback.conn.wait_until_ready().await?;
+            if let Err(error) = rollback.conn.wait_until_ready().await {
+                // Macro: the server refused the SAVEPOINT (say, in an aborted transaction),
+                // so there is none to roll back to. Left armed, the guard would queue
+                // `ROLLBACK TO SAVEPOINT` for it, and the caller's next statement would
+                // fail with "savepoint does not exist". A refused top-level BEGIN keeps
+                // the guard: a custom statement may have opened the transaction first.
+                if depth > 0 && matches!(error, Error::Database(_)) {
+                    rollback.conn.inner.transaction_depth -= 1;
+                    rollback.defuse();
+                }
+                return Err(error);
+            }
             if !rollback.conn.in_transaction() {
                 rollback.conn.inner.transaction_depth -= 1;
                 return Err(Error::BeginFailed);

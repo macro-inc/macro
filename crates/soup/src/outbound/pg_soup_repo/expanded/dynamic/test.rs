@@ -900,6 +900,7 @@ async fn a_begin_dropped_mid_flight_leaves_the_connection_clean(
     assert_eq!(one, 1);
     snapshot.commit().await?;
     assert_eq!(idle_state(&pool, &single).await?, "idle");
+    single.close().await;
     Ok(())
 }
 
@@ -918,4 +919,37 @@ async fn idle_state(pool: &PgPool, single: &PgPool) -> anyhow::Result<String> {
             .await?;
     drop(held);
     Ok(state.unwrap_or_default())
+}
+
+/// A nested begin the server refuses (its transaction already aborted) opens
+/// no savepoint, so it must leave the outer transaction to roll back as usual
+/// rather than queue a rollback to a savepoint that does not exist.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_refused_savepoint_leaves_its_transaction_to_roll_back(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let single = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await?;
+    let mut outer = single.begin().await?;
+    let divided = sqlx::query_scalar!(r#"SELECT 1 / $1::int AS "quotient!""#, 0)
+        .fetch_one(&mut *outer)
+        .await;
+    assert!(
+        divided.is_err(),
+        "dividing by zero should abort the transaction"
+    );
+    let refused = matches!(
+        sqlx::Acquire::begin(&mut outer).await,
+        Err(sqlx::Error::Database(_))
+    );
+    assert!(
+        refused,
+        "a savepoint in an aborted transaction should be refused"
+    );
+    outer.rollback().await?;
+    assert_eq!(idle_state(&pool, &single).await?, "idle");
+    single.close().await;
+    Ok(())
 }

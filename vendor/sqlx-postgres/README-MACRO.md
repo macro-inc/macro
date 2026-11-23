@@ -12,7 +12,11 @@ leaves the connection aborted until the service restarts.
 
 This copy backports upstream's fix (launchbadge/sqlx#4394, first released in
 0.9.1): `begin` counts the transaction before the round trip and uncounts it
-if the server did not open one.
+if the server did not open one. One addition of ours: a nested begin whose
+SAVEPOINT the server refuses (its transaction already aborted) unwinds the
+count and queues no rollback, since there is no savepoint to roll back to;
+upstream's fix alone would queue `ROLLBACK TO SAVEPOINT` for it, and the
+caller's next statement would fail with "savepoint does not exist".
 
 Nothing else differs from the published crate, except that:
 
@@ -24,7 +28,9 @@ Nothing else differs from the published crate, except that:
   path dependency's, and the workspace builds with `-Dwarnings`.
 
 Drop this copy, and its `[patch.crates-io]` entry, once the workspace is on
-sqlx 0.9.1 or later. The tests that guard the fix are
+sqlx 0.9.1 or later, if upstream by then handles a refused SAVEPOINT too: the
+first test below fails if it does not. The tests that guard this copy are
+`a_refused_savepoint_leaves_its_transaction_to_roll_back`,
 `a_begin_dropped_mid_flight_leaves_the_connection_clean`
 (`crates/soup/src/outbound/pg_soup_repo/expanded/dynamic/test.rs`) and
 `a_dropped_read_of_known_items_leaves_no_transaction_open`

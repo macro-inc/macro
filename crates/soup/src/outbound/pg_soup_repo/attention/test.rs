@@ -1474,22 +1474,27 @@ async fn a_dropped_read_of_known_items_leaves_no_transaction_open(
     let sources = sources();
     let only = vec![EntityType::Document.with_entity_string(DOC_A.to_string())];
 
-    // Drop the read after 0 µs, 1 µs, … so some drops land while its
-    // transaction's BEGIN is on the wire.
-    for micros in 0..2_000u64 {
+    // Drop the read after one poll, two, … until it finishes, yielding to the
+    // runtime between polls, so the drops land at every await it reaches:
+    // waiting for the connection, with BEGIN on the wire, and after.
+    for polls in 1..=200usize {
         let mut recompute = req(WORK, &link_ids, &sources);
         recompute.only = Some(&only);
-        let _ = tokio::time::timeout(
-            std::time::Duration::from_micros(micros),
-            attention_soup_page(&single, recompute),
-        )
-        .await;
+        let finished = drop_after_polls(attention_soup_page(&single, recompute), polls).await;
         let state = idle_state(&pool, &single).await?;
         assert_eq!(
             state, "idle",
-            "a read dropped after {micros} µs left its connection {state}"
+            "a read dropped after {polls} polls left its connection {state}"
         );
+        if finished {
+            break;
+        }
     }
+    // The connection still serves a read that runs to the end.
+    let mut recompute = req(WORK, &link_ids, &sources);
+    recompute.only = Some(&only);
+    attention_soup_page(&single, recompute).await?;
+    single.close().await;
     Ok(())
 }
 
@@ -1508,4 +1513,20 @@ async fn idle_state(pool: &Pool<Postgres>, single: &Pool<Postgres>) -> anyhow::R
             .await?;
     drop(held);
     Ok(state.unwrap_or_default())
+}
+
+/// Polls `read` at most `polls` times, yielding to the runtime between polls,
+/// then drops it. Returns whether it finished first.
+async fn drop_after_polls<F: std::future::Future>(read: F, polls: usize) -> bool {
+    let mut read = std::pin::pin!(read);
+    for _ in 0..polls {
+        let ready =
+            std::future::poll_fn(|cx| std::task::Poll::Ready(read.as_mut().poll(cx).is_ready()))
+                .await;
+        if ready {
+            return true;
+        }
+        tokio::task::yield_now().await;
+    }
+    false
 }

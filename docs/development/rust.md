@@ -80,6 +80,14 @@ SQL `AT TIME ZONE` uses the database server's own tz data instead: on RDS it
 changes only with a Postgres minor version upgrade, and in local and CI
 containers with the image's `tzdata` package.
 
+## sqlx-postgres
+
+The workspace patches `sqlx-postgres` to
+[`vendor/sqlx-postgres`](../../vendor/sqlx-postgres/README-MACRO.md), the
+published 0.8.6 with upstream's fix for a transaction begin dropped
+mid-flight. Without it the pool hands out a connection still inside a
+transaction. Drop the copy once the workspace is on sqlx 0.9.1 or later.
+
 ## Test the affected packages
 
 Use the package name from the affected `Cargo.toml`, not a guessed spelling of
