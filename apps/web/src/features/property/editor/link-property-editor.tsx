@@ -53,6 +53,8 @@ export function LinkPropertyEditor(props: {
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
   selectedEntityCount: number;
+  /** Whether the item's saved links have been read; see `PropertyValueEditor`. */
+  savedValueState: 'known' | 'loading' | 'failed';
 }) {
   // Only one item's links can be listed. For several items a typed link
   // replaces each item's value, as the select and entity editors do.
@@ -83,9 +85,15 @@ export function LinkPropertyEditor(props: {
   const highlightedIndex = () =>
     props.searchValue().trim() || movedToRow() ? props.selectedIndex() : -1;
 
+  // Adding to links that haven't been read would save only the new one and
+  // drop the rest; a single link is replaced either way.
+  const waitsForLinks = () =>
+    props.property.isMultiSelect && props.savedValueState !== 'known';
+
   const rows = createMemo((): LinkPropertyRow[] => {
     const typed = props.searchValue().trim();
     const nextRows: LinkPropertyRow[] = [];
+    if (waitsForLinks()) return nextRows;
 
     if (typed) {
       nextRows.push({
@@ -152,7 +160,18 @@ export function LinkPropertyEditor(props: {
     <Show
       when={rows().length > 0}
       fallback={
-        <CommandMenuEmptyState>Type or paste a URL</CommandMenuEmptyState>
+        <CommandMenuEmptyState>
+          <Switch fallback="Type or paste a URL">
+            <Match
+              when={waitsForLinks() && props.savedValueState === 'loading'}
+            >
+              Loading links…
+            </Match>
+            <Match when={waitsForLinks() && props.savedValueState === 'failed'}>
+              Couldn't load this item's links
+            </Match>
+          </Switch>
+        </CommandMenuEmptyState>
       }
     >
       <CommandMenuList

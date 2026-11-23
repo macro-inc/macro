@@ -8,8 +8,12 @@ import type {
 import { PropertyEditorDialog } from './PropertyEditorModal';
 import type { PropertyEditorEntity } from './state/propertyEditor';
 
+const savedProperties = vi.hoisted(() => ({
+  read: { data: [] } as { data?: unknown[]; error?: Error },
+}));
+
 vi.mock('@queries/properties/entity', () => ({
-  useEntityPropertiesQuery: () => ({ data: [] }),
+  useEntityPropertiesQuery: () => savedProperties.read,
   useBulkUpdateEntityPropertyOptionsMutation: () => ({}),
 }));
 
@@ -87,7 +91,10 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  savedProperties.read = { data: [] };
+});
 
 describe('link property editor', () => {
   it('sets the first link of a property created from Add property', () => {
@@ -233,6 +240,37 @@ describe('link property editor', () => {
       valueType: 'LINK',
       values: ['https://example.com/one', 'https://example.com/two'],
     });
+  });
+
+  it('adds to the links the item holds once its properties are read', () => {
+    savedProperties.read = {
+      data: [
+        {
+          ...LINKEDIN,
+          isMultiSelect: true,
+          value: ['https://example.com/one'],
+        },
+      ],
+    };
+    const { onSave, field } = setup({ ...NEW_LINKEDIN, isMultiSelect: true });
+
+    type(field, 'example.com/two');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(savedValues(onSave)).toEqual({
+      valueType: 'LINK',
+      values: ['https://example.com/one', 'https://example.com/two'],
+    });
+  });
+
+  it('adds nothing while the item has not been read, so no link is dropped', () => {
+    savedProperties.read = {};
+    const { onSave, field } = setup({ ...NEW_LINKEDIN, isMultiSelect: true });
+
+    type(field, 'example.com/two');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('sets one link on every selected item', () => {

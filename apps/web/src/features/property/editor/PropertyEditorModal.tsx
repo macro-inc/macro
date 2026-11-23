@@ -1369,6 +1369,16 @@ function PropertyValueEditor(props: {
     );
   });
 
+  // A definition says nothing about the value a saved item already holds, so
+  // until the item's properties are read its links are unknown, not empty.
+  const savedValueState = (): 'known' | 'loading' | 'failed' => {
+    const property = resolvedProperty();
+    if (props.properties || !singleEntity()) return 'known';
+    if (property && 'value' in property) return 'known';
+    if (entityPropertiesQuery.data !== undefined) return 'known';
+    return entityPropertiesQuery.error ? 'failed' : 'loading';
+  };
+
   const handleSubmit = (
     value: string | number | boolean | Date | EntityReference
   ) => {
@@ -1449,6 +1459,7 @@ function PropertyValueEditor(props: {
             selectedEntityCount={
               props.properties ? 1 : props.selectedEntities.length
             }
+            savedValueState={savedValueState()}
           />
         )}
       </Match>
