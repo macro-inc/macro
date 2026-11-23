@@ -61,10 +61,16 @@ where
                 if report.stopped_early {
                     metrics.add(Metric::SweepsStoppedEarly, 1.0);
                 }
+                // A sweep that left out an inbox it could not read failed for
+                // that inbox, though it went on to the others.
+                if report.inboxes_failed > 0 {
+                    metrics.add(Metric::SweepFailures, 1.0);
+                }
                 tracing::info!(
                     inboxes = report.inboxes,
                     inboxes_unknown = report.inboxes_unknown,
                     inboxes_left = report.inboxes_left,
+                    inboxes_failed = report.inboxes_failed,
                     candidates = report.candidates,
                     classified = report.classified,
                     redecided = report.redecided,
