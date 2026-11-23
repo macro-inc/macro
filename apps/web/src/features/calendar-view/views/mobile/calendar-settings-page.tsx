@@ -6,11 +6,11 @@ import { TurnOffCalendarDialog } from '@app/features/calendar/components/TurnOff
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useCalendarTeamSettings } from '@app/features/calendar-team/calendar-team';
 import { usePending } from '@app/observability/flow';
+import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useAndroidBackNavigation } from '@core/mobile/androidBack';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Plus from '@icon/system/regular/plus.svg';
 import {
@@ -78,23 +78,10 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
   const back = () => (busyPage() ? setBusyPage(false) : props.onBack());
   return (
     <ViewShell.Root aside={false}>
-      <ViewShell.Main class="relative bg-page text-ink [--calendar-settings-radius:35px]">
+      <ViewShell.Main class="relative bg-page text-ink">
         <ViewShell.TopBar
           touch
-          navigation={
-            <ViewShell.TopBarIsland>
-              <Button
-                variant="ghost"
-                size="icon-md"
-                aria-label={
-                  busyPage() ? 'Back to calendar settings' : 'Back to calendar'
-                }
-                onClick={back}
-              >
-                <CaretLeft class="size-6" />
-              </Button>
-            </ViewShell.TopBarIsland>
-          }
+          navigation={<MobileHeader.Back onBack={back} />}
         >
           <ViewShell.TopBarTitle>
             <h1 class="truncate px-3 text-base font-semibold">
@@ -135,34 +122,38 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                           (item) => item.calendarId === source.id
                         )?.contributesToAvailability;
                       return (
-                        <Checkbox
-                          checked={value() === true}
-                          indeterminate={value() === undefined}
-                          disabled={value() === undefined || setBusy.isPending}
-                          class="flex min-h-14 gap-3 px-4"
-                          onChange={(checked) => {
-                            const userId = user();
-                            if (!userId) return;
-                            setBusy.mutate(
-                              {
-                                userId,
-                                calendarIds: [source.id],
-                                contributesToAvailability: checked,
-                              },
-                              {
-                                onError: () =>
-                                  toast.failure(
-                                    'Could not save which calendars make you busy'
-                                  ),
-                              }
-                            );
-                          }}
-                        >
-                          <Checkbox.Control />
-                          <Checkbox.Label class="min-w-0 flex-1">
-                            {source.name}
-                          </Checkbox.Label>
-                        </Checkbox>
+                        <CalendarSettingsRow>
+                          <Checkbox
+                            checked={value() === true}
+                            indeterminate={value() === undefined}
+                            disabled={
+                              value() === undefined || setBusy.isPending
+                            }
+                            class="min-h-10 w-full gap-3"
+                            onChange={(checked) => {
+                              const userId = user();
+                              if (!userId) return;
+                              setBusy.mutate(
+                                {
+                                  userId,
+                                  calendarIds: [source.id],
+                                  contributesToAvailability: checked,
+                                },
+                                {
+                                  onError: () =>
+                                    toast.failure(
+                                      'Could not save which calendars make you busy'
+                                    ),
+                                }
+                              );
+                            }}
+                          >
+                            <Checkbox.Control />
+                            <Checkbox.Label class="min-w-0 flex-1">
+                              {source.name}
+                            </Checkbox.Label>
+                          </Checkbox>
+                        </CalendarSettingsRow>
                       );
                     }}
                   </For>
@@ -204,7 +195,7 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                 <CalendarSettingsGroup title="Accounts">
                   <For each={controls.accounts()}>
                     {(account) => (
-                      <div class="flex min-h-16 items-center gap-3 px-4 py-2">
+                      <CalendarSettingsRow>
                         <div class="min-w-0 flex-1">
                           <div class="truncate text-base">
                             {account.emailAddress}
@@ -230,19 +221,21 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                               ? 'Reconnect'
                               : 'Enable'}
                         </Button>
-                      </div>
+                      </CalendarSettingsRow>
                     )}
                   </For>
-                  <Button
-                    variant="ghost"
-                    fullWidth
-                    size="lg"
-                    class="justify-start"
-                    onClick={controls.connectAnotherAccount}
-                  >
-                    <Plus class="size-5" />
-                    Connect another account
-                  </Button>
+                  <CalendarSettingsRow>
+                    <Button
+                      variant="ghost"
+                      fullWidth
+                      size="md"
+                      class="justify-start"
+                      onClick={controls.connectAnotherAccount}
+                    >
+                      <Plus class="size-5" />
+                      Connect another account
+                    </Button>
+                  </CalendarSettingsRow>
                 </CalendarSettingsGroup>
                 <CalendarSettingsGroup title="Availability">
                   <CalendarSettingsSelect
@@ -262,23 +255,25 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                     checked={availability.settings().excludeWeekends}
                     onChange={availability.setExcludeWeekends}
                   />
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    fullWidth
-                    class="justify-between"
-                    onClick={() => setBusyPage(true)}
-                  >
-                    <span>Busy calendars</span>
-                    <span class="flex items-center gap-2 text-ink-muted">
-                      {busy.isSuccess
-                        ? busyCalendars().filter(
-                            (calendar) => calendar.contributesToAvailability
-                          ).length
-                        : '…'}
-                      <CaretRight class="size-5" />
-                    </span>
-                  </Button>
+                  <CalendarSettingsRow>
+                    <Button
+                      variant="ghost"
+                      size="md"
+                      fullWidth
+                      class="justify-between"
+                      onClick={() => setBusyPage(true)}
+                    >
+                      <span>Busy calendars</span>
+                      <span class="flex items-center gap-2 text-ink-muted">
+                        {busy.isSuccess
+                          ? busyCalendars().filter(
+                              (calendar) => calendar.contributesToAvailability
+                            ).length
+                          : '…'}
+                        <CaretRight class="size-5" />
+                      </span>
+                    </Button>
+                  </CalendarSettingsRow>
                 </CalendarSettingsGroup>
                 <CalendarSettingsGroup title="Preferences">
                   <CalendarSettingsSwitch

@@ -11,20 +11,20 @@ export function CalendarSettingsGroup(props: {
       <h2 class="px-4 text-[13px] leading-4 font-medium text-ink-extra-muted">
         {props.title}
       </h2>
-      <div class="bg-surface rounded-[var(--calendar-settings-radius)] p-1">
-        {props.children}
-      </div>
+      <div class="bg-surface rounded-4xl p-1">{props.children}</div>
     </section>
   );
 }
 
 export function CalendarSettingsRow(props: {
-  label: string;
+  label?: string;
   children: JSX.Element;
 }) {
   return (
     <div class="flex min-h-14 min-w-0 items-center justify-between gap-3 px-4 py-2">
-      <span class="min-w-0 text-base leading-[22px]">{props.label}</span>
+      {props.label && (
+        <span class="min-w-0 text-base leading-[22px]">{props.label}</span>
+      )}
       {props.children}
     </div>
   );

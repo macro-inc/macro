@@ -16,6 +16,13 @@ const actions = vi.hoisted(() => ({
   sharing: vi.fn(),
   preference: vi.fn(),
 }));
+vi.mock('@components/app/mobile-header/mobile-header', () => ({
+  MobileHeader: {
+    Back: (props: { onBack: () => void }) => (
+      <button aria-label="Go back" onClick={props.onBack} />
+    ),
+  },
+}));
 vi.mock('@app/components/view-shell', () => {
   const Part = (props: ParentProps) => <div>{props.children}</div>;
   return {
@@ -132,6 +139,39 @@ it('writes display, account and countdown actions through existing controls', ()
   );
 });
 
+it('pads every settings card row through the shared row', () => {
+  render(() => <MobileCalendarSettingsPage onBack={vi.fn()} />);
+  expect(
+    screen
+      .getAllByText('Show weekends')[0]
+      .parentElement?.classList.contains('py-2')
+  ).toBe(true);
+  expect(
+    screen.getByText('Week starts on').parentElement?.classList.contains('py-2')
+  ).toBe(true);
+  expect(
+    screen
+      .getByText('owner@example.com')
+      .parentElement?.parentElement?.classList.contains('py-2')
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole('button', { name: 'Connect another account' })
+      .parentElement?.classList.contains('py-2')
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole('button', { name: /Busy calendars/ })
+      .parentElement?.classList.contains('py-2')
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: /Busy calendars/ }));
+  expect(
+    screen
+      .getByRole('checkbox', { name: 'Work' })
+      .parentElement?.parentElement?.classList.contains('py-2')
+  ).toBe(true);
+});
+
 it('edits busy calendars on the same page using the existing mutation', () => {
   render(() => <MobileCalendarSettingsPage onBack={vi.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: /Busy calendars/ }));
@@ -141,9 +181,7 @@ it('edits busy calendars on the same page using the existing mutation', () => {
     { userId: 'viewer', calendarIds: ['c1'], contributesToAvailability: false },
     expect.any(Object)
   );
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Back to calendar settings' })
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Go back' }));
   expect(
     screen.getByRole('heading', { name: 'Calendar settings' })
   ).toBeTruthy();
