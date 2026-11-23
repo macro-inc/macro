@@ -405,6 +405,12 @@ async fn one_operation_runs_at_most_one_catalog_write() {
             r#"mutation {{ a: {delete} ...more }} fragment more on PropertyCatalogMutationRoot {{ ensureTagSet(scope: USER) {{ scope }} }}"#
         ),
         format!("mutation {{ a: {delete} ... on PropertyCatalogMutationRoot {{ b: {delete} }} }}"),
+        // Nested past the depth the guard counts.
+        format!(
+            "mutation {{ a: {delete} {open}b: {delete}{close} }}",
+            open = "... on PropertyCatalogMutationRoot { ".repeat(18),
+            close = " }".repeat(18),
+        ),
     ] {
         let writer = FakeWriter::default();
         let (_, errors) = run(writer.clone(), &mutation).await;

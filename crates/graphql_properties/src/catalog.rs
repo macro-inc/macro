@@ -341,7 +341,8 @@ const CATALOG_WRITES: [&str; 8] = [
 fn one_catalog_write(ctx: &Context<'_>) -> async_graphql::Result<()> {
     let env = ctx.query_env;
     let writes = count_catalog_writes(&env.operation.node.selection_set.node, &env.fragments, 0);
-    if writes > 1 {
+    // An operation nested too deep to count is refused rather than let through.
+    if writes.is_none_or(|writes| writes > 1) {
         return Err(bad_request(
             "send each property catalog write in its own request",
         ));
@@ -349,26 +350,29 @@ fn one_catalog_write(ctx: &Context<'_>) -> async_graphql::Result<()> {
     Ok(())
 }
 
+/// Fragments nested deeper than this are not counted: the operation is refused.
+const MAX_CATALOG_FRAGMENT_DEPTH: usize = 16;
+
 /// Count catalog write fields at the root of an operation, through fragments.
+/// `None` when fragments nest deeper than [`MAX_CATALOG_FRAGMENT_DEPTH`].
 fn count_catalog_writes(
     selection_set: &SelectionSet,
     fragments: &HashMap<Name, Positioned<FragmentDefinition>>,
     depth: usize,
-) -> usize {
-    // Validation has already refused fragment cycles; the bound is a backstop.
-    if depth > 16 {
-        return 0;
+) -> Option<usize> {
+    if depth > MAX_CATALOG_FRAGMENT_DEPTH {
+        return None;
     }
     selection_set
         .items
         .iter()
         .map(|item| match &item.node {
-            Selection::Field(field) => {
-                usize::from(CATALOG_WRITES.contains(&field.node.name.node.as_str()))
-            }
+            Selection::Field(field) => Some(usize::from(
+                CATALOG_WRITES.contains(&field.node.name.node.as_str()),
+            )),
             Selection::FragmentSpread(spread) => fragments
                 .get(&spread.node.fragment_name.node)
-                .map_or(0, |fragment| {
+                .map_or(Some(0), |fragment| {
                     count_catalog_writes(&fragment.node.selection_set.node, fragments, depth + 1)
                 }),
             Selection::InlineFragment(inline) => {
