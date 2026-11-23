@@ -30,8 +30,9 @@ the axum route constructors that declare each handler's category.
 
 - Depends on: `serde`, `strum`, `utoipa`; `axum`, `tower`, `tracing` and
   `macro_tower_layers` (`ResponseSpanFields`) for `inbound::axum` only.
-- Used by: `agent_correlation` (resolves the caller); services adopt the
-  constructors route by route.
+- Used by: `agent_correlation` (resolves the caller), `macro_authorization`
+  (decides again as `AccountManager` once a key's lookup finds a manager's);
+  services adopt the constructors route by route.
 
 ## Checks
 

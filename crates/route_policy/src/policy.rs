@@ -323,7 +323,61 @@ impl RouteDecision {
     }
 }
 
+/// The decision a request's route is held to, shared between the route policy
+/// layer and the extractors that decide again once they know more (an account
+/// manager's key is told apart only after its lookup). The layer reads it back
+/// after the handler runs, so the response and the request span describe the
+/// decision that refused the request, not the first one.
+#[derive(Clone, Debug)]
+pub struct DecisionSlot(std::sync::Arc<std::sync::Mutex<RouteDecision>>);
+
+impl DecisionSlot {
+    /// A slot holding `decision`.
+    pub fn new(decision: RouteDecision) -> Self {
+        Self(std::sync::Arc::new(std::sync::Mutex::new(decision)))
+    }
+
+    /// The decision now held.
+    pub fn get(&self) -> RouteDecision {
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Replace the decision held.
+    pub fn set(&self, decision: RouteDecision) {
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = decision;
+    }
+}
+
+impl RouteDecision {
+    /// The stricter of two decisions of the same route: a refusal over a
+    /// would-be refusal over an allowance. The first stands on a tie. An
+    /// extractor that decides again, knowing more, keeps what the layer
+    /// already decided when that was narrower.
+    #[must_use]
+    pub fn stricter(self, other: Self) -> Self {
+        if other.verdict.severity() > self.verdict.severity() {
+            other
+        } else {
+            self
+        }
+    }
+}
+
 impl Verdict {
+    fn severity(self) -> u8 {
+        match self {
+            Self::Unresolved | Self::Public | Self::Allowed(_) => 0,
+            Self::Observed(_) => 1,
+            Self::Refused(_) => 2,
+        }
+    }
+
     /// Who called, when resolved.
     pub fn caller(self) -> Option<Caller> {
         match self {

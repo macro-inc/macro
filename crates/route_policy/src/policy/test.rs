@@ -163,3 +163,30 @@ fn a_channel_mention_is_a_program_that_may_not_send_or_fetch() {
         Enforcement::Observed
     );
 }
+
+#[test]
+fn the_stricter_of_two_decisions_stands_and_the_first_wins_a_tie() {
+    let decision = |verdict| RouteDecision {
+        category: Category::Send,
+        verdict,
+    };
+    let observed = |caller| {
+        decision(Verdict::Observed(
+            decide(caller, Category::Send).unwrap_err(),
+        ))
+    };
+    let allowed = decision(Verdict::Allowed(Caller::Person));
+    let no_send = observed(Caller::ScopedNoSend);
+    let refused = decision(Verdict::Refused(
+        decide(Caller::ScopedGeneration, Category::Send).unwrap_err(),
+    ));
+
+    assert_eq!(allowed.stricter(no_send), no_send);
+    assert_eq!(no_send.stricter(allowed), no_send);
+    assert_eq!(no_send.stricter(refused), refused);
+    assert_eq!(refused.stricter(no_send), refused);
+    assert_eq!(
+        no_send.stricter(observed(Caller::ScopedGeneration)),
+        no_send
+    );
+}

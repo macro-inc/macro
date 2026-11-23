@@ -18,8 +18,8 @@ mod resolve;
 pub use caller::Caller;
 pub use category::Category;
 pub use policy::{
-    ActiveRollout, CategorySet, Enforcement, NO_CALLER_MESSAGE, NarrowedRollout, NoRollout,
-    Refusal, RefusalCode, ResolvedCaller, Rollout, RouteDecision, Verdict, decide,
+    ActiveRollout, CategorySet, DecisionSlot, Enforcement, NO_CALLER_MESSAGE, NarrowedRollout,
+    NoRollout, Refusal, RefusalCode, ResolvedCaller, Rollout, RouteDecision, Verdict, decide,
 };
 pub use resolve::{Authenticated, CallerEvidence, ScopeEvidence, UnverifiedHeader, resolve_caller};
 

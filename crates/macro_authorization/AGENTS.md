@@ -29,7 +29,7 @@ by policy.
 
 ## Boundaries
 
-- Depends on: `macro_auth` (outbound JWT validation), `bot_id`, `bot_token`,
+- Depends on: `macro_auth` (outbound JWT validation), `route_policy`, `bot_id`, `bot_token`,
   `harness_id`, `harness_token`, `model_user`, `model-error-response`.
 - Used by: essentially every
   authenticated HTTP surface (`agent_session`, `agent_harness`, `ai_tools`,
@@ -82,6 +82,17 @@ naming the grant and the agent holding it. `AccountHolderOrInternal` is
 that signs `agent_scope`, held by a scoped code-mode run or a routine dry run):
 use it on anything that mints credentials, changes who can sign in, deletes
 the account, or changes its managers.
+The route policy (`crates/route_policy`) decides a route before this crate
+looks a user API key up. A key header alone resolves no caller, so a
+categorized route refuses it 403 `no_caller` before any extractor runs; the key
+reads as an API credential only when it rides beside a verified token. Once the
+lookup finds a manager's, the extractor decides the route again as
+`AccountManager` and answers that refusal with a 403. So the re-decision only
+narrows a caller already resolved: a holder's or manager's key sent alone needs
+a layer that verifies it and sets the `ResolvedCaller` before `route_policy`
+runs (see the categorization rule in `crates/route_policy/AGENTS.md`). An
+extractor inside router-level middleware runs before the route is decided and
+leaves it to the handler's.
 
 ## Gotchas
 

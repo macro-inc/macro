@@ -9,6 +9,7 @@ axum = [
   "dep:axum",
   "dep:macro_auth",
   "dep:model-error-response",
+  "dep:route_policy",
   "dep:serde",
   "dep:serde_json",
 ]
@@ -30,6 +31,7 @@ macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user" }
 rootcause = { workspace = true }
+route_policy = { path = "../route_policy", optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }

@@ -2286,3 +2286,139 @@ async fn user_api_key_wins_over_ambient_cookies() {
         )]
     );
 }
+
+/// Routes that declare a category, behind a stand-in for `propagate`, which
+/// reads every user API key as an API credential: only the key's lookup
+/// tells a manager's apart.
+fn categorized_router() -> Router {
+    categorized_router_for(route_policy::Caller::ApiCredential)
+}
+
+fn categorized_router_for(resolved: route_policy::Caller) -> Router {
+    let service = FakeAuthorizationService::default();
+    let state = TestState {
+        authorization: MacroAuthorizationState::new(Arc::new(service)),
+        _unrelated_state: "composite state",
+    };
+    Router::new()
+        .route(
+            "/keys",
+            route_policy::inbound::axum::get(
+                route_policy::Category::CredentialMint,
+                policy_handler::<UserOrInternal>,
+            ),
+        )
+        .route(
+            "/messages",
+            route_policy::inbound::axum::get(
+                route_policy::Category::Send,
+                policy_handler::<UserOrInternal>,
+            ),
+        )
+        .route(
+            "/items",
+            route_policy::inbound::axum::get(
+                route_policy::Category::Read,
+                policy_handler::<UserOrInternal>,
+            ),
+        )
+        .with_state(state)
+        .layer(::axum::middleware::from_fn(
+            move |mut request: Request<Body>, next: ::axum::middleware::Next| async move {
+                request
+                    .extensions_mut()
+                    .insert(route_policy::ResolvedCaller(resolved));
+                next.run(request).await
+            },
+        ))
+}
+
+#[tokio::test]
+async fn a_manager_credential_is_held_to_what_an_account_manager_may_do() {
+    let router = categorized_router();
+
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request("/keys", MANAGER_API_KEY)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        body,
+        json!({
+            "message": "An account manager can't create credentials or bearer links. Ask the account holder to do it themselves in Macro."
+        })
+    );
+
+    // The account holder's own key is only observed refusing it, for now.
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request("/keys", VALID_USER_API_KEY)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["acting_entity"], API_KEY_USER_ID);
+
+    // A manager may read.
+    let (status, _) = send(
+        &router,
+        empty_body(user_api_key_request("/items", MANAGER_API_KEY)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn a_refused_manager_key_leaves_the_manager_decision_on_the_response() {
+    let router = categorized_router();
+    let response = router
+        .oneshot(empty_body(user_api_key_request("/keys", MANAGER_API_KEY)))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let decision = response
+        .extensions()
+        .get::<route_policy::RouteDecision>()
+        .copied()
+        .expect("the response carries the route decision");
+    assert_eq!(decision.category, route_policy::Category::CredentialMint);
+    assert!(
+        matches!(
+            decision.verdict,
+            route_policy::Verdict::Refused(refusal)
+                if refusal.caller == route_policy::Caller::AccountManager
+        ),
+        "{decision:?}"
+    );
+}
+
+/// A manager's key beside a token that resolved a narrower caller keeps the
+/// narrower decision: a no-send run may not send, whatever a manager may do.
+#[tokio::test]
+async fn a_manager_key_keeps_the_narrower_decision_of_a_scoped_caller() {
+    let router = categorized_router_for(route_policy::Caller::ScopedNoSend);
+    let response = router
+        .oneshot(empty_body(user_api_key_request(
+            "/messages",
+            MANAGER_API_KEY,
+        )))
+        .await
+        .unwrap();
+
+    // Would-be refusals are only observed, so the request goes on.
+    assert_eq!(response.status(), StatusCode::OK);
+    let decision = response
+        .extensions()
+        .get::<route_policy::RouteDecision>()
+        .copied()
+        .expect("the response carries the route decision");
+    assert!(
+        matches!(
+            decision.verdict,
+            route_policy::Verdict::Observed(refusal)
+                if refusal.caller == route_policy::Caller::ScopedNoSend
+        ),
+        "{decision:?}"
+    );
+}
