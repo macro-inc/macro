@@ -66,4 +66,21 @@ describe('memo microphone', () => {
     fireEvent.click(test.button, { detail: 1 });
     expect(test.start).not.toHaveBeenCalled();
   });
+
+  it('records for a touch tap, whose pointer leaves before the click', () => {
+    const test = setup();
+    fireEvent.pointerDown(test.button);
+    fireEvent.pointerUp(test.button);
+    fireEvent.pointerLeave(test.button);
+    fireEvent.click(test.button, { detail: 1 });
+    expect(test.start).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a click after a cancelled press', () => {
+    const test = setup();
+    fireEvent.pointerDown(test.button);
+    fireEvent.pointerCancel(test.button);
+    fireEvent.click(test.button, { detail: 1 });
+    expect(test.start).not.toHaveBeenCalled();
+  });
 });
