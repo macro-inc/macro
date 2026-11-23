@@ -385,9 +385,29 @@ async fn run_server() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
     let bots_repo = PgBotsRepo::new(db.clone());
-    // The agent API checks a newly selected MCP app against the connector
-    // catalog (native overlays, then Pipedream's directory), the same check
-    // the ConfigureAgent tool makes.
+    // This process's one connectors composition: the agent API and the
+    // Macro agent's tools read connections only through it. `None` where the
+    // MCP credentials key is not configured.
+    let connectors = match ai_tools::connectors_config::connectors_config_from_env(env).await? {
+        Some(connectors_config) => Some(
+            connectors::composition::compose(
+                connectors_config,
+                db.clone(),
+                Arc::new(redis_client.clone()),
+                authentication_service_client::AuthServiceClient::new(
+                    config
+                        .authentication_service_secret_key
+                        .as_ref()
+                        .to_string(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                ),
+            )
+            .map_err(|report| anyhow::anyhow!("failed to compose connectors: {report:?}"))?,
+        ),
+        None => None,
+    };
+    // The agent API checks a newly selected MCP app against the connectors
+    // catalog, the same check the ConfigureAgent tool makes.
     let bots_service = BotServiceImpl::new(
         bots_repo,
         macro_event_broker.clone(),
@@ -396,7 +416,11 @@ async fn run_server() -> anyhow::Result<()> {
             hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
         ),
     )
-    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::from_env(db.clone())?);
+    .with_mcp_apps(ai_tools::ConnectorsAppCatalog::new(
+        connectors
+            .as_ref()
+            .map(|composed| composed.connectors.clone()),
+    ));
 
     let authorization_service: AuthorizationService = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(jwt_validation_args.clone()),
@@ -1057,7 +1081,7 @@ async fn run_server() -> anyhow::Result<()> {
             _ => Arc::new(search_service::FlaggedTermMatching::new(flags.clone())),
         };
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
-        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
     );
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -1117,6 +1141,21 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
+        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+    });
+    let contact_lists = Arc::new(contacts::outbound::repository::DbContactsRepository::new(
+        db.clone(),
+    ));
+    // Each viewer's `people` rows, GraphQL directory and SSE contact audience
+    // come from the legacy graph or the list-aware tables, by the per-viewer
+    // `contacts-list-reads` flag; a failed flag read means the legacy graph.
+    let contact_reads = Arc::new(contacts::domain::list_reads::FlaggedContactReads::new(
+        contacts_service,
+        contact_lists.clone(),
+        contacts::domain::list_reads::ContactListReads::new(flags.clone()),
+    ));
     let webhook_stream_feed = webhook::domain::stream::StreamFeed::new(
         webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY,
         webhook::domain::stream::WEBHOOK_STREAM_REPLAY_CAPACITY,
@@ -1125,9 +1164,7 @@ async fn run_server() -> anyhow::Result<()> {
         webhook_stream_feed.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
-        crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
-            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        )),
+        crate::outbound::stream_contacts::ContactsStreamChecker::new(contact_reads.clone()),
     );
     let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
         sse_stream_service,
@@ -1469,7 +1506,15 @@ async fn run_server() -> anyhow::Result<()> {
                 Arc::new(notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone())),
             ),
         ),
-        ContactsChannelDispatcher::new(contacts_ingress.clone()),
+        ContactsChannelDispatcher::new(Arc::new(contacts::domain::list_writes::ListWritesGate {
+            inner: contacts::domain::service::SqsContactsIngress {
+                queue: contacts_ingress.queue.clone(),
+            },
+            writes: contacts::domain::list_writes::ContactListWrites::new(
+                config.environment,
+                Some(flags.clone()),
+            ),
+        })),
     )
     .with_macro_event_broker(macro_event_broker.clone());
 
@@ -1692,17 +1737,7 @@ async fn run_server() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
-        Some(Arc::new(
-            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
-                authentication_service_client::AuthServiceClient::new(
-                    config
-                        .authentication_service_secret_key
-                        .as_ref()
-                        .to_string(),
-                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
-                ),
-            ),
-        )),
+        connectors.as_ref(),
         email::outbound::GmailSenderProvider::new(
             gmail_client::GmailClient::without_watch(),
             email::outbound::GmailTokenProviderImpl::lazy(
@@ -2012,7 +2047,7 @@ async fn run_server() -> anyhow::Result<()> {
                 PgChannelsRepo::new(db.clone()),
                 frecency_storage.clone(),
             )
-            .with_agent_dm_profiles(agent_dm_profiles),
+            .with_agent_dm_profiles(agent_dm_profiles.clone()),
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
             crm_service.clone(),
             GithubPullRequestServiceImpl::new(
@@ -2025,73 +2060,99 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     );
 
-    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
-        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
-    });
     // SQL predicates and follow-up reads use the primary, matching the catalog
     // versions and writes; replica lag must not select stale rows for an edit.
     let sql_service = databases_sql::DatabasesSql::new(
         databases_service.clone(),
         entity_access_service.clone(),
         primary_entity_soup.clone(),
-        contacts_service.clone(),
+        contact_reads.clone(),
     );
 
     // Directory refreshes follow contacts_invalidation immediately after writes.
-    // Keep membership and names on the primary, matching the legacy contacts read.
-    let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(Arc::new(
-        contacts::domain::service::directory::ContactsDirectoryService::new(
-            contacts_service,
-            contacts::outbound::names::DbContactNames::new(db.clone()),
+    // Keep membership, lists and names on the primary, matching the legacy
+    // contacts read. Lists come from the list-aware tables whichever store
+    // chose the contacts. The people typed text names (`contactsNamedBy`) are
+    // read through the same per-viewer reads.
+    let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(
+        Arc::new(
+            contacts::domain::service::directory::ContactsDirectoryService::new(
+                contact_reads.clone(),
+                contact_lists,
+                contacts::outbound::names::DbContactNames::new(db.clone()),
+            ),
         ),
-    ));
+        contact_reads,
+    );
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
 
     // REST and GraphQL lists share this reader. CRM email eligibility must
     // observe committed withdrawals/exclusions immediately; only that preview
     // leg reads the primary. Ordinary inbox lists keep using the replica.
-    let soup_service = Arc::new(
-        SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone()))
-                .with_source_items_enabled(config.soup_source_items_enabled),
-            frecency_service,
-            service::email_previews::ConsistentEmailPreviewReader::new(
-                ReadonlyEmailPreviewAdapter(email_service.clone()),
-                readonly_email_service.clone(),
-            ),
-            ChannelListServiceImpl::new(
-                PgChannelsRepo::new(readonly_db.clone()),
-                PgChannelsRepo::new(readonly_db.clone()),
-                frecency_storage.clone(),
-            )
-            .with_agent_dm_profiles(Arc::new(
-                outbound::agent_dm_authorizer::AgentDmProfileReader::new(
-                    PgChannelsRepo::new(readonly_db.clone()),
-                    PgBotsRepo::new(readonly_db.clone()),
+    // `channels` decides where the page's channels come from.
+    let list_soup =
+        |channels: ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>| {
+            Arc::new(
+                SoupImpl::new(
+                    PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone()))
+                        .with_source_items_enabled(config.soup_source_items_enabled),
+                    frecency_service.clone(),
+                    service::email_previews::ConsistentEmailPreviewReader::new(
+                        ReadonlyEmailPreviewAdapter(email_service.clone()),
+                        readonly_email_service.clone(),
+                    ),
+                    channels,
+                    call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                        readonly_db.clone(),
+                    )),
+                    // The Sales views' activity edges probe every record of the scope;
+                    // read them from the replica, like the rest of the list. Record
+                    // and access reads stay on the primary.
+                    crm::domain::service::CrmServiceImpl::new(
+                        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone())
+                            .with_activity_edges_replica(readonly_pool::ReadOnlyPool(
+                                readonly_db.clone(),
+                            )),
+                        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+                    ),
+                    GithubPullRequestServiceImpl::new(
+                        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
+                            readonly_db.clone(),
+                        )),
+                        PgGithubPullRequestRepo::new(readonly_db.clone()),
+                    ),
+                )
+                .with_favorites(favorites_service.clone())
+                .with_agent_branches(
+                    agent_changes::outbound::postgres::PgChangesetRepo::new(readonly_db.clone()),
                 ),
-            )),
-            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
-                readonly_db.clone(),
-            )),
-            // The Sales views' activity edges probe every record of the scope;
-            // read them from the replica, like the rest of the list. Record
-            // and access reads stay on the primary.
-            crm::domain::service::CrmServiceImpl::new(
-                crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone())
-                    .with_activity_edges_replica(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-                crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
-            ),
-            GithubPullRequestServiceImpl::new(
-                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
-                PgGithubPullRequestRepo::new(readonly_db.clone()),
-            ),
+            )
+        };
+    let soup_service = list_soup(
+        ChannelListServiceImpl::new(
+            PgChannelsRepo::new(readonly_db.clone()),
+            PgChannelsRepo::new(readonly_db.clone()),
+            frecency_storage.clone(),
         )
-        .with_favorites(favorites_service.clone())
-        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
-            readonly_db.clone(),
+        .with_agent_dm_profiles(Arc::new(
+            outbound::agent_dm_authorizer::AgentDmProfileReader::new(
+                PgChannelsRepo::new(readonly_db.clone()),
+                PgBotsRepo::new(readonly_db.clone()),
+            ),
         )),
+    );
+    // The same lists with their channels read from the primary, where the
+    // REST channel list reads them: a complete pass over the viewer's channel
+    // directory (`channelReads: PRIMARY`) then never lists a channel the
+    // viewer just left, or misses one just joined, while the replica lags.
+    let primary_channel_soup = list_soup(
+        ChannelListServiceImpl::new(
+            PgChannelsRepo::new(db.clone()),
+            PgChannelsRepo::new(db.clone()),
+            frecency_storage.clone(),
+        )
+        .with_agent_dm_profiles(agent_dm_profiles.clone()),
     );
 
     let websocket_notification_consumer_service =
@@ -2534,12 +2595,15 @@ async fn run_server() -> anyhow::Result<()> {
     ));
 
     // Attention feeds (Home's work feed and the notifications inbox) share
-    // one feed layer and these adapters: Soup
-    // candidates over the replica, notification acknowledgement on the
-    // primary, and live updates recomputed from the viewer's notification,
-    // activity and Soup streams. Done publishes a viewer-addressed Soup patch
-    // so the viewer's other sessions recompute too: GraphQL notification
-    // writes publish no realtime update.
+    // one feed layer and these adapters: Soup candidates over the replica
+    // for pages, unread counts and bulk clears, and over the primary for
+    // recomputes (a change the viewer was just sent, as that change's Soup
+    // patch read it) and for the rows done and seen act on, so they
+    // acknowledge what a recompute showed; notification acknowledgement on
+    // the primary; and live updates recomputed from the viewer's
+    // notification, activity and Soup streams. Done publishes a
+    // viewer-addressed Soup patch so the viewer's other sessions recompute
+    // too: GraphQL notification writes publish no realtime update.
     let feed_triggers: Arc<dyn attention_feed::domain::ports::FeedTriggers> = Arc::new(
         attention_feed::outbound::triggers::RealtimeFeedTriggers::new(
             websocket_notification_consumer_service.clone(),
@@ -2571,7 +2635,8 @@ async fn run_server() -> anyhow::Result<()> {
             attention_feed::outbound::soup::SoupCandidateSource::new(
                 soup_service.clone(),
                 Arc::new(email_service.clone()),
-            ),
+            )
+            .with_committed_reads(primary_entity_soup.clone()),
             attention_feed::outbound::notifications::ReaderFeedNotifications::new(
                 graphql_notification_reader.clone(),
             ),
@@ -2588,7 +2653,8 @@ async fn run_server() -> anyhow::Result<()> {
             attention_feed::outbound::soup::SoupCandidateSource::new(
                 soup_service.clone(),
                 Arc::new(email_service.clone()),
-            ),
+            )
+            .with_committed_reads(primary_entity_soup.clone()),
             attention_feed::outbound::notifications::ReaderFeedNotifications::new(
                 graphql_notification_reader.clone(),
             ),
@@ -2710,6 +2776,7 @@ async fn run_server() -> anyhow::Result<()> {
                 entity_access_service.as_ref().clone(),
             ),
         ),
+        graphql_primary_channel_soup: graphql_soup::PrimaryChannelSoup(primary_channel_soup),
         graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader::new(
             primary_entity_soup,
             Arc::new(email_service.clone()),

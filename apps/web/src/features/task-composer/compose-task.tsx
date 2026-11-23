@@ -12,7 +12,10 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
-import { enableTaskTemplates } from '@core/constant/featureFlags';
+import {
+  enableTaskStartDate,
+  enableTaskTemplates,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { throwOnErr } from '@core/util/result';
@@ -33,6 +36,7 @@ function createSplitTaskComposerHost(): TaskComposerHost {
   const userId = useUserId();
   const templates = useFeatureFlag(enableTaskTemplates);
   const templatesEnabled = () => !templates().loading && templates().enabled;
+  const startDates = useFeatureFlag(enableTaskStartDate);
   const requireTemplates = (viewerId: string) => {
     if (!templatesEnabled()) throw new Error('Task templates unavailable');
     if (userId() !== viewerId) throw new Error('Task template account changed');
@@ -55,6 +59,7 @@ function createSplitTaskComposerHost(): TaskComposerHost {
   return {
     userId,
     templatesEnabled,
+    startDatesEnabled: () => startDates().enabled,
     createTemplate: async (viewerId, selection, contents, definitions) => {
       requireTemplates(viewerId);
       const created = await createTemplate.mutateAsync({

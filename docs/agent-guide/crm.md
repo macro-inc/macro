@@ -245,6 +245,9 @@ matches are left unchanged. CRM settings and domain admission still apply.
 
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
+With the keyboard on the record pane (as a record opens, with nothing focused,
+or after a click on its text), Tab, Shift+Tab and the number keys move along
+them.
 On phones and tablets, the current section appears as a labeled header island
 with a caret. When the host collapses it, the section icon and caret keep its
 accessible label. Embedded phone headers put the switcher below the breadcrumb
@@ -840,6 +843,12 @@ It changes in place; for owners and admins it shows on and fixed, with the
 reason, and one note under the list says they always have CRM access. A member
 whose access is off reads **No CRM access** on their row's summary line.
 A failed save keeps the previous state and can be retried; members do not see these controls.
+CRM settings (Settings > CRM, and the CRM sidebar's settings entry) opens with
+**Who can use CRM**, the same switch for every person Members shows as a person
+row, in the same order, each named `CRM access for <name>`. Owners and admins show
+it on and disabled, with **Owner · Always has CRM access** or **Admin · Always has
+CRM access** on their row. Both places write the same team setting, so a change in
+one shows in the other; members, and everyone while the flag is off, see no section.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,
 drop retired snapshots when the cache generation changes. A CRM deep

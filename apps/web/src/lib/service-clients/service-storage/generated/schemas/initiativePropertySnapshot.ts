@@ -6,6 +6,7 @@
  */
 import type { InitiativePropertySnapshotDueDate } from './initiativePropertySnapshotDueDate';
 import type { InitiativePropertySnapshotPriority } from './initiativePropertySnapshotPriority';
+import type { InitiativePropertySnapshotStartDate } from './initiativePropertySnapshotStartDate';
 import type { InitiativePropertySnapshotStatus } from './initiativePropertySnapshotStatus';
 
 /**
@@ -20,6 +21,8 @@ export interface InitiativePropertySnapshot {
   dueDate?: InitiativePropertySnapshotDueDate;
   /** Priority option id, or unset. */
   priority?: InitiativePropertySnapshotPriority;
+  /** Start timestamp, or unset. */
+  startDate?: InitiativePropertySnapshotStartDate;
   /** Status option id, or unset. */
   status?: InitiativePropertySnapshotStatus;
 }

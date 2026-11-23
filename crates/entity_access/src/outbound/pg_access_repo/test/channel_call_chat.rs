@@ -99,3 +99,56 @@ async fn channel_call_chat_uses_current_channel_grants_without_direct_participan
     }
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../call/fixtures", scripts("call_repo"))
+)]
+async fn current_channel_users_are_the_members_who_have_not_left(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::ports::EntityAudienceLookup;
+
+    let service = EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone()));
+    let channel_id = uuid::uuid!("00000000-0000-0000-0000-000000000c01");
+    let current = || async {
+        let mut users = service
+            .get_current_channel_users(&channel_id.to_string())
+            .await?
+            .into_iter()
+            .map(|user| user.to_string())
+            .collect::<Vec<_>>();
+        users.sort();
+        anyhow::Ok(users)
+    };
+
+    let before = current().await?;
+    assert_eq!(before.len(), 3, "the fixture's three members");
+
+    let leaver = before[0].clone();
+    let joiner = user_id("macro|joiner@example.com");
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+        channel_id,
+        leaver,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+        channel_id,
+        joiner.as_ref(),
+    )
+    .execute(&pool)
+    .await?;
+
+    let mut expected = before[1..].to_vec();
+    expected.push(joiner.to_string());
+    expected.sort();
+    assert_eq!(current().await?, expected);
+    assert!(matches!(
+        service.get_current_channel_users("not-a-channel").await,
+        Err(AccessError::BadRequest(_))
+    ));
+    Ok(())
+}

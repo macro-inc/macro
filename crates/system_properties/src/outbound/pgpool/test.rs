@@ -7,6 +7,8 @@ use crate::domain::model::{PropertyRow, SystemPropertyKey};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
+mod start_date_migration;
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn initiative_initialization_preserves_values_and_folder_namespace(
     pool: Pool<Postgres>,
@@ -607,5 +609,43 @@ async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> 
         ]
     );
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn copy_keeps_start_and_due_dates_and_their_times(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let start =
+        serde_json::json!({"type": "Date", "value": "2026-11-24T21:00:00Z", "has_time": true});
+    let due = serde_json::json!({"type": "Date", "value": "2026-11-27T08:00:00Z"});
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES ($1, 'timed-source', 'TASK', $2, $3), ($4, 'timed-source', 'TASK', $5, $6)
+        "#,
+        Uuid::now_v7(),
+        SystemPropertyKey::START_DATE_UUID,
+        start,
+        Uuid::now_v7(),
+        SystemPropertyKey::DUE_DATE_UUID,
+        due,
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.copy_task_properties("timed-source", "timed-copy")
+        .await?;
+
+    let properties = get_task_property_values(&pool, "timed-copy").await;
+    let value_of = |definition: Uuid| {
+        properties
+            .iter()
+            .find(|(id, _)| *id == definition)
+            .and_then(|(_, value)| value.clone())
+    };
+    assert_eq!(value_of(SystemPropertyKey::START_DATE_UUID), Some(start));
+    assert_eq!(value_of(SystemPropertyKey::DUE_DATE_UUID), Some(due));
     Ok(())
 }

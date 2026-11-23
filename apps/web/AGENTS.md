@@ -224,7 +224,12 @@ its icon, its caret when it opens a menu, its name and its tooltip, as header
 actions do. `list-split.browser.e2e.ts` resizes a list view (`asideList`) opened
 as a second split across 720px: the list docks beside the empty preview above it
 and fills the split below it, never leaving an empty preview behind Show
-navigation.
+navigation. `view-tabs.browser.e2e.ts` holds the Tab rule over the real hotkey engine,
+header, `Tabs` and list controller, in a wide and a 700px split (stand-in
+panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
+header's tabs from its list, are focus order on a header button, leave an
+open item that replaced the list open, and leave a thread beside the list
+open after a click on its text.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -290,6 +295,12 @@ Resolve collection-provider ownership from the committed router entry before
 mounting its outlet; the layout's mount metadata can still describe the previous
 view. `split-layout/tests/SplitPanel-collection-navigation.test.tsx` covers CRM
 to Calls, history, and split reuse while that mirror is stale.
+
+A database's table tabs take Tab and the number keys only from the database
+pane: Tab on a selected cell still moves to the next cell and leaves the table
+open, and a dragged range of cells keeps its table (the real table tabs and
+records grid over the real hotkey engine):
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts table-tabs.browser.e2e.ts`.
 
 Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
@@ -431,7 +442,7 @@ service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It laun
 `--disable-web-security` because the scripted services answer for other origins:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 
-Members rows (owners, admins, members and agents) share one shape at every width, like a Machines row: picture, name, email, one summary line (role · plan, plus **Pro at renewal** or **No CRM access** when they apply; an agent's status), and a ⋯ that holds everything the viewer can change in the order plan, role, CRM access (named `CRM access for <name>`), Remove. The ⋯ is a `Dropdown` on desktop and a `MobileDrawer` sheet on touch, switched in `TeamMembers.tsx`. A setting the viewer can't change stays in place, disabled, with its reason written under it; don't use `disabledReason` there, whose tooltip takes the Escape that should close the menu. Names and emails wrap on rows under 480px, as Machines' names do, breaking an address before its `@`. Person rows are keyed by `user_id` (`Key`), so a refetch keeps each row and an open ⋯; don't give `useTeamQuery` `reconcile`, which writes into TanStack's cached object and so into the remove mutation's rollback snapshot. The same suite checks the rows at 1440, 820 (touch), 390, 360 and 320px, and each ⋯ item for owner, admin, member and agent rows.
+Members rows (owners, admins, members and agents) share one shape at every width, like a Machines row: picture, name, email, one summary line (role · plan, plus **Pro at renewal** or **No CRM access** when they apply; an agent's status), and a ⋯ that holds everything the viewer can change in the order plan, role, CRM access (named `CRM access for <name>`), Remove. The ⋯ is a `Dropdown` on desktop and a `MobileDrawer` sheet on touch, switched in `TeamMembers.tsx`. A setting the viewer can't change stays in place, disabled, with its reason written under it; don't use `disabledReason` there, whose tooltip takes the Escape that should close the menu. Names and emails wrap on rows under 480px, as Machines' names do, breaking an address before its `@`. Person rows are keyed by `user_id` (`Key`), so a refetch keeps each row and an open ⋯; don't give `useTeamQuery` `reconcile`, which writes into TanStack's cached object and so into the remove mutation's rollback snapshot. The same suite checks the rows at 1440, 820 (touch), 390, 360 and 320px, and each ⋯ item for owner, admin, member and agent rows. CRM settings' **Who can use CRM** (`views/crm-member-access.tsx`, which CRM receives as `CrmContext.MemberAccess`) lists the same person rows with `TeamMemberRow` and a CRM access switch, sharing Members' roster helpers in `primitives/team-roster.ts`; keep the two lists on those helpers. The suite's `?crm` page checks a change there seen in the ⋯ and back, a failed save and its retry, admins, and that members and flag-off owners see no list.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details), and event details
@@ -500,9 +511,18 @@ attachments-only menu. The block composer's plus menu has a backend-free
 browser regression on desktop and phone:
 `bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts composer.browser.e2e.ts`.
 
-Composer `/` menus list Connections between Skills and Pull requests. Keep native
-and hosted providers aligned with `mcp_select::select_connections`, prefer native
-credentials per provider, and preserve editor focus on pointer and touch selection.
+Composer `/` menus list Connections between Skills and Pull requests: the
+connected apps and servers `GET /connectors` lists, as the server decided them.
+Preserve editor focus on pointer and touch selection.
+
+Web code reads connection state (which apps and servers are connected, and
+how) only through `src/lib/queries/connectors/` (`useConnectors`, its
+mutations, `connectConnector` and the catalog). The server applies every
+rule; the web never picks a source, reads `macro-connect`, or computes a
+status. Connecting asks the server (`POST /connectors/{key}/connect`) and
+follows the step it answers, for GitHub too: when GitHub's connection is the
+account link, the server answers with `/app/connect/github`, the page that
+starts it.
 
 Undo in a large collaborative Markdown document (Loro undo, mirror, reconcile,
 caret mapping) has a backend-free timing regression:
@@ -897,8 +917,8 @@ ownership. Done, logout, and the ten-minute timeout retire pending callbacks.
 
 Connect can close without reporting success (an OAuth provider severs its
 consent popup's opener) even though Pipedream created the account. Every close
-without success, on web and native, asks `/pipedream/mcp/recover` to register
-the user's newest account for that app from the last fifteen minutes.
+without success, on web and native, asks `POST /connectors/{key}/complete`
+once, which records the account if the flow made one.
 Desktop Home and Agents new-conversation and active-session composers show the shared **Run agents
 on this computer** invitation until this installation is paired or the current
 user dismisses it locally. Keep the invitation tied to bundled macrod support,
@@ -1105,8 +1125,20 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   lazily in every new worker, which cost more than reopening the database on
   each tab return. The exchange has its own port, so a failure only costs the
   shortcut; never put the module in the activation message.
-  A reused engine records `graphql_cache.wasm_download` with 0 bytes and no
-  `wasm_compile`. The dev server never reuses: its asset URL outlives a rebuild.
+  Before any engine worker exists, the page compiles the engine itself, from
+  before its liveness lock, and offers that compile to the first worker for up
+  to 10 s; it drops the compile when the coordinator acknowledges it while
+  another visible tab owns the cache (`ownerElsewhere`). The page records
+  `graphql_cache.wasm_prefetch_download` and `wasm_prefetch_compile`.
+  A reused engine records `graphql_cache.wasm_download` with 0 bytes, timed as
+  the wait for the offer, and no `wasm_compile`. The dev server never reuses or
+  compiles ahead: its asset URL outlives a rebuild.
+  A fresh engine compiles a response served as exactly `application/wasm` with
+  `WebAssembly.compileStreaming` (`worker/wasm-compile.ts`): only then does
+  Chromium cache the optimized code for the next page load. Streamed,
+  `wasm_download` has no `bytes` and `wasm_compile` includes the body; a
+  streamed compile that fails other than on an invalid binary is reported as a
+  failed download and retried once from bytes.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
@@ -1151,11 +1183,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list, which holds top-level routines only: sub-routines, which another routine's run created, are reached from their creator); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
 - Keep Quick Access cache availability reactive to `getGraphqlSoupCacheHost()`; the host can appear, change or be disabled after the provider mounts, and email has no legacy source fallback.
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
-- Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
+- Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; with `enable-contact-lists` the backfill and exact lookup select `GraphqlContact.lists` (the `…WithLists` operations, never the fetch-only pages) and scan under checkpoint v3, so only clients the flag turns on rehydrate; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. An invalidation naming `changed` contacts also tops up just those ids through the exact lookup (`contacts/top-up.ts`), taking turns on the contact fence with scan pages (`write-turn.ts`); top-ups never delete. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
+- A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 (5 and 6 refuse them); the first search on a host goes without and is resent once it answers 7. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
+- A tab without a usable local cache lists server contact pages, which the server does not rank. On the first page of a typed search `readServerWindow` (`queries/contacts/directory.ts`) also reads who the text names: the server's named people (`readServerNames`: with `enable-named-contact-search` the whole directory's exact and word-start matches, ranked by list group then exact names, from `GraphqlUser.contactsNamedBy`; without it the exact matches of a scan that stops after 2,000 contacts, which a server older than the field still answers), plus the team roster or a whole typed address looked up by ID, and it classifies them and the page's own rows with the local ranking's exact and word-prefix rules (`namedBy`). One of those extra reads failing never fails the page, and one still unanswered two seconds in never holds it once its own rows have landed (`NAMED_READ_BUDGET_MS`): it lists without the people that read would have added, and still ranks everyone it has. `createContactDirectoryList` orders that page: direct-message partners, then teammates, then everyone else, exact before word-start matches, with the looser matches after them in the same groups; later pages are never reordered. Give every people list `teammates` (`useTeammateIds` in `queries/team/roster`, which observes the roster the app shell keeps loaded and never fetches it), and `directMessages` where the surface has them.
 - Cmd+K and mobile name search show **Searching…** under the listed rows (`isSearchingEntities`, through `createSteadyFlag`) while the cache has not answered the typed query, since contacts, sessions and commands list first; only a slow search says so. A replay of an answered window is not a pending search, and `isLoadingEntities` still means an empty list is loading. A search refused while the cache changes owner (`owner-handoff-blocked`) stays pending and `createProjectedList` replays it when `onCacheGenerationChanged` reports the replacement engine; nothing else would until the next cache write.
 - Cmd+K and mobile name search take task projects from the Quick Access `initiative` bucket (typed All queries and the Projects category), searched from the GraphQL cache like other entities. Don't give them a per-query server search: its rows drop out while each new query loads, so projects flash as you type.
-- Merge the complete channel list into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
+- Merge the channel directory's joined channels (`useChannelDirectory`) into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
 - Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.
 - Virtualize mobile name results like desktop Command Menu; local Quick Access sources are unbounded, and mounting them all stalls iOS keyboard focus during layout. Load additional search pages near the scroll end instead of reserving a paging bar.
 - Reconcile mobile full-text rows by entity ID so appending a page preserves DOM rows and scroll position; restore item anchors after responsive row measurement and disable browser scroll anchoring so layout changes cannot override restoration.
@@ -1375,7 +1409,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged. Retain pointer hit-testing coordinates until the drag sensor finishes so intervening scroll updates cannot discard a valid drop.
   Share section click and context menu controls with menu-local loading boundaries; use DropdownMenu.Content for click-menu roots and keep Mark all as read scoped to complete membership. Hide unavailable section edits and scope transfers. Name the personal filter submenu Display, retain trailing sort checks, and keep Unread only and default-on Unread when collapsed switches open when toggled. Supplement off-page unread rows only in collapsed groups whose Unread when collapsed preference is enabled; preserve expanded groups' page order.
   Compose the section click and right-click menus with `ContextMenuContent`, `MenuItem`, `MenuGroup`, and `MenuSeparator`; do not nest padded `Dropdown.Group` elements inside a context-menu surface.
-  Keep all section mute, unmute, and snooze actions personal to the viewer; use the complete current membership, not filtered or hydrated rows, and never apply the change to later additions. With `enable-channel-notification-settings`, section mute and notification settings are instead stored on the section (`/notification_settings/sections`) and apply to later additions; All channels has neither. Resolve built-in membership through the complete channel list, including custom-section assignments and preserving participant checks; Favorites targets channel favorites only. Use the bulk item-preference endpoints and shared snooze picker, applying confirmed changes to the cache once and preserving successful chunks on partial failure.
+  Keep all section mute, unmute, and snooze actions personal to the viewer; use the complete current membership, not filtered or hydrated rows, and never apply the change to later additions. With `enable-channel-notification-settings`, section mute and notification settings are instead stored on the section (`/notification_settings/sections`) and apply to later additions; All channels has neither. Resolve built-in membership through the complete channel directory (`readComplete()`), including custom-section assignments and preserving participant checks; Favorites targets channel favorites only. Use the bulk item-preference endpoints and shared snooze picker, applying confirmed changes to the cache once and preserving successful chunks on partial failure.
   Use checkbox items in Add to section to toggle explicit membership within each scope without changing the other scope; show rule-only matches checked and read-only.
   Carry team IDs into channel entities and require a matching team for new shared-section assignments; preserve server-authorized membership display while metadata hydrates.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
@@ -1432,7 +1466,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   The resolved interface language is reported to PostHog as the person
   property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
-- Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
+- Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off. The server reads a routine (`GET /scheduled-actions/{id}`) only to its owner and refuses everyone else (401/404): a routine page shows the template on that refusal (`readRefused`), and routine mention previews fall back to the template's read.
 - Gate the Agent pings notification setting and its settings-search entry on `enable-agent-notifications`; the notification service refuses `notifications.send` for a sender under the same key.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 - Keep Tasks date ranges on view-owned date-bucket boundaries in `features/tasks-view/core/task-due-date.ts`; send `sort_method=property` with the selected definition and direction, use keyed `date_ranges` grouping, and restart pages when midnight/timezone/resume changes the query key; preserve text-search ordering.
@@ -1954,9 +1988,16 @@ person (Macro) and keeps its People preview's rows as loading rows (`holdsRows`;
 with other sections also when no agent matches, `peopleHolding`), holding the highlighted
 row meanwhile; phones list nothing below them yet. On desktop, Booking Links, which arrive
 from the network, are a section below People; phones pin People rows above the rest. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when
-Cmd+K stops saying "Searching…". The menu reads a failed people window again once by
-itself, holding the rows meanwhile, and offers Retry only when that read fails too
-(`peopleFailed`).
+Cmd+K stops saying "Searching…". The held rows stay blank for `LOADING_ROWS_DELAY_MS`
+before they shimmer, so an ordinary open shows no loading state. The menu's directory
+read gives the cache `PEOPLE_CACHE_BUDGET_MS` (`peopleLocalBudgetMs`), then reads the
+server's window once for that query. A typed search's rows keep the order that window
+gives them (the people the text names first; see the server page ordering under Development
+Patterns), a browsing page's rows are ranked by the menu, and neither is re-read on cache
+changes, so the cache answering later never reorders them. The menu
+reads a failed people window again once by itself, holding the rows meanwhile, and
+offers Retry when that read fails too or a read is still pending when the hold ends
+(`peopleFailed`): People never disappears without saying why.
 
 ### Tag picker selection and creation
 

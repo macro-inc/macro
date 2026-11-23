@@ -423,6 +423,7 @@ describe('composeAgentContextPrompt with a trigger', () => {
             'The popover scrolls the page behind it. Ask <m-user-mention>{"userId":"macro|teo@example.com","displayName":"Teo"}</m-user-mention> for repro steps.',
           status: 'Todo',
           priority: 'High',
+          start: '2026-10-06T00:00:00Z',
           due: '2026-10-10T00:00:00Z',
           assignees: [
             { id: 'bot|00000000-0000-0000-0000-00000000c5c5', name: 'Cursor' },
@@ -444,7 +445,7 @@ describe('composeAgentContextPrompt with a trigger', () => {
         '<trigger kind="task_assigned" discussion="d1">',
         '  <note>Julia assigned you this task. Your replies are posted to your own discussion on the task, where Julia and others on the task read them.</note>',
         '  <assigned by="Julia" by_email="julia@example.com" by_id="macro|julia@example.com" at="2026-10-08T14:02:00Z"/>',
-        '  <task id="task-1" title="Fix calendar popover scroll" status="Todo" priority="High" due="2026-10-10T00:00:00Z">',
+        '  <task id="task-1" title="Fix calendar popover scroll" status="Todo" priority="High" start="2026-10-06T00:00:00Z" due="2026-10-10T00:00:00Z">',
         '    <project id="p-a1" name="Calendar polish"/>',
         '    <assignees>',
         '      <assignee name="Cursor" id="bot|00000000-0000-0000-0000-00000000c5c5"/>',
