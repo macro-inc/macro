@@ -638,6 +638,15 @@ pub(crate) fn kill_now(state: &MacrodState) {
     }
 }
 
+/// Stop the daemon before an installer replaces its executable, which Windows
+/// cannot do while it runs. Auto-start stays as the user left it, so the
+/// updated app starts the daemon again.
+#[cfg(windows)]
+pub(crate) async fn stop_for_install(state: &MacrodState) {
+    state.inner.lock().expect("macrod state lock").wanted = false;
+    stop_child(&state.inner).await;
+}
+
 /// Kill the child, invalidating any reader still attached to it.
 async fn stop_child(inner: &Arc<Mutex<Inner>>) {
     let child = {
