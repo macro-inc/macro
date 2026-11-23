@@ -25,6 +25,7 @@ jobs:
       generated_workflows: ${{ steps.filter.outputs.generated_workflows }}
       node_modules_nix: ${{ steps.filter.outputs.node_modules_nix }}
       tauri_lockfiles: ${{ steps.filter.outputs.tauri_lockfiles }}
+      desktop: ${{ steps.filter.outputs.desktop }}
       sdk: ${{ steps.filter.outputs.sdk }}
       observability_aws: ${{ steps.filter.outputs.observability_aws }}
       observability_image: ${{ steps.filter.outputs.observability_image }}
@@ -551,6 +552,14 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
               - '.github/workflows/check_tauri_lockfiles.yml'
+            desktop:
+              - 'apps/web/tauri/**'
+              - 'apps/web/src/observability/generated/**'
+              - 'nix/tauri-dev-shells.nix'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'rust-toolchain.toml'
+              - '.github/workflows/desktop_check.yml'
             sdk:
               - 'packages/sdk/**'
               - 'bun.lock'
@@ -635,6 +644,13 @@ jobs:
     name: Tauri lockfiles
     uses: ./.github/workflows/check_tauri_lockfiles.yml
     secrets: inherit
+  desktop:
+    needs:
+      - start
+    if: needs.start.outputs.desktop == 'true'
+    name: Desktop app
+    uses: ./.github/workflows/desktop_check.yml
+    secrets: inherit
   sdk:
     needs:
       - start
@@ -682,6 +698,7 @@ jobs:
       - generated-workflows
       - node-modules-nix
       - tauri-lockfiles
+      - desktop
       - sdk
       - observability-aws
       - observability-image

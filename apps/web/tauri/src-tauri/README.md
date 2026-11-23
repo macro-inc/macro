@@ -797,6 +797,25 @@ run from `apps/web` with `bunx vitest run --project scripts scripts/desktop-rele
 Frontend preparation tests are in the web `tauri` Vitest project. Native replacement/notarization still
 requires platform release testing; mocked HTTP tests never replace the test runner.
 
+## Unit tests in PR CI
+
+`PR CI` builds the desktop app on Linux and runs the library tests of `app` and
+`macro_bundle_updater_plugin` (`Desktop app / Test on Linux`,
+`desktop_check.yml`) when a pull request changes `apps/web/tauri/`, the
+generated wire types in `apps/web/src/observability/generated/`, or the Tauri
+Nix shell. It stubs the frontend build as `desktop_qa_macos.yml` does. Locally,
+from the repository root:
+
+```sh
+mkdir -p apps/web/dist && echo '<!doctype html>' > apps/web/dist/index.html
+echo development > apps/web/tauri/src-tauri/.macro-tauri-env
+nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml --locked -p app -p macro_bundle_updater_plugin --lib
+```
+
+The Linux notification tests start a private `dbus-daemon` with their own
+configuration, so they need no session bus or `/etc/dbus-1`. The macOS-only
+code (the `cef` feature, Apple APIs) compiles only in the macOS builds.
+
 ## Automated offline tests (Linux)
 
 See [native E2E](../../tests/native/README.md) for the isolated WebDriver setup,
