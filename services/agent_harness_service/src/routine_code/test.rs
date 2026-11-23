@@ -1187,13 +1187,19 @@ fn an_area_reads_its_index_guidance_and_declarations_without_imports() {
         [
             "src/entities/task-templates/namespace.d.ts",
             "src/entities/tasks/namespace.d.ts",
+            "src/entities/time/namespace.d.ts",
             "src/entities/task-templates/task-template.d.ts",
-            "src/entities/tasks/task.d.ts"
+            "src/entities/tasks/task.d.ts",
+            "src/entities/time/errors.d.ts",
+            "src/entities/time/task-time.d.ts",
+            "src/entities/time/time-entry.d.ts",
+            "src/entities/time/timer.d.ts"
         ]
     );
     assert!(reference.contains("class TaskNamespace "));
     assert!(reference.contains("class TaskTemplateNamespace "));
     assert!(reference.contains("class TaskTemplate "));
+    assert!(reference.contains("class TimeEntry "));
     assert!(!reference.lines().any(|line| line.starts_with("import ")));
     assert!(reference.len() <= ONE_AREA_BYTES + IMPORTED_TYPE_BYTES + 256);
 }
