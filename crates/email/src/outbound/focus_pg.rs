@@ -382,8 +382,25 @@ impl FocusStore for FocusPgRepository {
         // each per thread, off everything else. A thread below the cursor has
         // both times at or below it, so a later page starts each index range
         // at the cursor instead of reading the window from the top again.
+        //
+        // The people the owner wrote to lately are read once, from the
+        // owner's own sent mail, and each thread only looks its senders up
+        // in that set. Looking each sender up through every message
+        // addressed to them instead costs a probe per message: a mailing
+        // list is both the sender and a recipient of every message through
+        // it, so each of its threads read the whole list's history, and a
+        // busy inbox's first page passed the statement timeout.
         let rows = sqlx::query!(
             r#"
+            WITH recent_contact AS MATERIALIZED (
+                SELECT DISTINCT r.contact_id
+                FROM email_messages sent
+                JOIN email_message_recipients r ON r.message_id = sent.id
+                WHERE sent.link_id = $1
+                  AND sent.is_sent
+                  AND NOT sent.is_draft
+                  AND sent.internal_date_ts >= $5
+            )
             SELECT s.id AS "id!", s.latest_at AS "latest_at!"
             FROM (
                 SELECT t.id, t.is_signal, t.latest_inbound_message_ts,
@@ -451,14 +468,10 @@ impl FocusStore for FocusPgRepository {
                OR EXISTS (
                    SELECT 1
                    FROM email_messages inbound
-                   JOIN email_message_recipients r ON r.contact_id = inbound.from_contact_id
-                   JOIN email_messages sent ON sent.id = r.message_id
                    WHERE inbound.thread_id = s.id
                      AND NOT inbound.is_sent
                      AND NOT inbound.is_draft
-                     AND sent.is_sent
-                     AND NOT sent.is_draft
-                     AND sent.internal_date_ts >= $5
+                     AND inbound.from_contact_id IN (SELECT contact_id FROM recent_contact)
                )
             ORDER BY s.latest_at DESC, s.id DESC
             LIMIT $3
