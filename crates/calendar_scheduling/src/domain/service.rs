@@ -59,7 +59,7 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
         }
         self.validate_booking_hosts(&owner, &event.hosts).await?;
         for host in &event.hosts {
-            self.calendars.ready(host).await?;
+            self.calendars.ready(host, event.email_link_id).await?;
         }
         Ok(())
     }
@@ -143,7 +143,10 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
         user: &str,
         team: Option<Uuid>,
         profile: Profile,
-    ) -> Result<Profile, Error> {
+    ) -> Result<Profile, Error>
+    where
+        C: BookingAccounts,
+    {
         if profile.id != Self::profile_id(user, team) {
             return Err(Error::Forbidden);
         }
@@ -156,7 +159,58 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
         self.authorize(user, &owner, false).await?;
         let previous = self.repository.profile(owner.profile.id).await?;
         self.validate_hosts(&owner, previous.as_ref()).await?;
+        self.validate_accounts(&owner, previous.as_ref()).await?;
         self.repository.save_profile(owner).await
+    }
+    /// A personal link books only on a connected account its host can write,
+    /// and a video meeting needs an account that can add one. Only a changed
+    /// account, or one newly asked for a video meeting, is checked, so a link
+    /// whose account was removed since does not block saving the profile's
+    /// other links; it takes no bookings until its owner picks another.
+    async fn validate_accounts(
+        &self,
+        owner: &OwnedProfile,
+        previous: Option<&OwnedProfile>,
+    ) -> Result<(), Error>
+    where
+        C: BookingAccounts,
+    {
+        let changed = owner
+            .profile
+            .event_types
+            .iter()
+            .filter(|event| {
+                let old =
+                    previous.and_then(|p| p.profile.event_types.iter().find(|e| e.id == event.id));
+                event.email_link_id.is_some()
+                    && !old.is_some_and(|old| {
+                        old.email_link_id == event.email_link_id
+                            && (old.google_meet || !event.google_meet)
+                    })
+            })
+            .collect::<Vec<_>>();
+        if changed.is_empty() {
+            return Ok(());
+        }
+        let host = owner.user_id.as_deref().ok_or(Error::Forbidden)?;
+        let accounts = self.calendars.booking_accounts(host).await?;
+        for event in changed {
+            let account = accounts
+                .iter()
+                .find(|account| Some(account.email_link_id) == event.email_link_id)
+                .ok_or_else(|| {
+                    Error::Invalid(
+                        "Choose one of your connected accounts for this booking link".into(),
+                    )
+                })?;
+            if event.google_meet && !account.video_meetings {
+                return Err(Error::Invalid(format!(
+                    "{} can't add video meetings. Choose a Macro call or a custom location.",
+                    account.email_address
+                )));
+            }
+        }
+        Ok(())
     }
     async fn validate_hosts(
         &self,
@@ -279,7 +333,13 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         let busy_end = end + Duration::minutes(i64::from(event.after_minutes));
         let mut busy = self
             .calendars
-            .busy(&event.hosts, busy_start, busy_end, None)
+            .busy(
+                &event.hosts,
+                busy_start,
+                busy_end,
+                None,
+                event.email_link_id,
+            )
             .await?;
         busy.extend(
             self.repository
@@ -396,6 +456,18 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         Ok(slots)
     }
     /// Reserve a slot and create the provider event, or hold it for confirmation.
+    #[tracing::instrument(
+        name = "scheduling.book",
+        skip_all,
+        fields(
+            profile_id = %profile_id,
+            event_type_id = %event_id,
+            booking_id = tracing::field::Empty,
+            email_link_id = tracing::field::Empty,
+            status = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
     pub async fn book(
         &self,
         profile_id: Uuid,
@@ -424,6 +496,9 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .find(|e| e.id == event_id && e.enabled)
             .ok_or(Error::NotFound)?;
         self.validate_booking_hosts(&owner, &event.hosts).await?;
+        if let Some(inbox) = event.email_link_id {
+            tracing::Span::current().record("email_link_id", tracing::field::display(inbox));
+        }
         if event.requires_confirmation {
             return Err(Error::Invalid(
                 "This booking link is paused until its host enables automatic confirmation.".into(),
@@ -505,7 +580,10 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             calendar_event_id: None,
             calendar_id: Some(
                 self.calendars
-                    .creation_calendar(slot.hosts.first().ok_or(Error::CalendarUnavailable)?)
+                    .creation_calendar(
+                        slot.hosts.first().ok_or(Error::CalendarUnavailable)?,
+                        event.email_link_id,
+                    )
                     .await?,
             ),
             operation: Some(CalendarOperation::new(CalendarOperationKind::Create)),
@@ -536,22 +614,30 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             },
         };
         let reservation_id = record.booking.id;
-        loop {
+        let booked = loop {
             match self
                 .repository
                 .reserve(record.clone(), event.daily_limit, day_start, day_end)
                 .await
             {
-                Ok(reserved) if reserved.booking.id != reservation_id => return Ok(reserved),
-                Ok(reserved) => return self.finish_operation(reserved).await,
+                Ok(reserved) if reserved.booking.id != reservation_id => break reserved,
+                Ok(reserved) => break self.finish_operation(reserved).await?,
                 Err(Error::Conflict) => {
                     let host = backup_hosts.next().ok_or(Error::Conflict)?;
-                    record.calendar_id = Some(self.calendars.creation_calendar(&host).await?);
+                    record.calendar_id = Some(
+                        self.calendars
+                            .creation_calendar(&host, event.email_link_id)
+                            .await?,
+                    );
                     record.booking.hosts = vec![host];
                 }
                 Err(error) => return Err(error),
             }
-        }
+        };
+        let span = tracing::Span::current();
+        span.record("booking_id", tracing::field::display(booked.booking.id));
+        span.record("status", tracing::field::debug(booked.booking.status));
+        Ok(booked)
     }
     /// Read bookings for a profile, with authorization and a bounded range.
     pub async fn bookings(&self, user: &str, team: Option<Uuid>) -> Result<Vec<Booking>, Error> {
@@ -648,6 +734,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 record.busy_start,
                 record.busy_end,
                 None,
+                record.event.email_link_id,
             )
             .await?;
         if busy.iter().any(|interval| interval.end < interval.start) {
@@ -668,6 +755,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                         .hosts
                         .first()
                         .ok_or(Error::CalendarUnavailable)?,
+                    record.event.email_link_id,
                 )
                 .await?,
         );
@@ -762,6 +850,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 occupied_start,
                 occupied_end,
                 record.calendar_event_id,
+                event.email_link_id,
             )
             .await?;
         busy.extend(

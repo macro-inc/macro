@@ -121,6 +121,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
       onChipDragEnd={handleChipDragEnd}
       hideMenuOnEscape
       showChipAddresses
+      markAlreadyAdded
     />
   );
   return (

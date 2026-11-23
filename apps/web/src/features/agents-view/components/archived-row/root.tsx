@@ -8,7 +8,10 @@ export function ArchivedRowRoot(props: {
   children: JSX.Element;
 }) {
   return (
-    <div class="archived-conversation group/archive relative flex h-11 shrink-0 items-center gap-4 rounded-xl px-3 hover:bg-hover focus-within:bg-hover">
+    <div
+      data-press-surface
+      class="archived-conversation group/archive relative flex h-11 shrink-0 items-center gap-4 rounded-xl px-3 hover:bg-hover focus-within:bg-hover"
+    >
       <button
         type="button"
         aria-label={props.title}

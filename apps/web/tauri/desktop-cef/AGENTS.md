@@ -87,9 +87,17 @@ the same renderer code, but it skips AppKit's event timing.
   (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`).
 - `../src-tauri` must resolve `tauri` through `[patch.crates-io]` (a version
   requirement, not a git dependency) so this workspace can repoint it.
-- The `cef` feature of `../src-tauri` adds no dependencies; it switches the
-  served origin to `http://tauri.localhost` and the `AppRuntime` alias to
-  `tauri::DynRuntime`. It only compiles in this workspace.
+- The `cef` feature of `../src-tauri` switches the served origin to
+  `http://tauri.localhost` and the `AppRuntime` alias to `tauri::DynRuntime`,
+  and adds the `minidump` reader for Chromium's crash dumps. It only compiles
+  in this workspace.
+- `crash_reporter.cfg`, bundled into `Contents/Resources`, turns on Crashpad
+  with no `ServerURL`: dumps must stay on the Mac, and the app sends only a
+  signature of each to PostHog
+  (`../src-tauri/README.md#native-crash-reports`). Never add a server URL.
+  The app finds the dumps in the runtime's default `root_cache_path`, so
+  setting `.root_cache_path` on the `Cef` builder means updating
+  `crash_reports::setup` too.
 - The CEF Tauri fork's `on_web_content_process_terminate` callback takes a
   webview and termination details; the regular fork takes only a webview.
   Check both workspaces when changing shared callback registration.
