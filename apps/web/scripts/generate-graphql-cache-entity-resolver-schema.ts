@@ -204,8 +204,14 @@ export function renderEntityResolverSchema(
         }
         lines.push('      ],');
       }
-      if (field.argumentPaths.length === 1) {
-        lines.push(`      argumentPaths: [${tuple(field.argumentPaths[0] ?? [])}],`);
+      // Biome keeps a list of several multi-segment paths one per line and
+      // joins any other list that fits the line width.
+      const pathsLine = `      argumentPaths: [${field.argumentPaths.map(tuple).join(', ')}],`;
+      const matrix =
+        field.argumentPaths.length > 1 &&
+        field.argumentPaths.every((path) => path.length > 1);
+      if (!matrix && pathsLine.length <= FORMATTER_LINE_WIDTH) {
+        lines.push(pathsLine);
       } else {
         lines.push('      argumentPaths: [');
         for (const path of field.argumentPaths) {
