@@ -29,11 +29,12 @@ const nonEmailFilters: EntityFilters = {
  * What a search reaches. With no `in:` filter it is all mail, as the All tab
  * lists it; a view narrows it to what that view lists, its inbox views to
  * threads still in the inbox. Favorites and Focus narrow by thread id in
- * `buildEmailSearchRequest`.
+ * `buildEmailSearchRequest`; Focus's ids are already the threads still in the
+ * inbox, so it sends no Done state for the service to check page by page.
  */
 function scopeFilters(scope: EmailSearchScope): EmailFilters {
   return match(scope)
-    .with('inbox', 'focus', () => ({ done: false }))
+    .with('inbox', () => ({ done: false }))
     .with('signal', () => ({
       importance: true,
       shared: 'exclude' as const,
@@ -52,7 +53,7 @@ function scopeFilters(scope: EmailSearchScope): EmailFilters {
     .with('archived', () => ({ shared: 'exclude' as const, done: true }))
     .with('sent', () => ({ view: 'sent' as const }))
     .with('drafts', () => ({ view: 'drafts' as const }))
-    .with('favorites', 'all', () => ({}))
+    .with('focus', 'favorites', 'all', () => ({}))
     .exhaustive();
 }
 

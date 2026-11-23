@@ -493,11 +493,11 @@ describe('buildEmailSearchRequest', () => {
     ).toEqual([NIL]);
   });
 
-  it('holds in:focus to the threads Focus lists that are still in the inbox', () => {
+  it('holds in:focus to the threads Focus lists', () => {
     expect(
       requestFor({ scope: 'focus', scopeThreadIds: ['focus-a'] }).filters
         .email_filters
-    ).toEqual({ done: false, email_thread_ids: ['focus-a'] });
+    ).toEqual({ email_thread_ids: ['focus-a'] });
     expect(
       requestFor({ scope: 'focus', scopeThreadIds: [] }).filters.email_filters
         ?.email_thread_ids
