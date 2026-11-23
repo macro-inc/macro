@@ -666,6 +666,39 @@ fn a_kept_records_shadow_under_its_server_key_is_composed_there() {
     });
 }
 
+/// Queues an edit of `Note:local` that binds `Thing:local`, a settled create
+/// aliased to `Thing:server`, and says `Note` records share its ID. Returns
+/// the edit's queue ID.
+async fn queue_a_related_edit(storage: &mut TursoStorage) -> MutationId {
+    storage
+        .put_batch(vec![
+            (
+                key("Thing:local"),
+                cache_core::identity::alias_record(&key("Thing:server")),
+            ),
+            (key("Thing:server"), record("thing")),
+        ])
+        .await
+        .unwrap();
+    let mut edit = pending(
+        "EditPreview",
+        "mutation EditPreview { edit(id: \"local\") { id value } }",
+        serde_json::json!({ "edit": { "id": "local", "value": "edited" } }),
+        &["Note:local"],
+    );
+    let mut source = decode_optimistic_source(&edit.optimistic.optimistic_data_json).unwrap();
+    source.identity_bindings = vec![cache_core::identity::IdentityBinding {
+        local_key: key("Thing:local"),
+        delete_record: false,
+        response_path: Vec::new(),
+        reference_fields: vec!["Note.id".into()],
+        revalidation_variables: Vec::new(),
+    }];
+    edit.optimistic.optimistic_data_json = encode_optimistic_source(&source);
+    storage.enqueue_mutation(edit).await.unwrap();
+    storage.load_mutation_queue().await.unwrap()[2].id
+}
+
 #[test]
 fn a_shadow_moved_to_a_related_records_server_key_is_composed_there() {
     block_on(async {
@@ -673,33 +706,7 @@ fn a_shadow_moved_to_a_related_records_server_key_is_composed_there() {
             populate(TursoStorage::open_in_memory("schema-related-identity").unwrap()).await;
         // A settled create aliased its own record; a later write that binds
         // it names a record sharing its ID, whose shadow settlement moved.
-        storage
-            .put_batch(vec![
-                (
-                    key("Thing:local"),
-                    cache_core::identity::alias_record(&key("Thing:server")),
-                ),
-                (key("Thing:server"), record("thing")),
-            ])
-            .await
-            .unwrap();
-        let mut edit = pending(
-            "EditPreview",
-            "mutation EditPreview { edit(id: \"local\") { id value } }",
-            serde_json::json!({ "edit": { "id": "local", "value": "edited" } }),
-            &["Note:local"],
-        );
-        let mut source = decode_optimistic_source(&edit.optimistic.optimistic_data_json).unwrap();
-        source.identity_bindings = vec![cache_core::identity::IdentityBinding {
-            local_key: key("Thing:local"),
-            delete_record: false,
-            response_path: Vec::new(),
-            reference_fields: vec!["Note.id".into()],
-            revalidation_variables: Vec::new(),
-        }];
-        edit.optimistic.optimistic_data_json = encode_optimistic_source(&source);
-        storage.enqueue_mutation(edit).await.unwrap();
-        let owner = storage.load_mutation_queue().await.unwrap()[2].id;
+        let owner = queue_a_related_edit(&mut storage).await;
         put_shadow(&mut storage, "Note:server", owner).await;
 
         let adoption = adopt(&storage, RETYPED, &ProjectionInputs::none());
@@ -709,6 +716,38 @@ fn a_shadow_moved_to_a_related_records_server_key_is_composed_there() {
     });
 }
 
+#[test]
+fn a_related_records_tombstone_under_its_server_key_stays() {
+    // Dropping the related record's type keeps it, and so does a Reset.
+    for (scope, sdl) in [
+        ("schema-related-tombstone-types", BOTH_RETYPED),
+        ("schema-related-tombstone-reset", ROOTS),
+    ] {
+        block_on(async {
+            let mut storage = populate(TursoStorage::open_in_memory(scope).unwrap()).await;
+            queue_a_related_edit(&mut storage).await;
+            let mut tombstone = record("note");
+            tombstone.fields.insert(
+                cache_core::identity::DELETED_FIELD.into(),
+                cache_core::value::CacheValue::Bool(true),
+            );
+            storage
+                .put_batch(vec![(key("Note:server"), tombstone)])
+                .await
+                .unwrap();
+
+            adopt(&storage, sdl, &ProjectionInputs::none());
+            let kept = storage.get_batch(&[key("Note:server")]).await.unwrap();
+            assert_eq!(
+                kept[0]
+                    .as_ref()
+                    .and_then(|record| record.fields.get(cache_core::identity::DELETED_FIELD)),
+                Some(&cache_core::value::CacheValue::Bool(true)),
+                "{scope}"
+            );
+        });
+    }
+}
 #[test]
 fn a_changed_query_root_drops_its_document_and_shadow() {
     block_on(async {
@@ -745,7 +784,50 @@ fn a_changed_query_root_drops_its_document_and_shadow() {
 }
 
 #[test]
-fn a_write_whose_response_the_new_schema_cannot_hold_settles_as_failed() {
+fn a_type_named_like_the_query_root_drops_its_documents_with_its_records() {
+    block_on(async {
+        let old =
+            "type Query { mode: String one: ROOT_QUERY } type ROOT_QUERY { id: ID! value: String }";
+        let mut storage = TursoStorage::open_in_memory("schema-root-named-type").unwrap();
+        storage
+            .adopt_schema(&schema(old), &ProjectionInputs::none(), Unrecorded::Guess)
+            .unwrap();
+        storage
+            .put_batch_with_projections(
+                vec![(key("ROOT_QUERY:one"), record("one"))],
+                vec![ProjectionMutation::Replace(authoritative_projection(
+                    "ROOT_QUERY:one",
+                    "owner",
+                ))],
+            )
+            .await
+            .unwrap();
+        assert!(facts(&storage, "ROOT_QUERY:one") > 0);
+
+        // Retyping a query root field drops the records of that typename.
+        let adoption = adopt(
+            &storage,
+            &old.replace("mode: String", "mode: Int"),
+            &ProjectionInputs::none(),
+        );
+        assert_eq!(adoption.change, types(&[ROOT_QUERY], false));
+        assert_eq!(
+            storage.get_batch(&[key("ROOT_QUERY:one")]).await.unwrap(),
+            vec![None]
+        );
+        assert_eq!(
+            count(
+                &storage,
+                "SELECT count(*) FROM index_documents WHERE record_key = 'ROOT_QUERY:one'"
+            ),
+            0
+        );
+        assert_eq!(facts(&storage, "ROOT_QUERY:one"), 0);
+    });
+}
+
+#[test]
+fn a_write_whose_response_the_new_schema_cannot_hold_settles_with_its_identity() {
     block_on(async {
         // A projection reads `label`, so dropping it changes `Saved`.
         let old = schema(

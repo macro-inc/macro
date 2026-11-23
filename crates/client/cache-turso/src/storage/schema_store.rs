@@ -59,14 +59,14 @@ const ANY_RECORD: &str = "SELECT 1 FROM records WHERE __typename <> '__meta' LIM
 const ANY_QUEUED: &str = "SELECT 1 FROM mutation_queue LIMIT 1";
 const TYPE_RECORDS_DELETE: &str = "DELETE FROM records WHERE __typename = ?1";
 /// A type's index documents, by the `Typename:` prefix of their record keys
-/// ([`key_range`]). Their facts go first: a cascade deletes them one document
+/// ([`key_ranges`]). Their facts go first: a cascade deletes them one document
 /// at a time.
 const TYPE_DOCUMENTS_DELETE: &str =
     "DELETE FROM index_documents WHERE record_key >= ?1 AND record_key < ?2";
 const TYPE_DOCUMENT_COUNT: &str =
     "SELECT COUNT(*) FROM index_documents WHERE record_key >= ?1 AND record_key < ?2";
 const DOCUMENT_COUNT: &str = "SELECT COUNT(*) FROM index_documents";
-/// The facts of a type's documents, by [`key_range`], one per fact table.
+/// The facts of a type's documents, by [`key_ranges`], one per fact table.
 const TYPE_FACTS_DELETE: [&str; 3] = [
     "DELETE FROM exact_facts WHERE document_id IN (SELECT id FROM index_documents WHERE record_key >= ?1 AND record_key < ?2)",
     "DELETE FROM integer_facts WHERE document_id IN (SELECT id FROM index_documents WHERE record_key >= ?1 AND record_key < ?2)",
@@ -432,11 +432,17 @@ pub(super) fn record(
 /// `Typename;`: `;` follows `:`, which no type name holds. The query root's
 /// one record is keyed by its bare name, bounded alone by `ROOT_QUERY0`: a
 /// key holds `:` or a name character after a type name, never one below `0`.
-fn key_range(typename: &str) -> Vec<Value> {
+/// Its records share their typename with a type a schema may name
+/// `ROOT_QUERY`, so that name takes both ranges, as dropping its records does.
+fn key_ranges(typename: &str) -> Vec<Vec<Value>> {
+    let mut ranges = vec![vec![
+        text(&format!("{typename}:")),
+        text(&format!("{typename};")),
+    ]];
     if typename == ROOT_QUERY {
-        return vec![text(ROOT_QUERY), text(&format!("{ROOT_QUERY}0"))];
+        ranges.push(vec![text(ROOT_QUERY), text(&format!("{ROOT_QUERY}0"))]);
     }
-    vec![text(&format!("{typename}:")), text(&format!("{typename};"))]
+    ranges
 }
 
 /// The type of the records `key` names: what precedes its `:`, or all of it
@@ -452,7 +458,7 @@ fn key_typename(key: &str) -> &str {
 fn drop_facts(connection: &Db, changed: &BTreeSet<String>) -> Result<(), TursoStorageError> {
     let ranges = changed
         .iter()
-        .map(|typename| key_range(typename))
+        .flat_map(|typename| key_ranges(typename))
         .collect::<Vec<_>>();
     let mut dropping = 0_u64;
     for range in &ranges {
@@ -494,7 +500,9 @@ fn drop_types(connection: &Db, changed: &BTreeSet<String>) -> Result<u64, TursoS
     for typename in changed {
         let records = driver::execute(connection, TYPE_RECORDS_DELETE, vec![text(typename)])?;
         dropped += u64::try_from(records).map_err(|_| invariant())?;
-        driver::execute(connection, TYPE_DOCUMENTS_DELETE, key_range(typename))?;
+        for range in key_ranges(typename) {
+            driver::execute(connection, TYPE_DOCUMENTS_DELETE, range)?;
+        }
     }
     // The Quick Access rows' key leads with their profile, so one statement
     // reads the table once for every changed type.
@@ -625,38 +633,57 @@ fn queue_identity(
     let mut metadata = Vec::new();
     let mut seen = named.clone();
     let mut next = named.into_iter().collect::<Vec<_>>();
-    for _ in 0..=identity::MAX_ALIAS_CHAIN_DEPTH {
-        // A key no record can have holds nothing to keep.
-        let (entities, keys): (Vec<_>, Vec<_>) = std::mem::take(&mut next)
-            .into_iter()
-            .filter_map(|entity| {
-                RecordKey::from_entity(&entity)
-                    .ok()
-                    .map(|key| (entity, key))
-            })
-            .unzip();
-        if keys.is_empty() {
-            break;
-        }
-        let records = record_batch::read_with(connection, &keys, decode)?;
-        for ((entity, key), record) in entities.into_iter().zip(keys).zip(records) {
-            let Some(record) = record else {
-                continue;
-            };
-            if let Some(target) = identity::alias_target(&record) {
-                if seen.insert(target.clone()) {
-                    next.push(target.clone());
+    let aliases = loop {
+        for _ in 0..=identity::MAX_ALIAS_CHAIN_DEPTH {
+            // A key no record can have holds nothing to keep.
+            let (entities, keys): (Vec<_>, Vec<_>) = std::mem::take(&mut next)
+                .into_iter()
+                .filter_map(|entity| {
+                    RecordKey::from_entity(&entity)
+                        .ok()
+                        .map(|key| (entity, key))
+                })
+                .unzip();
+            if keys.is_empty() {
+                break;
+            }
+            let records = record_batch::read_with(connection, &keys, decode)?;
+            for ((entity, key), record) in entities.into_iter().zip(keys).zip(records) {
+                let Some(record) = record else {
+                    continue;
+                };
+                if let Some(target) = identity::alias_target(&record) {
+                    if seen.insert(target.clone()) {
+                        next.push(target.clone());
+                    }
+                    targets.insert(entity, target.clone());
                 }
-                targets.insert(entity, target.clone());
-            }
-            if let Some(kept) = identity::identity_metadata(record) {
-                metadata.push((key, kept));
+                if let Some(kept) = identity::identity_metadata(record) {
+                    metadata.push((key, kept));
+                }
             }
         }
-    }
-    // Each alias leads to the end of its chain, as the engine reads it; a
-    // cycle stops where it would repeat.
-    let mut aliases = targets
+        let mut aliases = chain_ends(&targets);
+        // Settlement stores an alias for the created record alone, and moves the
+        // shadows of the records a binding says share its ID too. Their server
+        // keys hold identity metadata as well, so they are read in turn.
+        identity::expand_reference_identities(&bindings, &mut aliases);
+        next = aliases
+            .values()
+            .filter(|target| seen.insert((*target).clone()))
+            .cloned()
+            .collect();
+        if next.is_empty() {
+            break aliases;
+        }
+    };
+    Ok(QueueIdentity { aliases, metadata })
+}
+
+/// Each key of `targets` to the end of its chain of aliases, as the engine
+/// reads it; a cycle stops where it would repeat.
+fn chain_ends(targets: &IdentityMap) -> IdentityMap {
+    targets
         .keys()
         .map(|local| {
             let mut target = &targets[local];
@@ -668,11 +695,7 @@ fn queue_identity(
             }
             (local.clone(), target.clone())
         })
-        .collect();
-    // Settlement stores an alias for the created record alone, and moves the
-    // shadows of the records a binding says share its ID too.
-    identity::expand_reference_identities(&bindings, &mut aliases);
-    Ok(QueueIdentity { aliases, metadata })
+        .collect()
 }
 
 /// What dropping every record of a previous cache format keeps: the
