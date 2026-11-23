@@ -10,6 +10,7 @@ import type {
 } from '../../context/crm-sources';
 import {
   useCompanyQuery,
+  useEditCompanyDomainMutation,
   useSetCompanyHiddenMutation,
   useSetCompanyNameMutation,
   useSetEmailSyncMutation,
@@ -284,6 +285,40 @@ export const storageServiceClient = {
     contacts = contacts.map((contact) => ({ ...contact, hidden }));
     return ok(undefined);
   },
+  async addCompanyDomain({ domain }) {
+    const added = domain.trim().toLowerCase();
+    // Another company of the team already has this one.
+    if (added === 'example.net')
+      return err([{ code: 'CONFLICT', message: 'Second company' }]);
+    if (!(await save()))
+      return err([{ code: 'BAD_REQUEST', message: 'Save rejected' }]);
+    if (!company.domains.some((held) => held.domain === added))
+      company = {
+        ...company,
+        domains: [
+          ...company.domains,
+          {
+            id: `domain-${company.domains.length + 1}`,
+            companyId: company.id,
+            domain: added,
+            createdAt: '2026-11-23',
+          },
+        ],
+      };
+    return ok({ ...company, contacts: [] });
+  },
+  async removeCompanyDomain({ domain }) {
+    // The company is named after its primary domain.
+    if (company.domains[0]?.domain === domain)
+      return err([{ code: 'BAD_REQUEST', message: 'Save rejected' }]);
+    if (!(await save()))
+      return err([{ code: 'FORBIDDEN', message: 'Save rejected' }]);
+    company = {
+      ...company,
+      domains: company.domains.filter((held) => held.domain !== domain),
+    };
+    return ok({ ...company, contacts: [] });
+  },
   async setCompanyName({ name }) {
     company = { ...company, name };
     return ok(undefined);
@@ -311,6 +346,8 @@ export const storageServiceClient = {
   | 'setCompanyHidden'
   | 'setContactHidden'
   | 'setCompanyName'
+  | 'addCompanyDomain'
+  | 'removeCompanyDomain'
   | 'setContactName'
   | 'setEmailSync'
 >;
@@ -332,6 +369,7 @@ export const useCrmContext = () => ({
   renameContact: () => useSetContactNameMutation(deps),
   editContactEmail: () => useSetContactEmailMutation(deps),
   editContactCompany: () => useSetContactCompanyMutation(deps),
+  editCompanyDomain: () => useEditCompanyDomainMutation(deps),
   setEmailSync: () => useSetEmailSyncMutation(deps),
   createRecordReferences: (): ItemListSource => ({
     isPending: false,
