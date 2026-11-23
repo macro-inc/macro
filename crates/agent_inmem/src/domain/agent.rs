@@ -649,8 +649,9 @@ impl UserInputRequester for AcpUserInputRequester {
                     }
                 };
                 // Typed text wins over a choice, as the fold reads the pair.
+                // A companion that is not text is no answer; the choice stands.
                 if !options.is_empty()
-                    && let Some(custom) = text_of(ASK_CUSTOM_FIELD)?
+                    && let Ok(Some(custom)) = text_of(ASK_CUSTOM_FIELD)
                     && !custom.trim().is_empty()
                 {
                     return Ok(UserInputOutcome::Answered(custom.trim().to_owned()));
