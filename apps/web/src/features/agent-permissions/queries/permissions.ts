@@ -183,6 +183,14 @@ function resetPermissionsMutationOptions(agentId: string) {
   };
 }
 
+/** For a new agent, whose id isn't known when the form mounts. */
+export async function setPermissionsNow(variables: SetPermissionsVariables) {
+  const options = setPermissionsMutationOptions(variables.agentId);
+  const view = await options.mutationFn(variables);
+  await options.onSuccess(view);
+  return view;
+}
+
 export function useSetAgentToolPermissionsMutation(agentId: Accessor<string>) {
   return useMutation(() => setPermissionsMutationOptions(agentId()));
 }

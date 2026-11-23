@@ -32,6 +32,7 @@ import {
   latestChanges,
 } from '../core/references';
 import {
+  setPermissionsNow,
   useAgentToolPermissionsQuery,
   useToolPermissionCatalogQuery,
 } from '../queries/permissions';
@@ -51,50 +52,41 @@ type Mode = 'source' | 'own';
 /** What the new-agent form saves once the agent exists. */
 export type PermissionsDraft = {
   mode: Mode;
-  /** The policy picked to follow, or the default when none was picked. */
+  /** The policy to follow (picked, or the scope's default), if any. */
   sourcePolicyId?: string;
-  /** What a new agent of this scope follows unless told otherwise. */
-  defaultPolicyId?: string;
   /** The own permissions' changes over the source's, when `mode` is `own`. */
   changes: ToolPermissionChange[];
 };
 
 /**
- * Saves a new agent's permissions: follows the picked policy when it isn't
- * the scope's default, then, for own permissions, copies what it follows
- * and applies the draft's changes. The agent already exists, so a failure
- * leaves it following its default, which is safe.
+ * Saves a new agent's permissions: follows the chosen policy, then, for
+ * own permissions, copies what it follows and applies the draft's changes
+ * in one detach (with no policy to follow, the changes are saved as they
+ * are). The source is set even when it is the scope's default, so the agent
+ * follows what the form showed whatever the server picked at creation. The
+ * agent already exists, so a failure leaves it as the server created it.
  */
 export async function applyPermissionsDraft(
   agentId: string,
   draft: PermissionsDraft
 ) {
   const sourcePolicyId = draft.sourcePolicyId;
-  const follows =
-    sourcePolicyId !== undefined && sourcePolicyId !== draft.defaultPolicyId;
-  // The scope's default needs no request at all.
-  if (!follows && draft.mode !== 'own') return ok(undefined);
+  const changes = latestChanges(draft.changes);
+  const own = draft.mode === 'own';
+  if (!sourcePolicyId && (!own || changes.length === 0)) return ok(undefined);
+
   const interaction = beginInteraction(
-    draft.mode === 'own'
-      ? 'agent_permissions.detach'
-      : 'agent_permissions.set_source'
+    own ? 'agent_permissions.detach' : 'agent_permissions.set_source'
   );
+  const trace = interaction.span;
   const result = await ResultAsync.fromPromise(
     (async () => {
-      if (follows && sourcePolicyId) {
-        await setSourceNow({
-          agentId,
-          sourcePolicyId,
-          trace: interaction.span,
-        });
+      if (!sourcePolicyId) {
+        await setPermissionsNow({ agentId, changes, trace });
+        return;
       }
-      if (draft.mode === 'own') {
-        await detachNow({
-          agentId,
-          changes: latestChanges(draft.changes),
-          trace: interaction.span,
-        });
-      }
+      await setSourceNow({ agentId, sourcePolicyId, trace });
+      if (own) await detachNow({ agentId, changes, trace });
     })(),
     (error) => error
   );
@@ -220,7 +212,6 @@ export function NewAgentPermissions(props: {
   props.draft(() => ({
     mode: mode(),
     sourcePolicyId: selected()?.policyId,
-    defaultPolicyId: fallback()?.policyId,
     changes: changes(),
   }));
   onCleanup(() => props.draft(undefined));

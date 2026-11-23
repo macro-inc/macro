@@ -1781,7 +1781,7 @@ function AgentEditorPage(props: {
               <Show when={permissionsFlag() && !props.agent}>
                 <AgentFormSection
                   title={t('agentPermissions.title')}
-                  description={t('agentPermissions.sectionDescription')}
+                  description={t('agentPermissions.newSectionDescription')}
                 >
                   <NewAgentPermissions
                     share={share()}

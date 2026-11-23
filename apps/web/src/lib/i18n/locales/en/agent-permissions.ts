@@ -3,6 +3,8 @@ export default {
   title: 'Permissions',
   permissionsButton: 'Permissions',
   agentPermissions: "{{agent}}'s permissions",
+  newSectionDescription:
+    'What this agent may do in its programs. Saved with the agent.',
   sectionDescription:
     'What this agent may do in its programs. Changes save right away.',
   toolPermissionsTitle: 'Tool permissions',

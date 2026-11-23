@@ -105,7 +105,6 @@ vi.mock('@app/features/agent-permissions', () => ({
     props.draft(() => ({
       mode: 'own',
       sourcePolicyId: `default-${props.share}`,
-      defaultPolicyId: `default-${props.share}`,
       changes: [],
     }));
     return <section aria-label="New agent permissions">{props.share}</section>;
@@ -1201,7 +1200,6 @@ describe('Agents', () => {
           {
             mode: 'own',
             sourcePolicyId: 'default-Team',
-            defaultPolicyId: 'default-Team',
             changes: [],
           }
         )

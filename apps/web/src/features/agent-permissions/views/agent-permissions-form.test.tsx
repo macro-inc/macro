@@ -119,7 +119,6 @@ describe('NewAgentPermissions', () => {
     expect(form.draft()).toMatchObject({
       mode: 'source',
       sourcePolicyId: 'policy-macro',
-      defaultPolicyId: 'policy-macro',
     });
 
     choose(screen.getByRole('button', { name: /Set agent/ }), /Scout/);
@@ -203,51 +202,65 @@ describe('NewAgentPermissions draft', () => {
 });
 
 describe('applyPermissionsDraft', () => {
-  it('follows a picked agent that is not the default', async () => {
+  it('follows the chosen agent, default or not', async () => {
     client.setSource.mockResolvedValue(ok(FOLLOWING_VIEW));
     const result = await applyPermissionsDraft('new-agent', {
       mode: 'source',
-      sourcePolicyId: 'policy-scout',
-      defaultPolicyId: 'policy-macro',
+      sourcePolicyId: 'policy-macro',
       changes: [],
     });
     expect(result.isOk()).toBe(true);
     expect(client.setSource.mock.calls[0]?.slice(0, 2)).toEqual([
       'new-agent',
-      { sourcePolicyId: 'policy-scout' },
+      { sourcePolicyId: 'policy-macro' },
     ]);
     expect(client.detach).not.toHaveBeenCalled();
   });
 
-  it('sends nothing for the default source', async () => {
-    await applyPermissionsDraft('new-agent', {
-      mode: 'source',
-      sourcePolicyId: 'policy-macro',
-      defaultPolicyId: 'policy-macro',
-      changes: [],
-    });
+  it('sends nothing with no source and no changes', async () => {
+    await applyPermissionsDraft('new-agent', { mode: 'source', changes: [] });
+    await applyPermissionsDraft('new-agent', { mode: 'own', changes: [] });
     expect(client.setSource).not.toHaveBeenCalled();
     expect(client.detach).not.toHaveBeenCalled();
+    expect(client.set).not.toHaveBeenCalled();
   });
 
-  it("detaches with the draft's last change per target", async () => {
+  it("follows, then detaches with the draft's last change per target", async () => {
+    client.setSource.mockResolvedValue(ok(FOLLOWING_VIEW));
     client.detach.mockResolvedValue(ok(ENTITY_VIEW));
     await applyPermissionsDraft('new-agent', {
       mode: 'own',
-      sourcePolicyId: 'policy-macro',
-      defaultPolicyId: 'policy-macro',
+      sourcePolicyId: 'policy-scout',
       changes: [
         { target: { kind: 'action', action: 'send' }, state: 'never' },
         { target: { kind: 'action', action: 'send' }, state: 'ask' },
       ],
     });
-    expect(client.setSource).not.toHaveBeenCalled();
+    expect(client.setSource.mock.calls[0]?.slice(0, 2)).toEqual([
+      'new-agent',
+      { sourcePolicyId: 'policy-scout' },
+    ]);
     expect(client.detach.mock.calls[0]?.slice(0, 2)).toEqual([
       'new-agent',
       {
         changes: [{ target: { kind: 'action', action: 'send' }, state: 'ask' }],
       },
     ]);
+  });
+
+  it('saves own changes as they are with no policy to follow', async () => {
+    client.set.mockResolvedValue(ok(ENTITY_VIEW));
+    await applyPermissionsDraft('new-agent', {
+      mode: 'own',
+      changes: [{ target: { kind: 'action', action: 'read' }, state: 'ask' }],
+    });
+    expect(client.set.mock.calls[0]?.slice(0, 2)).toEqual([
+      'new-agent',
+      {
+        changes: [{ target: { kind: 'action', action: 'read' }, state: 'ask' }],
+      },
+    ]);
+    expect(client.detach).not.toHaveBeenCalled();
   });
 });
 

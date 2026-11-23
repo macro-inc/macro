@@ -75,9 +75,11 @@ changes.
   stay saved; Reset clears them too.
 - A save to any agent re-reads every other agent's view and every policy
   preview (`storeView`): agents following it resolve through it.
-- A new agent follows its scope's default (personal Macro for a private
-  agent, the team default for a team agent) without any request; only a
-  different pick sends `PUT .../source`.
+- A new agent's form preselects its scope's default (personal Macro for a
+  private agent, the team default for a team agent), and creating it always
+  sends `PUT .../source` for the chosen policy (then `detach` for own
+  permissions): it ends up following what the form showed, whatever the
+  server assigned at creation.
 - The Macro persona's permissions use `MACRO_NEW_BOT_ID`, not
   `MACRO_AGENT_BOT_ID` (the row id).
 - Gate every entry point, and every read of the permissions API, on
