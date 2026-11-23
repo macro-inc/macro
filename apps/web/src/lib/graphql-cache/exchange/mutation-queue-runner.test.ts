@@ -117,6 +117,7 @@ function fixture(
   } as unknown as CacheHost;
   const revalidate = vi.fn(async () => {});
   const replayExplicitEffects = vi.fn(() => undefined);
+  const deleteReportedRecords = vi.fn(async () => ({ attempted: false }));
   let runner!: MutationQueueRunner;
   runner = createMutationQueueRunner({
     host,
@@ -144,11 +145,19 @@ function fixture(
       operationName: getOperationAST(op.query)?.name?.value,
       variables: op.variables ?? {},
     }),
-    deleteReportedRecords: async () => ({ attempted: false }),
+    deleteReportedRecords,
     replayExplicitEffects,
     revalidate,
   });
-  return { runner, forwarded, commit, host, revalidate, replayExplicitEffects };
+  return {
+    runner,
+    forwarded,
+    commit,
+    host,
+    revalidate,
+    replayExplicitEffects,
+    deleteReportedRecords,
+  };
 }
 
 it.each([
@@ -220,6 +229,65 @@ it.each([
       revalidations,
       expect.anything(),
       [],
+      true
+    );
+  }
+);
+
+it.each([
+  { outcome: { kind: 'committed' as const }, disposition: 'committed' },
+  {
+    outcome: {
+      kind: 'committed-superseded' as const,
+      replacementTransactionId: '2',
+    },
+    disposition: 'superseded',
+  },
+])(
+  'applies nothing from a confirmed response the cache could not write: $disposition',
+  async ({ outcome, disposition }) => {
+    const onCacheError = vi.fn();
+    const {
+      runner,
+      forwarded,
+      commit,
+      revalidate,
+      replayExplicitEffects,
+      deleteReportedRecords,
+    } = fixture({ onCacheError });
+    const op = operation();
+    commit.mockResolvedValue({
+      ...outcome,
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: ['draft-query'],
+      reset: false,
+      unwritableResponse: 'unknown field `subject`',
+    });
+    await runner.admit(op, enqueue(op, '1'), runner.epoch());
+    const data = {
+      saveEmailDraft: { draftId: 'canonical-draft', subject: 'Draft' },
+    };
+    const settled = await runner.settle(
+      { operation: forwarded[0], data, stale: false, hasNext: false },
+      queueAttemptOf(forwarded[0])!
+    );
+    // The server applied the write, so it settles as applied, not as failed.
+    expect(
+      settled.extensions?.normalizedCacheMutationDisposition
+    ).toMatchObject({ kind: disposition });
+    expect(onCacheError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'unknown field `subject`' }),
+      expect.anything()
+    );
+    expect(deleteReportedRecords).not.toHaveBeenCalled();
+    expect(replayExplicitEffects).not.toHaveBeenCalled();
+    expect(revalidate).toHaveBeenCalledOnce();
+    expect(revalidate).toHaveBeenCalledWith(
+      [],
+      expect.anything(),
+      ['draft-query'],
       true
     );
   }

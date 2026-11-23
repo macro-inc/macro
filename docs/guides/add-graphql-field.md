@@ -246,10 +246,12 @@ new fields needs the regenerated SDL in the same change.
   refetch, at a cost that grows with the records dropped (seconds for a large
   type); a renamed operation root drops every record. A queued write whose
   response no longer fits settles without the response's content, keeping the
-  ID the server gave it, and the queries it names for revalidation refetch. Native apps built
+  IDs the server gave it, and the queries it affects refetch. Native apps built
   before clients stored their schema refuse such a change and run without the
-  cache until they update, and a native build older than the cache file it
-  opens, after a rollback, replaces the file, queued writes included. Bump `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in
+  cache until they update. A rollback adopts the older build's schema the same
+  way, unless it goes past a storage step: a native build older than its cache
+  file's storage version replaces the file, queued writes included. Bump
+  `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in
   `crates/client/cache-schema/src/lib.rs`, which also drops every record, only
   for a change the schema cannot show, such as a removed enum value cached
   records may hold; browsers then start a new cache file, losing writes still

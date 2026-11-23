@@ -72,9 +72,13 @@ pub struct WriteResultWire {
     /// Effective scalar patches; absent when a query reread is required.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
-    /// Bindings omitted while preserving a normalizable server response.
+    /// Bindings omitted while preserving a server response.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub identity_errors: Vec<String>,
+    /// Why a confirmed response's content was not written; nothing is
+    /// applied from that response.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unwritable_response: Option<String>,
     /// Effective-view revision installed by this logical mutation.
     pub revision: String,
     /// Whether this write advanced `revision`.
@@ -449,6 +453,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         unchanged_views: None,
         field_changes: result.field_changes,
         identity_errors: result.identity_errors,
+        unwritable_response: result.unwritable_response,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
         search_changed_buckets: result.search_changed_buckets,

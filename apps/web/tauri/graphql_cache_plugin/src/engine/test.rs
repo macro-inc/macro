@@ -139,6 +139,7 @@ fn empty_write_result() -> WriteResultWire {
         unchanged_views: None,
         field_changes: None,
         identity_errors: Vec::new(),
+        unwritable_response: None,
         mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
@@ -190,6 +191,7 @@ fn tagged_wire_enum_fields_are_camel_case() {
     committed
         .identity_errors
         .push("missing identity response object".into());
+    committed.unwritable_response = Some("unknown field".into());
     let value =
         serde_json::to_value(CommitOptimisticWriteResultWire::Committed { result: committed })
             .unwrap();
@@ -198,6 +200,7 @@ fn tagged_wire_enum_fields_are_camel_case() {
         value["identityErrors"],
         serde_json::json!(["missing identity response object"])
     );
+    assert_eq!(value["unwritableResponse"], "unknown field");
     assert_eq!(
         serde_json::to_value(MutationUpsertKindWire::ReplacedPending {
             removed_transaction_id: "1".to_string(),
@@ -1143,9 +1146,9 @@ fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
         serde_json::json!({"user": {"id": "user-1", "soup": "malformed"}}),
     ))
     .unwrap();
-    assert!(matches!(
-        committed,
-        CommitOptimisticWriteResultWire::Committed { .. }
-    ));
+    let CommitOptimisticWriteResultWire::Committed { result } = committed else {
+        panic!("settles: {committed:?}");
+    };
+    assert!(result.unwritable_response.is_some());
     assert!(block_on(handle.inspect_mutations()).unwrap().is_empty());
 }

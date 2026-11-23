@@ -826,92 +826,113 @@ fn a_type_named_like_the_query_root_drops_its_documents_with_its_records() {
     });
 }
 
+/// A create binding `local` to the response object under `field`.
+fn create_binding(local: &str, field: &str) -> cache_core::identity::IdentityBinding {
+    cache_core::identity::IdentityBinding {
+        local_key: key(local),
+        delete_record: false,
+        response_path: vec![field.into()],
+        reference_fields: Vec::new(),
+        revalidation_variables: Vec::new(),
+    }
+}
+
+/// Queues `query` under a schema a projection reads `Saved.label` of, adopts
+/// one that dropped `label`, then confirms the write with `response`, as a
+/// server still on the older schema answers.
+async fn confirm_across_a_dropped_field(
+    query: &str,
+    bindings: &[cache_core::identity::IdentityBinding],
+    optimistic: serde_json::Value,
+    response: serde_json::Value,
+) -> (Engine<TursoStorage>, CommitOptimisticWriteResult) {
+    let old = schema(
+        "type Query { saved: Saved } type Mutation { save: Saved } type Saved { id: ID! label: String }",
+    );
+    let new = schema(
+        "type Query { saved: Saved } type Mutation { save: Saved } type Saved { id: ID! revision: Int }",
+    );
+    let inputs = ProjectionInputs::none().own("Saved", &["label"]);
+    let storage = TursoStorage::open_in_memory("schema-unwritable-response").unwrap();
+    storage
+        .adopt_schema(&old, &inputs, Unrecorded::Guess)
+        .unwrap();
+    let mut engine = Engine::with_schema(storage, 32, old);
+    let variables = serde_json::Map::new();
+    let (transaction, _) = engine
+        .begin_optimistic_write(
+            None,
+            BeginOptimisticWrite {
+                client_metadata: None,
+                identity_bindings: bindings,
+                uuid: "11111111-1111-4111-8111-111111111111",
+                query,
+                operation_name: None,
+                variables: &variables,
+                data: &optimistic,
+                link_patches: &[],
+                revalidations: &[],
+                created_at_ms: 0,
+            },
+        )
+        .await
+        .unwrap();
+    let storage = engine.into_storage();
+    let adoption = storage
+        .adopt_schema(&new, &inputs, Unrecorded::Guess)
+        .unwrap();
+    assert_eq!(adoption.change, types(&["Saved"], false));
+    assert_eq!(adoption.retired_overlays, 1);
+
+    let mut engine = Engine::with_schema(storage, 32, adoption.schema);
+    let claimed = engine
+        .claim_next_mutation(MutationClaimRequest {
+            owner: "runner".into(),
+            now_ms: 1,
+            lease_expires_at_ms: 100,
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    let outcome = engine
+        .commit_optimistic_write_with_outcome(
+            transaction,
+            MutationClaimToken {
+                owner: "runner".into(),
+                generation: claimed.lease_generation,
+            },
+            query,
+            None,
+            &variables,
+            &response,
+        )
+        .await
+        .unwrap();
+    (engine, outcome)
+}
+
 #[test]
 fn a_write_whose_response_the_new_schema_cannot_hold_settles_with_its_identity() {
     block_on(async {
-        // A projection reads `label`, so dropping it changes `Saved`.
-        let old = schema(
-            "type Query { saved: Saved } type Mutation { save: Saved } type Saved { id: ID! label: String }",
-        );
-        let new = schema(
-            "type Query { saved: Saved } type Mutation { save: Saved } type Saved { id: ID! revision: Int }",
-        );
-        let inputs = ProjectionInputs::none().own("Saved", &["label"]);
-        let storage = TursoStorage::open_in_memory("schema-unwritable-response").unwrap();
-        storage
-            .adopt_schema(&old, &inputs, Unrecorded::Guess)
-            .unwrap();
-        let mut engine = Engine::with_schema(storage, 32, old);
-        let query = "mutation Save { save { __typename id label } }";
-        let variables = serde_json::Map::new();
-        // A create: the server gives the record its ID.
-        let bindings = [cache_core::identity::IdentityBinding {
-            local_key: key("Saved:local"),
-            delete_record: false,
-            response_path: vec!["save".into()],
-            reference_fields: Vec::new(),
-            revalidation_variables: Vec::new(),
-        }];
-        let (transaction, _) = engine
-            .begin_optimistic_write(
-                None,
-                BeginOptimisticWrite {
-                    client_metadata: None,
-                    identity_bindings: &bindings,
-                    uuid: "11111111-1111-4111-8111-111111111111",
-                    query,
-                    operation_name: None,
-                    variables: &variables,
-                    data: &serde_json::json!({
-                        "save": { "__typename": "Saved", "id": "local", "label": "pending" }
-                    }),
-                    link_patches: &[],
-                    revalidations: &[],
-                    created_at_ms: 0,
-                },
-            )
-            .await
-            .unwrap();
-        let storage = engine.into_storage();
-        let adoption = storage
-            .adopt_schema(&new, &inputs, Unrecorded::Guess)
-            .unwrap();
-        assert_eq!(adoption.change, types(&["Saved"], false));
-        assert_eq!(adoption.retired_overlays, 1);
-
-        // A server still on the older schema answers with the dropped field.
-        let mut engine = Engine::with_schema(storage, 32, adoption.schema);
-        let claimed = engine
-            .claim_next_mutation(MutationClaimRequest {
-                owner: "runner".into(),
-                now_ms: 1,
-                lease_expires_at_ms: 100,
-            })
-            .await
-            .unwrap()
-            .unwrap();
-        let outcome = engine
-            .commit_optimistic_write_with_outcome(
-                transaction,
-                MutationClaimToken {
-                    owner: "runner".into(),
-                    generation: claimed.lease_generation,
-                },
-                query,
-                None,
-                &variables,
-                &serde_json::json!({
-                    "save": { "__typename": "Saved", "id": "9", "label": "accepted" }
-                }),
-            )
-            .await
-            .unwrap();
+        let (engine, outcome) = confirm_across_a_dropped_field(
+            "mutation Save { save { __typename id label } }",
+            // A create: the server gives the record its ID.
+            &[create_binding("Saved:local", "save")],
+            serde_json::json!({
+                "save": { "__typename": "Saved", "id": "local", "label": "pending" }
+            }),
+            serde_json::json!({
+                "save": { "__typename": "Saved", "id": "9", "label": "accepted" }
+            }),
+        )
+        .await;
         // It settles without its content, so the queue moves on, and keeps
         // the ID the server gave it for the writes that name the local one.
         let CommitOptimisticWriteResult::Committed(result) = outcome else {
             panic!("settles: {outcome:?}");
         };
-        assert_eq!(result.identity_errors.len(), 1, "{result:?}");
+        assert!(result.identity_errors.is_empty(), "{result:?}");
+        assert!(result.unwritable_response.is_some(), "{result:?}");
         assert!(
             engine
                 .storage()
@@ -940,6 +961,90 @@ fn a_write_whose_response_the_new_schema_cannot_hold_settles_with_its_identity()
             server.fields.get("id"),
             Some(&cache_core::value::CacheValue::String("9".into()))
         );
+    });
+}
+
+#[test]
+fn a_settled_write_keeps_the_identities_that_resolved() {
+    block_on(async {
+        // Two creates, the second of which the server answered with null.
+        let (engine, outcome) = confirm_across_a_dropped_field(
+            "mutation Save { save { __typename id label } other: save { __typename id label } }",
+            &[
+                create_binding("Saved:local", "save"),
+                create_binding("Saved:other", "other"),
+            ],
+            serde_json::json!({
+                "save": { "__typename": "Saved", "id": "local", "label": "pending" },
+                "other": { "__typename": "Saved", "id": "other", "label": "pending" }
+            }),
+            serde_json::json!({
+                "save": { "__typename": "Saved", "id": "9", "label": "accepted" },
+                "other": null
+            }),
+        )
+        .await;
+        let CommitOptimisticWriteResult::Committed(result) = outcome else {
+            panic!("settles: {outcome:?}");
+        };
+        assert_eq!(result.identity_errors.len(), 1, "{result:?}");
+        assert!(result.unwritable_response.is_some(), "{result:?}");
+        let records = engine
+            .storage()
+            .get_batch(&[key("Saved:local"), key("Saved:other")])
+            .await
+            .unwrap();
+        assert_eq!(
+            records[0],
+            Some(cache_core::identity::alias_record(&key("Saved:9")))
+        );
+        assert_eq!(
+            records[1]
+                .as_ref()
+                .and_then(cache_core::identity::alias_target),
+            None
+        );
+    });
+}
+
+#[test]
+fn a_response_object_of_another_type_settles_no_identity() {
+    block_on(async {
+        // The operation selects the type under an alias.
+        let query = "mutation Save { save { kind: __typename id label } }";
+        let (engine, outcome) = confirm_across_a_dropped_field(
+            query,
+            &[create_binding("Saved:local", "save")],
+            serde_json::json!({ "save": { "kind": "Saved", "id": "local", "label": "pending" } }),
+            serde_json::json!({ "save": { "kind": "Other", "id": "9", "label": "accepted" } }),
+        )
+        .await;
+        // Nothing of the response can be kept, so the attempt fails as it did
+        // before settlement kept identities.
+        assert!(
+            matches!(outcome, CommitOptimisticWriteResult::Failed(_)),
+            "{outcome:?}"
+        );
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let records = engine
+            .storage()
+            .get_batch(&[key("Saved:local"), key("Saved:9")])
+            .await
+            .unwrap();
+        assert_eq!(
+            records[0]
+                .as_ref()
+                .and_then(cache_core::identity::alias_target),
+            None
+        );
+        assert_eq!(records[1], None);
     });
 }
 

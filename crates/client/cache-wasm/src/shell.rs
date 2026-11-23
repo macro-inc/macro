@@ -160,6 +160,8 @@ struct JsWriteResult {
     field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     identity_errors: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unwritable_response: Option<String>,
     revision: String,
     revision_advanced: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -538,6 +540,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
         unchanged_views: None,
         field_changes: result.field_changes,
         identity_errors: result.identity_errors,
+        unwritable_response: result.unwritable_response,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
         search_changed_buckets: result.search_changed_buckets,

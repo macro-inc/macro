@@ -220,9 +220,12 @@ pub struct QueryRegistration<'a> {
 pub struct WriteResult {
     /// Effective scalar changes; absent when consumers must re-read queries.
     pub field_changes: Option<Vec<crate::field_changes::RecordFieldChange>>,
-    /// Identity bindings omitted while committing otherwise normalizable server
-    /// data, or why a settled response's content was not written.
+    /// Identity bindings omitted while committing server data.
     pub identity_errors: Vec<String>,
+    /// Why a confirmed response's content was not written: it did not
+    /// normalize, so its write settled with only the identities it resolved.
+    /// Hosts apply nothing from that response and revalidate instead.
+    pub unwritable_response: Option<String>,
     /// Revision installed after this logical cache mutation.
     pub revision: CacheRevision,
     /// Whether this write advanced [`Self::revision`].
@@ -707,6 +710,7 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before_all, &after)),
             identity_errors: Vec::new(),
+            unwritable_response: None,
             revision,
             revision_advanced: true,
             search_changed_buckets: None,
@@ -1750,6 +1754,7 @@ impl<S: Storage> Engine<S> {
                         WriteResult {
                             field_changes: None,
                             identity_errors: Vec::new(),
+                            unwritable_response: None,
                             mutation_uuid: None,
                             revision: self.revision,
                             revision_advanced: true,
@@ -1860,6 +1865,7 @@ impl<S: Storage> Engine<S> {
             WriteResult {
                 field_changes: Some(field_changes),
                 identity_errors: Vec::new(),
+                unwritable_response: None,
                 mutation_uuid: None,
                 revision,
                 revision_advanced,
@@ -2575,6 +2581,7 @@ impl<S: Storage> Engine<S> {
             write_result: WriteResult {
                 field_changes: Some(crate::field_changes::between(&before, &after)),
                 identity_errors: Vec::new(),
+                unwritable_response: None,
                 revision,
                 revision_advanced: true,
                 search_changed_buckets: None,
@@ -2898,8 +2905,9 @@ impl<S: Storage> Engine<S> {
     /// Real records and queue deletion commit in one storage transaction.
     /// Invalid response identities are reported in [`WriteResult::identity_errors`].
     /// A response that cannot normalize settles without its content, keeping
-    /// the identities it resolved, unless some failed to resolve: then the
-    /// attempt is discarded and [`EngineError::IdentityResolutionFailed`]
+    /// the identities that resolved, and [`WriteResult::unwritable_response`]
+    /// says why. If it has identities and none resolved, the attempt is
+    /// discarded instead, and [`EngineError::IdentityResolutionFailed`]
     /// carries the rollback changes.
     pub async fn commit_optimistic_write(
         &mut self,
@@ -3110,13 +3118,14 @@ impl<S: Storage> Engine<S> {
         let mut unwritable = None;
         let mut updates = match normalize(&self.schema, op, variables, data) {
             Ok(updates) => updates,
-            Err(error) if identity_errors.is_empty() => {
+            Err(error) if identity_errors.is_empty() || !identities.is_empty() => {
                 // The server accepted the write, but no retry of this response
                 // normalizes: the schema dropped a field a write queued under
                 // an older one selects, or the response is malformed. Settle it
                 // as a stale outcome is settled, keeping the IDs it resolved
                 // without its content, rather than holding the queue head or
-                // losing an ID a later queued write names.
+                // losing an ID a later queued write names. Bindings that did
+                // not resolve are reported, as for a response that normalizes.
                 unwritable = Some(error.to_string());
                 projections.clear();
                 identities
@@ -3125,8 +3134,9 @@ impl<S: Storage> Engine<S> {
                     .collect()
             }
             Err(error) => {
-                // No safe authoritative write is possible. Retire this attempt
-                // rather than replaying an already successful server mutation.
+                // Neither the content nor any identity can be written. Retire
+                // this attempt rather than replaying an already successful
+                // server mutation.
                 let error = format!("{}; {error}", identity_errors.join("; "));
                 let rollback = self
                     .rollback_optimistic_write_with_outcome(transaction, claim)
@@ -3288,10 +3298,10 @@ impl<S: Storage> Engine<S> {
                 projections: live_projection_keys,
             },
         );
-        identity_errors.extend(unwritable);
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors,
+            unwritable_response: unwritable,
             revision,
             revision_advanced: true,
             search_changed_buckets: None,
@@ -3400,6 +3410,7 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors: Vec::new(),
+            unwritable_response: None,
             revision,
             revision_advanced: true,
             search_changed_buckets: None,
@@ -3744,6 +3755,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         Ok(WriteResult {
             field_changes: self.optimistic.is_empty().then_some(field_changes),
             identity_errors: Vec::new(),
+            unwritable_response: None,
             revision,
             revision_advanced,
             search_changed_buckets: None,
