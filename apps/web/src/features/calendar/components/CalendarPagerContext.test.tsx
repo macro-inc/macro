@@ -236,6 +236,36 @@ describe('calendar Today navigation', () => {
 
 // Native scroll events commit the same five mounted FullCalendar instances used by the workspace.
 describe('calendar native paging', () => {
+  it('releases a phone Month contact even when a child consumes touchend', async () => {
+    const { pager, viewport, calendar } = mountCalendar('dayGridMonth');
+    Object.defineProperty(viewport, 'onscrollend', { value: null });
+    const child = document.createElement('button');
+    viewport.append(child);
+    document.body.append(viewport);
+    child.addEventListener('touchend', (event) => event.stopPropagation());
+    try {
+      viewport.dispatchEvent(new Event('touchstart'));
+      child.dispatchEvent(
+        new TouchEvent('touchend', { touches: [], bubbles: true })
+      );
+      await vi.advanceTimersByTimeAsync(150);
+      expect(pager().pager.phase()).toBe('idle');
+      pager().navigateToDate(new Date(2027, 3, 1));
+      await vi.advanceTimersByTimeAsync(400);
+      expect(calendar().getDate().getMonth()).toBe(3);
+      viewport.dispatchEvent(new Event('touchstart'));
+      viewport.scrollLeft = 300;
+      viewport.dispatchEvent(new Event('scroll'));
+      child.dispatchEvent(
+        new TouchEvent('touchend', { touches: [], bubbles: true })
+      );
+      viewport.dispatchEvent(new Event('scrollend'));
+      await vi.advanceTimersByTimeAsync(150);
+      expect(calendar().getDate().getMonth()).toBe(4);
+    } finally {
+      viewport.remove();
+    }
+  });
   it('pages many months both ways without recycling during phone momentum', async () => {
     const { pager, calendar, viewport, pages } = mountCalendar('dayGridMonth');
     Object.defineProperty(viewport, 'onscrollend', { value: null });
@@ -657,6 +687,22 @@ describe('calendar native paging', () => {
       root?.querySelector('.fc-scroller-harness-liquid > .fc-scroller')
         ?.scrollTop
     ).toBe(540);
+  });
+  it('keeps the desktop date anchor unchanged for ignored animation presses', async () => {
+    device.touch = false;
+    const { pager, viewport, calendar } = mountCalendar('dayGridMonth');
+    Object.defineProperty(viewport, 'onscrollend', { value: null });
+    await vi.advanceTimersByTimeAsync(300);
+    pager().nextPeriod();
+    pager().nextPeriod();
+    pager().previousPeriod();
+    expect(pager().navigationDate().getMonth()).toBe(11);
+    viewport.dispatchEvent(new Event('scrollend'));
+    pager().nextPeriod();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(pager().activeDate().getFullYear()).toBe(2027);
+    expect(pager().activeDate().getMonth()).toBe(0);
+    expect(calendar().getDate().getMonth()).toBe(0);
   });
   it('keeps the date anchor when desktop wheel interrupts an adjacent date animation', async () => {
     device.touch = false;

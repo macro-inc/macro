@@ -63,6 +63,8 @@ export interface SnapPagerController {
   /** Accumulated command destination, including a pending native gesture request. */
   targetPosition: () => number;
   phase: Accessor<SnapPagerPhase>;
+  /** Desktop period buttons ignore active animation, but accept idle burst steps. */
+  canStep: () => boolean;
   viewport: Accessor<HTMLDivElement | undefined>;
   attachViewport: (element: HTMLDivElement) => () => void;
   next: () => void;
@@ -241,7 +243,7 @@ export function createSnapPager(
     clearTimer();
   };
   const touchEnd = (event: TouchEvent) => {
-    if (event.touches.length > 0) return;
+    if (!touchHeld || event.touches.length > 0) return;
     touchHeld = false;
     finishGesture();
   };
@@ -252,7 +254,7 @@ export function createSnapPager(
     clearTimer();
   };
   const pointerEnd = (event: PointerEvent) => {
-    if (event.pointerType === 'touch') return;
+    if (!pointerHeld || event.pointerType === 'touch') return;
     pointerHeld = false;
     finishGesture();
   };
@@ -538,6 +540,13 @@ export function createSnapPager(
     settle();
   };
 
+  const canStep = () =>
+    !locked() &&
+    (!options.instantWheel?.() ||
+      (!programmaticAnimating &&
+        !nativeScroll &&
+        !gestureHeld() &&
+        alignmentTarget === undefined));
   const command = (offset: number) => {
     if (locked() || !Number.isInteger(offset) || offset === 0) return;
     const now = Date.now();
@@ -571,14 +580,14 @@ export function createSnapPager(
     programmaticAnimating = false;
     element.removeEventListener('scroll', onScroll);
     element.removeEventListener('scrollend', onScrollEnd);
-    element.removeEventListener('touchstart', touchStart);
+    element.removeEventListener('touchstart', touchStart, true);
     element.removeEventListener('wheel', onWheel);
-    element.removeEventListener('pointerdown', pointerStart);
+    element.removeEventListener('pointerdown', pointerStart, true);
     if (attached !== element) return;
-    window.removeEventListener('touchend', touchEnd);
-    window.removeEventListener('touchcancel', touchEnd);
-    window.removeEventListener('pointerup', pointerEnd);
-    window.removeEventListener('pointercancel', pointerEnd);
+    window.removeEventListener('touchend', touchEnd, true);
+    window.removeEventListener('touchcancel', touchEnd, true);
+    window.removeEventListener('pointerup', pointerEnd, true);
+    window.removeEventListener('pointercancel', pointerEnd, true);
     wheelLastAt = undefined;
     touchHeld = false;
     pointerHeld = false;
@@ -604,6 +613,7 @@ export function createSnapPager(
     position,
     targetPosition: () => queuedJump ?? position() + pending,
     phase,
+    canStep,
     viewport,
     origin,
     locked,
@@ -619,17 +629,41 @@ export function createSnapPager(
       element.addEventListener('wheel', onWheel, { passive: false });
       element.addEventListener('scroll', onScroll);
       element.addEventListener('scrollend', onScrollEnd);
-      element.addEventListener('touchstart', touchStart, { passive: true });
-      element.addEventListener('pointerdown', pointerStart, { passive: true });
-      window.addEventListener('touchend', touchEnd, { passive: true });
-      window.addEventListener('touchcancel', touchEnd, { passive: true });
-      window.addEventListener('pointerup', pointerEnd, { passive: true });
-      window.addEventListener('pointercancel', pointerEnd, { passive: true });
+      // Nested controls and sheets can consume release events. Capture both
+      // ends so the ring never keeps a stale held-contact flag after dismissal.
+      element.addEventListener('touchstart', touchStart, {
+        passive: true,
+        capture: true,
+      });
+      element.addEventListener('pointerdown', pointerStart, {
+        passive: true,
+        capture: true,
+      });
+      window.addEventListener('touchend', touchEnd, {
+        passive: true,
+        capture: true,
+      });
+      window.addEventListener('touchcancel', touchEnd, {
+        passive: true,
+        capture: true,
+      });
+      window.addEventListener('pointerup', pointerEnd, {
+        passive: true,
+        capture: true,
+      });
+      window.addEventListener('pointercancel', pointerEnd, {
+        passive: true,
+        capture: true,
+      });
       jump(element, middle * element.clientWidth);
       return () => detach(element);
     },
-    next: () => command(1),
-    previous: () => command(-1),
+    next: () => {
+      if (canStep()) command(1);
+    },
+    previous: () => {
+      if (canStep()) command(-1);
+    },
     goTo: command,
     reset() {
       programmaticAnimating = false;

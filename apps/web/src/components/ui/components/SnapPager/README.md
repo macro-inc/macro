@@ -43,7 +43,9 @@ track under a finger. Rapid queued commands never enable the programmatic quiet
 timer during observed native scrolling. After release without any scroll event,
 a 150ms no-op window permits recovery only if `scrollLeft` also stays unchanged.
 Any arriving scroll cancels that timer; a scroll arriving after recovery takes
-native ownership back and waits for `scrollend`. This bounded heuristic favors
+native ownership back and waits for `scrollend`. Passive capture listeners track
+contact lifecycle even when nested controls consume release events. Releases
+outside a contact started in the viewport do nothing. This bounded heuristic favors
 recovery over an indefinitely stuck pager; it is not compositor-completion proof.
 A later gesture cancels pending commands through
 `onNavigationCancel`.
@@ -52,10 +54,12 @@ Desktop hosts can set `instantWheel` and `rapidPressMs: 300`. Horizontal-dominan
 wheel input past 4px jumps one period instantly and blocks native horizontal
 overflow; events less than 180ms apart belong to the same gesture, including
 inertia. `onWheelNavigate` updates host date anchors before the jump. A wheel
-gesture interrupts a button animation at the combined target. Buttons animate
-once, then jump during the 300ms burst; an unfinished animation also jumps on a
-new press. One aggregate settlement follows the quiet interval, never a partial
-animation position. Phone swipes keep the default native path.
+gesture interrupts a button animation at the combined target. Desktop period
+buttons ignore presses while a native gesture or smooth animation is active;
+`canStep()` lets the host avoid changing its date anchor for ignored presses.
+After animation completes, every press is accepted: idle presses inside the
+300ms burst jump, and a quiet interval re-arms smooth navigation. One aggregate
+settlement follows the quiet interval. Phone swipes keep the default native path.
 
 At rest, CSS uses proximity snapping with `scroll-snap-stop: normal`. During a
 gesture it is disabled so it cannot force an early page decision. A slow drag

@@ -92,6 +92,39 @@ describe('native gesture settlement', () => {
     expect(pager.position()).toBe(0);
   });
 
+  it('ignores unrelated contact releases outside the viewport', () => {
+    const { pager } = measuredPager();
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    expect(pager.phase()).toBe('idle');
+    vi.advanceTimersByTime(150);
+    expect(pager.phase()).toBe('idle');
+  });
+
+  it('captures pointer cancellation consumed by a child', () => {
+    const { pager, element } = measuredPager();
+    const child = document.createElement('div');
+    element.append(child);
+    document.body.append(element);
+    child.addEventListener('pointercancel', (event) => event.stopPropagation());
+    try {
+      child.dispatchEvent(
+        Object.assign(new Event('pointerdown', { bubbles: true }), {
+          pointerType: 'pen',
+        })
+      );
+      child.dispatchEvent(
+        Object.assign(new Event('pointercancel', { bubbles: true }), {
+          pointerType: 'pen',
+        })
+      );
+      vi.advanceTimersByTime(150);
+      expect(pager.phase()).toBe('idle');
+      pager.goTo(12);
+      expect(pager.position()).toBe(12);
+    } finally {
+      element.remove();
+    }
+  });
   it('recovers a no-scroll tap after 150ms', () => {
     const { pager, element } = measuredPager();
     element.dispatchEvent(new Event('touchstart'));

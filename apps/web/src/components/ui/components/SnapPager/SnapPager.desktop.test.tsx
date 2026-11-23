@@ -54,48 +54,62 @@ it('ignores vertical-dominant wheel input and small jitter', () => {
   expect(wheel(2).defaultPrevented).toBe(false);
   expect(pager.position()).toBe(0);
 });
-it('animates the first button then jumps repeated presses and reports their aggregate', () => {
-  const { pager, element, onSettle } = setup();
+it('ignores button presses during an animation without extending the burst', () => {
+  const { pager, element } = setup();
+  pager.next();
+  vi.advanceTimersByTime(100);
+  pager.next();
+  pager.previous();
+  expect(pager.targetPosition()).toBe(1);
+  expect(element.scrollTo).toHaveBeenCalledTimes(1);
+  element.scrollLeft = 300;
+  element.dispatchEvent(new Event('scrollend'));
+  vi.advanceTimersByTime(301);
   pager.next();
   expect(element.scrollTo).toHaveBeenLastCalledWith({
     left: 300,
     behavior: 'smooth',
   });
+});
+it('always accepts a press right after animation completion and every idle rapid press', () => {
+  const { pager, element, onSettle } = setup();
+  pager.next();
   vi.advanceTimersByTime(100);
+  element.scrollLeft = 300;
+  element.dispatchEvent(new Event('scrollend'));
   pager.next();
   expect(pager.position()).toBe(2);
   expect(element.scrollTo).toHaveBeenLastCalledWith({
     left: 200,
     behavior: 'instant',
   });
-  vi.advanceTimersByTime(100);
-  pager.next();
-  expect(pager.position()).toBe(3);
-  expect(onSettle).not.toHaveBeenCalled();
+  for (let count = 0; count < 5; count++) {
+    pager.next();
+    vi.advanceTimersByTime(20);
+  }
+  expect(pager.position()).toBe(7);
   vi.advanceTimersByTime(300);
-  expect(onSettle).toHaveBeenCalledExactlyOnceWith(3);
+  expect(onSettle).toHaveBeenCalledExactlyOnceWith(7);
 });
-it('re-arms button animation after 300ms without input', () => {
+it('re-arms animation after an idle quiet window', () => {
   const { pager, element } = setup();
   pager.next();
-  pager.next();
+  element.scrollLeft = 300;
+  element.dispatchEvent(new Event('scrollend'));
   vi.advanceTimersByTime(301);
-  pager.next();
+  pager.previous();
   expect(element.scrollTo).toHaveBeenLastCalledWith({
-    left: 300,
+    left: 100,
     behavior: 'smooth',
   });
 });
-it('finishes a running animation instantly even after the re-arm interval', () => {
+it('ignores a press during a long-running animation even after the quiet window', () => {
   const { pager, element } = setup();
   pager.next();
   vi.advanceTimersByTime(301);
   pager.previous();
-  expect(element.scrollTo).toHaveBeenLastCalledWith({
-    left: 200,
-    behavior: 'instant',
-  });
-  expect(pager.position()).toBe(0);
+  expect(pager.targetPosition()).toBe(1);
+  expect(element.scrollTo).toHaveBeenCalledTimes(1);
 });
 it('a gesture interrupts a button animation with one direct jump', () => {
   const { pager, element, wheel, onSettle } = setup();

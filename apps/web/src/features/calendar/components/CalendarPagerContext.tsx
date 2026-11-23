@@ -301,7 +301,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     props.onNavigate();
   }
   const navigatePeriod = (direction: 'previous' | 'next') => {
-    if (pager.locked()) return;
+    if (!pager.canStep()) return;
     preparePeriodNavigation(direction === 'previous' ? -1 : 1);
     if (direction === 'previous') pager.previous();
     else pager.next();
