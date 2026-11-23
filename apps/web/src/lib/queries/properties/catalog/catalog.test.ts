@@ -14,6 +14,22 @@ import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError, createRequest } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+
+/** Failures that reached fireAndForget's report. */
+const unhandled = vi.hoisted(() => [] as unknown[]);
+vi.mock('@core/util/fireAndForget', () => ({
+  fireAndForget: (work: Promise<unknown>) => {
+    const watch = async () => {
+      try {
+        await work;
+      } catch (error: unknown) {
+        unhandled.push(error);
+      }
+    };
+    return watch();
+  },
+}));
+
 import { CatalogMutationError, isCatalogErrorCode } from './errors';
 import {
   catalogListResult,
@@ -561,6 +577,30 @@ describe('catalog mutations', () => {
       );
       await expect(mutation.mutateAsync(undefined)).rejects.toBe(refused);
       expect(isCatalogErrorCode(refused, 'CONFLICT')).toBe(true);
+      dispose();
+    });
+  });
+
+  it('reports a callback that fails after mutate, but not the refusal onError had', async () => {
+    await createRoot(async (dispose) => {
+      unhandled.length = 0;
+      const broken = new Error('callback failed');
+      const onError = vi.fn();
+      const saves = createCatalogMutation(async () => 1, {
+        onSuccess: () => {
+          throw broken;
+        },
+      });
+      saves.mutate(undefined);
+      await vi.waitFor(() => expect(unhandled).toEqual([broken]));
+      const refused = new CatalogMutationError('taken', 'CONFLICT');
+      const refuses = createCatalogMutation(() => Promise.reject(refused), {
+        onError,
+      });
+      refuses.mutate(undefined);
+      await vi.waitFor(() => expect(onError).toHaveBeenCalled());
+      await Promise.resolve();
+      expect(unhandled).toEqual([broken]);
       dispose();
     });
   });
