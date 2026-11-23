@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Key } from '@solid-primitives/keyed';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Scroll } from '@ui/components/Scroll';
 import {
   type Accessor,
@@ -12,6 +12,7 @@ import {
   type JSX,
   on,
   onCleanup,
+  onMount,
   Show,
   useContext,
 } from 'solid-js';
@@ -333,7 +334,8 @@ function Columns(props: {
     if (atEnd) target = end;
     // The lanes have their new width but not yet their new place, so the
     // focused control's offset inside its lane is already the new one. Keep
-    // it in view, from its left edge when it is wider than the viewport.
+    // it in view, from its left edge when it is wider than the viewport, when
+    // its lane was in view; overscan keeps lanes out of view mounted too.
     const active = document.activeElement;
     const slot = viewport?.contains(active)
       ? active?.closest<HTMLElement>('[data-kanban-board-column]')
@@ -342,7 +344,13 @@ function Columns(props: {
     const focused = virtualizer
       .getVirtualItems()
       .find((candidate) => String(candidate.key) === slotKey);
-    if (active && slot && focused) {
+    if (
+      active &&
+      slot &&
+      focused &&
+      focused.start < offset + visible &&
+      focused.end > offset
+    ) {
       const box = active.getBoundingClientRect();
       const left =
         16 +
@@ -365,6 +373,11 @@ function Columns(props: {
     // browser already clamped the offset to the target while re-measuring.
     viewport.dispatchEvent(new Event('scroll'));
   }
+  // Not `createResizeObserver`: it rounds widths and drops a change of less
+  // than a pixel, which would leave every lane at a width none of them has.
+  const slots = makeResizeObserver((entries) => {
+    for (const entry of entries) setColumnWidth(entry.contentRect.width);
+  });
   const virtualizer = createKanbanVirtualizer({
     direction: 'horizontal',
     keys: () => {
@@ -429,12 +442,15 @@ function Columns(props: {
         <Key each={virtualItems()} by="key">
           {(item) => {
             const key = item().key;
-            const [slot, setSlot] = createSignal<HTMLDivElement>();
-            createResizeObserver(slot, ({ width }) => setColumnWidth(width));
+            let slot!: HTMLDivElement;
+            onMount(() => {
+              slots.observe(slot);
+              onCleanup(() => slots.unobserve(slot));
+            });
 
             return (
               <div
-                ref={setSlot}
+                ref={slot}
                 class="absolute top-0 h-full w-84"
                 data-kanban-board-column={key}
                 style={{ left: `${item().start}px` }}

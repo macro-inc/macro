@@ -339,6 +339,74 @@ test('keeps the reading position and unsaved input when the text size changes', 
   await cdp.detach();
 });
 
+test('keeps the reading position when focus is in a lane out of view', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  const move = page
+    .locator('[data-kanban-board-column]')
+    .first()
+    .locator('[data-kanban-card]')
+    .first()
+    .getByRole('button', { name: /^Move / });
+  await move.evaluate((element: HTMLElement) =>
+    element.focus({ preventScroll: true })
+  );
+  // The second lane at the left edge; the first stays mounted out of view.
+  await viewport.evaluate((element) => {
+    element.scrollLeft = 16 + 352;
+  });
+  await expect(move).toBeFocused();
+  await expect(move).not.toBeInViewport();
+  const second = page.locator('[data-kanban-board-column]').nth(1);
+  const leftOf = async () => {
+    const [lane, box] = await Promise.all([
+      second.boundingBox(),
+      viewport.boundingBox(),
+    ]);
+    return lane && box ? Math.round(lane.x - box.x) : null;
+  };
+  expect(await leftOf()).toBe(0);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('32px');
+  await expect.poll(leftOf).toBe(0);
+  await cdp.detach();
+});
+
+test('follows a text size that changes the lane width by less than a pixel', async ({
+  page,
+}) => {
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  const scrollWidth = () => viewport.evaluate((element) => element.scrollWidth);
+  const setRoot = (size: string) =>
+    page.evaluate((value) => {
+      document.documentElement.style.fontSize = value;
+    }, size);
+  const initial = await scrollWidth();
+  // Lanes become 336.42px wide, which rounds to their old 336px.
+  await setRoot('16.02px');
+  await expect.poll(scrollWidth).toBeGreaterThan(initial);
+  // A lane mounted now measures the same width.
+  await viewport.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth / 2;
+  });
+  await setRoot('16px');
+  await expect.poll(scrollWidth).toBe(initial);
+});
+
 type ScrollEndWindow = Window & {
   holdScrollEnds?: boolean;
   deliverScrollEnds?: () => number;
