@@ -5,7 +5,7 @@ use crate::normalize::RecordUpdates;
 use crate::value::{CacheValue, EntityKey, Record};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Reserved record field hiding an explicitly deleted entity.
 pub const DELETED_FIELD: &str = "__cacheIdentityDeleted";
@@ -120,30 +120,49 @@ pub fn resolve(
 }
 
 /// The `__typename` of the response object at `path`, under any key
-/// `selections` select it by, an alias included.
+/// `selections` select it by, an alias included. A key that a fragment on
+/// another type selects another field by is skipped: its value may not be a
+/// type name.
 fn response_typename<'a>(
     selections: &[Selection],
     path: &[String],
     object: &'a Value,
 ) -> Option<&'a str> {
-    let mut keys = vec!["__typename"];
-    typename_keys(selections, path, &mut keys);
-    keys.into_iter().find_map(|key| object.get(key)?.as_str())
+    let mut keys = ResponseKeys {
+        typename: vec!["__typename"],
+        other: BTreeSet::new(),
+    };
+    keys.collect(selections, path);
+    keys.typename
+        .into_iter()
+        .filter(|key| !keys.other.contains(key))
+        .find_map(|key| object.get(key)?.as_str())
 }
 
-/// The response keys `selections` select `__typename` under on the object at
-/// `path`, through fragments.
-fn typename_keys<'s>(selections: &'s [Selection], path: &[String], keys: &mut Vec<&'s str>) {
-    for selection in selections {
-        match selection {
-            Selection::Fragment { selection_set, .. } => typename_keys(selection_set, path, keys),
-            Selection::Field(field) => match path.split_first() {
-                None if field.name == "__typename" => keys.push(&field.response_key),
-                Some((step, rest)) if field.response_key == *step => {
-                    typename_keys(&field.selection_set, rest, keys);
-                }
-                _ => {}
-            },
+/// The response keys selected on the object at a path, through fragments.
+struct ResponseKeys<'s> {
+    /// Keys `__typename` is selected under.
+    typename: Vec<&'s str>,
+    /// Keys another field is selected under.
+    other: BTreeSet<&'s str>,
+}
+
+impl<'s> ResponseKeys<'s> {
+    fn collect(&mut self, selections: &'s [Selection], path: &[String]) {
+        for selection in selections {
+            match selection {
+                Selection::Fragment { selection_set, .. } => self.collect(selection_set, path),
+                Selection::Field(field) => match path.split_first() {
+                    None if field.name == "__typename" => self.typename.push(&field.response_key),
+                    None => {
+                        self.other.insert(&field.response_key);
+                    }
+                    Some((step, rest)) if field.response_key == *step => {
+                        self.collect(&field.selection_set, rest);
+                    }
+                    Some(_) => {}
+                },
+            }
         }
     }
 }
@@ -533,6 +552,24 @@ mod tests {
                 EntityKey::entity("Draft", &["local"]),
                 EntityKey::entity("Draft", &["server"])
             )]))
+        );
+    }
+
+    #[test]
+    fn resolve_skips_a_key_another_fragment_selects_another_field_by() {
+        let bindings = [binding("Saved:local", &["save", "saved"])];
+        let document = crate::document::Document::parse(
+            "mutation Save { save { saved { ... on Saved { kind: __typename } \
+             ... on Other { kind: label actual: __typename } id } } }",
+        )
+        .unwrap();
+        let selections = &document.operation(None).unwrap().selection_set;
+        let response = json!({
+            "save": { "saved": { "kind": "Saved", "actual": "Other", "id": "server" } }
+        });
+        assert_eq!(
+            resolve(&bindings, selections, &response),
+            Err("identity response changed entity type".into())
         );
     }
 }
