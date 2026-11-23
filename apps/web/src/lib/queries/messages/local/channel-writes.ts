@@ -143,6 +143,8 @@ export interface ChannelReaction {
   id: string;
   emoji: string;
   add: boolean;
+  /** The person reacting, to tell whether the device shows the change. */
+  userId: string;
   /** The message's reactions with this change applied, when the caller knows them. */
   reactions?: readonly Reaction[];
   nonce: string;
@@ -220,8 +222,17 @@ function refusalOf(error: CombinedError): ThrownResultError {
   );
 }
 
+/** First wait before asking an unanswering queue again, doubled up to the cap. */
+const QUEUE_RECHECK_MS = 1_000;
+const QUEUE_RECHECK_MAX_MS = 30_000;
+/** Waits before asking the server again whether it has a send. */
+const SERVER_LOOKUP_RETRIES_MS = [500, 1_000];
+
 /**
- * Waits for the queue to settle a transaction, or the one that replaced it.
+ * Waits for the queue to settle one write, or the transaction that replaced
+ * it. The write is its transaction and its mutation id: transaction ids
+ * restart when the queue is rebuilt, so a settlement or a queued entry for
+ * another mutation under the same transaction id is not this write's.
  * Listening starts before the write is handed over, so a settlement that lands
  * between the queue's answer and the wait is not missed. A retired host
  * (`retired`, from `ChannelWrites.retire`) reports nothing more, so each wait
@@ -233,16 +244,23 @@ function refusalOf(error: CombinedError): ThrownResultError {
  * reset with its storage intact. So after any generation change, heard
  * before or during the wait, the queue is asked: a write it still holds keeps
  * waiting, and one that left it unheard ends as `missed`, whose outcome the
- * caller reads from the device and then the server. A reset whose queue
- * cannot be asked loses the write (`CACHE_RESET`).
+ * caller reads from the device and then the server. A queue that cannot
+ * answer is asked again, backing off, since its settlement may already have
+ * gone by; after a reset it loses the write instead (`CACHE_RESET`).
  */
-function watchSettlements(host: ChannelWriteHost, retired: Lost) {
+function watchSettlements(
+  host: ChannelWriteHost,
+  retired: Lost,
+  mutationUuid: string
+) {
   const settlements = new Map<string, Deferred.Deferred<MutationSettlement>>();
   const reset: Lost = Deferred.makeUnsafe();
   const missed = Deferred.makeUnsafe<'missed'>();
   let waiting: string | undefined;
   // A generation change heard before the wait had a transaction to check.
   let unchecked: CacheGenerationChange['storage'] | undefined;
+  let recheck: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
   const lost = () =>
     Deferred.doneUnsafe(
       reset,
@@ -252,9 +270,13 @@ function watchSettlements(host: ChannelWriteHost, retired: Lost) {
    * After the engine comes back, with its storage kept or (as a host that
    * was suspended conservatively reports) reset, asks the queue: a write it
    * still holds keeps waiting, and one that left it unheard is `missed`.
-   * Without an answer, a reset loses the write.
+   * Without an answer, a reset loses the write and a kept store is asked
+   * again later.
    */
-  const checkQueued = async (storage: CacheGenerationChange['storage']) => {
+  const checkQueued = async (
+    storage: CacheGenerationChange['storage'],
+    retryMs = QUEUE_RECHECK_MS
+  ) => {
     const transactionId = waiting;
     if (!transactionId) {
       if (storage === 'reset' || !unchecked) unchecked = storage;
@@ -267,12 +289,33 @@ function watchSettlements(host: ChannelWriteHost, retired: Lost) {
       if (!host.inspectMutations) throw new Error('queue cannot be listed');
       queue = await host.inspectMutations();
     } catch (error) {
-      if (storage === 'reset') lost();
-      else Telemetry.error(error, { surface: 'channel-writes' });
+      if (storage === 'reset') {
+        lost();
+        return;
+      }
+      Telemetry.error(error, { surface: 'channel-writes' });
+      // A host that cannot list its queue never will: wait for the settlement.
+      if (!host.inspectMutations || stopped || waiting !== transactionId)
+        return;
+      clearTimeout(recheck);
+      recheck = setTimeout(
+        () =>
+          fireAndForget(
+            checkQueued(storage, Math.min(retryMs * 2, QUEUE_RECHECK_MAX_MS)),
+            'channel-writes'
+          ),
+        retryMs
+      );
       return;
     }
     if (waiting !== transactionId) return;
-    if (queue.some((entry) => entry.transactionId === transactionId)) return;
+    if (
+      queue.some(
+        (entry) =>
+          entry.transactionId === transactionId && entry.uuid === mutationUuid
+      )
+    )
+      return;
     Deferred.doneUnsafe(missed, Effect.succeed('missed' as const));
   };
   const settlementOf = (transactionId: string) => {
@@ -284,6 +327,11 @@ function watchSettlements(host: ChannelWriteHost, retired: Lost) {
     return deferred;
   };
   const stopSettled = host.onMutationSettled((settlement) => {
+    if (
+      settlement.mutationUuid !== undefined &&
+      settlement.mutationUuid !== mutationUuid
+    )
+      return;
     Deferred.doneUnsafe(
       settlementOf(settlement.transactionId),
       Effect.succeed(settlement)
@@ -319,6 +367,8 @@ function watchSettlements(host: ChannelWriteHost, retired: Lost) {
     });
   return {
     stop() {
+      stopped = true;
+      clearTimeout(recheck);
       stopSettled();
       stopReset();
     },
@@ -415,6 +465,12 @@ interface Write<TData, TVariables extends AnyVariables> {
   written: (data: TData) => ChannelMessageWriteFieldsFragment;
   /** The row to answer with when a delivered write cannot be read back. */
   predicted?: ChannelMessageFieldsFragment;
+  /**
+   * Whether the device's copy shows this write, for one that left the queue
+   * unheard: another tab may have rolled it back. A send is checked against
+   * the server instead.
+   */
+  applied?: (message: ChannelMessageFieldsFragment) => boolean;
   unstored?: ChannelPageEntry;
   reply?: UnstoredReply;
   /** The trace the write was asked for in, when it awaited before starting. */
@@ -491,26 +547,62 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   }
 
   /**
-   * A write that left the queue while this page heard nothing. A send is
-   * delivered when the device or the server holds it, and was not sent when
-   * neither does; other writes resolve with the device's copy, which the
-   * views reread.
+   * A write that left the queue while this page heard nothing, delivered or
+   * rolled back by another tab. A send is delivered when the device or the
+   * server holds it, was not sent when neither does, and is unknown when the
+   * server cannot say. Another write is delivered when the device's copy
+   * shows it (`applied`), which a rollback undoes.
    */
   async function missedOutcome(
     write: Pick<
       Write<unknown, AnyVariables>,
-      'channelId' | 'messageId' | 'operation'
+      'channelId' | 'messageId' | 'operation' | 'applied'
     >
   ): Promise<Message> {
     const message = await readMessage(write.messageId);
-    if (message) return mapChannelMessage(message);
-    const send = write.operation === SEND_OPERATION;
-    const delivered = send ? await serverCopy(write) : undefined;
+    if (message && (write.applied?.(message) ?? true))
+      return mapChannelMessage(message);
+    if (message) {
+      throw refusal('NOT_APPLIED', 'the write was rolled back elsewhere');
+    }
+    if (write.operation !== SEND_OPERATION) {
+      throw refusal('NOT_FOUND', 'the message is not on the device');
+    }
+    // A failed send restores its draft, and sending that again would post a
+    // second copy of one that arrived: ask the server more than once.
+    let delivered = await serverCopy(write);
+    for (const waitMs of SERVER_LOOKUP_RETRIES_MS) {
+      if (delivered !== undefined) break;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      delivered = await serverCopy(write);
+    }
     if (delivered) return delivered;
-    throw refusal(
-      send ? 'NOT_SENT' : 'NOT_FOUND',
-      'the write left the queue while the page was away'
-    );
+    throw delivered === null
+      ? refusal('NOT_SENT', 'the send was rolled back elsewhere')
+      : refusal(
+          'DELIVERY_UNKNOWN',
+          'the server could not say whether it has the send'
+        );
+  }
+
+  /** Reads a waiting write's outcome from the device and the server. */
+  function recovered<T>(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'operation' | 'channelId' | 'messageId'
+    >,
+    reason: 'missed' | 'retry_exhausted',
+    read: () => Promise<T>
+  ): Promise<T> {
+    return Telemetry.span('channel.write.recover', async (span) => {
+      span.setAttr('channel.id', write.channelId);
+      span.setAttr('message.id', write.messageId);
+      span.setAttr('write.operation', write.operation);
+      span.setAttr('write.recovery', reason);
+      const outcome = await read();
+      span.setAttr('write.recovered', outcome !== undefined);
+      return outcome;
+    });
   }
 
   /**
@@ -533,7 +625,9 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   async function queuedWrite<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>
   ): Promise<Message> {
-    const settlements = watchSettlements(deps.host, retired);
+    // Taken before any await: recovery after a long wait joins the write's trace.
+    const trace = write.trace ?? Telemetry.captureContext();
+    const settlements = watchSettlements(deps.host, retired, write.uuid);
     addPending(write.channelId, {
       uuid: write.uuid,
       unstored: write.unstored,
@@ -545,8 +639,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     try {
       // The span covers the hand-off and a direct answer; a queued write can
       // wait for hours, which is not this operation's duration.
-      const traced = <T>(operation: () => T): T =>
-        write.trace ? write.trace.run(operation) : operation();
+      const traced = <T>(operation: () => T): T => trace.run(operation);
       const result = await traced(() =>
         Telemetry.span(write.operation, async (span) => {
           span.setAttr('channel.id', write.channelId);
@@ -568,11 +661,18 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         try {
           outcome = await settlements.committed(disposition.transactionId);
         } catch (error) {
-          const delivered = await deliveredAfterAll(write, error);
+          const delivered = await traced(() =>
+            recovered(write, 'retry_exhausted', () =>
+              deliveredAfterAll(write, error)
+            )
+          );
           if (delivered) return delivered;
           throw error;
         }
-        if (outcome === 'missed') return await missedOutcome(write);
+        if (outcome === 'missed')
+          return await traced(() =>
+            recovered(write, 'missed', () => missedOutcome(write))
+          );
         return await stored(write);
       }
       if (result.error) throw refusalOf(result.error);
@@ -656,6 +756,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         channelId: edit.channelId,
         messageId: edit.id,
         uuid: crypto.randomUUID(),
+        applied: (message) => message.content === edit.content,
         run: (client, options) =>
           executeOptimisticMutation(
             client as Client,
@@ -698,6 +799,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         channelId: deletion.channelId,
         messageId: deletion.id,
         uuid: crypto.randomUUID(),
+        applied: (message) => message.deletedAt !== null,
         run: (client, options) =>
           executeOptimisticMutation(
             client as Client,
@@ -732,6 +834,12 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         channelId: reaction.channelId,
         messageId: reaction.id,
         uuid: crypto.randomUUID(),
+        applied: (message) =>
+          message.reactions.some(
+            (entry) =>
+              entry.emoji === reaction.emoji &&
+              entry.users.includes(reaction.userId)
+          ) === reaction.add,
         run: (client, options) =>
           executeOptimisticMutation(
             client as Client,

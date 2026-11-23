@@ -71,17 +71,25 @@ export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
   const listeners = new Set<(settlement: MutationSettlement) => void>();
   const resets = new Set<(change: CacheGenerationChange) => void>();
   const device = fakeHost([], { records });
-  // Transactions the queue still holds, as `inspectMutations` lists them.
-  const queued: string[] = [];
-  // Set to make the queue unreadable, as an engine that did not come back.
-  const queue = { unreadable: false };
+  // Transactions the queue still holds, as `inspectMutations` lists them: a
+  // bare id is the last write handed over, an entry names its own mutation.
+  const queued: (string | { transactionId: string; uuid: string })[] = [];
+  // Set to make the queue unreadable, as an engine that did not come back;
+  // `failures` fails only that many reads.
+  const queue = { unreadable: false, failures: 0, lastUuid: '' };
   const host: ChannelWriteHost = {
     readRecordsByKeys: device.readRecordsByKeys,
     async inspectMutations() {
       if (queue.unreadable) throw new Error('queue unreadable');
+      if (queue.failures > 0) {
+        queue.failures -= 1;
+        throw new Error('queue busy');
+      }
       return queued.map(
-        (transactionId) =>
-          ({ transactionId }) as Awaited<
+        (entry) =>
+          (typeof entry === 'string'
+            ? { transactionId: entry, uuid: queue.lastUuid }
+            : entry) as Awaited<
             ReturnType<NonNullable<ChannelWriteHost['inspectMutations']>>
           >[number]
       );
@@ -125,8 +133,11 @@ export function setup(
   records: ChannelMessageFieldsFragment[] = [],
   server: ChannelMessageFieldsFragment[] = []
 ) {
-  const { client, calls } = fakeClient(answer);
   const device = writeHost(records);
+  const { client, calls } = fakeClient((variables) => {
+    device.queue.lastUuid = calls.at(-1)?.context.uuid ?? '';
+    return answer(variables);
+  });
   const runtime = { notifyChanged: vi.fn() };
   const fetched: string[] = [];
   const writes = createChannelWrites({

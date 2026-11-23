@@ -48,7 +48,12 @@ separately from Soup's thread-root projection.
 - Message mutations are replayed by the client's queue: send goes through
   `post_once` (the client id returns the stored message), edit through
   `patch_once` (an edit the message already shows writes nothing) and delete
-  through `delete_once` (the tombstone); react is already repeatable. A root
+  through `delete_once` (the tombstone); react is already repeatable. Send and
+  delete are safe to replay at any time. An edit or reaction replayed after a
+  lost response is safe only if the message did not change in between: one
+  that lands after a newer edit or reaction from the same person's other
+  device undoes it, and the input carries nothing the server could refuse it
+  by. The client replays them only after a transport failure. A root
   is returned with its thread summary so the cached row stays complete, and a
   reply (sent, replayed or deleted) with its root, read back on primary after
   the commit. A reply's root that cannot be read back is left out; a written

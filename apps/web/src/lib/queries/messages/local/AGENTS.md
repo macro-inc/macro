@@ -24,14 +24,20 @@ TanStack path in `../` runs untouched.
   durable cache mutation queue and waits for their settlement; a retired host
   (`graphql-soup.ts` cleanup) fails the writes still waiting. When the cache
   session changes (the engine returned from the back/forward cache, or reset),
-  a waiting write asks the queue whether it still holds the write: if not, it
-  answers from the device copy, else for a send from the server copy
-  (`ChannelMessage`), else `NOT_SENT`/`NOT_FOUND`; a queue that cannot be read
-  after a reset fails the write with `CACHE_RESET`. The queue replays only
-  sends and deletes the server answered `SERVICE_UNAVAILABLE`
+  a waiting write asks the queue whether it still holds the write: if not, an
+  edit, delete or reaction resolves only when the device copy shows it
+  (`applied`; another tab may have rolled it back, `NOT_APPLIED`), and a send
+  answers from the device copy, else the server copy (`ChannelMessage`), else
+  `NOT_SENT`, or `DELIVERY_UNKNOWN` when the server cannot say. A queue that
+  cannot be read is asked again with backoff, except after a reset, which
+  fails the write with `CACHE_RESET`. A write is its transaction id and its
+  mutation id: transaction ids restart when the queue is rebuilt. The queue
+  replays only sends and deletes the server answered `SERVICE_UNAVAILABLE`
   (`graphql-mutation-retry.ts`): the server dedupes them by message id, while a
-  replayed edit or reaction could undo a newer one. A send the queue stops
-  retrying answers with the server copy when there is one.
+  replayed edit or reaction could undo a newer one; every write is still sent
+  again after a transport failure. A send the queue stops retrying answers
+  with the server copy when there is one. Recovery runs as
+  `channel.write.recover` in the write's trace.
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the
   person is idle, and evicts channels untouched for 30 days. A pushed frame
   for a channel the device does not hold gives it an empty sync row once the

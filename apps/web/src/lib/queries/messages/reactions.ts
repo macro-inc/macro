@@ -228,6 +228,7 @@ export function useAddReactionMutation(
           id: vars.messageId,
           emoji: vars.emoji,
           add: true,
+          userId: vars.userId,
           reactions:
             vars.currentReactions &&
             addUserReaction(vars.currentReactions, vars.emoji, vars.userId)
@@ -314,6 +315,7 @@ export function useRemoveReactionMutation(
           id: vars.messageId,
           emoji: vars.emoji,
           add: false,
+          userId: vars.userId,
           reactions:
             vars.currentReactions &&
             removeUserReaction(vars.currentReactions, vars.emoji, vars.userId)

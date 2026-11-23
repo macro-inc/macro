@@ -1,12 +1,22 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   channelMessageKey,
   mapChannelMessage,
   unplacedSortKey,
 } from '../channel-map';
+import { createChannelWrites } from '../channel-writes';
 import { CHANNEL_ID, graphqlMessage } from './fixtures';
-import { NOW, refused, SENDER, send, setup, written } from './write-fixtures';
+import {
+  fakeClient,
+  NOW,
+  refused,
+  SENDER,
+  send,
+  setup,
+  writeHost,
+  written,
+} from './write-fixtures';
 
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@macro-inc/observability')>()),
@@ -19,6 +29,11 @@ vi.mock('@macro-inc/observability', async (importOriginal) => ({
 }));
 
 const settleMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+// A test that times out under fake timers would leave them on for the next.
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('createChannelWrites', () => {
   it('sends with the message id as queue identity and nonce, predicting the row', async () => {
@@ -374,6 +389,174 @@ describe('createChannelWrites', () => {
     expect(thrownResultErrorHasCode(error, 'NOT_SENT')).toBe(true);
   });
 
+  describe('a write that left the queue while the page was away', () => {
+    const away = async (
+      stored: ReturnType<typeof graphqlMessage>,
+      write: (writes: ReturnType<typeof setup>['writes']) => Promise<unknown>
+    ) => {
+      const world = setup(
+        () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+        [stored]
+      );
+      world.queued.push('4');
+      const writing = write(world.writes);
+      await settleMicrotasks();
+      world.queued.length = 0;
+      world.restore();
+      return writing.catch((thrown: unknown) => thrown);
+    };
+    const remove =
+      (id: string) => (writes: ReturnType<typeof setup>['writes']) =>
+        writes.remove({ channelId: CHANNEL_ID, id, nonce: 'd' });
+    const edit = (id: string) => (writes: ReturnType<typeof setup>['writes']) =>
+      writes.edit({
+        channelId: CHANNEL_ID,
+        id,
+        content: 'edited',
+        mentions: [],
+        removeAttachmentIds: [],
+        addAttachments: [],
+        nonce: 'e',
+      });
+    const react =
+      (id: string) => (writes: ReturnType<typeof setup>['writes']) =>
+        writes.react({
+          channelId: CHANNEL_ID,
+          id,
+          emoji: '👍',
+          add: true,
+          userId: SENDER,
+          nonce: 'r',
+        });
+    const rolledBack = (outcome: unknown) =>
+      thrownResultErrorHasCode(outcome, 'NOT_APPLIED');
+
+    it('rejects a delete another tab rolled back', async () => {
+      const stored = graphqlMessage(7);
+      expect(rolledBack(await away(stored, remove(stored.id)))).toBe(true);
+    });
+
+    it('resolves a delete the device shows', async () => {
+      const stored = graphqlMessage(7, { deletedAt: NOW.toISOString() });
+      expect(await away(stored, remove(stored.id))).toEqual(
+        mapChannelMessage(stored)
+      );
+    });
+
+    it('rejects an edit another tab rolled back', async () => {
+      const stored = graphqlMessage(7);
+      expect(rolledBack(await away(stored, edit(stored.id)))).toBe(true);
+    });
+
+    it('resolves an edit the device shows', async () => {
+      const stored = graphqlMessage(7, { content: 'edited' });
+      expect(await away(stored, edit(stored.id))).toEqual(
+        mapChannelMessage(stored)
+      );
+    });
+
+    it('rejects a reaction another tab rolled back', async () => {
+      const stored = graphqlMessage(7);
+      expect(rolledBack(await away(stored, react(stored.id)))).toBe(true);
+    });
+
+    it('resolves a reaction the device shows', async () => {
+      const stored = graphqlMessage(7, {
+        reactions: [{ emoji: '👍', users: [SENDER] }],
+      });
+      expect(await away(stored, react(stored.id))).toEqual(
+        mapChannelMessage(stored)
+      );
+    });
+  });
+
+  // Transaction ids restart when the device's queue is rebuilt.
+  it('ignores a settlement for another mutation under its transaction id', async () => {
+    const stored = graphqlMessage(7);
+    const { writes, settle, calls } = setup(
+      () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+      [stored]
+    );
+    const sending = writes.send(send(stored.id));
+    await settleMicrotasks();
+    settle({
+      transactionId: '4',
+      mutationUuid: crypto.randomUUID(),
+      status: 'committed',
+    });
+    await settleMicrotasks();
+    expect(writes.pendingCount(CHANNEL_ID)).toBe(1);
+
+    settle({
+      transactionId: '4',
+      mutationUuid: calls[0].context.uuid,
+      status: 'committed',
+    });
+    await expect(sending).resolves.toEqual(mapChannelMessage(stored));
+  });
+
+  it('does not take a rebuilt queue entry under its transaction id for itself', async () => {
+    const { writes, queued, restore, fetched } = setup(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const id = graphqlMessage(7).id;
+    const sending = writes.send(send(id));
+    await settleMicrotasks();
+    queued.push({ transactionId: '4', uuid: crypto.randomUUID() });
+    restore();
+    const error = await sending.catch((thrown: unknown) => thrown);
+    expect(thrownResultErrorHasCode(error, 'NOT_SENT')).toBe(true);
+    expect(fetched).toEqual([id]);
+  });
+
+  it('asks the queue again when it cannot answer after the page comes back', async () => {
+    vi.useFakeTimers();
+    try {
+      const stored = graphqlMessage(7);
+      const { writes, queued, queue, restore } = setup(
+        () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+        [stored]
+      );
+      queued.push('4');
+      const sending = writes.send(send(stored.id));
+      await vi.advanceTimersByTimeAsync(0);
+      // Delivered from another tab while away; the first read fails.
+      queued.length = 0;
+      queue.failures = 1;
+      restore();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(writes.pendingCount(CHANNEL_ID)).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      await expect(sending).resolves.toEqual(mapChannelMessage(stored));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not call a send lost when the server cannot say whether it has it', async () => {
+    const id = graphqlMessage(7).id;
+    const { client } = fakeClient(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const device = writeHost();
+    device.queued.push('4');
+    const writes = createChannelWrites({
+      host: device.host,
+      runtime: { notifyChanged: vi.fn() },
+      client: () => client,
+      now: () => NOW,
+      fetchMessage: () => Promise.reject(new Error('offline')),
+    });
+    const sending = writes.send(send(id));
+    await settleMicrotasks();
+    device.queued.length = 0;
+    device.restore();
+    const error = await sending.catch((thrown: unknown) => thrown);
+    expect(thrownResultErrorHasCode(error, 'NOT_SENT')).toBe(false);
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
+  });
+
   it('keeps waiting for a write still queued when the page comes back', async () => {
     const stored = graphqlMessage(7);
     const { writes, queued, restore, settle } = setup(
@@ -466,6 +649,7 @@ describe('createChannelWrites', () => {
       id: stored.id,
       emoji: '👍',
       add: true,
+      userId: SENDER,
       reactions: [{ emoji: '👍', users: [SENDER] }],
       nonce: 'r',
     });
