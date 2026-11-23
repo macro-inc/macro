@@ -41,7 +41,8 @@ changes.
   the API, resolution and tighten-only rules → `crates/agent_permissions`
   (agent harness `/agent-tool-permissions`, `/agents/{id}/tool-permissions`,
   and for following another agent's permissions `.../source`, `.../detach`,
-  `/agent-tool-permissions/sources` and `/agent-tool-permissions/policies/{id}`;
+  `/agent-tool-permissions/sources`, `/agent-tool-permissions/policies/{id}`
+  and a team's default at `/agent-tool-permissions/teams/{id}`;
   a following view carries `source` and `inherited`, which this page doesn't
   show yet).
 
