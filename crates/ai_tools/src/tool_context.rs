@@ -560,10 +560,11 @@ pub fn build_calendar_tool_context(
     .with_shared_event_copies(shared_event_copies)
 }
 
-/// Settings-only scheduling service; no provider/calendar writes are exposed here.
+/// Settings-only scheduling service; no provider/calendar writes are exposed
+/// here, only the connected accounts a personal link can book on.
 pub type ToolBookingLinkService = calendar_scheduling::domain::service::Service<
     calendar_scheduling::outbound::postgres::PostgresRepository,
-    (),
+    calendar_scheduling::outbound::macro_services::MacroBookingAccounts<ToolCalendarReadService>,
     calendar_scheduling::outbound::macro_services::MacroDirectory<ToolTeamService>,
 >;
 /// Booking-link tool dependencies.
@@ -577,7 +578,11 @@ pub fn build_booking_link_tool_context(
     calendar_scheduling::inbound::toolset::BookingLinkToolContext {
         service: Arc::new(calendar_scheduling::domain::service::Service::new(
             calendar_scheduling::outbound::postgres::PostgresRepository::new(pool.clone()),
-            (),
+            calendar_scheduling::outbound::macro_services::MacroBookingAccounts(Arc::new(
+                calendar_events::domain::service::CalendarService::new(
+                    calendar_events::outbound::pg::PgCalendarRepository::new(pool.clone()),
+                ),
+            )),
             calendar_scheduling::outbound::macro_services::MacroDirectory(TeamRepositoryImpl::new(
                 pool,
             )),
