@@ -37,30 +37,34 @@ function readStatus(
 
 function TaskPreview(props: { taskId: string }) {
   return (
-    <Suspense>
-      <ItemPreview
-        class="inline-flex align-middle ring-0"
-        id={props.taskId}
-        type="document"
-      />
-    </Suspense>
+    <span class="min-w-0 truncate">
+      <Suspense>
+        <ItemPreview
+          class="inline-flex max-w-full align-middle ring-0"
+          id={props.taskId}
+          type="document"
+        />
+      </Suspense>
+    </span>
   );
 }
 
 function EntryRow(props: { entry: TimeEntry }) {
   return (
-    <div class="flex min-w-0 items-baseline gap-2 py-1 text-xs">
-      <span class="w-24 shrink-0 text-ink-muted">
-        {formatDay(props.entry.date)}
-      </span>
-      <span class="w-14 shrink-0 text-ink tabular-nums">
-        {formatMinutes(props.entry.minutes)}
-      </span>
-      <span class="w-40 shrink-0 truncate text-ink-muted">
-        {props.entry.userId.replace(/^macro\|/, '')}
-      </span>
+    <div class="min-w-0 py-1 text-xs">
+      <div class="flex min-w-0 items-baseline gap-2">
+        <span class="shrink-0 text-ink-muted">
+          {formatDay(props.entry.date)}
+        </span>
+        <span class="shrink-0 text-ink tabular-nums">
+          {formatMinutes(props.entry.minutes)}
+        </span>
+        <span class="min-w-0 truncate text-ink-muted">
+          {props.entry.userId.replace(/^macro\|/, '')}
+        </span>
+      </div>
       <Show when={props.entry.note}>
-        {(note) => <span class="min-w-0 truncate text-ink">{note()}</span>}
+        {(note) => <p class="break-words text-ink">{note()}</p>}
       </Show>
     </div>
   );
@@ -86,7 +90,9 @@ function TimeToolCard(props: {
       }
     >
       <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
-        <div class="min-w-0 truncate">{props.children}</div>
+        <div class="flex min-w-0 items-center gap-1 overflow-hidden">
+          {props.children}
+        </div>
         <Tool.ResultToggle
           expanded={expanded()}
           onToggle={() => setExpanded((value) => !value)}
@@ -121,8 +127,11 @@ export const timeTrackingHandlers = {
           </Show>
         }
       >
-        Log <span class="text-ink">{formatMinutes(ctx.tool.data.minutes)}</span>{' '}
-        <span class="text-ink-placeholder">·</span>{' '}
+        <span class="shrink-0">
+          Log{' '}
+          <span class="text-ink">{formatMinutes(ctx.tool.data.minutes)}</span>{' '}
+          <span class="text-ink-placeholder">·</span>
+        </span>
         <TaskPreview taskId={ctx.tool.data.task_id} />
       </TimeToolCard>
     ),
@@ -147,8 +156,10 @@ export const timeTrackingHandlers = {
           </Show>
         }
       >
-        Read <span class="text-ink">time logged</span>{' '}
-        <span class="text-ink-placeholder">·</span>{' '}
+        <span class="shrink-0">
+          Read <span class="text-ink">time logged</span>{' '}
+          <span class="text-ink-placeholder">·</span>
+        </span>
         <TaskPreview taskId={ctx.tool.data.task_id} />
       </TimeToolCard>
     ),
