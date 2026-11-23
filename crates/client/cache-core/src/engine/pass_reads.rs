@@ -4,7 +4,8 @@
 //! records and projection states the response touches; the write then reads
 //! the same records to merge and the same states to see whether its
 //! projections change anything. [`PassReads`] serves the passes from storage,
-//! as before, reading each key once, and keeps what storage returned.
+//! as before, reading each key once, and keeps what storage returned, except
+//! records the hot tier holds, which the write takes from the hot tier.
 //! [`Engine::keep_pass_reads`] hands that to the next write, which uses it in
 //! place of its own storage reads only when storage has committed nothing
 //! between the passes' reads and the write's last storage read, so the write

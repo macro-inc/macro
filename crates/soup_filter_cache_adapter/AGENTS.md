@@ -81,6 +81,10 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   Build it with `WriteResponse::with_updates` from the engine's
   `Engine::normalize_network` and write with `write_normalized_query`, so the
   passes and the write share that one normalization.
+- Hosts run those passes through `write_passes` (or `WritePasses::step` to
+  yield between them), never one by one: it reads each stored key once
+  through `Engine::pass_reads` and keeps what it read for the write that
+  follows, which reuses it only while `Storage::write_position` holds still.
 
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under
