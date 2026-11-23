@@ -13,7 +13,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.each([undefined, 'choices'] as const)(
+it.each([undefined, 'choices', 'choices-filled'] as const)(
   'switches a controlled %s value by its visible label',
   (variant) => {
     const [value, setValue] = createSignal<'all' | 'recent' | 'threads'>('all');

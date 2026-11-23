@@ -193,6 +193,23 @@ function ChoicesDemo() {
 }
 // #endregion
 
+// #region demo:filled-choices
+function FilledChoicesDemo() {
+  const [value, setValue] = createSignal<'event' | 'away'>('event');
+  return (
+    <Tabs
+      aria-label="Filled event type"
+      variant="choices-filled"
+      options={[
+        { value: 'event', label: 'Event' },
+        { value: 'away', label: 'Out of office' },
+      ]}
+      value={value()}
+      onChange={setValue}
+    />
+  );
+}
+// #endregion
 export default defineDoc({
   name: 'Tabs',
   category: 'Navigation',
@@ -214,8 +231,15 @@ export default defineDoc({
       id: 'choices',
       title: 'Form choices',
       description:
-        'Separate 36px value choices use an accent selection and 15px text, retaining the same radio and keyboard behavior.',
+        'Separate 24px choice faces use 12px text; touch keeps 28px faces inside 44px targets.',
       render: ChoicesDemo,
+    },
+    {
+      id: 'filled-choices',
+      title: 'Filled form choices',
+      description:
+        'Separate 28px choices pair solid accent selection with its foreground token. Radio and keyboard behavior stays shared.',
+      render: FilledChoicesDemo,
     },
     {
       id: 'counts',

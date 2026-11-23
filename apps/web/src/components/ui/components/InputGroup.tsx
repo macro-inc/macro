@@ -27,7 +27,7 @@ const INPUT_GROUP_SIZE_VARIANTS: Record<InputSize, string> = {
   md: 'h-8 text-base',
   lg: 'h-9 text-base',
   xl: 'h-12 text-base',
-  field: 'h-9 text-[15px] leading-5',
+  field: 'h-9 text-base',
 };
 
 const INPUT_GROUP_ADDON_PADDING: Record<
@@ -103,7 +103,7 @@ export const inputGroupVariants = createVariants(
       ),
       bare: 'border-transparent bg-transparent',
       value:
-        'border-transparent bg-ink/6 has-[[data-slot=input-group-control]:focus-visible]:ring-[1.5px] has-[[data-slot=input-group-control]:focus-visible]:ring-accent',
+        'border-transparent bg-control has-[[data-slot=input-group-control]:focus-visible]:ring-[1.5px] has-[[data-slot=input-group-control]:focus-visible]:ring-accent',
     },
     size: INPUT_GROUP_SIZE_VARIANTS,
   },

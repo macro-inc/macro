@@ -60,7 +60,7 @@ function TextFieldTextArea<T extends ValidComponent = 'textarea'>(
 
   const treatment = () => {
     if (local.variant === 'title')
-      return 'min-h-8 max-h-24 overflow-y-auto border-0 bg-transparent p-0 text-2xl font-semibold leading-8 touch:min-h-[30px] touch:max-h-[90px] touch:text-[22px] touch:leading-[30px]';
+      return 'min-h-8 max-h-24 overflow-y-auto border-0 bg-transparent p-0 text-2xl font-semibold leading-8';
     if (local.variant === 'embedded')
       return 'min-h-10 border-0 bg-transparent px-0 py-1.5 text-sm';
     return 'min-h-20 rounded-xl border border-edge-frame bg-control not-touch:elevated px-2.5 py-2 text-base transition-[border-color,box-shadow] duration-120 motion-reduce:transition-none';
@@ -90,7 +90,7 @@ function TextFieldSurface(props: ComponentProps<'div'>) {
     <div
       {...rest}
       class={cn(
-        'min-h-12 w-full rounded-lg border border-transparent bg-ink/6 px-2.5 py-1 text-sm text-ink focus-within:border-input-focus',
+        'min-h-12 w-full rounded-lg border border-transparent bg-control px-2.5 py-1 text-sm text-ink focus-within:border-input-focus',
         local.class
       )}
     />

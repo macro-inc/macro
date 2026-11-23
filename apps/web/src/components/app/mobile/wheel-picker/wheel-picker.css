@@ -16,8 +16,7 @@
   top: calc(var(--wheel-row-height) * 2);
   height: var(--wheel-row-height);
   border-radius: 20px;
-  background: var(--color-accent);
-  opacity: 0.18;
+  background: var(--color-selected);
   pointer-events: none;
 }
 
@@ -77,9 +76,10 @@
 .wheel-picker-label {
   position: absolute;
   right: 16px;
-  top: 100px;
-  font-size: 15px;
-  line-height: 20px;
+  top: calc(var(--wheel-row-height) * 2.5);
+  transform: translateY(-50%);
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
   font-weight: 400;
   color: var(--color-ink-muted);
   pointer-events: none;

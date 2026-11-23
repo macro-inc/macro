@@ -47,13 +47,16 @@ export function wheelSnapIndex(
   );
 }
 
-/** Continuous emphasis avoids a row jumping styles halfway through a fling. */
+/** Keep type on the shared scale while fading emphasis through a fling. */
 export function wheelRowStyle(distance: number) {
   const near = Math.min(1, Math.abs(distance));
   const far = Math.max(0, Math.min(1, Math.abs(distance) - 1));
+  const centered = Math.abs(distance) < 0.5;
   return {
-    'font-size': `${17 - near - far}px`,
-    'line-height': `${22 - far * 2}px`,
+    'font-size': centered ? 'var(--text-lg)' : 'var(--text-base)',
+    'line-height': centered
+      ? 'var(--text-lg--line-height)'
+      : 'var(--text-base--line-height)',
     'font-weight': 600 - near * 200,
     color:
       near < 1

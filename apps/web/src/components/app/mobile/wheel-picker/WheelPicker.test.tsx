@@ -23,8 +23,8 @@ describe('wheel snapping', () => {
     expect(wheelSnapIndex(67, 3, false)).toBe(2);
     expect(wheelSnapIndex(-100, 3, false)).toBe(0);
     expect(wheelSnapIndex(1000, 3, false)).toBe(2);
-    expect(wheelRowStyle(0)['font-size']).toBe('17px');
-    expect(wheelRowStyle(1)['font-size']).toBe('16px');
+    expect(wheelRowStyle(0)['font-size']).toBe('var(--text-lg)');
+    expect(wheelRowStyle(1)['font-size']).toBe('var(--text-base)');
     expect(wheelRowStyle(2).opacity).toBe(0.6);
   });
 

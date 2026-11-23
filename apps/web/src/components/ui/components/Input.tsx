@@ -20,7 +20,7 @@ const INPUT_SIZE_VARIANTS: Record<InputSize, string> = {
   md: 'h-8 px-3 text-base',
   lg: 'h-9 px-3.5 text-base',
   xl: 'h-12 px-4 text-base',
-  field: 'h-9 px-3 text-[15px] leading-5',
+  field: 'h-9 px-3 text-base',
 };
 
 // Touch keeps its rounded fields and their original inset.
@@ -54,7 +54,7 @@ export const inputVariants = createVariants(
       ),
       bare: 'border-transparent bg-transparent',
       value:
-        'border-transparent bg-ink/6 focus-visible:ring-[1.5px] focus-visible:ring-accent',
+        'border-transparent bg-control focus-visible:ring-[1.5px] focus-visible:ring-accent',
     },
     size: INPUT_SIZE_VARIANTS,
   },

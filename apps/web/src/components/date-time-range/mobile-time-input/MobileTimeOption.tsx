@@ -24,7 +24,7 @@ export function MobileTimeOption(props: {
       <span class="flex shrink-0 items-center gap-2">
         <Show when={props.option.detail}>
           {(detail) => (
-            <span class="text-[13px] text-ink-extra-muted">{detail()}</span>
+            <span class="text-xs text-ink-extra-muted">{detail()}</span>
           )}
         </Show>
         <Show when={props.selected}>

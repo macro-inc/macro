@@ -98,7 +98,7 @@ export type TabsProps<T extends string> = {
   ref?: (element: HTMLElement) => void;
 } & (
   | {
-      variant?: 'grouped' | 'pills' | 'choices';
+      variant?: 'grouped' | 'pills' | 'choices' | 'choices-filled';
       size?: TabsSize;
       /** Let many options flow onto more lines; renders pills on touch too. */
       wrap?: boolean;
@@ -137,9 +137,11 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
     const option = props.options.find((option) => option.value === value);
     if (option) props.onChange(option.value);
   };
+  const isChoice = () =>
+    props.variant === 'choices' || props.variant === 'choices-filled';
   // Wrapping presets retain separate pills; desktop view tabs share a frame.
   const touchStyle = (): TabsTouchStyle =>
-    isTouchDevice() && !props.wrap && props.variant !== 'choices'
+    isTouchDevice() && !props.wrap && !isChoice()
       ? (props.touch ?? 'pill')
       : 'pills';
 
@@ -162,11 +164,12 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
             class={cn(
               'flex min-w-0 items-center',
               props.wrap && 'flex-wrap',
-              props.variant === 'choices' && 'gap-1 touch:gap-1.5',
-              props.variant !== 'choices' &&
+              isChoice() && 'gap-1 touch:gap-1.5',
+              !isChoice() &&
                 (props.size === 'xs' || props.size === 'sm'
                   ? 'gap-1'
                   : 'gap-1.5'),
+              props.variant === 'choices-filled' && 'gap-2',
               props.fullWidth && 'w-full'
             )}
           >
@@ -177,7 +180,8 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
                   size={props.size ?? 'md'}
                   iconOnly={props.iconOnly ?? false}
                   fullWidth={props.fullWidth ?? false}
-                  choices={props.variant === 'choices'}
+                  choices={isChoice()}
+                  filledChoices={props.variant === 'choices-filled'}
                 />
               )}
             </For>
@@ -286,6 +290,7 @@ function PillOption<T extends string>(props: {
   fullWidth: boolean;
   joined?: boolean;
   choices?: boolean;
+  filledChoices?: boolean;
 }) {
   const [tooltipOpen, setTooltipOpen] = createSignal(false);
   const square = () => props.iconOnly && props.option.icon !== undefined;
@@ -306,6 +311,7 @@ function PillOption<T extends string>(props: {
               'not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
               'data-checked:overlay-active data-checked:text-ink'
             ),
+        props.filledChoices && 'h-7',
         'shadow-none has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',
         'data-disabled:pointer-events-none data-disabled:opacity-50',
         !props.joined &&
@@ -327,12 +333,14 @@ function PillOption<T extends string>(props: {
         class={cn(
           'flex min-w-0 flex-1 items-center justify-center gap-2 font-medium whitespace-nowrap select-none',
           props.choices
-            ? 'h-6 self-center rounded-full border border-edge-button bg-control px-2.5 text-xs leading-4 touch:h-7 touch:px-3 touch:text-[13px] touch:leading-[18px] group-data-checked/choice:bg-accent/24 group-data-checked/choice:border-accent/50 group-data-checked/choice:text-accent'
+            ? 'h-6 self-center rounded-full border border-edge-button bg-control px-2.5 text-xs leading-4 touch:h-7 touch:px-3 touch:text-xs group-data-checked/choice:bg-selected group-data-checked/choice:border-accent group-data-checked/choice:text-accent'
             : cn(
                 'self-stretch',
                 (!square() || props.size === 'composer') &&
                   tabContentClasses(props.size)
               ),
+          props.filledChoices &&
+            'h-7 bg-button-secondary-bg border-transparent text-ink-muted group-data-checked/choice:bg-accent group-data-checked/choice:border-transparent group-data-checked/choice:text-button-accent-ink',
           props.joined && 'py-0'
         )}
       >

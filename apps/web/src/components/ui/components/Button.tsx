@@ -23,7 +23,7 @@ import { Tooltip } from './Tooltip';
 const buttonFrames = {
   primary:
     'bg-button-primary-bg text-button-primary-ink border-transparent shadow-button',
-  value: 'bg-ink/6 text-ink border-transparent shadow-none',
+  value: 'bg-control text-ink border-transparent shadow-none',
   accent:
     'bg-button-accent-bg text-button-accent-ink border-transparent shadow-button',
   secondary: cn(
@@ -115,9 +115,9 @@ const buttonStyles = createVariants(
       'icon-xs': iconControlSizes.xs,
       'icon-sm': iconControlSizes.sm,
       'icon-md': iconControlSizes.md,
-      sheet: 'min-h-11 px-4 py-2 text-[15px] leading-5',
-      'sheet-row': 'min-h-11 px-0 py-2 text-base leading-[22px] font-normal',
-      field: 'h-9 px-3 text-[15px] leading-5 font-normal',
+      sheet: 'min-h-11 px-4 py-2 text-base',
+      'sheet-row': 'min-h-11 px-0 py-2 text-base font-normal',
+      field: 'h-9 px-3 text-base font-normal',
       'icon-lg': iconControlSizes.lg,
       'icon-xl': iconControlSizes.xl,
     },
