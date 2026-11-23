@@ -27,7 +27,7 @@ function pruneHeaders(rows: DomRow[]): DomRow[] {
 
 /** Relative time at the end of a row's text, as one tick apart is the same read. */
 function normalizeText(text: string): string {
-  return text.replace(/(\d+)(m|h|d|w)$/, '<t:$2>');
+  return text.replace(/(\d+)(m|h|d|w)$/, '<t:$2>').replace(/now$/, '<t:m>');
 }
 
 function normalize(rows: DomRow[]): DomRow[] {

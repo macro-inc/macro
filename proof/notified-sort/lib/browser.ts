@@ -308,13 +308,26 @@ export async function readHomeDom(lane: Lane, maxRows = 400): Promise<DomRow[]> 
       return best;
     })();
     const rows = new Map<string, { top: number; row: unknown }>();
+    // The row's text as textContent gives it, but with its relative time (its
+    // last text, a node of its own) set apart by a space: run together, a
+    // title ending in a digit and the time read ambiguously ("Event 2" + "1m"
+    // is "Event 21m", as is "Event " + "21m").
+    const textOf = (root: Element) => {
+      const parts: string[] = [];
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) parts.push(n.nodeValue ?? '');
+      let last = parts.length - 1;
+      while (last > 0 && !parts[last].trim()) last -= 1;
+      if (last > 0 && /^(now|\d+(mo|m|h|d|w|y))$/.test(parts[last].trim())) parts[last] = ` ${parts[last]}`;
+      return parts.join('').replace(/\s+/g, ' ').trim();
+    };
     const collect = () => {
       for (const el of grid.querySelectorAll('[role="row"]')) {
         const h = el as HTMLElement;
         const top = h.getBoundingClientRect().top + scroller.scrollTop;
         const entity = h.getAttribute('data-soup-entity');
         if (entity !== null || (h.id && !h.id.includes("group-header"))) {
-          const text = (h.querySelector('[data-home-item]') ?? h).textContent?.replace(/\s+/g, ' ').trim() ?? '';
+          const text = textOf(h.querySelector('[data-home-item]') ?? h);
           const labels = [...h.querySelectorAll('[aria-label]')].map((x) => x.getAttribute('aria-label') ?? '').sort();
           rows.set(`e:${h.id || entity}`, {
             top,

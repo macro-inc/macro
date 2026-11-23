@@ -259,6 +259,13 @@ describe('heldApartFromShared', () => {
     const e = { oldMounted: [base.c], newMounted: ['email/c/today/u Other'], oldReload: ['email/c/today/u New'], newReload: ['email/c/today/u New'] };
     expect(heldApartFromShared(e).newHeld).toBe(false);
   });
+  it('reads `now` and `1m` as one tick, apart from a title ending in a digit', () => {
+    const later = 'calendar_event/z/today/u Zeta Event 2 1m';
+    const e = { oldMounted: [base.header, base.a], newMounted: [base.header, 'calendar_event/z/today/u Zeta Event 2 now', base.a], oldReload: [base.header, later, base.a], newReload: [base.header, later, base.a] };
+    expect(heldApartFromShared(e)).toMatchObject({ newHeld: true, oldHeld: false });
+    const renamed = { ...e, newMounted: [base.header, 'calendar_event/z/today/u Zeta Event 3 now', base.a] };
+    expect(heldApartFromShared(renamed).newHeld).toBe(false);
+  });
 });
 
 describe('onlyStaleTimeLabels', () => {

@@ -18,8 +18,9 @@ export function compactDom(list: DomRow[]): string[] {
 
 /** `type/id/bucket[*] text` → `type/id`; headers have no key. */
 const keyOf = (row: string) => (row.startsWith('# ') ? null : row.split(' ')[0].split('/').slice(0, 2).join('/'));
-/** One relative-time tick apart is the same read (as lib/dom.ts). */
-const norm = (row: string) => row.replace(/(\d+)(m|h|d|w)$/, '<t:$2>');
+/** One relative-time tick apart is the same read (as lib/dom.ts); `now` is
+ * the tick before `1m`. */
+const norm = (row: string) => row.replace(/(\d+)(m|h|d|w)$/, '<t:$2>').replace(/now$/, '<t:m>');
 
 function rowsByKey(list: string[]): Map<string, string> {
   const by = new Map<string, string>();
