@@ -324,6 +324,36 @@ describe('createLocalChannelTimeline', () => {
     dispose();
   });
 
+  it('keeps a page paged in while a reread was reading', async () => {
+    const { timeline, runtime, host, dispose } = mount({
+      rows: messages(70),
+    });
+    await waitFor(() => !timeline.isLoading());
+
+    // The reread reads the 50 entries shown; the older page lands first.
+    const read = host.channelTimeline;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let first = true;
+    host.channelTimeline = async (args) => {
+      if (first) {
+        first = false;
+        await held;
+      }
+      return read(args);
+    };
+    runtime.changed();
+    await timeline.loadOlder();
+    release();
+    for (let i = 0; i < 20; i += 1) await settle();
+
+    expect(timeline.entries()).toHaveLength(70);
+    expect(timeline.hasOlder()).toBe(false);
+    dispose();
+  });
+
   it('fetches a channel the device does not hold and follows it once stored', async () => {
     const rows = messages(2);
     let held = false;

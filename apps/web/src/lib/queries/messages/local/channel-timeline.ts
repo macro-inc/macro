@@ -232,6 +232,8 @@ export function createLocalChannelTimeline(
   let anchorId: string | undefined;
   let rereading: Promise<void> | undefined;
   let rereadAgain = false;
+  // Bumped when a page is merged in; a reread begun before it is stale.
+  let merges = 0;
   let abort: AbortController | undefined;
   let currentLoad: Promise<void> = Promise.resolve();
 
@@ -342,6 +344,7 @@ export function createLocalChannelTimeline(
   const reread = async () => {
     if (!held || state.phase !== 'ready') return;
     const token = loadToken;
+    const merged = merges;
     const live = state.newerCursor === null;
     const result = await rereadWindow(deps.host, channelId, {
       oldest: state.entries.at(-1)?.sortKey,
@@ -351,6 +354,11 @@ export function createLocalChannelTimeline(
       anchorId: anchorId ?? middleMessageId(state.entries),
     });
     if (token !== loadToken) return;
+    // A page merged in meanwhile is not in what was read: read again.
+    if (merged !== merges) {
+      rereadAgain = true;
+      return;
+    }
     if (result.kind === 'lost') {
       // Reset or evicted meanwhile: load the window again, from the server.
       await load(
@@ -401,6 +409,7 @@ export function createLocalChannelTimeline(
         onUnsupported();
         return;
       }
+      merges += 1;
       setState(
         produce((draft) => {
           draft.entries = mergeEntries(draft.entries, loaded.page.entries);
