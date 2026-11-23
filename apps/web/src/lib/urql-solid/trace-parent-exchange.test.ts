@@ -34,6 +34,14 @@ function within<T>(name: string, work: () => T): T {
   }
 }
 
+const mutation = gql`
+  mutation Rename($id: ID!) {
+    rename(id: $id) {
+      id
+    }
+  }
+`;
+
 const query = gql`
   query Viewer($first: Int) {
     viewer(first: $first) {
@@ -86,5 +94,20 @@ describe('trace parent exchanges', () => {
     subscription.unsubscribe();
 
     expect(sentIn).toEqual(['crm.contacts', undefined]);
+  });
+
+  it('sends a mutation in the trace its caller named, and no other', async () => {
+    const sentIn: (string | undefined)[] = [];
+    const client = clientRecording(sentIn);
+    const parent = {
+      run: <T>(work: () => T) => within('property_catalog.create', work),
+    };
+
+    await client
+      .mutation(mutation, { id: '1' }, { [TRACE_PARENT_CONTEXT_KEY]: parent })
+      .toPromise();
+    await client.mutation(mutation, { id: '2' }).toPromise();
+
+    expect(sentIn).toEqual(['property_catalog.create', undefined]);
   });
 });
