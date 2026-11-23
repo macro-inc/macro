@@ -26,6 +26,142 @@ describe('phone Month geometry', () => {
     expect(phoneMonthBarCapacity(360, 6)).toBe(1);
   });
 
+  it.each([
+    [0, 0],
+    [45, 0],
+    [46, 1],
+    [61, 1],
+    [62, 2],
+    [78, 3],
+    [190, 10],
+  ])('fits %i pixels of cell height into %i rows', (height, rows) => {
+    expect(phoneMonthBarCapacity(height, 1)).toBe(rows);
+  });
+
+  it('accounts for week dividers and never guesses unmeasured capacity', () => {
+    expect(phoneMonthBarCapacity(null, 5)).toBe(0);
+    expect(phoneMonthBarCapacity(235, 5)).toBe(1);
+    expect(phoneMonthBarCapacity(234, 5)).toBe(0);
+    expect(phoneMonthBarCapacity(1200, 6)).toBe(10);
+  });
+
+  it.each([
+    [0, [], 6],
+    [1, [], 6],
+    [2, [0], 5],
+    [3, [0, 1], 4],
+    [6, [0, 1, 2, 3, 4, 5], 0],
+    [7, [0, 1, 2, 3, 4, 5], 0],
+  ])(
+    'reserves overflow within %i available rows',
+    (capacity, lanes, hidden) => {
+      const events = Array.from({ length: 6 }, (_, index) => ({
+        id: `timed-${index}`,
+        start: `2026-11-09T${10 + index}:00:00`,
+        end: `2026-11-09T${11 + index}:00:00`,
+        allDay: false,
+        isCancelled: false,
+      }));
+      const week = layoutPhoneMonthWeek(
+        agendaEventsByDay(events, new Date(2026, 10, 8), 7),
+        capacity
+      );
+      expect(week.bars.map((bar) => bar.lane)).toEqual(lanes);
+      expect(week.hidden[1]).toBe(hidden);
+      expect(
+        week.bars.length + Number(hidden > 0 && capacity > 0)
+      ).toBeLessThanOrEqual(capacity);
+    }
+  );
+
+  it('stacks timed events chronologically below every span in their day', () => {
+    const events = [
+      {
+        id: 'first-day',
+        start: '2026-11-08',
+        end: '2026-11-10',
+        allDay: true,
+        isCancelled: false,
+      },
+      {
+        id: 'continuing',
+        start: '2026-11-09',
+        end: '2026-11-11',
+        allDay: true,
+        isCancelled: false,
+      },
+      {
+        id: 'late',
+        start: '2026-11-10T13:00:00',
+        end: '2026-11-10T14:00:00',
+        allDay: false,
+        isCancelled: false,
+      },
+      {
+        id: 'early',
+        start: '2026-11-10T09:00:00',
+        end: '2026-11-10T10:00:00',
+        allDay: false,
+        isCancelled: false,
+      },
+    ];
+    const week = layoutPhoneMonthWeek(
+      agendaEventsByDay(events, new Date(2026, 10, 8), 7),
+      4
+    );
+    expect(week.bars.filter((bar) => bar.startColumn === 2)).toMatchObject([
+      { event: { id: 'early' }, lane: 2, endColumn: 3, kind: 'timed' },
+      { event: { id: 'late' }, lane: 3, endColumn: 3, kind: 'timed' },
+    ]);
+    expect(
+      week.bars.find((bar) => bar.event.id === 'continuing')
+    ).toMatchObject({
+      startColumn: 1,
+      endColumn: 3,
+      lane: 1,
+      kind: 'span',
+    });
+  });
+
+  it('retains timed overnight spans ahead of single-day timed events', () => {
+    const events = [
+      {
+        id: 'overnight',
+        start: '2026-11-08T23:00:00',
+        end: '2026-11-10T01:00:00',
+        allDay: false,
+        isCancelled: false,
+      },
+      {
+        id: 'morning',
+        start: '2026-11-09T09:00:00',
+        end: '2026-11-09T10:00:00',
+        allDay: false,
+        isCancelled: false,
+      },
+    ];
+    const week = layoutPhoneMonthWeek(
+      agendaEventsByDay(events, new Date(2026, 10, 8), 7),
+      3
+    );
+    expect(week.bars).toMatchObject([
+      {
+        event: { id: 'overnight' },
+        startColumn: 0,
+        endColumn: 3,
+        lane: 0,
+        kind: 'span',
+      },
+      {
+        event: { id: 'morning' },
+        startColumn: 1,
+        endColumn: 2,
+        lane: 1,
+        kind: 'timed',
+      },
+    ]);
+  });
+
   it('keeps multi-day bars in shared lanes with exclusive ends', () => {
     const events = [
       {

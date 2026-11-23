@@ -1,9 +1,13 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
 
+export const PHONE_MONTH_DATE_HEIGHT = 32;
+export const PHONE_MONTH_EVENT_HEIGHT = 14;
+export const PHONE_MONTH_ROW_PITCH = 16;
 export type MonthEvent = Pick<CalendarEvent, 'id' | 'start' | 'end' | 'allDay'>;
 export type MonthDay<T extends MonthEvent> = { date: Date; events: T[] };
 export type MonthBar<T extends MonthEvent> = {
   event: T;
+  kind: 'span' | 'timed';
   startColumn: number;
   endColumn: number;
   lane: number;
@@ -24,18 +28,28 @@ export function phoneMonthRange(month: Date) {
   return { start, end, dayCount, weekCount: dayCount / 7 };
 }
 
-/** Keep the date heading clear and reserve one 16px slot for each displayed row. */
+/** Fit complete rows below the date, including gaps and the shortest week's border. */
 export function phoneMonthBarCapacity(
   height: number | null,
   weekCount: number
 ) {
-  const maximum = weekCount === 6 ? 4 : 5;
-  if (!height) return maximum;
-  // Dates occupy 32px; the last 14px bar needs no trailing 2px of its 16px pitch.
+  if (height === null || height <= 0 || weekCount <= 0) return 0;
+  const cellHeight = height / weekCount - Number(weekCount > 1);
+  const trailingGap = PHONE_MONTH_ROW_PITCH - PHONE_MONTH_EVENT_HEIGHT;
   return Math.max(
-    1,
-    Math.min(maximum, Math.floor((height / weekCount - 32 + 2) / 16))
+    0,
+    Math.floor(
+      (cellHeight - PHONE_MONTH_DATE_HEIGHT + trailingGap) /
+        PHONE_MONTH_ROW_PITCH
+    )
   );
+}
+
+function isSpanningEvent(event: MonthEvent) {
+  if (event.allDay) return true;
+  const nextDay = new Date(event.start);
+  nextDay.setHours(24, 0, 0, 0);
+  return new Date(event.end).getTime() > nextDay.getTime();
 }
 /** Assign shared lanes before clipping, so a multi-day bar never jumps between cells. */
 export function layoutPhoneMonthWeek<T extends MonthEvent>(
@@ -51,6 +65,7 @@ export function layoutPhoneMonthWeek<T extends MonthEvent>(
         spans.set(event.id, {
           event,
           startColumn: column,
+          kind: isSpanningEvent(event) ? 'span' : 'timed',
           endColumn: column + 1,
         });
     }
@@ -58,6 +73,7 @@ export function layoutPhoneMonthWeek<T extends MonthEvent>(
 
   const ordered = [...spans.values()].sort(
     (a, b) =>
+      Number(b.kind === 'span') - Number(a.kind === 'span') ||
       Number(b.event.allDay) - Number(a.event.allDay) ||
       b.endColumn - b.startColumn - (a.endColumn - a.startColumn) ||
       a.startColumn - b.startColumn ||
@@ -66,16 +82,29 @@ export function layoutPhoneMonthWeek<T extends MonthEvent>(
   );
   const bars: MonthBar<T>[] = [];
   for (const span of ordered) {
+    // Spans share lanes across the week. Timed rows start below every span in
+    // their own day, rather than backfilling a gap above a continuing span.
     let lane = 0;
-    while (
-      bars.some(
-        (bar) =>
-          bar.lane === lane &&
-          bar.startColumn < span.endColumn &&
-          span.startColumn < bar.endColumn
+    if (span.kind === 'span') {
+      while (
+        bars.some(
+          (bar) =>
+            bar.lane === lane &&
+            bar.startColumn < span.endColumn &&
+            span.startColumn < bar.endColumn
+        )
       )
-    )
-      lane += 1;
+        lane += 1;
+    } else {
+      for (const bar of bars) {
+        if (
+          bar.startColumn <= span.startColumn &&
+          bar.endColumn > span.startColumn
+        ) {
+          lane = Math.max(lane, bar.lane + 1);
+        }
+      }
+    }
     bars.push({ ...span, lane });
   }
 
