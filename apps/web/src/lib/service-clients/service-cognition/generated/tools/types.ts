@@ -6023,7 +6023,8 @@ export interface Booking {
    */
   timeZone: string;
   /**
-   * Assigned hosts.
+   * Assigned hosts. Empty in responses to the booker, since a Macro user
+   * identity carries the host's sign-in address.
    */
   hosts: string[];
   status: BookingStatus;
@@ -7117,6 +7118,14 @@ export interface BookingLinkEvent {
    * Generate a Google Meet conference. Mutually exclusive with `macroCall`.
    */
   googleMeet: boolean;
+  /**
+   * The connected account, an `emailLinkId` from the listing's `accounts`,
+   * whose primary calendar takes this link's bookings and sends their
+   * invitations from its address. Omit to book on the host's primary
+   * account. Personal links only; team links book on each host's primary
+   * account. Google Meet needs a Google account.
+   */
+  emailLinkId?: string | null;
   /**
    * Whether new bookings are accepted.
    */
@@ -11620,6 +11629,12 @@ export interface ListBookingLinksResult {
    */
   schedules: Schedule[];
   /**
+   * Connected accounts a personal link can book on: set one's
+   * `emailLinkId` on the draft to have bookings land on that account's
+   * calendar with invitations from its address. Empty for a team.
+   */
+  accounts: BookingAccount[];
+  /**
    * Matching links including their complete drafts.
    */
   links: BookingLinkResult[];
@@ -11648,6 +11663,20 @@ export interface Schedule {
    * Date-specific replacements.
    */
   overrides: DateOverride[];
+}
+/**
+ * A connected account whose primary calendar the host can write, so a
+ * personal link can book on it.
+ */
+export interface BookingAccount {
+  /**
+   * Connected inbox identity, set as a link's `emailLinkId`.
+   */
+  emailLinkId: string;
+  /**
+   * The account's address, which invitations for its bookings come from.
+   */
+  emailAddress: string;
 }
 /**
  * Read every booking starting in a half-open timestamp range for personal or team Booking Links. Returns IDs, status, hosts, guest details, answers, attendance and reschedule history; use these IDs to manage meetings. Both timestamps are required, with an explicit UTC offset. Maximum range 733 days. Oversized result sets fail rather than silently truncating: narrow the range. Use GetBookingInsights for aggregate statistics.
@@ -13591,6 +13620,13 @@ export interface EventType {
    * Generate a Google Meet conference. Mutually exclusive with a Macro call.
    */
   googleMeet: boolean;
+  /**
+   * Connected inbox whose primary calendar takes this link's bookings, so
+   * the event lands there and its invitation comes from that address.
+   * Absent books on the host's primary inbox. Personal links only: team
+   * links book on each host's primary inbox.
+   */
+  emailLinkId?: string | null;
   /**
    * Whether new bookings are accepted.
    */
