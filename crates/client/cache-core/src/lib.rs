@@ -13,7 +13,7 @@ pub mod entity_resolver;
 pub mod field_changes;
 pub mod identity;
 pub mod link_patch;
-pub mod meta;
+pub use cache_schema as meta;
 pub mod normalize;
 pub mod page_retention;
 pub mod people;

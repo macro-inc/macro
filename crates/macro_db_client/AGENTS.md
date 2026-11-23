@@ -113,6 +113,14 @@ owner-only Notion mirror. No existing folders or import rows are backfilled.
 
 ## Gotchas
 
+- `entity_access`, `"Document"`, `"Chat"`, `"Project"` and `document_sub_type`
+  carry the `source_items` triggers. Each commit that wrote one of them takes
+  ACCESS SHARE on all five, so DDL that needs ACCESS EXCLUSIVE on any of them
+  (`ALTER TABLE`, a non-concurrent index) also stalls writers to the other
+  four: give it a short `lock_timeout`. A mass update of these tables rewrites
+  its items' `source_items` rows at commit while holding their buckets; update
+  in small committed batches, or remove the triggers, update, and backfill
+  (`docs/runbooks/source-items.md`). Writers must use READ COMMITTED.
 - `document_email` has a statement-level `AFTER DELETE` trigger
   (`document_email_release`, migration `20261116200143`) that queues each
   document a statement unlinks in `released_email_attachment_documents`, even

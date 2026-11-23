@@ -1,8 +1,4 @@
-import {
-  CollapsibleSection,
-  useViewTabHotkeys,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
@@ -12,13 +8,11 @@ import { useProjectSavedViews } from '@app/features/projects/context/project-sav
 import { ProjectSavedViewsList } from '@app/features/projects/views/project-saved-views';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
-import { useParams } from '@app/lib/split-router';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,
 } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -29,7 +23,6 @@ import { Dynamic } from 'solid-js/web';
 import {
   BUILT_IN_TASK_TABS,
   PROJECT_TABS,
-  TASK_TABS,
   type TaskTabItem,
 } from '../constants';
 import { isProjectTab, projectScopeForTab } from '../core/task-navigation';
@@ -154,36 +147,14 @@ function TaskFavorites(props: {
 
 export function TasksSidebar() {
   const layout = useSplitLayout();
-  const panel = useSplitPanelOrThrow();
-  const {
-    state,
-    setTab,
-    selectedTask,
-    isSidebarSectionOpen,
-    setSidebarSectionOpen,
-  } = useTasksView();
-  const params = useParams<{ projectId?: string }>();
+  const { state, setTab, isSidebarSectionOpen, setSidebarSectionOpen } =
+    useTasksView();
   const projectViews = useProjectSavedViews();
   const selectTab = (id: TasksTab) => {
     if (isProjectTab(id) && projectViews)
       projectViews.selectScope(projectScopeForTab(id));
     else setTab(id);
   };
-
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: panel.isPanelActive,
-    ids: () => TASK_TABS.map((tab) => tab.id),
-    activeId: () => state.tab,
-    setActiveId: (id) => {
-      const tab = TASK_TABS.find((tab) => tab.id === id);
-      if (tab) selectTab(tab.id);
-    },
-    // Tab cycles these tabs over a list and is focus order over an open project
-    // or task. A pane's own override can't hold this: the sidebar remounts after
-    // it whenever the view crosses its layout breakpoint.
-    shouldHandleSequentialKeyEvent: () => !params.projectId && !selectedTask(),
-  });
 
   return (
     <ViewSidebar.Root

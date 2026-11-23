@@ -61,10 +61,87 @@ pub struct QueueDiagnostics {
     pub oldest_created_at_ms: Option<i64>,
 }
 
+/// Where a storage stands in its history of commits. Two equal positions
+/// from one storage mean it committed nothing in between.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WritePosition {
+    /// Changes whenever the storage starts its history over, such as a new log.
+    pub epoch: u64,
+    /// Advances with every commit within an epoch.
+    pub offset: u64,
+}
+
+/// The durable reads a projection pass makes before a write. Every
+/// [`Storage`] serves them; [`crate::engine::PassReads`] serves them through
+/// the engine's hot tier and reads each key once, so the write that follows
+/// does not read again.
+pub trait DurableRead {
+    type Error: std::error::Error + MaybeSend + 'static;
+    /// The storage underneath, for the reads this trait does not cover.
+    type Storage: crate::predicate::PredicateIndexStorage<Error = Self::Error>;
+
+    /// The storage underneath.
+    fn storage(&self) -> &Self::Storage;
+
+    /// Durable records aligned with `keys`, as [`Storage::get_batch`].
+    fn read_records(
+        &self,
+        keys: &[EntityKey<'_>],
+    ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend;
+
+    /// Projection states aligned with `keys`, as
+    /// [`Storage::load_projection_states`].
+    fn read_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend;
+
+    /// The queued mutations, as [`Storage::load_mutation_queue`].
+    fn read_mutation_queue(
+        &self,
+    ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend;
+}
+
+impl<S: crate::predicate::PredicateIndexStorage> DurableRead for S {
+    type Error = S::Error;
+    type Storage = S;
+
+    fn storage(&self) -> &S {
+        self
+    }
+
+    fn read_records(
+        &self,
+        keys: &[EntityKey<'_>],
+    ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend {
+        self.get_batch(keys)
+    }
+
+    fn read_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend {
+        self.load_projection_states(keys)
+    }
+
+    fn read_mutation_queue(
+        &self,
+    ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend {
+        self.load_mutation_queue()
+    }
+}
+
 /// Async KV over normalized records. Batch-oriented by design: the engine
 /// issues one `get_batch` per denormalization round, never per record.
 pub trait Storage: MaybeSend {
     type Error: std::error::Error + MaybeSend + 'static;
+
+    /// The current [`WritePosition`], or `None` when this storage does not
+    /// track one. Engines reuse what they read for a write only while it
+    /// holds still, so `None` turns that off.
+    fn write_position(&self) -> Option<WritePosition> {
+        None
+    }
 
     /// Atomically replace copied layers and recomposed shadows for affected keys.
     /// Preserve all other shadows and authored command metadata.
@@ -112,6 +189,16 @@ pub trait Storage: MaybeSend {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// [`Self::put_batch_with_projections`] with borrowed records, for a caller
+    /// that keeps them. The default clones them.
+    fn put_records_with_projections(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+        self.put_batch_with_projections(entries.to_vec(), projections)
+    }
 
     /// Deletes records (absent keys are ignored).
     fn delete_batch(

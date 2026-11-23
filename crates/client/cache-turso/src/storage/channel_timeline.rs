@@ -79,7 +79,7 @@ fn is_entry(typename: &str) -> bool {
 /// Writes or removes the timeline row of every message and activity entry,
 /// keeping the last entry for a key exactly like the record upsert does.
 pub(super) fn write_rows(
-    connection: &Arc<Connection>,
+    connection: &Db,
     entries: &[EncodedRecord],
 ) -> Result<(), TursoStorageError> {
     let mut last = HashMap::new();
@@ -109,7 +109,7 @@ pub(super) fn write_rows(
 
 /// Removes the timeline rows of deleted message and activity records.
 pub(super) fn delete_rows(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[RecordKey],
 ) -> Result<(), TursoStorageError> {
     let mut statement = None;
@@ -124,7 +124,7 @@ pub(super) fn delete_rows(
 }
 
 /// Removes every timeline row, stretch and sync row with the rest of the cache.
-pub(super) fn clear(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn clear(connection: &Db) -> Result<(), TursoStorageError> {
     for table in TABLES {
         driver::execute(connection, &format!("DELETE FROM {table}"), Vec::new())?;
     }
@@ -132,7 +132,7 @@ pub(super) fn clear(connection: &Arc<Connection>) -> Result<(), TursoStorageErro
 }
 
 pub(super) fn save_projection_version(
-    connection: &Arc<Connection>,
+    connection: &Db,
 ) -> Result<(), TursoStorageError> {
     driver::execute(
         connection,
@@ -149,7 +149,7 @@ pub(super) fn save_projection_version(
 /// when the projection changed, without touching records, coverage, or sync
 /// state.
 pub(super) fn ensure_projection_version(
-    connection: &Arc<Connection>,
+    connection: &Db,
 ) -> Result<(), TursoStorageError> {
     let versions = driver::query(connection, META_SELECT, vec![text(PROJECTION_VERSION_KEY)])?;
     if let [row] = versions.as_slice()
@@ -182,7 +182,7 @@ fn row_values(row: &ChannelTimelineRow) -> Vec<Value> {
     ]
 }
 
-fn delete_row(statement: &mut turso_core::Statement, key: &str) -> Result<(), TursoStorageError> {
+fn delete_row(statement: &mut driver::Prepared, key: &str) -> Result<(), TursoStorageError> {
     let changed = driver::execute_prepared(statement, vec![text(key)])?;
     if (0..=1).contains(&changed) {
         Ok(())
@@ -210,7 +210,7 @@ fn parse_scope(value: &str) -> Result<TimelineScope, TursoStorageError> {
 }
 
 fn row_by_key(
-    connection: &Arc<Connection>,
+    connection: &Db,
     key: &EntityKey<'_>,
 ) -> Result<Option<ChannelTimelineRow>, TursoStorageError> {
     match driver::query(connection, ROW_BY_KEY, vec![text(key.as_ref())])?.as_slice() {
@@ -227,7 +227,7 @@ fn row_by_key(
 }
 
 fn window_rows(
-    connection: &Arc<Connection>,
+    connection: &Db,
     sql: &str,
     request: &ChannelTimelineRequest,
     scope: &TimelineScope,
@@ -262,7 +262,7 @@ fn window_rows(
 }
 
 fn load_coverage(
-    connection: &Arc<Connection>,
+    connection: &Db,
     channel_id: &str,
     scope: &TimelineScope,
 ) -> Result<Vec<TimelineSpan>, TursoStorageError> {
@@ -290,7 +290,7 @@ struct SyncRow {
 }
 
 fn load_sync(
-    connection: &Arc<Connection>,
+    connection: &Db,
     channel_id: &str,
 ) -> Result<Option<SyncRow>, TursoStorageError> {
     match driver::query(connection, SYNC_SELECT, vec![text(channel_id)])?.as_slice() {
@@ -307,7 +307,7 @@ fn load_sync(
 }
 
 fn query_snapshot(
-    connection: &Arc<Connection>,
+    connection: &Db,
     request: &ChannelTimelineRequest,
 ) -> Result<ChannelTimelineSnapshot, TursoStorageError> {
     let seq = load_sync(connection, &request.channel_id)?.and_then(|sync| sync.seq);
@@ -365,7 +365,7 @@ fn query_snapshot(
 }
 
 fn record_keys(
-    connection: &Arc<Connection>,
+    connection: &Db,
     sql: &str,
     value: &str,
 ) -> Result<Vec<String>, TursoStorageError> {
@@ -378,7 +378,7 @@ fn record_keys(
 /// Deletes the named records with their timeline rows and returns the keys
 /// that existed.
 fn delete_records(
-    connection: &Arc<Connection>,
+    connection: &Db,
     doomed: BTreeSet<String>,
 ) -> Result<Vec<EntityKey<'static>>, TursoStorageError> {
     let doomed = doomed
@@ -404,7 +404,7 @@ fn delete_records(
 }
 
 fn apply_commit(
-    connection: &Arc<Connection>,
+    connection: &Db,
     commit: &ChannelTimelineCommit,
 ) -> Result<ChannelCommitOutcome, TursoStorageError> {
     let channel_id = commit.channel_id.as_str();
@@ -477,7 +477,7 @@ fn apply_commit(
 }
 
 fn apply_eviction(
-    connection: &Arc<Connection>,
+    connection: &Db,
     eviction: &ChannelEviction,
 ) -> Result<ChannelEvictionOutcome, TursoStorageError> {
     let max_channels = usize::from(eviction.max_channels);
@@ -507,7 +507,7 @@ fn apply_eviction(
     })
 }
 
-fn count(connection: &Arc<Connection>, sql: &str) -> Result<u64, TursoStorageError> {
+fn count(connection: &Db, sql: &str) -> Result<u64, TursoStorageError> {
     match driver::query(connection, sql, Vec::new())?.as_slice() {
         [row] => u64::try_from(required_i64(row, 0)?).map_err(|_| invariant()),
         _ => Err(invariant()),
@@ -569,7 +569,7 @@ impl ChannelTimelineStorage for TursoStorage {
 }
 
 /// Validates the frozen channel tables, their columns, and every index.
-pub(super) fn validate_schema(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn validate_schema(connection: &Db) -> Result<(), TursoStorageError> {
     let column = |name, declared_type, not_null, primary_key_position| ColumnSpec {
         name,
         declared_type,

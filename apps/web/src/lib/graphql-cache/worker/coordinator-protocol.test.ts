@@ -716,6 +716,7 @@ describe('coordinator runtime protocol', () => {
 
   it.each([
     { ...version, kind: 'registered', tabId: 'tab' },
+    { ...version, kind: 'registered', tabId: 'tab', ownerElsewhere: true },
     {
       ...version,
       kind: 'become-owner',
@@ -754,6 +755,20 @@ describe('coordinator runtime protocol', () => {
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });
+
+  it.each([false, 'yes', null])(
+    'rejects a registration whose ownerElsewhere is %s',
+    (ownerElsewhere) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'registered',
+          tabId: 'tab',
+          ownerElsewhere,
+        }).ok
+      ).toBe(false);
+    }
+  );
 
   it.each([
     'opened-existing',
@@ -1004,7 +1019,7 @@ describe('coordinator runtime protocol', () => {
     });
     expect(CACHE_STORAGE_VERSION).toEqual({
       schemaCompatibilityEpoch: rustConstant(
-        'crates/client/cache-core/src/codec.rs',
+        'crates/client/cache-schema/src/lib.rs',
         'CACHE_SCHEMA_COMPATIBILITY_EPOCH'
       ),
       formatVersion: rustConstant(
