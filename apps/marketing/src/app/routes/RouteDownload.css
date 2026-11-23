@@ -54,12 +54,12 @@
 }
 
 /* Preserve the shared primary button's ink over the legacy anchor reset. */
-.downloads-action .site-nav-start {
+.downloads-installers .site-nav-start {
   color: #000;
 }
 
-.downloads-action .site-nav-start,
-.downloads-action .site-nav-demo {
+.downloads-installers .site-nav-start,
+.downloads-installers .site-nav-demo {
   width: 220px;
   min-height: 44px;
   font-size: 15px;
@@ -149,23 +149,19 @@
   }
 }
 
-/* Phones are not offered the desktop installers. */
-.downloads-page .downloads-phone-note {
+/* Phones get the mobile apps; computers get the desktop installers. */
+.downloads-page .downloads-phone-only {
   display: none;
-  color: #999;
-  font-size: 15px;
-  line-height: 1.6;
-  text-align: center;
 }
 
 @media (max-width: 767px) {
-  .downloads-page .downloads-phone-note {
-    display: block;
-  }
-  .downloads-action,
-  .downloads-note,
-  .downloads-release,
-  .downloads-page .downloads-version {
+  .downloads-page .downloads-desktop-only {
     display: none;
+  }
+  .downloads-page ul.downloads-phone-only {
+    display: flex;
+  }
+  .downloads-page p.downloads-phone-only {
+    display: block;
   }
 }

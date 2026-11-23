@@ -7,7 +7,11 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FALLBACK_DOWNLOAD_URLS } from '../../features/marketing/core/desktopDownloads';
+import {
+  ANDROID_PLAY_STORE_URL,
+  FALLBACK_DOWNLOAD_URLS,
+  IOS_APP_STORE_URL,
+} from '../../features/marketing/core/desktopDownloads';
 import { analytics } from '../utils/utilAnalytic';
 import { RouteDownload } from './RouteDownload';
 
@@ -29,8 +33,8 @@ function visitWith(userAgent: string) {
   ));
 }
 
-function downloadLinks() {
-  return within(screen.getByRole('list', { name: 'Desktop installers' }))
+function downloadLinks(list = 'Desktop installers') {
+  return within(screen.getByRole('list', { name: list }))
     .getAllByRole('link')
     .map((link) => [link.textContent, link.getAttribute('href')]);
 }
@@ -108,5 +112,19 @@ describe('RouteDownload', () => {
       'desktop_download_clicked',
       { platform: 'macos', source: 'marketing' }
     );
+  });
+
+  it('leads the phone list with the phone platform store', () => {
+    visitWith('Mozilla/5.0 (Linux; Android 14; Pixel 8)');
+    expect(downloadLinks('Mobile apps')).toEqual([
+      ['Download for Android', ANDROID_PLAY_STORE_URL],
+      ['Download for iOS', IOS_APP_STORE_URL],
+    ]);
+    cleanup();
+    visitWith('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)');
+    expect(downloadLinks('Mobile apps')).toEqual([
+      ['Download for iOS', IOS_APP_STORE_URL],
+      ['Download for Android', ANDROID_PLAY_STORE_URL],
+    ]);
   });
 });

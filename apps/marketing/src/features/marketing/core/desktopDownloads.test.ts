@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   desktopPlatformOrder,
   desktopReleaseVersion,
+  detectPhonePlatform,
   detectVisitorPlatform,
   FALLBACK_DOWNLOAD_URLS,
   fetchDesktopDownloadUrls,
+  phonePlatformOrder,
   releaseDownloadUrls,
 } from './desktopDownloads';
 
@@ -29,6 +31,23 @@ describe('detectVisitorPlatform', () => {
     ['', undefined],
   ])('detects %s', (userAgent, platform) => {
     expect(detectVisitorPlatform(userAgent)).toBe(platform);
+  });
+});
+
+describe('phone platforms', () => {
+  it.each([
+    ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', 'ios'],
+    ['Mozilla/5.0 (Linux; Android 14; Pixel 8)', 'android'],
+    ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', undefined],
+    ['Mozilla/5.0 (X11; Linux x86_64)', undefined],
+  ])('detects %s', (userAgent, platform) => {
+    expect(detectPhonePlatform(userAgent)).toBe(platform);
+  });
+
+  it('lists the visitor phone first, iOS by default', () => {
+    expect(phonePlatformOrder('android')).toEqual(['android', 'ios']);
+    expect(phonePlatformOrder('ios')).toEqual(['ios', 'android']);
+    expect(phonePlatformOrder(undefined)).toEqual(['ios', 'android']);
   });
 });
 

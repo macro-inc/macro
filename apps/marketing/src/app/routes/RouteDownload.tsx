@@ -9,10 +9,14 @@ import {
   type DesktopDownloadUrls,
   desktopPlatformOrder,
   desktopReleaseVersion,
+  detectPhonePlatform,
   detectVisitorPlatform,
   FALLBACK_DOWNLOAD_URLS,
   fetchDesktopDownloadUrls,
   IOS_APP_STORE_URL,
+  PHONE_PLATFORM_DETAILS,
+  type PhonePlatform,
+  phonePlatformOrder,
   type VisitorPlatform,
 } from '../../features/marketing/core/desktopDownloads';
 import { analytics } from '../utils/utilAnalytic';
@@ -31,12 +35,14 @@ export function RouteDownload() {
     FALLBACK_DOWNLOAD_URLS
   );
   const [visitor, setVisitor] = createSignal<VisitorPlatform>();
+  const [phone, setPhone] = createSignal<PhonePlatform>();
   const platforms = () => desktopPlatformOrder(visitor());
   const releaseVersion = () =>
     desktopReleaseVersion(downloads()[platforms()[0]]);
 
   onMount(() => {
     setVisitor(detectVisitorPlatform(navigator.userAgent));
+    setPhone(detectPhonePlatform(navigator.userAgent));
     const controller = new AbortController();
     onCleanup(() => controller.abort());
     const loadLatestRelease = async () => {
@@ -52,15 +58,35 @@ export function RouteDownload() {
           <div class="downloads-app-icon" aria-hidden="true">
             <MacroLogo />
           </div>
-          <h1>Download Macro Alpha</h1>
-          <p>Available for macOS and Linux</p>
+          {/* Phones get the mobile apps, never the desktop installers. */}
+          <h1>
+            Download Macro
+            <span class="downloads-desktop-only"> Alpha</span>
+          </h1>
+          <p class="downloads-desktop-only">Available for macOS and Linux</p>
+          <p class="downloads-phone-only">Get Macro on your phone.</p>
         </header>
 
-        <p class="downloads-phone-note">
-          Open this page on a Mac or Linux computer to download the desktop app.
-        </p>
+        <ul
+          class="downloads-installers downloads-phone-only"
+          aria-label="Mobile apps"
+        >
+          <For each={phonePlatformOrder(phone())}>
+            {(platform, index) => (
+              <li>
+                <a
+                  class={index() === 0 ? 'site-nav-start' : 'site-nav-demo'}
+                  href={PHONE_PLATFORM_DETAILS[platform].url}
+                >
+                  Download for {PHONE_PLATFORM_DETAILS[platform].label}
+                </a>
+                <span>{PHONE_PLATFORM_DETAILS[platform].store}</span>
+              </li>
+            )}
+          </For>
+        </ul>
 
-        <div class="downloads-action">
+        <div class="downloads-action downloads-desktop-only">
           <ul class="downloads-installers" aria-label="Desktop installers">
             <For each={platforms()}>
               {(platform, index) => (
@@ -85,30 +111,34 @@ export function RouteDownload() {
         </div>
 
         <Show when={visitor() === 'windows'}>
-          <p class="downloads-note">
+          <p class="downloads-note downloads-desktop-only">
             Windows is not supported yet. <a href="/app">Use Macro</a> in your
             browser.
           </p>
         </Show>
 
-        <p class="downloads-release">
+        <p class="downloads-release downloads-desktop-only">
           <a href={DESKTOP_RELEASE_URL} target="_blank" rel="noreferrer">
             All releases
             <ArrowUpRight aria-hidden="true" />
           </a>
         </p>
         <Show when={releaseVersion()}>
-          {(version) => <p class="downloads-version">{version()}</p>}
+          {(version) => (
+            <p class="downloads-version downloads-desktop-only">{version()}</p>
+          )}
         </Show>
 
         <article class="documentation-body">
-          <h2 id="desktop">Desktop</h2>
-          <p>
+          <h2 id="desktop" class="downloads-desktop-only">
+            Desktop
+          </h2>
+          <p class="downloads-desktop-only">
             The macOS app requires macOS 13 (Ventura) or later on a Mac with
             Apple silicon. The Linux app is an x86_64 AppImage. The desktop app
             updates itself when a new release is published.
           </p>
-          <p>
+          <p class="downloads-desktop-only">
             For self-hosting, see the{' '}
             <a href="/docs/security#self-hosting">self-hosting overview</a>.
           </p>

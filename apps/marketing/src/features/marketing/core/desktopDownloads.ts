@@ -40,6 +40,36 @@ export function detectVisitorPlatform(
   return undefined;
 }
 
+export type PhonePlatform = 'ios' | 'android';
+
+export const PHONE_PLATFORM_DETAILS: Record<
+  PhonePlatform,
+  { label: string; store: string; url: string }
+> = {
+  ios: { label: 'iOS', store: 'App Store', url: IOS_APP_STORE_URL },
+  android: {
+    label: 'Android',
+    store: 'Google Play',
+    url: ANDROID_PLAY_STORE_URL,
+  },
+};
+
+/** The visitor's phone operating system, if the browser is on one. */
+export function detectPhonePlatform(
+  userAgent: string
+): PhonePlatform | undefined {
+  if (/android/i.test(userAgent)) return 'android';
+  if (/iphone|ipad|ipod/i.test(userAgent)) return 'ios';
+  return undefined;
+}
+
+/** Mobile apps with the visitor's own phone platform first, iOS by default. */
+export function phonePlatformOrder(
+  phone: PhonePlatform | undefined
+): PhonePlatform[] {
+  return phone === 'android' ? ['android', 'ios'] : ['ios', 'android'];
+}
+
 /** Desktop installers with the visitor's own platform first. */
 export function desktopPlatformOrder(
   visitor: VisitorPlatform | undefined

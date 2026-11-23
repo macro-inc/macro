@@ -287,9 +287,11 @@ update these fallbacks in `desktopDownloads.ts` when retiring older installers.
 The separate “All releases” link opens GitHub, with the primary installer's
 release version displayed beneath it. Below the installers, the page describes
 the desktop, web, iOS, and Android apps.
-Phones are not offered the download page: the main navigation hides its link
-below 768px, and the homepage rail that holds “Download for Desktop” only shows
-at 1440px and wider.
+Phones are not offered the desktop download page: the main navigation hides
+its link below 768px, and the homepage rail that holds “Download for Desktop”
+only shows at 1440px and wider. A phone that opens `/download` (below 768px)
+sees “Download Macro” with App Store and Google Play buttons, its own platform
+first, and no desktop installers, release link, or Desktop section.
 Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
 Before the first prerender build, install Chromium with
