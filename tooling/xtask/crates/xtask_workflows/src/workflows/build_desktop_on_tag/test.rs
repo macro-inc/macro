@@ -383,7 +383,8 @@ esac
             "size": contents.len(),
             "digest": format!("sha256:{}", sha256_hex(contents)),
         }));
-        fs::write(&state, serde_json::to_string(&assets).expect("asset JSON")).expect("asset state");
+        fs::write(&state, serde_json::to_string(&assets).expect("asset JSON"))
+            .expect("asset state");
         self
     }
 
@@ -460,7 +461,11 @@ fn download_links_publish_fixed_name_installers_for_the_promoted_release() {
     let fixture = LinksFixture::new(RELEASE_VERSION).with_asset(1, "latest.json", "feed");
     assert_publish_success(&fixture.run());
     let assets = fixture.assets();
-    assert_eq!(assets.get(MAC_LINK), Some(&sha256_hex("new dmg")), "{assets:?}");
+    assert_eq!(
+        assets.get(MAC_LINK),
+        Some(&sha256_hex("new dmg")),
+        "{assets:?}"
+    );
     assert_eq!(
         assets.get(LINUX_LINK),
         Some(&sha256_hex("new appimage")),
@@ -478,7 +483,11 @@ fn download_links_replace_old_installers_only_after_the_new_upload() {
         .with_asset(2, LINUX_LINK, "old appimage");
     assert_publish_success(&fixture.run());
     let assets = fixture.assets();
-    assert_eq!(assets.get(MAC_LINK), Some(&sha256_hex("new dmg")), "{assets:?}");
+    assert_eq!(
+        assets.get(MAC_LINK),
+        Some(&sha256_hex("new dmg")),
+        "{assets:?}"
+    );
     assert_eq!(assets.len(), 2, "{assets:?}");
 
     // The public name keeps serving the old file until its replacement is uploaded.
@@ -494,7 +503,7 @@ fn download_links_replace_old_installers_only_after_the_new_upload() {
     let delete = position("api --method DELETE repos/macro-inc/macro/releases/assets/1");
     assert!(upload < delete, "{calls}");
     assert!(
-        lines[upload].contains(&format!("{MAC_LINK}.next")),
+        lines[upload].contains(&format!("next-{MAC_LINK}")),
         "uploads go to a staging name: {calls}"
     );
 }
@@ -519,5 +528,41 @@ fn download_links_follow_only_the_promoted_release() {
     assert_eq!(
         fixture.assets().get(MAC_LINK),
         Some(&sha256_hex("newer dmg"))
+    );
+}
+
+#[test]
+fn download_links_recover_from_a_swap_that_failed_after_the_delete() {
+    // A previous run uploaded the staging copy and deleted the old link, then
+    // failed to rename: the rerun must restore the link and leave no staging copy.
+    let fixture = LinksFixture::new(RELEASE_VERSION)
+        .with_asset(1, &format!("next-{MAC_LINK}"), "new dmg")
+        .with_asset(2, LINUX_LINK, "new appimage");
+    assert_publish_success(&fixture.run());
+    let assets = fixture.assets();
+    assert_eq!(
+        assets.get(MAC_LINK),
+        Some(&sha256_hex("new dmg")),
+        "{assets:?}"
+    );
+    assert_eq!(assets.len(), 2, "{assets:?}");
+}
+
+#[test]
+fn download_links_fail_without_the_installer() {
+    let fixture = LinksFixture::new(RELEASE_VERSION);
+    fs::remove_file(fixture.temp.path().join(format!(
+        "release-artifacts/Macro-{RELEASE_VERSION}-x86_64-linux.AppImage"
+    )))
+    .expect("remove AppImage");
+    let output = fixture.run();
+    assert!(
+        !output.status.success(),
+        "a missing installer must fail the step"
+    );
+    assert!(
+        fixture.assets().is_empty(),
+        "no link changes: {:?}",
+        fixture.assets()
     );
 }
