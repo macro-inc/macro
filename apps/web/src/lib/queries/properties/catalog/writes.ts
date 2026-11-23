@@ -492,14 +492,20 @@ export async function addPropertyOption(
       updatedAt: now,
     };
     // Context does not survive the await for the links, so the enqueue runs
-    // in the trace the add started in.
+    // in the trace the add started in, and only under the login that made it.
     const parent = Telemetry.captureContext();
+    const session = queryAccountSession();
     const enqueue = async (cacheHost: CacheHost) => {
       const updates = await optionListLinks(
         cacheHost,
         propertyDefinitionId,
         option
       );
+      if (queryAccountSession() !== session)
+        throw new CatalogMutationError(
+          'Another login took over while the add read the cache',
+          'ACCOUNT_CHANGED'
+        );
       return parent.run(() =>
         executeOptimisticMutation(
           client,

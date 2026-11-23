@@ -27,6 +27,8 @@ const soup = vi.hoisted(() => ({
   /** The cache store's answers to reads of the tag sets, in order; then a miss. */
   cachedReads: [] as unknown[],
   session: 1,
+  /** Runs while the add reads the cache's records. */
+  duringRead: undefined as (() => void) | undefined,
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -85,18 +87,24 @@ beforeEach(() => {
   soup.cachedReads = [];
   soup.session = 1;
   soup.definitionCached = true;
+  soup.duringRead = undefined;
 });
 
 /** A cache host whose queue holds every write until the test settles it. */
 function queueingHost() {
   const listeners = new Set<(settlement: MutationSettlement) => void>();
+  let drained = Promise.withResolvers<void>();
   soup.host = {
     onMutationSettled(listener) {
       listeners.add(listener);
-      return () => listeners.delete(listener);
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) drained.resolve();
+      };
     },
     onCacheGenerationChanged: () => () => {},
     readRecordsByKeys: async ({ keys }) => {
+      soup.duringRead?.();
       if (soup.definitionCached === 'unreadable')
         throw new Error('cache read timed out');
       return {
@@ -116,8 +124,12 @@ function queueingHost() {
       for (const listener of [...listeners]) listener(settlement);
     },
     {
-      /** Writes still waiting for a settlement; a write stops once it has handled its own. */
-      waiting: () => listeners.size,
+      /** Resolves once no write waits for a settlement: each stops once it has handled its own. */
+      drained: async () => {
+        if (listeners.size === 0) return;
+        drained = Promise.withResolvers<void>();
+        await drained.promise;
+      },
     }
   );
 }
@@ -219,6 +231,16 @@ describe('adding an option', () => {
       expect(options.updates).toHaveLength(1);
       expect(added).toBeInstanceOf(Promise);
     }
+  });
+
+  it('drops an add when another login takes over while it reads the cache', async () => {
+    queueingHost();
+    soup.duringRead = () => {
+      soup.session = 2;
+    };
+    const added = await outcomeOf(addPropertyOption('def-1', TAG));
+    expect(isCatalogErrorCode(added, 'ACCOUNT_CHANGED')).toBe(true);
+    expect(soup.optimistic).not.toHaveBeenCalled();
   });
 
   it('rejects a queued add the server refuses later', async () => {
@@ -560,7 +582,7 @@ describe('option order', () => {
       settle({ transactionId: 'tx-b', status: 'committed' });
       settle({ transactionId: 'tx-c', status: 'committed' });
       // Both commits have reached the coalescer once their writes stop waiting.
-      await vi.waitFor(() => expect(settle.waiting()).toBe(0));
+      await settle.drained();
       // The trailing reload waits for the one running.
       expect(readers.refreshed).toHaveLength(HOLDING_DEF_1.length);
       readers.release();
