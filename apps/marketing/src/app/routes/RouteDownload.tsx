@@ -112,8 +112,11 @@ export function RouteDownload() {
 
         <Show when={visitor() === 'windows'}>
           <p class="downloads-note downloads-desktop-only">
-            Windows is not supported yet. <a href="/app">Use Macro</a> in your
-            browser.
+            Windows is not supported yet.{' '}
+            <a href="/app" target="_self">
+              Use Macro
+            </a>{' '}
+            in your browser.
           </p>
         </Show>
 
@@ -144,8 +147,10 @@ export function RouteDownload() {
           </p>
           <h2 id="web">Web</h2>
           <p>
-            <a href="/app">Open Macro</a> in a modern browser. No installation
-            needed.
+            <a href="/app" target="_self">
+              Open Macro
+            </a>{' '}
+            in a modern browser. No installation needed.
           </p>
           <h2 id="ios">iOS</h2>
           <p>
