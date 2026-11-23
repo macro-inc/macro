@@ -1853,7 +1853,8 @@ Agents → Permissions) before it runs. The cards name no language:
   <Agent> can change this.` for others.
 - A denied, cancelled or expired hold leaves a failed row in the tool group
   naming what the program would have done, `Send email · Denied` (or
-  **Cancelled**, **Not approved in time**). A step the bootstrap backstop
+  **Cancelled**, **Not approved in time**), counted as failed on the folded
+  run (`Used 1 tool · 1 failed`). A step the bootstrap backstop
   refused mid-run reads **Blocked**.
 
 With `enable-agent-permissions` off for the session's owner nothing here

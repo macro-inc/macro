@@ -88,6 +88,8 @@ export function describeGatedThings(
 export function gatedThingsTitle(
   operations: readonly GatedOperation[]
 ): string {
+  // A record whose operations this build can't read still names the step.
+  if (operations.length === 0) return t('agentPermissionsChat.runProgram');
   const things = describeGatedThings(operations);
   return things.charAt(0).toLocaleUpperCase(formatLocale()) + things.slice(1);
 }

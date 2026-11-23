@@ -36,6 +36,7 @@ export default {
   allowInSession: 'Allow in this session',
   cancelRequest: 'Cancel request',
 
+  runProgram: 'Run a program',
   denied: 'Denied',
   cancelled: 'Cancelled',
   notApprovedInTime: 'Not approved in time',

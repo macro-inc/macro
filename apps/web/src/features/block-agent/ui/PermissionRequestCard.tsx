@@ -52,7 +52,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps) {
             </For>
           </p>
           <div class="mt-1 flex flex-col-reverse gap-2 @[30rem]/request:flex-row @[30rem]/request:items-center @[30rem]/request:justify-between @[30rem]/request:gap-3">
-            <div class="flex items-center gap-1">
+            <div class="flex flex-wrap items-center gap-1">
               <Button
                 type="button"
                 variant="ghost"
@@ -73,7 +73,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps) {
                 </Button>
               </Show>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
               <Button
                 type="button"
                 variant="ghost"

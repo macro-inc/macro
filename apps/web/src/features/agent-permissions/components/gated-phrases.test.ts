@@ -21,6 +21,7 @@ describe('gated phrases', () => {
       describeGatedThings([SEND_MESSAGE, EDIT_DOCUMENT, RENAME_DOCUMENT])
     ).toBe('send email and edit documents');
     expect(gatedThingsTitle([SEND_MESSAGE])).toBe('Send email');
+    expect(gatedThingsTitle([])).toBe('Run a program');
   });
 
   it('asks with the agent plain and each action and entity accented', () => {

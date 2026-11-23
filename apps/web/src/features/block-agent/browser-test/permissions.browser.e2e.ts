@@ -63,7 +63,8 @@ for (const { language } of LANGUAGES) {
       await expect(blocked).toContainText('Delete email filter');
       // A blocked program stands alone; a denied one is a failed row in its
       // tool group, and an allowed hold has no row of its own.
-      await page.getByRole('button', { name: 'Used 1 tool' }).click();
+      // The folded run says one step failed.
+      await page.getByRole('button', { name: /Used 1 tool.*1 failed/ }).click();
       const denied = page.locator('[data-tool-status="failed"]', {
         hasText: 'Send email',
       });
