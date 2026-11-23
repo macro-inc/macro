@@ -287,6 +287,7 @@ dependencies = [
  "logger",
  "macro_bundle_updater_plugin",
  "mime_guess",
+ "minisign-verify",
  "navigation_plugin",
  "nom 8.0.0",
  "objc2 0.5.3",

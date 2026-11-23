@@ -22,6 +22,7 @@ tauri = { workspace = true, features = ["test"] }
 specta = { version = "=2.0.0-rc.25", features = ["derive", "uuid"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
+tempfile = "3"
 
 [features]
 # Automatic OTA bundle updates: check on launch/resume, apply cached bundles at
@@ -83,6 +84,8 @@ tauri-plugin-os = "2"
 clap = { version = "4", features = ["derive"] }
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "=2.10.1"
+# The updater's own signature library, to verify the download it keeps on disk.
+minisign-verify = "0.2"
 # 2.5 requires tauri 2.12; the pinned fork is 2.11.
 tauri-plugin-window-state = "=2.4.1"
 
