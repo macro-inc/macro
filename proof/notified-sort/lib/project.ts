@@ -59,3 +59,19 @@ export function discrepancies(live: Row[], fresh: Row[]): string[] {
   if (sharedLive.join('\n') !== sharedFresh.join('\n')) tokens.push('order');
   return tokens;
 }
+
+export type Paging = { pages: number; hasNextPage: boolean };
+
+/**
+ * A mounted list holds only the pages it loaded, and a re-read keeps that
+ * count (both transports: urql-solid/infinite-query-observer.ts refetch reads
+ * `this.pages.length` pages, TanStack's infinite refetch its loaded pages).
+ * When rows join above them, the rows its last page no longer reaches move to
+ * a page it has not loaded, and it says so with a next page. Its rows are then
+ * the fresh read's first rows, exactly, and full pages of them.
+ */
+export function pastLoadedPages(live: Row[], fresh: Row[], paging: Paging | null, limit: number | undefined): boolean {
+  if (!paging?.hasNextPage || !limit || paging.pages < 1) return false;
+  if (live.length !== paging.pages * limit || live.length >= fresh.length) return false;
+  return discrepancies(live, fresh.slice(0, live.length)).length === 0;
+}

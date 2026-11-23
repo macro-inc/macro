@@ -42,7 +42,7 @@ import { compactDom, heldApartFromShared } from './lib/dom-held.ts';
 import { generateReads, type ReadCase } from './lib/gen.ts';
 import { applyMutant, MUTANTS, revertMutant } from './lib/mutants.ts';
 import { queueNotify } from './lib/notify.ts';
-import { discrepancies, instant, project, rowsDiff, sameRows, type Row } from './lib/project.ts';
+import { discrepancies, instant, pastLoadedPages, project, rowsDiff, sameRows, type Paging, type Row } from './lib/project.ts';
 import { Rng } from './lib/rng.ts';
 import { seedWorld, sender } from './lib/setup.ts';
 import { q, sql, stackFromEnv, type User } from './lib/stack.ts';
@@ -487,6 +487,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
           const lastLive: (Row[] | null)[][] = specs.map(() => [null, null]);
           // Each side's last snapshot state, for the evidence of a miss.
           const lastMeta: (string | null)[][] = specs.map(() => [null, null]);
+          const lastPaging: (Paging | null)[][] = specs.map(() => [null, null]);
           while (Date.now() - liveStart < LIVE_BOUND_MS) {
             for (let i = 0; i < specs.length; i++) {
               for (const side of [0, 1]) {
@@ -494,6 +495,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
                 const snap = await probeSnapLive(lanes.live[side], ids[i]);
                 if (!snap) continue;
                 lastLive[i][side] = project(snap);
+                lastPaging[i][side] = { pages: snap.pages, hasNextPage: snap.hasNextPage };
                 lastMeta[i][side] = `${snap.transport}${snap.error ? ` error ${snap.error.slice(0, 160)}` : ''} settled=${snap.settled} entities=${snap.entities.length}`;
                 if (snap.settled && sameRows(lastLive[i][side] ?? [], raw[i][side])) reached[i][side] = Date.now() - liveStart;
               }
@@ -545,12 +547,17 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             if (held.length) emit(`live:${tag}:new-held-notified-stamp`, note(1, held));
             const newOnly = tNew.filter((t) => !tOld.includes(t) || t === 'unread');
             if (newOnly.length) {
-              emit(`live:${tag}:new-not-within-bound${changed[1]}`, note(1, newOnly));
+              // The fresh read reads up to maxPages; the mounted list holds the
+              // pages it loaded when it opened (probe.ts openLive). Rows pushed
+              // past those pages are on its next page (closure P3).
+              const limit = Number(specs[i].params?.limit) || undefined;
+              const pastPages = !specs[i].groupBy && newOnly.every((t) => t.startsWith('missing:')) && pastLoadedPages(lastLive[i][1] ?? [], raw[i][1], lastPaging[i][1], limit);
+              emit(`live:${tag}:${pastPages ? 'new-past-loaded-pages' : 'new-not-within-bound'}${changed[1]}`, note(1, newOnly));
               // The evidence for an open difference: each side's mounted rows
               // and its fresh read, as key@notifiedAt in list order.
               const compact = (rows: Row[] | null) => (rows ?? []).map((r) => `${r.key}@${r.notifiedAt ?? '-'}`);
               const evidence = (checks.liveRows as unknown[] | undefined) ?? [];
-              evidence.push({ spec: i, oldMeta: lastMeta[i][0], newMeta: lastMeta[i][1], oldLive: compact(lastLive[i][0]), oldFresh: compact(raw[i][0]), newLive: compact(lastLive[i][1]), newFresh: compact(raw[i][1]) });
+              evidence.push({ spec: i, oldMeta: lastMeta[i][0], newMeta: lastMeta[i][1], newPaging: lastPaging[i][1], limit, pastPages, oldLive: compact(lastLive[i][0]), oldFresh: compact(raw[i][0]), newLive: compact(lastLive[i][1]), newFresh: compact(raw[i][1]) });
               checks.liveRows = evidence;
             }
             else if (tOld.length || tNew.length) {

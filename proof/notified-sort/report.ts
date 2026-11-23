@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { CLOSURES, closureOf } from './lib/closed.ts';
 import { channelNameRest, homeCheckClosure, type CompactDom } from './lib/dom-held.ts';
 import { authRefreshTimeoutClass } from './lib/compare.ts';
+import { pastLoadedPages, type Row } from './lib/project.ts';
 
 type ClassEntry = { n: number; example: unknown };
 type RefEntry = { 'ref-agrees': number; 'ref-disagrees': number; 'ref-absent': number; example: unknown };
@@ -115,6 +116,62 @@ function reclassifyDomNames(run: string, classes: Record<string, ClassEntry>): {
   return moved;
 }
 
+/**
+ * A run recorded before run.ts named a mounted list that holds only the pages
+ * it loaded (closure P3) kept it as `live:<tag>:new-not-within-bound`. Moves
+ * each such miss whose evidence (checks.liveRows), the mounted list's state
+ * as the reopen recorded it (checks.reopened: pages, hasNextPage) and the
+ * spec's page size (sequences.jsonl) show it, as run.ts now does live: every
+ * new-side token is a missing row, and the list's rows are full pages that
+ * equal the fresh read's first rows (lib/project.ts pastLoadedPages).
+ */
+function reclassifyPastPages(run: string, classes: Record<string, ClassEntry>): { lane: string; step: number; spec: number; from: string; to: string }[] {
+  const stepsPath = join(outDir, run, 'steps.jsonl');
+  const seqPath = join(outDir, run, 'sequences.jsonl');
+  if (!existsSync(stepsPath) || !existsSync(seqPath)) return [];
+  type Spec = { params?: { limit?: number }; groupBy?: unknown };
+  type Evidence = { spec: number; pastPages?: boolean; newLive: string[]; newFresh: string[] };
+  type Reopen = { spec: number; side: string; state?: { pages: number; hasNextPage: boolean } };
+  const specsOf = new Map<string, Spec[]>();
+  for (const line of readFileSync(seqPath, 'utf8').split('\n').filter(Boolean)) {
+    const seq = JSON.parse(line) as { lane: string; sequence: number; specs?: Spec[] };
+    specsOf.set(`${seq.lane}/${seq.sequence}`, seq.specs ?? []);
+  }
+  const rows = (compact: string[]): Row[] =>
+    compact.map((c) => {
+      const at = c.lastIndexOf('@');
+      const n = c.slice(at + 1);
+      return { key: c.slice(0, at), notifiedAt: n === '-' ? null : n, name: null };
+    });
+  const moved: { lane: string; step: number; spec: number; from: string; to: string }[] = [];
+  for (const line of readFileSync(stepsPath, 'utf8').split('\n').filter(Boolean)) {
+    const step = JSON.parse(line) as { lane: string; sequence: number; step: number; checks?: { liveRows?: Evidence[]; liveMisses?: string[]; reopened?: Reopen[] } };
+    for (const ev of step.checks?.liveRows ?? []) {
+      // Recorded by run.ts with the rule already applied.
+      if (ev.pastPages !== undefined) continue;
+      const spec = specsOf.get(`${step.lane}/${step.sequence}`)?.[ev.spec];
+      if (!spec || spec.groupBy) continue;
+      const tag = ev.spec < 2 ? 'home' : 'random';
+      const prefix = `spec${ev.spec} new `;
+      const misses = (step.checks?.liveMisses ?? []).find((m) => m.startsWith(prefix));
+      const tokens = misses ? misses.slice(prefix.length).split(' ').map((t) => t.replace(/<.*$/, '')) : [];
+      if (!tokens.length || !tokens.every((t) => t.startsWith('missing:'))) continue;
+      const state = step.checks?.reopened?.find((r) => r.spec === ev.spec && r.side === 'new')?.state;
+      if (!state || !pastLoadedPages(rows(ev.newLive), rows(ev.newFresh), state, Number(spec.params?.limit) || undefined)) continue;
+      const from = Object.keys(classes).find((cls) => cls === `live:${tag}:new-not-within-bound` || cls.startsWith(`live:${tag}:new-not-within-bound:`));
+      if (!from) continue;
+      const entry = classes[from];
+      entry.n -= 1;
+      if (entry.n <= 0) delete classes[from];
+      const to = from.replace('new-not-within-bound', 'new-past-loaded-pages');
+      classes[to] ??= { n: 0, example: { lane: step.lane, sequence: step.sequence, step: step.step, spec: ev.spec, state } };
+      classes[to].n += 1;
+      moved.push({ lane: step.lane, step: step.step, spec: ev.spec, from, to });
+    }
+  }
+  return moved;
+}
+
 const outDir
 
  = join(import.meta.dirname, 'out');
@@ -128,6 +185,7 @@ for (const run of runs.sort()) {
   const reclassified = summary.sequences?.classes ? reclassifyHeldDom(run, summary.sequences.classes) : [];
   const authTimeouts = summary.sequences?.classes ? reclassifyAuthTimeouts(run, summary.sequences.classes) : [];
   const domNames = summary.dom?.classes ? reclassifyDomNames(run, summary.dom.classes) : [];
+  const pastPages = summary.sequences?.classes ? reclassifyPastPages(run, summary.sequences.classes) : [];
   for (const phase of ['reads', 'dom', 'sequences']) {
     const classes: Record<string, ClassEntry> = summary[phase]?.classes ?? {};
     for (const [cls, entry] of Object.entries(classes)) {
@@ -150,6 +208,7 @@ for (const run of runs.sort()) {
     reclassified,
     authTimeouts,
     domNames,
+    pastPages,
     closedBy,
     open,
   };

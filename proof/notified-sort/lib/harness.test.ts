@@ -12,7 +12,7 @@ import { channelNameRest, heldApartFromShared, homeCheckClosure, onlyStaleTimeLa
 import { compareHomeDom, parseRowId } from './dom.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
-import { discrepancies, instant, project, sameRows } from './project.ts';
+import { discrepancies, instant, pastLoadedPages, project, sameRows, type Row } from './project.ts';
 import { Rng } from './rng.ts';
 import { buildWorld } from './world.ts';
 
@@ -172,6 +172,22 @@ describe('comparison', () => {
     const a = project(snap(base));
     expect(sameRows(a, project(snap(structuredClone(base))))).toBe(true);
     expect(sameRows(a, project(snap([base[1], base[0], base[2], base[3]])))).toBe(false);
+  });
+
+  it('names rows pushed past the loaded pages, and nothing a fault leaves', () => {
+    const row = (k: string): Row => ({ key: `document:${k}`, notifiedAt: null, name: null });
+    const fresh = ['a', 'j', 'b', 'c', 'd'].map(row);
+    const live = fresh.slice(0, 4);
+    const paging = { pages: 2, hasNextPage: true };
+    expect(pastLoadedPages(live, fresh, paging, 2)).toBe(true);
+    // No next page, a short page, a dropped or swapped row, or a stale list.
+    expect(pastLoadedPages(live, fresh, { ...paging, hasNextPage: false }, 2)).toBe(false);
+    expect(pastLoadedPages(live.slice(0, 3), fresh, paging, 2)).toBe(false);
+    expect(pastLoadedPages([fresh[0], fresh[2], fresh[3], fresh[4]], fresh, paging, 2)).toBe(false);
+    expect(pastLoadedPages([fresh[0], fresh[2], fresh[1], fresh[3]], fresh, paging, 2)).toBe(false);
+    expect(pastLoadedPages(live, fresh, paging, undefined)).toBe(false);
+    expect(closureOf('live:random:new-past-loaded-pages:seen/project')?.id).toBe('P3');
+    expect(closureOf('live:random:new-not-within-bound:seen/project')).toBeUndefined();
   });
 
   it('reads the entity of a Home row from its DOM id', () => {
