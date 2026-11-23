@@ -734,18 +734,32 @@ stapled Gatekeeper verdict, and launches the app from it on the macOS runner's
 GUI session with the smoke suite of `apps/web/tests/macos/qa.mjs` (window,
 screenshot, soak, crash report, clean quit, app log). A launch that shows no
 window or screenshot is retried once; a crash, crash report, panic or a second
-failed launch fails the job, so `desktop-stable` keeps the previous version and
-`Alert native build failures` says so in its post. The versioned release still
-gets the installers `publish-installers` attaches, but not the update signatures
-`publish-release` makes, so `Desktop Release Watch` reports those missing 4 hours
-later unless a re-run has promoted the release. The release app embeds the production PostHog key, so the
-job blocks the analytics proxy host (read from `src/lib/analytics/analytics.ts`)
-in `/etc/hosts` before the launch. The job's `macos-qa-release-*` artifact holds
+failed launch fails the job, so `desktop-stable` and its download links keep the
+previous version, and `Alert native build failures` says so in its post. The
+versioned release still gets the installers `publish-installers` attaches, but
+not the update signatures `publish-release` makes, so `Desktop Release Watch`
+reports those missing 4 hours later unless a re-run has promoted the release.
+The release app embeds the production PostHog key, so the job blocks the
+analytics proxy host (read from `src/lib/analytics/analytics.ts`) in
+`/etc/hosts` before the launch. The job's `macos-qa-release-*` artifact holds
 `summary.md`, screenshots and logs. After a flake, re-run the failed jobs:
 `qa-macos` reruns, then `publish-release` promotes. `Desktop QA macOS` (workflow
 dispatch, any ref) runs the same harness on an unsigned build; its `full` suite
 adds the src-tauri `cargo test`, linked with the DMG build's Apple linker
 (`.#tauri-desktop-apple-linker`) because Nix's cctools `ld` crashes on it.
+
+Public download links never name a version. While `desktop-stable` serves a
+release's `latest.json`, the next step of the same job copies that release's
+installers onto `desktop-stable` as `Macro-macos-arm64.dmg` and
+`Macro-linux-x86_64.AppImage`, so they always match what auto-update installs. Each
+copy is uploaded under a staging name and then renamed over the old one, so the
+link is never missing for the length of an upload; an installer whose bytes are
+already there is skipped, and reruns of an older tag change nothing. Customers
+use `https://macro.com/download/mac` and `/download/linux`, which the website's
+edge redirects to those assets (`apps/marketing/seo/download-redirects.json`), so
+the hosting can move without changing the links. A new platform (Intel Mac,
+Windows) adds a fixed name in `publish_desktop_download_links.sh` and a redirect
+in that manifest.
 
 Failed releases post to the Macro Alerts channel. `Alert native build failures`
 posts when any job of `Build Desktop on Tag` fails or times out, or when a tag's

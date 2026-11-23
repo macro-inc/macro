@@ -280,12 +280,10 @@ is unchanged; run `apps/web` separately when testing local signup changes.
 Linux”. It offers both published installers, Apple silicon DMG and x86_64
 AppImage, with the visitor's platform first as the primary button; other
 browsers list macOS first, and Windows visitors are pointed to the web app.
-It searches recent stable GitHub releases for each installer, skipping CLI-only
-releases and unfinished platform uploads.
-Verified direct installer URLs remain usable while loading and if the API fails;
-update these fallbacks in `desktopDownloads.ts` when retiring older installers.
-The separate “All releases” link opens GitHub, with the primary installer's
-release version displayed beneath it. Below the installers, the page describes
+The buttons link to `/download/mac` and `/download/linux`, which redirect to
+the current release's installers (`seo/download-redirects.json`), so the page
+never names a version or calls GitHub. The separate “All releases” link opens
+GitHub. Below the installers, the page describes
 the desktop, web, iOS, and Android apps.
 Phones are not offered the desktop download page: the main navigation hides
 its link below 768px, and the homepage rail that holds “Download for Desktop”
@@ -1143,7 +1141,7 @@ The build also runs `scripts/verify-docs-redirects.ts` against the permanent
 records in `apps/docs/docs.json`, the captured old-host sitemap, every current
 guide, Markdown export, and media file. Preserve the published URL baseline
 when adding redirects. `--origin=<static-preview-origin>` additionally checks
-HTTP responses. `seo/page-redirects.json` is the single map for retired website routes: local servers and CloudFront return 308 responses preserving queries and fragments, with static fallback pages for other hosts. Deploy the website stack with the site to activate edge records. The guides retain scoped styles for previews restored from the
+HTTP responses. `seo/page-redirects.json` is the single map for retired website routes: local servers and CloudFront return 308 responses preserving queries and fragments, with static fallback pages for other hosts. Deploy the website stack with the site to activate edge records. `seo/download-redirects.json` holds the stable desktop installer links (`/download/mac`, `/download/linux`): temporary 302s to the fixed-name assets on the `desktop-stable` GitHub release, served the same three ways. Link to these paths, never to a versioned installer. The guides retain scoped styles for previews restored from the
 live docs; these do not change the visual feature pages.
 
 ### Product comparison links
