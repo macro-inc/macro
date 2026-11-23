@@ -22,7 +22,7 @@ crowds out the helper text that does matter.
 Don't:
 
 - Under **Dictate**, "Type what you say into the message"; under **Voice
-  memo**, "Send a recording of your voice" (#11903 removed both).
+  memo**, "Send a recording of your voice" (the mic menu in #11903).
 - A tooltip "Open in channel" on the labelled **Open in channel** button; keep
   it only on the phone's icon-only form (#11651).
 
