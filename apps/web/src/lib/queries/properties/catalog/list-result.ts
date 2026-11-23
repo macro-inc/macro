@@ -38,34 +38,43 @@ export type CatalogListStamp = {
 
 /**
  * Follows a reader's results: stamps those that carry news (a server answer
- * or a local write), and keeps the server's refusal of the read until the
- * server answers it again. The cache republishes a list it still holds, with
- * no error, whenever a record it reads changes; a list the server refused
- * (its definition deleted, or no longer visible to the viewer) would come
- * back on screen from the cache. TanStack kept a refused read failed until
- * its next fetch.
+ * or a local write), and keeps the server's refusal of each read (each
+ * operation key) until the server answers that read successfully. The cache
+ * republishes a list it still holds, with no error, whenever a record it
+ * reads changes; a list the server refused (its definition deleted, or no
+ * longer visible to the viewer) would come back on screen from the cache.
+ * TanStack kept a refused read failed until its next successful fetch. A
+ * failure that reached no server neither sets nor clears a refusal.
  */
 export function createListedAt(): CatalogListStamp & {
   onResult(result: OperationResult<unknown, AnyVariables>): void;
 } {
   const [listedAt, setListedAt] = createSignal(0);
-  const [refusal, setRefusal] = createSignal<{
-    key: number;
-    error: CombinedError;
-  }>();
+  const [refusals, setRefusals] = createSignal<
+    ReadonlyMap<number, CombinedError>
+  >(new Map());
+  const update = (key: number, error: CombinedError | undefined) => {
+    const next = new Map(refusals());
+    if (error) next.set(key, error);
+    else if (!next.delete(key)) return;
+    setRefusals(next);
+  };
   return {
     listedAt,
     refusal(operationKey) {
-      const refused = refusal();
-      return refused && refused.key === operationKey ? refused.error : null;
+      if (operationKey === undefined) return null;
+      return refusals().get(operationKey) ?? null;
     },
     onResult(result) {
       const source = normalizedCacheResultMetadata(result)?.source;
       const key = result.operation.key;
-      if (result.error?.graphQLErrors.length)
-        setRefusal({ key, error: result.error });
-      else if (source === 'live-network' || refusal()?.key !== key)
-        setRefusal(undefined);
+      if (result.error?.graphQLErrors.length) update(key, result.error);
+      else if (
+        source === 'live-network' &&
+        !result.error &&
+        result.data != null
+      )
+        update(key, undefined);
       if (result.data == null || source === 'normalized-cache-hit') return;
       setListedAt(Date.now());
     },
