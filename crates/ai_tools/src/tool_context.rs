@@ -2059,6 +2059,7 @@ fn imported_entity_type(source: import::domain::models::ImportSource) -> model_e
             model_entity::EntityType::Document
         }
         ImportSource::Slack => model_entity::EntityType::Channel,
+        ImportSource::Hubspot => model_entity::EntityType::CrmCompany,
     }
 }
 
