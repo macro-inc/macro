@@ -1,0 +1,22 @@
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_0cc55d4013f523::t_465f0d08520f6e 47,49,64-65,67-71,80-83,89,91-109
+  s_0cc55d4013f523::t_fad8f7e594ee5c 110-132,134-149,261-266,268-269
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_0cc55d4013f523::t_4ba65379bfc189 2-4,557-561
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8dd0fafee098f3bd192427f75bdcd3b18793ed5f",
+  "prompts": {},
+  "sessions": {
+    "s_0cc55d4013f523": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca630804-2c38-4ccc-9ee3-17de52402d45",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

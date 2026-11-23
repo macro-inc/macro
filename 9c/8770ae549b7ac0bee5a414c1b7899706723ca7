@@ -1,0 +1,23 @@
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_0cc55d4013f523::t_8f6ac60443eb11 26-29,66,74-76
+crates/agent_permissions/AGENTS.md
+  s_0cc55d4013f523::t_af81ef8d8c3dc8 108-109
+docs/agent-guide/ai-chat.md
+  s_0cc55d4013f523::t_70d7ea00ea32dd 1835-1847,1854-1857,1864-1865
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9c8770ae549b7ac0bee5a414c1b7899706723ca7",
+  "prompts": {},
+  "sessions": {
+    "s_0cc55d4013f523": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca630804-2c38-4ccc-9ee3-17de52402d45",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
