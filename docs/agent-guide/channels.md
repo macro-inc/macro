@@ -280,8 +280,9 @@ it, and reads `Thinking` whenever the turn is running with no open run, before
 the first step or while the agent writes after one.
 Once a run closes, it folds to a `Used N tools` summary, with a caret after it
 on hover, that opens to compact rows like the session's tool rows: the label
-only. A failed or interrupted step looks like any other; the agent explains a
-failure in its reply.
+only. A failed or interrupted step looks like any other, and a program that
+failed or stopped without naming a step is left out of the line and the
+summary; the agent explains a failure in its reply.
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool

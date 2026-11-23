@@ -7,8 +7,9 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
 
-// An agent's reply in a channel thread: a sealed run with a failed step and
-// one the turn ended under, between two passages of its text.
+// An agent's reply in a channel thread: a sealed run with a failed step, one
+// the turn ended under, and two programs that named no step, between two
+// passages of its text.
 render(
   () => (
     <main class="mx-auto flex max-w-2xl flex-col gap-2 p-4 text-sm">
@@ -36,6 +37,9 @@ render(
               label: 'Read task',
               status: 'interrupted',
             },
+            // The fold's own rows for programs that named no step.
+            { id: 'e', label: 'A step failed', status: 'failed' },
+            { id: 'f', label: 'Step interrupted', status: 'interrupted' },
           ]}
         />
         <p>

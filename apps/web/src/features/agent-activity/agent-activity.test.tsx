@@ -119,13 +119,21 @@ it('folds a sealed run to a summary that opens to its steps, without the session
         { id: 't1', label: 'Ran', detail: 'cargo', status: 'completed' },
         { id: 't2', label: 'Read', detail: 'lib.rs', status: 'failed' },
         { id: 't3', label: 'Edit', detail: 'lib.rs', status: 'interrupted' },
+        { id: 't4', label: 'A step failed', detail: null, status: 'failed' },
+        {
+          id: 't5',
+          label: 'Step interrupted',
+          detail: null,
+          status: 'interrupted',
+        },
       ]}
       sealed
     />
   ));
   expect(live.acquired).toEqual([]);
   expect(view.queryAllByRole('listitem')).toEqual([]);
-  // Every step counts alike, and how one ended stays in the data.
+  // Every named step counts alike, and how one ended stays in the data; a
+  // program that named no step is left out.
   const summary = view.getByRole('button', { name: 'Used 3 tools' });
   expect(summary.querySelector('.text-failure')).toBeNull();
   summary.click();

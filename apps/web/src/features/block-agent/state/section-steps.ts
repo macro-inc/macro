@@ -39,7 +39,7 @@ const WORKING: SectionStep = {
  * it acted on, since only people who can read the session see this line. A
  * program reads as the operations its saved record has observed so far: its
  * receipt, and so its fold rows, only list them once it returns. A program
- * that failed without naming a step is left out, so the line stays on the
+ * that failed or stopped without naming a step is left out, so the line stays on the
  * step before it: the agent explains a failure in its reply.
  */
 export function sectionSteps(options: {
@@ -77,7 +77,11 @@ export function sectionSteps(options: {
   return steps.length > 0 ? steps : [WORKING];
 }
 
-/** A program's own row standing for no named step, once it failed. */
+/** A program's own row standing for no named step, once it failed or stopped. */
 function isUnnamedFailure(part: MessagePart, row: ActivityRow): boolean {
-  return isCodeExecution(part) && row.id === part.id && row.status === 'failed';
+  return (
+    isCodeExecution(part) &&
+    row.id === part.id &&
+    (row.status === 'failed' || row.status === 'interrupted')
+  );
 }

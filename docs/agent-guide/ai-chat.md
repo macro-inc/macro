@@ -1468,8 +1468,8 @@ tools**), and the expanded list shows a failed, timed out, or cancelled step
 like any other: the transcript never names a tool failure, and the agent
 explains one in its reply. A program that failed before reporting a step is
 one step. While the program runs, the group's live line names its observed
-operations; a program that fails without naming one leaves the line on the
-step before it. There is no
+operations; a program that fails or stops without naming one leaves the line
+on the step before it. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
 survives reload, and is capped at the first 128 requests. These are advisory

@@ -78,11 +78,12 @@ describe('sectionSteps', () => {
   it("leaves out a program's unnamed failure, keeping the step before it", () => {
     expect(
       sectionSteps({
-        parts: [call('a'), program('p'), program('q')],
+        parts: [call('a'), program('p'), program('q'), program('r')],
         rows: [
           row('a', 'Read', 'completed', 'a.rs'),
           row('p', 'A step failed', 'failed'),
           row('q:0', 'Update draft', 'failed'),
+          row('r', 'Step interrupted', 'interrupted'),
         ],
         observed: () => undefined,
         thinking: false,
