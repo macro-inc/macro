@@ -1,6 +1,7 @@
 import { firstOrAborted } from '@core/util/abort-signal';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import {
   type AnyVariables,
@@ -26,6 +27,8 @@ export async function queryChannelNetwork<
   signal?: AbortSignal
 ): Promise<{ data: TData; cached: Promise<void> }> {
   signal?.throwIfAborted();
+  // The session the read is sent under, to tell a refusal it caused.
+  const sentUnder = cacheSessionGeneration.capture();
   const settled = await firstOrAborted(
     pipe(
       getGraphqlSoupClient().query(document, variables, {
@@ -54,6 +57,10 @@ export async function queryChannelNetwork<
       ? await metadata.persistence
       : metadata.revision;
     if (revision === undefined) {
+      // The cache refuses records stamped with a session it has since left
+      // (startup's first owner proof): read again under the new one.
+      if (cacheSessionGeneration.capture() !== sentUnder)
+        throw new StaleCacheAuthorityError();
       throw new Error('channel query could not be cached');
     }
   };
