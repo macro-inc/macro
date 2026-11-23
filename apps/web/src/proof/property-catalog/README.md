@@ -86,9 +86,10 @@ retried page load happened.
   rows whose server sort key is equal swap: definitions by lowercased name,
   options by display order then value, and caller rows only when both sides'
   list, the one that caller derives its rows from (`CALLER_SOURCES` in `run.mjs`: the all, system or CRM export definitions listing, the tag sets, or a select editor's own option list), gives them the same key; an option without a key never ties). Tie
-  keys lowercase the way the server sorted that list: definitions with options
-  like Rust's `to_lowercase` (JavaScript's `toLowerCase`), plain definitions,
-  options and tag options like PostgreSQL's `LOWER` under its libc collation
+  keys lowercase the way the server sorted that list: definitions (both
+  listings, since #11212 sorts them alike) like Rust's `to_lowercase`
+  (JavaScript's `toLowerCase`), options and tag options like PostgreSQL's
+  `LOWER` under its libc collation
   (one code point at a time, so `İ` lowers to `i`). At the end the run asks
   PostgreSQL to lower the strings SQL-sorted keys were built from (up to
   200,000 distinct ones, NUL-free) and fails if any differs from the harness's

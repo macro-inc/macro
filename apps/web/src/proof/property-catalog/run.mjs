@@ -238,7 +238,8 @@ const sqlLower = (s) => {
   return out;
 };
 
-// Tie order. The server sorts definitions by lowercased display_name and
+// Tie order. The server sorts definitions by display_name lowercased in Rust
+// (both listings, with and without options), and
 // options by (display_order, number_value, LOWER(string_value)) (tag options:
 // display_order, LOWER(string_value)), with no tiebreaker, so rows whose keys
 // are equal come back in either order on both paths. Only those lists are
@@ -248,8 +249,7 @@ const rowId = (el) => (Array.isArray(el) ? (typeof el[0] === 'string' ? el[0] : 
 function defKey(e) {
   const d = e?.definition ?? e;
   if (!d || typeof d !== 'object' || typeof d.display_name !== 'string') return null;
-  // A definition with options (`{ definition, property_options }`) came from the Rust sort.
-  return e?.definition ? `d:${rustLower(d.display_name)}` : `d:${sqlLower(d.display_name)}`;
+  return `d:${rustLower(d.display_name)}`;
 }
 function optKey(o) {
   // REST options are snake case, REST tag options camel case.
