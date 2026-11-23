@@ -20,16 +20,13 @@ export type NativeUpdateStatus = Status &
   Partial<Pick<Snapshot, 'failedInstallVersion'>>;
 
 /**
- * True while the previous launch's failed install can be tried again: the
- * update is downloading again or is ready.
+ * True while the previous launch's failed install is being tried again: the
+ * update is downloading again or is ready. A check alone may find nothing to
+ * install, so it doesn't count.
  */
 export function retryingFailedInstall(status: NativeUpdateStatus): boolean {
   if (!status.failedInstallVersion) return false;
-  return (
-    status.status === 'Checking' ||
-    status.status === 'Downloading' ||
-    status.status === 'Ready'
-  );
+  return status.status === 'Downloading' || status.status === 'Ready';
 }
 
 export function nativeUpdateDescription(status: NativeUpdateStatus): string {

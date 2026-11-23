@@ -116,31 +116,24 @@ function runningBuild(): string {
 }
 
 /**
- * The update ready to apply, if any: a desktop app update that failed to
- * install last time (offered again once it has downloaded again), a
- * downloaded desktop app update, a downloaded web bundle in the desktop app,
- * or a newer web build.
+ * The update ready to apply, if any: a downloaded desktop app update (offered
+ * as a retry when it failed to install last time), a downloaded web bundle in
+ * the desktop app, or a newer web build. Otherwise, while a desktop app update
+ * that failed to install downloads again, a notice that it did.
  */
 export function useAppUpdate(): Accessor<AppUpdate | undefined> {
   const tauri = useTauri();
 
   return createMemo(() => {
     const native = tauri?.nativeUpdateStatus();
-    if (tauri && native && retryingFailedInstall(native)) {
-      const id = `native-failed:${native.failedInstallVersion}`;
-      if (native.status !== 'Ready') {
-        // A new id once it is ready, so the popover opens again for Try again.
-        return {
-          id: `${id}:downloading`,
-          ...UPDATE_COPY.nativeFailedDownloading,
-          busy: false,
-          waiting: true,
-          apply: () => {},
-        };
-      }
+    const retrying = native !== undefined && retryingFailedInstall(native);
+    // Keyed apart from the download notice below, so the popover opens again
+    // once Try again works.
+    const failedId = `native-failed:${native?.failedInstallVersion}`;
+    if (tauri && retrying && native.status === 'Ready') {
       const preparing = tauri.nativeUpdatePreparing();
       return {
-        id,
+        id: failedId,
         ...UPDATE_COPY.nativeFailed,
         ...(preparing && {
           description: UPDATE_COPY.nativePreparing.description,
@@ -185,6 +178,16 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
         busy: false,
         waiting: false,
         apply: web.reload,
+      };
+    }
+
+    if (retrying) {
+      return {
+        id: `${failedId}:downloading`,
+        ...UPDATE_COPY.nativeFailedDownloading,
+        busy: false,
+        waiting: true,
+        apply: () => {},
       };
     }
 

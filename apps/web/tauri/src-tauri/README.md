@@ -620,9 +620,13 @@ cache and excludes concurrent frontend OTA reloads. Neither update channel wipes
 user data. Mobile updates remain managed by the app stores. Debug, recording,
 branch, and `--no-default-features` builds do not auto-install native updates.
 
-When an install fails, the old app is still in place (the updater restores or
-never moves it). **Restart to update** then relaunches that version; a quit
-stays quit, because the person asked to quit. The next launch reads the
+When an install fails, **Restart to update** relaunches the version still
+installed; a quit stays quit, because the person asked to quit. The common
+failures (a read-only or translocated bundle, a declined admin prompt, a bad
+archive) leave the old app in place, and the AppImage updater restores its
+backup. On macOS the pinned updater keeps its backup of the old app in a
+temporary directory, so a failure after it moved the old app out can leave no
+app to relaunch; the app then just exits. The next launch reads the
 install record (see [update telemetry](#update-telemetry)), reports
 `install_failed`, and keeps the target version as `failedInstallVersion` in
 the status it gives the webview (`get_native_update_status`, generated as

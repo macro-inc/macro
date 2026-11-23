@@ -61,3 +61,15 @@ it('still offers a ready update from a binary that does not report failed instal
     dispose();
   });
 });
+
+it('says nothing about a failed install while a check may find nothing to retry', () => {
+  // Checks run every few hours and after each failed download.
+  tauri.status = () => ({
+    status: 'Checking',
+    failedInstallVersion: '2026.1119.1',
+  });
+  createRoot((dispose) => {
+    expect(useAppUpdate()()).toBeUndefined();
+    dispose();
+  });
+});
