@@ -8,8 +8,10 @@ const CEF_CONFIG = 'apps/web/tauri/desktop-cef/tauri.conf.json';
 const TARGETS = {
   'darwin-aarch64': { suffix: '-aarch64-darwin.app.tar.gz', required: true },
   'linux-x86_64': { suffix: '-x86_64-linux.AppImage', required: true },
-  // Present only when the Windows build was signed and released; a release
-  // without it keeps Windows users on their current version.
+  // Present only when the Windows build was signed and released. A release
+  // without it keeps Windows users on their current version until a later
+  // release includes Windows again; the feed holds one version for every
+  // target, so it cannot point Windows at an older release's installer.
   'windows-x86_64': { suffix: '-x86_64-windows-setup.exe', required: false },
 };
 

@@ -17,8 +17,9 @@ Set-StrictMode -Version Latest
 # Outputs: signed (the installer will be signed) and publish (it may reach the
 # release, the update feed and the download pages).
 
-# Microsoft.ArtifactSigning.Client 1.0.146 is the last release on .NET 8, which
-# rolls forward to newer runtimes; 1.0.147 and later need .NET 10.
+# Microsoft.ArtifactSigning.Client 1.0.146 is the last release on .NET 8; its
+# runtimeconfig sets rollForward to Major, so it also loads on newer runtimes.
+# 1.0.147 and later need .NET 10.
 $dlibVersion = '1.0.146'
 $dlibSha256 = '7761E5D8F31E54B764DA21D33CD8B0A2940E1B05526C7DFCB5E94B0431426F70'
 

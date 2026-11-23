@@ -27,7 +27,8 @@ if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)
 $commandKey = 'HKCU:\Software\Classes\macro\shell\open\command'
 if (-not (Test-Path $commandKey)) { throw 'The installer did not register the macro:// scheme' }
 $command = (Get-ItemProperty -Path $commandKey).'(default)'
-if ($command -notmatch '^"([^"]+\.exe)"') { throw "Unexpected macro:// command: $command" }
+# The callback URI must reach the app as its argument.
+if ($command -notmatch '^"([^"]+\.exe)"\s+"%1"$') { throw "Unexpected macro:// command: $command" }
 $app = $Matches[1]
 $installDir = Split-Path $app
 Write-Output "Installed $app"
@@ -57,44 +58,54 @@ try {
   if (-not $page) { throw 'No Macro page at https://tauri.localhost within 120 seconds' }
 
   # Wait for the app to render text: an origin the protocol handler rejects,
-  # or a bundle that fails to start, leaves the document empty.
+  # or a bundle that fails to start, leaves the document empty. Every socket
+  # call shares the deadline, so a page that stops answering fails the check
+  # instead of holding the job.
+  $timeout = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(90))
   $socket = [System.Net.WebSockets.ClientWebSocket]::new()
-  $socket.ConnectAsync([Uri]$page.webSocketDebuggerUrl, [Threading.CancellationToken]::None).Wait()
-  $expression = 'JSON.stringify({ href: location.href, state: document.readyState, text: (document.body ? document.body.innerText : "").trim().length })'
-  $result = $null
-  $id = 0
-  $deadline = (Get-Date).AddSeconds(90)
-  while ((Get-Date) -lt $deadline) {
-    if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) while its page loaded" }
-    $id++
-    $request = @{ id = $id; method = 'Runtime.evaluate'; params = @{ expression = $expression; returnByValue = $true } } | ConvertTo-Json -Compress -Depth 4
-    $bytes = [Text.Encoding]::UTF8.GetBytes($request)
-    $socket.SendAsync([ArraySegment[byte]]::new($bytes), 'Text', $true, [Threading.CancellationToken]::None).Wait()
-    $reply = $null
-    while (-not $reply) {
-      $message = [IO.MemoryStream]::new()
-      do {
-        $buffer = [byte[]]::new(65536)
-        $receive = $socket.ReceiveAsync([ArraySegment[byte]]::new($buffer), [Threading.CancellationToken]::None)
-        $receive.Wait()
-        $message.Write($buffer, 0, $receive.Result.Count)
-      } while (-not $receive.Result.EndOfMessage)
-      $frame = [Text.Encoding]::UTF8.GetString($message.ToArray()) | ConvertFrom-Json
-      # Skip events; only our reply carries our id.
-      if ($frame.PSObject.Properties['id'] -and $frame.id -eq $id) { $reply = $frame }
+  try {
+    $expression = 'JSON.stringify({ href: location.href, state: document.readyState, text: (document.body ? document.body.innerText : "").trim().length })'
+    $result = $null
+    $loaded = $false
+    $id = 0
+    try {
+      $socket.ConnectAsync([Uri]$page.webSocketDebuggerUrl, $timeout.Token).Wait()
+      while (-not $loaded -and -not $timeout.IsCancellationRequested) {
+        if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) while its page loaded" }
+        $id++
+        $request = @{ id = $id; method = 'Runtime.evaluate'; params = @{ expression = $expression; returnByValue = $true } } | ConvertTo-Json -Compress -Depth 4
+        $bytes = [Text.Encoding]::UTF8.GetBytes($request)
+        $socket.SendAsync([ArraySegment[byte]]::new($bytes), 'Text', $true, $timeout.Token).Wait()
+        $reply = $null
+        while (-not $reply) {
+          $message = [IO.MemoryStream]::new()
+          do {
+            $buffer = [byte[]]::new(65536)
+            $receive = $socket.ReceiveAsync([ArraySegment[byte]]::new($buffer), $timeout.Token)
+            $receive.Wait()
+            $message.Write($buffer, 0, $receive.Result.Count)
+          } while (-not $receive.Result.EndOfMessage)
+          $frame = [Text.Encoding]::UTF8.GetString($message.ToArray()) | ConvertFrom-Json
+          # Skip events; only our reply carries our id.
+          if ($frame.PSObject.Properties['id'] -and $frame.id -eq $id) { $reply = $frame }
+        }
+        # An error reply (the page navigating or reloading mid-evaluation) has
+        # no value; try again.
+        if ($reply.PSObject.Properties['result'] -and $reply.result.result.PSObject.Properties['value']) {
+          $result = $reply.result.result.value | ConvertFrom-Json
+          $loaded = $result.state -eq 'complete' -and $result.text -gt 0 -and $result.href -like 'https://tauri.localhost/*'
+        }
+        if (-not $loaded) { Start-Sleep -Seconds 2 }
+      }
+    } catch {
+      if (-not $timeout.IsCancellationRequested) { throw }
     }
-    # An error reply (the page navigating or reloading mid-evaluation) has no
-    # value; try again.
-    if ($reply.PSObject.Properties['result'] -and $reply.result.result.PSObject.Properties['value']) {
-      $result = $reply.result.result.value | ConvertFrom-Json
-      if ($result.state -eq 'complete' -and $result.text -gt 0) { break }
-    }
-    Start-Sleep -Seconds 2
+    if (-not $loaded) { throw "Macro's page did not load at https://tauri.localhost within 90 seconds: $($result | ConvertTo-Json -Compress)" }
+    Write-Output "Page loaded: $($result | ConvertTo-Json -Compress)"
+  } finally {
+    $socket.Dispose()
+    $timeout.Dispose()
   }
-  if (-not $result -or $result.text -eq 0) { throw "Macro's page rendered nothing: $($result | ConvertTo-Json -Compress)" }
-  if ($result.href -notlike 'https://tauri.localhost/*') { throw "Macro's page left the app origin: $($result.href)" }
-  Write-Output "Page loaded: $($result | ConvertTo-Json -Compress)"
-  $socket.Dispose()
 
   Start-Sleep -Seconds 5
   if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) after loading" }
