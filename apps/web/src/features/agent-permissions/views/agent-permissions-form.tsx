@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { beginInteraction } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { queryReadyGate } from '@queries/gate';
@@ -109,7 +110,8 @@ function ModeTabs(props: {
       value={props.value}
       disabled={props.disabled}
       size="sm"
-      touch="segmented"
+      // The two labels are long: on a phone they wrap rather than clip.
+      wrap={isTouchDevice()}
       onChange={props.onChange}
     />
   );
