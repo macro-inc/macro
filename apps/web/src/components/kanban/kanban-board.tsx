@@ -322,8 +322,10 @@ function Columns(props: {
     // rewrites them in place.
     const offset = virtualizer.scrollOffset ?? 0;
     const visible = viewport?.clientWidth ?? 0;
+    // At the end as the viewport was: it may narrow in the same layout.
     const atEnd =
-      offset > 0 && offset + visible >= virtualizer.getTotalSize() - 1;
+      offset > 0 &&
+      offset + (shown || visible) >= virtualizer.getTotalSize() - 1;
     const item = virtualizer.getVirtualItemForOffset(offset);
     const lane = item
       ? item.index + (offset - item.start) / (item.size + 16)

@@ -257,6 +257,42 @@ test('keeps a card being edited when the pane narrows as the text grows', async 
   await expect.poll(inside).toBe(true);
 });
 
+test('keeps the end in view when the pane narrows as the text grows', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1800, height: 900 });
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  await viewport.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  const end = page.getByRole('region', { name: 'New group' });
+  await expect(end).toBeInViewport({ ratio: 1 });
+  // Both in one layout, as when a split opens beside the board.
+  await page.evaluate(() => {
+    document.body.style.width = '1280px';
+    document.documentElement.style.fontSize = '20px';
+  });
+  await expect
+    .poll(() => viewport.evaluate((element) => element.clientWidth))
+    .toBeLessThanOrEqual(1280);
+  const shortOfEnd = () =>
+    viewport.evaluate((element) =>
+      Math.round(element.scrollWidth - element.scrollLeft - element.clientWidth)
+    );
+  await expect.poll(shortOfEnd).toBeLessThanOrEqual(1);
+  const [column, box] = await Promise.all([
+    end.boundingBox(),
+    viewport.boundingBox(),
+  ]);
+  expect(column && box && column.x + column.width <= box.x + box.width).toBe(
+    true
+  );
+});
+
 test.describe('on a phone', () => {
   test.use({
     isMobile: true,
