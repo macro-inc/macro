@@ -266,8 +266,11 @@ impl<G: MessageRealtime, L: ChannelMessageChangeLoader, P: ChannelTimelineUpdate
         event: &MessageEvent,
         users: HashSet<String>,
     ) -> Result<(), rootcause::Report> {
-        let sent = self.realtime.send(event, users.clone()).await;
-        let published = self.publish_update(event, users).await;
+        // The live update waits on neither the gateway call nor the reverse.
+        let (sent, published) = futures::join!(
+            self.realtime.send(event, users.clone()),
+            self.publish_update(event, users)
+        );
         sent.and(published)
     }
 }
