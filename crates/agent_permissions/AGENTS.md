@@ -105,8 +105,8 @@ reads the viewer's. A new surface goes in this table with its flag-off test.
 | Web: Permissions on Your agents rows (inline panel), the editor's Permissions section, `requestAgentPermissions` links | `Agents.tsx` (`useAgentPermissionsFlag`, `useAgentPermissionsAvailable`) | hidden; an open panel closes; a link waits | `Agents.test.tsx` (`permissions`) |
 | Web: ShowPermissions card | `ShowPermissionsPart` | a plain row, nothing read | `ShowPermissionsPart.test.tsx` |
 | Web: blocked card | `BlockedPermissionsNotice` | the card without Review permissions, nothing read | `blocked-permissions-notice.test.tsx` |
-| Web: approval card | `PermissionApprovalRequest` | still answerable (a run waits on it), no permissions link, nothing read | `PermissionApprovalRequest.test.tsx` |
-| Web: declined row, Blocked step, answered-hold row | `CodeExecutionPart`, `CodeExecutionToolCall`, `ToolApprovalPart` | data only a gated run makes | — |
+| Web: approval card docked above the composer | `PermissionApprovalRequest` | still answerable (a run waits on it), no Edit permissions, nothing read | `PermissionApprovalRequest.test.tsx` |
+| Web: denied row, Blocked step | `CodeExecutionPart`, `CodeExecutionToolCall` | data only a gated run makes | — |
 
 Not flagged, by design: the migrations (tables), the registry
 (`agent_permission_registry`, data), the reserved `macro-sdk` app slug

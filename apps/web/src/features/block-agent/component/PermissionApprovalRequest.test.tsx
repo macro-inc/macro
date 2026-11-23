@@ -34,20 +34,10 @@ const REQUEST: HeldToolApproval = {
 };
 
 const viewer = vi.hoisted(() => ({ id: 'macro|dana@example.com' }));
+const SOURCE = 'await tools.email.send_message({ body: {} })';
+// The held program; a test may add a module.
+const held = vi.hoisted(() => ({ module: undefined as string | undefined }));
 const answer = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
-const JS_TOOLS_PROGRAM = {
-  source: 'await tools.email.send_message({ body: {} })',
-  language: 'js_tools',
-};
-// The held program; each test may swap in another language's.
-const held = vi.hoisted(() => ({
-  program: { source: '', language: '' } as {
-    source: string;
-    language: string;
-    module?: string;
-  },
-}));
-
 vi.mock('../context/AgentSessionContext', () => ({
   useOptionalAgentSession: () => ({
     sessionId: () => 'session-1',
@@ -61,12 +51,9 @@ vi.mock('../context/AgentSessionContext', () => ({
             kind: 'tool_approval',
             approvalId: 'approval-1',
             arguments: {
-              source: held.program.source,
-              module: held.program.module,
-              permission: {
-                language: held.program.language,
-                operations: [SEND],
-              },
+              source: 'await tools.email.send_message({ body: {} })',
+              module: held.module,
+              permission: { language: 'js_tools', operations: [SEND] },
             },
           },
         ],
@@ -115,7 +102,7 @@ function renderRequest() {
 beforeEach(() => {
   queryClient.clear();
   viewer.id = 'macro|dana@example.com';
-  held.program = JS_TOOLS_PROGRAM;
+  held.module = undefined;
   flags.permissions = true;
   client.session.mockResolvedValue(
     ok({ agentId: 'agent-1', canEdit: true, groups: [], rules: [] })
@@ -128,61 +115,104 @@ afterEach(() => {
 });
 
 describe('PermissionApprovalRequest', () => {
-  it('asks the approver, listing what the program may do', async () => {
+  it('asks the approver in one sentence, accenting what it would do', () => {
     renderRequest();
-    expect(screen.getByText('Approval needed')).toBeTruthy();
-    expect(
-      screen.getByText('Scout wants to run a program that may:')
-    ).toBeTruthy();
-    expect(screen.getByText('Send message')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Allow for this session' })
+    const request = screen.getByRole('region', {
+      name: 'Permission approval request',
+    });
+    expect(request.textContent).toContain('Allow Scout to send email?');
+    const accented = [...request.querySelectorAll('.text-accent')].map(
+      (span) => span.textContent
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    expect(accented).toEqual(['send', 'email']);
+  });
+
+  it('answers once, for the session, or no', () => {
+    renderRequest();
+    fireEvent.click(screen.getByRole('button', { name: 'Allow once' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Allow in this session' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
     expect(answer.mock.calls).toEqual([
       ['approval-1', 'approve'],
       ['approval-1', 'approve_and_remember'],
       ['approval-1', 'deny'],
     ]);
+  });
 
+  it('keeps View program, then Deny and Edit permissions, then the Allows', async () => {
+    renderRequest();
+    await screen.findByRole('button', { name: 'Edit permissions' });
+    expect(
+      screen.getAllByRole('button').map((button) => button.textContent)
+    ).toEqual([
+      'View program',
+      'Deny',
+      'Edit permissions',
+      'Allow once',
+      'Allow in this session',
+    ]);
+    expect(
+      screen
+        .getByRole('button', { name: 'Allow in this session' })
+        .getAttribute('data-variant')
+    ).toBe('primary');
+  });
+
+  it('opens the agent’s permissions in settings from Edit permissions', async () => {
+    renderRequest();
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Scout’s permissions' })
+      await screen.findByRole('button', { name: 'Edit permissions' })
     );
     expect(settings.openSettingsInSplit).toHaveBeenCalledWith('Agents');
+  });
+
+  it('offers Edit permissions only to someone who may edit the agent', async () => {
+    client.session.mockResolvedValue(
+      ok({ agentId: 'agent-1', canEdit: false, groups: [], rules: [] })
+    );
+    renderRequest();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(screen.queryByRole('button', { name: 'Edit permissions' })).toBe(
+      null
+    );
+    expect(screen.getByRole('button', { name: 'Allow once' })).toBeTruthy();
   });
 
   it('stays answerable without reading permissions while the flag is off', async () => {
     flags.permissions = false;
     renderRequest();
-    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Allow once' }));
     expect(answer).toHaveBeenCalledWith('approval-1', 'approve');
     // Give a session read the chance to land: there must be none.
     await Promise.resolve();
     expect(client.session).not.toHaveBeenCalled();
     expect(
-      screen.queryByRole('button', { name: 'Scout’s permissions' })
+      screen.queryByRole('button', { name: 'Edit permissions' })
     ).toBeNull();
   });
 
-  it('shows the program on request', () => {
+  it('shows the program and what it may call on request', () => {
     renderRequest();
+    expect(screen.queryByText(SOURCE)).toBeNull();
     const toggle = screen.getByRole('button', { name: 'View program' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(toggle);
-    expect(screen.getByText(JS_TOOLS_PROGRAM.source)).toBeTruthy();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText(SOURCE)).toBeTruthy();
+    expect(screen.getByText('Send message')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide program' }));
+    expect(screen.queryByText(SOURCE)).toBeNull();
   });
 
   it('shows the program and its module, each named', () => {
-    held.program = {
-      ...JS_TOOLS_PROGRAM,
-      module: 'export const greeting = "hello";',
-    };
+    held.module = 'export const greeting = "hello";';
     renderRequest();
     fireEvent.click(screen.getByRole('button', { name: 'View program' }));
     expect(screen.getByText('Program')).toBeTruthy();
-    expect(screen.getByText(JS_TOOLS_PROGRAM.source)).toBeTruthy();
+    expect(screen.getByText(SOURCE)).toBeTruthy();
     expect(screen.getByText('Module, with no network')).toBeTruthy();
     expect(screen.getByText('export const greeting = "hello";')).toBeTruthy();
   });
@@ -192,12 +222,11 @@ describe('PermissionApprovalRequest', () => {
     renderRequest();
     expect(screen.getByText('Waiting for Dana to approve')).toBeTruthy();
     expect(
-      screen.getByText(
-        "Scout wants to run a program with Dana's access that may:"
-      )
+      screen.getByText('Scout wants to send email with Dana’s access.')
     ).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('button', { name: 'Allow once' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
     expect(answer).toHaveBeenCalledWith('approval-1', 'cancel');
   });
 });

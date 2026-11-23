@@ -37,6 +37,7 @@ import { useOpenPromptOrigin } from '../open-prompt-origin';
 import { isCodeModeSupportCall } from '../state/code-mode-support';
 import { isControlMessage } from '../state/control-message';
 import { isNotificationMessage } from '../state/notification-message';
+import { isPermissionHold } from '../state/permission-approval';
 import { agentContextText, promptOrigin } from '../state/prompt-origin';
 import { sectionSteps } from '../state/section-steps';
 import { thoughtIsStreaming } from '../state/thought-streaming';
@@ -248,7 +249,12 @@ function ToolGroupPart(props: {
     parts()
       .map((part, offset) => ({ part, index: props.start + offset }))
       // A blank line between calls joins the run but has nothing to show.
-      .filter(({ part }) => !isCodeModeSupportCall(part) && !isBlankText(part));
+      .filter(
+        ({ part }) =>
+          !isCodeModeSupportCall(part) &&
+          !isBlankText(part) &&
+          !isPermissionHold(part)
+      );
   const renderParts = () => (
     <Index each={shownParts()}>
       {(shown) => (

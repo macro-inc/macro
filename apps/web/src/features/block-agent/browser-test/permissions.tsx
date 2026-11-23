@@ -1,6 +1,7 @@
 // An agent session where permissions shaped the turn: a program blocked by a
-// Never setting, a hold answered for the session, a ShowPermissions card, a
-// declined program, and a hold waiting above the composer. The harness's
+// Never setting, a hold answered for the session (no row of its own), a
+// ShowPermissions card, a denied program, and a hold docked above the
+// composer. The harness's
 // permission routes answer from memory. `?viewer=other` shows it to someone
 // who can't edit the agent and isn't the approver; `?theme=light` lights it.
 // The programs are JS tools ones (opencode's JavaScript dialect), with saved
@@ -553,8 +554,11 @@ function SessionFixture() {
           {(request) => <ToolApprovalRequest request={request} />}
         </For>
         {/* Stands in for the composer, so the hold sits where it does in
-            the app. */}
-        <div class="rounded-3xl border border-edge-muted bg-panel px-5 py-4 text-sm text-ink-extra-muted">
+            the app: right above it, at its width, 8px apart. */}
+        <div
+          data-testid="composer"
+          class="rounded-[28px] border border-edge-muted bg-panel px-5 py-3 text-sm text-ink-extra-muted"
+        >
           Message the agent, @mention anything
         </div>
       </div>

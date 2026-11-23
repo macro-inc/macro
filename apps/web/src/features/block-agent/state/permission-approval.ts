@@ -7,23 +7,33 @@
  */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
-import type {
-  ExecutionPermission,
-  GatedOperation,
-  ShowPermissionsSelection,
+import {
+  type ExecutionPermission,
+  type GatedOperation,
+  PermissionAction,
+  type ShowPermissionsSelection,
+  ToolPermissionOrigin,
+  ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
 import { z } from 'zod';
 
 /** The approval server slug of a hold on the agent's permissions. */
 export const PERMISSION_HOLD_SLUG = 'macro-sdk';
 
-const PERMISSION_ACTION = z.enum([
-  'create',
-  'read',
-  'update',
-  'destroy',
-  'send',
-]);
+/**
+ * A hold on the agent's permissions in the transcript. It shows nothing
+ * there: the pending one docks above the composer, and once answered the
+ * program's own row says whether it ran.
+ */
+export function isPermissionHold(part: MessagePart | undefined): boolean {
+  return (
+    part?.kind === 'tool_approval' && part.serverSlug === PERMISSION_HOLD_SLUG
+  );
+}
+
+// The generated enums, so a value the server adds (an action default's
+// `action` origin) parses here too instead of hiding the whole hold.
+const PERMISSION_ACTION = z.enum(PermissionAction);
 
 const gatedOperationSchema = z.object({
   service: z.string(),
@@ -32,8 +42,8 @@ const gatedOperationSchema = z.object({
   group: z.string(),
   groupName: z.string(),
   action: PERMISSION_ACTION.nullish(),
-  state: z.enum(['always', 'ask', 'never']),
-  origin: z.enum(['tool', 'group_action', 'default', 'session']),
+  state: z.enum(ToolPermissionState),
+  origin: z.enum(ToolPermissionOrigin),
 }) satisfies z.ZodType<GatedOperation>;
 
 const permissionHoldSchema = z.object({
@@ -87,7 +97,7 @@ const showPermissionsResultSchema = z.object({
 });
 
 export type PermissionHold = {
-  /** The program, for "View program". */
+  /** The program. */
   source?: string;
   /** The TypeScript module beside it, shown with it; it reaches no network. */
   module?: string;

@@ -44,11 +44,9 @@ async function shot(
 }
 
 // JS tools programs, whose saved records the cards load.
-const LANGUAGES = [
-  { language: 'js_tools', program: 'tools.email.send_message' },
-] as const;
+const LANGUAGES = [{ language: 'js_tools' }] as const;
 
-for (const { language, program } of LANGUAGES) {
+for (const { language } of LANGUAGES) {
   test.describe(`${language} programs`, () => {
     test('a blocked program says what was refused and links to the permissions', async ({
       page,
@@ -63,15 +61,15 @@ for (const { language, program } of LANGUAGES) {
         'Nothing ran. This program could delete email, and Scout is never allowed to.'
       );
       await expect(blocked).toContainText('Delete email filter');
-      // A blocked program stands alone; a declined one is a quiet row in its
-      // tool group, which doesn't count it as failed.
-      await page.getByRole('button', { name: 'Used 1 tool' }).click();
-      await expect(
-        page.getByText('Didn’t run a program that may send email').first()
-      ).toBeVisible();
-      await expect(
-        page.getByText('Allowed for this session by you')
-      ).toBeVisible();
+      // A blocked program stands alone; a denied one is a failed row in its
+      // tool group, and an allowed hold has no row of its own.
+      // The folded run says one step failed.
+      await page.getByRole('button', { name: /Used 1 tool.*1 failed/ }).click();
+      const denied = page.locator('[data-tool-status="failed"]', {
+        hasText: 'Send email',
+      });
+      await expect(denied).toContainText('Denied');
+      await expect(page.getByText('Allowed for this session')).toHaveCount(0);
       await blocked.getByRole('button', { name: 'Review permissions' }).click();
       await expect(page.locator('body')).toHaveAttribute(
         'data-opened-settings',
@@ -80,28 +78,88 @@ for (const { language, program } of LANGUAGES) {
       await shot(page, `blocked-${language}`, isMobile);
     });
 
-    test('the approver approves a held program', async ({ page, isMobile }) => {
+    test('the approver allows a held program from the dock', async ({
+      page,
+      isMobile,
+    }) => {
       await page.goto(fixture(`language=${language}`));
       const request = page.getByRole('region', {
         name: 'Permission approval request',
       });
-      await expect(request).toContainText('Approval needed');
       await expect(request).toContainText(
-        'Scout wants to run a program that may:'
+        'Allow Scout to send email and edit documents and projects?'
       );
-      await expect(request).toContainText('Rename document');
+      await expect(request.locator('.text-accent')).toHaveText([
+        'send',
+        'email',
+        'edit',
+        'documents',
+        'projects',
+      ]);
+      // Docked right above the composer, at its width, 8px apart.
+      const card = await request.boundingBox();
+      const composer = await page.getByTestId('composer').boundingBox();
+      if (!card || !composer) throw new Error('Not laid out');
+      expect(Math.round(card.width)).toBe(Math.round(composer.width));
+      expect(Math.round(composer.y - (card.y + card.height))).toBe(8);
+      // Out of the transcript, which scrolls on its own.
+      await expect(
+        page
+          .getByRole('region', { name: 'Agent session' })
+          .getByRole('region', {
+            name: 'Permission approval request',
+          })
+      ).toHaveCount(0);
+
+      const deny = await request
+        .getByRole('button', { name: 'Deny' })
+        .boundingBox();
+      const allow = await request
+        .getByRole('button', { name: 'Allow in this session' })
+        .boundingBox();
+      if (!deny || !allow) throw new Error('Not laid out');
+      if (isMobile) {
+        // Stacked: the Allows first, then Deny and Edit permissions.
+        expect(allow.y + allow.height).toBeLessThanOrEqual(deny.y);
+      } else {
+        expect(Math.round(allow.y + allow.height / 2)).toBe(
+          Math.round(deny.y + deny.height / 2)
+        );
+        expect(allow.x).toBeGreaterThan(deny.x);
+      }
+      // Nothing in the card runs past its edge.
+      const fits = await request.evaluate(
+        (region) => region.scrollWidth <= region.clientWidth
+      );
+      expect(fits).toBe(true);
+      await shot(page, `approval-${language}`, isMobile);
+
+      // What is approved, on request: the asked operations and the program.
       await request.getByRole('button', { name: 'View program' }).click();
-      await expect(request).toContainText(program);
-      // Long lines wrap, so nothing the person approves is cut off.
+      await expect(request).toContainText('Rename document');
+      await expect(request).toContainText('tools.email.send_message');
       const source = request.locator('pre');
       expect(
         await source.evaluate((pre) => pre.scrollWidth <= pre.clientWidth)
       ).toBe(true);
-      await shot(page, `approval-${language}`, isMobile);
+      await shot(page, `approval-program-${language}`, isMobile);
       await request.getByRole('button', { name: 'Hide program' }).click();
-      await request
-        .getByRole('button', { name: 'Approve', exact: true })
-        .click();
+
+      await request.getByRole('button', { name: 'Edit permissions' }).click();
+      await expect(page.locator('body')).toHaveAttribute(
+        'data-opened-settings',
+        'Agents'
+      );
+      await request.getByRole('button', { name: 'Allow once' }).click();
+      await expect(request).toHaveCount(0);
+    });
+
+    test('a denied hold clears the dock', async ({ page }) => {
+      await page.goto(fixture(`language=${language}`));
+      const request = page.getByRole('region', {
+        name: 'Permission approval request',
+      });
+      await request.getByRole('button', { name: 'Deny' }).click();
       await expect(request).toHaveCount(0);
     });
   });
@@ -213,10 +271,15 @@ test('someone else sees the cards read-only and can only stop waiting', async ({
     name: 'Permission approval request',
   });
   await expect(request).toContainText('Waiting for Dana to approve');
+  await expect(request).toContainText(
+    'Scout wants to send email and edit documents and projects with Dana’s access.'
+  );
+  await expect(request.getByRole('button', { name: 'Allow once' })).toHaveCount(
+    0
+  );
   await expect(
-    request.getByRole('button', { name: 'Approve', exact: true })
-  ).toHaveCount(0);
-  await expect(request.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    request.getByRole('button', { name: 'Cancel request' })
+  ).toBeVisible();
   await expect(
     page.getByText('Only people who can edit Scout can change these.')
   ).toBeVisible();

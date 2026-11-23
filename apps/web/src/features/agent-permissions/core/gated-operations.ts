@@ -20,6 +20,8 @@ export type GatedGroup = {
 export type GatedThing = {
   /** `null` for an operation the registry does not classify. */
   action: PermissionAction | null;
+  /** The registry group (entity) id. */
+  group: string;
   groupName: string;
 };
 
@@ -74,7 +76,9 @@ export function gatedThings(
         (thing) =>
           thing.action === action && thing.groupName === group.groupName
       );
-      if (!seen) things.push({ action, groupName: group.groupName });
+      if (!seen) {
+        things.push({ action, group: group.group, groupName: group.groupName });
+      }
     }
   }
   return things;

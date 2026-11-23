@@ -1,7 +1,9 @@
 export { GatedOperationList } from './components/gated-operation-list';
 export {
   describeGatedThings,
-  permissionRunTitle,
+  gatedThingsTitle,
+  type PhrasePart,
+  permissionRequestParts,
 } from './components/gated-phrases';
 export { gatedFocus } from './core/gated-operations';
 export type { PermissionFocus } from './core/model';

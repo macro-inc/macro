@@ -58,6 +58,16 @@ describe('parsePermissionHold', () => {
     ).toEqual({ source, operations: [SEND] });
   });
 
+  it('reads an operation whose state comes from its action’s default', () => {
+    const fromDefault = { ...SEND, origin: 'action' };
+    expect(
+      parsePermissionHold({
+        source: 'await tools.email.send_message({ body: {} })',
+        permission: { operations: [fromDefault] },
+      })?.operations
+    ).toEqual([fromDefault]);
+  });
+
   it('is not a permission hold without operations', () => {
     expect(parsePermissionHold({ path: '/x' })).toBeUndefined();
     expect(parsePermissionHold(null)).toBeUndefined();

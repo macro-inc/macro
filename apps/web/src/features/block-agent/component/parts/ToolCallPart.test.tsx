@@ -1675,7 +1675,7 @@ describe('code execution results', () => {
     expect(rendered.container.textContent).not.toContain(jsToolsSource);
   });
 
-  it('shows a declined JS tools program as a quiet row', () => {
+  it('shows a denied JS tools program as a failed row that says Denied', () => {
     codeQuery.record = {
       executionId,
       source: jsToolsSource,
@@ -1692,10 +1692,14 @@ describe('code execution results', () => {
     const rendered = render(() => (
       <ToolCallPart part={jsToolsPart()} context={context(false)} />
     ));
-    expect(rendered.getByTestId('title').textContent).toBe(
-      'Didn’t run a program that may delete email'
-    );
-    expect(rendered.getByTestId('trailing').textContent).toBe('Declined');
+    expect(rendered.getByTestId('title').textContent).toBe('Delete email');
+    expect(rendered.getByTestId('trailing').textContent).toBe('Denied');
+    expect(
+      rendered
+        .getByTestId('title')
+        .closest('[data-status]')
+        ?.getAttribute('data-status')
+    ).toBe('failed');
     expect(rendered.queryByTestId('blocked-by-permissions')).toBeNull();
   });
 

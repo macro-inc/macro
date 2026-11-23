@@ -70,12 +70,13 @@ export function useCodeExecutionRecord(
         ...(saved?.calls ?? []).map((call) => call.status),
       ],
       ended: ended(),
-      // A program its permissions stopped didn't fail: it never ran, and
-      // its own row says why.
+      // A program its permissions blocked didn't fail: it never ran, and
+      // its own card says why. One a person denied is a failed step, so a
+      // folded run still says so.
       cancelled:
         (saved?.status ?? receipt()?.status) === 'cancelled' ||
-        parseExecutionPermission(saved?.permission ?? receipt()?.permission) !==
-          undefined,
+        parseExecutionPermission(saved?.permission ?? receipt()?.permission)
+          ?.outcome === 'blocked',
     });
   };
 
