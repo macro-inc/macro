@@ -14,6 +14,7 @@ import { usePosthog } from '@app/lib/analytics/posthog';
 import { useInterfaceLanguageSync } from '@app/lib/i18n/use-interface-language-sync';
 import { useCalendarCache } from '@app/lib/queries/calendar/graphql/use-calendar-cache';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
+import { useChannelPrewarm } from '@app/lib/queries/messages/local/use-channel-prewarm';
 import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { MacOSNotificationUpdateRequiredError } from '@app/lib/tauri/notification';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -133,6 +134,7 @@ export function AppProviders(props: ParentProps) {
     channelDirectory.complete() ? channelDirectory.channels() : undefined
   );
   useCalendarCache(() => userId() !== undefined);
+  useChannelPrewarm(() => userId() !== undefined);
   useWarmPromptDismissals(userId);
   useResumeFolderUploads(userId);
   useInterfaceLanguageSync();
