@@ -9,7 +9,7 @@ client = ["dep:reqwest"]
 default = []
 ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:anyhow"]
 postgres = ["dep:sqlx"]
-inbound = ["dep:axum", "dep:macro_authorization", "schema"]
+inbound = ["dep:axum", "dep:macro_authorization", "dep:agent_correlation", "dep:tokio", "schema"]
 schema = ["dep:utoipa"]
 calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id", "dep:reqwest"]
 
@@ -36,6 +36,8 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 calendar_events = { path = "../calendar_events", optional = true }
 teams = { path = "../teams", default-features = false, features = ["ports"], optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
+agent_correlation = { path = "../agent_correlation", optional = true }
+tokio = { workspace = true, optional = true, features = ["rt"] }
 
 [dev-dependencies]
 model_user = { path = "../model_user" }

@@ -77,9 +77,12 @@ can be counted as completed, but this alone is not evidence of attendance.
 
 ## Operational behavior
 
-A booking holds its host reservations before calling the provider. An uncertain
-provider write leaves the booking `failed` (or `processing` after a process crash),
-with reservations retained to avoid duplicate meetings. Durable operation intents, stable
+A booking holds its host reservations before calling the provider. The HTTP routes
+that book, approve, cancel, reschedule or change a booking run it on its own task, so
+a caller that hangs up mid-request (a dropped connection, a closed tab) still leaves
+it finished and saved within seconds; a retry of the same request returns it. An
+uncertain provider write leaves the booking `failed` (or `processing` after a process
+crash), with reservations retained to avoid duplicate meetings. Durable operation intents, stable
 provider creation IDs, pinned calendars, and version-fenced retries recover these states after
 five minutes. The calendar-service worker runs every 15 seconds and failures back off to an hour.
 A refusal decided before anything reaches the provider (no writable calendar, a read-only calendar,
