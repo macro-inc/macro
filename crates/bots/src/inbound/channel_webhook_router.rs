@@ -226,7 +226,7 @@ where
     };
     if super::axum_router::refuses_program_mint(attribution, &headers) {
         return Err(ChannelBotWebhookHandlerErr::Forbidden(
-            super::axum_router::PROGRAM_MINT_REFUSAL,
+            super::axum_router::program_mint_refusal(&headers),
         ));
     }
     let caller = caller_from_receipt(&access.entity_access_receipt)?;

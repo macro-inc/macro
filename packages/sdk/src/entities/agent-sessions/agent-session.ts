@@ -18,7 +18,11 @@ import type {
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import type { Agent } from '../agents/agent';
+import { Agent } from '../agents/agent';
+import {
+  type ToolPermissions,
+  toolPermissions,
+} from '../agents/tool-permissions';
 import type { Channel } from '../channels/channel';
 import { shareWithChannel } from '../channels/share';
 import { MacroEntity } from '../entity';
@@ -231,6 +235,23 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    */
   toolApprovalById(id: string): ToolApproval {
     return ToolApproval.byId(this.client, this, id);
+  }
+
+  /**
+   * This session's tool permissions. They are its agent's (for a built-in
+   * persona, the session owner's), plus any restrictions the agent put on
+   * itself for this session only (`sessionRules`).
+   *
+   * @readonly
+   * @flag enable-agent-permissions
+   */
+  async toolPermissions(): Promise<ToolPermissions> {
+    const view = unwrap(
+      await this.client.agentHarness.getAgentSessionToolPermissions({
+        path: { session_id: this.id },
+      }),
+    );
+    return toolPermissions(Agent.byId(this.client, view.agentId), view);
   }
 
   /**

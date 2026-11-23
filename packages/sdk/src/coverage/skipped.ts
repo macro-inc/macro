@@ -42,6 +42,15 @@ export const agentHarnessExcluded = [
   'startClaudeSignIn', // Computer account credentials are managed in the app.
   'getAgentVoices', // The agent voice picker is an admin app flow.
   'getAgentVoiceSample', // The agent voice picker is an admin app flow.
+  'resetAgentToolPermissions', // Person-only: refused for SDK and agent credentials.
+  'setAgentToolPermissions', // Person-only: refused for SDK and agent credentials.
+  'setAgentToolPermissionsSource', // Person-only: refused for SDK and agent credentials.
+  'detachAgentToolPermissions', // Person-only: refused for SDK and agent credentials.
+  'getAgentToolPermissionSources', // The settings page's source picker only, for now.
+  'getAgentToolPermissionPolicy', // The settings page's source preview only, for now.
+  'getTeamToolPermissions', // The settings page's team default only, for now.
+  'setTeamToolPermissions', // Person-only (team admins and owners): refused for SDK and agent credentials.
+  'resetTeamToolPermissions', // Person-only (team admins and owners): refused for SDK and agent credentials.
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =

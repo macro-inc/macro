@@ -7,7 +7,11 @@
  * Subagents and user tools stay outside groups so delegated work and user
  * interactions remain visible regardless of the surrounding tool traffic.
  * Tools with their own answer or session view always break the run, including
- * while their arguments are still arriving.
+ * while their arguments are still arriving. So do a program its permissions
+ * blocked (its card says what was refused and must stay in view) and a
+ * ShowPermissions call (its card holds live controls). A hold on the
+ * agent's permissions renders nothing in the transcript, so it never splits
+ * a run.
  *
  * Thoughts after a run's last call belong to the run, at the tail of the
  * message too: the run's live line says `Thinking` while the tail thought
@@ -24,6 +28,12 @@
  */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
+import { codeExecutionReceipt } from './code-execution';
+import {
+  isPermissionHold,
+  isShowPermissions,
+  parseExecutionPermission,
+} from './permission-approval';
 
 export type PartSegment = {
   kind: 'part' | 'tools';
@@ -76,10 +86,14 @@ function isGroupable(part: MessagePart | undefined): boolean {
   return (
     part?.kind === 'thought' ||
     isBlankText(part) ||
+    // A permission hold renders nothing, so it joins its program's run.
+    isPermissionHold(part) ||
     (part?.kind === 'tool_use' &&
       part.detail.kind !== 'subagent' &&
       part.detail.kind !== 'user_tool' &&
-      !rendersOwnView(part))
+      !rendersOwnView(part) &&
+      !isPermissionBlocked(part) &&
+      !isShowPermissions(part))
   );
 }
 
@@ -144,6 +158,18 @@ export function liveToolSegment(
         (part.status === 'pending' || part.status === 'running')
     );
   return callOut ? index : -1;
+}
+
+/**
+ * A program its permissions refused before it ran (an operation it may
+ * call is set to Never), known from the call's receipt.
+ */
+export function isPermissionBlocked(part: MessagePart): boolean {
+  if (!isCodeExecution(part)) return false;
+  const permission = parseExecutionPermission(
+    codeExecutionReceipt(part)?.permission
+  );
+  return permission?.outcome === 'blocked';
 }
 
 /** Only Macro's session-authenticated internal server may select this view. */

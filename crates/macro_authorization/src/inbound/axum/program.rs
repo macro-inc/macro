@@ -36,6 +36,21 @@ pub fn is_program_run(attribution: CredentialAttribution, headers: &HeaderMap) -
     attribution != CredentialAttribution::Person || headers.contains_key(CODE_EXECUTION_HEADER)
 }
 
+/// [`CODE_EXECUTION_HEADER`]'s value on a request from a JavaScript tools
+/// program (code mode's dialect, `tools.<service>.<operation>`); a
+/// TypeScript program sends `1`.
+pub const DIALECT_PROGRAM: &str = "js_tools";
+
+/// Whether a request comes from a program in code mode's dialect, as its
+/// [`CODE_EXECUTION_HEADER`] says, so a refusal can name the dialect's
+/// operations instead of the TypeScript SDK's. Anything else (a TypeScript
+/// program, an agent's own token, a person) is answered as today.
+pub fn from_dialect_program(headers: &HeaderMap) -> bool {
+    headers
+        .get(CODE_EXECUTION_HEADER)
+        .is_some_and(|value| value == DIALECT_PROGRAM)
+}
+
 /// The refusal a sign-in route gives a program: one that reads the code from
 /// the user's inbox would hold the account.
 pub const PROGRAM_SIGN_IN_REFUSAL: &str = "An agent's program cannot sign in to Macro: the sign-in code would give it the account. Tell the user to sign in themselves.";

@@ -21,7 +21,7 @@ use entity_access::{
 use macro_authorization::{
     CredentialAttribution, CredentialOrigin, MacroAuthorizationExtractor,
     MacroAuthorizationService, MacroAuthorizationState, MacroUserAuthentication, UserOnly,
-    is_agent_run,
+    from_dialect_program, is_agent_run,
 };
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::Deserialize;
@@ -85,7 +85,7 @@ impl IntoResponse for ApiError {
             ExternalChatError::Invalid(_) | ExternalChatError::CannotAdd(_) => {
                 StatusCode::BAD_REQUEST
             }
-            ExternalChatError::Forbidden | ExternalChatError::ConfirmationRequired => {
+            ExternalChatError::Forbidden | ExternalChatError::ConfirmationRequired { .. } => {
                 StatusCode::FORBIDDEN
             }
             ExternalChatError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
@@ -125,7 +125,9 @@ pub fn refuse_unconfirmed_program_send(
 ) -> Result<(), ApiError> {
     let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
     if is_agent_run(attribution, headers) && !confirmed {
-        return Err(ApiError(ExternalChatError::ConfirmationRequired));
+        return Err(ApiError(ExternalChatError::ConfirmationRequired {
+            dialect: from_dialect_program(headers),
+        }));
     }
     Ok(())
 }

@@ -245,6 +245,29 @@ fn a_program_cannot_create_an_event_the_user_has_not_seen() {
     assert!(refuse_program_create(CredentialAttribution::Person, &browser).is_ok());
 }
 
+/// A dialect program is refused in the dialect's terms; every other program
+/// with today's text.
+#[test]
+fn a_create_refusal_names_the_operations_of_the_programs_code_mode() {
+    let mut dialect = axum::http::HeaderMap::new();
+    dialect.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        macro_authorization::DIALECT_PROGRAM.parse().unwrap(),
+    );
+    let mut typescript = axum::http::HeaderMap::new();
+    typescript.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+
+    let refusal = refuse_program_create(CredentialAttribution::Agent, &dialect).unwrap_err();
+    assert_eq!(refusal.message, DIALECT_PROGRAM_CREATE_REFUSAL);
+    for headers in [typescript, axum::http::HeaderMap::new()] {
+        let refusal = refuse_program_create(CredentialAttribution::Agent, &headers).unwrap_err();
+        assert_eq!(refusal.message, PROGRAM_CREATE_REFUSAL);
+    }
+}
+
 #[test]
 fn an_owner_routine_code_step_creates_events_but_an_agent_program_does_not() {
     let mut code_step = axum::http::HeaderMap::new();

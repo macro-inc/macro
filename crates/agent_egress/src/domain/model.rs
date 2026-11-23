@@ -684,9 +684,12 @@ impl McpServerSlug {
     /// Rejects rather than repairs: the path-segment side of this is chosen
     /// by code the model wrote, and a slug that gets "cleaned up" into a
     /// different valid slug is a way to ask for a server other than the one
-    /// named. The charset is Pipedream's own for app slugs.
+    /// named. The charset is Pipedream's own for app slugs. The slug of a
+    /// hold on an agent's permissions is reserved: a connected app by that
+    /// name could pass its own calls off as one.
     pub fn parse(segment: &str) -> Option<Self> {
         let valid = !segment.is_empty()
+            && segment != crate::domain::approval::SDK_PERMISSION_SLUG
             && segment.chars().all(|character| {
                 character.is_ascii_lowercase()
                     || character.is_ascii_digit()

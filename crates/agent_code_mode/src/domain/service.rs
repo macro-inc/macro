@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use agent_session::domain::model::{AgentSession, AgentSessionId};
 use async_trait::async_trait;
-use code_execution::domain::{ContextShape, ExecuteRequest, Limits, Outcome, ProgramExecutor};
+use code_execution::domain::{
+    ContextShape, ExecuteRequest, Language, Limits, Outcome, ProgramExecutor,
+};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::Semaphore;
@@ -13,7 +15,7 @@ use super::*;
 
 /// Session-bound execution and reads. Inbound adapters supply authenticated facts.
 #[async_trait]
-pub trait SessionCodeMode: Send + Sync + 'static {
+pub trait SessionCodeMode: CodeModeKinds {
     /// Execute as the selected account, bound to the originating prompt's turn.
     async fn execute(
         &self,
@@ -32,6 +34,16 @@ pub trait SessionCodeMode: Send + Sync + 'static {
     ) -> Result<ExecutionRecord, CodeModeError>;
 }
 
+/// JavaScript tools programs, offered where the runner can run them and the
+/// agent permissions gate checks them.
+pub struct JsToolsPrograms {
+    /// The interpreter and catalog's fingerprint, recorded on every JS tools
+    /// execution.
+    pub fingerprint: String,
+    /// The per-owner rollout: agent permissions, the only flag on them.
+    pub rollout: Arc<dyn OwnerRollout>,
+}
+
 struct Inner {
     executor: Option<Arc<dyn ProgramExecutor>>,
     credentials: Arc<dyn ExecutionCredentials>,
@@ -39,6 +51,9 @@ struct Inner {
     turns: Arc<dyn ExecutionTurns>,
     images: Arc<dyn ModelImages>,
     admission: Arc<Semaphore>,
+    js_tools: Option<Arc<JsToolsPrograms>>,
+    /// Each recent turn's code-mode kind, as it was first resolved.
+    kinds: std::sync::Mutex<super::kinds::TurnKinds>,
 }
 
 /// Code-mode policy over interchangeable execution, credential, and storage capabilities.
@@ -62,6 +77,8 @@ impl CodeModeService {
             turns,
             images,
             admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
+            js_tools: None,
+            kinds: std::sync::Mutex::default(),
         }))
     }
 
@@ -99,10 +116,39 @@ impl CodeModeService {
         }
     }
 
+    /// Offer JavaScript tools programs to sessions whose owner has the
+    /// rollout. Wire it only where the permissions gate analyzes them.
+    pub fn with_js_tools(self, js_tools: JsToolsPrograms) -> Self {
+        Self(Arc::new(Inner {
+            executor: self.0.executor.clone(),
+            credentials: Arc::clone(&self.0.credentials),
+            store: Arc::clone(&self.0.store),
+            turns: Arc::clone(&self.0.turns),
+            images: Arc::clone(&self.0.images),
+            admission: Arc::clone(&self.0.admission),
+            js_tools: Some(Arc::new(js_tools)),
+            kinds: std::sync::Mutex::default(),
+        }))
+    }
+
+    /// The fingerprint of what a JS tools execution ran against: its
+    /// interpreter and catalog.
+    fn sdk_fingerprint(&self, language: ProgramLanguage) -> Option<String> {
+        match language {
+            ProgramLanguage::Javascript => None,
+            ProgramLanguage::JsTools => self
+                .0
+                .js_tools
+                .as_ref()
+                .map(|js_tools| js_tools.fingerprint.clone()),
+        }
+    }
+
     async fn run(
         &self,
         mut identity: ExecutionIdentity,
         execution: ExecutionId,
+        language: ProgramLanguage,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<(ExecutionReceipt, Option<MacroUserIdStr<'static>>), CodeModeError> {
@@ -111,12 +157,16 @@ impl CodeModeService {
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
             source: request.source.clone(),
+            module: request.module.clone(),
+            language,
+            sdk_fingerprint: self.sdk_fingerprint(language),
             status: ExecutionStatus::Running,
             result: None,
             error: None,
             calls: Vec::new(),
             activity: Vec::new(),
             activity_truncated: false,
+            permission: None,
         };
         match self.0.store.create(identity.session, &record).await {
             Ok(()) => {}
@@ -124,6 +174,8 @@ impl CodeModeService {
                 match self.0.store.get(identity.session, execution).await {
                     Ok(existing)
                         if existing.source == request.source
+                            && existing.module == request.module
+                            && existing.language == record.language
                             && existing.acting_as == Some(identity.acting_as)
                             && existing.turn_id == Some(identity.turn) =>
                     {
@@ -157,10 +209,13 @@ impl CodeModeService {
         }
         let executor = self.0.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
         // A program with type errors stops here, before the owner is asked
-        // to approve it or a credential is minted for it.
-        if let Err(outcome) = executor
-            .check_program(&request, SESSION_PROGRAM, cancel.clone())
-            .await
+        // to approve it or a credential is minted for it, and so does a JS
+        // tools program whose module has them. A JS tools program itself
+        // isn't TypeScript: the permission gate parses and analyzes it.
+        if (language == ProgramLanguage::Javascript || request.module.is_some())
+            && let Err(outcome) = executor
+                .check_program(&request, SESSION_PROGRAM, cancel.clone())
+                .await
         {
             (record.status, record.result, record.error) = settle_unrun(outcome, Reviews::Allowed);
             self.0.store.save(identity.session, &record).await?;
@@ -172,10 +227,42 @@ impl CodeModeService {
         } = match self
             .0
             .credentials
-            .issue(&identity, &request.source, cancel.clone())
+            .issue(
+                &identity,
+                &request.source,
+                request.module.as_deref(),
+                record.language,
+                cancel.clone(),
+            )
             .await
         {
-            Ok(issued) => issued,
+            Ok(issued) => {
+                tracing::Span::current().record(
+                    "permission",
+                    if issued.environment.allowed_operations.is_some() {
+                        "admitted"
+                    } else {
+                        "off"
+                    },
+                );
+                issued
+            }
+            // Checked and not run: the program's outcome, not the service's.
+            Err(CodeModeError::NotRun(not_run)) => {
+                tracing::Span::current().record(
+                    "permission",
+                    match &not_run.permission {
+                        Some(ExecutionPermission::Blocked { .. }) => "blocked",
+                        Some(ExecutionPermission::Declined { .. }) => "declined",
+                        None => "cannot_analyze",
+                    },
+                );
+                record.status = ExecutionStatus::Failed;
+                record.error = Some(not_run.message);
+                record.permission = not_run.permission;
+                self.0.store.save(identity.session, &record).await?;
+                return Ok((receipt(&record), None));
+            }
             Err(error) => {
                 record.status = ExecutionStatus::Failed;
                 record.error = Some(error.to_string());
@@ -498,6 +585,9 @@ impl SessionCodeMode for CodeModeService {
             .map_err(|_| CodeModeError::Forbidden)?
             .clone();
         validate_request(&request)?;
+        let kind = self.code_mode_kind(session.id, &owner).await;
+        refuse_other_kind(kind, &request)?;
+        let language = ProgramLanguage::from(request.language);
         let permit = Arc::clone(&self.0.admission)
             .try_acquire_owned()
             .map_err(|_| CodeModeError::Busy)?;
@@ -518,9 +608,13 @@ impl SessionCodeMode for CodeModeService {
             execution_id = %execution,
             assigned_execution_id = tracing::field::Empty,
             source_bytes = request.source.len(),
+            module_bytes = request.module.as_ref().map(String::len),
+            language = request.language.as_str(),
+            sdk_fingerprint = self.sdk_fingerprint(language).as_deref(),
             status = tracing::field::Empty,
             activity = tracing::field::Empty,
             result_bytes = tracing::field::Empty,
+            permission = tracing::field::Empty,
         );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
@@ -528,7 +622,9 @@ impl SessionCodeMode for CodeModeService {
         tokio::spawn(
             async move {
                 let _permit = permit;
-                let mut result = service.run(identity, execution, request, cancel).await;
+                let mut result = service
+                    .run(identity, execution, language, request, cancel)
+                    .await;
                 // Image reads stay inside the admission budget, and show only
                 // files the account the execution acted as owns.
                 if let Ok((receipt, acting_user)) = &mut result {
@@ -577,6 +673,68 @@ impl SessionCodeMode for CodeModeService {
         // survived. Expose the same uncertainty on journal reads and retries.
         record.error = execution_error(&record);
         Ok(record)
+    }
+}
+
+#[async_trait]
+impl CodeModeKinds for CodeModeService {
+    async fn code_mode_kind(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+    ) -> CodeModeKind {
+        // A turn that cannot be read resolves afresh: it can run nothing, as
+        // `execute` reads the same turn and refuses.
+        let turn = self.0.turns.active(session).await.ok().flatten();
+        if let Some(turn) = turn
+            && let Some(kind) = self.turn_kinds().get(session, turn)
+        {
+            return kind;
+        }
+        let kind = self.resolve_kind(owner).await;
+        match turn {
+            Some(turn) => self.turn_kinds().settle(session, turn, kind),
+            None => kind,
+        }
+    }
+}
+
+impl CodeModeService {
+    fn turn_kinds(&self) -> std::sync::MutexGuard<'_, super::kinds::TurnKinds> {
+        self.0
+            .kinds
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The dialect where this deployment can run and gate it and `owner`
+    /// has agent permissions; TypeScript otherwise, or when the flag can't
+    /// be read.
+    async fn resolve_kind(&self, owner: &MacroUserIdStr<'static>) -> CodeModeKind {
+        let (Some(js_tools), Some(_)) = (&self.0.js_tools, &self.0.executor) else {
+            return CodeModeKind::TypeScript;
+        };
+        if js_tools.rollout.enabled(owner).await {
+            CodeModeKind::Dialect
+        } else {
+            CodeModeKind::TypeScript
+        }
+    }
+}
+
+/// Refuse a program of the other kind than the turn's, before anything is
+/// recorded: a tool list the agent read before the kind changed can't run
+/// the other mode.
+fn refuse_other_kind(kind: CodeModeKind, request: &ExecuteRequest) -> Result<(), CodeModeError> {
+    match (kind, request.language) {
+        (CodeModeKind::TypeScript, Language::Javascript)
+        | (CodeModeKind::Dialect, Language::JsTools) => Ok(()),
+        (CodeModeKind::TypeScript, Language::JsTools) => Err(CodeModeError::Invalid(
+            "This session runs TypeScript programs: write a TypeScript module exporting async function main and call ExecuteCode without language.".into(),
+        )),
+        (CodeModeKind::Dialect, Language::Javascript) => Err(CodeModeError::Invalid(
+            "This session runs JS tools programs: pass source as a script that calls await tools.<service>.<operation>(...), as ExecuteCode's description shows.".into(),
+        )),
     }
 }
 
@@ -694,12 +852,26 @@ pub(super) fn settle_unrun(
 
 /// Reject requests the runner would refuse, before minting a credential.
 pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeError> {
+    let max_source_bytes = Limits::default().max_source_bytes;
+    if request.module.as_ref().is_some_and(|module| {
+        request.language != Language::JsTools
+            || module.trim().is_empty()
+            || module.len() > max_source_bytes
+    }) {
+        return Err(CodeModeError::Invalid(
+            "Provide module only beside a JS tools program, nonempty and at most 64 KiB, or leave it out."
+                .into(),
+        ));
+    }
     if request.source.trim().is_empty()
-        || request.source.len() > Limits::default().max_source_bytes
+        || request.source.len() > max_source_bytes
         || request.timeout_ms == 0
         || request.timeout_ms > 30_000
     {
-        return Err(CodeModeError::Invalid("Provide a nonempty TypeScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
+        return Err(CodeModeError::Invalid(match request.language {
+            Language::Javascript => "Provide a nonempty TypeScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.",
+            Language::JsTools => "Provide a nonempty JS tools program of at most 64 KiB and timeout_ms between 1 and 30000.",
+        }.into()));
     }
     Ok(())
 }
@@ -712,6 +884,7 @@ fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {
         result: record.result.clone(),
         error: execution_error(record),
         model_media: Vec::new(),
+        permission: record.permission.clone(),
     }
 }
 

@@ -17,6 +17,7 @@ import type {
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
+  AgentToolPermissions,
   AgentUpdates,
   AiAdmissionErrorBody,
   AnswerToolApprovalRequest,
@@ -47,6 +48,7 @@ import type {
   CreateAgentSessionResponse,
   CreateReview,
   CredentialRejectedResponse,
+  DetachToolPermissions,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
   DiscoverConnectorsResponse,
@@ -57,6 +59,7 @@ import type {
   ExtractInputRequest,
   ExtractInputResponse,
   GetAgentSessionActivityParams,
+  GetAgentToolPermissionSourcesParams,
   LinkedTaskResponse,
   LinkTaskRequest,
   ListAgentRepositoryBranchesParams,
@@ -79,8 +82,15 @@ import type {
   SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
   SetAgentSessionArchivedRequest,
+  SetToolPermissionSource,
   SharePermissionV2,
   StartFreshAgentConversationRequest,
+  TeamToolPermissions,
+  TightenToolPermissionsResponse,
+  ToolPermissionCatalog,
+  ToolPermissionChanges,
+  ToolPermissionError,
+  ToolPermissionSourceCandidates,
   UiCommandOutcome,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
@@ -4067,6 +4077,72 @@ export const answerAgentSessionToolApproval = async (
 };
 
 /**
+ * @summary The tool permissions that apply in a session: its agent's (for a built-in
+persona, the session owner's) and the agent's restrictions on itself for
+this session (`sessionRules`).
+ */
+export type getAgentSessionToolPermissionsResponse200 = {
+  data: AgentToolPermissions;
+  status: 200;
+};
+
+export type getAgentSessionToolPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionToolPermissionsResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type getAgentSessionToolPermissionsResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type getAgentSessionToolPermissionsResponseSuccess =
+  getAgentSessionToolPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionToolPermissionsResponseError = (
+  | getAgentSessionToolPermissionsResponse401
+  | getAgentSessionToolPermissionsResponse403
+  | getAgentSessionToolPermissionsResponse404
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionToolPermissionsResponse =
+  | getAgentSessionToolPermissionsResponseSuccess
+  | getAgentSessionToolPermissionsResponseError;
+
+export const getGetAgentSessionToolPermissionsUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/tool-permissions`;
+};
+
+export const getAgentSessionToolPermissions = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionToolPermissionsResponse> => {
+  const res = await fetch(getGetAgentSessionToolPermissionsUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionToolPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionToolPermissionsResponse;
+};
+
+/**
  * @summary Open an item in a new pane of the app tab the person who prompted the
 running turn typed in. Only a running execution of the session's current
 turn may send, as the account it acts as.
@@ -4317,6 +4393,410 @@ export const unregisterAgentSessionWork = async (
 };
 
 /**
+ * @summary Every group, action and SDK operation an agent permission can name.
+ */
+export type getAgentToolPermissionCatalogResponse200 = {
+  data: ToolPermissionCatalog;
+  status: 200;
+};
+
+export type getAgentToolPermissionCatalogResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentToolPermissionCatalogResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type getAgentToolPermissionCatalogResponseSuccess =
+  getAgentToolPermissionCatalogResponse200 & {
+    headers: Headers;
+  };
+export type getAgentToolPermissionCatalogResponseError = (
+  | getAgentToolPermissionCatalogResponse401
+  | getAgentToolPermissionCatalogResponse404
+) & {
+  headers: Headers;
+};
+
+export type getAgentToolPermissionCatalogResponse =
+  | getAgentToolPermissionCatalogResponseSuccess
+  | getAgentToolPermissionCatalogResponseError;
+
+export const getGetAgentToolPermissionCatalogUrl = () => {
+  return `/agent-tool-permissions/catalog`;
+};
+
+export const getAgentToolPermissionCatalog = async (
+  options?: RequestInit
+): Promise<getAgentToolPermissionCatalogResponse> => {
+  const res = await fetch(getGetAgentToolPermissionCatalogUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentToolPermissionCatalogResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentToolPermissionCatalogResponse;
+};
+
+/**
+ * @summary A policy by id, read only: the caller's own Macro policy, or an agent's
+they may edit. The form shows it before the agent that will follow it
+exists.
+ */
+export type getAgentToolPermissionPolicyResponse200 = {
+  data: AgentToolPermissions;
+  status: 200;
+};
+
+export type getAgentToolPermissionPolicyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentToolPermissionPolicyResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type getAgentToolPermissionPolicyResponseSuccess =
+  getAgentToolPermissionPolicyResponse200 & {
+    headers: Headers;
+  };
+export type getAgentToolPermissionPolicyResponseError = (
+  | getAgentToolPermissionPolicyResponse401
+  | getAgentToolPermissionPolicyResponse404
+) & {
+  headers: Headers;
+};
+
+export type getAgentToolPermissionPolicyResponse =
+  | getAgentToolPermissionPolicyResponseSuccess
+  | getAgentToolPermissionPolicyResponseError;
+
+export const getGetAgentToolPermissionPolicyUrl = (policyId: string) => {
+  return `/agent-tool-permissions/policies/${policyId}`;
+};
+
+export const getAgentToolPermissionPolicy = async (
+  policyId: string,
+  options?: RequestInit
+): Promise<getAgentToolPermissionPolicyResponse> => {
+  const res = await fetch(getGetAgentToolPermissionPolicyUrl(policyId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentToolPermissionPolicyResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentToolPermissionPolicyResponse;
+};
+
+/**
+ * @summary The policies an agent may follow, for the picker: the caller's own Macro
+first (private agents only), then agents. With `agentId`, those it can't
+follow say why (`unavailable`) and the one it follows is `current`.
+ */
+export type getAgentToolPermissionSourcesResponse200 = {
+  data: ToolPermissionSourceCandidates;
+  status: 200;
+};
+
+export type getAgentToolPermissionSourcesResponse400 = {
+  data: ToolPermissionError;
+  status: 400;
+};
+
+export type getAgentToolPermissionSourcesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentToolPermissionSourcesResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type getAgentToolPermissionSourcesResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type getAgentToolPermissionSourcesResponseSuccess =
+  getAgentToolPermissionSourcesResponse200 & {
+    headers: Headers;
+  };
+export type getAgentToolPermissionSourcesResponseError = (
+  | getAgentToolPermissionSourcesResponse400
+  | getAgentToolPermissionSourcesResponse401
+  | getAgentToolPermissionSourcesResponse403
+  | getAgentToolPermissionSourcesResponse404
+) & {
+  headers: Headers;
+};
+
+export type getAgentToolPermissionSourcesResponse =
+  | getAgentToolPermissionSourcesResponseSuccess
+  | getAgentToolPermissionSourcesResponseError;
+
+export const getGetAgentToolPermissionSourcesUrl = (
+  params?: GetAgentToolPermissionSourcesParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-tool-permissions/sources?${stringifiedParams}`
+    : `/agent-tool-permissions/sources`;
+};
+
+export const getAgentToolPermissionSources = async (
+  params?: GetAgentToolPermissionSourcesParams,
+  options?: RequestInit
+): Promise<getAgentToolPermissionSourcesResponse> => {
+  const res = await fetch(getGetAgentToolPermissionSourcesUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentToolPermissionSourcesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentToolPermissionSourcesResponse;
+};
+
+/**
+ * @summary A team's default tool permissions: what its agents follow unless they
+pick another source. Its members read them.
+ */
+export type getTeamToolPermissionsResponse200 = {
+  data: TeamToolPermissions;
+  status: 200;
+};
+
+export type getTeamToolPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getTeamToolPermissionsResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type getTeamToolPermissionsResponseSuccess =
+  getTeamToolPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type getTeamToolPermissionsResponseError = (
+  | getTeamToolPermissionsResponse401
+  | getTeamToolPermissionsResponse404
+) & {
+  headers: Headers;
+};
+
+export type getTeamToolPermissionsResponse =
+  | getTeamToolPermissionsResponseSuccess
+  | getTeamToolPermissionsResponseError;
+
+export const getGetTeamToolPermissionsUrl = (teamId: string) => {
+  return `/agent-tool-permissions/teams/${teamId}`;
+};
+
+export const getTeamToolPermissions = async (
+  teamId: string,
+  options?: RequestInit
+): Promise<getTeamToolPermissionsResponse> => {
+  const res = await fetch(getGetTeamToolPermissionsUrl(teamId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamToolPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamToolPermissionsResponse;
+};
+
+/**
+ * @summary Change a team's default tool permissions in either direction, as `PUT
+/agents/{agent_id}/tool-permissions` does for an agent. Only a team admin
+or owner signed in to Macro; every agent following it takes the change
+on its next call.
+ */
+export type setTeamToolPermissionsResponse200 = {
+  data: TeamToolPermissions;
+  status: 200;
+};
+
+export type setTeamToolPermissionsResponse400 = {
+  data: ToolPermissionError;
+  status: 400;
+};
+
+export type setTeamToolPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type setTeamToolPermissionsResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type setTeamToolPermissionsResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type setTeamToolPermissionsResponseSuccess =
+  setTeamToolPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type setTeamToolPermissionsResponseError = (
+  | setTeamToolPermissionsResponse400
+  | setTeamToolPermissionsResponse401
+  | setTeamToolPermissionsResponse403
+  | setTeamToolPermissionsResponse404
+) & {
+  headers: Headers;
+};
+
+export type setTeamToolPermissionsResponse =
+  | setTeamToolPermissionsResponseSuccess
+  | setTeamToolPermissionsResponseError;
+
+export const getSetTeamToolPermissionsUrl = (teamId: string) => {
+  return `/agent-tool-permissions/teams/${teamId}`;
+};
+
+export const setTeamToolPermissions = async (
+  teamId: string,
+  toolPermissionChanges: ToolPermissionChanges,
+  options?: RequestInit
+): Promise<setTeamToolPermissionsResponse> => {
+  const res = await fetch(getSetTeamToolPermissionsUrl(teamId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(toolPermissionChanges),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamToolPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamToolPermissionsResponse;
+};
+
+/**
+ * @summary Reset a team's default tool permissions so everything is always allowed
+for the agents following it. Only a team admin or owner signed in to
+Macro.
+ */
+export type resetTeamToolPermissionsResponse200 = {
+  data: TeamToolPermissions;
+  status: 200;
+};
+
+export type resetTeamToolPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type resetTeamToolPermissionsResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type resetTeamToolPermissionsResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type resetTeamToolPermissionsResponseSuccess =
+  resetTeamToolPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type resetTeamToolPermissionsResponseError = (
+  | resetTeamToolPermissionsResponse401
+  | resetTeamToolPermissionsResponse403
+  | resetTeamToolPermissionsResponse404
+) & {
+  headers: Headers;
+};
+
+export type resetTeamToolPermissionsResponse =
+  | resetTeamToolPermissionsResponseSuccess
+  | resetTeamToolPermissionsResponseError;
+
+export const getResetTeamToolPermissionsUrl = (teamId: string) => {
+  return `/agent-tool-permissions/teams/${teamId}`;
+};
+
+export const resetTeamToolPermissions = async (
+  teamId: string,
+  options?: RequestInit
+): Promise<resetTeamToolPermissionsResponse> => {
+  const res = await fetch(getResetTeamToolPermissionsUrl(teamId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resetTeamToolPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as resetTeamToolPermissionsResponse;
+};
+
+/**
  * @summary List the caller's active registrations of sessions they can still view, newest first.
  */
 export type listAgentWorkRegistrationsResponse200 = {
@@ -4371,6 +4851,449 @@ export const listAgentWorkRegistrations = async (
     status: res.status,
     headers: res.headers,
   } as listAgentWorkRegistrationsResponse;
+};
+
+/**
+ * @summary An agent's tool permissions: its own when the caller may edit it or is the
+agent, the caller's own settings for a built-in persona.
+ */
+export type getAgentToolPermissionsResponse200 = {
+  data: AgentToolPermissions;
+  status: 200;
+};
+
+export type getAgentToolPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentToolPermissionsResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type getAgentToolPermissionsResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type getAgentToolPermissionsResponseSuccess =
+  getAgentToolPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type getAgentToolPermissionsResponseError = (
+  | getAgentToolPermissionsResponse401
+  | getAgentToolPermissionsResponse403
+  | getAgentToolPermissionsResponse404
+) & {
+  headers: Headers;
+};
+
+export type getAgentToolPermissionsResponse =
+  | getAgentToolPermissionsResponseSuccess
+  | getAgentToolPermissionsResponseError;
+
+export const getGetAgentToolPermissionsUrl = (agentId: string) => {
+  return `/agents/${agentId}/tool-permissions`;
+};
+
+export const getAgentToolPermissions = async (
+  agentId: string,
+  options?: RequestInit
+): Promise<getAgentToolPermissionsResponse> => {
+  const res = await fetch(getGetAgentToolPermissionsUrl(agentId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentToolPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentToolPermissionsResponse;
+};
+
+/**
+ * @summary Change an agent's tool permissions in either direction: an action's
+default (`always` removes it), an entity's exception to it (any state is
+kept, `always` included; `null` follows the default again) or one
+operation. Only a person signed in to Macro who may edit the agent; for a
+built-in persona, the caller's own settings.
+ */
+export type setAgentToolPermissionsResponse200 = {
+  data: AgentToolPermissions;
+  status: 200;
+};
+
+export type setAgentToolPermissionsResponse400 = {
+  data: ToolPermissionError;
+  status: 400;
+};
+
+export type setAgentToolPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type setAgentToolPermissionsResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type setAgentToolPermissionsResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type setAgentToolPermissionsResponseSuccess =
+  setAgentToolPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type setAgentToolPermissionsResponseError = (
+  | setAgentToolPermissionsResponse400
+  | setAgentToolPermissionsResponse401
+  | setAgentToolPermissionsResponse403
+  | setAgentToolPermissionsResponse404
+) & {
+  headers: Headers;
+};
+
+export type setAgentToolPermissionsResponse =
+  | setAgentToolPermissionsResponseSuccess
+  | setAgentToolPermissionsResponseError;
+
+export const getSetAgentToolPermissionsUrl = (agentId: string) => {
+  return `/agents/${agentId}/tool-permissions`;
+};
+
+export const setAgentToolPermissions = async (
+  agentId: string,
+  toolPermissionChanges: ToolPermissionChanges,
+  options?: RequestInit
+): Promise<setAgentToolPermissionsResponse> => {
+  const res = await fetch(getSetAgentToolPermissionsUrl(agentId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(toolPermissionChanges),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setAgentToolPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setAgentToolPermissionsResponse;
+};
+
+/**
+ * @summary Reset an agent's tool permissions so everything is always allowed. Only a
+person signed in to Macro who may edit the agent.
+ */
+export type resetAgentToolPermissionsResponse200 = {
+  data: AgentToolPermissions;
+  status: 200;
+};
+
+export type resetAgentToolPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type resetAgentToolPermissionsResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type resetAgentToolPermissionsResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type resetAgentToolPermissionsResponseSuccess =
+  resetAgentToolPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type resetAgentToolPermissionsResponseError = (
+  | resetAgentToolPermissionsResponse401
+  | resetAgentToolPermissionsResponse403
+  | resetAgentToolPermissionsResponse404
+) & {
+  headers: Headers;
+};
+
+export type resetAgentToolPermissionsResponse =
+  | resetAgentToolPermissionsResponseSuccess
+  | resetAgentToolPermissionsResponseError;
+
+export const getResetAgentToolPermissionsUrl = (agentId: string) => {
+  return `/agents/${agentId}/tool-permissions`;
+};
+
+export const resetAgentToolPermissions = async (
+  agentId: string,
+  options?: RequestInit
+): Promise<resetAgentToolPermissionsResponse> => {
+  const res = await fetch(getResetAgentToolPermissionsUrl(agentId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resetAgentToolPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as resetAgentToolPermissionsResponse;
+};
+
+/**
+ * @summary Make an agent own its settings again: they become what it resolves to
+now (session restrictions and approvals aside), its own restrictions
+kept, with `changes` applied on top, all in one transaction. Only a
+person signed in to Macro who may edit the agent.
+ */
+export type detachAgentToolPermissionsResponse200 = {
+  data: AgentToolPermissions;
+  status: 200;
+};
+
+export type detachAgentToolPermissionsResponse400 = {
+  data: ToolPermissionError;
+  status: 400;
+};
+
+export type detachAgentToolPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type detachAgentToolPermissionsResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type detachAgentToolPermissionsResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type detachAgentToolPermissionsResponseSuccess =
+  detachAgentToolPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type detachAgentToolPermissionsResponseError = (
+  | detachAgentToolPermissionsResponse400
+  | detachAgentToolPermissionsResponse401
+  | detachAgentToolPermissionsResponse403
+  | detachAgentToolPermissionsResponse404
+) & {
+  headers: Headers;
+};
+
+export type detachAgentToolPermissionsResponse =
+  | detachAgentToolPermissionsResponseSuccess
+  | detachAgentToolPermissionsResponseError;
+
+export const getDetachAgentToolPermissionsUrl = (agentId: string) => {
+  return `/agents/${agentId}/tool-permissions/detach`;
+};
+
+export const detachAgentToolPermissions = async (
+  agentId: string,
+  detachToolPermissions: DetachToolPermissions,
+  options?: RequestInit
+): Promise<detachAgentToolPermissionsResponse> => {
+  const res = await fetch(getDetachAgentToolPermissionsUrl(agentId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(detachToolPermissions),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: detachAgentToolPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as detachAgentToolPermissionsResponse;
+};
+
+/**
+ * @summary Make an agent follow another policy (its source): the source's settings
+apply on the agent's next call, and its own rows only restrict them. An
+agent that owned its settings loses the ones a person made; its
+restrictions on itself stay. Only a person signed in to Macro who may
+edit the agent; following grants nothing over the source.
+ */
+export type setAgentToolPermissionsSourceResponse200 = {
+  data: AgentToolPermissions;
+  status: 200;
+};
+
+export type setAgentToolPermissionsSourceResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type setAgentToolPermissionsSourceResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type setAgentToolPermissionsSourceResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type setAgentToolPermissionsSourceResponse409 = {
+  data: ToolPermissionError;
+  status: 409;
+};
+
+export type setAgentToolPermissionsSourceResponseSuccess =
+  setAgentToolPermissionsSourceResponse200 & {
+    headers: Headers;
+  };
+export type setAgentToolPermissionsSourceResponseError = (
+  | setAgentToolPermissionsSourceResponse401
+  | setAgentToolPermissionsSourceResponse403
+  | setAgentToolPermissionsSourceResponse404
+  | setAgentToolPermissionsSourceResponse409
+) & {
+  headers: Headers;
+};
+
+export type setAgentToolPermissionsSourceResponse =
+  | setAgentToolPermissionsSourceResponseSuccess
+  | setAgentToolPermissionsSourceResponseError;
+
+export const getSetAgentToolPermissionsSourceUrl = (agentId: string) => {
+  return `/agents/${agentId}/tool-permissions/source`;
+};
+
+export const setAgentToolPermissionsSource = async (
+  agentId: string,
+  setToolPermissionSource: SetToolPermissionSource,
+  options?: RequestInit
+): Promise<setAgentToolPermissionsSourceResponse> => {
+  const res = await fetch(getSetAgentToolPermissionsSourceUrl(agentId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setToolPermissionSource),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setAgentToolPermissionsSourceResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setAgentToolPermissionsSourceResponse;
+};
+
+/**
+ * @summary Make an agent's tool permissions stricter. An agent may call this on
+itself; it is saved to the agent when the person it acts for may edit
+it, else to the current session only. Refused when anything would become
+more permissive: an operation, a default, or an entity's action no
+operation has yet.
+ */
+export type tightenAgentToolPermissionsResponse200 = {
+  data: TightenToolPermissionsResponse;
+  status: 200;
+};
+
+export type tightenAgentToolPermissionsResponse400 = {
+  data: ToolPermissionError;
+  status: 400;
+};
+
+export type tightenAgentToolPermissionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type tightenAgentToolPermissionsResponse403 = {
+  data: ToolPermissionError;
+  status: 403;
+};
+
+export type tightenAgentToolPermissionsResponse404 = {
+  data: ToolPermissionError;
+  status: 404;
+};
+
+export type tightenAgentToolPermissionsResponse422 = {
+  data: ToolPermissionError;
+  status: 422;
+};
+
+export type tightenAgentToolPermissionsResponseSuccess =
+  tightenAgentToolPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type tightenAgentToolPermissionsResponseError = (
+  | tightenAgentToolPermissionsResponse400
+  | tightenAgentToolPermissionsResponse401
+  | tightenAgentToolPermissionsResponse403
+  | tightenAgentToolPermissionsResponse404
+  | tightenAgentToolPermissionsResponse422
+) & {
+  headers: Headers;
+};
+
+export type tightenAgentToolPermissionsResponse =
+  | tightenAgentToolPermissionsResponseSuccess
+  | tightenAgentToolPermissionsResponseError;
+
+export const getTightenAgentToolPermissionsUrl = (agentId: string) => {
+  return `/agents/${agentId}/tool-permissions/tighten`;
+};
+
+export const tightenAgentToolPermissions = async (
+  agentId: string,
+  toolPermissionChanges: ToolPermissionChanges,
+  options?: RequestInit
+): Promise<tightenAgentToolPermissionsResponse> => {
+  const res = await fetch(getTightenAgentToolPermissionsUrl(agentId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(toolPermissionChanges),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: tightenAgentToolPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as tightenAgentToolPermissionsResponse;
 };
 
 /**

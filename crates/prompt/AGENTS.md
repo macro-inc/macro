@@ -39,6 +39,14 @@ AI system prompts: one module per prompt section, each exporting a
   `ai_tools` inlines it from the generated catalog, and routed turns load it
   per entity. Only cross-cutting rules live in this crate. `code_mode.rs` is
   only the general code-mode section.
+- Code mode has two kinds (`CodeModeKind`, decided once per turn): TypeScript
+  (`macro.*`, `code_mode::PROMPT`) and the dialect (`tools.*`,
+  `code_mode::DIALECT_PROMPT`). `dialect::session_tool_use_prompt` is the
+  TypeScript session prompt with the dialect section and every phrase in
+  `dialect.rs`'s swap lists replaced; `agent_session_prompt` likewise. A new
+  `macro.*` or `execution.*` hint in a shared section needs a swap there, or
+  `each_kind_of_prompt_teaches_only_its_own_code` fails. Never edit a
+  TypeScript text to suit the dialect: flag-off prompts stay byte for byte.
 
 ## Tool contracts
 

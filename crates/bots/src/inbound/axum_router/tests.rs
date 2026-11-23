@@ -1422,3 +1422,26 @@ async fn an_agents_program_cannot_mint_a_bot_token() {
         assert_eq!(mints.load(Ordering::SeqCst), 0, "{run}");
     }
 }
+
+/// A dialect program is told to present the mint card in the dialect's
+/// terms; every other program with today's text.
+#[test]
+fn a_mint_refusal_names_the_operations_of_the_programs_code_mode() {
+    let mut dialect = HeaderMap::new();
+    dialect.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        macro_authorization::DIALECT_PROGRAM.parse().unwrap(),
+    );
+    let mut typescript = HeaderMap::new();
+    typescript.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+
+    assert_eq!(program_mint_refusal(&dialect), DIALECT_PROGRAM_MINT_REFUSAL);
+    assert_eq!(program_mint_refusal(&typescript), PROGRAM_MINT_REFUSAL);
+    assert_eq!(
+        program_mint_refusal(&HeaderMap::new()),
+        PROGRAM_MINT_REFUSAL
+    );
+}

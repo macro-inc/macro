@@ -144,22 +144,26 @@ impl DenoChecker {
         // a diagnostic) any other file, whatever the source imports or
         // references.
         let mut map = BTreeMap::from([
-            (
-                "@macro-inc/sdk".to_owned(),
-                format!("{types_url}src/macro.d.ts"),
-            ),
             ("file:///".to_owned(), "file:///unavailable/".to_owned()),
             (check_url.clone(), check_url.clone()),
             (types_url.clone(), types_url.clone()),
         ]);
-        match imports {
-            ProgramImports::Sdk => {}
-            ProgramImports::SdkAndHandlebars => {
-                map.insert(
-                    "handlebars".to_owned(),
-                    format!("{types_url}{HANDLEBARS_MODULE}"),
-                );
-            }
+        let (sdk, handlebars) = match imports {
+            ProgramImports::Sdk => (true, false),
+            ProgramImports::SdkAndHandlebars => (true, true),
+            ProgramImports::Handlebars => (false, true),
+        };
+        if sdk {
+            map.insert(
+                "@macro-inc/sdk".to_owned(),
+                format!("{types_url}src/macro.d.ts"),
+            );
+        }
+        if handlebars {
+            map.insert(
+                "handlebars".to_owned(),
+                format!("{types_url}{HANDLEBARS_MODULE}"),
+            );
         }
         let map = serde_json::json!({ "imports": map });
         tokio::fs::write(check.join("imports.json"), map.to_string())

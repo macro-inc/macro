@@ -1,7 +1,10 @@
 //! Macro Internal MCP: session tools served by the harness, separate from workspace MCP.
 
-use agent_code_mode::{domain::SessionCodeMode, inbound::toolset::CodeModeToolContext};
 use agent_code_mode::{domain::reviews::ReviewService, inbound::reviews::ReviewToolContext};
+use agent_code_mode::{
+    domain::{CodeModeKind, SessionCodeMode},
+    inbound::toolset::CodeModeToolContext,
+};
 use std::sync::{Arc, OnceLock};
 use tracing::Instrument as _;
 
@@ -87,6 +90,12 @@ async fn authenticate(session: AuthenticatedSession, mut request: Request, next:
     next.run(request).await
 }
 
+/// The code tools in the server's instructions, for a TypeScript session.
+const TYPESCRIPT_CODE_TOOLS: &str = " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the type-checked TypeScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.";
+
+/// The same for a session whose programs the agent's permissions gate.
+const DIALECT_CODE_TOOLS: &str = " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for programs that reach Macro through tools.<service>.<operation>(...) calls checked against this agent's permissions, with an optional TypeScript module for computation, their guides, and the persistent review workflow. Reuse guides already in context.";
+
 #[derive(Clone)]
 pub(super) struct InternalTools {
     pub(super) service: Arc<dyn SessionPullRequests>,
@@ -97,6 +106,60 @@ pub(super) struct InternalTools {
     pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
     /// Macro app origin, for links back to the calling session.
     pub(super) app_url: Arc<str>,
+    /// Agent permissions, for `ShowPermissions` in sessions whose JavaScript
+    /// tools programs they gate.
+    pub(super) permissions: Option<Arc<dyn agent_permissions::domain::service::AgentPermissions>>,
+}
+
+impl InternalTools {
+    /// The server's instructions for the caller's session: [`get_info`]'s,
+    /// with the code tools described as the session's current kind defines
+    /// them. Both handshakes (`initialize`, `discover`) answer with these.
+    ///
+    /// [`get_info`]: ServerHandler::get_info
+    async fn caller_instructions(&self, extensions: &rmcp::model::Extensions) -> Option<String> {
+        let instructions = self.get_info().instructions;
+        let grant = extensions
+            .get::<axum::http::request::Parts>()
+            .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
+            .map(|AuthenticatedSession(grant)| grant);
+        match grant {
+            Some(grant) if self.code_mode_kind(grant).await == Some(CodeModeKind::Dialect) => {
+                instructions.map(|text| text.replace(TYPESCRIPT_CODE_TOOLS, DIALECT_CODE_TOOLS))
+            }
+            _ => instructions,
+        }
+    }
+
+    /// The code-mode kind of `session`'s current turn, resolved once for the
+    /// turn by code mode; `None` without code mode or a person owner.
+    async fn code_mode_kind(
+        &self,
+        session: &agent_session::domain::model::AgentSession,
+    ) -> Option<CodeModeKind> {
+        let code_mode = self.code_mode.as_ref()?;
+        let owner = session.owner_user().ok()?;
+        Some(code_mode.code_mode_kind(session.id, owner).await)
+    }
+
+    /// `ShowPermissions`' context when a turn of `kind` is gated: it runs
+    /// JavaScript tools programs, which the agent's permissions check.
+    fn permission_tools(
+        &self,
+        session: &agent_session::domain::model::AgentSession,
+        kind: Option<CodeModeKind>,
+    ) -> Option<agent_permissions::inbound::toolset::PermissionToolContext> {
+        let permissions = self.permissions.as_ref()?;
+        if kind != Some(CodeModeKind::Dialect) {
+            return None;
+        }
+        Some(agent_permissions::inbound::toolset::PermissionToolContext {
+            service: Arc::clone(permissions),
+            session: session.id,
+            agent: session.bot_id,
+            owner: session.owner_user().ok()?.clone(),
+        })
+    }
 }
 
 impl ServerHandler for InternalTools {
@@ -112,17 +175,51 @@ impl ServerHandler for InternalTools {
             " macro_internal.PresentReview presents editable email/calendar draft stacks or questions through the shared session stream. It completes immediately as Presented to the user and never waits for approval. Later account-holder decisions deliver typed review.decided and review.settled system events. GetReview reads saved drafts and outcomes by reviewId. DecideReview uses the same claim/execute path and requires a real request from the review’s account holder in the current turn; system notifications never authorize decisions. After presenting an import plan, ask \"Should I kick it off?\"; when the review’s account holder says yes, submit it with macro_internal.DecideReview.",
         );
         if self.code_mode.is_some() {
-            info.instructions.as_mut().expect("instructions are set").push_str(
-                " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the type-checked TypeScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.",
-            );
+            info.instructions
+                .as_mut()
+                .expect("instructions are set")
+                .push_str(TYPESCRIPT_CODE_TOOLS);
         }
         info
+    }
+
+    /// The server's instructions, with the code tools described as the
+    /// session's current kind defines them.
+    async fn initialize(
+        &self,
+        request: rmcp::model::InitializeRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::InitializeResult, rmcp::ErrorData> {
+        if context.peer.peer_info().is_none() {
+            context.peer.set_peer_info(request);
+        }
+        let mut info = self.get_info();
+        info.instructions = self.caller_instructions(&context.extensions).await;
+        Ok(info)
+    }
+
+    /// The 2026-07-28 lifecycle's handshake, which clients send instead of
+    /// `initialize`. rmcp's default answers it from `get_info`, which always
+    /// describes TypeScript code mode.
+    async fn discover(
+        &self,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::DiscoverResult, rmcp::ErrorData> {
+        let mut info = self.get_info();
+        info.instructions = self.caller_instructions(&context.extensions).await;
+        let mut result = rmcp::model::DiscoverResult::from_server_info(
+            self.supported_protocol_versions().into_owned(),
+            info,
+        );
+        // The instructions depend on whose session is asking.
+        result.cache_scope = rmcp::model::CacheScope::Private;
+        Ok(result)
     }
 
     async fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
-        _: rmcp::service::RequestContext<rmcp::RoleServer>,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
         let mut definitions: Vec<_> = toolset()
             .tools
@@ -144,26 +241,59 @@ impl ServerHandler for InternalTools {
             })
             .collect();
         if self.code_mode.is_some() {
-            definitions.extend(
-                agent_code_mode::inbound::toolset::toolset()
-                    .tools
-                    .iter()
-                    .map(|(name, tool)| {
-                        Tool::new(
-                            name.clone(),
-                            tool.description.clone(),
-                            Arc::new(tool.input_schema.clone()),
-                        )
-                        .with_title(tool.annotations.title)
-                        .annotate(
-                            ToolAnnotations::with_title(tool.annotations.title)
-                                .read_only(tool.annotations.kind.read_only_hint())
-                                .destructive(tool.annotations.kind.destructive_hint())
-                                .idempotent(tool.annotations.idempotent)
-                                .open_world(tool.annotations.open_world),
-                        )
-                    }),
+            let grant = context
+                .extensions
+                .get::<axum::http::request::Parts>()
+                .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
+                .map(|AuthenticatedSession(grant)| grant);
+            // The turn's kind picks ExecuteCode's shape and whether
+            // ShowPermissions is offered; with no session, today's tools.
+            let kind = match grant {
+                Some(grant) => self.code_mode_kind(grant).await,
+                None => None,
+            };
+            let tools = agent_code_mode::inbound::toolset::session_toolset(
+                kind.unwrap_or(CodeModeKind::TypeScript),
             );
+            if let Some(grant) = grant
+                && self.permission_tools(grant, kind).is_some()
+            {
+                definitions.extend(
+                    agent_permissions::inbound::toolset::toolset()
+                        .tools
+                        .iter()
+                        .map(|(name, tool)| {
+                            Tool::new(
+                                name.clone(),
+                                tool.description.clone(),
+                                Arc::new(tool.input_schema.clone()),
+                            )
+                            .with_title(tool.annotations.title)
+                            .annotate(
+                                ToolAnnotations::with_title(tool.annotations.title)
+                                    .read_only(tool.annotations.kind.read_only_hint())
+                                    .destructive(tool.annotations.kind.destructive_hint())
+                                    .idempotent(tool.annotations.idempotent)
+                                    .open_world(tool.annotations.open_world),
+                            )
+                        }),
+                );
+            }
+            definitions.extend(tools.tools.iter().map(|(name, tool)| {
+                Tool::new(
+                    name.clone(),
+                    tool.description.clone(),
+                    Arc::new(tool.input_schema.clone()),
+                )
+                .with_title(tool.annotations.title)
+                .annotate(
+                    ToolAnnotations::with_title(tool.annotations.title)
+                        .read_only(tool.annotations.kind.read_only_hint())
+                        .destructive(tool.annotations.kind.destructive_hint())
+                        .idempotent(tool.annotations.idempotent)
+                        .open_world(tool.annotations.open_world),
+                )
+            }));
         }
         definitions.extend(
             agent_code_mode::inbound::reviews::toolset()
@@ -186,9 +316,11 @@ impl ServerHandler for InternalTools {
                 }),
         );
         for tool in &mut definitions {
+            // ShowPermissions spends nobody's access: it shows the person
+            // controls they use with their own session.
             if !matches!(
                 tool.name.as_ref(),
-                "DescribeCodeTools" | "ReadCodeDocs" | "ExecuteCode"
+                "DescribeCodeTools" | "ReadCodeDocs" | "ExecuteCode" | "ShowPermissions"
             ) {
                 ai_toolset::actor::add_actor_schema(Arc::make_mut(&mut tool.input_schema));
             }
@@ -236,6 +368,33 @@ impl InternalTools {
             .owner_user()
             .map_err(|error| rmcp::ErrorData::invalid_request(error.to_string(), None))?;
         let mut acting_user = owner.clone();
+        if request.name.as_ref() == "ShowPermissions" {
+            let kind = self.code_mode_kind(grant).await;
+            let Some(permission_context) = self.permission_tools(grant, kind) else {
+                return Ok(CallToolResult::error(vec![ContentBlock::text(
+                    "ShowPermissions is not available in this session.",
+                )])
+                .into());
+            };
+            // Clients that send every call an account choice may send one
+            // here too; it has nothing to choose.
+            let mut arguments = request.arguments.unwrap_or_default();
+            arguments.remove("acting_as");
+            let result = agent_permissions::inbound::toolset::toolset()
+                .try_tool_call(
+                    permission_context,
+                    RequestContext::new(owner.clone()).with_genai_telemetry(false),
+                    &request.name,
+                    &serde_json::Value::Object(arguments),
+                )
+                .await
+                .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
+            let result = match result {
+                Ok(value) => CallToolResult::structured(value),
+                Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+            };
+            return Ok(result.into());
+        }
         if !matches!(
             request.name.as_ref(),
             "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs"
@@ -286,8 +445,16 @@ impl InternalTools {
             };
             return Ok(result.into());
         }
-        if let Some(code_mode) = &self.code_mode {
-            let tools = agent_code_mode::inbound::toolset::toolset();
+        if let Some(code_mode) = &self.code_mode
+            && matches!(
+                request.name.as_ref(),
+                "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs"
+            )
+            && let Some(kind) = self.code_mode_kind(grant).await
+        {
+            // The turn's tools, whatever the agent's tool list says: a call
+            // of the other kind fails to decode, or execute refuses it.
+            let tools = agent_code_mode::inbound::toolset::session_toolset(kind);
             if tools.tools.contains_key(request.name.as_ref()) {
                 // The session actor meters the outer MCP call. Only SDK calls
                 // bypass ACP and retain the toolset's own telemetry.
@@ -300,6 +467,7 @@ impl InternalTools {
                             service: code_mode.clone(),
                             session: grant.clone(),
                             cognition: self.cognition.clone(),
+                            kind,
                         },
                         request_context,
                         &request.name,

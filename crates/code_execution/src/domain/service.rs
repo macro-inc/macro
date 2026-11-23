@@ -21,11 +21,61 @@ pub struct ExecutionService {
     prechecked: Arc<std::sync::Mutex<std::collections::VecDeque<Prechecked>>>,
 }
 
-/// A precheck pass: the program's shape and SHA-256, and when it lapses.
+/// A precheck pass: what was checked (a program's shape, or `None` for a
+/// module) and its SHA-256, and when it lapses.
 struct Prechecked {
-    shape: ContextShape,
+    shape: Option<ContextShape>,
     digest: [u8; 32],
     until: Instant,
+}
+
+/// What one type check covers.
+#[derive(Clone, Copy)]
+enum Checked<'a> {
+    /// An attended TypeScript program, whose `main` receives a context of
+    /// `shape`.
+    Program {
+        source: &'a str,
+        shape: ContextShape,
+    },
+    /// A JS tools program's TypeScript module: no SDK, no context.
+    Module(&'a str),
+}
+
+impl<'a> Checked<'a> {
+    /// What a run of `request` checks before it runs: a TypeScript program,
+    /// a JS tools program's module, or nothing (a JS tools program alone,
+    /// which its run parses and analyzes instead).
+    fn of(request: &'a ExecuteRequest, shape: ContextShape) -> Option<Self> {
+        match request.language {
+            Language::Javascript => Some(Self::Program {
+                source: &request.source,
+                shape,
+            }),
+            Language::JsTools => request.module.as_deref().map(Self::Module),
+        }
+    }
+
+    fn text(self) -> &'a str {
+        match self {
+            Self::Program { source, .. } | Self::Module(source) => source,
+        }
+    }
+
+    fn shape(self) -> Option<ContextShape> {
+        match self {
+            Self::Program { shape, .. } => Some(shape),
+            Self::Module(_) => None,
+        }
+    }
+
+    /// How the model's error text names it.
+    fn noun(self) -> &'static str {
+        match self {
+            Self::Program { .. } => "it",
+            Self::Module(_) => "its module",
+        }
+    }
 }
 
 /// How long a pass waits for its run: long enough for an owner to approve.
@@ -75,6 +125,13 @@ impl ExecutionService {
         if request.source.trim().is_empty() || request.source.len() > self.limits.max_source_bytes {
             return Err(AdmissionError::InvalidSource);
         }
+        if let Some(module) = &request.module
+            && (request.language != Language::JsTools
+                || module.trim().is_empty()
+                || module.len() > self.limits.max_source_bytes)
+        {
+            return Err(AdmissionError::InvalidModule);
+        }
         let duration = std::time::Duration::from_millis(request.timeout_ms);
         if duration.is_zero() || duration > self.limits.max_duration {
             return Err(AdmissionError::InvalidTimeout);
@@ -106,6 +163,9 @@ impl ExecutionService {
             "code_execution.run",
             run_id = %run_id.0,
             check = tracing::field::Empty,
+            language = job.request.language.as_str(),
+            module_bytes = job.request.module.as_ref().map(String::len),
+            allowed_operations = job.environment.allowed_operations.as_ref().map(Vec::len),
             outcome = tracing::field::Empty,
         );
         self.tasks.spawn(
@@ -144,23 +204,31 @@ impl ExecutionService {
         token: CancellationToken,
     ) -> Outcome {
         let span = tracing::Span::current();
-        if job.environment.unattended.is_some() {
-            span.record("check", "skipped");
-        } else if self.take_prechecked(job.environment.shape(), &job.request.source) {
-            span.record("check", "prechecked");
-        } else {
-            let checked = tokio::select! {
-                biased;
-                _ = token.cancelled() => return Outcome::Cancelled,
-                _ = sink.closed() => return Outcome::Cancelled,
-                _ = sleep_until(job.deadline) => return Outcome::TimedOut,
-                checked = self.check(&job.request.source, job.environment.shape()) => checked,
-            };
-            if let Err((label, failure)) = checked {
-                span.record("check", label);
-                return failure.into();
+        // A JS tools program isn't TypeScript: its run parses and analyzes
+        // it, and refuses one that doesn't. Its module is TypeScript.
+        let checked = Checked::of(&job.request, job.environment.shape())
+            .filter(|_| job.environment.unattended.is_none());
+        match checked {
+            None => {
+                span.record("check", "skipped");
             }
-            span.record("check", "passed");
+            Some(checked) if self.take_prechecked(checked) => {
+                span.record("check", "prechecked");
+            }
+            Some(checked) => {
+                let outcome = tokio::select! {
+                    biased;
+                    _ = token.cancelled() => return Outcome::Cancelled,
+                    _ = sink.closed() => return Outcome::Cancelled,
+                    _ = sleep_until(job.deadline) => return Outcome::TimedOut,
+                    outcome = self.check(checked) => outcome,
+                };
+                if let Err((label, failure)) = outcome {
+                    span.record("check", label);
+                    return failure.into();
+                }
+                span.record("check", "passed");
+            }
         }
         let queued = tracing::info_span!("code_execution.queue");
         tokio::select! {
@@ -192,13 +260,10 @@ impl ExecutionService {
         }
     }
 
-    /// Type-check `source` as a program whose context has `shape`: `Err`
-    /// carries the span label and the failure to end the run with.
-    async fn check(
-        &self,
-        source: &str,
-        shape: ContextShape,
-    ) -> Result<(), (&'static str, ExecutionFailure)> {
+    /// Type-check a program or module: `Err` carries the span label and
+    /// the failure to end the run with.
+    async fn check(&self, checked: Checked<'_>) -> Result<(), (&'static str, ExecutionFailure)> {
+        let source = checked.text();
         if let Some(directive) = CHECK_OPT_OUTS
             .iter()
             .find(|directive| source.contains(**directive))
@@ -208,23 +273,35 @@ impl ExecutionService {
                 ExecutionFailure::new(
                     FailureCode::Compile,
                     format!(
-                        "The program wasn't run: it turns type checking off with {directive}. Remove it and fix the types instead."
+                        "The program wasn't run: {} turns type checking off with {directive}. Remove it and fix the types instead.",
+                        checked.noun()
                     ),
                 ),
             ));
         }
+        let (file, declarations, imports) = match checked {
+            Checked::Program { shape, .. } => (
+                PROGRAM_FILE,
+                program_context(shape),
+                ProgramImports::SdkAndHandlebars,
+            ),
+            Checked::Module(_) => (
+                MODULE_FILE,
+                MODULE_DECLARATIONS.to_owned(),
+                ProgramImports::Handlebars,
+            ),
+        };
         let files = [SourceFile {
-            name: PROGRAM_FILE.to_owned(),
+            name: file.to_owned(),
             source: source.to_owned(),
         }];
-        let declarations = program_context(shape);
         match self
             .checker
-            .check_files(&files, &declarations, ProgramImports::SdkAndHandlebars)
+            .check_files(&files, &declarations, imports)
             .await
         {
             Ok(diagnostics) if diagnostics.is_empty() => Ok(()),
-            Ok(diagnostics) => Err(("rejected", type_errors(&diagnostics))),
+            Ok(diagnostics) => Err(("rejected", type_errors(checked, &diagnostics))),
             Err(CheckError::Busy) => Err((
                 "busy",
                 ExecutionFailure::new(
@@ -252,13 +329,17 @@ impl ExecutionService {
         cancellation: CancellationToken,
     ) -> Result<(), Outcome> {
         let span = tracing::info_span!("code_execution.precheck", check = tracing::field::Empty);
-        if request.source.trim().is_empty() || request.source.len() > self.limits.max_source_bytes {
+        let Some(checked) = Checked::of(request, shape) else {
+            span.record("check", "skipped");
+            return Ok(());
+        };
+        if checked.text().trim().is_empty() || checked.text().len() > self.limits.max_source_bytes {
             span.record("check", "invalid");
-            return Err(ExecutionFailure::new(
-                FailureCode::Limit,
-                AdmissionError::InvalidSource.to_string(),
-            )
-            .into());
+            let invalid = match checked {
+                Checked::Program { .. } => AdmissionError::InvalidSource,
+                Checked::Module(_) => AdmissionError::InvalidModule,
+            };
+            return Err(ExecutionFailure::new(FailureCode::Limit, invalid.to_string()).into());
         }
         // A precheck counts against this executor's admission like a run,
         // so one executor's callers can't fill the checker it shares.
@@ -272,7 +353,7 @@ impl ExecutionService {
         };
         let duration =
             std::time::Duration::from_millis(request.timeout_ms).min(self.limits.max_duration);
-        let checked = tokio::select! {
+        let outcome = tokio::select! {
             biased;
             _ = cancellation.cancelled() => {
                 span.record("check", "cancelled");
@@ -282,9 +363,9 @@ impl ExecutionService {
                 span.record("check", "timed_out");
                 return Err(Outcome::TimedOut);
             }
-            checked = self.check(&request.source, shape).instrument(span.clone()) => checked,
+            outcome = self.check(checked).instrument(span.clone()) => outcome,
         };
-        match checked {
+        match outcome {
             Ok(()) => {
                 span.record("check", "passed");
                 let mut prechecked = self
@@ -297,8 +378,8 @@ impl ExecutionService {
                     prechecked.pop_front();
                 }
                 prechecked.push_back(Prechecked {
-                    shape,
-                    digest: digest(&request.source),
+                    shape: checked.shape(),
+                    digest: digest(checked.text()),
                     until: now + PRECHECK_TTL,
                 });
                 Ok(())
@@ -310,14 +391,15 @@ impl ExecutionService {
         }
     }
 
-    /// Whether `source` passed a precheck for `shape` that no run has used
-    /// yet; using it takes it.
-    fn take_prechecked(&self, shape: ContextShape, source: &str) -> bool {
+    /// Whether `checked` passed a precheck that no run has used yet; using
+    /// it takes it.
+    fn take_prechecked(&self, checked: Checked<'_>) -> bool {
         let mut prechecked = self
             .prechecked
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let digest = digest(source);
+        let shape = checked.shape();
+        let digest = digest(checked.text());
         let now = Instant::now();
         match prechecked
             .iter()
@@ -417,15 +499,24 @@ impl EventSink {
 
 /// What an attended program's module is checked as.
 const PROGRAM_FILE: &str = "main.ts";
+/// What a JS tools program's module is checked as.
+const MODULE_FILE: &str = "module.ts";
+/// A module's ambient declarations: none.
+const MODULE_DECLARATIONS: &str = "export {};\n";
 /// Type errors shown to the model; it fixes these and sees the rest next time.
 const MAX_REPORTED_DIAGNOSTICS: usize = 20;
 
 /// The checker's problems, as the model reads them to fix the program. Each
 /// message names its file, line and column (`at main.ts:2:18`).
-fn type_errors(diagnostics: &[Diagnostic]) -> ExecutionFailure {
-    let mut message = String::from(
-        "The program wasn't run: it doesn't type-check against the Macro SDK. Fix these errors and run it again.\n",
-    );
+fn type_errors(checked: Checked<'_>, diagnostics: &[Diagnostic]) -> ExecutionFailure {
+    let mut message = String::from(match checked {
+        Checked::Program { .. } => {
+            "The program wasn't run: it doesn't type-check against the Macro SDK. Fix these errors and run it again.\n"
+        }
+        Checked::Module(_) => {
+            "The program wasn't run: its module doesn't type-check. Fix these errors and run it again.\n"
+        }
+    });
     for diagnostic in diagnostics.iter().take(MAX_REPORTED_DIAGNOSTICS) {
         message.push('\n');
         message.push_str(&diagnostic.message);

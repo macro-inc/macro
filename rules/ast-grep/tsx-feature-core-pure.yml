@@ -18,6 +18,7 @@ files:
   - apps/web/src/features/task-templates/core/**
   - apps/web/src/features/entity-appearance/core/**
   - apps/web/src/features/passwords/core/**
+  - apps/web/src/features/agent-permissions/core/**
   - apps/web/src/features/notifications-inbox/core/**
   - apps/web/src/features/channel-notification-stacks/core/**
   - apps/web/src/features/new-home/core/**

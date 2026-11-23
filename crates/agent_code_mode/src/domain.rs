@@ -1,4 +1,5 @@
 //! Session and user code-mode use cases.
+mod kinds;
 mod models;
 mod ports;
 mod service;

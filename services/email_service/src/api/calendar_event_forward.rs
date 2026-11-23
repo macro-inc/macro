@@ -14,7 +14,7 @@ use email::domain::{
     event_forward::{EventForwardError, EventForwardRequest, forward_event},
     models::ContactInfo,
 };
-use email::inbound::axum::send_router::{PROGRAM_SEND_REFUSAL, refuse_program_send};
+use email::inbound::axum::send_router::refuse_program_send;
 use macro_authorization::{CredentialAttribution, MacroAuthorizationExtractor, UserOrInternal};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -128,9 +128,9 @@ fn refuse_program_forward(
     attribution: CredentialAttribution,
     headers: &HeaderMap,
 ) -> Result<(), ForwardCalendarEventError> {
-    refuse_program_send(attribution, headers, None).map_err(|_| ForwardCalendarEventError {
+    refuse_program_send(attribution, headers, None).map_err(|refusal| ForwardCalendarEventError {
         code: ForwardCalendarEventErrorCode::ConfirmationRequired,
-        message: PROGRAM_SEND_REFUSAL.to_owned(),
+        message: refusal.to_string(),
     })
 }
 

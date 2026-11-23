@@ -1,12 +1,15 @@
 /**
  * A tool call held for the session owner, once answered. Pending ones live
- * above the composer so there is only one place to answer them.
+ * above the composer so there is only one place to answer them. A hold on
+ * the agent's permissions has no row of its own: its program's row says
+ * whether it ran (`CodeExecutionPart`).
  */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useOptionalAgentSession } from '../../context/AgentSessionContext';
+import { isPermissionHold } from '../../state/permission-approval';
 import {
   describeToolCall,
   possessive,
@@ -52,7 +55,9 @@ export function ToolApprovalPart(props: {
       .exhaustive();
 
   return (
-    <Show when={props.part.status !== 'pending'}>
+    <Show
+      when={props.part.status !== 'pending' && !isPermissionHold(props.part)}
+    >
       <ToolCard
         title={title()}
         trailing={<span class="text-ink">{outcome()}</span>}

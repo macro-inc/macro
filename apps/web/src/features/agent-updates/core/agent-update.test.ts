@@ -63,6 +63,7 @@ describe('agent updates selection', () => {
         serverName: 'Linear',
         toolName: 'search',
         requestedBy: null,
+        approver: null,
       },
     ];
     const updates = selectAgentUpdates(

@@ -37,6 +37,10 @@ Everything a user could plausibly want belongs in the SDK.
 
 To skip: add the method name, alphabetically, to `<camelService>Excluded` in
 `src/coverage/skipped.ts`, then `just coverage && just check`. Don't wrap.
+An excluded endpoint is also out of agents' JS tools: delete its line from
+`crates/agent_permission_registry/registry.json` (moving one out of
+`Excluded` needs a line there; `bun run test` in `packages/code-mode-sdk`
+checks both).
 
 ## To wrap it
 

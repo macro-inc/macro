@@ -12,6 +12,7 @@
 import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import { isCodeModeSupportCall } from '../../state/code-mode-support';
+import { isShowPermissions } from '../../state/permission-approval';
 import {
   isCodeExecution,
   presentedReviewId,
@@ -20,6 +21,7 @@ import {
 import { settledToolStatus } from '../../ui';
 import { CodeExecutionPart } from '../../views/CodeExecutionPart';
 import { PresentedReviewPart } from '../../views/PresentedReviewPart';
+import { ShowPermissionsPart } from '../../views/ShowPermissionsPart';
 import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { EditToolCall } from './EditToolCall';
 import { ExchangeToolCall } from './ExchangeToolCall';
@@ -73,6 +75,13 @@ export function ToolCallPart(props: {
             reviewId={id()}
           />
         )}
+      </Match>
+      <Match when={isShowPermissions(props.part)}>
+        <ShowPermissionsPart
+          part={props.part}
+          common={common()}
+          context={props.context}
+        />
       </Match>
       <Match when={isCodeExecution(props.part)}>
         <CodeExecutionPart

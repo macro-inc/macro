@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
-import { catalog } from './generated/catalog';
+import { catalog, flagged } from './generated/catalog';
 import { buildTools, type Tool, type ToolGrouping } from './tools';
 
 /** `value` without `description` strings, with object keys sorted. */
@@ -48,6 +48,22 @@ describe('buildTools', () => {
       ).toMatchFileSnapshot(`./__snapshots__/tools.${grouping}.json`);
     });
   }
+
+  test('flagged methods are no tools: tool permissions stay out while their flag is off', () => {
+    expect(flagged).toEqual({
+      'enable-agent-permissions': [
+        'Agent.tightenToolPermissions',
+        'Agent.toolPermissions',
+        'AgentSession.toolPermissions',
+        'agents.toolPermissionCatalog',
+      ],
+    });
+    const left = new Set(Object.values(flagged).flat());
+    for (const grouping of ['entity', 'method'] satisfies ToolGrouping[])
+      for (const tool of buildTools(catalog, grouping))
+        for (const operation of tool.operations.keys())
+          expect(left.has(operation), `${tool.name}: ${operation}`).toBe(false);
+  });
 
   test('an entity tool holds one hint class and sets every hint', () => {
     const tools = buildTools(catalog, 'entity');

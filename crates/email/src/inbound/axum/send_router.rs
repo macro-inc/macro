@@ -8,7 +8,7 @@ use axum::{
 use axum_extra::extract::Cached;
 use macro_authorization::{
     CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, UserOrInternal, is_agent_run,
+    MacroAuthorizationState, UserOrInternal, from_dialect_program, is_agent_run,
 };
 use model_error_response::ErrorResponse;
 use thiserror::Error;
@@ -40,6 +40,10 @@ mod test;
 /// email before it leaves, as with the `SendEmail` tool.
 pub const PROGRAM_SEND_REFUSAL: &str = "An agent's program cannot send email without the user seeing it first. In an agent session, present it with execution.reviews.create({kind: 'email', ...}) and return the review's reference. In a channel or document thread, write the email out, ask whether to send it, and only after the user replies approving it call macro.email.sendConfirmed (or EmailMessage.forwardConfirmed, EmailDraft.send, EmailDraft.schedule) with their reply quoted in userConfirmation.";
 
+/// [`PROGRAM_SEND_REFUSAL`] for a program in code mode's dialect
+/// ([`from_dialect_program`]), naming its operations.
+pub const DIALECT_PROGRAM_SEND_REFUSAL: &str = "An agent's program cannot send email without the user seeing it first. In an agent session, present it with tools.agent_harness.create_session_review (kind \"email\") and return its id in reviews. In a channel or document thread, write the email out, ask whether to send it, and only after the user replies approving it call tools.cognition.send_confirmed_email (a forward too, as an email quoting the message) with their reply quoted in userConfirmation, or tools.email.upsert_scheduled_message for a saved draft with it in user_confirmation.";
+
 /// Refuse a send from an agent's program (see [`is_agent_run`]) that does
 /// not quote the user's approval. A person in the app sends from the
 /// composer, which is their confirmation; a route that takes no
@@ -51,7 +55,9 @@ pub fn refuse_program_send(
 ) -> Result<(), SendMessageError> {
     let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
     if is_agent_run(attribution, headers) && !confirmed {
-        return Err(SendMessageError::ConfirmationRequired);
+        return Err(SendMessageError::ConfirmationRequired {
+            dialect: from_dialect_program(headers),
+        });
     }
     Ok(())
 }
@@ -65,9 +71,14 @@ pub enum SendMessageError {
     /// Not found.
     #[error("{0}")]
     NotFound(String),
-    /// An agent's program asked to send without the user seeing the email.
-    #[error("{PROGRAM_SEND_REFUSAL}")]
-    ConfirmationRequired,
+    /// An agent's program asked to send without the user seeing the email;
+    /// `dialect` when it was a dialect program, whose refusal names its
+    /// operations.
+    #[error("{}", if *dialect { DIALECT_PROGRAM_SEND_REFUSAL } else { PROGRAM_SEND_REFUSAL })]
+    ConfirmationRequired {
+        /// The program was in code mode's dialect.
+        dialect: bool,
+    },
     /// The inbox is busy; the same request succeeds once it settles.
     #[error("{0}")]
     Conflict(String),
@@ -85,7 +96,7 @@ impl IntoResponse for SendMessageError {
         let status = match &self {
             SendMessageError::Validation(_) => StatusCode::BAD_REQUEST,
             SendMessageError::NotFound(_) => StatusCode::NOT_FOUND,
-            SendMessageError::ConfirmationRequired => StatusCode::FORBIDDEN,
+            SendMessageError::ConfirmationRequired { .. } => StatusCode::FORBIDDEN,
             SendMessageError::Conflict(_) => StatusCode::CONFLICT,
             SendMessageError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

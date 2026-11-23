@@ -41,14 +41,14 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
       depth={3}
       role="region"
       aria-label="Tool approval request"
-      class="overflow-hidden text-ink"
+      class="@container/card overflow-hidden text-ink"
     >
       <Card.Header class="pb-2">
         <Item class="items-start gap-3 border-0 p-0">
           <Item.Media>
             <ShieldCheck />
           </Item.Media>
-          <Item.Content class="gap-0.5">
+          <Item.Content class="min-w-0 gap-0.5">
             <Card.Title>
               {props.canApprove
                 ? 'Approval needed'

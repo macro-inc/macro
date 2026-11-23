@@ -7,8 +7,9 @@ attribution while using the explicitly selected `acting_as` account's API
 permissions. Credential issuance resolves and approves that selection before
 minting. ExecuteCode requires the originating prompt’s `turn_id`; admission and
 credential approval must reject a replacement turn before adopting its account.
-Saved execution retries must match both actor selection and original
-turn, so a later requester cannot inherit an earlier execution result.
+Saved execution retries must match the actor selection, the original
+turn, the language and the module, so a later requester cannot inherit an earlier
+execution result.
 
 Owns session-authorized code executions, user-scoped executions for the public
 MCP, SDK documentation selection, saved execution records, and durable review
@@ -106,10 +107,64 @@ stacks. Process isolation belongs to
   (`compose_routines::DIRECT`). No byte budget counts the skill, so it never
   takes another entity's place. `mcp_guides` and `entity_guide` (no attached skill) serve
   hosts that carry areas whole. All of it is generated from the SDK; edit the TSDoc.
-- `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
-  public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
+- The code-mode kind (`CodeModeKind`: `TypeScript` or `Dialect`) is the one
+  value every agent-facing code-mode surface follows. `CodeModeKinds`
+  resolves it once per turn (`CodeModeService`, cached by session and active
+  turn in `domain/kinds.rs`): `Dialect` when the owner has
+  `enable-agent-permissions` (the harness's `JsToolsRollout`) and the harness
+  gates JS tools programs (`CodeModeService::with_js_tools`, wired wherever
+  Deno runs programs). The in-process agent reads it at turn start
+  (`TurnRequest::code_mode_kind`), the internal MCP for `tools/list`, tool
+  calls (`CodeModeToolContext::kind`, `session_toolset(kind)`) and
+  `ShowPermissions`; nothing else reads the flag. `execute` refuses a program
+  of the other kind before recording it (`refuse_other_kind`).
+- JavaScript tools programs (`ProgramLanguage::JsTools`, `js_tools`) run in a
+  `Dialect` turn, and only they do: its `ExecuteCode`
+  (`ExecuteCodeWithJsTools`) has no `language`; `source` is always the
+  dialect and the optional `module` is TypeScript with no network, SDK or
+  token (`code_execution`'s README, "The module"), read with `get`/`call`.
+  `execute` refuses a dialect program in a TypeScript turn and a TypeScript
+  one (or a module) in a dialect turn before minting a credential. A dialect
+  program skips the TypeScript check (the gate parses and analyzes it); its
+  module is checked (`check_program`) before anyone is asked to approve it.
+  Only `source` is analyzed and gated; the approver is shown both
+  (`ExecutionCredentials::issue` takes the module). A record keeps its
+  `language` (left out for JavaScript, so those records read as before),
+  its `module` (left out when absent) and the interpreter and catalog's
+  `sdkFingerprint` (`code_mode_assets::JS_TOOLS_FINGERPRINT`), all in the
+  `agent_code_execution.record` JSON, so no migration. The public MCP's
+  `UserExecuteCode` stays TypeScript only, and the harness withholds it from
+  calls an agent session in a dialect turn makes.
+- Dialect docs sit beside the TypeScript ones and never replace them. A
+  dialect turn's `DescribeCodeTools`/`ReadCodeDocs` (in
+  `toolset_with_js_tools`, from `src/inbound/toolset/dialect.rs`) serve the
+  hand-written guides in `src/inbound/toolset/dialect/` (program,
+  results, permissions, module, search, examples); `select_documentation`
+  returns nothing for a dialect turn. Each kind's texts must never teach the
+  other (`each_kind_teaches_only_its_own_code`), every `tools.*` call in them
+  must be in the catalog, and every `js` example must pass the analyzer
+  (`every_dialect_example_is_analyzed`, Deno).
+- `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_js_tools()`
+  for a dialect turn (`session_toolset(kind)` picks;
+  `ExecuteCodeWithJsTools`'s description is `toolset/session/js_tools.md`,
+  `js_tools_permissions.md` and the PresentView schema in dialect terms
+  (`dialect_view_schema`), none of today's TypeScript texts;
+  `each_kinds_execute_code_teaches_only_its_own_code` holds both kinds to
+  it), `user_toolset()` for the public MCP. With JS
+  tools off, the session tools, the prompt's code-mode sections and the
+  discovery guides are pinned byte for byte by
+  `toolset/test/without_js_tools.json` (`UPDATE_TOOLSET_SNAPSHOT=1` rewrites
+  it; only for a change meant for everyone).
+  Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
   guidance once, there.
+- Agent permissions: credential issue may answer `CodeModeError::NotRun`
+  (the program was checked and not run). `run` records it as `failed` with
+  `error` (the model's text) and, when its permissions stopped it,
+  `permission` (`ExecutionPermission`: `blocked` or `declined`), on both the
+  record and the receipt, and returns the receipt. Absent `permission`
+  serializes as before. The `code_mode.execution` span's `permission` field
+  says `off`, `admitted`, `blocked`, `declined` or `cannot_analyze`.
 
 ## Boundaries
 
@@ -143,6 +198,12 @@ longer delivery state.
 
 - `cargo test -p agent_code_mode --lib` from the repository root, with live local
   database configuration and `SQLX_OFFLINE` unset.
+- Keep `toolset/session/js_tools.md`'s example (a program and its module)
+  running: it runs end to end through the gate
+  (`toolset/test/js_tools.rs`, `-- --include-ignored` with Deno 2.9.6 on
+  `PATH`), its module type-checks
+  (`the_descriptions_module_example_type_checks`), and its operations must be
+  in the JS tools catalog (`the_js_tools_texts_call_catalog_operations`).
 - The review toolset test builds every review tool through shared provider schema
   validation.
 - The SDK catalog and operation labels come from `crates/code_mode_assets`,

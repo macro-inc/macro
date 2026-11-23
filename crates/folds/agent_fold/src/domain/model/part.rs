@@ -102,6 +102,10 @@ pub enum MessagePart {
         /// Approved for good: the person who asked may make the calls it
         /// covers without the owner being asked again.
         remembered: bool,
+        /// For a hold on the agent's permissions (`macro-sdk`), the only
+        /// person who may approve or decline it; absent on other holds,
+        /// whose approver is the session's owner.
+        approver: Option<String>,
     },
     /// A user-issued control operation on the session.
     Control {

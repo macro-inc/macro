@@ -44,6 +44,7 @@ mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
 mod speech_gateway;
+mod tool_permissions;
 mod trigger;
 mod voice_gateway;
 
@@ -235,6 +236,29 @@ struct PendingHarnessWork {
 }
 
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+
+/// The analyzer the permission gate lists a JS tools program's operations
+/// with, or `None` when it can't start. That is logged, not fatal: without
+/// it JS tools programs are never offered, and everything else still boots.
+async fn js_tools_analyzer(
+    binary: std::path::PathBuf,
+    scratch: std::path::PathBuf,
+) -> Option<Arc<dyn code_execution::domain::ProgramAnalyzer>> {
+    match code_execution::outbound::deno::analyze::JsToolsAnalyzer::new(
+        binary,
+        scratch,
+        8,
+        code_execution::domain::Limits::default().max_source_bytes,
+    )
+    .await
+    {
+        Ok(analyzer) => Some(Arc::new(analyzer)),
+        Err(error) => {
+            tracing::error!(%error, "JS tools analyzer failed to start; JS tools programs are off");
+            None
+        }
+    }
+}
 
 fn macro_mcp_endpoint(base_url: &McpServiceUrl) -> Result<url::Url, url::ParseError> {
     // Append rather than Url::join("/mcp"), which would discard the gateway prefix.
@@ -661,6 +685,9 @@ pub async fn run() -> anyhow::Result<()> {
     .context("failed to compose cognition APIs")?;
     let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
+    // List the SDK operations a JS tools program may call, for the
+    // permission gate, wherever Deno runs programs.
+    let mut program_analyzers = code_mode::permissions::Analyzers::default();
     let code_runner = match &config.deno_binary {
         Some(binary) => {
             let runner = code_execution::outbound::deno::DenoRunner::new(
@@ -671,6 +698,9 @@ pub async fn run() -> anyhow::Result<()> {
             .await
             .map_err(|error| anyhow::anyhow!("invalid Deno runtime: {error}"))?;
             let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
+            // JS tools programs need only Deno: the bundle is embedded.
+            program_analyzers.js_tools =
+                js_tools_analyzer(binary.into(), code_scratch.path().join("analyses-js")).await;
             // One checker for every executor: each attended program is
             // type-checked before it runs.
             let checker: Arc<dyn code_execution::domain::ProgramChecker> = Arc::new(
@@ -809,6 +839,7 @@ pub async fn run() -> anyhow::Result<()> {
     });
     let public_code_mode = match &code_runner {
         Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
+            kinds: None,
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -828,32 +859,6 @@ pub async fn run() -> anyhow::Result<()> {
         }),
         None => None,
     };
-    let public_mcp_router = public_mcp::router(
-        &config,
-        &secrets,
-        tool_context.clone(),
-        pool.clone(),
-        aws_sdk_kms::Client::new(&aws_config),
-        macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
-            config.environment,
-            &secrets,
-        )
-        .await?,
-        event_broker_tracker.clone(),
-        service_shutdown.clone(),
-        public_code_mode,
-        feature_flags
-            .clone()
-            .map(|flags| {
-                anthropic_gateway::brain::BrainRollout::new(
-                    agent_credentials::rollout::PgAgentCreators::new(pool.clone()),
-                    flags,
-                )
-            })
-            .unwrap_or_default(),
-    )
-    .await
-    .context("failed to compose public MCP")?;
     // Session tasks are read as the owner through the same services Macro's own tools use.
     let task_directory = agent_harness::outbound::session_tasks::DocumentTaskDirectory::new(
         tool_context.document_tool_context.service.clone(),
@@ -919,31 +924,115 @@ pub async fn run() -> anyhow::Result<()> {
         agent_code_mode::domain::ui_commands::NavigableRoutes::generated()
             .context("the generated agent route table does not parse")?,
     );
-    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
-        Arc::new(agent_code_mode::domain::CodeModeService::new(
-            code_executor,
-            Arc::new(code_mode::RunCredentials {
-                egress: code_egress.clone(),
-                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
-                signer: MacroApiTokenSigner::new(
-                    pool.clone(),
-                    config.macro_api_token_issuer.as_ref(),
-                    config.macro_api_token_private_secret_key.as_ref(),
+    // Agent permissions (`enable-agent-permissions`): who may edit an agent
+    // is the bots service's rule, and the catalog is the checked-in registry.
+    // Its routes and the gate on JS tools programs share it.
+    let agent_permissions_service: Arc<dyn agent_permissions::domain::service::AgentPermissions> =
+        Arc::new(
+            agent_permissions::domain::service::AgentPermissionsService::new(
+                agent_permissions::outbound::pg::PgPermissionStore::new(pool.clone()),
+                tool_permissions::BotsAgentDirectory(
+                    bots::domain::service::BotServiceImpl::new(
+                        PgBotsRepo::new(pool.clone()),
+                        broker.clone(),
+                        computers::harness_service(&pool),
+                    ),
+                    PgBotsRepo::new(pool.clone()),
                 ),
-                gate: owner_tool_gate.clone(),
-                endpoints: code_mode::sdk_endpoints()?,
-                scopes: Arc::clone(&session_scopes),
-            }),
-            execution_store,
-            execution_turns,
-            Arc::new(code_mode::images::StaticFileModelImages(
-                static_file_service_client::StaticFileServiceClient::with_timeout(
-                    config.internal_api_key.clone(),
-                    macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
-                    std::time::Duration::from_secs(10),
+                tool_permissions::RepoTeamDirectory(
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
                 ),
-            )),
-        ));
+                tool_permissions::RepoSessionDirectory(session_repo.clone()),
+                code_mode::PermissionsFlag(feature_flags.clone()),
+                Arc::new(agent_permissions::outbound::registry::registry_catalog()),
+            ),
+        );
+    // JS tools programs are offered only where the gate analyzes them.
+    let js_tools_fingerprint = program_analyzers
+        .js_tools
+        .as_ref()
+        .map(|analyzer| analyzer.sdk_fingerprint().to_owned());
+    let permission_gate = program_analyzers.any().then(|| {
+        Arc::new(code_mode::permissions::PermissionGate {
+            analyzers: program_analyzers,
+            permissions: Arc::clone(&agent_permissions_service),
+            holds: tool_approvals.clone(),
+            rollout: Arc::new(code_mode::PermissionsFlag(feature_flags.clone())),
+            prompters: Arc::new(session_repo.clone()),
+        })
+    });
+    let session_code_mode = agent_code_mode::domain::CodeModeService::new(
+        code_executor,
+        Arc::new(code_mode::RunCredentials {
+            egress: code_egress.clone(),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            signer: MacroApiTokenSigner::new(
+                pool.clone(),
+                config.macro_api_token_issuer.as_ref(),
+                config.macro_api_token_private_secret_key.as_ref(),
+            ),
+            gate: owner_tool_gate.clone(),
+            endpoints: code_mode::sdk_endpoints()?,
+            scopes: Arc::clone(&session_scopes),
+            permissions: permission_gate.clone(),
+        }),
+        execution_store,
+        execution_turns,
+        Arc::new(code_mode::images::StaticFileModelImages(
+            static_file_service_client::StaticFileServiceClient::with_timeout(
+                config.internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                std::time::Duration::from_secs(10),
+            ),
+        )),
+    );
+    // JavaScript tools programs, for owners with agent permissions, which
+    // gate every one of them.
+    let session_code_mode = match js_tools_fingerprint {
+        Some(fingerprint) => {
+            session_code_mode.with_js_tools(agent_code_mode::domain::JsToolsPrograms {
+                fingerprint,
+                rollout: Arc::new(code_mode::JsToolsRollout(code_mode::PermissionsFlag(
+                    feature_flags.clone(),
+                ))),
+            })
+        }
+        None => session_code_mode,
+    };
+    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> = Arc::new(session_code_mode);
+    let public_mcp_router = public_mcp::router(
+        &config,
+        &secrets,
+        tool_context.clone(),
+        pool.clone(),
+        aws_sdk_kms::Client::new(&aws_config),
+        macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
+            config.environment,
+            &secrets,
+        )
+        .await?,
+        event_broker_tracker.clone(),
+        service_shutdown.clone(),
+        // An agent session's public MCP code mode follows its turn's kind.
+        public_code_mode.map(|public| public_mcp::PublicCodeMode {
+            kinds: Some(Arc::new(public_mcp::OwnerCodeModeKinds {
+                sessions: session_repo.clone(),
+                kinds: code_mode.clone(),
+            })),
+            ..public
+        }),
+        feature_flags
+            .clone()
+            .map(|flags| {
+                anthropic_gateway::brain::BrainRollout::new(
+                    agent_credentials::rollout::PgAgentCreators::new(pool.clone()),
+                    flags,
+                )
+            })
+            .unwrap_or_default(),
+    )
+    .await
+    .context("failed to compose public MCP")?;
     let session_metadata_realtime = WorkRegistrationRealtime::new(
         ConnectionGatewayAgentSessionRealtime::new(
             connection_gateway.clone(),
@@ -1006,6 +1095,7 @@ pub async fn run() -> anyhow::Result<()> {
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
             app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
+            permissions: Some(Arc::clone(&agent_permissions_service)),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
@@ -1090,6 +1180,7 @@ pub async fn run() -> anyhow::Result<()> {
         )
         .with_admission(admission.clone())
         .with_agent_keys(Arc::clone(&agent_keys))
+        .with_code_mode_kinds(code_mode.clone())
         .with_dev_commands(enable_dev_commands),
     );
     let inmem = InMemRuntime {
@@ -2140,6 +2231,15 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     ));
+    // Agent permissions (`enable-agent-permissions`): who may edit an agent
+    // is the bots service's rule, and the catalog is the checked-in registry.
+    let agent_tool_permissions = agent_permissions::inbound::axum_router::router(
+        agent_permissions::inbound::axum_router::AgentPermissionsRouterState::new(
+            Arc::clone(&agent_permissions_service),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let notification_service = Arc::new(agent_session::domain::notifications::NotificationService(
         Arc::new(agent_session::outbound::notifications::PgNotificationStore(
             pool.clone(),
@@ -2226,6 +2326,7 @@ pub async fn run() -> anyhow::Result<()> {
             .with_auto_archive(auto_archive)
             .with_work_registrations(work_registrations)
             .with_tool_approvals(tool_approval_answers)
+            .with_agent_tool_permissions(agent_tool_permissions)
             .with_app_connections(app_connections)
             .with_code_executions(code_executions)
             .with_notifications(notification_ingress)

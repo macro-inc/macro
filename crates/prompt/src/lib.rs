@@ -15,6 +15,7 @@ pub mod coding_agents;
 pub mod connected_toolsets;
 pub mod databases;
 pub mod deferred_tools;
+pub mod dialect;
 pub mod do_not;
 pub mod math;
 pub mod mcp_item_links;
@@ -39,7 +40,7 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
 
 /// [`BASE_PROMPT`] without its tone section, for agent sessions, whose
 /// preamble ([`agent_session`]) sets their own tone.
-static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
+pub(crate) static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
     .compose(&citations::PROMPT)
     .compose(&mentions::PROMPT)
     .compose(&do_not::PROMPT)
@@ -69,7 +70,8 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&skills::PROMPT);
 
 /// Agent-session instructions in code mode: [`SESSION_TOOL_USE_PROMPT`] with
-/// the [`code_mode`] section and nonblocking saved reviews.
+/// the [`code_mode`] section and nonblocking saved reviews. Sessions that run
+/// the dialect get [`dialect::session_tool_use_prompt`] instead.
 pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&code_mode::PROMPT)
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)

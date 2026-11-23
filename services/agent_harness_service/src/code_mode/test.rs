@@ -48,13 +48,29 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
         calls: AtomicUsize::new(0),
     };
     assert!(matches!(
-        approve_run(&gate, &identity, "fixture", &CancellationToken::new()).await,
+        approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            None,
+            ProgramLanguage::Javascript,
+            &CancellationToken::new()
+        )
+        .await,
         Err(CodeModeError::Invalid(_))
     ));
     let cancel = CancellationToken::new();
     cancel.cancel();
     assert!(matches!(
-        approve_run(&gate, &identity, "fixture", &cancel).await,
+        approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            None,
+            ProgramLanguage::Javascript,
+            &cancel
+        )
+        .await,
         Err(CodeModeError::Forbidden)
     ));
     assert_eq!(gate.calls.load(Ordering::SeqCst), 1);
@@ -63,9 +79,76 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
         calls: AtomicUsize::new(0),
     };
     assert!(
-        approve_run(&gate, &identity, "fixture", &CancellationToken::new())
-            .await
-            .is_ok()
+        approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            None,
+            ProgramLanguage::Javascript,
+            &CancellationToken::new()
+        )
+        .await
+        .is_ok()
+    );
+}
+
+/// Records the arguments the approval hold shows.
+#[derive(Default)]
+struct Recording(std::sync::Mutex<Vec<serde_json::Value>>);
+impl NativeToolGate for Recording {
+    fn check<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+        args: &'a serde_json::Value,
+    ) -> Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        self.0.lock().unwrap().push(args.clone());
+        Box::pin(async { NativeToolVerdict::Refuse("recorded".into()) })
+    }
+
+    fn refuse_remote_mcp<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>> {
+        Box::pin(async { None })
+    }
+}
+
+#[tokio::test]
+async fn the_approval_hold_names_a_js_tools_programs_language() {
+    let session = test_agent_session(AgentSessionId::new());
+    let identity = ExecutionIdentity {
+        execution: agent_code_mode::domain::ExecutionId::mint(),
+        acting_as: ai_toolset::actor::ToolActor::Owner,
+        session: session.id,
+        agent_id: session.bot_id,
+        owner: session.owner_user().unwrap().clone(),
+        turn: macro_uuid::Uuid::from_u128(1),
+    };
+    let gate = Recording::default();
+    for (language, module) in [
+        (ProgramLanguage::JsTools, Some("export const x = 1;")),
+        (ProgramLanguage::Javascript, None),
+    ] {
+        let _ = approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            module,
+            language,
+            &CancellationToken::new(),
+        )
+        .await;
+    }
+    let held = gate.0.lock().unwrap();
+    assert_eq!(held[0]["language"], "js_tools");
+    // The approver sees the module beside the program.
+    assert_eq!(held[0]["module"], "export const x = 1;");
+    // A JavaScript hold reads as it did before languages.
+    assert_eq!(
+        held[1],
+        serde_json::json!({"source": "fixture", "acting_as": identity.acting_as, "turn_id": identity.turn})
     );
 }
 
@@ -87,9 +170,16 @@ async fn execution_credentials_use_the_gate_resolved_requester() {
         calls: AtomicUsize::new(0),
     };
     assert_eq!(
-        approve_run(&gate, &identity, "fixture", &CancellationToken::new())
-            .await
-            .unwrap(),
+        approve_run(
+            &gate,
+            &identity,
+            "fixture",
+            None,
+            ProgramLanguage::Javascript,
+            &CancellationToken::new()
+        )
+        .await
+        .unwrap(),
         requester
     );
 }
@@ -373,6 +463,8 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.setChannelSection",
         "storage.updateChannelSection",
         "scheduled-action.attachSuggestionDraft",
+        // An agent restricting its own tool permissions only takes away.
+        "agent-harness.tightenAgentToolPermissions",
         // Reads and inference sent as POST.
         "agent-harness.agentSessionsForPullRequest",
         "agent-harness.agentSessionsForPullRequests",
@@ -697,8 +789,15 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             }),
             endpoints: SdkEndpoints::default(),
             scopes: Arc::new(Scopes(scope)),
+            permissions: None,
         }
-        .issue(&identity, "fixture", CancellationToken::new())
+        .issue(
+            &identity,
+            "fixture",
+            None,
+            ProgramLanguage::Javascript,
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
         assert_eq!(
@@ -945,6 +1044,8 @@ async fn suggestions_brief_programs_type_check() {
                 ExecuteRequest {
                     source: source.clone(),
                     timeout_ms: 30_000,
+                    language: code_execution::domain::Language::Javascript,
+                    module: None,
                 },
                 RunEnvironment {
                     session_id: Some(uuid::Uuid::now_v7()),
@@ -965,4 +1066,257 @@ async fn suggestions_brief_programs_type_check() {
         );
     }
     service.shutdown().await;
+}
+
+/// Agent permissions' page and API follow their flag alone (JavaScript tools
+/// programs need nothing more), and are off when the flags can't be read.
+#[tokio::test]
+async fn agent_permissions_follow_their_flag() {
+    use agent_permissions::domain::ports::PermissionsRollout;
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    use feature_flags::{FlagSnapshot, FlagValue};
+
+    let permissions_only =
+        MacroUserIdStr::try_from("macro|permissions-only@example.com".to_owned()).unwrap();
+    let other = MacroUserIdStr::try_from("macro|other@example.com".to_owned()).unwrap();
+    let unreadable = MacroUserIdStr::try_from("macro|unreadable@example.com".to_owned()).unwrap();
+    let on = |keys: &[&str]| {
+        FlagSnapshot::new(
+            keys.iter()
+                .map(|key| ((*key).to_owned(), FlagValue::Boolean(true))),
+        )
+    };
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(permissions_only.clone(), Ok(on(&[PERMISSIONS_FLAG])));
+    flags.set(other.clone(), Ok(on(&["enable-something-else"])));
+    flags.set(unreadable.clone(), Err("posthog is down".to_owned()));
+    let rollout = PermissionsFlag(Some(flags));
+
+    assert!(rollout.enabled(&permissions_only).await);
+    assert!(!rollout.enabled(&other).await);
+    assert!(!rollout.enabled(&unreadable).await);
+    assert!(
+        !PermissionsFlag::<FakeFeatureFlags>(None)
+            .enabled(&permissions_only)
+            .await
+    );
+}
+
+/// The whole credential issue with the permission gate, against the same
+/// fixtures as [`a_run_signs_its_sessions_scope_into_its_credential`].
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
+    use super::permissions::test::{call, gate};
+    use agent_permissions::domain::model::PermissionState;
+    use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
+    use code_execution::domain::Analysis;
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ('00000000-0000-4000-8000-000000000001', 'owner@example.com', 'owner@example.com', 'stripe_owner');
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ('macro|owner@example.com', 'owner@example.com', '00000000-0000-4000-8000-000000000001');
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../crates/agent_code_mode/src/outbound/postgres/test/sessions.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(
+        1,
+    )));
+    let owner = session.owner_user().unwrap().clone();
+    let identity = ExecutionIdentity {
+        execution: agent_code_mode::domain::ExecutionId::mint(),
+        acting_as: ai_toolset::actor::ToolActor::Owner,
+        session: session.id,
+        agent_id: bot_id::BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0xa9e7)),
+        owner: owner.clone(),
+        turn: macro_uuid::Uuid::from_u128(1),
+    };
+    let correlations = || async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM agent_correlations"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+    };
+    let analysis = || {
+        Analysis::Calls(
+            [
+                call("email", "send_message"),
+                call("storage", "get_document"),
+            ]
+            .into(),
+        )
+    };
+    let issue = |parts: super::permissions::test::Parts, language: ProgramLanguage| {
+        let gate = Arc::new(Gate {
+            verdict: NativeToolVerdict::RunAs(owner.clone()),
+            calls: AtomicUsize::new(0),
+        });
+        let credentials = RunCredentials {
+            egress: EgressRollout::new(None),
+            signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            gate: gate.clone(),
+            endpoints: SdkEndpoints::default(),
+            scopes: Arc::new(Scopes(None)),
+            permissions: Some(Arc::new(parts.gate)),
+        };
+        let identity = identity.clone();
+        async move {
+            let issued = credentials
+                .issue(
+                    &identity,
+                    "fixture",
+                    None,
+                    language,
+                    CancellationToken::new(),
+                )
+                .await;
+            (issued, gate.calls.load(Ordering::SeqCst))
+        }
+    };
+
+    // Flag off, or JavaScript: exactly today's run, never analyzed.
+    for (rollout, language) in [(true, ProgramLanguage::Javascript)] {
+        let parts = gate(analysis(), &[], ToolApprovalStatus::Approved, rollout);
+        let analyzer = parts.analyzer.clone();
+        let (issued, asked) = issue(parts, language).await;
+        assert_eq!(issued.unwrap().environment.allowed_operations, None);
+        assert_eq!(asked, 1);
+        assert_eq!(*analyzer.calls.lock().unwrap(), 0);
+    }
+    let before = correlations().await;
+
+    // A JS tools program the gate did not check (its rollout read off, as
+    // when the flags can't be read) never runs ungated: refused before
+    // anyone is asked, a correlation or a credential.
+    let parts = gate(analysis(), &[], ToolApprovalStatus::Approved, false);
+    let (issued, asked) = issue(parts, ProgramLanguage::JsTools).await;
+    assert!(matches!(
+        issued,
+        Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+            permission: None,
+            ..
+        }))
+    ));
+    assert_eq!(asked, 0);
+    assert_eq!(correlations().await, before);
+
+    // Never: refused before the owner hold, a correlation or a credential.
+    let parts = gate(
+        analysis(),
+        &[("email.send_message", PermissionState::Never)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let holds = parts.holds.clone();
+    let (issued, asked) = issue(parts, ProgramLanguage::JsTools).await;
+    assert!(matches!(
+        issued,
+        Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+            permission: Some(agent_code_mode::domain::ExecutionPermission::Blocked { .. }),
+            ..
+        }))
+    ));
+    assert_eq!(asked, 0);
+    assert!(holds.held.lock().unwrap().is_empty());
+    assert_eq!(correlations().await, before);
+
+    // Ask, declined: no correlation or credential either.
+    let parts = gate(
+        analysis(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Denied,
+        true,
+    );
+    let (issued, _) = issue(parts, ProgramLanguage::JsTools).await;
+    assert!(matches!(
+        issued,
+        Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+            permission: Some(agent_code_mode::domain::ExecutionPermission::Declined { .. }),
+            ..
+        }))
+    ));
+    assert_eq!(correlations().await, before);
+
+    // Ask, approved: runs limited to everything it may call.
+    let parts = gate(
+        analysis(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let holds = parts.holds.clone();
+    let (issued, asked) = issue(parts, ProgramLanguage::JsTools).await;
+    let environment = issued.unwrap().environment;
+    assert_eq!(asked, 1);
+    assert_eq!(holds.held.lock().unwrap()[0].approver, owner);
+    assert_eq!(
+        holds.held.lock().unwrap()[0].arguments["permission"]["language"],
+        "js_tools"
+    );
+    assert_eq!(
+        environment.allowed_operations,
+        Some(vec![
+            call("email", "send_message"),
+            call("storage", "get_document")
+        ])
+    );
+    assert_eq!(correlations().await, before + 1);
+}
+
+/// The gate applies per language: the permissions flag for JavaScript tools
+/// programs, never for plain JavaScript.
+#[tokio::test]
+async fn the_gate_follows_the_permissions_flag() {
+    use super::permissions::LanguageRollout;
+    use agent_code_mode::domain::OwnerRollout;
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    use feature_flags::{FlagSnapshot, FlagValue};
+
+    let user = |name: &str| MacroUserIdStr::try_from(format!("macro|{name}@example.com")).unwrap();
+    let on = |keys: &[&str]| {
+        FlagSnapshot::new(
+            keys.iter()
+                .map(|key| ((*key).to_owned(), FlagValue::Boolean(true))),
+        )
+    };
+    let permissions = user("permissions");
+    let other = user("other");
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(permissions.clone(), Ok(on(&[PERMISSIONS_FLAG])));
+    flags.set(other.clone(), Ok(on(&["enable-something-else"])));
+    let rollout = PermissionsFlag(Some(flags));
+
+    for (owner, language, gated) in [
+        (&permissions, ProgramLanguage::JsTools, true),
+        (&permissions, ProgramLanguage::Javascript, false),
+        (&other, ProgramLanguage::JsTools, false),
+        (&other, ProgramLanguage::Javascript, false),
+    ] {
+        assert_eq!(
+            LanguageRollout::enabled(&rollout, owner, language).await,
+            gated,
+            "{owner:?} {language:?}"
+        );
+    }
+    // JavaScript tools programs are offered on the permissions flag alone.
+    let js_tools = JsToolsRollout(rollout);
+    assert!(OwnerRollout::enabled(&js_tools, &permissions).await);
+    assert!(!OwnerRollout::enabled(&js_tools, &other).await);
+    assert!(
+        !LanguageRollout::enabled(
+            &PermissionsFlag::<FakeFeatureFlags>(None),
+            &permissions,
+            ProgramLanguage::JsTools
+        )
+        .await
+    );
 }

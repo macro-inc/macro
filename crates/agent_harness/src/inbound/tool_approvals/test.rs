@@ -10,6 +10,10 @@ fn refusals_answer_with_the_status_the_buttons_branch_on() {
         status(ToolApprovalError::NobodyToRemember),
         StatusCode::UNPROCESSABLE_ENTITY
     );
+    assert_eq!(
+        status(ToolApprovalError::NeedsPerson),
+        StatusCode::FORBIDDEN
+    );
 }
 
 #[test]

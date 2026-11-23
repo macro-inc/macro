@@ -747,6 +747,72 @@ export type AgentSetModelAction = {
 };
 
 /**
+ * An agent's permissions as they apply to the caller.
+ */
+export type AgentToolPermissions = {
+    /**
+     * The agent (or persona) id.
+     */
+    agentId: BotId;
+    /**
+     * The caller may change and reset them.
+     */
+    canEdit: boolean;
+    /**
+     * The caller may set this agent's source or detach it: a person who
+     * may edit an owned agent.
+     */
+    canSetSource: boolean;
+    /**
+     * The caller may tighten them.
+     */
+    canTighten: boolean;
+    /**
+     * Each action's default, in display order: what every group's action
+     * without an exception follows, a new group's included.
+     */
+    defaults: Array<ToolPermissionDefault>;
+    /**
+     * Every catalog group with an operation, with the actions it has
+     * operations for.
+     */
+    groups: Array<ToolPermissionGroup>;
+    /**
+     * When it follows: the settings it inherits, as a policy owning them
+     * would hold them (what a detach copies, before the agent's own
+     * restrictions). Read only.
+     */
+    inherited?: Array<ToolPermissionRule> | null;
+    /**
+     * Whose settings these are.
+     */
+    kind: ToolPermissionPolicyKind;
+    /**
+     * The policy's stable id.
+     */
+    policyId: ToolPermissionPolicyId;
+    /**
+     * How many operations are not always allowed.
+     */
+    restricted: number;
+    /**
+     * The saved settings, including any on a group's action no operation
+     * has yet (not in `groups`, applied once one does).
+     */
+    rules: Array<ToolPermissionRule>;
+    /**
+     * The agent's restrictions on itself for this session, when the view is
+     * of a session.
+     */
+    sessionRules?: Array<ToolPermissionRule> | null;
+    source?: null | ToolPermissionSource;
+    /**
+     * The registry version the resolution used.
+     */
+    version: string;
+};
+
+/**
  * One pending interaction, or one stalled session.
  */
 export type AgentUpdate = {
@@ -1698,6 +1764,22 @@ export type CredentialRejectedResponse = {
 export type DecisionVia = 'card' | 'chat' | 'inbox';
 
 /**
+ * How an approval ended without approving.
+ */
+export type DeclinedStatus = 'denied' | 'cancelled' | 'expired';
+
+/**
+ * A detach, and the changes to make in the same transaction.
+ */
+export type DetachToolPermissions = {
+    /**
+     * Changes applied on top of the snapshot (between 1 and 200), as `set`
+     * takes them.
+     */
+    changes?: Array<ToolPermissionChange> | null;
+};
+
+/**
  * HTTP request selecting one provider to probe.
  */
 export type DiscoverAgentCapabilitiesRequest = {
@@ -1948,6 +2030,58 @@ export type ExecutionActivity = {
 export type ExecutionId = string;
 
 /**
+ * Why a program did not run, when its permissions stopped it.
+ */
+export type ExecutionPermission = {
+    /**
+     * The operations set to never.
+     */
+    operations: Array<GatedOperation>;
+    outcome: 'blocked';
+} | {
+    /**
+     * The operations it asked about.
+     */
+    operations: Array<GatedOperation>;
+    outcome: 'declined';
+    /**
+     * How the approval ended.
+     */
+    status: DeclinedStatus;
+};
+
+/**
+ * Compact model result with an identity the UI uses to load the durable record.
+ */
+export type ExecutionReceipt = {
+    /**
+     * Observed SDK operations for conversation activity snapshots.
+     */
+    activity?: Array<ExecutionActivity>;
+    /**
+     * Safe failure text, when execution did not succeed.
+     */
+    error?: string | null;
+    /**
+     * Reference to the session's durable rendering record.
+     */
+    executionId: ExecutionId;
+    /**
+     * Pixels of the images `main` returned in `images`, for the model.
+     */
+    modelMedia?: Array<ModelImage>;
+    permission?: null | ExecutionPermission;
+    /**
+     * Only the value explicitly returned by the program.
+     */
+    result?: unknown;
+    /**
+     * Last recorded outcome; running may be stale after a process interruption.
+     */
+    status: ExecutionStatus;
+};
+
+/**
  * Durable source and final outcome, with historical bridge calls when present.
  * The full journal is not included in the model's tool result.
  */
@@ -1974,11 +2108,28 @@ export type ExecutionRecord = {
      */
     executionId: ExecutionId;
     /**
+     * The language `source` is written in; historical records are JavaScript.
+     * JavaScript, the default, is left out, so records of JavaScript
+     * programs serialize as they did before languages.
+     */
+    language?: ProgramLanguage;
+    /**
+     * A JS tools program's TypeScript module, read with `get` and `call`;
+     * absent for every other program, so their records read as before.
+     */
+    module?: string | null;
+    permission?: null | ExecutionPermission;
+    /**
      * JSON returned by the program, if successful.
      */
     result?: unknown;
     /**
-     * The submitted TypeScript module.
+     * For a JavaScript tools program, the fingerprint of the interpreter and
+     * catalog it ran with.
+     */
+    sdkFingerprint?: string | null;
+    /**
+     * The submitted program: a JavaScript module or a JS tools script.
      */
     source: string;
     /**
@@ -2061,6 +2212,44 @@ export type ExtractInputResponse = InputSuggestions & {
 export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
 
 /**
+ * One SDK operation a program may call, as the gate judged it: what the
+ * approval dialog lists and a refusal names.
+ */
+export type GatedOperation = {
+    action?: null | PermissionAction;
+    /**
+     * Its group id; `unclassified` for an operation the registry does not
+     * know.
+     */
+    group: string;
+    /**
+     * Its group's display name.
+     */
+    groupName: string;
+    /**
+     * What it does, for a person. `service.operation` for an operation the
+     * registry does not know.
+     */
+    label: string;
+    /**
+     * The raw operationId, e.g. `send_message`.
+     */
+    operation: string;
+    /**
+     * Where the state comes from.
+     */
+    origin: ToolPermissionOrigin;
+    /**
+     * The SDK's spec name, e.g. `email`.
+     */
+    service: string;
+    /**
+     * Its effective state.
+     */
+    state: ToolPermissionState;
+};
+
+/**
  * One end of the compared range.
  */
 export type GitRefDto = {
@@ -2072,6 +2261,21 @@ export type GitRefDto = {
      * The commit, when known.
      */
     sha?: string | null;
+};
+
+/**
+ * One group, and which of its actions.
+ */
+export type GroupSelection = {
+    /**
+     * The actions to show; empty or absent shows every action the group has
+     * operations for.
+     */
+    actions?: Array<PermissionAction>;
+    /**
+     * A group id, such as `documents` or `email`.
+     */
+    group: string;
 };
 
 /**
@@ -2283,6 +2487,32 @@ export type LogFrameDto = {
     direction: LogDirectionDto;
 };
 
+/**
+ * An operation a change would have made more permissive.
+ */
+export type LoosenedOperation = {
+    /**
+     * Its state before.
+     */
+    from: ToolPermissionState;
+    /**
+     * What it does, for a person.
+     */
+    label: string;
+    /**
+     * The raw operationId.
+     */
+    operation: string;
+    /**
+     * The SDK's spec name.
+     */
+    service: string;
+    /**
+     * Its state after.
+     */
+    to: ToolPermissionState;
+};
+
 export type MacroUserIdStr = string;
 
 /**
@@ -2346,6 +2576,34 @@ export type MessageSuggestions = {
 export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
 
 /**
+ * Base64 PNG pixels the model sees as an image block, never a URL.
+ */
+export type ModelImage = {
+    /**
+     * Base64 PNG bytes.
+     */
+    data: string;
+    /**
+     * Always a PNG.
+     */
+    mediaType: ModelImageMediaType;
+    /**
+     * Always an image.
+     */
+    type: ModelMediaType;
+};
+
+/**
+ * The media type of a model image; only PNG.
+ */
+export type ModelImageMediaType = 'image/png';
+
+/**
+ * The kind of model media; only images.
+ */
+export type ModelMediaType = 'image';
+
+/**
  * Monthly ordinal weekday, such as the first Friday.
  */
 export type MonthlyWeekday = {
@@ -2392,6 +2650,12 @@ export type OpenInApp = {
      */
     placement?: UiPlacement;
 };
+
+/**
+ * What an operation does to its group's data, the unit a person allows,
+ * asks about or refuses.
+ */
+export type PermissionAction = 'create' | 'read' | 'update' | 'destroy' | 'send';
 
 /**
  * The decision carried by an [`AgentPermissionAction`].
@@ -2446,6 +2710,13 @@ export type PreviewAgentSessionsResponse = {
      */
     previews: Array<AgentSessionPreviewDto>;
 };
+
+/**
+ * The language of a session program. JavaScript tools programs are offered
+ * only to sessions whose owner has agent permissions
+ * ([`OwnerRollout`](super::OwnerRollout)), which gate them.
+ */
+export type ProgramLanguage = 'javascript' | 'js_tools';
 
 /**
  * A file the prompt refers to, by where the agent can fetch it.
@@ -2607,7 +2878,7 @@ export type QueuedActionDto = {
 /**
  * A dispatch result; unfinished work is never reported as success.
  */
-export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown';
+export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown' | 'refused';
 
 /**
  * A real inner call, recorded by trusted dispatch for the existing renderers.
@@ -2998,6 +3269,17 @@ export type SetAgentSessionArchivedRequest = {
     archived: boolean;
 };
 
+/**
+ * The policy an agent is to follow.
+ */
+export type SetToolPermissionSource = {
+    /**
+     * The source's policy id, from the picker (`sources`) or a view's
+     * `policyId`.
+     */
+    sourcePolicyId: ToolPermissionPolicyId;
+};
+
 export type SharePermissionV2 = {
     /**
      * The channel share permissions for the item
@@ -3017,10 +3299,90 @@ export type SharePermissionV2 = {
 };
 
 /**
+ * `ShowPermissions`' result: what the chat card shows, and a snapshot for
+ * the model. The card reads the live settings itself.
+ */
+export type ShowPermissionsResult = {
+    /**
+     * The agent whose permissions these are.
+     */
+    agentId: string;
+    /**
+     * Each shown setting as it stands now.
+     */
+    current: Array<ShownPermission>;
+    /**
+     * Each action's default as it stands now, in display order: what every
+     * group's action without an exception follows.
+     */
+    defaults?: Array<ToolPermissionDefault>;
+    /**
+     * When the agent follows another policy: "Follows <name> (@handle)".
+     * Its settings come from there, and changes made there apply here.
+     */
+    follows?: string | null;
+    /**
+     * What the model should do next.
+     */
+    message: string;
+    /**
+     * The agent's sentence for above the controls.
+     */
+    reason?: string | null;
+    /**
+     * What to show.
+     */
+    selection: ShowPermissionsSelection;
+    /**
+     * The session the card is in.
+     */
+    sessionId: string;
+};
+
+/**
+ * What was shown, resolved.
+ */
+export type ShowPermissionsSelection = {
+    /**
+     * The groups, each with the actions shown (every one it has operations
+     * for when none were named). Only actions some operation has are shown.
+     */
+    groups: Array<GroupSelection>;
+    /**
+     * The operations.
+     */
+    tools: Array<ToolSelection>;
+};
+
+/**
+ * One shown setting as it stands now.
+ */
+export type ShownPermission = {
+    /**
+     * Where the state comes from.
+     */
+    origin: ToolPermissionOrigin;
+    /**
+     * Its effective state.
+     */
+    state: ToolPermissionState;
+    /**
+     * The group action or operation.
+     */
+    target: ToolPermissionTarget;
+};
+
+/**
  * How the user recovers from a failed Claude sign-in. The web dialog
  * chooses its way out from this, never from the message.
  */
 export type SignInRecoveryCode = 'invalid_code' | 'malformed_code' | 'sign_in_expired' | 'computer_unreachable' | 'computer_busy' | 'rollout_disabled';
+
+/**
+ * Whose sources to list: an agent's, or a scope for an agent not created
+ * yet.
+ */
+export type SourceScopeQuery = 'private' | 'team';
 
 /**
  * The session the user is choosing to leave behind.
@@ -3081,6 +3443,65 @@ export type TaskSuggestions = {
 };
 
 /**
+ * A team's default permissions: what the team's agents follow unless they
+ * pick another source, resolved as a policy that owns its settings.
+ */
+export type TeamToolPermissions = {
+    /**
+     * The caller may change and reset them: a team admin or owner, signed
+     * in to Macro.
+     */
+    canEdit: boolean;
+    /**
+     * Each action's default, in display order.
+     */
+    defaults: Array<ToolPermissionDefault>;
+    /**
+     * Every catalog group with an operation, with the actions it has
+     * operations for.
+     */
+    groups: Array<ToolPermissionGroup>;
+    /**
+     * Always `team`.
+     */
+    kind: ToolPermissionPolicyKind;
+    /**
+     * The policy's stable id, to follow.
+     */
+    policyId: ToolPermissionPolicyId;
+    /**
+     * How many operations are not always allowed.
+     */
+    restricted: number;
+    /**
+     * The saved settings, hidden ones included.
+     */
+    rules: Array<ToolPermissionRule>;
+    /**
+     * The team.
+     */
+    teamId: string;
+    /**
+     * The registry version the resolution used.
+     */
+    version: string;
+};
+
+/**
+ * The result of a tightening.
+ */
+export type TightenToolPermissionsResponse = {
+    /**
+     * Where it was saved.
+     */
+    appliedTo: ToolPermissionAppliedTo;
+    /**
+     * The permissions now.
+     */
+    permissions: AgentToolPermissions;
+};
+
+/**
  * Which authenticated participant's access a tool call requests.
  */
 export type ToolActor = 'requester' | 'owner';
@@ -3094,6 +3515,471 @@ export type ToolApprovalAnswerDto = 'approve' | 'approve_and_remember' | 'deny' 
  * Where a held tool call stands once answered.
  */
 export type ToolApprovalStatusDto = 'pending' | 'approved' | 'denied' | 'cancelled' | 'expired';
+
+/**
+ * One action of a group, resolved.
+ */
+export type ToolPermissionAction = {
+    /**
+     * The action.
+     */
+    action: PermissionAction;
+    /**
+     * This policy has an exception saved for it (in `rules`), even when
+     * its state equals the default.
+     */
+    exception: boolean;
+    /**
+     * `group_action` (its exception), `action` (the action's default),
+     * `default` (nothing saved: always) or `session`.
+     */
+    origin: ToolPermissionOrigin;
+    /**
+     * The operations whose state differs from `state`.
+     */
+    overrides: Array<ToolPermissionOverride>;
+    /**
+     * The state of its operations that have no setting of their own.
+     */
+    state: ToolPermissionState;
+    /**
+     * How many operations the group has with this action.
+     */
+    tools: number;
+};
+
+/**
+ * Where a tightening was saved.
+ */
+export type ToolPermissionAppliedTo = 'agent' | 'session';
+
+/**
+ * Every group, action and operation a permission can name.
+ */
+export type ToolPermissionCatalog = {
+    /**
+     * The five actions, in display order.
+     */
+    actions: Array<ToolPermissionCatalogAction>;
+    /**
+     * The groups, in display order.
+     */
+    groups: Array<ToolPermissionCatalogGroup>;
+    /**
+     * The registry version; the same in every permissions view it resolved.
+     */
+    version: string;
+};
+
+/**
+ * An action, as the catalog describes it to a person.
+ */
+export type ToolPermissionCatalogAction = {
+    /**
+     * The action.
+     */
+    action: PermissionAction;
+    /**
+     * What it covers.
+     */
+    description: string;
+    /**
+     * Its display name, e.g. "Delete".
+     */
+    name: string;
+};
+
+/**
+ * A group and its operations, as the catalog lists them.
+ */
+export type ToolPermissionCatalogGroup = {
+    /**
+     * What it covers.
+     */
+    description: string;
+    /**
+     * Stable id.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Its operations, in registry order.
+     */
+    tools: Array<ToolPermissionCatalogTool>;
+};
+
+/**
+ * One classified SDK operation.
+ */
+export type ToolPermissionCatalogTool = {
+    /**
+     * Its action.
+     */
+    action: PermissionAction;
+    /**
+     * What it does, for a person.
+     */
+    label: string;
+    /**
+     * The raw operationId.
+     */
+    operation: string;
+    /**
+     * The SDK's spec name.
+     */
+    service: string;
+};
+
+/**
+ * One requested change. `state: None` removes the setting: a tool falls back
+ * to its group's action, a group's action to the action's default, a default
+ * to always. `always` on a default removes it too, since that is what no
+ * default means; a person's `always` on a group's action is kept, as an
+ * explicit exception.
+ */
+export type ToolPermissionChange = {
+    state?: null | ToolPermissionState;
+    /**
+     * What to change.
+     */
+    target: ToolPermissionTarget;
+};
+
+/**
+ * Changes to an agent's permissions.
+ */
+export type ToolPermissionChanges = {
+    /**
+     * Between 1 and 200 changes, applied together.
+     */
+    changes: Array<ToolPermissionChange>;
+};
+
+/**
+ * One action's default, resolved.
+ */
+export type ToolPermissionDefault = {
+    /**
+     * The action.
+     */
+    action: PermissionAction;
+    /**
+     * `action` (a saved default), `default` (none: always) or `session`.
+     */
+    origin: ToolPermissionOrigin;
+    /**
+     * The state of every group's action that has no exception.
+     */
+    state: ToolPermissionState;
+};
+
+/**
+ * Why a request was refused.
+ */
+export type ToolPermissionError = {
+    /**
+     * `invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,
+     * `would_loosen`, `follows_source`, `source_cycle`, `source_too_deep`,
+     * `source_not_allowed` or `internal`.
+     */
+    code: string;
+    /**
+     * What went wrong, for a person.
+     */
+    message: string;
+    /**
+     * For `would_loosen` and `follows_source`: the operations the change
+     * would have loosened.
+     */
+    operations?: Array<LoosenedOperation> | null;
+    source?: null | ToolPermissionPolicyId;
+    /**
+     * For `unknown_target`: the targets the registry does not have.
+     */
+    targets?: Array<ToolPermissionTarget> | null;
+};
+
+/**
+ * One group, resolved.
+ */
+export type ToolPermissionGroup = {
+    /**
+     * The actions it has operations for, in display order.
+     */
+    actions: Array<ToolPermissionAction>;
+    /**
+     * The group id.
+     */
+    group: string;
+};
+
+/**
+ * Where an effective state comes from.
+ */
+export type ToolPermissionOrigin = 'tool' | 'group_action' | 'default' | 'action' | 'session' | 'source';
+
+/**
+ * An operation whose state differs from its group's action.
+ */
+export type ToolPermissionOverride = {
+    /**
+     * What it does, for a person.
+     */
+    label: string;
+    /**
+     * The raw operationId.
+     */
+    operation: string;
+    /**
+     * `tool` or `session`.
+     */
+    origin: ToolPermissionOrigin;
+    /**
+     * The SDK's spec name.
+     */
+    service: string;
+    /**
+     * Its effective state.
+     */
+    state: ToolPermissionState;
+};
+
+/**
+ * A policy's stable id: the same for as long as the policy exists, whatever
+ * its owner or settings.
+ */
+export type ToolPermissionPolicyId = string;
+
+/**
+ * Whether the permissions are an owned agent's or the caller's own for a
+ * built-in persona.
+ */
+export type ToolPermissionPolicyKind = 'agent' | 'persona' | 'team';
+
+/**
+ * A stored setting.
+ */
+export type ToolPermissionRule = {
+    /**
+     * Its state.
+     */
+    state: ToolPermissionState;
+    /**
+     * What it applies to.
+     */
+    target: ToolPermissionTarget;
+    /**
+     * When it was last set.
+     */
+    updatedAt: string;
+    /**
+     * The agent set it by restricting itself.
+     */
+    viaAgent: boolean;
+};
+
+/**
+ * The policy a follower follows, as its view shows it.
+ */
+export type ToolPermissionSource = {
+    agent?: null | ToolPermissionSourceAgent;
+    /**
+     * The caller may edit the source itself (through its own permissions).
+     */
+    canEdit: boolean;
+    /**
+     * The follower may still follow it: false once the follower's or the
+     * source's owner changed so that it would not be offered now. Nothing
+     * loosens; its editors should pick a source or detach.
+     */
+    inScope: boolean;
+    kind?: null | ToolPermissionPolicyKind;
+    policyId?: null | ToolPermissionPolicyId;
+    scope?: null | ToolPermissionSourceScope;
+    /**
+     * Whether it still applies as itself.
+     */
+    status: ToolPermissionSourceStatus;
+    team?: null | ToolPermissionSourceTeam;
+    /**
+     * The rest of the chain past the source, toward its root.
+     */
+    via: Array<ToolPermissionSourceVia>;
+};
+
+/**
+ * The agent a source policy belongs to (for a built-in persona, the
+ * persona), as a person recognizes it.
+ */
+export type ToolPermissionSourceAgent = {
+    /**
+     * Its picture.
+     */
+    avatarUrl?: string | null;
+    /**
+     * It was deleted: its policy still applies, and nobody can edit it.
+     */
+    deleted: boolean;
+    /**
+     * Its handle; absent once it is deleted.
+     */
+    handle?: string | null;
+    /**
+     * The agent's (or persona's) id.
+     */
+    id: BotId;
+    /**
+     * Its name.
+     */
+    name: string;
+};
+
+/**
+ * A policy the picker offers as a source.
+ */
+export type ToolPermissionSourceCandidate = {
+    agent?: null | ToolPermissionSourceAgent;
+    /**
+     * The agent follows it now.
+     */
+    current: boolean;
+    /**
+     * Whose it is.
+     */
+    kind: ToolPermissionPolicyKind;
+    /**
+     * Its policy id, to set as the source.
+     */
+    policyId: ToolPermissionPolicyId;
+    /**
+     * Whose it is, for the badge.
+     */
+    scope: ToolPermissionSourceScope;
+    team?: null | ToolPermissionSourceTeam;
+    unavailable?: null | ToolPermissionSourceUnavailable;
+};
+
+/**
+ * The sources the picker offers: the person's own Macro first, then team
+ * defaults, then agents.
+ */
+export type ToolPermissionSourceCandidates = {
+    /**
+     * The candidates, in display order.
+     */
+    candidates: Array<ToolPermissionSourceCandidate>;
+};
+
+/**
+ * Whose a source policy is: a person's own (their Macro, their private
+ * agents) or a team's.
+ */
+export type ToolPermissionSourceScope = {
+    kind: 'personal';
+} | {
+    kind: 'team';
+    /**
+     * The team.
+     */
+    teamId: string;
+    /**
+     * Its name, when it could be read.
+     */
+    teamName?: string | null;
+};
+
+/**
+ * Whether a followed source still applies as itself.
+ */
+export type ToolPermissionSourceStatus = 'live' | 'deleted' | 'lost';
+
+/**
+ * A team, as a person recognizes it.
+ */
+export type ToolPermissionSourceTeam = {
+    /**
+     * The team.
+     */
+    id: string;
+    /**
+     * Its name.
+     */
+    name: string;
+};
+
+/**
+ * Why a candidate source can't be picked.
+ */
+export type ToolPermissionSourceUnavailable = 'cycle' | 'too_deep';
+
+/**
+ * One more policy along a chain: "Scout follows Macro".
+ */
+export type ToolPermissionSourceVia = {
+    /**
+     * Its handle, when known.
+     */
+    handle?: string | null;
+    /**
+     * Its name.
+     */
+    name: string;
+};
+
+/**
+ * How an operation may be called. Ordered from most to least permissive, so
+ * `max` is the more restrictive of two states.
+ */
+export type ToolPermissionState = 'always' | 'ask' | 'never';
+
+/**
+ * What a stored setting applies to: an action's default, one group's
+ * action (an exception to the default), or one operation.
+ */
+export type ToolPermissionTarget = {
+    /**
+     * The action.
+     */
+    action: PermissionAction;
+    kind: 'action';
+} | {
+    /**
+     * The action.
+     */
+    action: PermissionAction;
+    /**
+     * A registry group id, e.g. `documents`.
+     */
+    group: string;
+    kind: 'group_action';
+} | {
+    kind: 'tool';
+    /**
+     * The raw operationId, e.g. `delete_document`.
+     */
+    operation: string;
+    /**
+     * The SDK's spec name, e.g. `storage`.
+     */
+    service: string;
+};
+
+/**
+ * One SDK operation.
+ */
+export type ToolSelection = {
+    /**
+     * The raw operationId, as a refusal names it.
+     */
+    operation: string;
+    /**
+     * The SDK's spec name, such as `email`.
+     */
+    service: string;
+};
 
 /**
  * What opened a session.
@@ -4868,7 +5754,7 @@ export type AnswerAgentSessionToolApprovalData = {
 export type AnswerAgentSessionToolApprovalErrors = {
     401: string;
     /**
-     * Agent run approving, not the owner for approve or deny, or no edit access
+     * Agent run approving, not the owner for approve or deny, or no edit access; or, for a hold on the agent's permissions, not a person's own session
      */
     403: string;
     404: string;
@@ -4890,6 +5776,32 @@ export type AnswerAgentSessionToolApprovalResponses = {
 };
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
+
+export type GetAgentSessionToolPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/tool-permissions';
+};
+
+export type GetAgentSessionToolPermissionsErrors = {
+    401: string;
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type GetAgentSessionToolPermissionsError = GetAgentSessionToolPermissionsErrors[keyof GetAgentSessionToolPermissionsErrors];
+
+export type GetAgentSessionToolPermissionsResponses = {
+    200: AgentToolPermissions;
+};
+
+export type GetAgentSessionToolPermissionsResponse = GetAgentSessionToolPermissionsResponses[keyof GetAgentSessionToolPermissionsResponses];
 
 export type OpenInAppData = {
     body: OpenInApp;
@@ -4986,6 +5898,176 @@ export type RegisterAgentSessionWorkResponses = {
 
 export type RegisterAgentSessionWorkResponse = RegisterAgentSessionWorkResponses[keyof RegisterAgentSessionWorkResponses];
 
+export type GetAgentToolPermissionCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-tool-permissions/catalog';
+};
+
+export type GetAgentToolPermissionCatalogErrors = {
+    401: string;
+    /**
+     * Agent permissions are off
+     */
+    404: ToolPermissionError;
+};
+
+export type GetAgentToolPermissionCatalogError = GetAgentToolPermissionCatalogErrors[keyof GetAgentToolPermissionCatalogErrors];
+
+export type GetAgentToolPermissionCatalogResponses = {
+    200: ToolPermissionCatalog;
+};
+
+export type GetAgentToolPermissionCatalogResponse = GetAgentToolPermissionCatalogResponses[keyof GetAgentToolPermissionCatalogResponses];
+
+export type GetAgentToolPermissionPolicyData = {
+    body?: never;
+    path: {
+        /**
+         * The policy
+         */
+        policy_id: string;
+    };
+    query?: never;
+    url: '/agent-tool-permissions/policies/{policy_id}';
+};
+
+export type GetAgentToolPermissionPolicyErrors = {
+    401: string;
+    404: ToolPermissionError;
+};
+
+export type GetAgentToolPermissionPolicyError = GetAgentToolPermissionPolicyErrors[keyof GetAgentToolPermissionPolicyErrors];
+
+export type GetAgentToolPermissionPolicyResponses = {
+    200: AgentToolPermissions;
+};
+
+export type GetAgentToolPermissionPolicyResponse = GetAgentToolPermissionPolicyResponses[keyof GetAgentToolPermissionPolicyResponses];
+
+export type GetAgentToolPermissionSourcesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * An existing agent: its scope, with candidates it can't follow marked.
+         */
+        agentId?: string;
+        /**
+         * Without `agentId`: the scope the new agent will have.
+         */
+        scope?: SourceScopeQuery;
+        /**
+         * With `scope=team`: the team.
+         */
+        teamId?: string;
+    };
+    url: '/agent-tool-permissions/sources';
+};
+
+export type GetAgentToolPermissionSourcesErrors = {
+    400: ToolPermissionError;
+    401: string;
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type GetAgentToolPermissionSourcesError = GetAgentToolPermissionSourcesErrors[keyof GetAgentToolPermissionSourcesErrors];
+
+export type GetAgentToolPermissionSourcesResponses = {
+    200: ToolPermissionSourceCandidates;
+};
+
+export type GetAgentToolPermissionSourcesResponse = GetAgentToolPermissionSourcesResponses[keyof GetAgentToolPermissionSourcesResponses];
+
+export type ResetTeamToolPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * The team
+         */
+        team_id: string;
+    };
+    query?: never;
+    url: '/agent-tool-permissions/teams/{team_id}';
+};
+
+export type ResetTeamToolPermissionsErrors = {
+    401: string;
+    /**
+     * Not a team admin or owner, or not a person's own session (needs_person)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type ResetTeamToolPermissionsError = ResetTeamToolPermissionsErrors[keyof ResetTeamToolPermissionsErrors];
+
+export type ResetTeamToolPermissionsResponses = {
+    200: TeamToolPermissions;
+};
+
+export type ResetTeamToolPermissionsResponse = ResetTeamToolPermissionsResponses[keyof ResetTeamToolPermissionsResponses];
+
+export type GetTeamToolPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * The team
+         */
+        team_id: string;
+    };
+    query?: never;
+    url: '/agent-tool-permissions/teams/{team_id}';
+};
+
+export type GetTeamToolPermissionsErrors = {
+    401: string;
+    /**
+     * Off, or not a member of the team
+     */
+    404: ToolPermissionError;
+};
+
+export type GetTeamToolPermissionsError = GetTeamToolPermissionsErrors[keyof GetTeamToolPermissionsErrors];
+
+export type GetTeamToolPermissionsResponses = {
+    200: TeamToolPermissions;
+};
+
+export type GetTeamToolPermissionsResponse = GetTeamToolPermissionsResponses[keyof GetTeamToolPermissionsResponses];
+
+export type SetTeamToolPermissionsData = {
+    body: ToolPermissionChanges;
+    path: {
+        /**
+         * The team
+         */
+        team_id: string;
+    };
+    query?: never;
+    url: '/agent-tool-permissions/teams/{team_id}';
+};
+
+export type SetTeamToolPermissionsErrors = {
+    400: ToolPermissionError;
+    401: string;
+    /**
+     * Not a team admin or owner, or not a person's own session (needs_person)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type SetTeamToolPermissionsError = SetTeamToolPermissionsErrors[keyof SetTeamToolPermissionsErrors];
+
+export type SetTeamToolPermissionsResponses = {
+    200: TeamToolPermissions;
+};
+
+export type SetTeamToolPermissionsResponse = SetTeamToolPermissionsResponses[keyof SetTeamToolPermissionsResponses];
+
 export type ListAgentWorkRegistrationsData = {
     body?: never;
     path?: never;
@@ -5005,6 +6087,185 @@ export type ListAgentWorkRegistrationsResponses = {
 };
 
 export type ListAgentWorkRegistrationsResponse = ListAgentWorkRegistrationsResponses[keyof ListAgentWorkRegistrationsResponses];
+
+export type ResetAgentToolPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * The agent or built-in persona
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/tool-permissions';
+};
+
+export type ResetAgentToolPermissionsErrors = {
+    401: string;
+    /**
+     * May not edit the agent, or not a person's own session (needs_person)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type ResetAgentToolPermissionsError = ResetAgentToolPermissionsErrors[keyof ResetAgentToolPermissionsErrors];
+
+export type ResetAgentToolPermissionsResponses = {
+    200: AgentToolPermissions;
+};
+
+export type ResetAgentToolPermissionsResponse = ResetAgentToolPermissionsResponses[keyof ResetAgentToolPermissionsResponses];
+
+export type GetAgentToolPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * The agent or built-in persona
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/tool-permissions';
+};
+
+export type GetAgentToolPermissionsErrors = {
+    401: string;
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type GetAgentToolPermissionsError = GetAgentToolPermissionsErrors[keyof GetAgentToolPermissionsErrors];
+
+export type GetAgentToolPermissionsResponses = {
+    200: AgentToolPermissions;
+};
+
+export type GetAgentToolPermissionsResponse = GetAgentToolPermissionsResponses[keyof GetAgentToolPermissionsResponses];
+
+export type SetAgentToolPermissionsData = {
+    body: ToolPermissionChanges;
+    path: {
+        /**
+         * The agent or built-in persona
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/tool-permissions';
+};
+
+export type SetAgentToolPermissionsErrors = {
+    400: ToolPermissionError;
+    401: string;
+    /**
+     * May not edit the agent, or not a person's own session (needs_person)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type SetAgentToolPermissionsError = SetAgentToolPermissionsErrors[keyof SetAgentToolPermissionsErrors];
+
+export type SetAgentToolPermissionsResponses = {
+    200: AgentToolPermissions;
+};
+
+export type SetAgentToolPermissionsResponse = SetAgentToolPermissionsResponses[keyof SetAgentToolPermissionsResponses];
+
+export type DetachAgentToolPermissionsData = {
+    body: DetachToolPermissions;
+    path: {
+        /**
+         * The owned agent
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/tool-permissions/detach';
+};
+
+export type DetachAgentToolPermissionsErrors = {
+    400: ToolPermissionError;
+    401: string;
+    /**
+     * May not edit the agent, or not a person's own session (needs_person)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type DetachAgentToolPermissionsError = DetachAgentToolPermissionsErrors[keyof DetachAgentToolPermissionsErrors];
+
+export type DetachAgentToolPermissionsResponses = {
+    200: AgentToolPermissions;
+};
+
+export type DetachAgentToolPermissionsResponse = DetachAgentToolPermissionsResponses[keyof DetachAgentToolPermissionsResponses];
+
+export type SetAgentToolPermissionsSourceData = {
+    body: SetToolPermissionSource;
+    path: {
+        /**
+         * The owned agent
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/tool-permissions/source';
+};
+
+export type SetAgentToolPermissionsSourceErrors = {
+    401: string;
+    /**
+     * May not edit the agent, not a person's own session (needs_person), or a source it may not follow (source_not_allowed)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+    /**
+     * The source follows the agent (source_cycle), or too many agents would follow each other in a row (source_too_deep)
+     */
+    409: ToolPermissionError;
+};
+
+export type SetAgentToolPermissionsSourceError = SetAgentToolPermissionsSourceErrors[keyof SetAgentToolPermissionsSourceErrors];
+
+export type SetAgentToolPermissionsSourceResponses = {
+    200: AgentToolPermissions;
+};
+
+export type SetAgentToolPermissionsSourceResponse = SetAgentToolPermissionsSourceResponses[keyof SetAgentToolPermissionsSourceResponses];
+
+export type TightenAgentToolPermissionsData = {
+    body: ToolPermissionChanges;
+    path: {
+        /**
+         * The agent or built-in persona
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/tool-permissions/tighten';
+};
+
+export type TightenAgentToolPermissionsErrors = {
+    400: ToolPermissionError;
+    401: string;
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+    /**
+     * The change would make an operation more permissive (would_loosen)
+     */
+    422: ToolPermissionError;
+};
+
+export type TightenAgentToolPermissionsError = TightenAgentToolPermissionsErrors[keyof TightenAgentToolPermissionsErrors];
+
+export type TightenAgentToolPermissionsResponses = {
+    200: TightenToolPermissionsResponse;
+};
+
+export type TightenAgentToolPermissionsResponse = TightenAgentToolPermissionsResponses[keyof TightenAgentToolPermissionsResponses];
 
 export type ListCodingAgentsData = {
     body?: never;

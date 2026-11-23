@@ -24,6 +24,11 @@ fn parsing_rejects_rather_than_repairs() {
     assert_eq!(McpServerSlug::parse("Datadog"), None);
     assert_eq!(McpServerSlug::parse("data dog"), None);
     assert_eq!(McpServerSlug::parse(""), None);
+    assert_eq!(
+        McpServerSlug::parse("macro-sdk"),
+        None,
+        "reserved for permission holds"
+    );
     for verbatim in ["datadog-us5", "google_sheets", "linear"] {
         assert_eq!(
             McpServerSlug::parse(verbatim).map(|slug| slug.as_str().to_owned()),

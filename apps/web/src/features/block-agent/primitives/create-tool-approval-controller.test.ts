@@ -16,6 +16,7 @@ const held = {
   serverName: 'Macro',
   toolName: 'ListEmails',
   requestedBy: 'macro|julia@macro.com',
+  approver: null,
 } satisfies PendingInteraction;
 
 const permission = {
@@ -104,6 +105,23 @@ describe('createToolApprovalController', () => {
     dispose();
   });
 
+  it('clears an answered call at once, before the session lists it gone', async () => {
+    const { controller, dispose } = setup('macro|wolf@macro.com');
+    await controller.answer('approval-1', 'deny');
+    expect(controller.pending()).toEqual([]);
+    dispose();
+  });
+
+  it('keeps a call whose answer failed, to answer again', async () => {
+    const { controller, dispose, answer } = setup('macro|wolf@macro.com');
+    answer.mockResolvedValueOnce(
+      err([{ code: 'NETWORK_ERROR' as never, message: 'offline' }])
+    );
+    await controller.answer('approval-1', 'approve');
+    expect(controller.pending()).toEqual([held]);
+    dispose();
+  });
+
   it('says so when somebody answered first', async () => {
     const { controller, dispose, answer, onFailure } = setup(
       'macro|wolf@macro.com'
@@ -115,6 +133,43 @@ describe('createToolApprovalController', () => {
     expect(onFailure).toHaveBeenCalledWith(
       'That tool call was already answered'
     );
+    dispose();
+  });
+
+  it('lets only the approver a permission hold names answer it', async () => {
+    const { controller, dispose, answer, setPending } = setup(
+      'macro|julia@macro.com'
+    );
+    const hold = {
+      ...held,
+      approvalId: 'approval-2',
+      serverSlug: 'macro-sdk',
+      approver: 'macro|julia@macro.com',
+    } satisfies PendingInteraction;
+    setPending([hold]);
+    expect(controller.canApprove(hold)).toBe(true);
+    // The session's owner is not this hold's approver.
+    expect(controller.canApprove()).toBe(false);
+    await expect(controller.answer('approval-2', 'approve')).resolves.toBe(
+      true
+    );
+    expect(answer).toHaveBeenCalledWith('session-a', 'approval-2', 'approve');
+    dispose();
+  });
+
+  it('refuses the owner on a permission hold naming someone else', async () => {
+    const { controller, dispose, answer, setPending } = setup(
+      'macro|wolf@macro.com'
+    );
+    setPending([
+      {
+        ...held,
+        serverSlug: 'macro-sdk',
+        approver: 'macro|julia@macro.com',
+      },
+    ]);
+    await expect(controller.answer('approval-1', 'deny')).resolves.toBe(false);
+    expect(answer).not.toHaveBeenCalled();
     dispose();
   });
 });

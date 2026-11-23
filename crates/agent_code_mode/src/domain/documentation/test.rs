@@ -57,6 +57,7 @@ async fn one_bounded_request_expands_only_selected_entities() {
     });
     let service: Arc<dyn Cognition> = classifier.clone();
     let result = select_documentation(
+        CodeModeKind::TypeScript,
         &user(),
         RoutingRequest {
             latest: &"x".repeat(20000),
@@ -81,6 +82,35 @@ async fn one_bounded_request_expands_only_selected_entities() {
     }
 }
 
+/// The SDK documentation teaches TypeScript: a turn taught the dialect gets
+/// none of it, and Jev is not asked.
+#[tokio::test]
+async fn a_dialect_turn_gets_no_sdk_documentation() {
+    let classifier = Arc::new(Classifier {
+        requests: Mutex::new(vec![]),
+        delay: Duration::ZERO,
+        fail: false,
+        relevant: &[],
+    });
+    let service: Arc<dyn Cognition> = classifier.clone();
+    for guidance in [Guidance::Inline, Guidance::Selected] {
+        let result = select_documentation(
+            CodeModeKind::Dialect,
+            &user(),
+            RoutingRequest {
+                latest: "find my documents about the launch",
+                previous: None,
+            },
+            Some(&service),
+            guidance,
+            &CancellationToken::new(),
+        )
+        .await;
+        assert_eq!(result, "");
+    }
+    assert!(classifier.requests.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn errors_and_absent_provider_retain_catalog() {
     let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
@@ -90,6 +120,7 @@ async fn errors_and_absent_provider_retain_catalog() {
         relevant: &["ai", "documents"],
     });
     let fallback = select_documentation(
+        CodeModeKind::TypeScript,
         &user(),
         RoutingRequest {
             latest: "request",
@@ -102,6 +133,7 @@ async fn errors_and_absent_provider_retain_catalog() {
     .await;
     assert_eq!(
         select_documentation(
+            CodeModeKind::TypeScript,
             &user(),
             RoutingRequest {
                 latest: "request",
@@ -125,6 +157,7 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
         relevant: &["ai", "documents"],
     });
     let fallback = select_documentation(
+        CodeModeKind::TypeScript,
         &user(),
         RoutingRequest {
             latest: "request",
@@ -138,6 +171,7 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
     let result = tokio::time::timeout(
         Duration::from_millis(1500),
         select_documentation(
+            CodeModeKind::TypeScript,
             &user(),
             RoutingRequest {
                 latest: "request",
@@ -156,6 +190,7 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
     let result = tokio::time::timeout(
         Duration::from_millis(50),
         select_documentation(
+            CodeModeKind::TypeScript,
             &user(),
             RoutingRequest {
                 latest: "request",
@@ -301,6 +336,7 @@ async fn routed_turns_bring_each_selected_entitys_guidance_with_its_index() {
         relevant: &["databases"],
     });
     let result = select_documentation(
+        CodeModeKind::TypeScript,
         &user(),
         RoutingRequest {
             latest: "how many rows in Leads have revenue over 10k?",
@@ -375,6 +411,7 @@ async fn entities_past_the_first_32_route_in_another_parallel_call() {
     let service: Arc<dyn Cognition> = classifier.clone();
 
     let result = select_documentation(
+        CodeModeKind::TypeScript,
         &user(),
         RoutingRequest {
             latest: "request",
@@ -459,6 +496,7 @@ async fn a_routed_routine_request_brings_the_compose_routines_skill() {
         relevant: &["routines"],
     });
     let result = select_documentation(
+        CodeModeKind::TypeScript,
         &user(),
         RoutingRequest {
             latest: "every Monday at 9, post the open bugs in #eng",
@@ -488,6 +526,7 @@ async fn the_attached_skill_leaves_byte_budgets_to_the_entities() {
         relevant,
     });
     let routed = select_documentation(
+        CodeModeKind::TypeScript,
         &user(),
         RoutingRequest {
             latest: "when a task is done, post it in #sales",
@@ -599,6 +638,7 @@ async fn a_follow_up_keeps_the_previous_requests_entities() {
     let classifier: Arc<dyn Cognition> = Arc::new(BookingLinkClassifier);
 
     let result = select_documentation(
+        CodeModeKind::TypeScript,
         &user(),
         RoutingRequest {
             latest: "now do the same for the other one",

@@ -23,3 +23,19 @@ pub const HOSTS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/hosts.j
 /// The SDK's TypeScript declarations that routine code is type-checked
 /// against, with their fingerprint, as JSON.
 pub const SDK_TYPES: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/sdk-types.json"));
+
+/// The JS tools interpreter for Deno: `@opencode/codemode` with the may-call
+/// analyzer and tool runtime (`packages/code-mode-sdk/src/js-tools`), as one
+/// ES module. It holds no SDK; the bootstrap sends each tool call.
+pub const JS_TOOLS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/js-tools.mjs"));
+
+/// The SDK operations JS tools programs call as `tools.<service>.<operation>`,
+/// with each one's route and schemas, and those left out with the reason, as
+/// JSON.
+pub const JS_TOOLS_CATALOG: &str =
+    include_str!(concat!(env!("CODE_MODE_ASSETS"), "/js-tools.json"));
+
+/// What a JS tools run records as its SDK fingerprint:
+/// `@opencode/codemode@<version>+<hash of JS_TOOLS and JS_TOOLS_CATALOG>`.
+pub const JS_TOOLS_FINGERPRINT: &str =
+    include_str!(concat!(env!("CODE_MODE_ASSETS"), "/js-tools.fingerprint"));

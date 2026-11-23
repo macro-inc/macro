@@ -45,6 +45,8 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
         &self,
         identity: &agent_code_mode::domain::ExecutionIdentity,
         _: &str,
+        _: Option<&str>,
+        _: agent_code_mode::domain::ProgramLanguage,
         _: tokio_util::sync::CancellationToken,
     ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
         Ok(agent_code_mode::domain::IssuedRun {
@@ -126,6 +128,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
             reviews: Arc::new(std::sync::OnceLock::new()),
             gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
             app_url: "https://macro.com".into(),
+            permissions: None,
         },
     );
     assert_eq!(

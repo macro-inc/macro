@@ -26,3 +26,9 @@ globs = [
   "packages/sdk/**",
 ]
 mark-changed = ["code_mode_assets"]
+
+# The permission registry, which the JS tools catalog code_mode_assets builds
+# reads.
+[[path-rule]]
+globs = ["crates/agent_permission_registry/registry.json"]
+mark-changed = ["code_mode_assets"]

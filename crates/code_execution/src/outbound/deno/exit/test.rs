@@ -210,6 +210,8 @@ async fn a_program_that_exhausts_its_heap_records_how_deno_died() {
             ExecuteRequest {
                 source: "export async function main() { const kept = []; for (;;) kept.push(new Array(100000).fill(Math.random())); }".into(),
                 timeout_ms: 30_000,
+                language: crate::domain::Language::Javascript,
+                module: None,
             },
             RunEnvironment::default(),
         )
@@ -269,6 +271,8 @@ async fn a_program_the_deadline_stops_records_its_end() {
             ExecuteRequest {
                 source: "export async function main() { for (;;) {} }".into(),
                 timeout_ms: 1_500,
+                language: crate::domain::Language::Javascript,
+                module: None,
             },
             RunEnvironment::default(),
         )

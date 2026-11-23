@@ -38,6 +38,7 @@ import {
   changingModel,
   hasPendingStop,
 } from '../state/control-message';
+import { PERMISSION_HOLD_SLUG } from '../state/permission-approval';
 import {
   type EffortSelection,
   effortConfigOption,
@@ -179,6 +180,14 @@ export function AgentComposer(props: {
 
   const pendingPermissions = () =>
     interactions.pending().filter((request) => request.kind === 'permission');
+  const permissionHolds = () =>
+    toolApprovals
+      .pending()
+      .filter((request) => request.serverSlug === PERMISSION_HOLD_SLUG);
+  const heldToolCalls = () =>
+    toolApprovals
+      .pending()
+      .filter((request) => request.serverSlug !== PERMISSION_HOLD_SLUG);
   const pendingElicitation = () =>
     interactions.pending().some((request) => request.kind === 'elicitation');
   // Files dropped, pasted, or picked into the composer. Every one goes to
@@ -313,9 +322,18 @@ export function AgentComposer(props: {
           </div>
         )}
       </For>
-      <For each={toolApprovals.pending()}>
+      <For each={heldToolCalls()}>
         {(approval) => (
           <div class="mb-2 min-w-0">
+            <ToolApprovalRequest request={approval} />
+          </div>
+        )}
+      </For>
+      {/* Held on the agent's permissions: docked right above the input, at
+          its width, the host's 8px gap between them. */}
+      <For each={permissionHolds()}>
+        {(approval) => (
+          <div class="min-w-0" data-permission-request>
             <ToolApprovalRequest request={approval} />
           </div>
         )}

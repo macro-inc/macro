@@ -1,10 +1,19 @@
-import { createEffect, on, Suspense } from 'solid-js';
+import {
+  BlockedPermissionsNotice,
+  gatedThingsTitle,
+} from '@app/features/agent-permissions';
+import { t } from '@app/lib/i18n';
+import { createEffect, Match, on, Suspense, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import { CodeExecutionToolCall } from '../component/parts/CodeExecutionToolCall';
 import type {
   ToolCallCommon,
   ToolCallContext,
   ToolUsePart,
 } from '../component/parts/shared';
+import { useOptionalAgentSession } from '../context/AgentSessionContext';
+import { parseExecutionPermission } from '../state/permission-approval';
+import { ToolCard } from '../ui';
 import { useCodeExecutionRecord } from './code-execution-record';
 
 /** Production wiring; the result components receive only data and context. */
@@ -19,6 +28,8 @@ export function CodeExecutionPart(props: {
     executionId,
     query,
     source,
+    program,
+    isThisProgram,
     record,
     error,
   } = useCodeExecutionRecord(
@@ -45,15 +56,33 @@ export function CodeExecutionPart(props: {
           const call = `${sessionId}:${toolCallId}`;
           if (loggedCall === call) return;
           loggedCall = call;
+          const module = program()?.module;
           console.log(
             '[Code mode] ExecuteCode',
             { sessionId, executionId, toolCallId },
-            `\n${source}`
+            module ? `\n${source}\n// module\n${module}` : `\n${source}`
           );
         }
       )
     );
   }
+
+  const session = useOptionalAgentSession();
+  const agentName = () =>
+    session?.bot()?.name ?? t('agentPermissionsChat.theAgent');
+  // A program its permissions stopped before it ran: the saved record's
+  // account, else the receipt's (the record may not have loaded yet).
+  const permission = () =>
+    parseExecutionPermission(record()?.permission) ??
+    parseExecutionPermission(receipt()?.permission);
+  const blocked = () => {
+    const current = permission();
+    return current?.outcome === 'blocked' ? current : undefined;
+  };
+  const declined = () => {
+    const current = permission();
+    return current?.outcome === 'declined' ? current : undefined;
+  };
 
   const status = () => record()?.status ?? receipt()?.status;
   const common = (): ToolCallCommon => {
@@ -74,21 +103,52 @@ export function CodeExecutionPart(props: {
   };
 
   return (
-    <Suspense
-      fallback={
-        <p class="text-xs text-ink-extra-muted">Loading workspace activity…</p>
-      }
-    >
-      <CodeExecutionToolCall
-        common={common()}
-        context={props.context}
-        record={record()}
-        error={error()}
-        loading={Boolean(executionId()) && query.isPending}
-        unavailable={
-          query.isError || (query.isSuccess && query.data.source !== source())
-        }
-      />
-    </Suspense>
+    <Switch>
+      <Match when={blocked()}>
+        {(current) => (
+          <BlockedPermissionsNotice
+            sessionId={props.context.sessionId}
+            agentName={agentName()}
+            operations={current().operations}
+          />
+        )}
+      </Match>
+      {/* A held program nobody allowed is a failed step: what it would have
+          done, and why it didn't. */}
+      <Match when={declined()}>
+        {(current) => (
+          <ToolCard
+            title={gatedThingsTitle(current().operations)}
+            status="failed"
+            muted
+            trailing={match(current().status)
+              .with('denied', () => t('agentPermissionsChat.denied'))
+              .with('cancelled', () => t('agentPermissionsChat.cancelled'))
+              .with('expired', () =>
+                t('agentPermissionsChat.notApprovedInTime')
+              )
+              .exhaustive()}
+          />
+        )}
+      </Match>
+      <Match when={true}>
+        <Suspense
+          fallback={
+            <p class="text-xs text-ink-extra-muted">
+              Loading workspace activity…
+            </p>
+          }
+        >
+          <CodeExecutionToolCall
+            common={common()}
+            context={props.context}
+            record={record()}
+            error={error()}
+            loading={Boolean(executionId()) && query.isPending}
+            unavailable={query.isError || (query.isSuccess && !isThisProgram())}
+          />
+        </Suspense>
+      </Match>
+    </Switch>
   );
 }

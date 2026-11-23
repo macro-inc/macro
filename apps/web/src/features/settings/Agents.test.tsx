@@ -20,13 +20,15 @@ import {
   QueryClientProvider,
   useQuery,
 } from '@tanstack/solid-query';
-import { Suspense } from 'solid-js';
+import { err, ok } from 'neverthrow';
+import { createSignal, Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
 import {
   agentSettingsRequest,
   requestAgentDetail,
+  requestAgentPermissions,
   requestCreateAgent,
 } from './agentSettingsState';
 import {
@@ -79,6 +81,55 @@ vi.mock('./components/coding-preferences-setting', () => ({
 }));
 vi.mock('./components/auto-archive-setting', () => ({
   AutoArchiveSetting: () => null,
+}));
+
+// The permissions panel has its own suite; here only its entry points. The
+// flag is a signal, so a test can turn it off under an open panel.
+const [permissionsFlag, setPermissionsFlag] = createSignal(false);
+const permissionMocks = vi.hoisted(() => ({
+  served: true,
+  teamServed: true,
+  applyDraft: vi.fn(),
+}));
+vi.mock('@app/features/agent-permissions', () => ({
+  refusalMessage: () => undefined,
+  useTeamPermissionsAvailable: (teamId: () => string | undefined) => () =>
+    permissionsFlag() && permissionMocks.teamServed && teamId() !== undefined,
+  TeamPermissionsPanel: (props: { teamId: string }) => (
+    <section aria-label="Team default permissions panel">
+      Team permissions of {props.teamId}
+    </section>
+  ),
+  applyPermissionsDraft: permissionMocks.applyDraft,
+  EditAgentPermissions: (props: { agentId: string; agentName: string }) => (
+    <section aria-label={`Permissions of ${props.agentName}`}>
+      Editor permissions of {props.agentName} ({props.agentId})
+    </section>
+  ),
+  NewAgentPermissions: (props: {
+    share: 'Private' | 'Team';
+    draft: (read: () => unknown) => void;
+  }) => {
+    props.draft(() => ({
+      mode: 'own',
+      sourcePolicyId: `default-${props.share}`,
+      changes: [],
+    }));
+    return <section aria-label="New agent permissions">{props.share}</section>;
+  },
+  useAgentPermissionsFlag: () => permissionsFlag,
+  useAgentPermissionsAvailable: () => () =>
+    permissionsFlag() && permissionMocks.served,
+  AgentPermissionsPanel: (props: {
+    agentId: string;
+    agentName: string;
+    focus?: { group: string };
+  }) => (
+    <section aria-label={`Permissions of ${props.agentName}`}>
+      Permissions panel of {props.agentName} ({props.agentId})
+      {props.focus ? ` at ${props.focus.group}` : ''}
+    </section>
+  ),
 }));
 
 const [searchParams, updateSearchParams] = createStore<{
@@ -346,6 +397,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   device.touch = false;
+  setPermissionsFlag(false);
+  permissionMocks.served = true;
+  permissionMocks.teamServed = true;
   avatarMocks.upload.mockReset();
   apiKeyMocks.query.data = undefined;
   apiKeyMocks.save.mockReset();
@@ -1018,6 +1072,255 @@ describe('Agents', () => {
 
     expect(screen.getByRole('heading', { name: 'Edit agent' })).toBeTruthy();
     expect(agentSettingsRequest()).toBeUndefined();
+  });
+
+  describe('permissions', () => {
+    const ownAgent = {
+      bot: {
+        id: 'agent-1',
+        kind: 'owned',
+        owner: { type: 'user', user_id: 'macro|user@example.com' },
+        name: 'Bug fixer',
+        handle: 'bug-fixer',
+        has_agent: true,
+        created_at: '2026-08-27T12:00:00Z',
+        updated_at: '2026-08-27T12:00:00Z',
+      },
+      instructions: 'Fix the root cause.',
+      harness: 'in-memory',
+      default_model: Model.sonnet55,
+      channel_scope: 'all',
+      channel_ids: [],
+    };
+
+    const panel = (name: string) =>
+      screen.queryByRole('region', { name: `Permissions of ${name}` });
+
+    // jsdom has no layout; a link scrolls the row into view.
+    beforeEach(() => {
+      Element.prototype.scrollIntoView = vi.fn();
+    });
+
+    it("expands Macro's permissions inline under its row", () => {
+      setPermissionsFlag(true);
+      render(() => <Agents {...agentsPageProps} />);
+      const toggle = screen.getByRole('button', {
+        name: "Macro's permissions",
+      });
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      // The Macro persona's permissions are the new Macro bot's.
+      expect(panel('Macro')?.textContent).toContain(
+        '00000000-0000-0000-0000-00000000a2a2'
+      );
+      // The list stays: the panel is under the row, not a page.
+      expect(screen.getByRole('heading', { name: 'Your agents' })).toBeTruthy();
+      fireEvent.click(toggle);
+      expect(panel('Macro')).toBeNull();
+    });
+
+    it("expands an agent's permissions, one row at a time", () => {
+      setPermissionsFlag(true);
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(
+        screen.getByRole('button', { name: "Bug fixer's permissions" })
+      );
+      expect(panel('Bug fixer')?.textContent).toContain('agent-1');
+      fireEvent.click(
+        screen.getByRole('button', { name: "Macro's permissions" })
+      );
+      expect(panel('Macro')).toBeTruthy();
+      expect(panel('Bug fixer')).toBeNull();
+    });
+
+    it("hides Macro's Permissions when the API has none for it", () => {
+      setPermissionsFlag(true);
+      permissionMocks.served = false;
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      expect(
+        screen.queryByRole('button', { name: "Macro's permissions" })
+      ).toBeNull();
+      // An agent the viewer manages always has permissions; its panel says
+      // so itself if the API has none.
+      expect(
+        screen.getByRole('button', { name: "Bug fixer's permissions" })
+      ).toBeTruthy();
+    });
+
+    it('scrolls a linked row into view once, not again after the editor', () => {
+      setPermissionsFlag(true);
+      agentMocks.query.data = [ownAgent];
+      requestAgentPermissions('agent-1');
+      render(() => <Agents {...agentsPageProps} />);
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      fireEvent.click(screen.getByRole('button', { name: /Back/ }));
+      expect(panel('Bug fixer')).toBeTruthy();
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides Permissions and an open panel when the flag turns off', () => {
+      setPermissionsFlag(true);
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(
+        screen.getByRole('button', { name: "Bug fixer's permissions" })
+      );
+      expect(panel('Bug fixer')).toBeTruthy();
+      setPermissionsFlag(false);
+      expect(panel('Bug fixer')).toBeNull();
+      expect(screen.queryByRole('button', { name: /'s permissions$/ })).toBe(
+        null
+      );
+    });
+
+    it('shows the permissions inside the agent editor', () => {
+      setPermissionsFlag(true);
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      expect(panel('Bug fixer')?.textContent).toContain('agent-1');
+    });
+
+    it('shows the team default row to a member and expands it', () => {
+      setPermissionsFlag(true);
+      render(() => <Agents {...agentsPageProps} />);
+      const toggle = screen.getByRole('button', {
+        name: 'Team default permissions',
+      });
+      expect(
+        screen.queryByRole('region', { name: 'Team default permissions panel' })
+      ).toBeNull();
+      fireEvent.click(toggle);
+      expect(
+        screen.getByRole('region', { name: 'Team default permissions panel' })
+          .textContent
+      ).toContain('team-1');
+      // One row open at a time.
+      fireEvent.click(
+        screen.getByRole('button', { name: "Macro's permissions" })
+      );
+      expect(
+        screen.queryByRole('region', { name: 'Team default permissions panel' })
+      ).toBeNull();
+    });
+
+    it('has no team default row without a team, the API or the flag', () => {
+      agentMocks.currentTeam = null;
+      setPermissionsFlag(true);
+      const { unmount } = render(() => <Agents {...agentsPageProps} />);
+      expect(
+        screen.queryByRole('button', { name: 'Team default permissions' })
+      ).toBeNull();
+      unmount();
+      agentMocks.currentTeam = { team: { id: 'team-1' } };
+      permissionMocks.teamServed = false;
+      render(() => <Agents {...agentsPageProps} />);
+      expect(
+        screen.queryByRole('button', { name: 'Team default permissions' })
+      ).toBeNull();
+    });
+
+    it("saves a new agent's permissions once the agent exists", async () => {
+      setPermissionsFlag(true);
+      permissionMocks.applyDraft.mockResolvedValue(ok(undefined));
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+      const dialog = screen.getByRole('region', { name: 'New agent' });
+      expect(
+        within(dialog).getByRole('region', { name: 'New agent permissions' })
+          .textContent
+      ).toBe('Private');
+      fireEvent.input(within(dialog).getByLabelText('Name'), {
+        target: { value: 'Bug fixer' },
+      });
+      fireEvent.click(within(dialog).getByLabelText('Team'));
+      // The section follows Who can use it.
+      expect(
+        within(dialog).getByRole('region', { name: 'New agent permissions' })
+          .textContent
+      ).toBe('Team');
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Create agent' })
+      );
+      await waitFor(() =>
+        expect(permissionMocks.applyDraft).toHaveBeenCalledWith(
+          'created-agent',
+          {
+            mode: 'own',
+            sourcePolicyId: 'default-Team',
+            changes: [],
+          }
+        )
+      );
+    });
+
+    it("offers Retry when a new agent's permissions fail to save", async () => {
+      setPermissionsFlag(true);
+      permissionMocks.applyDraft.mockResolvedValue(err(new Error('refused')));
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+      const dialog = screen.getByRole('region', { name: 'New agent' });
+      fireEvent.input(within(dialog).getByLabelText('Name'), {
+        target: { value: 'Bug fixer' },
+      });
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Create agent' })
+      );
+      await waitFor(() =>
+        expect(agentMocks.toastFailure).toHaveBeenCalledWith(
+          'Agent created, but its permissions weren’t saved',
+          expect.objectContaining({
+            actions: [expect.objectContaining({ label: 'Retry' })],
+          })
+        )
+      );
+      // The agent exists either way: the form closes.
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('is not in the editor while the flag is off', () => {
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      expect(panel('Bug fixer')).toBeNull();
+    });
+
+    it('holds a permissions link until the flag is on', () => {
+      agentMocks.query.data = [ownAgent];
+      requestAgentPermissions('agent-1');
+      render(() => <Agents {...agentsPageProps} />);
+      expect(panel('Bug fixer')).toBeNull();
+      expect(agentSettingsRequest()).toBeDefined();
+
+      setPermissionsFlag(true);
+      expect(panel('Bug fixer')).toBeTruthy();
+      expect(agentSettingsRequest()).toBeUndefined();
+    });
+
+    it("expands an agent's row when a link asks, at the linked group", () => {
+      setPermissionsFlag(true);
+      agentMocks.query.data = [ownAgent];
+      requestAgentPermissions('agent-1', { group: 'email' });
+      render(() => <Agents {...agentsPageProps} />);
+      expect(panel('Bug fixer')?.textContent).toContain('at email');
+      expect(
+        screen
+          .getByRole('button', { name: "Bug fixer's permissions" })
+          .getAttribute('aria-expanded')
+      ).toBe('true');
+      expect(agentSettingsRequest()).toBeUndefined();
+    });
+
+    it("expands Macro's row for a link to the Macro persona", () => {
+      setPermissionsFlag(true);
+      requestAgentPermissions('00000000-0000-0000-0000-00000000a2a2');
+      render(() => <Agents {...agentsPageProps} />);
+      expect(panel('Macro')).toBeTruthy();
+    });
   });
 
   it('lets team members edit without deleting or privatizing another creator agent', () => {

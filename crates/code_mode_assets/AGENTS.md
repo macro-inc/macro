@@ -5,8 +5,10 @@
 Agent code mode's generated assets: the public SDK and Handlebars bundled for
 Deno, the agent SDK documentation catalog, the SDK operation catalog (label,
 method, path and whether it writes), every service the SDK can reach with its
-host in each environment, and the SDK's TypeScript declarations
-routine code is type-checked against. They are
+host in each environment, the SDK's TypeScript declarations
+routine code is type-checked against, and the JS tools interpreter
+(`JS_TOOLS`), its catalog of SDK operations (`JS_TOOLS_CATALOG`) and their
+fingerprint (`JS_TOOLS_FINGERPRINT`). They are
 built from `packages/sdk` when this crate compiles and are never committed.
 
 ## How it works
@@ -40,7 +42,9 @@ A failed run or a missing file fails the build; there is no stale fallback.
 
 - A new generator input outside `GENERATOR_INPUTS` in `build.rs` or the
   `codeModeAssetsSrc` filter in `nix/cloud-storage.nix` leaves cargo or Nix
-  builds stale; add it to both.
+  builds stale; add it to both. The JS tools catalog reads
+  `packages/sdk/specs` and `crates/agent_permission_registry/registry.json`;
+  the filter lists that file and its parent directories by name.
 - Compiling this crate (and every dependent, including DSS and the agent
   harness) needs bun and both `node_modules` installs unless
   `CODE_MODE_ASSETS_DIR` is set.

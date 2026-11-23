@@ -543,6 +543,10 @@ pub enum SendAuthority {
 /// person has to see the message first, as with email.
 pub const PROGRAM_SEND_REFUSAL: &str = "An agent's program cannot send to an external chat without the user seeing the message first. Write the message out, ask whether to send it, and only after the user replies approving it call chat.send again with their reply quoted in userConfirmation.";
 
+/// [`PROGRAM_SEND_REFUSAL`] for a program in code mode's dialect, naming its
+/// operation.
+pub const DIALECT_PROGRAM_SEND_REFUSAL: &str = "An agent's program cannot send to an external chat without the user seeing the message first. Write the message out, ask whether to send it, and only after the user replies approving it call tools.storage.external_chat_send again with their reply quoted in userConfirmation.";
+
 /// Sanitized failures safe to show in the native UI.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ExternalChatError {
@@ -558,9 +562,14 @@ pub enum ExternalChatError {
     /// The caller lacks authority for this operation.
     #[error("you do not have permission for this WhatsApp operation")]
     Forbidden,
-    /// An agent's program sent without quoting the user's approval.
-    #[error("{PROGRAM_SEND_REFUSAL}")]
-    ConfirmationRequired,
+    /// An agent's program sent without quoting the user's approval;
+    /// `dialect` when it was a dialect program, whose refusal names its
+    /// operation.
+    #[error("{}", if *dialect { DIALECT_PROGRAM_SEND_REFUSAL } else { PROGRAM_SEND_REFUSAL })]
+    ConfirmationRequired {
+        /// The program was in code mode's dialect.
+        dialect: bool,
+    },
     /// Conflicts with an existing identity, transaction or idempotency key.
     #[error("this conflicts with an existing WhatsApp connection or request")]
     Conflict,
@@ -600,7 +609,7 @@ impl ExternalChatError {
             Self::CannotAdd(CannotAdd::NotInChatList) => "cannot_add_not_in_chat_list",
             Self::NotFound => "not_found",
             Self::Forbidden => "forbidden",
-            Self::ConfirmationRequired => "confirmation_required",
+            Self::ConfirmationRequired { .. } => "confirmation_required",
             Self::Conflict => "conflict",
             Self::Disconnected => "disconnected",
             Self::SendExpired => "send_expired",

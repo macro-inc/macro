@@ -1237,6 +1237,102 @@ Macro credits. Opening one lands on this section, where **Sign in with Claude**
 starts over. People can turn them off under **Settings → Notifications →
 Computer Claude sign-ins**.
 
+### Agent permissions
+
+Behind `enable-agent-permissions` (the one flag on agent permissions and the
+JS tools programs they gate; on in local stacks, PostHog on dev and
+production, off when PostHog can't be read), each row in **Your agents** for
+an agent the viewer manages, and Macro's (the persona under the new Macro bot
+id) when the API answers for it, has a **Permissions ⌄** button (accessible
+name `<Agent>'s permissions`, `aria-expanded`). It expands the agent's tool
+permissions inline under the row, one row at a time; pressing it again
+collapses them. `requestAgentPermissions(agentId, focus?)` (chat cards'
+**Review permissions** and **All permissions**) opens Settings → Agents with
+that row expanded, scrolled into view, and the linked tool's or action's
+accordion open. An agent's edit form shows the same component in its
+**Permissions** section between `Who can use it` and `Advanced`, saving on each
+click. The buttons, the section and a link are absent while the flag is off
+(Macro's button and the section also on a 404, and the section on the create
+form); an open panel closes when the
+flag turns off, and a link waits until it is on.
+
+The component is a table, **Action** / **Default permission**, with one
+accordion row per action in display order Read, Create, Edit, Send, Delete.
+Each row shows `<n> exceptions` (and `· <n> tool settings`) and an
+`Allow · Ask · Never` segmented control (radio group `<Action> default
+permission`, the saved state highlighted; choosing Allow clears the saved
+default). Expanded (region `<Action> exceptions`), it lists each entity's
+exception with its own segmented control (`<Entity>: <Action>`) and a ✕
+(`<Entity>: use default (X)`, tooltip `Use default (X)`) that removes the
+exception, then `The other <n> entities follow the <Action> default.` (`All
+<n> entities …` with none). `+ Add exception` (`Add a <Action> exception`)
+opens a searchable list of the entities (registry groups) that have tools for
+that action and no exception yet; picking one adds a row with nothing
+highlighted, choosing a state saves it, and its ✕ cancels it. `Channels &
+messages` covers messaging; creating and deleting channels, their settings,
+members, join links, access requests and channel bots are under `Channel
+settings & members`. Only pairs with at least one tool are shown or counted:
+a rule saved on a hidden pair stays saved and enforced. Saved rules on single
+tools (the agent's own restrictions, older settings) are listed under their
+action as **Individual tools**, with `Set by agent` and a remove button
+(`Remove the setting for <tool>`); the settings never create them.
+Every click saves at once (one `PUT`, queued per agent); a failure puts the
+control back and shows a toast.
+
+An agent can follow another policy instead of keeping its own. Its row's
+panel then shows the source's card (picture, name, @handle, `Personal` or
+`Team · <team>`), `This agent automatically follows permission changes made
+to @handle.` (with `@handle follows @other.` for a longer chain), and the
+component read-only: inherited exceptions listed, and the agent's own
+restrictions marked on their rows (`Restricted by the agent: Ask`) with a ✕
+(`Remove the restriction on <row>`) for people who may edit it. Its Reset
+reads **Remove restrictions** and removes only the agent's own restrictions
+(it keeps following); Reset on Macro's row adds that agents following it
+change too. A deleted
+source stays followed as it was; a lost one (gone for good) makes the agent
+ask before everything; one out of scope says to pick another. The agent
+form's **Permissions** section has two tabs (radio group `Permissions`):
+**Use another agent’s permissions** (`Use same permissions as` card with
+**Set agent ⌄**: candidates with picture, @handle and scope, one that would
+loop or chain too long disabled with `Would follow itself` / `Too many agents
+in a row`; and `Show @handle’s permissions`, collapsed) and **Set my own
+permissions** (the editable component). Creating an agent follows personal
+Macro (private) or the team default (team) unless another is picked, and
+sets that source once the agent exists; own permissions start from the
+picked agent's and are saved then too (a failure leaves the agent as the
+server created it, with **Retry** on the toast).
+Editing an agent: Set agent on an agent with its own permissions asks first
+(`Follow @handle?`), and on the second tab **Use my own permissions** copies
+what it follows and stops following.
+
+A team member also sees a **Team default permissions** row (team glyph,
+`Team agents follow these unless set to follow another or use their own.`)
+after the team's agents, with the same **Permissions ⌄** button (accessible
+name `Team default permissions`) expanding the same component for the team's
+default. Team admins and owners edit it (changes save at once; Reset asks
+first); other members see it read-only with `Only team admins and owners can
+change these.` Team agents that follow it pick up changes at once. In the
+Set agent picker it reads `Team default` with `Team · <team>`, and a new
+team agent preselects it.
+
+Below the table, a line counts the visible saved settings by who made them
+(`2 settings changed · 1 set by <agent> itself`), and `Reset permissions`
+asks for confirmation (a drawer on phones) and puts every setting back to
+Allow, hidden ones included. A note says the settings apply to every program
+the agent runs (`Applies to every program <agent> runs in sessions where agent
+permissions are on.`): a program reaches Macro only through steps the
+settings check, and the code it runs on the side can't reach Macro at all;
+the agent's other tools and connected apps aren't covered, even where a
+setting says Never. People who can't edit the agent see the controls
+disabled, no `+ Add exception`, no Reset, and `Only people who can edit
+<agent> can change these.` On phones the agent row's buttons wrap under its
+name and the panel spans the row; each segmented control takes the full
+width under its name.
+
+Backend-free check of the component (desktop and phone):
+`bunx playwright test --config src/features/block-agent/browser-test/permissions.playwright.config.ts -g settings`
+from `apps/web` (`?view=page` of that fixture).
+
 ### GitHub reconnect recovery
 
 When GitHub reports that reauthentication is required, reconnect starts OAuth

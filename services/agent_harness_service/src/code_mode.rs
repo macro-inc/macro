@@ -1,6 +1,7 @@
 //! Composition of code execution credentials with the harness's owner approval gate.
 use agent_code_mode::domain::{
-    CodeModeError, ExecutionCredentials, ExecutionIdentity, IssuedRun, UserExecutionCredentials,
+    CodeModeError, ExecutionCredentials, ExecutionIdentity, IssuedRun, ProgramLanguage,
+    UserExecutionCredentials,
 };
 use agent_correlation::domain::{CorrelationRepository, SessionScope};
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, SignedCorrelation};
@@ -105,6 +106,10 @@ pub struct RunCredentials {
     pub gate: Arc<dyn NativeToolGate>,
     pub endpoints: SdkEndpoints,
     pub scopes: Arc<dyn SessionScopes>,
+    /// The agent permissions gate on checked programs (JavaScript tools);
+    /// `None` where the runner can't analyze them, and then every program
+    /// runs as before.
+    pub permissions: Option<Arc<permissions::PermissionGate>>,
 }
 
 /// Which narrower scope a session's code runs in, decided where its
@@ -228,9 +233,40 @@ impl ExecutionCredentials for RunCredentials {
         &self,
         identity: &ExecutionIdentity,
         source: &str,
+        module: Option<&str>,
+        language: ProgramLanguage,
         cancel: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError> {
-        let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
+        // Refused or rewritten before anyone is asked anything.
+        let checked = match &self.permissions {
+            Some(gate) => gate.check(identity, source, language).await?,
+            None => None,
+        };
+        // Code mode offers JS tools programs only to owners the gate applies
+        // to, so one it did not check (its rollout read off this time, say
+        // because the flags could not be read) never runs ungated.
+        if language == ProgramLanguage::JsTools && checked.is_none() {
+            tracing::warn!("a JS tools program was not checked by the permission gate");
+            return Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+                message: "This program did not run: its permissions could not be checked. \
+                          Nothing was sent; try again."
+                    .to_owned(),
+                permission: None,
+            }));
+        }
+        let actor = approve_run(
+            self.gate.as_ref(),
+            identity,
+            source,
+            module,
+            language,
+            &cancel,
+        )
+        .await?;
+        if let (Some(gate), Some(checked)) = (&self.permissions, &checked) {
+            gate.hold(checked, identity, &actor, source, module, &cancel)
+                .await?;
+        }
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         let correlation = self
             .correlations
@@ -273,6 +309,8 @@ impl ExecutionCredentials for RunCredentials {
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
                 egress: self.egress.egress(&actor).await,
+                // The whole analyzed set, not only what was asked about.
+                allowed_operations: checked.map(|checked| checked.calls.into_iter().collect()),
             },
             acting_user: actor,
         })
@@ -346,6 +384,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             execution_id: None,
             unattended: None,
             egress: self.egress.egress(user).await,
+            allowed_operations: None,
         })
     }
 }
@@ -363,6 +402,71 @@ pub(crate) fn trace_headers() -> BTreeMap<String, String> {
                 .map(|value| (name.to_string(), value.to_owned()))
         })
         .collect()
+}
+
+/// The backend rollout for agent permissions. It is also the only flag on
+/// JavaScript tools programs. Off everywhere until the flag is created in
+/// PostHog and targeted.
+pub const PERMISSIONS_FLAG: &str = "enable-agent-permissions";
+
+/// [`PERMISSIONS_FLAG`] for a user. Without a flag client (local stacks
+/// without PostHog) or when the flags can't be read, it is off.
+pub struct PermissionsFlag<Flags>(pub Option<Flags>);
+
+/// Whether every one of `keys` is on for `user`; off without a flag client or
+/// when the flags can't be read.
+async fn flags_on<Flags: feature_flags::FeatureFlags>(
+    flags: &Option<Flags>,
+    user: &MacroUserIdStr<'static>,
+    keys: &[&str],
+) -> bool {
+    let Some(flags) = flags else {
+        return false;
+    };
+    flags
+        .load(user)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, ?keys, "could not read the code mode flags");
+        })
+        .is_ok_and(|snapshot| keys.iter().all(|key| snapshot.is_enabled(key)))
+}
+
+/// The page and API: on wherever the gate applies to some language, which
+/// [`PERMISSIONS_FLAG`] alone gives (JavaScript tools programs).
+impl<Flags: feature_flags::FeatureFlags + 'static>
+    agent_permissions::domain::ports::PermissionsRollout for PermissionsFlag<Flags>
+{
+    async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool {
+        flags_on(&self.0, user, &[PERMISSIONS_FLAG]).await
+    }
+}
+
+/// The gate, per language: [`PERMISSIONS_FLAG`] for JavaScript tools.
+/// Plain JavaScript is never gated.
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> permissions::LanguageRollout
+    for PermissionsFlag<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>, language: ProgramLanguage) -> bool {
+        match language {
+            ProgramLanguage::Javascript => false,
+            ProgramLanguage::JsTools => flags_on(&self.0, owner, &[PERMISSIONS_FLAG]).await,
+        }
+    }
+}
+
+/// Whether an owner may run JavaScript tools programs: [`PERMISSIONS_FLAG`]
+/// alone, the gate's rollout for them, since permissions gate every one.
+pub struct JsToolsRollout<Flags>(pub PermissionsFlag<Flags>);
+
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OwnerRollout
+    for JsToolsRollout<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        permissions::LanguageRollout::enabled(&self.0, owner, ProgramLanguage::JsTools).await
+    }
 }
 
 macro_env_var::env_var! { struct DocumentStorageServiceCloudfrontDistributionUrl; }
@@ -436,16 +540,30 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 
 pub mod connected_apps;
 pub mod images;
+pub mod permissions;
 pub mod reviews;
 pub mod ui_commands;
 
+/// Ask the owner gate to run the program as the selected account. The
+/// approver sees its source, a JS tools program's module and the language.
 async fn approve_run(
     gate: &dyn NativeToolGate,
     identity: &ExecutionIdentity,
     source: &str,
+    module: Option<&str>,
+    language: ProgramLanguage,
     cancel: &CancellationToken,
 ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, CodeModeError> {
-    let args = serde_json::json!({"source": source, "acting_as": identity.acting_as, "turn_id": identity.turn});
+    let mut args = serde_json::json!({"source": source, "acting_as": identity.acting_as, "turn_id": identity.turn});
+    // The approver sees what the source is written in, and the module beside
+    // it. JavaScript, the default, is left out, so its hold reads as it did
+    // before languages.
+    if language != ProgramLanguage::Javascript {
+        args["language"] = serde_json::json!(language);
+    }
+    if let Some(module) = module {
+        args["module"] = serde_json::json!(module);
+    }
     let verdict = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Err(CodeModeError::Forbidden),

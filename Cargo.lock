@@ -338,6 +338,8 @@ dependencies = [
 name = "agent_code_mode"
 version = "0.1.0"
 dependencies = [
+ "agent_permission_registry",
+ "agent_permissions",
  "agent_runtime_protocol",
  "agent_session",
  "ai_toolset",
@@ -364,6 +366,7 @@ dependencies = [
  "macro_uuid",
  "nom 8.0.0",
  "nutype",
+ "prompt",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -657,6 +660,8 @@ dependencies = [
  "agent_git",
  "agent_harness",
  "agent_inmem",
+ "agent_permission_registry",
+ "agent_permissions",
  "agent_preview",
  "agent_runtime_protocol",
  "agent_session",
@@ -903,6 +908,50 @@ dependencies = [
  "trigger_context",
  "url",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_permission_registry"
+version = "0.1.0"
+dependencies = [
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_permissions"
+version = "0.1.0"
+dependencies = [
+ "agent_correlation",
+ "agent_fold",
+ "agent_permission_registry",
+ "ai_toolset",
+ "async-trait",
+ "axum",
+ "bot_id",
+ "chrono",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model_user",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
  "workspace-hack",
 ]
 

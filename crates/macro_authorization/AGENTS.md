@@ -71,7 +71,12 @@ working, even with `x-macro-code-execution`: the runtime marks every code
 step's request, so the header counts only for a credential that signs no
 program (`Person`), never against a signed claim. A routine step running as
 its owner signs only `routine_id`, so never test `agent_id` alone for "is
-this a person". `authorize_identity` retains
+this a person". A refusal that names how to proceed in code picks its text
+with `from_dialect_program(headers)`: a JavaScript tools program's requests
+carry `x-macro-code-execution: js_tools` (`DIALECT_PROGRAM`) and get the
+dialect's operations (`tools.*`); every other request gets today's text,
+byte for byte. The value only picks wording; it never decides access.
+`authorize_identity` retains
 verified origin and signed agent attribution on user authentication. It
 does not turn a user credential into bot authority or change endpoint policies.
 

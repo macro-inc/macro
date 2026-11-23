@@ -2,9 +2,10 @@
 
 ## Scope
 
-Packages the public Macro SDK and Handlebars for restricted Deno execution and
-builds the agent documentation catalog. Canonical TypeDoc rendering and the
-HTML worker belong to `packages/sdk-docs`.
+Packages the public Macro SDK and Handlebars for restricted Deno execution,
+builds the agent documentation catalog, and bundles the JS tools interpreter
+(`@opencode/codemode`) with its operation catalog and may-call analyzer.
+Canonical TypeDoc rendering and the HTML worker belong to `packages/sdk-docs`.
 
 ## Start here
 
@@ -34,6 +35,11 @@ HTML worker belong to `packages/sdk-docs`.
   `typescript` and typed with `CodeContext`; `crates/agent_code_mode` checks
   each one.
 - `crmEmailPrivacy` documents `macro.crm.emailPrivacy` separately from CRM records so both entity indexes stay within the 16 KiB bound; this changes neither the public namespace nor endpoint authorization.
+- `src/js-tools/`: JS tools programs (README, "JS tools"). `catalog.ts`
+  builds `js-tools.json` from the specs, the generated SDK and the permission
+  registry; `analyze.ts` is the may-call analysis the permissions gate and
+  every run use; `runtime.ts` gives the interpreter one tool per operation
+  and refuses unanalyzed calls; `index.ts` is `js-tools.mjs`'s entry.
 - The bundled SDK adds its hand-assigned display verb to each generated call
   when code mode enables the verb header in the bootstrap.
 - Keep `generate.ts`'s `postReads` in step with
@@ -57,6 +63,24 @@ Run from this directory after installing the root workspace and the standalone
 the generator refuses to run without `packages/sdk/node_modules`.
 
 ## Gotchas
+
+- The analyzer is sound only for what `@opencode/codemode` 2.3.2 has: no
+  global object, `eval`, `Proxy`, `Reflect` or getters, and `require` as the
+  one global that loads others. Upgrade it by bumping the exact version, then
+  read the `interpreter-support.md` diff: every new global or binding form
+  needs an analyzer rule before `pins.test.ts` is updated. Add a program to
+  the corpus in `analyze.test.ts` for each new way to reach `tools`; each
+  runs in the real interpreter, which must call nothing outside an `ok`
+  answer.
+- Our modules import Effect as `codemode-effect` (an alias of the version
+  codemode pins), never `effect`, which is the web app's version; the bundle
+  resolves both to codemode's copy. The web app pins its own `effect`
+  exactly, so codemode's doesn't replace it in `bun.lock`.
+- A new operation in the specs needs its registry line
+  (`crates/agent_permission_registry`) or generation fails, unless the
+  catalog skips it: one on the SDK's `Excluded` lists, or one a tool can't
+  send or read, goes in `skipped` and has no registry line
+  (`catalog.test.ts` pins both).
 
 - The outputs are never committed. A new file the generator reads must be added
   to `GENERATOR_INPUTS` in `crates/code_mode_assets/build.rs` and to

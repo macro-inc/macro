@@ -27,6 +27,10 @@
 - `@routing` and `@agent` are agent-only block tags: `renderSdkDocs` returns
   them as `AgentNotes` for `packages/code-mode-sdk` and removes them before
   writing any output, so the public reference never shows them.
+- `@flag <flag-name>` marks a declaration (or a module) behind a feature
+  flag: `renderSdkDocs` removes it, and the re-exports of it, when TypeDoc
+  begins resolving, before members are grouped, so neither the reference nor
+  code mode's docs show it.
 - TypeDoc and its Markdown plugin must use the same TypeDoc runtime instance.
   The workspace also contains other versions; preserve the peer resolution in
   `src/render.ts` and test actual generation after dependency changes.

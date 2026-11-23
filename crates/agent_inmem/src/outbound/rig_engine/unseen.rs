@@ -5,8 +5,9 @@
 //!
 //! [`ReplyDelivery::Unseen`]: crate::domain::engine::ReplyDelivery::Unseen
 
+use super::turn_code_tools::TurnCodeTools;
+use agent_code_mode::domain::CodeModeKind;
 use ai_toolset::{RequestContext, SearchableTool, ToolCallFuture, ToolInfo, ToolSet, ToolSetError};
-use mcp_toolset::RemoteMcpToolSet;
 
 use crate::domain::mcp::CODE_MODE_MCP_TOOLS;
 
@@ -14,21 +15,58 @@ use crate::domain::mcp::CODE_MODE_MCP_TOOLS;
 /// works, with no conversation to write for.
 pub(super) const PROMPT: &str = include_str!("unseen.md");
 
+/// Where [`PROMPT`]'s code-mode section starts; a dialect turn replaces it.
+const CODE_MODE_SECTION: &str = "# Code Mode\n";
+
+/// Phrases before the code-mode section that name a TypeScript SDK call,
+/// and their dialect wording.
+pub(super) const DIALECT_SWAPS: [(&str, &str); 1] = [(
+    "(`macro.workspace`)",
+    "(`tools.storage.post_items_soup_ast`)",
+)];
+
+/// [`PROMPT`] for a dialect turn ([`CodeModeKind::Dialect`]): the same
+/// shared rules, with the dialect's code-mode section and every SDK call
+/// swapped for its operation. A test fails when a swapped phrase is gone.
+pub(super) static DIALECT_PROMPT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    let head = PROMPT
+        .find(CODE_MODE_SECTION)
+        .map_or(PROMPT, |start| &PROMPT[..start]);
+    let head = DIALECT_SWAPS
+        .iter()
+        .fold(head.to_owned(), |text, (from, to)| text.replace(from, to));
+    format!("{head}{}", include_str!("unseen_dialect.md"))
+});
+
+/// The shared prompt of an unseen turn of `kind`.
+pub(super) fn prompt(kind: CodeModeKind) -> &'static str {
+    match kind {
+        CodeModeKind::TypeScript => PROMPT,
+        CodeModeKind::Dialect => DIALECT_PROMPT.as_str(),
+    }
+}
+
 const EXECUTE_CODE: &str = "mcp__macro_internal__ExecuteCode";
 
-/// Code mode's tools out of a session's MCP servers, and nothing else.
-/// `ExecuteCode` goes out without its reviews, views and the PresentView
-/// schema: nobody would see what they present.
+/// Code mode's tools out of a session's MCP servers, and nothing else. In
+/// a TypeScript turn, `ExecuteCode` goes out without its reviews, views and
+/// the PresentView schema: nobody would see what they present. A dialect
+/// turn's goes out as listed.
 pub(super) struct CodeModeOnly {
-    tools: RemoteMcpToolSet,
-    execute_code: String,
+    tools: TurnCodeTools,
+    execute_code: Option<String>,
 }
 
 impl CodeModeOnly {
-    pub(super) fn new(tools: RemoteMcpToolSet) -> Self {
+    pub(super) fn new(tools: TurnCodeTools, kind: CodeModeKind) -> Self {
         Self {
             tools,
-            execute_code: agent_code_mode::inbound::toolset::unseen_execute_code_description(),
+            execute_code: match kind {
+                CodeModeKind::TypeScript => {
+                    Some(agent_code_mode::inbound::toolset::unseen_execute_code_description())
+                }
+                CodeModeKind::Dialect => None,
+            },
         }
     }
 }
@@ -60,10 +98,9 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for CodeModeOnly {
             .into_iter()
             .filter(|tool| CODE_MODE_MCP_TOOLS.contains(&tool.name.as_str()))
             .map(|tool| SearchableTool {
-                description: if tool.name == EXECUTE_CODE {
-                    self.execute_code.clone()
-                } else {
-                    tool.description
+                description: match &self.execute_code {
+                    Some(unseen) if tool.name == EXECUTE_CODE => unseen.clone(),
+                    _ => tool.description,
                 },
                 ..tool
             })

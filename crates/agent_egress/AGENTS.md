@@ -59,6 +59,13 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `tools/call` is `EgressError::RateLimited` (with its `Retry-After`), which
   `exchange_as` returns as an error, never as an `isError` result (the
   sandbox proxy answers a tool result saying the call did not run).
+- A hold on an agent's permissions (`SDK_PERMISSION_SLUG`, `macro-sdk`,
+  `PermissionApprovals::hold_permissions`): a JS tools program that may call
+  "ask" operations waits for the account it acts as (recorded as the
+  approval's owner, sent as the notice's `approver`); its arguments carry
+  `permission.operations`. Always allowing remembers one standing approval
+  per operation for that account. Only a person's own session may approve or
+  decline it (`answer`'s `by_person`); other holds ignore that.
 
 ## Scope
 

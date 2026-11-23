@@ -4,10 +4,12 @@ import type { ToolUsePart } from '../component/parts/shared';
 import {
   codeExecutionInput,
   codeExecutionReceipt,
+  isRecordOfProgram,
   programEnded,
   programFailures,
   programSteps,
 } from '../state/code-execution';
+import { parseExecutionPermission } from '../state/permission-approval';
 import { isToolActive } from '../ui/types';
 
 /**
@@ -28,10 +30,18 @@ export function useCodeExecutionRecord(
     return part().status === 'pending' ? undefined : requestedExecutionId();
   };
   const query = useAgentCodeExecutionQuery(sessionId, executionId);
-  const source = () => codeExecutionInput(part())?.source;
+  const program = () => codeExecutionInput(part());
+  const source = () => program()?.source;
   // A rejected duplicate ID must not display the previous program's results.
-  const record = () =>
-    query.isSuccess && query.data.source === source() ? query.data : undefined;
+  const isThisProgram = () => {
+    const input = program();
+    return (
+      query.isSuccess &&
+      input !== undefined &&
+      isRecordOfProgram(query.data, input)
+    );
+  };
+  const record = () => (isThisProgram() ? query.data : undefined);
   const error = () => {
     const detail = part().detail;
     return (
@@ -60,7 +70,13 @@ export function useCodeExecutionRecord(
         ...(saved?.calls ?? []).map((call) => call.status),
       ],
       ended: ended(),
-      cancelled: (saved?.status ?? receipt()?.status) === 'cancelled',
+      // A program its permissions blocked didn't fail: it never ran, and
+      // its own card says why. One a person denied is a failed step, so a
+      // folded run still says so.
+      cancelled:
+        (saved?.status ?? receipt()?.status) === 'cancelled' ||
+        parseExecutionPermission(saved?.permission ?? receipt()?.permission)
+          ?.outcome === 'blocked',
     });
   };
 
@@ -70,6 +86,8 @@ export function useCodeExecutionRecord(
     executionId,
     query,
     source,
+    program,
+    isThisProgram,
     record,
     error,
     ended,

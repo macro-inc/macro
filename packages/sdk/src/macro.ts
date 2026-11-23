@@ -421,6 +421,19 @@ export {
   type AgentPatch,
 } from './entities/agents/agent';
 export type { CodingAgent } from './entities/agents/namespace';
+export type {
+  PermissionAction,
+  TightenedToolPermissions,
+  ToolPermissionCatalog,
+  ToolPermissionChange,
+  ToolPermissionChanges,
+  ToolPermissionDefault,
+  ToolPermissionGroup,
+  ToolPermissionRule,
+  ToolPermissionState,
+  ToolPermissionTarget,
+  ToolPermissions,
+} from './entities/agents/tool-permissions';
 export { UserApiKey } from './entities/api-keys/api-key';
 export {
   Bot,
