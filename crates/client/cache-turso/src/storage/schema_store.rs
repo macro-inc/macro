@@ -10,9 +10,10 @@
 //!
 //! - [`Tier::Compatible`] stores the new schema and nothing else.
 //! - [`Tier::Types`] drops the records of the changed types with every row
-//!   derived from them and every queued projection of them, takes the overlay
-//!   off each queued write that wrote one, and starts the backfill over (it
-//!   drops the storage generation).
+//!   derived from them and every queued projection of them (every queued
+//!   projection, when other documents read them), takes the overlay off each
+//!   queued write that wrote one, and starts the backfill over (it drops the
+//!   storage generation).
 //! - [`Tier::Reset`] drops every record but the identity and authority, by
 //!   dropping and creating each table again, with every queued projection
 //!   and overlay. A tier whose statement fails, or that runs out of space,
@@ -330,13 +331,18 @@ fn apply(
                 let marked = driver::execute(connection, EVERY_DOCUMENT_DIRTY, Vec::new())?;
                 adoption.incomplete_documents = u64::try_from(marked).map_err(|_| invariant())?;
             }
+            // When other documents read a changed type, any queued
+            // projection may hold facts it fed, as the build before derived
+            // them.
             let queue = conform_queue(
                 connection,
                 |request, source| overlay_fits(&change.stored, changed, request, source),
                 |key| {
-                    key.as_str()
-                        .split_once(':')
-                        .is_some_and(|(typename, _)| changed.contains(typename))
+                    *every_document
+                        || key
+                            .as_str()
+                            .split_once(':')
+                            .is_some_and(|(typename, _)| changed.contains(typename))
                 },
             )?;
             adoption.retired_overlays = queue.retired;

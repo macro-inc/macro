@@ -480,6 +480,20 @@ fn a_type_other_documents_read_makes_them_incomplete() {
         let adoption = adopt(&storage, RETYPED, &inputs);
         assert_eq!(adoption.change, types(&["Thing"], true));
         assert_eq!(adoption.incomplete_documents, 1);
+        // Any queued projection may hold facts the changed type fed, as the
+        // build before derived them, so every one goes; the overlay of the
+        // write returning a `Note` stays.
+        let sources = sources(&mut storage).await;
+        assert!(
+            sources
+                .iter()
+                .all(|source| source.projection_mutations.is_empty())
+        );
+        assert!(!is_retired(&sources[1]));
+        assert_eq!(
+            count(&storage, "SELECT count(*) FROM optimistic_index_documents"),
+            0
+        );
         assert_eq!(
             count(
                 &storage,
