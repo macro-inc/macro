@@ -42,7 +42,7 @@ import { compactDom, heldApartFromShared } from './lib/dom-held.ts';
 import { generateReads, type ReadCase } from './lib/gen.ts';
 import { applyMutant, MUTANTS, revertMutant } from './lib/mutants.ts';
 import { queueNotify } from './lib/notify.ts';
-import { discrepancies, instant, pastLoadedPages, project, rowsDiff, sameRows, type Paging, type Row } from './lib/project.ts';
+import { discrepancies, instant, pastLoadedPages, project, REST_DEADLINE, rowsDiff, sameRows, staleSlotPastPages, type Paging, type Row } from './lib/project.ts';
 import { Rng } from './lib/rng.ts';
 import { seedWorld, sender } from './lib/setup.ts';
 import { q, sql, stackFromEnv, type User } from './lib/stack.ts';
@@ -552,12 +552,20 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
               // past those pages are on its next page (closure P3).
               const limit = Number(specs[i].params?.limit) || undefined;
               const pastPages = !specs[i].groupBy && newOnly.every((t) => t.startsWith('missing:')) && pastLoadedPages(lastLive[i][1] ?? [], raw[i][1], lastPaging[i][1], limit);
-              emit(`live:${tag}:${pastPages ? 'new-past-loaded-pages' : 'new-not-within-bound'}${changed[1]}`, note(1, newOnly));
+              // A row both mounted lists still show alike, which the fresh
+              // read dropped, holds a slot in the loaded pages (closure P4):
+              // its extra token is main's too, so only the pushed rows are new.
+              const behindAlike = !pastPages && !specs[i].groupBy && newOnly.every((t) => t.startsWith('missing:')) && staleSlotPastPages(lastLive[i][1] ?? [], raw[i][1], lastLive[i][0] ?? [], lastPaging[i][1], limit) !== null;
+              // The branch reads this list with main's own REST reader (Home's
+              // grouped lists), and its 12 s deadline cut the re-read off (T11).
+              const restDeadline = REST_DEADLINE.test(lastMeta[i][1] ?? '');
+              const name = restDeadline ? 'new-rest-deadline' : pastPages ? 'new-past-loaded-pages' : behindAlike ? 'new-past-loaded-pages-behind-alike' : 'new-not-within-bound';
+              emit(`live:${tag}:${name}${changed[1]}`, note(1, newOnly));
               // The evidence for an open difference: each side's mounted rows
               // and its fresh read, as key@notifiedAt in list order.
               const compact = (rows: Row[] | null) => (rows ?? []).map((r) => `${r.key}@${r.notifiedAt ?? '-'}`);
               const evidence = (checks.liveRows as unknown[] | undefined) ?? [];
-              evidence.push({ spec: i, oldMeta: lastMeta[i][0], newMeta: lastMeta[i][1], newPaging: lastPaging[i][1], limit, pastPages, oldLive: compact(lastLive[i][0]), oldFresh: compact(raw[i][0]), newLive: compact(lastLive[i][1]), newFresh: compact(raw[i][1]) });
+              evidence.push({ spec: i, oldMeta: lastMeta[i][0], newMeta: lastMeta[i][1], newPaging: lastPaging[i][1], limit, pastPages, behindAlike, restDeadline, oldLive: compact(lastLive[i][0]), oldFresh: compact(raw[i][0]), newLive: compact(lastLive[i][1]), newFresh: compact(raw[i][1]) });
               checks.liveRows = evidence;
             }
             else if (tOld.length || tNew.length) {

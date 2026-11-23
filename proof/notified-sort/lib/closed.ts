@@ -224,6 +224,33 @@ export const CLOSURES: Closure[] = [
       'Invisible: every caller that reads a channel row\'s participantIds looks for the one id that is not the viewer, whatever the order: features/channel/channel-icon.tsx:28-29 (ids.find(id => id !== userId()) ?? ids[0], DMs only; other channels draw ChannelAvatar, which reads no participants), features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx:708, features/command/contact-items.ts:22 and features/agent-work/core/work-visibility.ts:15 (filters). Ordered avatar rows read call participants, not channel ones. ' +
       DOM_EVIDENCE,
   },
+  {
+    id: 'P4',
+    match: /^live:[a-z]+:new-past-loaded-pages-behind-alike$/,
+    title: 'A row both sides still show holds a slot in the loaded pages, so the next row waits on the next page',
+    cause:
+      "P3 with a stale row in the window. A write that no event announces leaves the row it removes on both mounted lists, alike: the harness's delete-notification deletes the notification rows in SQL, which publishes no patch (S1), and removing a participant from a public or team channel arrives as a channel update with isParticipant false, which neither main's Home nor the branch acts on (the PR body's leaving-a-channel bullet). The branch's list keeps the page count it loaded (lib/urql-solid/infinite-query-observer.ts:684 refetch reads Math.max(1, this.pages.length) pages), so with the stale row in it the fresh read's next row is one past its last page; main's REST list shows that row only because it holds more pages (P1). run.ts names this only when every new-side token is a missing row, the list is ungrouped and full pages with a next page, every row the fresh read lacks is on main's mounted list under the same notification time, and the list's other rows are the fresh read's first rows exactly (lib/project.ts staleSlotPastPages, harness test 'names a stale row both sides keep'). Instances, quiet seed 3701: lane v1 sequence 3 step 13 (delete-notification on a channel, limit 1, 3 pages: the branch shows [channel, document, chat], the fresh read [document, chat, document]; main shows the same channel at the same time), lane v11 sequence 0 step 12 and lane v8 sequence 1 step 18 (delete-notification on a document, limits 1 and 5), lane v13 sequence 3 step 15 (participant-remove on a public channel, limit 8, 3 pages, 24 rows: the stale thread on both, the 25th fresh row past the last page).",
+    outcome:
+      "Invisible as a wrong row, and not a branch-only staleness: the stale row is on main's list too, and every other row is the list's first rows, in order. Scrolling loads the next page from the last row's cursor, which returns the pushed row; the next read of the list (any notification, or a reload) drops the stale row on both sides.",
+  },
+  {
+    id: 'T11',
+    match: /^live:[a-z]+:new-rest-deadline$/,
+    title: "A list the branch still reads with main's REST reader hit that reader's 12 s deadline under load",
+    cause:
+      "Home's Signal and Noise lists set emailView 'inbox' (features/home/queries/home-query.ts:175-177) and grouped GraphQL Soup refuses email views (lib/queries/soup/graphql/ast.ts:997-999), so the grouped input is undefined (graphql/grouped-items.ts:105-115) and the facade falls back to main's REST reader (lib/queries/soup/items.ts:434-443): every Home grouped read in the run is REST on both sides (reads.jsonl dims transport 'rest->rest', 443 of 443). Neither items.ts nor request-timeout.ts differs between main and the branch (git diff 6449317189c 328d999a060 on them is empty), and notification-soup.ts only adds the GraphQL re-read. So both sides ran the same REST code; on the branch's tab the refetch after the notification ran past the 12 s deadline (request-timeout.ts:5, T9) and failed with 'TimeoutError: signal timed out', which left in place the rows the notification had stamped and put at the top of the cached REST list (lib/queries/notification/notification-soup.ts:59 updateSoupForNotification, main's code, which the branch keeps; B1). Instance: quiet seed 3701, lane v11 sequence 1 step 0 (notify-burst on a thread; spec2 Home Signal grouped by project): the branch's list shows the three notified rows above the five the fresh read has, its state 'rest error ... TimeoutError: signal timed out'; main's tab answered in time and settled at 94 ms; the reopened list read the fresh five (checks.reopened matchesFresh true).",
+    outcome:
+      "Not the PR's code: main's REST reader on a slow stack, the same on either tab; on main it shows Home's error state with Retry exactly as here. The comparison stops at the error, and a fresh mount reads the right rows.",
+  },
+  {
+    id: 'U1',
+    match: /^live:[a-z]+:old-unsettled$/,
+    title: "Main's mounted list showed its fresh read's rows but was still fetching at the bound",
+    cause:
+      "The probe counts a list as caught up only when it shows the fresh read's rows and is settled: not pending, loading or fetching (probe.ts:108-112). Main's REST notified lists are TanStack infinite queries (lib/queries/soup/items.ts:344) that refetch on every invalidation of an entity they hold (normalized-cache/operations.ts:256 invalidateSoupEntity) and after the probe reopens them on a storage reset. The class says nothing about the branch: its list at the same step is judged by its own classes, and a branch list that never settles is live:<tag>:new-unsettled, which stays open. Instance: quiet seed 3701, lane v22 sequence 0 step 0 (role on a document), the step after the run's only storage reset (resets.jsonl, both sides, 20:51:22): main's three lists showed the fresh rows (28, 4 and 0) and were still fetching (isFetching true, no error) when the 15 s bound ran out while each fresh read took 6.3 s; the branch's settled at 28, 52 and 61 ms. At the next step main's settled at 8, 28 and 32 ms.",
+    outcome:
+      "Main only, and invisible as rows: main's list already showed the right rows, with a refresh in flight. Nothing the branch shows differs.",
+  },
 ];
 
 export function closureOf(cls: string): Closure | undefined {

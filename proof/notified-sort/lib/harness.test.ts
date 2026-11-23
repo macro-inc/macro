@@ -12,7 +12,7 @@ import { channelNameRest, heldApartFromShared, homeCheckClosure, onlyStaleTimeLa
 import { compareHomeDom, parseRowId } from './dom.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
-import { discrepancies, instant, pastLoadedPages, project, sameRows, type Row } from './project.ts';
+import { discrepancies, instant, pastLoadedPages, project, REST_DEADLINE, sameRows, staleSlotPastPages, type Row } from './project.ts';
 import { Rng } from './rng.ts';
 import { buildWorld } from './world.ts';
 
@@ -188,6 +188,38 @@ describe('comparison', () => {
     expect(pastLoadedPages(live, fresh, paging, undefined)).toBe(false);
     expect(closureOf('live:random:new-past-loaded-pages:seen/project')?.id).toBe('P3');
     expect(closureOf('live:random:new-not-within-bound:seen/project')).toBeUndefined();
+  });
+
+  it('names a stale row both sides keep, and nothing else', () => {
+    const row = (k: string, at: string | null = null): Row => ({ key: `document:${k}`, notifiedAt: at, name: null });
+    const fresh = ['a', 'b', 'c', 'd'].map((k) => row(k));
+    const paging = { pages: 3, hasNextPage: true };
+    // The branch keeps x in its three one-row pages; main shows x too.
+    const live = [row('x', 't1'), row('a'), row('b')];
+    const old = [row('x', 't1'), row('a'), row('b'), row('c')];
+    expect(staleSlotPastPages(live, fresh, old, paging, 1)?.map((r) => r.key)).toEqual(['document:x']);
+    // Main dropped x, or shows it at another time: the branch alone is behind.
+    expect(staleSlotPastPages(live, fresh, old.slice(1), paging, 1)).toBeNull();
+    expect(staleSlotPastPages(live, fresh, [row('x', 't2'), ...old.slice(1)], paging, 1)).toBeNull();
+    // A dropped, swapped or extra fresh row, a short page, no next page, no stale row.
+    expect(staleSlotPastPages([row('x', 't1'), row('b'), row('c')], fresh, old, paging, 1)).toBeNull();
+    expect(staleSlotPastPages([row('x', 't1'), row('b'), row('a')], fresh, old, paging, 1)).toBeNull();
+    expect(staleSlotPastPages(live.slice(0, 2), fresh, old, paging, 1)).toBeNull();
+    expect(staleSlotPastPages(live, fresh, old, { ...paging, hasNextPage: false }, 1)).toBeNull();
+    expect(staleSlotPastPages(fresh.slice(0, 3), fresh, old, paging, 1)).toBeNull();
+    expect(closureOf('live:random:new-past-loaded-pages-behind-alike')?.id).toBe('P4');
+    expect(closureOf('live:random:new-past-loaded-pages-behind-alike:after-network-change')).toBeUndefined();
+  });
+
+  it('names a REST deadline on the branch, and only that', () => {
+    expect(REST_DEADLINE.test('rest error An unknown error occurred: TimeoutError: signal timed out settled=true entities=8')).toBe(true);
+    expect(REST_DEADLINE.test('rest error AbortError: The user aborted a request. settled=true entities=2')).toBe(true);
+    expect(REST_DEADLINE.test('graphql error An unknown error occurred: TimeoutError: signal timed out settled=true')).toBe(false);
+    expect(REST_DEADLINE.test('rest error Failed to fetch settled=true entities=0')).toBe(false);
+    expect(closureOf('live:grouped:new-rest-deadline')?.id).toBe('T11');
+    expect(closureOf('live:home:old-unsettled')?.id).toBe('U1');
+    expect(closureOf('live:home:old-unsettled:after-network-change')).toBeUndefined();
+    expect(closureOf('live:home:new-unsettled')).toBeUndefined();
   });
 
   it('reads the entity of a Home row from its DOM id', () => {

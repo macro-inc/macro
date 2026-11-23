@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { CLOSURES, closureOf } from './lib/closed.ts';
 import { channelNameRest, homeCheckClosure, type CompactDom } from './lib/dom-held.ts';
 import { authRefreshTimeoutClass } from './lib/compare.ts';
-import { pastLoadedPages, type Row } from './lib/project.ts';
+import { pastLoadedPages, REST_DEADLINE, staleSlotPastPages, type Row } from './lib/project.ts';
 
 type ClassEntry = { n: number; example: unknown };
 type RefEntry = { 'ref-agrees': number; 'ref-disagrees': number; 'ref-absent': number; example: unknown };
@@ -172,6 +172,71 @@ function reclassifyPastPages(run: string, classes: Record<string, ClassEntry>): 
   return moved;
 }
 
+/**
+ * A run recorded before run.ts named two more kinds of new-side miss kept them
+ * as `live:<tag>:new-not-within-bound`. Moves each miss whose evidence
+ * (checks.liveRows, checks.liveMisses) shows one, as run.ts now does live:
+ * - `new-rest-deadline` (closure T11): the branch's list was on REST and its
+ *   last state was main's 12 s deadline error (lib/project.ts REST_DEADLINE);
+ * - `new-past-loaded-pages-behind-alike` (closure P4): every new-side token
+ *   is a missing row or an extra row main's mounted list shows too, and the
+ *   list is full pages whose other rows are the fresh read's first rows
+ *   (lib/project.ts staleSlotPastPages, on the recorded key@notifiedAt rows).
+ */
+function reclassifyLiveSlots(run: string, classes: Record<string, ClassEntry>): { lane: string; step: number; spec: number; from: string; to: string }[] {
+  const stepsPath = join(outDir, run, 'steps.jsonl');
+  const seqPath = join(outDir, run, 'sequences.jsonl');
+  if (!existsSync(stepsPath) || !existsSync(seqPath)) return [];
+  type Spec = { groupBy?: unknown };
+  type Evidence = { spec: number; pastPages?: boolean; behindAlike?: boolean; newMeta?: string; newPaging?: { pages: number; hasNextPage: boolean }; limit?: number; oldLive: string[]; newLive: string[]; newFresh: string[] };
+  const specsOf = new Map<string, Spec[]>();
+  for (const line of readFileSync(seqPath, 'utf8').split('\n').filter(Boolean)) {
+    const seq = JSON.parse(line) as { lane: string; sequence: number; specs?: Spec[] };
+    specsOf.set(`${seq.lane}/${seq.sequence}`, seq.specs ?? []);
+  }
+  const rows = (compact: string[]): Row[] =>
+    compact.map((c) => {
+      const at = c.lastIndexOf('@');
+      const n = c.slice(at + 1);
+      return { key: c.slice(0, at), notifiedAt: n === '-' ? null : n, name: null };
+    });
+  const tokensOf = (misses: string[], prefix: string) => {
+    const line = misses.find((m) => m.startsWith(prefix));
+    return line ? line.slice(prefix.length).split(' ').map((t) => t.replace(/<.*$/, '')) : [];
+  };
+  const moved: { lane: string; step: number; spec: number; from: string; to: string }[] = [];
+  for (const line of readFileSync(stepsPath, 'utf8').split('\n').filter(Boolean)) {
+    const step = JSON.parse(line) as { lane: string; sequence: number; step: number; checks?: { liveRows?: Evidence[]; liveMisses?: string[] } };
+    for (const ev of step.checks?.liveRows ?? []) {
+      // Recorded by run.ts with the rules already applied, or already named P3.
+      if (ev.behindAlike !== undefined || ev.pastPages) continue;
+      const spec = specsOf.get(`${step.lane}/${step.sequence}`)?.[ev.spec];
+      if (!spec) continue;
+      const tag = spec.groupBy ? 'grouped' : ev.spec < 2 ? 'home' : 'random';
+      const misses = step.checks?.liveMisses ?? [];
+      const newTokens = tokensOf(misses, `spec${ev.spec} new `);
+      const oldTokens = tokensOf(misses, `spec${ev.spec} old `);
+      let name: string | null = null;
+      if (REST_DEADLINE.test(ev.newMeta ?? '')) name = 'new-rest-deadline';
+      else if (!spec.groupBy && newTokens.length && newTokens.every((t) => t.startsWith('missing:') || (t.startsWith('extra:') && oldTokens.includes(t)))) {
+        const stale = staleSlotPastPages(rows(ev.newLive), rows(ev.newFresh), rows(ev.oldLive), ev.newPaging ?? null, ev.limit);
+        if (stale && newTokens.filter((t) => t.startsWith('extra:')).every((t) => stale.some((r) => `extra:${r.key}` === t))) name = 'new-past-loaded-pages-behind-alike';
+      }
+      if (!name) continue;
+      const from = `live:${tag}:new-not-within-bound`;
+      const entry = classes[from];
+      if (!entry) continue;
+      entry.n -= 1;
+      if (entry.n <= 0) delete classes[from];
+      const to = `live:${tag}:${name}`;
+      classes[to] ??= { n: 0, example: { lane: step.lane, sequence: step.sequence, step: step.step, spec: ev.spec, newMeta: ev.newMeta, newPaging: ev.newPaging, limit: ev.limit } };
+      classes[to].n += 1;
+      moved.push({ lane: step.lane, step: step.step, spec: ev.spec, from, to });
+    }
+  }
+  return moved;
+}
+
 const outDir
 
  = join(import.meta.dirname, 'out');
@@ -186,6 +251,7 @@ for (const run of runs.sort()) {
   const authTimeouts = summary.sequences?.classes ? reclassifyAuthTimeouts(run, summary.sequences.classes) : [];
   const domNames = summary.dom?.classes ? reclassifyDomNames(run, summary.dom.classes) : [];
   const pastPages = summary.sequences?.classes ? reclassifyPastPages(run, summary.sequences.classes) : [];
+  const liveSlots = summary.sequences?.classes ? reclassifyLiveSlots(run, summary.sequences.classes) : [];
   for (const phase of ['reads', 'dom', 'sequences']) {
     const classes: Record<string, ClassEntry> = summary[phase]?.classes ?? {};
     for (const [cls, entry] of Object.entries(classes)) {
@@ -209,6 +275,7 @@ for (const run of runs.sort()) {
     authTimeouts,
     domNames,
     pastPages,
+    liveSlots,
     closedBy,
     open,
   };

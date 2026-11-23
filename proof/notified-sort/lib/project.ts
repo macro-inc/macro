@@ -75,3 +75,26 @@ export function pastLoadedPages(live: Row[], fresh: Row[], paging: Paging | null
   if (live.length !== paging.pages * limit || live.length >= fresh.length) return false;
   return discrepancies(live, fresh.slice(0, live.length)).length === 0;
 }
+
+/**
+ * The same full pages, but a row the fresh read dropped still holds a slot in
+ * them, because no event told either side it left: main's mounted list shows
+ * that row too, under the same notification time. Each such row pushes the
+ * fresh read's next row past the loaded pages. Returns the stale rows when
+ * that is all the list's difference: its other rows are the fresh read's first
+ * rows, exactly, in full pages with a next page. Otherwise null.
+ */
+export function staleSlotPastPages(live: Row[], fresh: Row[], oldLive: Row[], paging: Paging | null, limit: number | undefined): Row[] | null {
+  if (!paging?.hasNextPage || !limit || paging.pages < 1 || live.length !== paging.pages * limit) return null;
+  const freshKeys = new Set(fresh.map((r) => r.key));
+  const stale = live.filter((r) => !freshKeys.has(r.key));
+  if (!stale.length) return null;
+  const onOld = new Map(oldLive.map((r) => [r.key, r.notifiedAt]));
+  if (!stale.every((r) => onOld.has(r.key) && onOld.get(r.key) === r.notifiedAt)) return null;
+  const kept = live.filter((r) => freshKeys.has(r.key));
+  if (kept.length >= fresh.length) return null;
+  return discrepancies(kept, fresh.slice(0, kept.length)).length === 0 ? stale : null;
+}
+
+/** A REST read that main's 12 s Soup deadline cut off (closures T9, T11). */
+export const REST_DEADLINE = /^rest error .*(TimeoutError: signal timed out|AbortError: The user aborted a request)/;
