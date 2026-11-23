@@ -104,6 +104,12 @@ retried page load happened.
   its own); `state`
   (query state fields, or a reader missing on one side); and `diff`. Reader
   errors are compared whatever the data did.
+- `refused-busy`: a settle that timed out on the head only because readers
+  the server refused (and the cache never held) stayed marked fetching, with
+  no request in flight. The shared cache leaves such a read fetching after an
+  optimistic write rolls back, until the next write; no caller reads the
+  fetching flag of a failed options or tag-set list. That side counts as
+  settled and its snapshot is compared; `settle.refusedBusy` counts them.
 - `old-stale`: main's live readers miss some updates (an invalidation that
   does not reach them) that the cache's live queries pick up. A live reader or
   caller whose data differs counts as `old-stale` instead of `diff` only when

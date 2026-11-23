@@ -1423,6 +1423,22 @@ async function settleAll(pair) {
       return withWaitedOn(s, await ev(s, 'settle', CONFIG.settleMs), since);
     })
   );
+  // The shared cache leaves a read the server refused, and that it never held,
+  // marked fetching after an optimistic write rolls back, until the next write,
+  // with no request made. No caller reads the fetching flag of a failed list,
+  // so a head side whose only busy readers failed, with nothing in flight, has
+  // settled: class `refused-busy`, counted in `settle.refusedBusy`.
+  const all = sides(pair);
+  for (const [i, t] of res.entries()) {
+    const w = t.waitedOn;
+    if (!t.timedOut || all[i].side !== 'neu' || !w?.busy?.length) continue;
+    if (w.inflight?.length || w.fetches?.length) continue;
+    const snap = await ev(all[i], 'snapshot');
+    if (!w.busy.every((b) => typeof b.reader === 'string' && snap[b.reader]?.isError === true)) continue;
+    t.timedOut = false;
+    R.settle.refusedBusy = (R.settle.refusedBusy ?? 0) + 1;
+    record('settle', `${SIDE_NAMES[i]} kept a refused read marked fetching`, 'refused-busy', null, { readers: w.busy.length }, { waitedOn: w });
+  }
   // A side that did not settle within the bound broke the live-update bound:
   // a difference, and its snapshot is not compared as data.
   res.forEach((t, i) => {
