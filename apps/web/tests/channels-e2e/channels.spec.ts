@@ -464,15 +464,20 @@ test('CHN-16 a rename saved while the list of channels is still being read shows
   await ada.postAll(channel.id, ['before the rename']);
   const renamed = unique('renamed');
 
-  const letThrough = await holdChannelList(page);
+  const list = await holdChannelList(page);
   const view = new ChannelView(page, channel.id);
   await view.open();
+  // An answer from before the rename waits: it has the old name.
+  await list.held();
   await chooseChannelAction(page, 'Rename');
   const dialog = page.getByRole('dialog', { name: 'Rename item' });
   await dialog.getByRole('textbox', { name: 'Name' }).fill(renamed);
   await dialog.getByRole('button', { name: 'Save name' }).click();
   await expect(dialog).toBeHidden();
-  await letThrough();
+  await list.letThrough();
 
+  await expect(channelHeader(page)).toContainText(renamed);
+  // Nothing on screen says when the page has taken the old answer in.
+  await page.waitForTimeout(3_000);
   await expect(channelHeader(page)).toContainText(renamed);
 });

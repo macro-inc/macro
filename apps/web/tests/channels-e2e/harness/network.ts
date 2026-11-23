@@ -214,38 +214,69 @@ const GRAPHQL = '**/dss/items/soup/graphql';
 /** The read a page fills its list of channels with, page after page. */
 const CHANNEL_LIST_READ = 'SoupChannelDirectoryBackfill';
 
+/** What `holdChannelList` gives a test to wait on. */
+export type HeldChannelList = {
+  /** Resolves once an answer is held back. */
+  held: () => Promise<void>;
+  /** Lets the answers through; resolves once the page has them. */
+  letThrough: () => Promise<void>;
+};
+
 /**
  * Holds back the answers to the page's reading of its list of channels: the
- * services have answered, the page has not been told. Returns the step that
- * lets them through, which first waits for one to be held.
+ * services have answered, the page has not been told.
  */
-export async function holdChannelList(
-  page: Page
-): Promise<() => Promise<void>> {
-  const held: Array<() => void> = [];
+export async function holdChannelList(page: Page): Promise<HeldChannelList> {
+  const waiting: Array<() => void> = [];
+  const delivered: Promise<void>[] = [];
   let holding = true;
   await page.route(GRAPHQL, async (route) => {
+    let asked: { operationName?: string; variables?: unknown } | null = null;
     try {
-      const asked: { operationName?: string } | null = route
-        .request()
-        .postDataJSON();
-      if (asked?.operationName !== CHANNEL_LIST_READ) {
-        await route.fallback();
-        return;
-      }
+      asked = route.request().postDataJSON();
+    } catch {
+      // not JSON, so not a read of the list
+    }
+    // A read of channels by their ids shares the operation; the list's own
+    // read names none.
+    const byId = JSON.stringify(asked?.variables ?? {}).includes('"channelId"');
+    if (asked?.operationName !== CHANNEL_LIST_READ || byId) {
+      await route.fallback();
+      return;
+    }
+    let done = () => {};
+    delivered.push(
+      new Promise<void>((resolve) => {
+        done = resolve;
+      })
+    );
+    try {
       const answer = await route.fetch();
-      if (holding) await new Promise<void>((letGo) => held.push(letGo));
+      if (holding) await new Promise<void>((letGo) => waiting.push(letGo));
       await route.fulfill({ response: answer });
     } catch {
-      // the page that asked is gone
+      // The page that asked is gone, or the services did not answer.
+      try {
+        await route.abort();
+      } catch {
+        // already answered or gone
+      }
+    } finally {
+      done();
     }
   });
-  return async () => {
-    await expect
-      .poll(() => held.length, { message: 'an answer is held back' })
+  const held = () =>
+    expect
+      .poll(() => waiting.length, { message: 'an answer is held back' })
       .toBeGreaterThan(0);
-    holding = false;
-    for (const letGo of held) letGo();
+  return {
+    held,
+    letThrough: async () => {
+      await held();
+      holding = false;
+      for (const letGo of waiting) letGo();
+      await Promise.all(delivered);
+    },
   };
 }
 

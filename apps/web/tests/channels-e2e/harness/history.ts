@@ -156,30 +156,43 @@ export async function clearNotifications(ofCast: number): Promise<void> {
     PERSON_KEYS.map(async (key) => {
       const http = await apiFor(key, ofCast);
       try {
-        // Every page is listed before anything is removed: a page can come
-        // back empty with more behind it, when its rows could not be read.
-        const ids: string[] = [];
-        let cursor: string | null | undefined;
-        do {
-          const listed = await http.get('/notification/v1/user_notifications', {
-            params: { states: '', limit: 500, ...(cursor ? { cursor } : {}) },
-          });
-          if (!listed.ok()) {
-            throw new Error(`list notifications failed (${listed.status()})`);
-          }
-          const page = (await listed.json()) as GetAllUserNotificationsResponse;
-          ids.push(...page.items.map((item) => item.id));
-          cursor = page.next_cursor;
-        } while (cursor);
-        for (let start = 0; start < ids.length; start += 500) {
-          const removed = await http.delete(
-            '/notification/v1/user_notifications/bulk',
-            { data: { notificationIds: ids.slice(start, start + 500) } }
-          );
-          if (!removed.ok()) {
-            throw new Error(
-              `remove notifications failed (${removed.status()})`
+        // A pass lists every page, then removes what it listed. A page can
+        // come back short or empty with more behind it, when some of its
+        // rows could not be read, so passes go on until one lists nothing.
+        for (let pass = 0; ; pass += 1) {
+          if (pass === 50) throw new Error('notifications are never all gone');
+          const ids: string[] = [];
+          let cursor: string | null | undefined;
+          do {
+            const listed = await http.get(
+              '/notification/v1/user_notifications',
+              {
+                params: {
+                  states: '',
+                  limit: 500,
+                  ...(cursor ? { cursor } : {}),
+                },
+              }
             );
+            if (!listed.ok()) {
+              throw new Error(`list notifications failed (${listed.status()})`);
+            }
+            const page =
+              (await listed.json()) as GetAllUserNotificationsResponse;
+            ids.push(...page.items.map((item) => item.id));
+            cursor = page.next_cursor;
+          } while (cursor);
+          if (ids.length === 0) return;
+          for (let start = 0; start < ids.length; start += 500) {
+            const removed = await http.delete(
+              '/notification/v1/user_notifications/bulk',
+              { data: { notificationIds: ids.slice(start, start + 500) } }
+            );
+            if (!removed.ok()) {
+              throw new Error(
+                `remove notifications failed (${removed.status()})`
+              );
+            }
           }
         }
       } finally {
