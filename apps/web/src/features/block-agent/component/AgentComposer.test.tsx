@@ -120,7 +120,7 @@ it('passes opening context to the composer without issuing it', () => {
 });
 
 describe('view-only session controls', () => {
-  it('disables and guards prompt, model, stop, queue, and attachment actions', () => {
+  it('disables and guards prompt, model, stop, queue, and attachment actions', async () => {
     render(() => <AgentComposer />);
 
     expect(mocks.input?.disabled).toBe(true);
@@ -134,7 +134,7 @@ describe('view-only session controls', () => {
     mocks.input?.onSend('A new prompt', []);
     mocks.input?.onStop?.();
     mocks.input?.onAttachFiles?.([new File(['text'], 'note.txt')]);
-    mocks.model?.onModel('new-model');
+    await mocks.model?.onModel('new-model');
     // Read-only: the edit is not sent, so nothing is there to await.
     expect(mocks.queued?.onEdit('queued-1', 'Edited prompt')).toBeUndefined();
     mocks.queued?.onRemove('queued-1');
