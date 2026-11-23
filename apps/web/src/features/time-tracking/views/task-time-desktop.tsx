@@ -8,11 +8,11 @@ import { EntryForm } from '../components/entry-form';
 import { LogTimeInput, QuickLengths } from '../components/log-time-input';
 import { TimePill } from '../components/time-pill';
 import { localDay } from '../core/entry-days';
+import type { TimeEntryValues } from '../core/entry-values';
 import { createTaskTime } from '../primitives/create-task-time';
-import type { TimeEntryValues } from '../queries/time-entries';
 import { EntriesSection } from './shared/entries-section';
 import { reportWrite } from './shared/report-write';
-import type { TaskTimeViewProps } from './task-time-view';
+import type { TaskTimeViewProps } from './shared/task-time-props';
 
 type Mode =
   | { kind: 'list' }

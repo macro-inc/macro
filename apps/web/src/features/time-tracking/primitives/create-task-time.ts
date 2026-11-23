@@ -3,11 +3,11 @@ import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated
 import { err } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { useTimeTracking } from '../context/time-tracking-context';
+import type { TimeEntryValues } from '../core/entry-values';
 import {
   createTaskTimeEntriesQuery,
   deleteTimeEntry,
   logTime,
-  type TimeEntryValues,
   updateTimeEntry,
 } from '../queries/time-entries';
 import type { TimeWriteResult } from '../queries/write-result';

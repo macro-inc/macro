@@ -15,7 +15,7 @@ import { localDay } from '../../core/entry-days';
 import { createTaskTime } from '../../primitives/create-task-time';
 import { EntriesSection } from '../shared/entries-section';
 import { reportWrite } from '../shared/report-write';
-import type { TaskTimeViewProps } from '../task-time-view';
+import type { TaskTimeViewProps } from '../shared/task-time-props';
 
 type Mode =
   | { kind: 'list' }
@@ -41,7 +41,7 @@ export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
       <TimePill
         minutes={props.minutes}
         aria-expanded={open()}
-        class="touch:min-h-9"
+        class="min-h-9"
         onClick={() => {
           setMode({ kind: 'list' });
           setOpen(true);

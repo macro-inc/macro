@@ -1,9 +1,12 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
-import type { JSX } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { TimeTrackingProvider } from './time-tracking-provider';
-import { TaskTimeView } from './views/task-time-view';
+import { TaskTimeSheet } from './views/mobile/task-time-sheet';
+import type { TaskTimeViewProps } from './views/shared/task-time-props';
+import { TaskTimeDesktop } from './views/task-time-desktop';
 
 function Person(props: { userId: string }): JSX.Element {
   const name = () => getDisplayName(tryMacroId(props.userId));
@@ -15,20 +18,32 @@ function Person(props: { userId: string }): JSX.Element {
   );
 }
 
-/** A task's Time pill and panel, wired to the app. */
+/**
+ * A task's Time pill and panel, wired to the app: a popover on desktop, a
+ * bottom sheet on touch.
+ */
 export function TaskTimePill(props: {
   taskId: string;
   minutes: number;
   canEdit: boolean;
 }): JSX.Element {
+  const view: TaskTimeViewProps = {
+    get taskId() {
+      return props.taskId;
+    },
+    get minutes() {
+      return props.minutes;
+    },
+    get canEdit() {
+      return props.canEdit;
+    },
+    person: (userId) => <Person userId={userId} />,
+  };
   return (
     <TimeTrackingProvider>
-      <TaskTimeView
-        taskId={props.taskId}
-        minutes={props.minutes}
-        canEdit={props.canEdit}
-        person={(userId) => <Person userId={userId} />}
-      />
+      <Show when={isTouchDevice()} fallback={<TaskTimeDesktop {...view} />}>
+        <TaskTimeSheet {...view} />
+      </Show>
     </TimeTrackingProvider>
   );
 }

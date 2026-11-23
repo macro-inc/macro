@@ -2,9 +2,9 @@ import { t } from '@app/lib/i18n';
 import { Button } from '@ui/components/Button';
 import { Input } from '@ui/components/Input';
 import { createSignal, type JSX, Show } from 'solid-js';
+import type { TimeEntryValues } from '../core/entry-values';
 import { formatLength } from '../core/format-length';
 import { MAX_ENTRY_MINUTES, parseLength } from '../core/parse-length';
-import type { TimeEntryValues } from '../queries/time-entries';
 
 type EntryFormProps = {
   /** Values to start from: a new entry's length and day, or an entry to edit. */

@@ -1,7 +1,7 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { Input } from '@ui/components/Input';
 import { parseISO } from 'date-fns';
-import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { dayBefore } from '../core/entry-days';
 import { formatLength } from '../core/format-length';
 import { MAX_ENTRY_MINUTES, parseLength } from '../core/parse-length';
@@ -138,33 +138,37 @@ export function QuickLengths(props: {
       when={props.chips}
       fallback={
         <div class="flex flex-col">
-          {lengths.map((minutes) => (
-            <Row
-              label={t('timeTracking.quickLength', {
-                length: formatLength(minutes),
-              })}
-              hint={t('timeTracking.today')}
-              onClick={() => props.onLog(minutes)}
-              disabled={props.disabled}
-            />
-          ))}
+          <For each={lengths}>
+            {(minutes) => (
+              <Row
+                label={t('timeTracking.quickLength', {
+                  length: formatLength(minutes),
+                })}
+                hint={t('timeTracking.today')}
+                onClick={() => props.onLog(minutes)}
+                disabled={props.disabled}
+              />
+            )}
+          </For>
         </div>
       }
     >
       <div class="grid grid-cols-4 gap-2">
-        {lengths.map((minutes) => (
-          <button
-            type="button"
-            disabled={props.disabled}
-            onClick={() => props.onLog(minutes)}
-            aria-label={t('timeTracking.quickLength', {
-              length: formatLength(minutes),
-            })}
-            class="min-h-[44px] rounded-full border border-edge-muted text-sm text-ink disabled:text-ink-extra-muted"
-          >
-            {formatLength(minutes)}
-          </button>
-        ))}
+        <For each={lengths}>
+          {(minutes) => (
+            <button
+              type="button"
+              disabled={props.disabled}
+              onClick={() => props.onLog(minutes)}
+              aria-label={t('timeTracking.quickLength', {
+                length: formatLength(minutes),
+              })}
+              class="min-h-[44px] rounded-full border border-edge-muted text-sm text-ink disabled:text-ink-extra-muted"
+            >
+              {formatLength(minutes)}
+            </button>
+          )}
+        </For>
       </div>
     </Show>
   );
