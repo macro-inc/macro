@@ -80,6 +80,8 @@ see goes through `close_session`.
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the
 effective history served to transcript readers: replayed prompts lose action IDs.
+A prompt sent again after a disconnect reads as running; only a disconnect
+after its latest send makes it interrupted.
 
 `domain/notifications.rs` owns durable typed system-event production and the
 transaction-aware producer port. `outbound/notifications.rs` owns the outbox
@@ -91,7 +93,11 @@ Await rollback on empty or blocked claims so their session lock is released
 before the next real prompt attempts to attach quiet events.
 Discovery uses bounded cursor pages so callers can
 advance past unavailable sessions. Quiet batches bind to the actual prompt action ID;
-notification-only turns record `PrompterKind::System` and no human authority.
+notification-only turns record `PrompterKind::System` and no human authority,
+except a batch of only `app.connected` events after the owner's turn that
+offered those apps' connect buttons, which the harness records as `Program`
+for the owner (see
+`agent_harness`'s `continues_for_owner`).
 A prompt from a program (`ControlPrincipal::Program`, including a session
 created with a first prompt) or a routine's agent step, and a queued prompt a
 program rewrote, record `PrompterKind::Program`: the user's access, never the

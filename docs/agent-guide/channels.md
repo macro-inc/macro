@@ -1189,6 +1189,10 @@ toast. The same applies to a channel preview in Home; a closed channel opens nor
 In Chat, the detail uses the shared channel top bar with Messages, Attachments,
 Participants, and Calls tabs (when calls are enabled). A message target switches
 back to Messages; changing unread notifications does not restart navigation.
+With the keyboard on the conversation (the message list, after Esc leaves the
+composer), Tab, Shift+Tab and the number keys move along those tabs; in the
+composer Tab stays the composer's, and in a split beside a list (Home, New
+Home) the list's own tabs keep its keys.
 
 On desktop, switching conversations selects and mounts the cached conversation
 immediately. Messages load alongside the notification refresh. Explicit message

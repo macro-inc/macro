@@ -748,7 +748,6 @@ export default {
       'Không tìm thấy cài đặt nào. Hãy thử “chữ ký”, “giao diện” hoặc “lịch”.',
     backToSettings: 'Quay lại cài đặt',
     closeSettings: 'Đóng cài đặt',
-    goToTab: 'Đi tới thẻ cài đặt {{number}}',
     editProfile: 'Chỉnh sửa hồ sơ',
     logOut: 'Đăng xuất',
     yourAccount: 'Tài khoản của bạn',

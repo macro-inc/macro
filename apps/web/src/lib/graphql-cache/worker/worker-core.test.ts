@@ -4,7 +4,11 @@ import {
   testAuthority,
   withoutAuthorityEnvelope,
 } from '../authority-fixture';
-import { type CacheRequest, INITIAL_CACHE_REVISION } from '../protocol';
+import {
+  type CacheRequest,
+  INITIAL_CACHE_REVISION,
+  parseCacheRevision,
+} from '../protocol';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
@@ -2828,6 +2832,161 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('reports a request answered a second after it arrived, split into its wait and its run', async () => {
+    let monotonicNow = 0;
+    let finishWrite!: () => void;
+    const writeQuery = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishWrite = () =>
+            resolve({
+              revision: INITIAL_CACHE_REVISION,
+              changed: [],
+              affectedOps: [],
+              reset: false,
+            });
+        })
+    );
+    const readQuery = vi.fn(async (opId: string) => {
+      if (opId === 'op-3') monotonicNow += 300;
+      return { kind: 'miss' };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ writeQuery, readQuery }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const write = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+    await vi.waitFor(() => expect(writeQuery).toHaveBeenCalledOnce());
+    const readOp = (id: number, opId: string) =>
+      core.handleRequest(port, {
+        id,
+        kind: 'read',
+        opId,
+        query: 'query Read { value }',
+      });
+    monotonicNow = 200;
+    const read = readOp(3, 'op-1');
+    // Joins the queued op-1 read, so its wait counts from 200.
+    monotonicNow = 400;
+    const duplicate = readOp(4, 'op-1');
+    monotonicNow = 700;
+    const behind = readOp(5, 'op-2');
+    monotonicNow = 1_700;
+    finishWrite();
+    await Promise.all([write, read, duplicate, behind]);
+    // Ran 300 ms: not reported.
+    monotonicNow = 2_000;
+    await readOp(6, 'op-3');
+
+    expect(readQuery.mock.calls.map(([opId]) => opId)).toEqual([
+      'op-1',
+      'op-2',
+      'op-3',
+    ]);
+    for (const id of [3, 4, 5, 6]) {
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id, ok: true })
+      );
+    }
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'write',
+        requestKind: 'write',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 0,
+        durationMs: 1_700,
+        queueDepth: 0,
+      },
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'read',
+        requestKind: 'read',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 1_500,
+        durationMs: 0,
+        queueDepth: 1,
+      },
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'read',
+        requestKind: 'read',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 1_000,
+        durationMs: 0,
+        queueDepth: 0,
+      },
+    ]);
+  });
+
+  it('reports a slow request that failed with its error class', async () => {
+    let monotonicNow = 0;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async () => {
+          monotonicNow += 1_200;
+          throw new Error('OPFS read failed');
+        },
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'op-1',
+      query: 'query Read { value }',
+    });
+
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 2, ok: false })
+    );
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        requestKind: 'read',
+        outcome: 'error',
+        errorCode: 'opfs-io',
+        queueWaitMs: 0,
+        durationMs: 1_200,
+      }),
+    ]);
+  });
+
   it('marks compatibility diagnostics unavailable instead of authoritative empty', async () => {
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({ close: vi.fn() }),
@@ -3336,6 +3495,319 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  function quietTimer() {
+    const timers: { run: () => void; cancelled: boolean }[] = [];
+    const afterQuiet = vi.fn((run: () => void) => {
+      const timer = { run, cancelled: false };
+      timers.push(timer);
+      return () => {
+        timer.cancelled = true;
+      };
+    });
+    return {
+      afterQuiet,
+      armed: () => timers.filter((timer) => !timer.cancelled).length,
+      /** Ends the quiet period of every wait still armed. */
+      elapse: () => {
+        const live = timers.filter((timer) => !timer.cancelled);
+        timers.length = 0;
+        for (const timer of live) timer.run();
+      },
+    };
+  }
+
+  it('checkpoints the WAL once quiet after a write, after the requests that follow it', async () => {
+    const order: string[] = [];
+    const checkpointIfDue = vi.fn(async () => {
+      order.push('checkpoint');
+      return { ran: true, walFrames: 640, backfilledFrames: 640 };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(`read:${opId}`);
+          return { kind: 'miss' };
+        },
+        writeQuery: async () => {
+          order.push('write');
+          return {
+            revision: INITIAL_CACHE_REVISION,
+            revisionAdvanced: false,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+          };
+        },
+        checkpointIfDue,
+      }),
+    });
+    const record = vi.fn();
+    const port = { postMessage: vi.fn() };
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      telemetry: { record, flush: vi.fn() },
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    const read = (id: number, opId: string) =>
+      core.handleRequest(port, {
+        id,
+        kind: 'read',
+        opId,
+        query: 'query Read { read }',
+      });
+
+    // Opening may leave a WAL from the last session; the boot reads that
+    // follow run first and re-arm the wait.
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    await read(2, 'boot');
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(order).toEqual(['read:boot', 'checkpoint']));
+
+    // A read writes nothing, so it leaves nothing to copy.
+    await read(3, 'alone');
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(0);
+
+    await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 4,
+      kind: 'write',
+      query: 'query { user { id } }',
+      data: { user: { id: 'user-1' } },
+    });
+    await read(5, 'after-write');
+    expect(order.slice(3)).toEqual(['write', 'read:after-write']);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() =>
+      expect(order.slice(3)).toEqual([
+        'write',
+        'read:after-write',
+        'checkpoint',
+      ])
+    );
+    expect(checkpointIfDue).toHaveBeenCalledTimes(2);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'graphql_cache.wal_checkpoint',
+        operationCategory: 'storage',
+        outcome: 'success',
+        count: 640,
+        walFrames: 640,
+      })
+    );
+  });
+
+  it('copies no WAL while a request runs, and waits for the next quiet period', async () => {
+    let finishRead!: () => void;
+    const readQuery = vi.fn(
+      () =>
+        new Promise<{ kind: 'miss' }>((resolve) => {
+          finishRead = () => resolve({ kind: 'miss' });
+        })
+    );
+    const checkpointIfDue = vi
+      .fn()
+      .mockResolvedValue({ ran: true, walFrames: 600, backfilledFrames: 600 });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery, checkpointIfDue }),
+    });
+    const quiet = quietTimer();
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const read = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'slow',
+      query: 'query Read { read }',
+    });
+    await vi.waitFor(() => expect(readQuery).toHaveBeenCalledTimes(1));
+    quiet.elapse();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(checkpointIfDue).not.toHaveBeenCalled();
+
+    finishRead();
+    await read;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(checkpointIfDue).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the engine healthy when a WAL checkpoint fails and retries it after the next request', async () => {
+    const checkpointIfDue = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('cache turso database error'))
+      .mockResolvedValue({ ran: false, walFrames: 12, backfilledFrames: 0 });
+    const readQuery = vi.fn().mockResolvedValue({ kind: 'miss' });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery, checkpointIfDue }),
+    });
+    const record = vi.fn();
+    const onStorageResetRequired = vi.fn();
+    const port = { postMessage: vi.fn() };
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      telemetry: { record, flush: vi.fn() },
+      onStorageResetRequired,
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() =>
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'graphql_cache.wal_checkpoint',
+          outcome: 'error',
+        })
+      )
+    );
+
+    // The next request runs, even a read, and the quiet after it tries again.
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'after-failure',
+      query: 'query Read { read }',
+    });
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 2, ok: true })
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(checkpointIfDue).toHaveBeenCalledTimes(2));
+    expect(onStorageResetRequired).not.toHaveBeenCalled();
+    // A checkpoint with nothing due records nothing, and is not retried.
+    expect(
+      record.mock.calls.filter(
+        ([event]) => event.name === 'graphql_cache.wal_checkpoint'
+      )
+    ).toHaveLength(1);
+    await core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      opId: 'later',
+      query: 'query Read { read }',
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(0);
+  });
+
+  it('reports a WAL checkpoint that found the database files busy', async () => {
+    const busyError = Object.assign(
+      new Error('OPFS sync handle open failed (NoModificationAllowedError)'),
+      { cacheStorageBusy: true as const }
+    );
+    const checkpointIfDue = vi.fn().mockRejectedValue(busyError);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ checkpointIfDue }),
+    });
+    const onStorageBusy = vi.fn();
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      onStorageBusy,
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(onStorageBusy).toHaveBeenCalledOnce());
+  });
+
+  it('arms no WAL checkpoint when the engine cannot copy one', async () => {
+    const readQuery = vi.fn().mockResolvedValue({ kind: 'miss' });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery }),
+    });
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.afterQuiet).not.toHaveBeenCalled();
+  });
+
+  it('cancels a pending WAL checkpoint on drain and waits for a running one', async () => {
+    let finishCheckpoint!: () => void;
+    const checkpointIfDue = vi.fn(
+      () =>
+        new Promise<{
+          ran: boolean;
+          walFrames: number;
+          backfilledFrames: number;
+        }>((resolve) => {
+          finishCheckpoint = () =>
+            resolve({ ran: true, walFrames: 500, backfilledFrames: 500 });
+        })
+    );
+    const close = vi.fn().mockResolvedValue(undefined);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ checkpointIfDue, close }),
+    });
+    const quiet = quietTimer();
+    const pending = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await pending.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    await pending.drain();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(0);
+    expect(checkpointIfDue).not.toHaveBeenCalled();
+
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(checkpointIfDue).toHaveBeenCalledTimes(1));
+    let drained = false;
+    const drain = core.drain().then(() => {
+      drained = true;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(drained).toBe(false);
+    expect(close).toHaveBeenCalledTimes(1);
+    finishCheckpoint();
+    await drain;
+    expect(close).toHaveBeenCalledTimes(2);
+  });
+
   it('reports an open that gave up on busy database files', async () => {
     const busyError = Object.assign(
       new Error('OPFS sync handle open failed (NoModificationAllowedError)'),
@@ -3366,5 +3838,429 @@ describe('CacheWorkerCore', () => {
         error: 'OPFS sync handle open failed (NoModificationAllowedError)',
       },
     ]);
+  });
+
+  describe('a hydrate in two halves', () => {
+    const written = {
+      revision: INITIAL_CACHE_REVISION,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    };
+
+    /** An engine whose first prepare waits until `release` is called. */
+    function splitEngine(order: string[]) {
+      const prepareStarted = Promise.withResolvers<void>();
+      const releasePrepare = Promise.withResolvers<void>();
+      let prepares = 0;
+      const engine = {
+        prepareHydrate: vi.fn(async (query: string) => {
+          prepares += 1;
+          order.push(`prepare:${query}`);
+          if (prepares === 1) {
+            prepareStarted.resolve();
+            await releasePrepare.promise;
+          }
+        }),
+        commitHydrate: vi.fn(async () => {
+          order.push('commit');
+          return { ...written, data: null };
+        }),
+        hydrateQuery: vi.fn(async () => {
+          order.push('hydrateQuery');
+          return { ...written, data: null };
+        }),
+        readQuery: vi.fn(async (opId: string | undefined) => {
+          order.push(`read:${opId}`);
+          if (opId === 'client:fails') throw new Error('read failed');
+          return { kind: 'miss' as const };
+        }),
+        entityFilter: vi.fn(async () => {
+          order.push('entity-filter');
+          return {
+            kind: 'incomplete' as const,
+            revision: INITIAL_CACHE_REVISION,
+          };
+        }),
+        writeQuery: vi.fn(async () => {
+          order.push('write');
+          return written;
+        }),
+        invalidateKeys: vi.fn(async () => {
+          order.push('invalidate');
+          return written;
+        }),
+        teardownOperation: vi.fn(async () => {
+          order.push('teardown');
+        }),
+      };
+      return {
+        engine,
+        prepareStarted: prepareStarted.promise,
+        release: () => releasePrepare.resolve(),
+      };
+    }
+
+    async function start(engine: object) {
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue(engine),
+      });
+      const messages: { id: number; ok: boolean }[] = [];
+      const port = {
+        postMessage: (message: { id: number; ok: boolean }) =>
+          messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      return { core, port, messages };
+    }
+
+    const hydrate = (id: number, query: string): CacheRequest => ({
+      generation: TEST_AUTHORITY_GENERATION,
+      id,
+      kind: 'hydrate',
+      query,
+      data: { backfill: true },
+    });
+    const read = (id: number, opId: string): CacheRequest => ({
+      id,
+      kind: 'read',
+      opId,
+      query: `query Q${id} { q }`,
+      priority: 'user-visible',
+    });
+
+    it('runs the reads sent while a hydrate reads before its write, and nothing else', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port, messages } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id: 3,
+          kind: 'write',
+          query: 'query Current { current }',
+          data: { current: true },
+        }),
+        core.handleRequest(port, hydrate(4, 'second')),
+        core.handleRequest(port, read(5, 'client:visible')),
+        core.handleRequest(port, {
+          id: 6,
+          kind: 'entity-filter',
+          request: {
+            filters: {},
+            sortMethod: 'UPDATED_AT',
+            sortDirection: 'DESC',
+            limit: 20,
+          },
+        })
+      );
+      release();
+      await Promise.all(sent);
+
+      // The queued write and the next hydrate keep their places behind it.
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:visible',
+        'entity-filter',
+        'commit',
+        'write',
+        'prepare:second',
+        'commit',
+      ]);
+      expect(engine.hydrateQuery).not.toHaveBeenCalled();
+      expect(messages.filter((message) => !message.ok)).toEqual([]);
+    });
+
+    it('lets no request that writes, and no read behind a fence, run between', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id: 3,
+          kind: 'invalidate',
+          keys: ['Document:1'],
+        }),
+        core.handleRequest(port, read(4, 'client:after-invalidate'))
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'commit',
+        'invalidate',
+        'read:client:after-invalidate',
+      ]);
+
+      order.length = 0;
+      const fenced = splitEngine(order);
+      const second = await start(fenced.engine);
+      const sentAgain = [
+        second.core.handleRequest(second.port, hydrate(2, 'first')),
+      ];
+      await fenced.prepareStarted;
+      sentAgain.push(
+        second.core.handleRequest(second.port, read(5, 'client:before')),
+        second.core.handleRequest(second.port, {
+          id: 3,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        second.core.handleRequest(second.port, read(4, 'client:remount'))
+      );
+      fenced.release();
+      await Promise.all(sentAgain);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:before',
+        'commit',
+        'teardown',
+        'read:client:remount',
+      ]);
+    });
+
+    it('stamps the hydrate notice with its authority after a read between fails', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      engine.commitHydrate.mockImplementationOnce(async () => {
+        order.push('commit');
+        return {
+          ...written,
+          revision: parseCacheRevision('1'),
+          revisionAdvanced: true,
+          searchChangedBuckets: ['document'],
+          data: null,
+        };
+      });
+      const { core, port } = await start(engine);
+      const posted: unknown[] = [];
+      port.postMessage = (message) => posted.push(message);
+      core.addPort(port);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(core.handleRequest(port, read(3, 'client:fails')));
+      release();
+      await Promise.all(sent);
+
+      expect(order).toEqual(['prepare:first', 'read:client:fails', 'commit']);
+      expect(posted).toContainEqual({
+        authorityGeneration: TEST_AUTHORITY_GENERATION,
+        kind: 'cache-hydrated',
+        revision: '1',
+        searchChangedBuckets: ['document'],
+      });
+    });
+
+    it('answers a read that fails between the halves and still writes the hydrate', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port, messages } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, read(3, 'client:fails')),
+        core.handleRequest(port, read(4, 'client:next'))
+      );
+      release();
+      await Promise.all(sent);
+
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:fails',
+        'read:client:next',
+        'commit',
+      ]);
+      expect(
+        messages.map(({ id, ok }) => ({ id, ok })).filter(({ id }) => id > 1)
+      ).toEqual([
+        { id: 3, ok: false },
+        { id: 4, ok: true },
+        { id: 2, ok: true },
+      ]);
+    });
+
+    it('reports a slow read that runs between the halves as that read', async () => {
+      let monotonicNow = 0;
+      const { engine, prepareStarted, release } = splitEngine([]);
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          ...engine,
+          readQuery: vi.fn(async (opId: string | undefined) => {
+            monotonicNow += 1_200;
+            if (opId === 'client:fails') throw new Error('read failed');
+            return { kind: 'miss' as const };
+          }),
+        }),
+      });
+      const observations: Array<Record<string, unknown>> = [];
+      const core = new CacheWorkerCore({
+        monotonicNow: () => monotonicNow,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      const port = { postMessage: vi.fn() };
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      monotonicNow = 100;
+      sent.push(
+        core.handleRequest(port, read(3, 'client:fails')),
+        core.handleRequest(port, read(4, 'client:next'))
+      );
+      monotonicNow = 300;
+      release();
+      await Promise.all(sent);
+
+      expect(
+        observations.filter(
+          (observation) =>
+            observation.name === 'graphql_cache.slow_request' &&
+            observation.requestKind === 'read'
+        )
+      ).toEqual([
+        expect.objectContaining({
+          outcome: 'error',
+          queueWaitMs: 200,
+          durationMs: 1_200,
+          queueDepth: 1,
+        }),
+        expect.objectContaining({
+          outcome: 'success',
+          queueWaitMs: 1_400,
+          durationMs: 1_200,
+          queueDepth: 0,
+        }),
+      ]);
+    });
+
+    it.each([
+      [
+        true,
+        ['prepare:first', 'stage', 'read:client:visible', 'commit', 'write'],
+      ],
+      // A failed stage may have marked storage for reset: it fails the
+      // hydrate before any read runs, and the rest keep their order.
+      [false, ['prepare:first', 'stage', 'write', 'read:client:visible']],
+    ])(
+      'runs the reads sent while a hydrate stages its write before the write (staged: %s)',
+      async (stagedOk, expected) => {
+        const order: string[] = [];
+        const { engine, release } = splitEngine(order);
+        const stageStarted = Promise.withResolvers<void>();
+        const releaseStage = Promise.withResolvers<void>();
+        const staged = {
+          ...engine,
+          stageHydrate: vi.fn(async () => {
+            order.push('stage');
+            stageStarted.resolve();
+            await releaseStage.promise;
+            if (!stagedOk) throw new Error('stage failed');
+          }),
+        };
+        const { core, port, messages } = await start(staged);
+        release();
+
+        const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+        await stageStarted.promise;
+        sent.push(
+          core.handleRequest(port, {
+            generation: TEST_AUTHORITY_GENERATION,
+            id: 3,
+            kind: 'write',
+            query: 'query Current { current }',
+            data: { current: true },
+          }),
+          core.handleRequest(port, read(4, 'client:visible'))
+        );
+        releaseStage.resolve();
+        await Promise.all(sent);
+
+        expect(order).toEqual(expected);
+        expect(
+          messages.filter((message) => !message.ok).map((message) => message.id)
+        ).toEqual(stagedOk ? [] : [2]);
+      }
+    );
+
+    it('runs the reads sent during each projection pass before the next', async () => {
+      const order: string[] = [];
+      const { engine, release } = splitEngine(order);
+      const passes = [
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+      ];
+      const passStarted = [
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+      ];
+      let pass = 0;
+      const stepped = {
+        ...engine,
+        stepHydrate: vi.fn(async () => {
+          const current = pass;
+          pass += 1;
+          if (current >= passes.length) {
+            order.push('step:none');
+            return false;
+          }
+          order.push(`step:${current}`);
+          passStarted[current]?.resolve();
+          await passes[current]?.promise;
+          return true;
+        }),
+        stageHydrate: vi.fn(async () => {
+          order.push('stage');
+        }),
+      };
+      const { core, port } = await start(stepped);
+      release();
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await passStarted[0]?.promise;
+      sent.push(core.handleRequest(port, read(3, 'client:visible')));
+      passes[0]?.resolve();
+      await passStarted[1]?.promise;
+      sent.push(core.handleRequest(port, read(4, 'client:visible')));
+      passes[1]?.resolve();
+      await Promise.all(sent);
+
+      expect(order).toEqual([
+        'prepare:first',
+        'step:0',
+        'read:client:visible',
+        'step:1',
+        'read:client:visible',
+        'step:none',
+        'stage',
+        'commit',
+      ]);
+    });
+
+    it('writes with hydrateQuery when the engine cannot split a hydrate', async () => {
+      const order: string[] = [];
+      const { engine } = splitEngine(order);
+      const {
+        prepareHydrate: _prepare,
+        commitHydrate: _commit,
+        ...whole
+      } = engine;
+      const { core, port, messages } = await start(whole);
+      await core.handleRequest(port, hydrate(2, 'first'));
+      expect(order).toEqual(['hydrateQuery']);
+      expect(messages.at(-1)).toMatchObject({ id: 2, ok: true });
+    });
   });
 });

@@ -58,6 +58,7 @@ fn hybrid_baseline_ignores_unrelated_stubs_and_preserves_rows_beyond_candidate_l
             result,
             PredicateReconciliation {
                 keys: vec![c.record_key, stub.clone(), a.record_key],
+                sort_values: vec![25, 20, 10],
                 retained_keys: vec![stub],
                 optimistic: false
             }

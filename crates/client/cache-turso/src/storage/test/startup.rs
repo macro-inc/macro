@@ -62,6 +62,20 @@ fn schema_11_cache_is_replaced_without_migrating_pending_writes() {
 }
 
 #[test]
+fn native_file_storage_keeps_temporary_tables_in_memory_and_a_larger_page_cache() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+    for _ in 0..2 {
+        let storage = database.open("scope").unwrap();
+        assert_eq!(storage.connection.get_temp_store(), TempStore::Memory);
+        let rows = driver::query(&storage.connection(), "PRAGMA cache_size", Vec::new()).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(required_i64(&rows[0], 0).unwrap(), NATIVE_PAGE_CACHE_PAGES);
+        storage.try_close().unwrap();
+    }
+}
+
+#[test]
 fn reopen_skips_full_integrity_scan_and_preserves_pending_writes() {
     block_on(async {
         let database = TursoMemoryDatabase::new("startup-without-full-scan.db");
@@ -329,5 +343,56 @@ fn failed_swap_keeps_the_migrated_database() {
         assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
         assert_eq!(namespace(&storage), cache_namespace("scope"));
         storage.try_close().unwrap();
+    });
+}
+
+#[test]
+fn used_database_reopens_with_the_pinned_schema_digest() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        let created = schema_digest(&storage.connection()).unwrap();
+        storage
+            .put_batch(vec![(key("Thing:1"), record("kept"))])
+            .await
+            .unwrap();
+        storage.enqueue_mutation(queued("Pending")).await.unwrap();
+        storage.try_close().unwrap();
+
+        let storage = database.open("scope").unwrap();
+        let reopened = schema_digest(&storage.connection()).unwrap();
+        validate_frozen_schema(&storage.connection()).unwrap();
+        validate_statements(&storage.connection()).unwrap();
+        assert_eq!(created, reopened);
+        assert_eq!(
+            reopened,
+            Some(FRESH_SCHEMA_DIGEST),
+            "update FRESH_SCHEMA_DIGEST to {:#034x}",
+            reopened.unwrap_or_default(),
+        );
+    });
+}
+
+#[test]
+fn fresh_schema_passes_every_open_check() {
+    let storage = TursoStorage::open_in_memory("scope").unwrap();
+    let connection = storage.connection();
+    assert!(has_fresh_schema(&connection).unwrap());
+    validate_frozen_schema(&connection).unwrap();
+    validate_statements(&connection).unwrap();
+}
+
+#[test]
+fn changed_schema_takes_the_full_checks_on_reopen() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let storage = database.open("scope").unwrap();
+        raw_execute(&storage, "DROP INDEX search_documents_browse_idx", vec![]);
+        assert!(!has_fresh_schema(&storage.connection()).unwrap());
+        storage.try_close().unwrap();
+
+        expect_reset_reason(database.open("scope"), PhysicalResetReason::Compatibility);
     });
 }

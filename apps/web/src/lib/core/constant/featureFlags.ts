@@ -471,6 +471,16 @@ export const enableContactLists = defineFlag({
   env: 'ENABLE_CONTACT_LISTS',
 });
 
+// In a tab without the local cache, reads the people typed text names from the
+// whole directory (`GraphqlUser.contactsNamedBy`) instead of the exact-name
+// scan of the first 2,000 contacts. Off in dev too: a server without the field
+// refuses any read that selects it, so this waits for the server to ship it.
+// Override with VITE_ENABLE_NAMED_CONTACT_SEARCH.
+export const enableNamedContactSearch = defineFlag({
+  key: 'enable-named-contact-search',
+  env: 'ENABLE_NAMED_CONTACT_SEARCH',
+});
+
 // No dev override: the server requires this same remote flag before accepting writes.
 export const enableCrmMemberAccessChanges = defineFlag({
   key: 'enable-crm-member-access-changes',
@@ -499,6 +509,16 @@ export const enableCrmLists = defineFlag({
 export const enableTaskSourceProperty = defineFlag({
   key: 'enable-task-source-property',
   env: 'ENABLE_TASK_SOURCE_PROPERTY',
+  default: onInDev,
+});
+
+/**
+ * Start Date on tasks and projects: the dates pill and picker, the details
+ * row, the composer, and the range in list cells and board cards.
+ */
+export const enableTaskStartDate = defineFlag({
+  key: 'enable-task-start-date',
+  env: 'ENABLE_TASK_START_DATE',
   default: onInDev,
 });
 
