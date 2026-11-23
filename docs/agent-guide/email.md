@@ -1550,8 +1550,14 @@ from Drafts and confirm its content and sending inbox; edit it again. Reconnect
 and check that exactly one draft remains and the open editor keeps any new text.
 On a cold app start, reopen a local draft thread before another GraphQL query has
 initialized the cache. Its subscription must observe settlement and adopt the
-server ID. If its identity read fails, it must remain cache-only until a later
-cache event resolves it; never send the unresolved handle to the server.
+server ID. If its identity read fails, or the cache has not answered it within
+a second, the thread is read from the server without storing the answer until a
+later cache event resolves it: a local handle comes back not found, which the
+view ignores for a draft the outbox still holds, and nothing is cached over the
+draft. A positively identified local draft is never sent to the server. To
+check the fallback, hold the tab's cache reads (drop `read` and
+`read-records-by-keys` requests to the cache coordinator) and open a thread from
+a message reference: it must load within a couple of seconds.
 Keep a reopened offline draft open while reconnecting: the composer must remain
 mounted when the local thread handle resolves to its server ID. After syncing,
 reopen the original local thread URL and confirm the composer still loads; then
