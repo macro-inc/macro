@@ -318,6 +318,28 @@ async fn removing_a_domain_keeps_its_contacts_and_mail(pool: PgPool) -> anyhow::
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mailbox_teardown_still_reaches_a_contact_whose_domain_was_removed(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let (team, link, service) = team_with_mailbox(&pool).await?;
+    let company = insert_company(&pool, team, true, &["example.com"]).await?;
+    let member = receipt(company, team, TeamRole::Member);
+    service.add_company_domain(&member, "example.org").await?;
+    sync(&pool, &service, team, link, "pat@example.org").await?;
+    service
+        .remove_company_domain(&member, "example.org")
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    assert!(
+        repo.has_depopulate_target(&team, "example.org", "pat@example.org")
+            .await?,
+        "the contact keeps its mailbox source until teardown removes it"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_domain_that_names_the_company_stays_until_it_is_renamed(
     pool: PgPool,
 ) -> anyhow::Result<()> {

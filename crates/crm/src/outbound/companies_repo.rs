@@ -670,6 +670,15 @@ impl CompaniesRepositoryImpl {
                   -- A further address is one somebody attached to this
                   -- contact, whatever company its domain belongs to.
                   OR LOWER(BTRIM(ct.email)) IS DISTINCT FROM ce.email
+                  -- The team's only holder of the address, whatever domains
+                  -- its company holds now: a domain removed from the company
+                  -- leaves its contacts there, and teardown must reach them.
+                  OR NOT EXISTS (
+                      SELECT 1 FROM crm_contact_emails other_email
+                      JOIN crm_contacts other ON other.id = other_email.contact_id
+                      WHERE other_email.email = $2 AND other.team_id = $1
+                        AND other.id <> ct.id
+                  )
               )
               AND (NOT $4 OR (SELECT COUNT(*) FROM crm_contact_emails other_email
                    JOIN crm_contacts other ON other.id = other_email.contact_id

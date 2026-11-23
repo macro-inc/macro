@@ -71,7 +71,7 @@ where
 {
     type Output = CompanyDomainsResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, company_id=%self.company_id), err)]
+    #[tracing::instrument(skip_all, fields(company_id = %self.company_id), err)]
     async fn call(
         &self,
         service_context: ServiceContext<CrmToolContext<CSvc, ESvc, PSvc>>,
@@ -122,7 +122,7 @@ where
 {
     type Output = CompanyDomainsResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, company_id=%self.company_id), err)]
+    #[tracing::instrument(skip_all, fields(company_id = %self.company_id), err)]
     async fn call(
         &self,
         service_context: ServiceContext<CrmToolContext<CSvc, ESvc, PSvc>>,
