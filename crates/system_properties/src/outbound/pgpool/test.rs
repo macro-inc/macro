@@ -407,6 +407,37 @@ async fn test_copy_task_properties_does_not_join_the_project(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("system_properties"))
 )]
+async fn test_copy_task_properties_starts_the_copy_with_no_time_logged(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let from_task_id = "source-task-with-props";
+    let to_task_id = "dest-task-time-logged";
+    let mut tx = pool.begin().await?;
+    crate::time_logged::write_task_time_logged(&mut tx, from_task_id, 95).await?;
+    tx.commit().await?;
+
+    repo.copy_task_properties(from_task_id, to_task_id).await?;
+
+    let properties = get_task_property_values(&pool, to_task_id).await;
+    assert!(!properties.is_empty(), "other properties are copied");
+    assert!(
+        properties
+            .iter()
+            .all(|(id, _)| *id != SystemPropertyKey::TIME_LOGGED_UUID),
+        "the copy has no time entries, so it has no Time logged"
+    );
+    assert_eq!(
+        crate::time_logged::read_task_time_logged(&pool, to_task_id).await?,
+        0
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("system_properties"))
+)]
 async fn test_copy_task_properties_overwrites_existing(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgSystemPropertiesRepository::new(pool.clone());
 

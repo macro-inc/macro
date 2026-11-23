@@ -176,6 +176,7 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/task_templates",
+  "crates/time_tracking",
   "crates/unfurl",
   "crates/single_flight",
   "crates/upstream_error",
