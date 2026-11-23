@@ -3884,11 +3884,11 @@ export type ToolPermissionSourceScope = {
     /**
      * The team.
      */
-    team_id: string;
+    teamId: string;
     /**
      * Its name, when it could be read.
      */
-    team_name?: string | null;
+    teamName?: string | null;
 };
 
 /**

@@ -13,7 +13,7 @@ import type { ToolPermissionSourceScopeOneOfThreeTeamName } from './toolPermissi
 export type ToolPermissionSourceScopeOneOfThree = {
   kind: ToolPermissionSourceScopeOneOfThreeKind;
   /** The team. */
-  team_id: string;
+  teamId: string;
   /** Its name, when it could be read. */
-  team_name?: ToolPermissionSourceScopeOneOfThreeTeamName;
+  teamName?: ToolPermissionSourceScopeOneOfThreeTeamName;
 };

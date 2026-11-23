@@ -10744,7 +10744,7 @@
                 "format": "uuid",
                 "description": "The team."
               },
-              "team_name": {
+              "teamName": {
                 "type": ["string", "null"],
                 "description": "Its name, when it could be read."
               }
