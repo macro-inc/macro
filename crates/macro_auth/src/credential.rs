@@ -34,6 +34,10 @@ pub const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 pub const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
 /// The document storage service's older header for the internal API key.
 pub const LEGACY_DSS_INTERNAL_API_KEY_HEADER: &str = "x-document-storage-service-auth-key";
+/// Set by the code-mode runtime (`code_execution`'s `bootstrap.mjs`) on every
+/// SDK request a program makes. A program can drop it, so it may only narrow
+/// what a request may do, never widen it.
+pub const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
 
 /// The access-token cookie's name in this environment.
 pub fn access_token_cookie_name() -> &'static str {

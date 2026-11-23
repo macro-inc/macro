@@ -74,12 +74,23 @@ code, not in its prompt. The harness also signs the scope into the credential
   that signs a scope, for a
   service no scope may reach at all (the image proxy, which fetches what
   its caller names).
+- Caller resolution: `propagate`, `enforce_signed_scope` and
+  `refuse_signed_scopes` feed every verified token's claims to
+  `route_policy::resolve_caller` and put the `ResolvedCaller` in the request.
+  A bot, harness, user API key or internal-key header is not verified here:
+  alone it resolves no caller (a categorized route refuses the request
+  `no_caller`), and beside a verified token it only narrows it (a program's
+  claim and any scope still win; an internal key narrows nothing). A header
+  that narrowed the caller also enforces the rollout for the caller it
+  narrowed (`NarrowedRollout`). A service with no database takes its rollout
+  from an `ActiveRollout` an outer layer puts in the request; none means
+  `NoRollout`.
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries
 
 - Owns `agent_correlations`; reads the session's bound agent for validation.
-- Depends on `macro_auth` only for the HTTP adapter.
+- Depends on `macro_auth` and `route_policy` only for the HTTP adapter.
 - Used by code-mode credential minting, HTTP services, and the event broker.
 
 ## Checks

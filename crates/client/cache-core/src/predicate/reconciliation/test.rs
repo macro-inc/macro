@@ -141,6 +141,7 @@ fn baseline_is_not_truncated_by_candidate_limit_and_unknowns_keep_sort_evidence(
         false,
     );
     assert_eq!(result.keys, vec![key("d"), key("b"), key("a")]);
+    assert_eq!(result.sort_values, vec![30, 15, 10]);
     assert_eq!(result.retained_keys, vec![key("b")]);
 }
 

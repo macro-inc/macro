@@ -13,7 +13,11 @@ import {
   type CollapsibleItemInput,
   useRegisterPriorityCollapseItem,
 } from '../../priority-collapse/createPriorityCollapser';
-import { SplitLayoutContext, SplitPanelContext } from './context';
+import {
+  SplitLayoutContext,
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from './context';
 import type {
   SplitContent,
   SplitContentType,
@@ -72,6 +76,16 @@ export function splitViewId(
  */
 export function withSplitPanelOwner<T>(name: string, factory: () => T): T {
   return useSplitPanelOrThrow().replaceOwnedSlot(name, factory);
+}
+
+/** The split's own hotkey scope, also from content an inline preview hosts. */
+export function splitRootScope(
+  panel: Pick<
+    SplitPanelContextType,
+    'splitHotkeyScope' | 'splitRootHotkeyScope'
+  >
+): string {
+  return panel.splitRootHotkeyScope ?? panel.splitHotkeyScope;
 }
 
 /**

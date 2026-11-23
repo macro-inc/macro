@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod test;
 
+use std::sync::Arc;
+
 use crate::{Caller, Category};
 
 /// Why `decide` refused a request, for the answer, the logs and the rollout.
@@ -153,12 +155,13 @@ pub fn decide(caller: Caller, category: Category) -> Result<(), Refusal> {
     let Some(code) = code else {
         return Ok(());
     };
-    let enforcement =
-        if caller.is_program() && (PERSON_ONLY.contains(&category) || category == C::Internal) {
-            Enforcement::Enforced
-        } else {
-            Enforcement::Observed
-        };
+    let enforced_from_the_start =
+        caller.is_program() && (PERSON_ONLY.contains(&category) || category == C::Internal);
+    let enforcement = if enforced_from_the_start {
+        Enforcement::Enforced
+    } else {
+        Enforcement::Observed
+    };
     Err(Refusal {
         code,
         category,
@@ -168,14 +171,55 @@ pub fn decide(caller: Caller, category: Category) -> Result<(), Refusal> {
 }
 
 /// The caller a service resolved for a request, put in its extensions
-/// before routing, with the categories whose observed refusals the rollout
-/// enforces for this request.
+/// before routing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ResolvedCaller {
-    /// Who called.
-    pub caller: Caller,
-    /// Categories whose [`Enforcement::Observed`] refusals are enforced.
-    pub enforced: CategorySet,
+pub struct ResolvedCaller(pub Caller);
+
+/// The rollout a service applies, put in a request's extensions beside its
+/// [`ResolvedCaller`]. With none, observed refusals stay observed.
+#[derive(Clone)]
+pub struct ActiveRollout(pub Arc<dyn Rollout>);
+
+/// Which categories' observed refusals the rollout enforces for a caller:
+/// the rollout flag, applied wherever a route is decided.
+pub trait Rollout: Send + Sync {
+    /// The categories whose observed refusals are enforced for `caller`.
+    fn enforced(&self, caller: Caller) -> CategorySet;
+}
+
+/// The rollout before any flag: observed refusals stay observed.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoRollout;
+
+impl Rollout for NoRollout {
+    fn enforced(&self, _caller: Caller) -> CategorySet {
+        CategorySet::default()
+    }
+}
+
+/// The rollout of a caller narrowed by a header nobody verified: the
+/// categories enforced for the narrowed caller and for the verified one it
+/// narrows, so a junk header can't pick the caller whose category isn't
+/// enforced yet.
+#[derive(Clone)]
+pub struct NarrowedRollout {
+    inner: Arc<dyn Rollout>,
+    verified: Caller,
+}
+
+impl NarrowedRollout {
+    /// `inner`, also enforcing for `verified`.
+    pub fn new(inner: Arc<dyn Rollout>, verified: Caller) -> Self {
+        Self { inner, verified }
+    }
+}
+
+impl Rollout for NarrowedRollout {
+    fn enforced(&self, caller: Caller) -> CategorySet {
+        self.inner
+            .enforced(caller)
+            .union(self.inner.enforced(self.verified))
+    }
 }
 
 /// A set of categories.
@@ -190,6 +234,12 @@ impl CategorySet {
     #[must_use]
     pub fn with(self, category: Category) -> Self {
         Self(self.0 | Self::bit(category))
+    }
+
+    /// The categories in either set.
+    #[must_use]
+    pub fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 
     /// Whether the set holds `category`.
@@ -229,16 +279,17 @@ pub enum Verdict {
 }
 
 impl RouteDecision {
-    /// The decision for a request to a route of `category` from `resolved`,
-    /// with the rollout's enforced categories applied. `safe_method` says
+    /// The decision for a request to a route of `category` from `caller`,
+    /// with the categories `rollout` enforces for it. `safe_method` says
     /// whether the request's method only reads (`GET`, `HEAD`, `OPTIONS`).
     pub fn new(
-        resolved: Option<ResolvedCaller>,
+        caller: Option<Caller>,
         category: Category,
         safe_method: bool,
         method_is_preflight: bool,
+        rollout: &dyn Rollout,
     ) -> Self {
-        let verdict = match resolved {
+        let verdict = match caller {
             None if category == Category::Public => Verdict::Public,
             // A CORS preflight carries no credentials by design, so it is
             // never refused for having no caller; it reads nothing.
@@ -246,23 +297,19 @@ impl RouteDecision {
             None => Verdict::Unresolved,
             // An unknown scope reads by method only, as its scope is held in
             // `agent_correlation`: a POST is refused even on a read route.
-            Some(resolved)
-                if resolved.caller == Caller::ScopedUnknown
-                    && !safe_method
-                    && category != Category::Public =>
-            {
+            Some(Caller::ScopedUnknown) if !safe_method && category != Category::Public => {
                 Verdict::Refused(Refusal {
                     code: RefusalCode::OutOfScope,
                     category,
-                    caller: resolved.caller,
+                    caller: Caller::ScopedUnknown,
                     enforcement: Enforcement::Enforced,
                 })
             }
-            Some(resolved) => match decide(resolved.caller, category) {
-                Ok(()) => Verdict::Allowed(resolved.caller),
+            Some(caller) => match decide(caller, category) {
+                Ok(()) => Verdict::Allowed(caller),
                 Err(refusal)
                     if refusal.enforcement == Enforcement::Enforced
-                        || resolved.enforced.contains(category) =>
+                        || rollout.enforced(caller).contains(category) =>
                 {
                     Verdict::Refused(Refusal {
                         enforcement: Enforcement::Enforced,

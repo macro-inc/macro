@@ -49,8 +49,8 @@ use macro_tower_layers::ResponseSpanFields;
 use tower::{Layer, Service};
 
 use crate::{
-    Caller, Category, NO_CALLER_MESSAGE, Refusal, RefusalCode, ResolvedCaller, RouteDecision,
-    Verdict,
+    ActiveRollout, Caller, Category, NO_CALLER_MESSAGE, NoRollout, Refusal, RefusalCode,
+    ResolvedCaller, RouteDecision, Verdict,
 };
 
 macro_rules! method_constructor {
@@ -160,13 +160,25 @@ where
     }
 
     fn call(&mut self, mut request: Request) -> Self::Future {
-        let resolved = request.extensions().get::<ResolvedCaller>().copied();
+        let caller = request
+            .extensions()
+            .get::<ResolvedCaller>()
+            .map(|ResolvedCaller(caller)| *caller);
         let safe_method = matches!(
             *request.method(),
             Method::GET | Method::HEAD | Method::OPTIONS
         );
         let preflight = is_cors_preflight(&request);
-        let decision = RouteDecision::new(resolved, self.category, safe_method, preflight);
+        let decision = match request.extensions().get::<ActiveRollout>() {
+            Some(ActiveRollout(rollout)) => RouteDecision::new(
+                caller,
+                self.category,
+                safe_method,
+                preflight,
+                rollout.as_ref(),
+            ),
+            None => RouteDecision::new(caller, self.category, safe_method, preflight, &NoRollout),
+        };
         if decision.verdict == Verdict::Unresolved {
             tracing::warn!(
                 route_policy.category = %self.category,

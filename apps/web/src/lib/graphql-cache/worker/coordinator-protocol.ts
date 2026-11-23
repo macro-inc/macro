@@ -155,6 +155,9 @@ export type CoordinatorToTabEnvelope =
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'registered';
       tabId: string;
+      /** Another visible tab's engine is starting or running as this tab
+       * joins, so this tab is not about to own the cache. */
+      ownerElsewhere?: true;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -1129,8 +1132,14 @@ export function validateCoordinatorToTabEnvelope(
   switch (value.kind) {
     case 'registered':
       if (
-        hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId']) &&
-        isNonEmptyString(value.tabId)
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerElsewhere',
+        ]) &&
+        isNonEmptyString(value.tabId) &&
+        (value.ownerElsewhere === undefined || value.ownerElsewhere === true)
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }

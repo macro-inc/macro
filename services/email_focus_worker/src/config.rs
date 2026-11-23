@@ -53,6 +53,14 @@ pub struct Config {
     /// Days of mail the backfill and the sweep cover, at most 90.
     #[macro_config_default(30)]
     pub focus_window_days: u16,
+    /// Days a person in the rollout may go without using Macro before Focus
+    /// stops working the inboxes their tab shows.
+    #[macro_config_default(7)]
+    pub focus_active_days: u16,
+    /// Seconds an answer about whether someone is active is kept: how long a
+    /// returning person waits, plus a look, for their inbox to fill.
+    #[macro_config_default(300)]
+    pub focus_activity_cache_secs: u64,
 }
 
 impl Config {

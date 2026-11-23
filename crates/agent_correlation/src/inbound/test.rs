@@ -3,6 +3,7 @@ use crate::domain::Correlation;
 use async_trait::async_trait;
 use axum::http::Request;
 use macro_auth::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
+use route_policy::NoRollout;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 const PRIVATE: &str = include_str!(
@@ -70,6 +71,7 @@ async fn optional_claim_is_validated_before_a_handler_can_use_it() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        rollout: Arc::new(NoRollout),
     };
     for bearer in [None, Some(token(None, None))] {
         let mut request = Request::builder()
@@ -141,6 +143,7 @@ async fn propagate_scopes_the_signed_routine_beside_the_correlation() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        rollout: Arc::new(NoRollout),
     };
     let app = axum::Router::new()
         .route(
@@ -209,6 +212,7 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        rollout: Arc::new(NoRollout),
     };
     let ran = Arc::new(AtomicUsize::new(0));
     let handler = {
@@ -265,6 +269,7 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        rollout: Arc::new(NoRollout),
     };
     let refused = AgentCorrelationExtractor::from_request_parts(&mut parts, &state).await;
     assert_eq!(
@@ -286,6 +291,7 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        rollout: Arc::new(NoRollout),
     };
     let app = axum::Router::new()
         .route(
@@ -342,6 +348,7 @@ async fn a_handler_reads_the_signed_scope_when_none_is_stored() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        rollout: Arc::new(NoRollout),
     };
     let app = axum::Router::new()
         .route(
@@ -620,6 +627,7 @@ async fn propagate_refuses_tokens_of_different_users() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        rollout: Arc::new(NoRollout),
     };
     let handled = Arc::new(AtomicUsize::new(0));
     let app = axum::Router::new()
@@ -713,6 +721,7 @@ async fn a_refused_sharing_change_is_answered_as_a_refusal() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        rollout: Arc::new(NoRollout),
     };
     let app = axum::Router::new()
         .route(
@@ -767,6 +776,305 @@ async fn a_refused_sharing_change_is_answered_as_a_refusal() {
     }
 }
 
+/// Routes behind `propagate` that answer with the caller it resolved, at the
+/// root and under a version.
+fn caller_echo(state: CorrelationState) -> axum::Router {
+    async fn echo(resolved: Option<axum::Extension<ResolvedCaller>>) -> String {
+        resolved.map_or(
+            "none".to_owned(),
+            |axum::Extension(ResolvedCaller(caller))| caller.to_string(),
+        )
+    }
+    let api = axum::Router::new()
+        .route(
+            "/whoami",
+            route_policy::inbound::axum::get(route_policy::Category::Read, echo),
+        )
+        .route(
+            "/keys",
+            route_policy::inbound::axum::post(route_policy::Category::CredentialMint, echo),
+        );
+    axum::Router::new()
+        .merge(api.clone())
+        .nest("/v1", api)
+        .layer(axum::middleware::from_fn_with_state(state, propagate))
+}
+
+#[tokio::test]
+async fn propagate_resolves_the_caller_from_the_signed_claims() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    let agent = Some(Uuid::from_u128(3));
+    for (bearer, code_execution, expected) in [
+        (Some(mint(None, None, None, None)), false, "api_credential"),
+        (Some(mint(None, None, None, None)), true, "program"),
+        (Some(mint(None, agent, None, None)), false, "program"),
+        (
+            Some(mint(None, None, Some(Uuid::from_u128(9)), None)),
+            false,
+            "program",
+        ),
+        (
+            Some(token(Some(Uuid::from_u128(1)), agent)),
+            false,
+            "program",
+        ),
+        (
+            Some(token(Some(Uuid::from_u128(6)), agent)),
+            false,
+            "scoped_generation",
+        ),
+        (
+            Some(mint(None, agent, None, Some("no_send"))),
+            false,
+            "scoped_no_send",
+        ),
+        (
+            Some(mint(None, agent, None, Some("a_newer_scope"))),
+            false,
+            "scoped_unknown",
+        ),
+    ] {
+        let mut request = Request::builder().method("GET").uri("/v1/whoami");
+        if let Some(bearer) = &bearer {
+            request = request.header("authorization", format!("Bearer {bearer}"));
+        }
+        if code_execution {
+            request = request.header(macro_auth::credential::CODE_EXECUTION_HEADER, "1");
+        }
+        let response = caller_echo(state.clone())
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{expected}");
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&body), expected);
+    }
+}
+
+/// A request with no credential, or one that doesn't verify, resolves no
+/// caller, so a categorized route refuses it before its handler runs.
+#[tokio::test]
+async fn a_request_with_no_verifiable_credential_is_refused_by_a_categorized_route() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    for request in [
+        // Nothing but the code-execution header.
+        Request::builder()
+            .method("GET")
+            .uri("/v1/whoami")
+            .header(macro_auth::credential::CODE_EXECUTION_HEADER, "1"),
+        // A token that isn't ours.
+        Request::builder()
+            .method("GET")
+            .uri("/whoami")
+            .header("authorization", "Bearer not.a.token"),
+    ] {
+        let response = caller_echo(state.clone())
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["code"],
+            "no_caller"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_program_is_refused_a_credential_route_on_every_mount() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    let program = mint(None, Some(Uuid::from_u128(3)), None, None);
+    let person_api_token = mint(None, None, None, None);
+    for path in ["/keys", "/v1/keys"] {
+        let refused = caller_echo(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(path)
+                    .header("authorization", format!("Bearer {program}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(refused.status(), StatusCode::FORBIDDEN, "{path}");
+        let body = axum::body::to_bytes(refused.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["code"],
+            "person_only"
+        );
+        // An API token with no program claims is only observed refusing
+        // credentials, so its request goes on for now.
+        let observed = caller_echo(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(path)
+                    .header("authorization", format!("Bearer {person_api_token}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(observed.status(), StatusCode::OK, "{path}");
+    }
+}
+
+#[tokio::test]
+async fn the_rollout_enforces_what_it_names_for_the_caller() {
+    use tower::ServiceExt;
+
+    struct EnforceCredentialsForApiTokens;
+    impl Rollout for EnforceCredentialsForApiTokens {
+        fn enforced(&self, caller: route_policy::Caller) -> route_policy::CategorySet {
+            match caller {
+                route_policy::Caller::ApiCredential => route_policy::CategorySet::default()
+                    .with(route_policy::Category::CredentialMint),
+                _ => route_policy::CategorySet::default(),
+            }
+        }
+    }
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    }
+    .with_rollout(Arc::new(EnforceCredentialsForApiTokens));
+    let person_api_token = mint(None, None, None, None);
+    let response = caller_echo(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/keys")
+                .header("authorization", format!("Bearer {person_api_token}"))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+/// A request that authenticates with a credential that doesn't verify here
+/// still resolves as the program whose verified token rides beside it.
+#[tokio::test]
+async fn a_program_token_beside_an_unverifiable_credential_is_still_a_program() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    let program = mint(None, Some(Uuid::from_u128(3)), None, None);
+    let cookie = format!(
+        "{}={program}",
+        macro_auth::credential::access_token_cookie_name()
+    );
+    for request in [
+        // A junk query token outranks the program's bearer.
+        Request::builder()
+            .method("GET")
+            .uri("/v1/whoami?macro-api-token=junk")
+            .header("authorization", format!("Bearer {program}")),
+        // A non-bearer Authorization header, with the program's token as the
+        // cookie.
+        Request::builder()
+            .method("GET")
+            .uri("/v1/whoami")
+            .header("authorization", "Basic eDp5")
+            .header("cookie", &cookie),
+        // An internal key nobody checked, beside the program's cookie.
+        Request::builder()
+            .method("GET")
+            .uri("/v1/whoami")
+            .header(macro_auth::credential::INTERNAL_API_KEY_HEADER, "junk")
+            .header("cookie", &cookie),
+    ] {
+        let response = caller_echo(state.clone())
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&body), "program");
+    }
+}
+
+/// An internal key the route hasn't checked doesn't widen the user token
+/// beside it.
+#[tokio::test]
+async fn an_unchecked_internal_key_does_not_widen_the_user_token_beside_it() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    let api_token = mint(None, None, None, None);
+    let response = caller_echo(state)
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/whoami")
+                .header(macro_auth::credential::INTERNAL_API_KEY_HEADER, "junk")
+                .header(
+                    "cookie",
+                    format!(
+                        "{}={api_token}",
+                        macro_auth::credential::access_token_cookie_name()
+                    ),
+                )
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&body), "api_credential");
+}
+
 /// Normal member-authorized agent sessions retain direct contribution writes;
 /// only credentials carrying a restricted scope are refused at the route gate.
 #[tokio::test]
@@ -778,6 +1086,7 @@ async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        rollout: Arc::new(NoRollout),
     };
     let app = axum::Router::new()
         .route(
@@ -813,5 +1122,271 @@ async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
             },
             "{scope:?}",
         );
+    }
+}
+
+/// A header that nothing here verifies (a bot, harness or user API key) may
+/// only narrow a request beside a verified token, never pick a wider caller:
+/// a program's claim still wins, and a plain token beside a bot header is the
+/// bot's, which may do less than an API credential.
+#[tokio::test]
+async fn an_unverified_header_never_widens_the_caller_a_verified_token_resolves() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    let cookie_name = macro_auth::credential::access_token_cookie_name();
+    let plain = mint(None, None, None, None);
+    let program = mint(None, Some(Uuid::from_u128(3)), None, None);
+    let no_send = mint(None, Some(Uuid::from_u128(3)), None, Some("no_send"));
+    for (header, token, expected) in [
+        (macro_auth::credential::BOT_TOKEN_HEADER, &plain, "bot"),
+        (
+            macro_auth::credential::HARNESS_TOKEN_HEADER,
+            &plain,
+            "harness",
+        ),
+        (
+            macro_auth::credential::USER_API_KEY_HEADER,
+            &plain,
+            "api_credential",
+        ),
+        (
+            macro_auth::credential::BOT_TOKEN_HEADER,
+            &program,
+            "program",
+        ),
+        (
+            macro_auth::credential::HARNESS_TOKEN_HEADER,
+            &program,
+            "program",
+        ),
+        (
+            macro_auth::credential::BOT_TOKEN_HEADER,
+            &no_send,
+            "scoped_no_send",
+        ),
+        (
+            macro_auth::credential::INTERNAL_API_KEY_HEADER,
+            &plain,
+            "api_credential",
+        ),
+        (
+            macro_auth::credential::INTERNAL_API_KEY_HEADER,
+            &program,
+            "program",
+        ),
+    ] {
+        let response = caller_echo(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/whoami")
+                    .header(header, "unverified")
+                    .header("cookie", format!("{cookie_name}={token}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&body), expected, "{header}");
+    }
+}
+
+/// Two tokens in one request, held to different scopes: the narrowest wins,
+/// whichever authenticates.
+#[tokio::test]
+async fn the_narrowest_scope_of_two_tokens_in_one_request_wins() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    let cookie_name = macro_auth::credential::access_token_cookie_name();
+    let agent = Some(Uuid::from_u128(3));
+    let no_send = mint(None, agent, None, Some("no_send"));
+    let generation = mint(None, agent, None, Some("generation"));
+    for (bearer, cookie, expected) in [
+        (&no_send, &generation, "scoped_generation"),
+        (&generation, &no_send, "scoped_generation"),
+    ] {
+        let response = caller_echo(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/whoami")
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .header("cookie", format!("{cookie_name}={cookie}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&body), expected);
+    }
+}
+
+/// A rollout an outer layer puts in the request is kept by a service with no
+/// database, so its observed refusals can be enforced there too.
+#[tokio::test]
+async fn a_rollout_from_an_outer_layer_reaches_a_service_with_no_database() {
+    use tower::ServiceExt;
+
+    struct EnforceCredentials;
+    impl Rollout for EnforceCredentials {
+        fn enforced(&self, caller: route_policy::Caller) -> route_policy::CategorySet {
+            match caller {
+                route_policy::Caller::ApiCredential => route_policy::CategorySet::default()
+                    .with(route_policy::Category::CredentialMint),
+                _ => route_policy::CategorySet::default(),
+            }
+        }
+    }
+    async fn minted() -> &'static str {
+        "minted"
+    }
+    let app = axum::Router::new()
+        .route(
+            "/keys",
+            route_policy::inbound::axum::post(route_policy::Category::CredentialMint, minted),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+            enforce_signed_scope,
+        ))
+        .layer(axum::middleware::from_fn(
+            |mut request: Request<axum::body::Body>, next: axum::middleware::Next| async move {
+                request
+                    .extensions_mut()
+                    .insert(route_policy::ActiveRollout(Arc::new(EnforceCredentials)));
+                next.run(request).await
+            },
+        ));
+    let bearer = mint(None, None, None, None);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/keys")
+                .header("authorization", format!("Bearer {bearer}"))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+/// A credential header with nothing verified beside it picks no caller: a
+/// categorized route refuses it as a request nobody could identify, so a junk
+/// header can't be a bot, a computer, an API credential or an internal
+/// service.
+#[tokio::test]
+async fn a_credential_header_alone_is_refused_by_a_categorized_route() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    for header in [
+        macro_auth::credential::BOT_TOKEN_HEADER,
+        macro_auth::credential::HARNESS_TOKEN_HEADER,
+        macro_auth::credential::USER_API_KEY_HEADER,
+        macro_auth::credential::INTERNAL_API_KEY_HEADER,
+        macro_auth::credential::LEGACY_DSS_INTERNAL_API_KEY_HEADER,
+    ] {
+        for extra in [None, Some(macro_auth::credential::CODE_EXECUTION_HEADER)] {
+            let mut request = Request::builder()
+                .method("POST")
+                .uri("/keys")
+                .header(header, "junk");
+            if let Some(extra) = extra {
+                request = request.header(extra, "1");
+            }
+            let response = caller_echo(state.clone())
+                .oneshot(request.body(axum::body::Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::FORBIDDEN,
+                "{header} {extra:?}"
+            );
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&body).unwrap()["code"],
+                "no_caller",
+                "{header} {extra:?}"
+            );
+        }
+    }
+}
+
+/// With a rollout that enforces credential minting for API credentials only,
+/// a junk bot header beside an API token can't pick the bot, whose category
+/// isn't enforced: the rollout enforces for both.
+#[tokio::test]
+async fn a_junk_header_cannot_pick_the_caller_whose_category_the_rollout_has_not_enforced() {
+    use tower::ServiceExt;
+
+    struct EnforceForApiCredentialsOnly;
+    impl Rollout for EnforceForApiCredentialsOnly {
+        fn enforced(&self, caller: route_policy::Caller) -> route_policy::CategorySet {
+            match caller {
+                route_policy::Caller::ApiCredential => route_policy::CategorySet::default()
+                    .with(route_policy::Category::CredentialMint),
+                _ => route_policy::CategorySet::default(),
+            }
+        }
+    }
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    }
+    .with_rollout(Arc::new(EnforceForApiCredentialsOnly));
+    let token = mint(None, None, None, None);
+    let cookie_name = macro_auth::credential::access_token_cookie_name();
+    for header in [
+        None,
+        Some(macro_auth::credential::BOT_TOKEN_HEADER),
+        Some(macro_auth::credential::HARNESS_TOKEN_HEADER),
+        Some(macro_auth::credential::INTERNAL_API_KEY_HEADER),
+    ] {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/keys")
+            .header("cookie", format!("{cookie_name}={token}"));
+        if let Some(header) = header {
+            request = request.header(header, "junk");
+        }
+        let response = caller_echo(state.clone())
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{header:?}");
     }
 }

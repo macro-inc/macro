@@ -3,7 +3,7 @@
 use axum::{Router, body::Body, extract::Request, http::Method};
 use tower::ServiceExt;
 
-use crate::{Caller, CategorySet, ResolvedCaller, RouteDecision};
+use crate::{Caller, ResolvedCaller, RouteDecision};
 
 /// Marks a request as a probe of the route policy: the layer answers with its
 /// decision and does not call the handler.
@@ -34,10 +34,9 @@ pub async fn undeclared_routes(router: Router, routes: &[(Method, &str)]) -> Vec
             undeclared.push(described);
             continue;
         };
-        request.extensions_mut().insert(ResolvedCaller {
-            caller: Caller::Person,
-            enforced: CategorySet::default(),
-        });
+        request
+            .extensions_mut()
+            .insert(ResolvedCaller(Caller::Person));
         request.extensions_mut().insert(Probe);
         match router.clone().oneshot(request).await {
             Ok(response) if response.extensions().get::<RouteDecision>().is_some() => {}

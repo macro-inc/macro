@@ -17,6 +17,9 @@ internal API key, and the Axum JWT-decode middleware.
   keep it. `macro_authorization` and `agent_correlation` read it;
   `AccessTokenExtractor` reads `access_token_sources` from the same parse
   (the first bearer, else the last cookie, nothing else), as it always has.
+  `CODE_EXECUTION_HEADER` lives here too; a program can drop it, so it
+  only ever narrows what a request may do. Services use it through
+  `macro_authorization`, which re-exports it.
 - `src/macro_api_token.rs`: the Macro API token (JWT) shape and claims.
 - `src/internal_api_key.rs`: `InternalApiKey`, the shared-secret credential
   for service-to-service calls.

@@ -36,9 +36,15 @@ fn router() -> Router {
 }
 
 fn resolved(caller: Caller) -> ResolvedCaller {
-    ResolvedCaller {
-        caller,
-        enforced: CategorySet::default(),
+    ResolvedCaller(caller)
+}
+
+/// A rollout that enforces the same categories for every caller.
+struct Enforce(CategorySet);
+
+impl crate::Rollout for Enforce {
+    fn enforced(&self, _caller: Caller) -> CategorySet {
+        self.0
     }
 }
 
@@ -50,10 +56,9 @@ async fn a_program_is_refused_minting_a_credential_on_every_mount() {
             .uri(path)
             .body(Body::empty())
             .unwrap();
-        request.extensions_mut().insert(ResolvedCaller {
-            caller: Caller::Program,
-            enforced: CategorySet::default(),
-        });
+        request
+            .extensions_mut()
+            .insert(ResolvedCaller(Caller::Program));
 
         let response = router().oneshot(request).await.unwrap();
 
@@ -172,10 +177,14 @@ async fn the_rollout_enforces_an_observed_category_it_names() {
         .uri("/dss/channels/7/join-link")
         .body(Body::empty())
         .unwrap();
-    request.extensions_mut().insert(ResolvedCaller {
-        caller: Caller::Program,
-        enforced: CategorySet::default().with(Category::ShareOutside),
-    });
+    request
+        .extensions_mut()
+        .insert(ResolvedCaller(Caller::Program));
+    request
+        .extensions_mut()
+        .insert(ActiveRollout(std::sync::Arc::new(Enforce(
+            CategorySet::default().with(Category::ShareOutside),
+        ))));
 
     let response = router().oneshot(request).await.unwrap();
 
@@ -291,10 +300,12 @@ async fn a_channel_mention_is_refused_what_a_run_that_sends_nothing_is() {
         .uri("/messages")
         .body(Body::empty())
         .unwrap();
-    send.extensions_mut().insert(ResolvedCaller {
-        caller: Caller::ChannelMention,
-        enforced: CategorySet::default().with(Category::Send),
-    });
+    send.extensions_mut()
+        .insert(ResolvedCaller(Caller::ChannelMention));
+    send.extensions_mut()
+        .insert(ActiveRollout(std::sync::Arc::new(Enforce(
+            CategorySet::default().with(Category::Send),
+        ))));
     assert_eq!(
         router.clone().oneshot(send).await.unwrap().status(),
         StatusCode::FORBIDDEN
@@ -372,10 +383,14 @@ async fn an_any_route_is_decided_for_every_method() {
             .uri("/proxy")
             .body(Body::empty())
             .unwrap();
-        request.extensions_mut().insert(ResolvedCaller {
-            caller: Caller::Program,
-            enforced: CategorySet::default().with(Category::Egress),
-        });
+        request
+            .extensions_mut()
+            .insert(ResolvedCaller(Caller::Program));
+        request
+            .extensions_mut()
+            .insert(ActiveRollout(std::sync::Arc::new(Enforce(
+                CategorySet::default().with(Category::Egress),
+            ))));
         let response = router.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN, "{method}");
     }

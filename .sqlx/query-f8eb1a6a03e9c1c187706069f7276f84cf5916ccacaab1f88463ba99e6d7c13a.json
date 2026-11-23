@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n        VALUES ($1, $2, 'TASK', $3, $4)\n        ON CONFLICT (entity_id, entity_type, property_definition_id)\n        DO UPDATE SET values = EXCLUDED.values, updated_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f8eb1a6a03e9c1c187706069f7276f84cf5916ccacaab1f88463ba99e6d7c13a"
+}

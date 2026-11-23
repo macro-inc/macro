@@ -401,6 +401,9 @@ pub struct TaskSnapshot {
     /// Priority option name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub priority: Option<String>,
+    /// Start date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<DateTime<Utc>>,
     /// Due date.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due: Option<DateTime<Utc>>,

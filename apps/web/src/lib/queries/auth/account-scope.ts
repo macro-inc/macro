@@ -8,13 +8,13 @@ import {
 } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 import { channelKeys } from '../channel/keys';
+import { forgetOwnChannelWrites } from '../channel/own-writes';
 import { queryClient } from '../client';
 import { emailKeys } from '../email/keys';
 import { authKeys } from './keys';
 
 const ACCOUNT_SOURCE_PREFIXES = [
-  channelKeys.listChannels._def,
-  channelKeys.activity._def,
+  channelKeys.directory._def,
   channelKeys.quickAccessGraphql._def,
   emailKeys.links._def,
   emailKeys.linksHealthProbe._def,
@@ -105,12 +105,15 @@ export function mutationQueryAccount(
 
 /** Keep the app shell's retained identity, but stop account-source reads until
  * a new auth request confirms the replacement session. Cached/manual writes
- * cannot reopen this gate. An old auth request is canceled before invalidation. */
+ * cannot reopen this gate. An old auth request is canceled before invalidation.
+ * The channel writes the old sign-in made, which directories lay over what
+ * they read, go with its queries. */
 export async function resetQueryAccountSession(): Promise<void> {
   stopWaitingForIdentity?.();
   resetMacroApiToken();
   const epoch = session().epoch + 1;
   setSession({ epoch, pending: true });
+  forgetOwnChannelWrites(queryClient);
   const cache = queryClient.getQueryCache();
   for (const query of cache.findAll({
     predicate: (query) =>
