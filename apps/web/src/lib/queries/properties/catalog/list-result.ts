@@ -45,6 +45,8 @@ export type CatalogListStamp = {
 // Refusals kept per reader: the reads it switched away from, newest last.
 const MAX_REFUSALS = 16;
 
+type Refusal = { key: number; error: CombinedError };
+
 /**
  * Follows a reader's results: stamps those that carry news (a server answer
  * or a local write), and keeps the server's refusal of each read (each
@@ -70,26 +72,21 @@ export function createListedAt<V extends AnyVariables>(
     return value === undefined ? undefined : createRequest(document, value).key;
   });
   const [listedAt, setListedAt] = createSignal(0);
-  const [refusals, setRefusals] = createSignal<
-    ReadonlyMap<number, CombinedError>
-  >(new Map());
+  // Oldest first, at most MAX_REFUSALS.
+  const [refusals, setRefusals] = createSignal<readonly Refusal[]>([]);
   const update = (key: number, error: CombinedError | undefined) => {
-    if (!error && !refusals().has(key)) return;
-    const next = new Map(refusals());
-    next.delete(key);
-    if (error) next.set(key, error);
-    for (const oldest of next.keys()) {
-      if (next.size <= MAX_REFUSALS) break;
-      next.delete(oldest);
-    }
-    setRefusals(next);
+    const others = refusals().filter((refusal) => refusal.key !== key);
+    if (!error && others.length === refusals().length) return;
+    setRefusals(
+      error ? [...others, { key, error }].slice(-MAX_REFUSALS) : others
+    );
   };
   return {
     listedAt,
     refusal() {
       const key = currentKey();
       if (key === undefined) return null;
-      return refusals().get(key) ?? null;
+      return refusals().find((refusal) => refusal.key === key)?.error ?? null;
     },
     onResult(result) {
       // A client without the normalized cache answers only from the server.

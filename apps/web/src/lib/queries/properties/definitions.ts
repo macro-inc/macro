@@ -58,15 +58,10 @@ function definitionsOnly(
   );
 }
 
-/** A definitions list; a successful read always carries its list. */
-export type PropertyDefinitionsQuery = Omit<
-  UrqlQueryResult<PropertyDefinitionResponse[]>,
-  'isSuccess'
-> &
-  (
-    | { readonly isSuccess: true; readonly data: PropertyDefinitionResponse[] }
-    | { readonly isSuccess: false }
-  );
+/** A definitions list, read from the cache and the server. */
+export type PropertyDefinitionsQuery = UrqlQueryResult<
+  PropertyDefinitionResponse[]
+>;
 
 const READ_OPTIONS = {
   requestPolicy: 'cache-and-network',
@@ -126,7 +121,7 @@ export function useListPropertiesQuery(
       ),
     refresh: () => query.refetch({ requestPolicy: 'network-only' }),
   });
-  return offlineAsSuccess(query) as unknown as PropertyDefinitionsQuery;
+  return offlineAsSuccess(query);
 }
 
 /**

@@ -65,7 +65,7 @@ export function createTaskBoardQueries(options: {
     includeOptions: true,
   }));
   const properties = createMemo(() => {
-    const available = definitions.isSuccess ? definitions.data : [];
+    const available = (definitions.isSuccess && definitions.data) || [];
 
     return new Map(
       available.map((item) => {

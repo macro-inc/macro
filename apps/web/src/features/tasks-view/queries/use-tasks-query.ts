@@ -272,7 +272,7 @@ export function useTasksDataSource(
   const propertyDefinitions = createMemo(
     () =>
       new Map(
-        (definitions.isSuccess ? definitions.data : []).map((item) => {
+        ((definitions.isSuccess && definitions.data) || []).map((item) => {
           const definition = 'definition' in item ? item.definition : item;
           const options =
             'property_options' in item ? item.property_options : [];
