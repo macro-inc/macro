@@ -10907,9 +10907,13 @@ type GraphqlTaskDependencyState {
 	"""
 	isBlocked: Boolean!
 	"""
-	Unfinished IDs from the readable task's relationships; names/content need separate view access.
+	Unfinished blockers that the viewer can read.
 	"""
 	openBlockerIds: [ID!]!
+	"""
+	Readable prerequisite IDs, independent of completion status.
+	"""
+	visibleBlockerIds: [ID!]!
 	"""
 	Canonical Status, Depends On, and Blocking assignments.
 	"""

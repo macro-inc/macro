@@ -32,6 +32,7 @@ impl TaskDependencyReader for Reader {
                                 },
                                 ..TaskDependencyState::default()
                             },
+                            blocker_receipts: vec![],
                             properties: vec![],
                         },
                     )
@@ -110,4 +111,92 @@ async fn post_write_effects_include_dependents_absent_from_the_old_snapshot() {
             .iter()
             .any(|state| state.id.as_str() == dependent.to_string())
     );
+}
+
+struct PrivacyReader(TaskDependencyData);
+
+impl TaskDependencyReader for PrivacyReader {
+    fn load<'a>(
+        &'a self,
+        _user: &'a MacroUserIdStr<'static>,
+        ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<HashMap<Uuid, TaskDependencyData>, rootcause::Report>> {
+        Box::pin(async move {
+            Ok(ids
+                .iter()
+                .filter(|id| **id == self.0.facts.task_id)
+                .map(|id| (*id, self.0.clone()))
+                .collect())
+        })
+    }
+}
+
+#[tokio::test]
+async fn readable_task_exposes_only_authorized_open_ids_without_narrowing_aggregate() {
+    let task = Uuid::from_u128(1);
+    let public = Uuid::from_u128(2);
+    let private = Uuid::from_u128(3);
+    // Private status changes and deletion change only the full aggregate, not
+    // visibility evidence. Opaque graph membership remains canonical.
+    for (visible, open) in [
+        (vec![], vec![private]),
+        (vec![public], vec![public, private]),
+        (vec![public], vec![private]),
+        (vec![public], vec![public]),
+        (vec![public], vec![]),
+    ] {
+        let reader = PrivacyReader(TaskDependencyData {
+            facts: TaskDependencyState {
+                task_id: task,
+                blocker_ids: vec![public, private],
+                open_blocker_ids: open.clone(),
+                ..Default::default()
+            },
+            blocker_receipts: visible
+                .iter()
+                .map(|id| {
+                    ViewReceipt::dangerously_assert_authenticated_user(
+                        MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap(),
+                        &id.to_string(),
+                        model_entity::EntityType::Document,
+                    )
+                })
+                .collect(),
+            properties: vec![],
+        });
+        let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+            .data(task_dependency_loader(
+                MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap(),
+                reader,
+            ))
+            .finish();
+        let response = schema.execute(format!(r#"{{ states(ids:["{task}","{private}"]) {{ id isBlocked openBlockerIds visibleBlockerIds }} }}"#)).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        let states = data["states"].as_array().unwrap();
+        assert_eq!(states.len(), 1);
+        assert_eq!(states[0]["isBlocked"], !open.is_empty());
+        assert_eq!(
+            states[0]["visibleBlockerIds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|id| id.as_str().unwrap())
+                .collect::<Vec<_>>(),
+            visible.iter().map(ToString::to_string).collect::<Vec<_>>()
+        );
+        let expected = open
+            .into_iter()
+            .filter(|id| visible.contains(id))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            states[0]["openBlockerIds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|id| id.as_str().unwrap())
+                .collect::<Vec<_>>(),
+            expected.iter().map(ToString::to_string).collect::<Vec<_>>()
+        );
+    }
 }

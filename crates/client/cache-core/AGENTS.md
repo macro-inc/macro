@@ -42,7 +42,9 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
 - `src/task_dependency.rs`, `src/engine/task_dependency.rs`: persist authored dependency/status assignments, not copied task neighborhoods. Replay each recipe against committed records plus surviving earlier layers before normalization. Preserve the authored assignment ID for parent links and canonical identity settlement; missing task roots never invent reciprocal records.
-- `tests/task_dependency_optimistic.rs`: real-engine regressions cover overlapping rejection, committed-base rebasing, completion/reopen, engine replacement, missing-root assignment links, canonical assignment IDs, and generation retirement at enqueue/settlement.
+- `tests/task_dependency_optimistic.rs`: real-engine regressions cover overlapping rejection, committed-base rebasing, completion/reopen, engine replacement, missing-root assignment links, canonical assignment IDs, generation retirement, and private prerequisites.
+- Replay exposes unfinished IDs only from server `visibleBlockerIds`; cached task presence never grants visibility, including after remove/re-add. Preserve aggregate blocking while unreadable prerequisites prevent proving an unblock.
+- Preserve canonical open facts during unrelated replay, including completion/deletion facts; apply cached status only for the authored status change. New prerequisites wait for authoritative visibility evidence.
 
 ## Scope
 

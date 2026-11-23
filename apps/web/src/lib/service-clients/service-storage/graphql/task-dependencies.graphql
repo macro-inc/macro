@@ -2,6 +2,7 @@ fragment TaskDependencyStateFields on GraphqlTaskDependencyState {
   __typename
   id
   isBlocked
+  visibleBlockerIds
   openBlockerIds
   properties { ...SoupPropertyFields }
 }

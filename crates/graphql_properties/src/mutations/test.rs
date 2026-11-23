@@ -358,6 +358,7 @@ impl crate::task_dependencies::TaskDependencyReader for EffectReader {
                                 task_id: *id,
                                 ..Default::default()
                             },
+                            blocker_receipts: vec![],
                             properties: Vec::new(),
                         },
                     )

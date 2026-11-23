@@ -1,11 +1,11 @@
 //! Authorized, batched facts about a task's dependency graph.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use super::model::{PropertyAccessReceiptExt, ViewReceipt};
 
-/// Dependency facts for one task. Identifiers never carry names or content.
+/// Canonical dependency facts for trusted use cases; project visibility before returning blocker status.
 #[derive(Clone, Debug, Default)]
 pub struct TaskDependencyState {
     /// Task whose dependency graph is described.
@@ -16,6 +16,46 @@ pub struct TaskDependencyState {
     pub dependent_ids: Vec<Uuid>,
     /// Existing, non-deleted blockers that have not completed.
     pub open_blocker_ids: Vec<Uuid>,
+}
+
+/// Viewer-specific blocker facts with the primary task's full aggregate state.
+#[derive(Clone, Debug, Default)]
+pub struct TaskDependencyVisibility {
+    /// Whether any canonical blocker is unfinished, including inaccessible blockers.
+    pub is_blocked: bool,
+    /// Relationship endpoints the caller can view, independent of completion state.
+    pub visible_blocker_ids: Vec<Uuid>,
+    /// Unfinished blockers the caller can view.
+    pub open_blocker_ids: Vec<Uuid>,
+}
+
+impl TaskDependencyState {
+    /// Apply blocker view capabilities without changing the primary task's aggregate state.
+    pub fn visible_state(&self, blocker_receipts: &[ViewReceipt]) -> TaskDependencyVisibility {
+        let visible = blocker_receipts
+            .iter()
+            .filter(|receipt| {
+                receipt.entity_type() == entity_access::domain::models::EntityType::Document
+            })
+            .filter_map(|receipt| Uuid::parse_str(receipt.entity_id()).ok())
+            .collect::<HashSet<_>>();
+
+        TaskDependencyVisibility {
+            is_blocked: !self.open_blocker_ids.is_empty(),
+            visible_blocker_ids: self
+                .blocker_ids
+                .iter()
+                .filter(|id| visible.contains(id))
+                .copied()
+                .collect(),
+            open_blocker_ids: self
+                .open_blocker_ids
+                .iter()
+                .filter(|id| visible.contains(id))
+                .copied()
+                .collect(),
+        }
+    }
 }
 
 /// Indexed storage reads for dependency facts.
@@ -69,3 +109,6 @@ impl<R: TaskDependencyStateRepository> TaskDependencyStateService<R> {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod test;

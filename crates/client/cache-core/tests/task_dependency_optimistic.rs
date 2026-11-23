@@ -24,7 +24,7 @@ const MUTATION: &str = concat!(
 );
 const QUERY: &str = r#"query Tasks($input: SoupInput!) {
  user { id soup(input: $input) { items { __typename id ... on GraphqlSoupDocument {
- taskDependencies { __typename id isBlocked openBlockerIds properties { id propertyDefinitionId value { __typename
+ taskDependencies { __typename id isBlocked visibleBlockerIds openBlockerIds properties { id propertyDefinitionId value { __typename
  ... on GraphqlEntityReferencePropertyValue { references { entityId entityType } }
  ... on GraphqlSelectOptionPropertyValue { optionIds } } } }
  } } } }
@@ -38,7 +38,7 @@ fn property(id: &str, definition: &str, targets: &[&str]) -> Value {
 
 fn state(id: &str, blockers: &[&str], dependents: &[&str]) -> Value {
     json!({"__typename":"GraphqlSoupDocument","id":id,"taskDependencies":{
-        "__typename":"GraphqlTaskDependencyState","id":id,"isBlocked":!blockers.is_empty(),"openBlockerIds":blockers,
+        "__typename":"GraphqlTaskDependencyState","id":id,"isBlocked":!blockers.is_empty(),"openBlockerIds":blockers,"visibleBlockerIds":blockers,
         "properties":[property(&format!("{id}-depends"), DEPENDS, blockers), property(&format!("{id}-blocking"), BLOCKING, dependents)]
     }})
 }
@@ -195,10 +195,7 @@ fn overlapping_rejection_rebases_immediately_and_after_engine_replacement() {
             assert_eq!(links(&visible[1], BLOCKING), vec!["c"]);
             assert_eq!(visible[0]["taskDependencies"]["isBlocked"], false);
             assert_eq!(visible[2]["taskDependencies"]["isBlocked"], true);
-            assert_eq!(
-                visible[2]["taskDependencies"]["openBlockerIds"],
-                json!(["b"])
-            );
+            assert_eq!(visible[2]["taskDependencies"]["openBlockerIds"], json!([]));
         }
     });
 }
@@ -510,7 +507,7 @@ fn assignment_links_follow_authored_then_canonical_assignment_ids() {
                 &json!({"setTaskProperty":{
                     "property":property("canonical", DEPENDS, &["b"]),
                     "tasks":[
-                        {"__typename":"GraphqlTaskDependencyState","id":"a","isBlocked":true,"openBlockerIds":["b"],"properties":[property("canonical", DEPENDS, &["b"]), property("a-blocking", BLOCKING, &[])]},
+                        {"__typename":"GraphqlTaskDependencyState","id":"a","isBlocked":true,"openBlockerIds":["b"],"visibleBlockerIds":["b"],"properties":[property("canonical", DEPENDS, &["b"]), property("a-blocking", BLOCKING, &[])]},
                         state("b", &[], &["a"])["taskDependencies"].clone()
                     ]
                 }}),
@@ -617,5 +614,154 @@ fn generation_retirement_discards_recipes_at_enqueue_and_settlement() {
                     .is_empty()
             );
         }
+    });
+}
+
+#[test]
+fn mixed_private_prerequisites_prevent_optimistic_unblock_despite_cached_private_status() {
+    block_on(async {
+        for private_completed in [false, true] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let mut a = state("a", &["b", "private"], &[]);
+            a["taskDependencies"]["visibleBlockerIds"] = json!(["b"]);
+            a["taskDependencies"]["openBlockerIds"] = json!(["b"]);
+            let mut private = state("private", &[], &["a"]);
+            if private_completed {
+                private["taskDependencies"]["properties"].as_array_mut().unwrap().push(json!({
+                    "id":"private-status","propertyDefinitionId":STATUS,
+                    "value":{"__typename":"GraphqlSelectOptionPropertyValue","optionIds":[COMPLETED]}
+                }));
+            }
+            seed(
+                &mut engine,
+                vec![a.clone(), state("b", &[], &["a"]), private],
+            )
+            .await;
+            let id = assign(&mut engine, "b", "11111111-1111-4111-8111-111111111111",
+                json!({"id":"b-status","propertyDefinitionId":STATUS,"value":{"__typename":"GraphqlSelectOptionPropertyValue","optionIds":[COMPLETED]}}),
+                TaskDependencyChange::Status { option_ids: vec![COMPLETED.into()] }).await;
+            for reload in [false, true] {
+                if reload {
+                    engine = Engine::new(engine.into_storage());
+                }
+                let tasks = tasks(&mut engine).await;
+                assert_eq!(tasks[0]["taskDependencies"]["isBlocked"], true);
+                assert_eq!(tasks[0]["taskDependencies"]["openBlockerIds"], json!([]));
+                assert_eq!(
+                    tasks[0]["taskDependencies"]["visibleBlockerIds"],
+                    json!(["b"])
+                );
+            }
+            reject(&mut engine, id).await;
+            assert_eq!(tasks(&mut engine).await[0], a);
+        }
+    });
+}
+
+#[test]
+fn removing_and_readding_a_denied_blocker_never_turns_cached_presence_into_authorization() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut a = state("a", &["b"], &[]);
+        a["taskDependencies"]["visibleBlockerIds"] = json!([]);
+        a["taskDependencies"]["openBlockerIds"] = json!([]);
+        seed(&mut engine, vec![a, state("b", &[], &["a"])]).await;
+        let remove = assign(
+            &mut engine,
+            "a",
+            "11111111-1111-4111-8111-111111111111",
+            property("a-depends", DEPENDS, &[]),
+            TaskDependencyChange::DependsOn { target_ids: vec![] },
+        )
+        .await;
+        assign(
+            &mut engine,
+            "a",
+            "22222222-2222-4222-8222-222222222222",
+            property("a-depends", DEPENDS, &["b"]),
+            TaskDependencyChange::DependsOn {
+                target_ids: vec!["b".into()],
+            },
+        )
+        .await;
+        let mut engine = Engine::new(engine.into_storage());
+        for rollback in [false, true] {
+            if rollback {
+                reject(&mut engine, remove).await;
+            }
+            let tasks = tasks(&mut engine).await;
+            assert_eq!(tasks[0]["taskDependencies"]["isBlocked"], true);
+            assert_eq!(tasks[0]["taskDependencies"]["openBlockerIds"], json!([]));
+            assert_eq!(tasks[0]["taskDependencies"]["visibleBlockerIds"], json!([]));
+        }
+    });
+}
+
+#[test]
+fn canonical_completion_or_deletion_facts_survive_unrelated_replay_and_stale_blocker_records() {
+    block_on(async {
+        for visible in [json!([]), json!(["b"])] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let mut a = state("a", &["b"], &[]);
+            a["taskDependencies"]["visibleBlockerIds"] = visible;
+            a["taskDependencies"]["openBlockerIds"] = json!([]);
+            a["taskDependencies"]["isBlocked"] = json!(false);
+            // B's cached unset status is stale after completion or deletion.
+            seed(&mut engine, vec![a.clone(), state("b", &[], &["a"])]).await;
+            assign(&mut engine, "a", "11111111-1111-4111-8111-111111111111",
+                json!({"id":"a-status","propertyDefinitionId":STATUS,"value":{"__typename":"GraphqlSelectOptionPropertyValue","optionIds":[]}}),
+                TaskDependencyChange::Status { option_ids: vec![] }).await;
+            let mut engine = Engine::new(engine.into_storage());
+            assert_eq!(
+                tasks(&mut engine).await[0]["taskDependencies"]["isBlocked"],
+                false
+            );
+            a["taskDependencies"]["isBlocked"] = json!(true);
+            if a["taskDependencies"]["visibleBlockerIds"] == json!(["b"]) {
+                a["taskDependencies"]["openBlockerIds"] = json!(["b"]);
+            }
+            seed(&mut engine, vec![a]).await;
+            assert_eq!(
+                tasks(&mut engine).await[0]["taskDependencies"]["isBlocked"],
+                true
+            );
+        }
+    });
+}
+
+#[test]
+fn unreadable_prerequisites_remain_conservative_until_all_are_removed() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut a = state("a", &["private", "other"], &[]);
+        a["taskDependencies"]["visibleBlockerIds"] = json!([]);
+        a["taskDependencies"]["openBlockerIds"] = json!([]);
+        seed(&mut engine, vec![a]).await;
+        assign(
+            &mut engine,
+            "a",
+            "11111111-1111-4111-8111-111111111111",
+            property("a-depends", DEPENDS, &["other"]),
+            TaskDependencyChange::DependsOn {
+                target_ids: vec!["other".into()],
+            },
+        )
+        .await;
+        assert_eq!(
+            tasks(&mut engine).await[0]["taskDependencies"]["isBlocked"],
+            true
+        );
+        assign(
+            &mut engine,
+            "a",
+            "22222222-2222-4222-8222-222222222222",
+            property("a-depends", DEPENDS, &[]),
+            TaskDependencyChange::DependsOn { target_ids: vec![] },
+        )
+        .await;
+        assert_eq!(
+            tasks(&mut engine).await[0]["taskDependencies"]["isBlocked"],
+            false
+        );
     });
 }

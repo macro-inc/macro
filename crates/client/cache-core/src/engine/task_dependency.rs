@@ -230,20 +230,44 @@ impl<S: Storage> Engine<S> {
                 let mut state = states.get(&id)?.clone();
                 let old = &before[&id];
                 let old_blockers = references(old, DEPENDS_ON);
-                let open = references(&state, DEPENDS_ON)
-                    .into_iter()
+                let blockers = references(&state, DEPENDS_ON);
+                let visible = blockers
+                    .iter()
                     .filter(|blocker| {
-                        if let Some(state) = states.get(blocker) {
+                        old["visibleBlockerIds"]
+                            .as_array()
+                            .is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(blocker)))
+                    })
+                    .cloned()
+                    .collect::<BTreeSet<_>>();
+                let mut uncertain = false;
+                let open = blockers
+                    .iter()
+                    .filter(|blocker| {
+                        if !visible.contains(*blocker) {
+                            uncertain |= !old_blockers.contains(blocker)
+                                || old["isBlocked"].as_bool() != Some(false);
+                            return false;
+                        }
+                        // Unrelated cached status cannot supersede canonical open facts,
+                        // including deletion. Only replay the authored status change.
+                        if recipe.definition() == STATUS
+                            && *blocker == &recipe.task_id
+                            && let Some(state) = states.get(*blocker)
+                        {
                             return !completed(state);
                         }
-                        !old_blockers.contains(blocker)
-                            || old["openBlockerIds"]
-                                .as_array()
-                                .is_none_or(|ids| ids.iter().any(|id| id.as_str() == Some(blocker)))
+                        old["openBlockerIds"]
+                            .as_array()
+                            .is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(blocker)))
                     })
+                    .cloned()
                     .collect::<Vec<_>>();
-                state["isBlocked"] = json!(!open.is_empty());
+                // An aggregate cannot identify which private prerequisite is open.
+                // Retain it until all remaining prerequisites prove an unblock.
+                state["isBlocked"] = json!(uncertain || !open.is_empty());
                 state["openBlockerIds"] = json!(open);
+                state["visibleBlockerIds"] = json!(visible);
                 Some(state)
             })
             .collect::<Vec<_>>();

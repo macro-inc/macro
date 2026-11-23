@@ -70,7 +70,18 @@ export function TaskDependencyDetail(props: { taskId: string }) {
           <TaskBlockedBadge blocked={state()?.isBlocked} />
           <span class="text-ink-muted">{t('entityActions.taskDependsOn')}</span>
           <For each={blockers()}>
-            {(blocker) => <TaskDependencyLink taskId={blocker.entityId} />}
+            {(blocker) => (
+              <Show
+                when={state()?.visibleBlockerIds.includes(blocker.entityId)}
+                fallback={
+                  <span class="text-ink-muted">
+                    {t('entityActions.taskUnavailable')}
+                  </span>
+                }
+              >
+                <TaskDependencyLink taskId={blocker.entityId} />
+              </Show>
+            )}
           </For>
         </div>
       </Show>

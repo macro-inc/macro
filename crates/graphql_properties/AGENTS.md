@@ -20,7 +20,8 @@ edge.
 - `src/loaders.rs`: `EntityPropertiesLoader` batching.
 - `src/task_dependencies.rs`: request-scoped task dependency facts; `setTaskProperty` returns the edited assignment and reciprocal normalized state. Search hydrates at most 500 task IDs per request; realtime uses independent related-task patches, and incomplete mutation effects trigger a scoped repair.
 - Task mutations retain actual reciprocal IDs from the committed domain outcome; pre/post reads alone miss concurrently removed neighbors.
-- Opaque prerequisite IDs and unfinished facts belong to the readable primary task's relationship state; referenced names/content require their own view authorization.
+- Pass blocker view receipts to the properties domain's `visible_state` projection; preserve aggregate `isBlocked` and opaque membership while redacting individual inaccessible-blocker facts.
+- Mint status-neutral blocker visibility through one deduplicated bulk authorization call; the repository caps SQL statements internally. Never expose a hidden-open subgroup flag.
 
 ## Scope
 

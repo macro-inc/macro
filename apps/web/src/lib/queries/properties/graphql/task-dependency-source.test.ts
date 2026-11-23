@@ -41,6 +41,7 @@ it('loads 1001 task facts in three requests and releases facts when the search c
                 id,
                 isBlocked: false,
                 openBlockerIds: [],
+                visibleBlockerIds: [],
                 properties: [],
               })),
             },

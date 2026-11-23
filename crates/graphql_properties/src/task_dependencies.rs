@@ -12,11 +12,15 @@ use entity_access::domain::ports::EntityAccessService;
 use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties::domain::model::ViewReceipt;
 use properties::domain::task_dependency_state::{
     TaskDependencyState, TaskDependencyStateRepository, TaskDependencyStateService,
 };
 use rootcause::markers::{Cloneable, Dynamic};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use system_properties::SystemPropertyKey;
 use tracing::Instrument;
 use uuid::Uuid;
@@ -32,8 +36,10 @@ pub struct GraphqlTaskDependencyState {
     pub id: ID,
     /// Whether any existing blocker is unfinished.
     pub is_blocked: bool,
-    /// Unfinished IDs from the readable task's relationships; names/content need separate view access.
+    /// Unfinished blockers that the viewer can read.
     pub open_blocker_ids: Vec<ID>,
+    /// Readable prerequisite IDs, independent of completion status.
+    pub visible_blocker_ids: Vec<ID>,
     /// Canonical Status, Depends On, and Blocking assignments.
     pub properties: Vec<GraphqlProperty>,
 }
@@ -43,6 +49,8 @@ pub struct GraphqlTaskDependencyState {
 pub struct TaskDependencyData {
     /// Authoritative dependency facts.
     pub facts: TaskDependencyState,
+    /// Independently minted prerequisite view capabilities for domain projection.
+    pub blocker_receipts: Vec<ViewReceipt>,
     /// Authorized property assignments.
     pub properties: Vec<EntityPropertyWithDefinition>,
 }
@@ -50,13 +58,18 @@ pub struct TaskDependencyData {
 impl GraphqlTaskDependencyState {
     /// Convert authorized domain facts to their normalized GraphQL record.
     pub fn new(value: TaskDependencyData) -> Self {
+        let visibility = value.facts.visible_state(&value.blocker_receipts);
         Self {
             dependent_ids: value.facts.dependent_ids,
             id: ID(value.facts.task_id.to_string()),
-            is_blocked: !value.facts.open_blocker_ids.is_empty(),
-            open_blocker_ids: value
-                .facts
+            is_blocked: visibility.is_blocked,
+            open_blocker_ids: visibility
                 .open_blocker_ids
+                .into_iter()
+                .map(|id| ID(id.to_string()))
+                .collect(),
+            visible_blocker_ids: visibility
+                .visible_blocker_ids
                 .into_iter()
                 .map(|id| ID(id.to_string()))
                 .collect(),
@@ -152,6 +165,10 @@ where
                 .load(&receipts)
                 .await
                 .map_err(|error| rootcause::report!(error))?;
+            // Authorize all prerequisites, not just unfinished ones: visibility evidence
+            // must not reveal completion status. Keep canonical facts for the aggregate.
+            let blocker_receipts =
+                load_blocker_view_receipts(self.access.as_ref(), user, &facts).await?;
             let entities = ids
                 .iter()
                 .map(|id| model_entity::EntityType::Document.with_entity_string(id.to_string()))
@@ -165,6 +182,11 @@ where
                     (
                         id,
                         TaskDependencyData {
+                            blocker_receipts: facts
+                                .blocker_ids
+                                .iter()
+                                .filter_map(|id| blocker_receipts.get(id).cloned())
+                                .collect(),
                             facts,
                             properties: properties.remove(&entity).unwrap_or_default(),
                         },
@@ -173,6 +195,34 @@ where
                 .collect())
         })
     }
+}
+
+/// Mint status-neutral blocker view capabilities; the repository bounds SQL statements.
+pub(crate) async fn load_blocker_view_receipts(
+    access: &impl EntityAccessService,
+    user: &MacroUserIdStr<'static>,
+    facts: &HashMap<Uuid, TaskDependencyState>,
+) -> Result<HashMap<Uuid, ViewReceipt>, rootcause::Report> {
+    let ids = facts
+        .values()
+        .flat_map(|state| state.blocker_ids.iter().copied())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>();
+    // One bulk call lets the repository load source memberships once and apply
+    // its own UUID statement cap, instead of repeating that work per outer chunk.
+    Ok(access
+        .generate_document_view_access_receipts(user, &ids)
+        .await
+        .map_err(|error| rootcause::report!(error))?
+        .into_values()
+        .filter_map(|receipt| {
+            Uuid::parse_str(&receipt.entity().entity_id)
+                .ok()
+                .map(|id| (id, receipt))
+        })
+        .collect())
 }
 
 /// Fixed loader type avoids adding dependency-reader generics to every schema root.

@@ -1,7 +1,10 @@
 use super::*;
 use entity_access::domain::models::{AccessError, AccessLevel, Entity};
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    collections::HashSet,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 fn receipt(key: &model_entity::Entity<'static>) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::try_new_authenticated_user(
@@ -72,6 +75,7 @@ async fn authorizes_concurrently_with_a_bounded_number_of_checks() {
 struct DocumentAccess {
     granted: Vec<String>,
     bulk_fails: bool,
+    bulk_batches: Arc<std::sync::Mutex<Vec<Vec<String>>>>,
     single_checks: Arc<std::sync::Mutex<Vec<String>>>,
 }
 
@@ -121,6 +125,10 @@ impl EntityAccessService for DocumentAccess {
         user_id: &'a MacroUserId<Lowercase<'_>>,
         document_ids: &'a [String],
     ) -> Result<HashMap<String, EntityAccessReceipt<ViewAccessLevel>>, AccessError> {
+        self.bulk_batches
+            .lock()
+            .unwrap()
+            .push(document_ids.to_vec());
         if self.bulk_fails {
             return Err(AccessError::internal("statement timeout"));
         }
@@ -281,4 +289,72 @@ async fn a_failed_bulk_lookup_checks_each_document() {
     let mut expected = [GRANTED, REFUSED, MISSING, LEGACY].map(String::from);
     expected.sort();
     assert_eq!(checked, expected);
+}
+
+#[tokio::test]
+async fn blocker_visibility_uses_one_status_neutral_bulk_call() {
+    use crate::task_dependencies::load_blocker_view_receipts;
+    use properties::domain::task_dependency_state::TaskDependencyState;
+    let task = Uuid::from_u128(2000);
+    let blockers = (1..=1001).map(Uuid::from_u128).collect::<Vec<_>>();
+    let granted = blockers
+        .iter()
+        .take(501)
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let access = DocumentAccess {
+        granted,
+        ..Default::default()
+    };
+    let user = MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap();
+    for open in [blockers.clone(), vec![], vec![blockers[0]]] {
+        let facts = HashMap::from([(
+            task,
+            TaskDependencyState {
+                task_id: task,
+                blocker_ids: blockers.clone(),
+                open_blocker_ids: open,
+                ..Default::default()
+            },
+        )]);
+        let visible = load_blocker_view_receipts(&access, &user, &facts)
+            .await
+            .unwrap();
+        assert_eq!(
+            visible.into_keys().collect::<HashSet<_>>(),
+            blockers.iter().take(501).copied().collect()
+        );
+    }
+    let batches = access.bulk_batches.lock().unwrap();
+    assert_eq!(
+        batches.iter().map(Vec::len).collect::<Vec<_>>(),
+        [1001, 1001, 1001]
+    );
+    assert!(access.single_checks.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn blocker_visibility_fails_closed_when_bulk_authorization_fails() {
+    use crate::task_dependencies::load_blocker_view_receipts;
+    use properties::domain::task_dependency_state::TaskDependencyState;
+    let task = Uuid::from_u128(1);
+    let access = DocumentAccess {
+        bulk_fails: true,
+        ..Default::default()
+    };
+    let user = MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap();
+    let facts = HashMap::from([(
+        task,
+        TaskDependencyState {
+            task_id: task,
+            blocker_ids: vec![Uuid::from_u128(2)],
+            ..Default::default()
+        },
+    )]);
+    assert!(
+        load_blocker_view_receipts(&access, &user, &facts)
+            .await
+            .is_err()
+    );
+    assert!(access.single_checks.lock().unwrap().is_empty());
 }
