@@ -15,8 +15,9 @@ future re-enablement.
 Use a pale blue selection highlight (#b8d5ff) with dark text (#101820) in both website entry styles. Keep public website text selectable with native browser behavior; restrict `user-select: none` to interactive controls that need it, never the page globally.
 
 The homepage follows the Email page. Its introduction is the feature-page hero:
-the H1 “The unified workspace for your company.”, one supporting paragraph, and
-Get Macro (signup) beside Book a demo, centered on desktop and left-aligned
+the H1 “The unified workspace for your company.”, the supporting H2 “Macro
+replaces 27+ apps with one connected system designed for humans and agents.”
+(narrower than the H1), and Get Macro (signup) beside Book a demo, centered on desktop and left-aligned
 below 700px. `HomepageTour` follows: one tab per module (Home, Mail, Chat, Tasks,
 Calendar, Docs, CRM, Calls) showing that module's captured app window on its
 `TutorialWallpaper`. It advances every five seconds until the visitor picks a
@@ -39,7 +40,7 @@ The neutral light homepage uses a pale secondary action, a sidebar matching the 
 
 Public actions share the raised white pill, one-pixel glass rim, and subtle
 pointer highlight from #9993. In light mode, keep the lift and rim at 75% of that original treatment, including the header button. The homepage and feature hero buttons use
-`site-nav-start`; keep these pills 140px wide and 40px tall to match the desktop Sign Up button, with matching type and icon sizing. Do not add a separate homepage button skin. Keep the current full-height documentation sidebar. Keep the homepage header transparent so the shared `PageVignette` fades scrolling content at the viewport edges without a solid header band. Keep the desktop transition from the hero to the feature diagram free of an extra Explore cue.
+`site-nav-start`; keep these pills 140px wide and 40px tall to match the desktop Sign Up button, with matching type and icon sizing. Do not add a separate homepage button skin. Keep the current full-height documentation sidebar. Keep the homepage header transparent so the shared `PageVignette` fades scrolling content at the viewport edges without a solid header band.
 
 Use `HomepageClosing` for a static bottom Sign Up button on the homepage, product, benefits, pricing, blog, and Wall of Love pages. Article layouts use `SitePageClosing` for the same treatment. Keep the header signup fixed in place; never animate it into the footer. Do not add bottom signup sections to security, legal, reference docs, account deletion, jobs, partners, or download pages. On phones, make the bottom signup button fill the content width up to 420px, with a 60px minimum height and 20px label. Keep signup and interactive demo flows separate. Keep miscellaneous links under “More stuff,” including separate Jobs and Partners links and a single Legal link to `/legal`. Keep billing guidance in Pricing, redirect the retired Billing & Plans page there, and leave the keyboard shortcut reference in the app rather than the website. The Legal page lists the existing policy and account-deletion URLs; preserve those URLs and their text. Omit Workspace basics from the sidebar; retain Home, Unified Memory, and Properties guides in search and contextual links from setup and product guides. Keep Agents under Top features. In Agent setup, show BYO agent and Add Macro MCP. Link to client-specific setup from the BYO guide.
 

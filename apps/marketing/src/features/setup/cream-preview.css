@@ -551,7 +551,7 @@ html[data-palette='cream'] .feature-flow-texture {
   opacity: .12;
 }
 
-html[data-palette='cream'] :is(.homepage-sidebar-connection-line, .homepage-demo-connection) path {
+html[data-palette='cream'] .homepage-demo-connection path {
   stroke: #72706c80;
 }
 

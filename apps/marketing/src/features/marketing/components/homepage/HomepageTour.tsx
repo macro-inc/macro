@@ -106,11 +106,19 @@ export function HomepageTour() {
     setPlaying(false);
   };
 
+  const targets: Record<string, () => number> = {
+    ArrowRight: () => current() + 1,
+    ArrowLeft: () => current() - 1,
+    Home: () => 0,
+    End: () => STOPS.length - 1,
+  };
+
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    const target = targets[event.key];
+    if (!target) return;
     event.preventDefault();
     stop();
-    show(current() + (event.key === 'ArrowRight' ? 1 : -1), true);
+    show(target(), true);
   };
 
   onMount(() => {
@@ -127,8 +135,18 @@ export function HomepageTour() {
     }, AUTOPLAY_MS);
   });
 
+  // Any visit to the controls (focus, a touch, a mouse over the tour) stops
+  // the tour, so it never moves while someone is reading or using it.
   return (
-    <section class="homepage-tour" aria-label="Macro, one module at a time">
+    <section
+      class="homepage-tour"
+      aria-label="Macro, one module at a time"
+      onFocusIn={stop}
+      onPointerDown={stop}
+      onPointerEnter={(event) => {
+        if (event.pointerType === 'mouse') stop();
+      }}
+    >
       <div class="homepage-tour-wallpapers" aria-hidden="true">
         <For each={STOPS}>
           {(item, index) => (
@@ -188,6 +206,7 @@ export function HomepageTour() {
         id="homepage-tour-screen"
         class="homepage-tour-screen"
         role="tabpanel"
+        tabIndex={0}
         aria-labelledby={`homepage-tour-tab-${current()}`}
       >
         <For each={STOPS}>

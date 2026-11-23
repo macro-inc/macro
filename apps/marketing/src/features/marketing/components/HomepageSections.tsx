@@ -35,7 +35,7 @@ type Section = {
 const SECTIONS: readonly Section[] = [
   {
     id: 'home',
-    title: 'Macro Mail, Macro Chat and Macro Tasks in one list.',
+    title: 'Macro Mail and Macro Chat in one list.',
     description:
       'Email, messages, tasks, mentions and agent replies land in one inbox that you clear from the keyboard.',
     tutorial: 'home',
@@ -115,7 +115,7 @@ const SECTIONS: readonly Section[] = [
   },
   {
     id: 'agents',
-    title: 'Macro Agents are teammates, not a sidebar.',
+    title: 'Macro Agents work like teammates.',
     description:
       'AI that works from everything you have — email, messages, tasks, docs, and calls — with your exact permissions.',
     tutorial: 'agents',
@@ -125,7 +125,7 @@ const SECTIONS: readonly Section[] = [
   },
   {
     id: 'coding',
-    title: 'Merge Macro GitHub pull requests from chat.',
+    title: 'Merge Macro GitHub PRs from chat.',
     description:
       'GitHub pull requests in your inbox beside email and chat, @mentionable anywhere, with comments synced both ways.',
     tutorial: 'github',

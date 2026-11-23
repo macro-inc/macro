@@ -47,10 +47,6 @@
   width: 100%;
 }
 
-.homepage-feature-section-more {
-  margin-top: 20px;
-}
-
 @media (max-width: 699px) {
   .homepage-screen {
     border-radius: 18px;

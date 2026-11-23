@@ -8,7 +8,6 @@ import { HomepageTour } from '../marketing/components/homepage/HomepageTour';
 import { SiteHeader } from '../marketing/components/SiteHeader';
 import { wallpapers } from '../marketing/components/TutorialWallpaper';
 import { routePhoneToMobileSignup } from '../marketing/core/navigation';
-import '../marketing/components/email/email-hero.css';
 import '../marketing/components/homepage/macro-homepage.css';
 import '../marketing/components/page-aura.css';
 
@@ -49,17 +48,16 @@ export function Homepage(props: { embedded?: boolean } = {}) {
           }}
         >
           <header
-            class="feature-page-hero email-page-hero macro-home-hero"
+            class="feature-page-hero macro-home-hero"
             aria-labelledby="macro-home-title"
           >
             <h1 id="macro-home-title" data-welcome-heading>
               The unified workspace for your company.
             </h1>
-            <p class="email-page-hero-description">
-              Macro is email, chat, docs, tasks, calendar, calls and CRM in one
-              workspace, with agents that work across all of it. Everything
-              links to everything else.
-            </p>
+            <h2 class="macro-home-tagline">
+              Macro replaces 27+ apps with one connected system designed for
+              humans and agents.
+            </h2>
             <div class="macro-home-actions">
               <a
                 class="site-nav-start homepage-hero-cta"

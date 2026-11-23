@@ -163,6 +163,12 @@ export async function verifyHomepage(
         await expect(page.locator('.homepage-hero-cta')).toBeVisible();
         await heading.dispose();
 
+        // The tour responds once hydrated: Next selects the following module.
+        await page.getByRole('button', { name: 'Next module' }).click();
+        await expect(
+          page.getByRole('tab', { name: 'Mail', exact: true })
+        ).toHaveAttribute('aria-selected', 'true');
+
         if (viewport.width < 768)
           await page
             .getByRole('button', { name: 'Open navigation', exact: true })
