@@ -308,6 +308,70 @@ fn a_changed_type_drops_its_rows_and_keeps_other_types_warm() {
 }
 
 #[test]
+fn a_type_holding_most_documents_keeps_the_others_facts() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("schema-most-documents.db");
+        let mut storage = populate(database.open("scope").unwrap()).await;
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                ["Thing:1", "Thing:2"]
+                    .into_iter()
+                    .map(|key| ProjectionMutation::Replace(authoritative_projection(key, "owner")))
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let note_facts = facts(&storage, "Note:0");
+        assert_eq!(note_facts, 3);
+
+        let adoption = adopt(&storage, RETYPED, &ProjectionInputs::none());
+        assert_eq!(adoption.change, types(&["Thing"], false));
+        assert_eq!(adoption.incomplete_documents, 0);
+        for thing in ["Thing:0", "Thing:1", "Thing:2"] {
+            assert_eq!(facts(&storage, thing), 0, "{thing}");
+        }
+        for table in ["exact_facts", "integer_facts", "sort_facts"] {
+            assert_eq!(
+                count(
+                    &storage,
+                    &format!(
+                        "SELECT count(*) FROM {table} WHERE document_id NOT IN (SELECT id FROM index_documents)"
+                    )
+                ),
+                0,
+                "{table}"
+            );
+        }
+        assert_eq!(
+            count(
+                &storage,
+                "SELECT count(*) FROM index_documents WHERE record_key LIKE 'Thing:%'"
+            ),
+            0
+        );
+        assert_eq!(facts(&storage, "Note:0"), note_facts);
+        assert_eq!(
+            count(
+                &storage,
+                "SELECT count(*) FROM sqlite_schema WHERE name LIKE 'schema_change_kept_%'"
+            ),
+            0
+        );
+        storage.try_close().unwrap();
+
+        // The fact tables and their indexes are the fresh schema's.
+        let storage = database.open("scope").unwrap();
+        assert!(has_fresh_schema(&storage.connection()).unwrap());
+        assert_eq!(
+            adopt(&storage, RETYPED, &ProjectionInputs::none()).change,
+            None
+        );
+        storage.try_close().unwrap();
+    });
+}
+
+#[test]
 fn a_type_other_documents_read_makes_them_incomplete() {
     block_on(async {
         let database = TursoMemoryDatabase::new("schema-every-document.db");

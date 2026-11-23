@@ -46,17 +46,27 @@ const SEVERAL_BUILDS: &str = "several-builds";
 const ANY_RECORD: &str = "SELECT 1 FROM records WHERE __typename <> '__meta' LIMIT 1";
 const TYPE_RECORDS_DELETE: &str = "DELETE FROM records WHERE __typename = ?1";
 const TYPE_SEARCH_DELETE: &str = "DELETE FROM search_documents WHERE __typename = ?1";
-/// A type's index documents, by the `Typename:` prefix of their record keys;
-/// their facts cascade.
+/// A type's index documents, by the `Typename:` prefix of their record keys
+/// ([`key_range`]). Their facts go first: a cascade deletes them one document
+/// at a time.
 const TYPE_DOCUMENTS_DELETE: &str =
     "DELETE FROM index_documents WHERE record_key >= ?1 AND record_key < ?2";
+const TYPE_DOCUMENT_COUNT: &str =
+    "SELECT COUNT(*) FROM index_documents WHERE record_key >= ?1 AND record_key < ?2";
+const DOCUMENT_COUNT: &str = "SELECT COUNT(*) FROM index_documents";
+/// The facts of a type's documents, by [`key_range`], one per fact table.
+const TYPE_FACTS_DELETE: [&str; 3] = [
+    "DELETE FROM exact_facts WHERE document_id IN (SELECT id FROM index_documents WHERE record_key >= ?1 AND record_key < ?2)",
+    "DELETE FROM integer_facts WHERE document_id IN (SELECT id FROM index_documents WHERE record_key >= ?1 AND record_key < ?2)",
+    "DELETE FROM sort_facts WHERE document_id IN (SELECT id FROM index_documents WHERE record_key >= ?1 AND record_key < ?2)",
+];
 /// The record whose loss starts the backfill over (`cache_core::engine`).
 const STORAGE_GENERATION_DELETE: &str =
     "DELETE FROM records WHERE __typename = '__meta' AND id = 'storage-generation'";
 const LAYER_UPDATE: &str = "UPDATE optimistic_layers SET optimistic_data_json = ?2, normalized_updates = ?3 WHERE mutation_id = ?1";
 
-// Making every document dirty marks them with the one incomplete state, then
-// drops their facts, in the same transaction. Contact documents are storage's
+// Making every document dirty drops their facts, then marks them with the one
+// incomplete state, in the same transaction. Contact documents are storage's
 // own projection of the contact record alone, so they stay.
 const EVERY_DOCUMENT_DIRTY: &str = "UPDATE index_documents SET state = 1 WHERE state = 0 AND substr(record_key, 1, 15) <> 'GraphqlContact:'";
 /// The fact tables, each `(document_id, attribute, value)`.
@@ -69,6 +79,9 @@ const DOCUMENTS_KEEPING_FACTS: &str =
 /// the open's transaction. No column has an affinity, so values go back as
 /// they came.
 const KEPT_FACTS_PREFIX: &str = "schema_change_kept_";
+/// A fact table's own indexes, which are built again after it is refilled;
+/// its primary key's index has no SQL and comes back with the table.
+const FACT_INDEXES: &str = "SELECT name, sql FROM sqlite_schema WHERE tbl_name = ?1 AND type = 'index' AND sql IS NOT NULL ORDER BY name";
 
 /// The index's tables derived from records, facts before the documents
 /// their foreign keys name; [`DERIVED_STORES`] lists the others.
@@ -227,9 +240,18 @@ pub(super) fn adopt(
                 changed,
                 every_document,
             } => {
+                // Facts go before the documents, which would otherwise
+                // cascade to them one document at a time.
+                if *every_document {
+                    keep_only_facts(connection, DOCUMENTS_KEEPING_FACTS, Vec::new())?;
+                } else {
+                    drop_facts(connection, changed)?;
+                }
                 adoption.dropped_records = drop_types(connection, changed)?;
                 if *every_document {
-                    adoption.incomplete_documents = dirty_every_document(connection)?;
+                    let marked = driver::execute(connection, EVERY_DOCUMENT_DIRTY, Vec::new())?;
+                    adoption.incomplete_documents =
+                        u64::try_from(marked).map_err(|_| invariant())?;
                 }
                 adoption.retired_overlays = retire_overlays(connection, |request, source| {
                     overlay_fits(&change.stored, changed, request, source)
@@ -268,20 +290,60 @@ pub(super) fn record(
     })
 }
 
+/// The bounds of the record keys of a type's records, `Typename:` to
+/// `Typename;`: `;` follows `:`, which no type name holds.
+fn key_range(typename: &str) -> Vec<Value> {
+    vec![text(&format!("{typename}:")), text(&format!("{typename};"))]
+}
+
+/// Drops the facts of the documents of `changed` record types. When those
+/// are most of the documents, the facts of the others are kept and every fact
+/// table created again around them ([`keep_only_facts`]), which costs what
+/// the kept facts do instead of what the dropped ones do.
+fn drop_facts(connection: &Db, changed: &BTreeSet<String>) -> Result<(), TursoStorageError> {
+    let ranges = changed
+        .iter()
+        .map(|typename| key_range(typename))
+        .collect::<Vec<_>>();
+    let mut dropping = 0_u64;
+    for range in &ranges {
+        dropping += count(connection, TYPE_DOCUMENT_COUNT, range.clone())?;
+    }
+    if dropping.saturating_mul(2) <= count(connection, DOCUMENT_COUNT, Vec::new())? {
+        for range in &ranges {
+            for statement in TYPE_FACTS_DELETE {
+                driver::execute(connection, statement, range.clone())?;
+            }
+        }
+        return Ok(());
+    }
+    let dropped = (0..ranges.len())
+        .map(|index| {
+            format!(
+                "(d.record_key >= ?{} AND d.record_key < ?{})",
+                2 * index + 1,
+                2 * index + 2
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" OR ");
+    keep_only_facts(
+        connection,
+        &format!("NOT ({dropped})"),
+        ranges.into_iter().flatten().collect(),
+    )
+}
+
 /// Drops the records of `changed` record types with every row derived from
-/// them. Returns how many records it dropped.
+/// them; their documents' facts are gone already. Returns how many records
+/// it dropped.
 fn drop_types(connection: &Db, changed: &BTreeSet<String>) -> Result<u64, TursoStorageError> {
     let mut dropped = 0_u64;
     for typename in changed {
         let records = driver::execute(connection, TYPE_RECORDS_DELETE, vec![text(typename)])?;
         dropped += u64::try_from(records).map_err(|_| invariant())?;
         driver::execute(connection, TYPE_SEARCH_DELETE, vec![text(typename)])?;
-        // `;` follows `:`, which no type name holds.
-        driver::execute(
-            connection,
-            TYPE_DOCUMENTS_DELETE,
-            vec![text(&format!("{typename}:")), text(&format!("{typename};"))],
-        )?;
+        driver::execute(connection, TYPE_DOCUMENTS_DELETE, key_range(typename))?;
     }
     for store in &DERIVED_STORES {
         if changed
@@ -294,40 +356,64 @@ fn drop_types(connection: &Db, changed: &BTreeSet<String>) -> Result<u64, TursoS
     Ok(dropped)
 }
 
-/// Makes every complete document but contacts' incomplete, without its
-/// facts. The facts the other documents keep wait in a table of their own
-/// while each fact table is created again: deleting most of a table's rows
-/// rewrites every page of it and its indexes.
-fn dirty_every_document(connection: &Db) -> Result<u64, TursoStorageError> {
+/// Keeps only the facts of the documents `d` that `kept` holds for, with its
+/// `parameters`. They wait in a table of their own while each fact table is
+/// created again: deleting most of a table's rows rewrites every page of it
+/// and its indexes, where refilling a new table in key order and then
+/// building its indexes writes each page once.
+fn keep_only_facts(
+    connection: &Db,
+    kept: &str,
+    parameters: Vec<Value>,
+) -> Result<(), TursoStorageError> {
+    let mut indexes = Vec::new();
     for table in FACT_TABLES {
-        let kept = format!("{KEPT_FACTS_PREFIX}{table}");
+        let waiting = format!("{KEPT_FACTS_PREFIX}{table}");
         driver::execute(
             connection,
-            &format!("CREATE TABLE {kept} (document_id, attribute, value)"),
+            &format!("CREATE TABLE {waiting} (document_id, attribute, value)"),
             Vec::new(),
         )?;
         driver::execute(
             connection,
             &format!(
-                "INSERT INTO {kept} (document_id, attribute, value) SELECT f.document_id, f.attribute, f.value FROM index_documents d JOIN {table} f ON f.document_id = d.id WHERE {DOCUMENTS_KEEPING_FACTS}"
+                "INSERT INTO {waiting} (document_id, attribute, value) SELECT f.document_id, f.attribute, f.value FROM index_documents d JOIN {table} f ON f.document_id = d.id WHERE {kept}"
             ),
-            Vec::new(),
+            parameters.clone(),
         )?;
+        for row in driver::query(connection, FACT_INDEXES, vec![text(table)])? {
+            indexes.push((required_text(&row, 0)?, required_text(&row, 1)?));
+        }
+    }
+    // Without their indexes, the tables are created again bare.
+    for (name, _) in &indexes {
+        driver::execute(connection, &format!("DROP INDEX {name}"), Vec::new())?;
     }
     recreate_tables(connection, &FACT_TABLES)?;
     for table in FACT_TABLES {
-        let kept = format!("{KEPT_FACTS_PREFIX}{table}");
+        let waiting = format!("{KEPT_FACTS_PREFIX}{table}");
         driver::execute(
             connection,
             &format!(
-                "INSERT INTO {table} (document_id, attribute, value) SELECT document_id, attribute, value FROM {kept}"
+                "INSERT INTO {table} (document_id, attribute, value) SELECT document_id, attribute, value FROM {waiting} ORDER BY document_id, attribute, value"
             ),
             Vec::new(),
         )?;
-        driver::execute(connection, &format!("DROP TABLE {kept}"), Vec::new())?;
+        driver::execute(connection, &format!("DROP TABLE {waiting}"), Vec::new())?;
     }
-    let marked = driver::execute(connection, EVERY_DOCUMENT_DIRTY, Vec::new())?;
-    u64::try_from(marked).map_err(|_| invariant())
+    for (_, sql) in &indexes {
+        driver::execute(connection, sql, Vec::new())?;
+    }
+    Ok(())
+}
+
+/// The one count `sql` selects.
+fn count(connection: &Db, sql: &str, parameters: Vec<Value>) -> Result<u64, TursoStorageError> {
+    let rows = driver::query(connection, sql, parameters)?;
+    let [row] = rows.as_slice() else {
+        return Err(invariant());
+    };
+    u64::try_from(required_i64(row, 0)?).map_err(|_| invariant())
 }
 
 /// Takes the optimistic overlay off each queued write that does not `fit`,
@@ -393,11 +479,7 @@ fn recompose_queued_shadows(connection: &Db) -> Result<(), TursoStorageError> {
 /// from them, by dropping each table and creating it again from the SQL the
 /// file stores for it and its indexes. Returns how many records it dropped.
 fn clear_records(connection: &Db) -> Result<u64, TursoStorageError> {
-    let count = driver::query(connection, RECORD_COUNT, Vec::new())?;
-    let [row] = count.as_slice() else {
-        return Err(invariant());
-    };
-    let count = u64::try_from(required_i64(row, 0)?).map_err(|_| invariant())?;
+    let count = count(connection, RECORD_COUNT, Vec::new())?;
     let kept = driver::query(connection, KEPT_RECORDS, Vec::new())?;
     let tables = DERIVED_TABLES
         .into_iter()
