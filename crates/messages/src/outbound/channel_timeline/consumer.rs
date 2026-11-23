@@ -82,13 +82,11 @@ impl ChannelTimelineUpdateSource for ChannelTimelineTopicConsumer {
                     return Ok((update, span));
                 }
                 Err(error) => {
+                    let error = undecodable(&error);
                     kafka_util::record_span_error(&span, &error);
-                    let unsupported =
-                        matches!(error, EventBrokerError::UnsupportedSchemaVersion { .. });
                     span.in_scope(|| {
                         tracing::warn!(
-                            error = ?error,
-                            unsupported,
+                            error = %error,
                             partition = kafka_message.partition(),
                             offset = kafka_message.offset(),
                             "skipping channel timeline record that does not decode"
@@ -97,5 +95,20 @@ impl ChannelTimelineUpdateSource for ChannelTimelineTopicConsumer {
                 }
             }
         }
+    }
+}
+
+/// Why a record did not decode, without its content: a JSON error quotes
+/// the value it rejected, and a rejected recipient id is personal data.
+fn undecodable(error: &EventBrokerError) -> String {
+    match error {
+        EventBrokerError::Serialization(json) => format!(
+            "payload does not decode ({:?} error at line {}, column {})",
+            json.classify(),
+            json.line(),
+            json.column()
+        ),
+        EventBrokerError::Internal(_) => "internal event broker error".to_owned(),
+        other => other.to_string(),
     }
 }
