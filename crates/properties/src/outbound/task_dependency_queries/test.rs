@@ -863,3 +863,42 @@ async fn cleanup_tolerates_malformed_previous_neighbor_value(
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_one_dependency_assignment_cleans_edges_and_the_inverse(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    for (definition, inverse) in [
+        (
+            SystemPropertyKey::DEPENDS_ON_UUID,
+            SystemPropertyKey::BLOCKING_UUID,
+        ),
+        (
+            SystemPropertyKey::BLOCKING_UUID,
+            SystemPropertyKey::DEPENDS_ON_UUID,
+        ),
+    ] {
+        let a = Uuid::now_v7();
+        let b = Uuid::now_v7();
+        task(&pool, a).await?;
+        task(&pool, b).await?;
+        link(&pool, a, definition, vec![], vec![b]).await?;
+        let assignment = sqlx::query_scalar!(
+            "SELECT id FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK' AND property_definition_id = $2",
+            a.to_string(), definition,
+        ).fetch_one(&pool).await?;
+        super::super::entity_property_queries::delete_entity_property(&pool, assignment).await?;
+        let edges = sqlx::query_scalar!("SELECT count(*) AS \"count!\" FROM task_dependency_edges")
+            .fetch_one(&pool)
+            .await?;
+        assert_eq!(edges, 0);
+        let value = sqlx::query_scalar!(
+            "SELECT values FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK' AND property_definition_id = $2",
+            b.to_string(), inverse,
+        ).fetch_one(&pool).await?;
+        assert_eq!(value, None);
+        let mut connection = pool.acquire().await?;
+        assert!(targets(&mut connection, b, inverse).await?.is_empty());
+    }
+    Ok(())
+}

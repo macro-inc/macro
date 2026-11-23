@@ -22,6 +22,7 @@ current, so `Property.Root` editors never refetch properties after a save;
 side-panel collections own their refresh (below).
 
 Task **Depends On** and **Blocking** use the existing multi-task entity editor in both directions. Saves use `setTaskProperty`, whose normalized dependency records update reciprocal assignments and Blocked state in one optimistic layer. `views/task-dependency-detail.tsx` renders authorized blocker links and status icons inside task details. Primary-task access permits aggregate Blocked state and opaque relationship IDs, not individual completion/deletion facts for inaccessible blockers. Keep optimistic unblocking conservative when unreadable prerequisites prevent proving the result. The shared cache owns rollback; never maintain a second relationship cache in a component.
+Task side-panel actions keep Status, Depends On, and Blocking attached. Clear relationships through their editor instead of generic Remove from entity so reciprocal optimistic and canonical effects stay together.
 
 `extractors/PropertyEmpty.tsx` shares empty-value glyphs across task list rows,
 board cards, group and column headers, and pickers: the wide ascending priority
