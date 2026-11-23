@@ -259,7 +259,7 @@ function partActivity(part: MessagePart): MagicChipActivity {
         busy: true,
       }))
       .with({ kind: 'elicitation', outcome: { kind: 'declined' } }, () => ({
-        label: 'Question declined',
+        label: 'Question skipped',
         busy: true,
       }))
       .with({ kind: 'elicitation', outcome: { kind: 'cancelled' } }, () => ({

@@ -196,6 +196,7 @@ export const BulkSetEntityPropertyOptions = z.object({
         'call',
         'user',
         'company',
+        'contact',
         'chat',
       ]),
       entity_id: z.string(),
@@ -11034,6 +11035,7 @@ export const GetEntityProperties = z.object({
     'call',
     'user',
     'company',
+    'contact',
     'chat',
   ]),
 });
@@ -19269,6 +19271,7 @@ export const SetEntityProperty = z.object({
     'call',
     'user',
     'company',
+    'contact',
     'chat',
   ]),
   property_definition_id: z.string().uuid(),

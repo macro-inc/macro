@@ -418,6 +418,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             whatsapp_passkey::whatsapp_passkey_authenticate,
             desktop_update::get_native_update_status,
             desktop_update::restart_native_update,
+            desktop_update::take_native_update_reports,
             diagnostics::read_desktop_diagnostics,
             diagnostics::record_frontend_diagnostic,
             #[cfg(desktop)]

@@ -10,6 +10,7 @@ import type { ActivityRowView } from './components/activity-rows';
 import { ActivitySummary } from './components/activity-summary';
 import { PresentedView } from './components/presented-view';
 import { replyToTurn, segmentRows } from './core/live-reply';
+import { isUnnamedOutcome } from './core/unnamed-outcomes';
 import { createCodeActivityRows } from './queries/code-activity';
 import { createLiveSession } from './queries/live-session';
 
@@ -61,8 +62,12 @@ function Run(props: {
   /** The session's live status line over an open run's steps. */
   summary?: string;
 }) {
+  // A program that failed or was cut off without naming a step says nothing
+  // about the work; the reply explains a failure in its own words.
   const steps = () =>
-    props.rows.filter((row) => !isAgentActivityCard(row.card));
+    props.rows.filter(
+      (row) => !isAgentActivityCard(row.card) && !isUnnamedOutcome(row)
+    );
   const views = () =>
     props.rows.flatMap((row) =>
       isAgentActivityCard(row.card) ? [{ id: row.id, view: row.card.view }] : []

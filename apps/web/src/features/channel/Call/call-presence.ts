@@ -8,6 +8,7 @@ export type CallPresenceMessage = {
 };
 
 const MAX_REMEMBERED_EVENTS = 256;
+const CALL_SOUND_MIN_GAP_MS = 1_500;
 
 export function parseCallPresenceMessage(
   value: unknown
@@ -49,6 +50,17 @@ export function createCallPresence(options: {
   let visit: { callId: string; visitId: string } | undefined;
   let initialParticipantSids = new Set<string>();
   const received = new Set<string>();
+  let lastPlayedAt = Number.NEGATIVE_INFINITY;
+
+  // New visit IDs bypass replay dedupe. Coalesce bursts rather than scheduling
+  // overlapping cues, and retain the gap across local leave/rejoin cycles.
+  function play(event: CallPresenceEvent) {
+    const now = performance.now();
+    if (now - lastPlayedAt < CALL_SOUND_MIN_GAP_MS) return false;
+    lastPlayedAt = now;
+    options.play(event);
+    return true;
+  }
 
   function joined(
     callId: string,
@@ -62,7 +74,7 @@ export function createCallPresence(options: {
     received.clear();
     visit = { callId, visitId: options.createVisitId() };
     if (recovery) return;
-    options.play('join');
+    play('join');
     return { ...visit, event: 'join' as const };
   }
 
@@ -76,7 +88,7 @@ export function createCallPresence(options: {
     if (!visit) return;
     const message = { ...visit, event: 'leave' as const };
     clear();
-    options.play('leave');
+    play('leave');
     return message;
   }
 
@@ -94,8 +106,7 @@ export function createCallPresence(options: {
       const oldest = received.values().next().value;
       if (oldest !== undefined) received.delete(oldest);
     }
-    options.play(message.event);
-    return true;
+    return play(message.event);
   }
 
   return { joined, left, receive, clear };
