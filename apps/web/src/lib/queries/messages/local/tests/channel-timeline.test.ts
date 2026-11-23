@@ -1,0 +1,365 @@
+import type {
+  CacheRevision,
+  ChannelTimelineCacheArgs,
+  ChannelTimelineCacheResult,
+} from '@graphql-cache/index';
+import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import { CombinedError } from '@urql/core';
+import { createRoot, createSignal } from 'solid-js';
+import { describe, expect, it, vi } from 'vitest';
+import { rootSortKey } from '../channel-map';
+import type { FetchChannelServerPage } from '../channel-pages';
+import { createChannelTouches } from '../channel-pages';
+import {
+  type ChannelTimelineRuntime,
+  createLocalChannelTimeline,
+  type LocalChannelTimeline,
+} from '../channel-timeline';
+import {
+  CHANNEL_ID,
+  fakeHost,
+  graphqlMessage as fixtureMessage,
+  keyOf,
+} from './fixtures';
+
+vi.mock('../channel-network', () => ({
+  queryChannelNetwork: () => {
+    throw new Error('tests pass fetchPage');
+  },
+}));
+
+type Row = ChannelMessageFieldsFragment;
+
+/** A root created `n` seconds into the fixture hour, for any `n` under 3600. */
+function graphqlMessage(n: number): Row {
+  const base = fixtureMessage(n);
+  const minutes = String(Math.floor(n / 60)).padStart(2, '0');
+  const seconds = String(n % 60).padStart(2, '0');
+  const createdAt = `2026-11-01T10:${minutes}:${seconds}.000123Z`;
+  return {
+    ...base,
+    createdAt,
+    updatedAt: createdAt,
+    thread: base.thread && { ...base.thread, createdAt, updatedAt: createdAt },
+    sortKey: rootSortKey(createdAt, base.id) ?? '',
+  };
+}
+
+/**
+ * Answers reads the way the engine does over one stretch held from the start
+ * of the channel to its live end: strict cursors, an `around` split, and the
+ * cursors' null edges.
+ */
+function windowOver(rows: () => Row[], held: () => boolean) {
+  return (args: ChannelTimelineCacheArgs): ChannelTimelineCacheResult => {
+    const base = {
+      kind: 'page' as const,
+      revision: '1' as CacheRevision,
+      seq: '7',
+      optimistic: false,
+    };
+    const miss = {
+      ...base,
+      covered: false,
+      keys: [],
+      olderCursor: null,
+      newerCursor: null,
+    };
+    if (!held()) return miss;
+    const sorted = [...rows()].sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1));
+    let older: Row[];
+    let newer: Row[];
+    let anchor: Row | undefined;
+    let olderLimit = args.limit;
+    let newerLimit = 0;
+    if (args.around !== undefined) {
+      anchor = sorted.find((row) => keyOf(row) === args.around);
+      if (!anchor) return miss;
+      const position = anchor.sortKey;
+      older = sorted.filter((row) => row.sortKey < position).reverse();
+      newer = sorted.filter((row) => row.sortKey > position);
+      olderLimit = Math.floor(args.limit / 2);
+      newerLimit = args.limit - olderLimit - 1;
+    } else if (args.after !== undefined) {
+      const after = args.after;
+      older = [];
+      newer = sorted.filter((row) => row.sortKey > after);
+      olderLimit = 0;
+      newerLimit = args.limit;
+    } else {
+      const before = args.before;
+      older = sorted
+        .filter((row) => before === undefined || row.sortKey < before)
+        .reverse();
+      newer = [];
+    }
+    const moreOlder = older.length > olderLimit;
+    const moreNewer = newer.length > newerLimit;
+    older = older.slice(0, olderLimit);
+    newer = newer.slice(0, newerLimit);
+    const page = [...newer.reverse(), ...(anchor ? [anchor] : []), ...older];
+    if (anchor === undefined && page.length === 0 && moreOlder) return miss;
+    const oldest = page.at(-1)?.sortKey ?? args.before ?? args.after ?? '';
+    const newest = page[0]?.sortKey ?? args.before ?? args.after ?? '';
+    return {
+      ...base,
+      covered: true,
+      keys: page.map(keyOf),
+      olderCursor: args.after !== undefined || moreOlder ? oldest : null,
+      newerCursor:
+        args.before !== undefined ||
+        ((args.around !== undefined || args.after !== undefined) && moreNewer)
+          ? newest
+          : null,
+    };
+  };
+}
+
+function fakeRuntime() {
+  const listeners = new Set<() => void>();
+  const runtime: ChannelTimelineRuntime & { changed(): void } = {
+    open: vi.fn(() => () => {}),
+    onChanged: vi.fn((_channelId: string, listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }),
+    noteStoredSeq: vi.fn(),
+    noteServerRead: vi.fn(),
+    ensureCurrent: vi.fn(async () => 'current' as const),
+    epoch: () => 3,
+    changed: () => {
+      for (const listener of listeners) listener();
+    },
+  };
+  return runtime;
+}
+
+const messages = (count: number) =>
+  Array.from({ length: count }, (_, index) => graphqlMessage(index + 1));
+
+const ids = (timeline: LocalChannelTimeline) =>
+  timeline
+    .entries()
+    .map((entry) => (entry.type === 'activity' ? '' : entry.message.id));
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+async function waitFor(check: () => boolean) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (check()) return;
+    await settle();
+  }
+  throw new Error('condition never held');
+}
+
+function mount(options: {
+  rows: Row[];
+  held?: boolean;
+  fetchPage?: FetchChannelServerPage;
+  around?: string;
+}) {
+  const [rows, setRows] = createSignal(options.rows);
+  const [held, setHeld] = createSignal(options.held ?? true);
+  const host = fakeHost(windowOver(rows, held), { records: options.rows });
+  const runtime = fakeRuntime();
+  const onUnsupported = vi.fn();
+  const [around, setAround] = createSignal<string | undefined>(options.around);
+  let dispose = () => {};
+  const timeline = createRoot((disposeRoot) => {
+    dispose = disposeRoot;
+    return createLocalChannelTimeline(
+      {
+        host,
+        runtime,
+        touches: createChannelTouches(),
+        fetchPage: options.fetchPage,
+      },
+      CHANNEL_ID,
+      around,
+      onUnsupported
+    );
+  });
+  const addRow = (row: Row) => {
+    host.records.set(keyOf(row), row);
+    setRows([...rows(), row]);
+  };
+  return {
+    timeline,
+    host,
+    runtime,
+    onUnsupported,
+    setHeld,
+    setAround,
+    addRow,
+    dispose,
+  };
+}
+
+describe('createLocalChannelTimeline', () => {
+  it('opens a held channel from the device without asking the server', async () => {
+    const fetchPage = vi.fn<FetchChannelServerPage>();
+    const { timeline, runtime, host, dispose } = mount({
+      rows: messages(3),
+      fetchPage,
+    });
+    await waitFor(() => !timeline.isLoading());
+
+    expect(ids(timeline)).toEqual(
+      messages(3)
+        .reverse()
+        .map((row) => row.id)
+    );
+    expect(timeline.hasOlder()).toBe(false);
+    expect(timeline.hasNewer()).toBe(false);
+    expect(fetchPage).not.toHaveBeenCalled();
+    await waitFor(() => vi.mocked(runtime.ensureCurrent).mock.calls.length > 0);
+    expect(runtime.noteStoredSeq).toHaveBeenCalledWith(CHANNEL_ID, '7');
+    expect(runtime.open).toHaveBeenCalledWith(CHANNEL_ID);
+    // One touch, no other write.
+    expect(host.commits).toEqual([
+      { channelId: CHANNEL_ID, touchedAtMs: expect.any(Number) },
+    ]);
+    dispose();
+  });
+
+  it('reads the window again when the runtime reports a change, keeping unchanged entries', async () => {
+    const { timeline, runtime, addRow, dispose } = mount({
+      rows: messages(3),
+    });
+    await waitFor(() => !timeline.isLoading());
+    const before = timeline.entries()[0];
+
+    addRow(graphqlMessage(4));
+    runtime.changed();
+    await waitFor(() => timeline.entries().length === 4);
+
+    expect(ids(timeline)[0]).toBe(graphqlMessage(4).id);
+    expect(timeline.entries()[1]).toBe(before);
+    dispose();
+  });
+
+  it('pages older entries from the device and stops at the first', async () => {
+    const { timeline, dispose } = mount({ rows: messages(70) });
+    await waitFor(() => !timeline.isLoading());
+    expect(timeline.entries()).toHaveLength(50);
+    expect(timeline.hasOlder()).toBe(true);
+
+    await timeline.loadOlder();
+
+    expect(timeline.entries()).toHaveLength(70);
+    expect(timeline.hasOlder()).toBe(false);
+    expect(ids(timeline).at(-1)).toBe(graphqlMessage(1).id);
+    dispose();
+  });
+
+  it('keeps every paged entry through a reread', async () => {
+    const { timeline, runtime, addRow, dispose } = mount({
+      rows: messages(70),
+    });
+    await waitFor(() => !timeline.isLoading());
+    await timeline.loadOlder();
+
+    addRow(graphqlMessage(71));
+    runtime.changed();
+    await waitFor(() => timeline.entries().length === 71);
+
+    expect(timeline.hasOlder()).toBe(false);
+    expect(ids(timeline)[0]).toBe(graphqlMessage(71).id);
+    expect(ids(timeline).at(-1)).toBe(graphqlMessage(1).id);
+    dispose();
+  });
+
+  it('fetches a channel the device does not hold and follows it once stored', async () => {
+    const rows = messages(2);
+    let held = false;
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: [...rows].reverse(),
+        olderCursor: null,
+        newerCursor: null,
+        seq: '9',
+      } as never,
+      cached: (async () => {
+        held = true;
+      })(),
+    }));
+    const mounted = mount({ rows, held: false, fetchPage });
+    const { timeline, runtime } = mounted;
+    await waitFor(() => !timeline.isLoading());
+    expect(ids(timeline)).toEqual([rows[1]!.id, rows[0]!.id]);
+    mounted.setHeld(held);
+    await waitFor(
+      () => vi.mocked(runtime.noteServerRead).mock.calls.length > 0
+    );
+    expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, '9', 3);
+    expect(mounted.host.commits.at(-1)).toMatchObject({
+      channelId: CHANNEL_ID,
+      coverage: [{ start: '', end: '\u{10FFFF}' }],
+      seq: { kind: 'lower', seq: '9' },
+    });
+
+    mounted.addRow(graphqlMessage(3));
+    runtime.changed();
+    await waitFor(() => timeline.entries().length === 3);
+    mounted.dispose();
+  });
+
+  it('reports a missing target from the server', async () => {
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => {
+      throw new CombinedError({
+        graphQLErrors: [
+          {
+            message: 'message or parent not found',
+            extensions: { code: 'NOT_FOUND' },
+          },
+        ],
+      });
+    });
+    const { timeline, dispose } = mount({
+      rows: messages(2),
+      held: false,
+      fetchPage,
+      around: 'gone-message',
+    });
+    await waitFor(() => !timeline.isLoading());
+
+    expect(timeline.isMissingTarget()).toBe(true);
+    expect(timeline.loadError()).toBe('NOT_FOUND');
+    dispose();
+  });
+
+  it('hands an unsupported host back to REST', async () => {
+    const host = fakeHost(() => ({ kind: 'unsupported' }));
+    const onUnsupported = vi.fn();
+    const dispose = createRoot((disposeRoot) => {
+      createLocalChannelTimeline(
+        { host, runtime: fakeRuntime(), touches: createChannelTouches() },
+        CHANNEL_ID,
+        () => undefined,
+        onUnsupported
+      );
+      return disposeRoot;
+    });
+    await waitFor(() => onUnsupported.mock.calls.length > 0);
+    dispose();
+  });
+
+  it('loads around a target and then back to the live end', async () => {
+    const rows = messages(80);
+    const { timeline, setAround, dispose } = mount({
+      rows,
+      around: rows[10]!.id,
+    });
+    await waitFor(() => !timeline.isLoading());
+    expect(ids(timeline)).toContain(rows[10]!.id);
+    expect(timeline.hasNewer()).toBe(true);
+
+    setAround(undefined);
+    await timeline.toLatest();
+
+    expect(timeline.hasNewer()).toBe(false);
+    expect(ids(timeline)[0]).toBe(rows[79]!.id);
+    dispose();
+  });
+});
