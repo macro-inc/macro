@@ -18,4 +18,5 @@ export const ToolPermissionOrigin = {
   default: 'default',
   action: 'action',
   session: 'session',
+  source: 'source',
 } as const;
