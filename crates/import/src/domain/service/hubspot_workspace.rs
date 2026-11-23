@@ -117,6 +117,14 @@ pub(in crate::domain::service) struct HubspotMeta {
 /// Each pipeline's entries by deal link, read once per write.
 type DealLinks = HashMap<Uuid, HashMap<String, Uuid>>;
 
+/// What one write phase links objects to.
+struct Known<'a> {
+    /// Earlier phases' records and earlier imports', by plan key.
+    targets: HashMap<&'a str, Uuid>,
+    /// Pipeline entries by deal link.
+    links: DealLinks,
+}
+
 /// Kinds in write order: what a later kind links to is written first.
 const WRITE_ORDER: [ImportKind; 4] = [
     ImportKind::HubspotPipeline,
@@ -242,7 +250,7 @@ where
                     .list(user, Some(self.workspace_source), None)
                     .await?;
                 // Earlier phases' records, and records earlier imports made.
-                let targets: HashMap<&str, Uuid> = rows
+                let targets = rows
                     .iter()
                     .filter(|row| {
                         row.user_id == user.as_ref() && row.status == ImportStatus::Imported
@@ -254,6 +262,10 @@ where
                         ))
                     })
                     .collect();
+                let mut known = Known {
+                    targets,
+                    links: DealLinks::default(),
+                };
                 let todo: Vec<&ImportEntity> = rows
                     .iter()
                     .filter(|row| {
@@ -266,7 +278,6 @@ where
                     .collect();
                 tracing::Span::current().record("objects", todo.len());
                 let mut phase_failed = 0;
-                let mut links = DealLinks::default();
                 for row in todo {
                     if control.reason().is_some() {
                         return Ok::<_, ImportError>(phase_failed);
@@ -276,8 +287,7 @@ where
                             user,
                             row,
                             team,
-                            &targets,
-                            &mut links,
+                            &mut known,
                             hubspot.writer.as_ref(),
                             control,
                         )
@@ -312,8 +322,7 @@ where
         user: &MacroUserIdStr<'static>,
         row: &ImportEntity,
         team: Option<Uuid>,
-        targets: &HashMap<&str, Uuid>,
-        links: &mut DealLinks,
+        known: &mut Known<'_>,
         writer: &dyn CrmImportWriter,
         control: &JobControl,
     ) -> Result<()> {
@@ -362,7 +371,7 @@ where
             Some(id) => id,
             None => {
                 let (id, created) = self
-                    .find_or_create(user, &meta, &link(row, &meta), targets, links, writer)
+                    .find_or_create(user, &meta, &link(row, &meta), known, writer)
                     .await?;
                 if created {
                     self.repo
@@ -395,10 +404,10 @@ where
         user: &MacroUserIdStr<'static>,
         meta: &HubspotMeta,
         link: &str,
-        targets: &HashMap<&str, Uuid>,
-        links: &mut DealLinks,
+        known: &mut Known<'_>,
         writer: &dyn CrmImportWriter,
     ) -> Result<(Uuid, bool)> {
+        let Known { targets, links } = known;
         match &meta.object {
             HubspotObject::Pipeline { stages } => Ok((
                 writer

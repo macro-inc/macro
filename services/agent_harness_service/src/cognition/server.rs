@@ -696,9 +696,9 @@ pub async fn build(
             import_notion::outbound::connected::ConnectedNotion::new(Arc::clone(&connections)),
         ))
         .with_hubspot(
-            Arc::new(import_hubspot::outbound::client::HubspotApi::new(Arc::clone(
-                &connections,
-            ))),
+            Arc::new(import_hubspot::outbound::client::HubspotApi::new(
+                Arc::clone(&connections),
+            )),
             Arc::new(ai_tools::HubspotCrmWriter::new(
                 &crm_tool_context,
                 &pipeline_tool_context,
