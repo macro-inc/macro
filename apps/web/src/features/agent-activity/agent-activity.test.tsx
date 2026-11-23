@@ -118,17 +118,26 @@ it('folds a sealed run to a summary that opens to its steps, without the session
       rows={[
         { id: 't1', label: 'Ran', detail: 'cargo', status: 'completed' },
         { id: 't2', label: 'Read', detail: 'lib.rs', status: 'failed' },
+        { id: 't3', label: 'Edit', detail: 'lib.rs', status: 'interrupted' },
+        { id: 't4', label: 'A step failed', status: 'failed' },
+        { id: 't5', label: 'Step interrupted', status: 'interrupted' },
       ]}
       sealed
     />
   ));
   expect(live.acquired).toEqual([]);
   expect(view.queryAllByRole('listitem')).toEqual([]);
-  view.getByRole('button', { name: 'Used 2 tools' }).click();
+  // Every named step counts alike, and how one ended stays in the data; a
+  // program that named no step is left out.
+  const summary = view.getByRole('button', { name: 'Used 3 tools' });
+  expect(summary.querySelector('.text-failure')).toBeNull();
+  summary.click();
   expect(steps(view)).toEqual([
     ['Ran', 'completed'],
-    ['ReadFailed', 'failed'],
+    ['Read', 'failed'],
+    ['Edit', 'interrupted'],
   ]);
+  expect(view.container.querySelector('.text-failure')).toBeNull();
 });
 
 it('shows an open run as one line naming the step it is on, live from the session', () => {

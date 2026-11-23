@@ -8,7 +8,7 @@ import Plus from '@icon/system/regular/plus.svg';
 import Trash from '@icon/system/regular/trash.svg';
 import { Button, Tabs } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { getDefaultCalendarTimeFormat } from '../../calendar/utils/time-format';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
 import {
   AvailabilityCalendar,
   type AvailabilityColumn,
@@ -24,6 +24,7 @@ import { availabilityState, validAvailabilityDate } from '../core/availability';
 import {
   type AvailabilityTimeFormat,
   availabilityMonth,
+  availabilityTimeFormat,
   formatAvailabilityDate,
   shiftAvailabilityMonth,
 } from '../core/availability-month';
@@ -44,8 +45,10 @@ export function ScheduleFields(props: {
   const [monthDate, setMonthDate] = createSignal(
     reportDate(new Date(), props.schedule.timeZone)
   );
+  const [preferences] = useCalendarPreferences();
+  // Starts on the calendar's clock; the toggle switches this editor only.
   const [timeFormat, setTimeFormat] = createSignal<AvailabilityTimeFormat>(
-    getDefaultCalendarTimeFormat() === '24-hour' ? '24h' : '12h'
+    availabilityTimeFormat(preferences.timeFormat)
   );
   const editor = createAvailabilityRules({
     schedule: () => props.schedule,

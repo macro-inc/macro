@@ -4,9 +4,8 @@ import { createSignal, createUniqueId, Show } from 'solid-js';
 import { ActivityRows, type ActivityRowView } from './activity-rows';
 
 /**
- * A finished run of steps as one line that opens to the steps. The line
- * counts steps only: a step that failed and was retried did not fail the
- * reply, so its failure shows on its own row once the run is open.
+ * A finished run of steps as one line that opens to the steps. It counts
+ * every step alike; a failure is the agent's to explain in its reply.
  */
 export function ActivitySummary(props: { rows: readonly ActivityRowView[] }) {
   const [open, setOpen] = createSignal(false);

@@ -111,6 +111,13 @@ the property (`entityActions.toastPropertySet`: "Companies set", or "Companies
 set on 3 items" for several). Tag assignment shows no toast, and the composer
 writes to its draft without one.
 
+When every selected item has one entity type, the modal's property list asks
+the properties service for that type (`for_entity_type`), so it offers only
+what those items can take: Stage, Owner and Revenue only on companies, and
+Parent Task, Subtasks and Time logged only on tasks. A mixed selection lists
+every definition. The create dialog uses the same type. The Properties panel
+reads the same list for its entity, so the picker opens with it loaded.
+
 A Link property takes its URL in the editor's search field
 (`editor/link-property-editor.tsx`): Enter sets it, or adds it when the
 property holds several links, and the item's links are listed below to remove

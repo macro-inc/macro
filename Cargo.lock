@@ -5108,6 +5108,7 @@ dependencies = [
  "graphql_registered_work",
  "graphql_scheduled_action",
  "graphql_soup",
+ "graphql_time_tracking",
  "graphql_work_feed",
  "item_filters",
  "macro_authorization",
@@ -5134,6 +5135,7 @@ dependencies = [
  "soup-filter-projection",
  "soup_realtime",
  "sqlx",
+ "time_tracking",
  "tokio",
  "tokio-util",
  "tracing",
@@ -5500,6 +5502,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "model-entity",
+ "models_pagination",
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -7023,6 +7026,7 @@ dependencies = [
  "graphql_initiative",
  "graphql_scheduled_action",
  "graphql_soup",
+ "graphql_time_tracking",
  "harnesses",
  "hex",
  "hosted_runtimes",
@@ -10103,6 +10107,27 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "uuid",
+]
+
+[[package]]
+name = "graphql_time_tracking"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "entity_access",
+ "futures",
+ "graphql_common",
+ "graphql_permission",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "serde_json",
+ "time_tracking",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

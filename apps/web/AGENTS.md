@@ -352,6 +352,12 @@ track sizing, which its own contents can push out, so a glyph sized off the cell
 feeds that loop and can settle with one emoji filling the picker. The same suite
 checks that widening a cell leaves the glyph alone.
 
+Space and Shift+Space page an open thread (the real desktop thread view in a
+frame like Mail's, over the real hotkey root and `registerEmailHotkeys`) from
+the moment it opens, while a focused button, a field and the reply composer
+keep their own Space; backend-free, desktop only:
+`bunx playwright test --config src/features/block-email/browser-test/playwright.config.ts`.
+
 The email reminder menu reads typed times through the real natural-time wasm
 package; its backend-free desktop/phone regression, at a fixed New York clock,
 checks both readings of a guessed hour, saving either, the reasons shown for
@@ -1276,6 +1282,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   scrolling peek window beside it. `activity.browser.e2e.ts` in
   `block-agent/browser-test` replays a long run and checks it shows one live
   line, then one settled row.
+- Never name a generic tool failure in an agent transcript or a channel/DM
+  agent reply: no **Failed**/**Timed out**/**Cancelled**/**Interrupted** text,
+  failure ink, fade, or `· N failed` count on tool rows, groups, or the live
+  line; the agent explains failures in its reply. Keep the status in the data
+  (`data-tool-status`, `data-status`); product cards (user tools, reviews,
+  elicitations, permissions, approvals) and session-event rows keep their
+  outcomes.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
