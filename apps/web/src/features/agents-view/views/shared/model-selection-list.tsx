@@ -237,7 +237,7 @@ export function ModelSelectionList(props: {
                 <Button
                   variant="link"
                   size="xs"
-                  class="-mr-1.5"
+                  class="-mr-1.5 not-data-disabled:hover:no-underline"
                   onClick={() => {
                     nav.setPage('agents');
                     if (!props.mobile) search?.focus();

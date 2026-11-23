@@ -68,10 +68,20 @@ describe('model selection list', () => {
       const seeAll = screen.getByRole('button', { name: 'See all' });
       expect(seeAll.classList.contains('text-link')).toBe(true);
       expect(seeAll.classList.contains('bg-transparent')).toBe(true);
+      expect(
+        seeAll.classList.contains('not-data-disabled:hover:no-underline')
+      ).toBe(true);
+      expect(
+        seeAll.classList.contains('not-data-disabled:hover:underline')
+      ).toBe(false);
+      expect(
+        seeAll.classList.contains('not-data-disabled:hover:text-link-hover')
+      ).toBe(true);
       const arrow = seeAll.querySelector('svg');
       expect(arrow).not.toBeNull();
       expect(arrow).toBe(seeAll.lastElementChild);
       expect(arrow?.getAttribute('aria-hidden')).toBe('true');
+      expect(arrow?.getAttribute('data-macro-icon')).toBe('arrow-right');
       fireEvent.click(seeAll);
       expect(nav.page()).toBe('agents');
       expect(screen.getByRole('button', { name: 'Agents' })).toBeTruthy();
