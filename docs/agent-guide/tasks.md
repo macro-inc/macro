@@ -429,8 +429,8 @@ touch it opens a bottom sheet with the one-tap lengths, Custom entry and the
 entries; swipe one's own entry right to edit it, left to delete it. Only
 people with edit access log; everyone who can see the task sees its entries;
 only an entry's author changes or deletes it. Time logged never shows as a
-generic property row or details row, and with the flag off nothing about
-time shows. Typed entries save at once and wait offline in the durable
+generic property row or details row, and the Add property picker never offers
+it; with the flag off nothing about time shows. Typed entries save at once and wait offline in the durable
 queue; the entry id is the replay key.
 
 Verify on a local stack at desktop 1440 and phone 390 with touch, as an editor
