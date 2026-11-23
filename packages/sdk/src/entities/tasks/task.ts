@@ -88,6 +88,11 @@ export class Task extends Document {
        * `dueDate` is saved as the due date.
        */
       startDate?: Date;
+      /**
+       * Keeps the time of day of `startDate` and `dueDate`, making each an
+       * exact moment (a 2 to 4 PM block) instead of a whole day.
+       */
+      withTimes?: boolean;
       /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
       team?: Team;
       /** Defaults to team sharing, or private when the session cannot share. */
@@ -106,6 +111,7 @@ export class Task extends Document {
       assignees: true,
       dueDate: true,
       startDate: true,
+      withTimes: true,
       team: true,
       shareWithTeam: true,
     });
@@ -275,6 +281,14 @@ export class Task extends Document {
  * (creator assigned, Not started). Sending any value replaces those defaults,
  * so the defaults are spelled out here.
  */
+function dateValue(date: Date, withTime: boolean | undefined) {
+  return {
+    type: 'date' as const,
+    value: date.toISOString(),
+    ...(withTime ? { has_time: true } : {}),
+  };
+}
+
 async function initialProperties(
   client: MacroClient,
   opts: Parameters<typeof Task.create>[1],
@@ -312,13 +326,13 @@ async function initialProperties(
   if (opts.dueDate) {
     values.push({
       propertyId: DUE_DATE_PROPERTY_ID,
-      value: { type: 'date', value: opts.dueDate.toISOString() },
+      value: dateValue(opts.dueDate, opts.withTimes),
     });
   }
   if (opts.startDate) {
     values.push({
       propertyId: START_DATE_PROPERTY_ID,
-      value: { type: 'date', value: opts.startDate.toISOString() },
+      value: dateValue(opts.startDate, opts.withTimes),
     });
   }
   return values;

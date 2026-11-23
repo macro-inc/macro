@@ -49,6 +49,11 @@ export class TaskNamespace {
      * `dueDate` is saved as the due date.
      */
     startDate?: Date;
+    /**
+     * Keeps the time of day of `startDate` and `dueDate`, making each an
+     * exact moment (a 2 to 4 PM block) instead of a whole day.
+     */
+    withTimes?: boolean;
     /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
     team?: Team;
     /** Defaults to team sharing, or private when the session cannot share. */
