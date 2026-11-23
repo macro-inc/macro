@@ -2,7 +2,11 @@ import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { type Exchange, makeOperation, type Operation } from '@urql/core';
 import { map, pipe } from 'wonka';
 
-/** Operation context key for the trace a query's request should join. */
+/**
+ * Operation context key for the trace a request should join. Queries get one
+ * from the span they start in; a mutation carries one only when its caller set
+ * it (a write that waited before it was sent).
+ */
 export const TRACE_PARENT_CONTEXT_KEY = 'macroTraceParent';
 
 /**
@@ -20,7 +24,8 @@ function firstRequestIn(parent: TraceContext): TraceContext {
   };
 }
 
-// Mutations are sent by the mutation queue inside its own attempt span.
+// Mutations are sent by the mutation queue inside its own attempt span, so
+// none is captured here.
 function captured(operation: Operation): Operation {
   if (operation.kind !== 'query' || operation.context[TRACE_PARENT_CONTEXT_KEY])
     return operation;
@@ -33,7 +38,8 @@ function captured(operation: Operation): Operation {
 function traced(operation: Operation): Operation {
   const parent: TraceContext | undefined =
     operation.context[TRACE_PARENT_CONTEXT_KEY];
-  if (!parent || operation.kind !== 'query') return operation;
+  if (!parent || (operation.kind !== 'query' && operation.kind !== 'mutation'))
+    return operation;
   const send = operation.context.fetch ?? fetch;
   return makeOperation(operation.kind, operation, {
     ...operation.context,
