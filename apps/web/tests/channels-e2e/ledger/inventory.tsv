@@ -69,10 +69,10 @@ sync-device-equals-server	What the device holds after catching up is what the se
 sync-far-behind	A channel more than a thousand changes behind is right when opened again	SYN-06	
 sync-link-after-change	An edit made while away shows after arriving through a link to an older message		A test of it was written and dropped: no break of the device copy made it fail, so it showed nothing about it
 sync-removed	A person removed from a channel while away is not shown the messages their device kept	SYN-08	
-sync-sequence-lowered	A page fetched during a catch-up that lowers the device's sequence is replayed from there		Cannot be staged from the screen; unit tests in src/lib/queries/messages/local/tests/catch-up
+sync-sequence-lowered	A page fetched during a catch-up that lowers the device's sequence is replayed from there		Cannot be staged from the screen; left to the unit tests of the client that keeps channels on the device
 prewarm	A device left alone fetches unread channels it has never opened, so they open offline		Tested with the client that keeps channels on the device, in the tests that follow it
 prewarm-limits	Prewarm takes at most forty unread and twenty recent channels, fifty messages each		Tested with the client that keeps channels on the device, in the tests that follow it
-prewarm-one-at-a-time	Prewarm fetches one channel at a time, and only while the person leaves the app alone		Not visible on screen; unit tests in src/lib/queries/messages/local/tests/prewarm
+prewarm-one-at-a-time	Prewarm fetches one channel at a time, and only while the person leaves the app alone		Not visible on screen; left to the unit tests of the client that keeps channels on the device
 eviction	A channel not opened for thirty days is dropped from the device		Tested with the client that keeps channels on the device, in the tests that follow it
 queued-writes	A message, reply, edit, deletion and reaction made offline show at once and reach the services once, in order, as last left		Tested with the client that keeps channels on the device, in the tests that follow it
 queue-reload	Writes that could not be sent survive a reload and are sent once when the services can be reached		Tested with the client that keeps channels on the device, in the tests that follow it

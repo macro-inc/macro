@@ -12,7 +12,8 @@
 # VITE_ENABLE_CHANNEL_LOCAL_SYNC=true builds the app that keeps channels on
 # the device and tells the tests so. Bundles are kept by commit and by those
 # variables under CHANNELS_E2E_BUNDLES (default ~/.cache/channels-e2e/bundles);
-# a checkout with uncommitted changes is built every time.
+# a checkout with uncommitted changes is built every time, and so is any
+# source with CHANNELS_E2E_REBUILD set.
 set -euo pipefail
 
 usage() {
@@ -51,10 +52,12 @@ fi
 settings=$({ env | grep '^VITE_' || true; } | sort | sha256sum | cut -c1-12)
 bundle=$cache/$commit-$settings
 
-if [ ! -f "$bundle/index.html" ] || [[ $commit == *-changed ]]; then
+if [ ! -f "$bundle/index.html" ] || [[ $commit == *-changed ]] || [ -n "${CHANNELS_E2E_REBUILD:-}" ]; then
   if [ ! -d "$checkout" ]; then
     git -C "$root" worktree add --detach "$checkout" "$commit" >&2
     made_checkout=1
+    # Gone again however the build ends.
+    trap '[ ! -d "$checkout" ] || git -C "$root" worktree remove --force "$checkout"' EXIT
   fi
   echo "building the app of $commit" >&2
   (
@@ -70,18 +73,24 @@ if [ ! -f "$bundle/index.html" ] || [[ $commit == *-changed ]]; then
       VITE_AI_EDITING_WORKER_URL=/ai-editing VITE_LOCAL_STACK=true \
       bun run --bun build >&2
     test -f dist/index.html
-    rm -rf "$bundle"
-    mkdir -p "$bundle"
-    cp -a dist/. "$bundle/"
+    # Whole or not at all: a bundle half copied would be taken for built.
+    rm -rf "$bundle" "$bundle.part"
+    mkdir -p "$bundle.part"
+    cp -a dist/. "$bundle.part/"
+    mv "$bundle.part" "$bundle"
   )
   if [ -n "$made_checkout" ]; then
     git -C "$root" worktree remove --force "$checkout"
   fi
 fi
 
+status=$(cd "$root" && just stack status --json --instance "$instance")
+proxy=$(jq -er .proxy_url <<<"$status")
+project=$(jq -er .project <<<"$status")
+
 # The directory the instance's proxy serves the app from.
 served=
-for container in $(docker ps -q --filter "label=com.docker.compose.project=macro-$instance"); do
+for container in $(docker ps -q --filter "label=com.docker.compose.project=$project"); do
   served=$(docker inspect "$container" \
     --format '{{range .Mounts}}{{if eq .Destination "/srv/frontend"}}{{.Source}}{{end}}{{end}}')
   [ -z "$served" ] || break
@@ -95,8 +104,6 @@ cp -a "$bundle/." "$served/"
 echo "instance $instance now serves the app of $commit" >&2
 
 cd "$web"
-status=$(cd "$root" && just stack status --json --instance "$instance")
-proxy=$(jq -er .proxy_url <<<"$status")
 export CHANNELS_E2E_STACK_URL="$proxy"
 config=tests/channels-e2e/playwright.config.ts
 [ "$what" = suite ] || config=tests/channels-e2e/fuzz/playwright.config.ts

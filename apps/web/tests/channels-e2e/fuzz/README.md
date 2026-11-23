@@ -68,7 +68,11 @@ reply missing`).
 ## Run it
 
 Against a stack seeded as for the suite (`../README.md`), serving one build
-and then the other:
+and then the other. The build with the variable has to be of a branch whose
+app keeps channels on the device: on a branch without that client the
+variable changes only which model the fuzzer compares against.
+`just test-channels-e2e-with <instance> <ref> fuzz` builds and serves a
+branch's app and runs this (`../README.md`). By hand:
 
 ```sh
 cd apps/web

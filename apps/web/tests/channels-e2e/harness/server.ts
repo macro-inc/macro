@@ -20,7 +20,8 @@ type StoredMessage = {
 type Entry = { type: string; message?: StoredMessage };
 
 /** A page of the channel, newest entry first. */
-type Page = { entries: Entry[]; next_cursor?: string | null };
+/** The cursor is the services' own and goes back to them as it came. */
+type Page = { entries: Entry[]; next_cursor?: unknown };
 
 type Thread = { replies: StoredMessage[] };
 
@@ -57,7 +58,7 @@ async function everyEntry(
   path: string
 ): Promise<Entry[]> {
   const pages: Entry[][] = [];
-  let cursor: string | undefined;
+  let cursor: unknown;
   for (let page = 0; page < 50; page += 1) {
     const selection = encodeURIComponent(
       JSON.stringify({ limit: 100, direction: 'older', cursor })

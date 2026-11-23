@@ -130,8 +130,8 @@ export async function failsSometimes(
 
 /**
  * Whether the app under test was built with `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`,
- * which the page cannot show. CI sets the variable for the build and the run
- * alike; a local run against a stack built with it must set it too.
+ * which the page cannot show. A run against an app built with it must set it
+ * too; `run-with-bundle.sh` gives it to the build and the run alike.
  */
 export const LOCAL_SYNC_BUILD =
   process.env.VITE_ENABLE_CHANNEL_LOCAL_SYNC === 'true';

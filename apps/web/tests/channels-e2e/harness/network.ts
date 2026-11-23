@@ -212,7 +212,7 @@ export async function loseWriteAnswers(
 /** Where a page asks for its list of channels, among much else. */
 const GRAPHQL = '**/dss/items/soup/graphql';
 /** The read a page fills its list of channels with, page after page. */
-const CHANNEL_LIST_READ = 'SoupChannelDirectoryBackfill';
+const CHANNEL_LIST_READS = ['SoupChannelDirectoryBackfill', 'ChannelDirectoryPage'];
 
 /** What `holdChannelList` gives a test to wait on. */
 export type HeldChannelList = {
@@ -240,7 +240,7 @@ export async function holdChannelList(page: Page): Promise<HeldChannelList> {
     // A read of channels by their ids shares the operation; the list's own
     // read names none.
     const byId = JSON.stringify(asked?.variables ?? {}).includes('"channelId"');
-    if (asked?.operationName !== CHANNEL_LIST_READ || byId) {
+    if (!CHANNEL_LIST_READS.includes(asked?.operationName ?? '') || byId) {
       await route.fallback();
       return;
     }

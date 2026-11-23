@@ -44,7 +44,9 @@ the bundle the instance serves, and runs. Every `VITE_*` variable set goes to
 the build and to the run, so `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true` in front
 builds and tests the app that keeps channels on the device. A git ref is
 built in a worktree of its own, from nothing; a checkout directory is built
-where it is, which is faster when it has been built before.
+where it is, which is faster when it has been built before. Only the commit
+and the `VITE_*` variables name a kept bundle: after changing anything else
+the build reads, set `CHANNELS_E2E_REBUILD=1`.
 
 Against any address that serves the app with the scenario's people seeded:
 
@@ -83,8 +85,9 @@ environment.
 - `harness/device.ts` reads a channel off the screen as lines of text
   (`shown`), and has the steps that leave a channel on a device and open it
   again with no connection. `harness/server.ts` reads the same lines from the
-  services (`serverChannel`). The tests of a device that keeps channels
-  (`current`, `offline`, `writes`, `prewarm`) end on three things that must
+  services (`serverChannel`). The tests of a channel brought up to date (`current`),
+  and those of a device that keeps channels, which follow that client and
+  are not here, end on three things that must
   agree: the lines the test expects, the screen, and the services.
 - `harness/history.ts` makes one long channel (230 messages, a 30-reply
   thread far back) before the first test and keeps it for later runs against
@@ -114,15 +117,6 @@ and when they pass again
 A failed run keeps the stack's logs (`channels-e2e-stack-logs`) and its
 traces (`channels-e2e-results`).
 
-## Writing a test
-
-- Title: an id (`MSG-03`) then a sentence a person would say. Above it, a
-  comment that starts `If this fails,` and says what a person would suffer.
-- Assert what is on screen with literals. No sleeps, no waiting on requests.
-- Add the id to `ledger/inventory.tsv`. Before trusting a new test, watch it
-  fail: break the product where the behaviour lives and run it.
-- A test that fails because the product is wrong keeps asserting the right
-  behaviour, marked `knownDefect()` with the defect in a comment and a row in
 ## The ledger
 
 `ledger/inventory.tsv` lists what channels do, and for each thing the tests
@@ -146,7 +140,7 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
 - Assert what is on screen with literals. No sleeps, no waiting on requests.
   The one timed wait is `leaveAlone` in `harness/device.ts`: a device
   fetches channels ahead only while its person does nothing, so doing
-  nothing for a while is the step under test (PRE-01 to PRE-05, REC-04). The one read
+  nothing for a while is the step under test (REC-04). The one read
   of what a page has fetched is `codeFetched`, with which `goOffline` lets a
   page finish fetching the app's code before it cuts it off: no test asserts
   on it.
@@ -154,9 +148,8 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
   kept on the device, writes that wait there) skips itself on other builds
   with `test.skip(!LOCAL_SYNC_BUILD, ...)`.
 - A test that runs on both builds and reads messages can fail on one alone:
-  with the flag, messages come through `src/lib/queries/messages/local/`,
-  and a break of the other path leaves the test passing, so watch it fail
-  on each.
+  with the flag, messages come through the device's own path, and a break
+  of the other path leaves the test passing, so watch it fail on each.
 - Add the id to `ledger/inventory.tsv`. Before trusting a new test, watch it
   fail: break the product where the behaviour lives and run it.
 - A test that fails because the product is wrong keeps asserting the right
