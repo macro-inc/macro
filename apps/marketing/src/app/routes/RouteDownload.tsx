@@ -80,6 +80,8 @@ export function RouteDownload() {
                   <a
                     class={index() === 0 ? 'site-nav-start' : 'site-nav-demo'}
                     href={DESKTOP_DOWNLOAD_URLS[platform]}
+                    // A full request, so the edge redirect serves the installer.
+                    target="_self"
                     onClick={() =>
                       analytics.trackPosthog('desktop_download_clicked', {
                         platform,

@@ -59,6 +59,16 @@ describe('RouteDownload', () => {
     ]);
   });
 
+  it('leaves installer clicks to the browser, not the router', () => {
+    visitWith('Mozilla/5.0 (X11; Linux x86_64)');
+    for (const link of within(
+      screen.getByRole('list', { name: 'Desktop installers' })
+    ).getAllByRole('link')) {
+      // The router cancels the clicks it handles; the edge serves these paths.
+      expect(fireEvent.click(link)).toBe(true);
+    }
+  });
+
   it('offers the Mac installer first on macOS and other computers', () => {
     visitWith('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
     expect(downloadLinks().map(([label]) => label)).toEqual([
