@@ -44,7 +44,7 @@ export function createRunningTimerQuery(
   );
   return {
     timer: (): RunningTimer | undefined =>
-      query.isSuccess ? (query.data?.runningTimer ?? undefined) : undefined,
+      query.isPending ? undefined : (query.data?.runningTimer ?? undefined),
     serverNow: (): string | undefined =>
       query.isSuccess ? query.data?.serverNow : undefined,
     pending: () => query.isPending,

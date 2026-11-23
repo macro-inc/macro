@@ -89,12 +89,13 @@ export function createTaskTimeEntriesQuery(
   );
   return {
     entries: (): readonly TimeEntryFieldsFragment[] =>
-      query.isSuccess ? (query.data?.entries ?? []) : [],
+      query.isPending ? [] : (query.data?.entries ?? []),
     nextCursor: (): string | undefined =>
-      query.isSuccess ? (query.data?.nextCursor ?? undefined) : undefined,
+      query.isPending ? undefined : (query.data?.nextCursor ?? undefined),
     /** No answer yet, so an empty list cannot say the task has no time. */
     pending: () => query.isPending,
-    failed: () => !query.isSuccess && query.isError,
+    /** The read failed with nothing to show; a failed refetch keeps the last page. */
+    failed: () => query.isError && query.data === undefined,
     refetch: () => query.refetch({ requestPolicy: 'network-only' }),
   };
 }
@@ -120,9 +121,9 @@ export function createTaskTimeEntriesAfterQuery(
   );
   return {
     entries: (): readonly TimeEntryFieldsFragment[] =>
-      query.isSuccess ? (query.data?.entries ?? []) : [],
+      query.isPending ? [] : (query.data?.entries ?? []),
     nextCursor: (): string | undefined =>
-      query.isSuccess ? (query.data?.nextCursor ?? undefined) : undefined,
+      query.isPending ? undefined : (query.data?.nextCursor ?? undefined),
     pending: () => query.isPending,
   };
 }
