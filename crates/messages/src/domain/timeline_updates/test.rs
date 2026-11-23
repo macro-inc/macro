@@ -326,9 +326,8 @@ mod fanout {
             Source(tokio::sync::Mutex::new(receiver)),
             project,
         ));
-        let user = |id: &'static str| {
-            macro_user_id::user_id::MacroUserIdStr::parse_from_str(id).unwrap()
-        };
+        let user =
+            |id: &'static str| macro_user_id::user_id::MacroUserIdStr::parse_from_str(id).unwrap();
         let (mut a1, _) = fanout.subscribe(user("macro|a@example.com")).into_parts();
         let (mut a2, _) = fanout.subscribe(user("macro|a@example.com")).into_parts();
         let (mut b, _) = fanout.subscribe(user("macro|b@example.com")).into_parts();
