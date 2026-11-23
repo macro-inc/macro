@@ -126,14 +126,18 @@ function queueingHost() {
     },
     readQuery: async () => soup.cachedReads.shift() ?? { kind: 'miss' },
   };
-  soup.optimistic.mockImplementation(() => ({
-    toPromise: async () => ({ queued: 'tx-1' }),
-  }));
+  const enqueued = Promise.withResolvers<void>();
+  soup.optimistic.mockImplementation(() => {
+    enqueued.resolve();
+    return { toPromise: async () => ({ queued: 'tx-1' }) };
+  });
   return Object.assign(
     (settlement: MutationSettlement) => {
       for (const listener of [...listeners]) listener(settlement);
     },
     {
+      /** Resolves once a write is in the queue. */
+      enqueued: () => enqueued.promise,
       /** Resolves once no write waits for a settlement: each stops once it has handled its own. */
       drained: async () => {
         if (listeners.size === 0) return;
@@ -254,16 +258,22 @@ describe('adding an option', () => {
   });
 
   it('stamps an add with the cache generation its links were read under', async () => {
-    queueingHost();
+    const settle = queueingHost();
     soup.duringRead = () => {
       soup.epoch = 'gen-2';
     };
-    // the queue never settles it here, so the test does not wait for it
-    const added = outcomeOf(addPropertyOption('def-1', TAG));
-    await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+    const added = addPropertyOption('def-1', TAG);
+    await settle.enqueued();
     const [, , , , options] = soup.optimistic.mock.calls[0] ?? [];
     expect(options).toMatchObject({ authorizationEpoch: 'gen-1' });
-    expect(added).toBeInstanceOf(Promise);
+    settle({ transactionId: 'tx-1', status: 'committed' });
+    await added;
+  });
+
+  it('drops a provisioning whose flow began under another login', async () => {
+    const provisioned = await outcomeOf(ensureTagSet('user', { session: 0 }));
+    expect(isCatalogErrorCode(provisioned, 'ACCOUNT_CHANGED')).toBe(true);
+    expect(soup.mutation).not.toHaveBeenCalled();
   });
 
   it('drops an add whose flow began under another login', async () => {

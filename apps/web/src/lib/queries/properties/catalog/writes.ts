@@ -138,6 +138,8 @@ type SettleOptions = {
   onLateFailure?: (error: Error) => void;
   /** Runs once the server has the write, whether it went at once or queued. */
   onCommit?: () => void;
+  /** The login session the write's flow began in; the session now when omitted. */
+  session?: number;
 };
 
 /** Waits for a queued write's commit in the background. */
@@ -168,7 +170,8 @@ type Settled<TData> =
  * a later refusal through `onLateFailure`; the cache has rolled it back by then.
  * A write that goes straight to the server (`serverAnswered`) waits until the
  * app is online before it is sent, in the trace it was started in, and is
- * dropped if another login took over the page meanwhile.
+ * dropped if another login took over the page meanwhile, or since the
+ * `session` its flow began in.
  */
 async function settle<TData, TVariables extends AnyVariables>(
   send: (
@@ -183,15 +186,13 @@ async function settle<TData, TVariables extends AnyVariables>(
   const context: Partial<OperationContext> = options.serverAnswered
     ? { [TRACE_PARENT_CONTEXT_KEY]: trace }
     : {};
-  if (options.serverAnswered && !onlineManager.isOnline()) {
-    const session = queryAccountSession();
-    await whenOnline();
-    if (queryAccountSession() !== session)
-      throw new CatalogMutationError(
-        'Another login took over while the write waited to go online',
-        'ACCOUNT_CHANGED'
-      );
-  }
+  const session = options.session ?? queryAccountSession();
+  if (options.serverAnswered && !onlineManager.isOnline()) await whenOnline();
+  if (queryAccountSession() !== session)
+    throw new CatalogMutationError(
+      'Another login took over before the write was sent',
+      'ACCOUNT_CHANGED'
+    );
   const settlements = observePropertyMutationSettlements(
     getGraphqlSoupCacheHost()
   );
@@ -609,7 +610,10 @@ export async function createPropertyDefinition(
 }
 
 /** Provisions (gets or creates) the viewer's tag set for a scope. */
-export async function ensureTagSet(scope: TagScope): Promise<TagSetResponse> {
+export async function ensureTagSet(
+  scope: TagScope,
+  started: { session?: number } = {}
+): Promise<TagSetResponse> {
   return Telemetry.span('property_catalog.ensure_tag_set', async (span) => {
     span.setAttr('property.scope', scope);
     const client = getGraphqlSoupClient();
@@ -622,7 +626,7 @@ export async function ensureTagSet(scope: TagScope): Promise<TagSetResponse> {
             { optimisticMutation: false, ...context }
           )
           .toPromise(),
-      { waitForCommit: true, serverAnswered: true }
+      { waitForCommit: true, serverAnswered: true, session: started.session }
     );
     const set =
       outcome.kind === 'committed' ? outcome.data?.ensureTagSet : undefined;

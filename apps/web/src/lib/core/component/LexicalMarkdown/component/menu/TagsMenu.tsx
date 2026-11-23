@@ -4,6 +4,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { TagDot } from '@property/tags/TagDot';
 import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from '@property/tags/tagColors';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import { queryReadyGate } from '@queries/gate';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
@@ -264,12 +265,15 @@ export function TagsMenu(props: {
       color: selectedColor(),
     };
     setPendingCreate(creation);
+    // The writes are dropped if another login takes over before they are sent.
+    const session = queryAccountSession();
 
     try {
-      const provisioned = await ensureTagSet.mutateAsync({ scope });
+      const provisioned = await ensureTagSet.mutateAsync({ scope, session });
       if (!provisioned.definition) return;
 
       const created = await addOption.mutateAsync({
+        session,
         propertyDefinitionId: provisioned.definition.id,
         body: {
           type: 'select_string',
@@ -281,6 +285,7 @@ export function TagsMenu(props: {
         },
       });
       if (
+        queryAccountSession() !== session ||
         pendingCreate() !== creation ||
         !props.menu.isOpen() ||
         createStep() !== 'scope' ||
