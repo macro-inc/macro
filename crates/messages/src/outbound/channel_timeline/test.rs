@@ -72,3 +72,26 @@ async fn updates_are_keyed_by_channel_and_decode_to_what_was_published() {
     assert_eq!(decoded.update.channel_id, CHANNEL);
     assert_eq!(decoded.update.activities[0].id, Uuid::from_u128(7));
 }
+
+#[tokio::test]
+async fn a_recipient_that_cannot_subscribe_does_not_drop_the_update() {
+    let broker = RecordingBroker::default();
+    BrokerChannelTimelinePublisher::new(broker.clone())
+        .publish(&update())
+        .unwrap();
+    let published = broker.published.lock().unwrap();
+    let mut wire: serde_json::Value = serde_json::from_slice(&published[0].2).unwrap();
+    // As a writer that addressed every participant, bots included, would.
+    wire["metadata"]["recipients"] = serde_json::json!([
+        "bot|00000000-0000-0000-0000-00000000b07a",
+        "macro|a@example.com",
+    ]);
+
+    let decoded =
+        Event::<ChannelTimelineTopicEvent>::decode(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let ChannelTimelineTopicEvent::Updated(decoded) = decoded.event;
+    assert_eq!(
+        decoded.recipients,
+        vec![MacroUserIdStr::parse_from_str("macro|a@example.com").unwrap()]
+    );
+}
