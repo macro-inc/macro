@@ -251,6 +251,44 @@ retried page load happened.
   unless it passed this time. Results are written
   to a temporary file and renamed into place.
 
+## Recorded run
+
+`run.sh all` at harness commit `f9758c2a201`, 2026-11-23 19:05–23:21 UTC,
+with `OLD_COMMIT=c8b5760036c` (main). Outside `apps/web/src/proof/` that
+commit is identical to the web PR head `b407dc8d5ca`, which contains the
+server PR head `98445d10909`; the local stack ran that server code (no stale
+services). Later commits change only this README and `results/`. The
+sanitized summary is `results/summary.json` (`summarize.mjs`, account
+addresses masked).
+
+| Run | Seed | Sequences × steps | Raw cases | Reader / caller comparisons | Fresh mounts | Differences | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `seed-1` quiet, then 2,500-definition volume | 1 | 200 × 20 | 27,044 | 113,112 / 141,728 | 17,716 | 0 | passed |
+| `seed-2-load` under load (6 load accounts, same-user reads), then volume | 2 | 200 × 20 | 27,141 | 111,480 / 141,728 | 17,716 | 0 | passed |
+| `seed-4` quiet | 4 | 100 × 20 | 13,498 | 55,576 / 70,528 | 8,816 | 0 | passed |
+| `control` main against main, with volume | 3 | 40 × 20 | 6,919 | 22,772 / 28,960 | 3,620 | 0 | passed |
+| `optimism` | 1 | 24 cases | | | | 0 failed checks | passed |
+
+- Every difference the runs found is classified (`tie-order`,
+  `timestamp-format`, `old-stale`, `refused-busy`); none is left open.
+  The control run shows the old side tying rows the same way against itself.
+- All five mutants (`drop-row`, `swap-order`, `alter-field`,
+  `stale-cache`, `skip-live-update`) were applied and caught, against a
+  clean baseline of the same seed and shape.
+- No settle timed out and none needed the harness-time allowance
+  (`harnessTime` 0); the slowest live settle took 7.2 s and was a
+  `refused-busy` side (64 over the three runs), the slowest fresh mount
+  4.1 s, under load.
+- Under load the six load accounts made 98,887 calls and 9,856 of them
+  failed; the load loop does not record why. The fuzzed accounts' own
+  same-user reads (240,199, both transports) had no errors, and every
+  comparison in that run passed.
+- The optimism run covered pending, failed (with rollback in a second tab)
+  and offline-then-reconnect for each of the eight writes. In 18 cases main's
+  live reader was stale where the head was current. A queued write landed
+  452–526 ms after the reconnect on the head, against 0–59 ms on main (the
+  shared queue's retry delay; see the PR).
+
 ## What the counts mean
 
 The counts measure work attempted, not successes, and are not interchangeable:
