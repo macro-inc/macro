@@ -660,6 +660,7 @@ impl TursoFileDatabase {
     /// A database carried forward from a migratable format is compacted first, so
     /// the upgrade also releases the space its dropped records occupied.
     pub fn open(&self, scope: &str) -> Result<TursoStorage, TursoStorageError> {
+        self.recover_interrupted_swap()?;
         let fresh = !self.path.exists();
         let (storage, migrated) = self.open_with_outcome(scope, fresh)?;
         if !migrated {
@@ -718,6 +719,19 @@ impl TursoFileDatabase {
         let mut reopened = self.open_with_outcome(scope, false)?.0;
         reopened.storage_upgraded_from = storage_upgraded_from;
         Ok(reopened)
+    }
+
+    /// Puts back the original [`Self::install_compacted`] moved aside when a
+    /// crash stopped it before the compacted file was in place. The original
+    /// is the migrated database; without it the open would start an empty
+    /// cache and lose the queued writes the migration kept.
+    fn recover_interrupted_swap(&self) -> Result<(), TursoStorageError> {
+        let backup_path = self.path.with_extension("backup");
+        if self.path.exists() || !backup_path.is_file() {
+            return Ok(());
+        }
+        std::fs::rename(&backup_path, &self.path)
+            .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Io))
     }
 
     /// Move the compacted database into place while keeping the original

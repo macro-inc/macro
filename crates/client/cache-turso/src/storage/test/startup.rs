@@ -221,6 +221,30 @@ fn failed_compaction_keeps_the_migrated_database() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn a_swap_a_crash_interrupted_reopens_the_migrated_database() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("cache.turso");
+        let database = TursoFileDatabase::new(&path).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        storage.enqueue_mutation(queued("Pending")).await.unwrap();
+        let pending = storage.load_mutation_queue().await.unwrap();
+        storage.try_close().unwrap();
+
+        // A crash after the swap moved the migrated original aside, before
+        // the compacted file took its place.
+        let backup_path = path.with_extension("backup");
+        std::fs::rename(&path, &backup_path).unwrap();
+        let storage = database.open("scope").unwrap();
+        assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
+        assert_eq!(namespace(&storage), cache_namespace("scope"));
+        storage.try_close().unwrap();
+        assert!(!backup_path.exists());
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn failed_swap_keeps_the_migrated_database() {
     block_on(async {
         let directory = tempfile::tempdir().unwrap();
