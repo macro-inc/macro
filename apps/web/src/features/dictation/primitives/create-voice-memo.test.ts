@@ -1,6 +1,7 @@
 import { renderHook } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import type { AudioRecorderCallbacks, RecorderHandle } from '../core/recording';
+import { FEEDBACK_MS } from '../core/types';
 import { createVoiceMemo } from './create-voice-memo';
 
 /** A recorder whose events the test fires explicitly. */
@@ -236,5 +237,27 @@ describe('voice memo', () => {
     await stopped;
     expect(test.result.phase()).toBe('idle');
     expect(test.onFinish).toHaveBeenCalledOnce();
+  });
+
+  it('clears a notice after a while, or on request', async () => {
+    vi.useFakeTimers();
+    try {
+      const test = setup();
+      FakeRecorder.nextAudio = new Blob([], { type: 'audio/mp4' });
+      await test.result.start();
+      await test.result.stop();
+      expect(test.result.notice()).toBe('empty');
+      vi.advanceTimersByTime(FEEDBACK_MS);
+      expect(test.result.notice()).toBeUndefined();
+
+      await test.result.start();
+      await test.result.stop();
+      expect(test.result.notice()).toBe('empty');
+      test.result.clearNotice();
+      expect(test.result.notice()).toBeUndefined();
+    } finally {
+      FakeRecorder.nextAudio = new Blob(['audio'], { type: 'audio/mp4' });
+      vi.useRealTimers();
+    }
   });
 });

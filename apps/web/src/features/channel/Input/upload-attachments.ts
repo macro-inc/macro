@@ -83,8 +83,13 @@ export async function uploadInputAttachments(options: {
   isActive?: () => boolean;
   /** Overrides classifying each file by its type, as for a voice memo. */
   kind?: InputAttachmentKind;
+  /** Leave failures to the caller, which reports them in its own UI. */
+  quiet?: boolean;
 }): Promise<string[]> {
   const isActive = options.isActive ?? (() => true);
+  const failure = (message: string) => {
+    if (!options.quiet) toast.failure(message);
+  };
   const attached: string[] = [];
   for (const file of options.files) {
     if (!isActive()) break;
@@ -108,7 +113,7 @@ export async function uploadInputAttachments(options: {
     // A full tracker rejected this file; do not upload an invisible attachment.
     if (!options.tracker.attachments().some((item) => item.id === pendingId)) {
       if (previewSrc) URL.revokeObjectURL(previewSrc);
-      toast.failure(`Could not attach ${file.name}: attachment limit reached`);
+      failure(`Could not attach ${file.name}: attachment limit reached`);
       continue;
     }
 
@@ -123,7 +128,7 @@ export async function uploadInputAttachments(options: {
       if (!isActive()) continue;
 
       if (result.failed) {
-        toast.failure(result.reason ?? `Failed to upload ${file.name}`);
+        failure(result.reason ?? `Failed to upload ${file.name}`);
         continue;
       }
 
@@ -131,7 +136,7 @@ export async function uploadInputAttachments(options: {
       if (!isActive()) continue;
       const uploaded = buildUploadedAttachment(file, pendingKind, result);
       if (!uploaded) {
-        toast.failure(`Failed to upload ${file.name}`);
+        failure(`Failed to upload ${file.name}`);
         continue;
       }
 
@@ -153,7 +158,7 @@ export async function uploadInputAttachments(options: {
       if (retainedPreview) attached.push(uploaded.id);
     } catch (error) {
       console.error('failed to upload attachment', error);
-      if (isActive()) toast.failure(`Failed to upload ${file.name}`);
+      if (isActive()) failure(`Failed to upload ${file.name}`);
     } finally {
       if (!retainedPreview) {
         options.tracker.removeAttachment(pendingId);

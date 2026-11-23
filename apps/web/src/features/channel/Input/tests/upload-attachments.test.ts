@@ -190,6 +190,25 @@ describe('uploadInputAttachments', () => {
     expect(toastFailureMock).toHaveBeenCalledWith('Failed to upload spec.md');
   });
 
+  it('leaves a quiet upload failure to the caller, with no toast', async () => {
+    const tracker = createInputAttachmentTracker();
+    const memo = new File(['abc'], 'Voice memo 9:05 AM.m4a', {
+      type: 'audio/mp4',
+    });
+
+    const attached = await uploadInputAttachments({
+      files: [memo],
+      tracker,
+      kind: 'audio',
+      quiet: true,
+      uploadFile: async () => ({ failed: true }),
+    });
+
+    expect(attached).toEqual([]);
+    expect(tracker.attachments()).toEqual([]);
+    expect(toastFailureMock).not.toHaveBeenCalled();
+  });
+
   it('stores document icon type from upload result', async () => {
     const tracker = createInputAttachmentTracker();
     const file = new File(['abc'], 'manual.pdf', {

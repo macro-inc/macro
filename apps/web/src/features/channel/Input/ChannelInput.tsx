@@ -50,10 +50,12 @@ import {
 } from 'lexical';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   type JSX,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
@@ -406,6 +408,8 @@ export function ChannelInput(props: ChannelInputProps) {
     ...composerDictation,
     start: () => {
       collapsedInput.expand();
+      // One note under the composer at a time: the last attempt's.
+      composerVoiceMemo.clearNotice();
       return composerDictation.start();
     },
   };
@@ -417,6 +421,8 @@ export function ChannelInput(props: ChannelInputProps) {
         files: [file],
         tracker: attachmentTracker,
         kind: 'audio',
+        // The recording panel reports a failure and offers Retry.
+        quiet: true,
         uploadFile: (memo) =>
           uploadFile(memo, () => 'static', { hideProgressIndicator: true }),
       });
@@ -434,9 +440,21 @@ export function ChannelInput(props: ChannelInputProps) {
     start: async () => {
       if (attachmentTracker.isFull()) return;
       collapsedInput.expand();
+      composerDictation.clearMessage();
       await composerVoiceMemo.start();
     },
   };
+  // A note about the last recording is stale once the draft moves on.
+  createEffect(
+    on(
+      draft,
+      () => {
+        composerDictation.clearMessage();
+        composerVoiceMemo.clearNotice();
+      },
+      { defer: true }
+    )
+  );
   const showVoiceMemo = () =>
     features().attachments &&
     features().voiceMemos &&
@@ -991,10 +1009,16 @@ export function ChannelInput(props: ChannelInputProps) {
         </Show>
         <VoiceMemoPanel memo={voiceMemo} />
       </Dynamic>
-      <Show when={features().dictation}>
-        <DictationFeedback dictation={dictation} />
+      <Show
+        when={voiceMemo.notice()}
+        fallback={
+          <Show when={features().dictation}>
+            <DictationFeedback dictation={dictation} />
+          </Show>
+        }
+      >
+        <VoiceMemoFeedback memo={voiceMemo} />
       </Show>
-      <VoiceMemoFeedback memo={voiceMemo} />
     </Input.Root>
   );
 }

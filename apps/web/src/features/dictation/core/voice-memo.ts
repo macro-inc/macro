@@ -28,6 +28,8 @@ export interface VoiceMemoController {
   /** Time recorded so far, or the length of the finished recording. */
   elapsedMs(): number;
   notice(): VoiceMemoNotice | undefined;
+  /** Drop the notice, e.g. once the draft has moved on. */
+  clearNotice(): void;
   disabled(): boolean;
   start(): Promise<void>;
   /** Finish recording and attach it; resolves once attached or abandoned. */

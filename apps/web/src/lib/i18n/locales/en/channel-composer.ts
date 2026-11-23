@@ -12,7 +12,7 @@ export default {
   askMacro: 'Ask Macro',
   joinCall: 'Join call',
   startCall: 'Start a call',
-  microphone: 'Record',
+  microphone: 'Dictate or record',
   dictate: 'Dictate',
   voiceMemo: 'Voice memo',
   voiceMemoFileName: 'Voice memo {{time}}',
@@ -23,6 +23,9 @@ export default {
   cancelVoiceMemo: 'Discard voice memo',
   stopVoiceMemo: 'Stop and attach',
   retryVoiceMemo: 'Try attaching again',
+  playVoiceMemo: 'Play voice memo',
+  pauseVoiceMemo: 'Pause voice memo',
+  seekVoiceMemo: 'Position in voice memo',
   voiceMemoMicrophoneDenied:
     'Microphone access is blocked. Allow it in your browser settings and try again.',
   voiceMemoMicrophoneMissing: 'No microphone was found.',

@@ -1,7 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Span } from '@macro-inc/observability';
-import { createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import type { CreateRecorder, RecorderHandle } from '../core/recording';
+import { FEEDBACK_MS } from '../core/types';
 import {
   type VoiceMemoController,
   type VoiceMemoNotice,
@@ -240,6 +241,13 @@ export function createVoiceMemo(options: {
     options.onFinish?.();
   };
 
+  // A notice is about the last attempt; it goes stale.
+  createEffect(() => {
+    if (!notice() || active()) return;
+    const timer = setTimeout(() => setNotice(undefined), FEEDBACK_MS);
+    onCleanup(() => clearTimeout(timer));
+  });
+
   onCleanup(() => {
     disposed = true;
     endTrace('disposed');
@@ -252,6 +260,7 @@ export function createVoiceMemo(options: {
     volumeHistory,
     elapsedMs,
     notice,
+    clearNotice: () => setNotice(undefined),
     disabled: () => phase() !== 'idle',
     start,
     stop,

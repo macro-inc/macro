@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { MediaImage } from '@channel/Media/MediaImage';
 import { MediaVideo } from '@channel/Media/MediaVideo';
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
@@ -10,7 +11,7 @@ import {
 } from '@core/constant/servers';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import XIcon from '@icon/system/regular/x.svg';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   children,
   createMemo,
@@ -140,24 +141,26 @@ function AudioAttachmentItem(props: {
   onRemove: (attachment: InputAttachmentData) => void;
 }) {
   return (
-    <div class="ph-no-capture group flex items-center gap-1 rounded-2xl border border-edge-muted p-1">
-      <Show
-        when={!props.attachment.pending}
-        fallback={
-          <span class="flex h-9 items-center gap-2 px-2 text-sm text-ink-muted">
-            <SpinnerIcon class="size-4 animate-spin" />
-            {truncateFilename(props.attachment.name)}
-          </span>
+    <Show when={!props.attachment.pending}>
+      <VoiceMemoPlayer
+        // Not the local preview: a restored draft's blob: URL is dead.
+        src={staticFileIdEndpoint(props.attachment.id)}
+        label={t('channelComposer.voiceMemo')}
+        trailing={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Remove ${props.attachment.name}`}
+            onClick={(event: MouseEvent) => {
+              event.stopPropagation();
+              props.onRemove(props.attachment);
+            }}
+          >
+            <XIcon class="size-3.5 text-ink-muted" />
+          </Button>
         }
-      >
-        <VoiceMemoPlayer
-          // Not the local preview: a restored draft's blob: URL is dead.
-          src={staticFileIdEndpoint(props.attachment.id)}
-          label={props.attachment.name}
-        />
-      </Show>
-      <RemoveButton attachment={props.attachment} onRemove={props.onRemove} />
-    </div>
+      />
+    </Show>
   );
 }
 
@@ -200,7 +203,11 @@ export function Attachments(props: AttachmentsProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
 
   const visibleAttachments = () => {
-    const items = input().attachments ?? [];
+    // A voice memo uploads under its recording panel, which says so; a
+    // pending chip below it would only grow the composer and move the panel.
+    const items = (input().attachments ?? []).filter(
+      (attachment) => !(attachment.kind === 'audio' && attachment.pending)
+    );
     if (!local.kind) return items;
     if (local.kind === 'media') {
       return items.filter(
