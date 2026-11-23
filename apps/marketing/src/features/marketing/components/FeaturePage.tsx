@@ -20,8 +20,10 @@ import './product-page-preview.css';
 import './demo-glass.css';
 import { PageOutline } from '../../documentation/components/PageOutline';
 import { BENEFIT_PAGES } from '../core/benefit-pages';
+import type { FeatureScreen } from '../core/feature-screens';
 import type { TutorialVideoId } from '../core/tutorial-videos';
 import { FeatureDemoArt, type FeatureDemoComposition } from './FeatureDemoArt';
+import { FeatureScreenshot } from './FeatureScreenshot';
 import { ProductCopy } from './ProductMention';
 import { isEmbeddedProductPage } from './productPagePreview';
 import { wallpapers } from './TutorialWallpaper';
@@ -104,6 +106,8 @@ export function FeaturePageSection(props: {
   id: string;
   title: string | readonly string[];
   description: string;
+  /** A real app screen; product pages use these instead of drawn demos. Children follow it. */
+  screen?: FeatureScreen;
   demo?: FeatureDemoComposition;
   children?: JSX.Element;
 }) {
@@ -147,11 +151,23 @@ export function FeaturePageSection(props: {
           <ProductCopy text={props.description} />
         </p>
       </header>
-      <Show when={props.demo} fallback={props.children}>
-        {(composition) => (
-          <FeatureDemoArt composition={composition()}>
+      <Show
+        when={props.screen}
+        fallback={
+          <Show when={props.demo} fallback={props.children}>
+            {(composition) => (
+              <FeatureDemoArt composition={composition()}>
+                {props.children}
+              </FeatureDemoArt>
+            )}
+          </Show>
+        }
+      >
+        {(screen) => (
+          <>
+            <FeatureScreenshot screen={screen()} />
             {props.children}
-          </FeatureDemoArt>
+          </>
         )}
       </Show>
     </section>

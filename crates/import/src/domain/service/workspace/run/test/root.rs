@@ -38,7 +38,7 @@ async fn a_trashed_root_is_recreated_once_by_the_host_writer(pool: PgPool) {
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -106,7 +106,7 @@ async fn a_purged_root_is_recreated_once_by_the_host_writer(pool: PgPool) {
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
