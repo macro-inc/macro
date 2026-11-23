@@ -159,6 +159,57 @@ test('keeps lanes apart and scrolls to the end in one move with a larger text si
   await expect(page.getByRole('region', { name: 'New group' })).toBeInViewport({
     ratio: 1,
   });
+  // Back at the start, a smaller text size keeps the board at its start.
+  await page.locator('[data-kanban-board-viewport]').evaluate((element) => {
+    element.scrollLeft = 0;
+  });
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 16 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('16px');
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-kanban-board-viewport]')
+        .evaluate((element) => element.scrollLeft)
+    )
+    .toBe(0);
+  await cdp.detach();
+});
+
+test('keeps a card being edited in view when the text size grows', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1800, height: 900 });
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  const card = page.locator(
+    '[data-kanban-card="00000000-0000-0000-0000-000000000011"]'
+  );
+  await expect(card).toBeVisible({ timeout: 30000 });
+  // Stage 2, the fifth lane, is the last one fully in view at 16px.
+  await card.hover();
+  await card.getByRole('button', { name: /^Move / }).click();
+  await page.getByRole('menuitem', { name: 'Stage 2', exact: true }).click();
+  const lane = page.locator(
+    '[data-kanban-lane="option:00000000-0000-0000-0001-000000000001"]'
+  );
+  await expect(lane.locator('[data-kanban-card]')).toHaveCount(1);
+  await expect(lane).toBeInViewport({ ratio: 1 });
+  await card.getByRole('button', { name: /^Next step:/ }).click();
+  const editor = card.getByRole('textbox', { name: 'Edit Next step' });
+  await editor.fill('Unsaved next step');
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('32px');
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue('Unsaved next step');
+  await expect(lane).toBeInViewport({ ratio: 1 });
   await cdp.detach();
 });
 

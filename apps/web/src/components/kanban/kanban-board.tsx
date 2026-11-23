@@ -314,8 +314,9 @@ function Columns(props: {
   function setColumnWidth(width: number) {
     if (width <= 0 || width === columnWidth) return;
     // Every lane moves but the viewport keeps its pixel offset. Keep the lane
-    // at the left edge there, or the end in view when scrolled to it. Read the
-    // item before `measure()`, which rewrites it in place.
+    // at the left edge there, or the end in view when scrolled to it, and a
+    // lane holding focus in view. Read items before `measure()`, which
+    // rewrites them in place.
     const offset = virtualizer.scrollOffset ?? 0;
     const visible = viewport?.clientWidth ?? 0;
     const atEnd =
@@ -324,11 +325,25 @@ function Columns(props: {
     const lane = item
       ? item.index + (offset - item.start) / (item.size + 16)
       : 0;
-    const end = 16 + virtualizer.options.count * (width + 16) - visible;
-    const target = Math.max(
+    const end = Math.max(
       0,
-      Math.min(end, atEnd ? end : 16 + lane * (width + 16))
+      16 + virtualizer.options.count * (width + 16) - visible
     );
+    let target = offset <= 16 ? offset : 16 + lane * (width + 16);
+    if (atEnd) target = end;
+    const focusedKey = viewport?.contains(document.activeElement)
+      ? document.activeElement
+          ?.closest<HTMLElement>('[data-kanban-board-column]')
+          ?.getAttribute('data-kanban-board-column')
+      : undefined;
+    const focused = virtualizer
+      .getVirtualItems()
+      .find((candidate) => String(candidate.key) === focusedKey);
+    if (focused) {
+      const start = 16 + focused.index * (width + 16);
+      target = Math.min(start, Math.max(target, start + width - visible));
+    }
+    target = Math.max(0, Math.min(end, target));
     // Lanes render from the new offset, so the ones in view stay mounted and
     // keep focus and unsaved input.
     virtualizer.scrollOffset = target;
