@@ -324,10 +324,16 @@ where
         scope: ImportScope,
         sharing: NotionSharing,
     ) -> futures::future::BoxFuture<'a, ()> {
+        let explicit_roots = match &scope {
+            ImportScope::Everything => 0,
+            ImportScope::Roots { ids } => ids.len(),
+        };
         let span = tracing::info_span!(
             "workspace_import.plan",
             source = self.workspace_source.as_ref(),
             sharing = sharing.as_ref(),
+            explicit_roots,
+            outcome = tracing::field::Empty,
             already_in_macro = tracing::field::Empty,
             stopped = tracing::field::Empty,
         );
@@ -344,6 +350,7 @@ where
                 Some(outcome) => outcome,
                 // Planning only reads, so the next process plans again.
                 None if control.handed_over() => {
+                    tracing::Span::current().record("outcome", "handed_over");
                     if control.reason() == Some(Stop::Shutdown) {
                         self.release_run(user).await;
                     }
@@ -360,9 +367,17 @@ where
                 }
             };
             // A cancelled run is `dismissed` already, so this moves nothing.
-            if let Err(error) = self.end_plan(user, to, error.as_deref()).await {
-                tracing::warn!(error = ?error, "could not record the notion planning outcome");
-            }
+            let stop = control.reason();
+            let outcome = match self.end_plan(user, to, error.as_deref()).await {
+                Ok(moved) => stop
+                    .as_ref()
+                    .map_or(if moved { to.as_ref() } else { "unchanged" }, AsRef::as_ref),
+                Err(error) => {
+                    tracing::warn!(error = ?error, "could not record the notion planning outcome");
+                    "settlement_failed"
+                }
+            };
+            tracing::Span::current().record("outcome", outcome);
             self.notify(user).await;
         }
         .instrument(span)

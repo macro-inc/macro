@@ -11,6 +11,6 @@ Decisions:
 - "skip": leave it in Notion. Only for objects with no value to the user in Macro: empty "Untitled" pages, Notion's own onboarding and template pages ("Getting Started", "Quick Note" with Notion's sample text, "Template" pages), and obvious duplicates. When in doubt, copy.
 - "hand": the import cannot do it well and a person or agent should handle it by hand. Use it rarely: for example a data source that mixes several unrelated kinds of records, or a page that is clearly a live embed or a dashboard of other databases with no content of its own.
 
-Always choose "copy" for a page marked `explicitlySelected`, including an onboarding or template page. This instruction applies to that page only. Decide separately for each descendant.
+Never choose "skip" for a page marked `explicitlySelected`, including an onboarding or template page. Choose "hand" when the page meets the criteria above. This instruction applies to that page only. Decide separately for each descendant.
 
 Give every object a verdict, answering by its "key". Keep "reason" to one short sentence a user would understand, and give one for every decision other than "copy".

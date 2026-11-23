@@ -11,7 +11,16 @@ where
     W: SlackWorkspaceSource,
     N: NotionConnections,
 {
-    #[tracing::instrument(name = "notion.start_write", skip_all, fields(review_id = %review_id), err)]
+    #[tracing::instrument(
+        name = "notion.start_write",
+        skip_all,
+        fields(
+            review_id = %review_id,
+            copy_overrides = tracing::field::Empty,
+            copy_override_outcome = tracing::field::Empty,
+        ),
+        err
+    )]
     pub(super) async fn start_write(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -76,6 +85,7 @@ where
                 });
             }
         }
+        tracing::Span::current().record("copy_overrides", promoted.len());
         // The owner's sharing changes are recorded on the rows first, so a
         // resumed write shares exactly what they approved.
         let items: Vec<write::WriteItem> = planned.iter().map(|(_, item)| item.clone()).collect();
@@ -109,11 +119,26 @@ where
 
         // Persist the reviewed Copy overrides before claiming rows so a resume
         // reconstructs the same selection from the ledger.
-        if !promoted.is_empty() {
-            self.repo
+        let (outcome, persisted) = if promoted.is_empty() {
+            ("none", Ok(()))
+        } else {
+            match self
+                .repo
                 .update_plan_rows(user, self.workspace_source, &promoted)
-                .await?;
-        }
+                .await
+            {
+                Ok(count) if count == promoted.len() as u64 => ("persisted", Ok(())),
+                Ok(_) => (
+                    "stale",
+                    Err(ImportError::NotReady(
+                        "The Notion plan changed before the selected pages could be saved. Review the plan again.",
+                    )),
+                ),
+                Err(error) => ("failed", Err(error)),
+            }
+        };
+        tracing::Span::current().record("copy_override_outcome", outcome);
+        persisted?;
         self.repo
             .set_plan_sharing(user, &to_share, &to_keep)
             .await?;

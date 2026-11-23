@@ -41,7 +41,7 @@ fn explicitly_requested_page_overrides_template_skip_but_its_child_does_not() {
         PlanTree::new(&inventory).for_scope(&import_notion::domain::model::ImportScope::Roots {
             ids: vec![template.clone()],
         });
-    let verdicts = [template, child]
+    let mut verdicts: HashMap<_, _> = [template.clone(), child]
         .into_iter()
         .map(|id| {
             let key = id.to_string();
@@ -70,6 +70,13 @@ fn explicitly_requested_page_overrides_template_skip_but_its_child_does_not() {
     assert_eq!(rows[0].metadata["plan"]["decision"], "copy");
     assert_eq!(rows[1].metadata["plan"]["decision"], "skip");
     assert_eq!(rows[1].metadata["plan"]["reason"], "Onboarding template");
+
+    let root = verdicts.get_mut(template.as_str()).unwrap();
+    root.decision = NotionDecision::Hand;
+    root.reason = Some("Requires manual setup".into());
+    let rows = tree.decided_rows(&verdicts, NotionSharing::Personal, false);
+    assert_eq!(rows[0].metadata["plan"]["decision"], "hand");
+    assert_eq!(rows[0].metadata["plan"]["reason"], "Requires manual setup");
 }
 
 #[test]

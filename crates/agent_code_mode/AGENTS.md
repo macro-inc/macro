@@ -155,7 +155,9 @@ longer delivery state.
 Import reviews contain exactly one draft, with source `notion`, `linear`, or
 `jira`. Source selection stays on that draft through presentation and approval.
 The optional `copySkipped` list records skipped Notion pages the owner chose
-to copy. The import service applies it to the approved plan.
+to copy. The import service applies it to the approved plan. Roll out the
+server that decodes `copySkipped` before serving a web build that writes it.
+Drain reviews with saved overrides before rolling back to an older decoder.
 
 The web and SDK review types are generated from these Rust types with specta
 (`src/bin/export_review_types.rs`, `just gen-agent-review-types` in `apps/web`).

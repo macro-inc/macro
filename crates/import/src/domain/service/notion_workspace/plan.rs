@@ -250,7 +250,7 @@ impl PlanTree {
             .iter()
             .filter_map(|node| {
                 let mut verdict = verdicts.get(node.id.as_str())?.clone();
-                if self.explicitly_selected(node) {
+                if self.explicitly_selected(node) && verdict.decision == NotionDecision::Skip {
                     verdict.decision = NotionDecision::Copy;
                     verdict.task_fields = None;
                     verdict.reason = Some("Explicitly selected for import.".into());

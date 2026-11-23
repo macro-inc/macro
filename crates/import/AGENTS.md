@@ -384,7 +384,7 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   mirror, with a report note. Derive visibility from the reviewed verdict, never
   the team claim. A folder's link-only setting does not grant database access.
 - A readable Notion page explicitly selected as an import root gets Copy even
-  if triage suggests Skip. Descendants keep their own verdicts. A new scoped
+  if triage suggests Skip. Preserve Hand and each descendant’s own verdict. A new scoped
   plan can stage a previously discarded root again. Respect the approved
   review’s explicit Copy overrides for skipped Notion pages when writing or
   resuming the plan.
