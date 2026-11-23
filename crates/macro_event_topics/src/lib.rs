@@ -73,6 +73,8 @@ topics! {
     MacroChannelsTopic => "macro.channels",
     /// Shared channel and document message events.
     MacroMessagesTopic => "macro.messages",
+    /// Committed channel changes, hydrated and addressed to the channel's participants.
+    MacroChannelTimelineTopic => "macro.channel_timeline",
     /// Signals telling the agent harness to open or feed an agent session.
     MacroAgentSessionsTopic => "macro.agent_sessions",
     /// Email lifecycle events (links, messages, threads, labels).
