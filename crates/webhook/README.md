@@ -513,10 +513,11 @@ encrypts the secret before calling it.
      ChatGPT row, including a subscribe this service is still finishing
      after its caller gave up. Run it alone, so its exclusive lock is held
      only for the catalog change; if it gives up behind a lock, run it again
-     until it succeeds.
+     until it succeeds. `-X` skips local psql settings, so each command
+     commits on its own.
 
      ```sh
-     psql -v ON_ERROR_STOP=1 -c "SET lock_timeout = '5s'" -c "
+     psql -X -v ON_ERROR_STOP=1 -c "SET lock_timeout = '5s'" -c "
        ALTER TABLE mcp_event_subscription
            ADD CONSTRAINT mcp_event_subscription_no_chatgpt
            CHECK (delivery_profile <> 'chatgpt') NOT VALID"
@@ -528,7 +529,7 @@ encrypts the secret before calling it.
      them find no row and are dropped.
 
      ```sh
-     psql -v ON_ERROR_STOP=1 \
+     psql -X -v ON_ERROR_STOP=1 \
        -c "DELETE FROM mcp_event_subscription WHERE delivery_profile = 'chatgpt'" \
        -c "SELECT count(*) FROM mcp_event_subscription WHERE delivery_profile = 'chatgpt'"
      ```
