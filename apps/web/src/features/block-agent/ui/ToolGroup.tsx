@@ -2,9 +2,9 @@
  * A run of tool calls and thoughts as one row that opens to them. While the
  * turn is in the run, the row is its live line: the working dots and the
  * step the agent is on, or the session's own status line over them. Once
- * the run is over it settles to "Used N tools". It opens only when the
- * reader asks, and then lists every call in full, failed ones marked on
- * their own rows: a call the agent retried did not fail the turn.
+ * the run is over it settles to "Used N tools"; a failure is the agent's to
+ * explain, so the row never counts them.
+ * It opens only when the reader asks, and then lists every call in full.
  *
  * Shaped like `Thought` rather than `ToolCard`: a bare caret row, no surface,
  * because the cards themselves appear once it opens.

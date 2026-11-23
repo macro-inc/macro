@@ -329,6 +329,7 @@ type ToolParserMap = {
     response: types.ListTeamMembersResponse;
   };
   LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
+  LogTime: { call: types.LogTime; response: types.LogTimeResponse };
   ManageAgentSession: {
     call: types.ManageAgentSession;
     response: types.SessionActionResult;
@@ -450,6 +451,10 @@ type ToolParserMap = {
     response: types.SpreadsheetResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  ReadTimeEntries: {
+    call: types.ReadTimeEntries;
+    response: types.ReadTimeEntriesResponse;
+  };
   ReadWordDocument: {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;
@@ -919,6 +924,7 @@ const toolParserMap = {
     response: schemas.ListTeamMembersResponse,
   },
   LoadTools: { call: schemas.LoadTools, response: schemas.LoadToolsResponse },
+  LogTime: { call: schemas.LogTime, response: schemas.LogTimeResponse },
   ManageAgentSession: {
     call: schemas.ManageAgentSession,
     response: schemas.SessionActionResult,
@@ -1058,6 +1064,10 @@ const toolParserMap = {
     response: schemas.SpreadsheetResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  ReadTimeEntries: {
+    call: schemas.ReadTimeEntries,
+    response: schemas.ReadTimeEntriesResponse,
+  },
   ReadWordDocument: {
     call: schemas.ReadWordDocument,
     response: schemas.WordDocumentResponse,
@@ -1523,6 +1533,7 @@ type ToolDataMap = {
     response: types.ListTeamMembersResponse;
   };
   LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
+  LogTime: { call: types.LogTime; response: types.LogTimeResponse };
   ManageAgentSession: {
     call: types.ManageAgentSession;
     response: types.SessionActionResult;
@@ -1644,6 +1655,10 @@ type ToolDataMap = {
     response: types.SpreadsheetResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  ReadTimeEntries: {
+    call: types.ReadTimeEntries;
+    response: types.ReadTimeEntriesResponse;
+  };
   ReadWordDocument: {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;

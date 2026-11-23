@@ -7,6 +7,40 @@ fn user_create_payload_without_user_data_defaults_to_none() {
     let webhook = deserialize_user_create_payload(None);
 
     assert_eq!(webhook.event.user.data, None);
+    assert_eq!(webhook.event.info.user_agent, None);
+}
+
+#[test]
+fn user_create_payload_keeps_the_browser_user_agent() {
+    let payload = json!({
+        "event": {
+            "createInstant": 1,
+            "id": "event-id",
+            "linkedObjectId": "linked-object-id",
+            "info": {
+                "ipAddress": "198.51.100.42",
+                "userAgent": "Mozilla/5.0"
+            },
+            "user": {
+                "id": "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+                "email": "new.user@example.com",
+                "username": null,
+                "verified": true,
+                "firstName": null,
+                "lastName": null,
+                "fullName": null
+            },
+            "type": "user.create"
+        }
+    });
+
+    let webhook: FusionAuthUserWebhook =
+        serde_json::from_value(payload).expect("valid FusionAuth user.create payload");
+
+    assert_eq!(
+        webhook.event.info.user_agent.as_deref(),
+        Some("Mozilla/5.0")
+    );
 }
 
 #[test]

@@ -279,10 +279,10 @@ A channel mention's reply in its thread is one message, so the line sits in
 it, and reads `Thinking` whenever the turn is running with no open run, before
 the first step or while the agent writes after one.
 Once a run closes, it folds to a `Used N tools` summary, with a caret after it
-on hover, that opens to compact rows like the session's tool rows: the label,
-and **Failed** or **Interrupted** when a step did not finish. The total
-includes failed steps, but the summary shows no separate failure count, since
-an agent often retries a failed step and recovers.
+on hover, that opens to compact rows like the session's tool rows: the label
+only. A failed or interrupted step looks like any other, and a program that
+failed or stopped without naming a step is left out of the line and the
+summary; the agent explains a failure in its reply.
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
@@ -443,8 +443,8 @@ the tool's own name, without a server or workspace label, never by the harness's
 (`mcp`). Clicking the row expands the exchange: a `Request` section with the
 tool's own arguments and a `Response` section with what it returned, both as
 syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
-button that copies the whole section; a call that failed is faded, shows the
-error as its subtitle, and adds an `Error` section. Rows for a call still running
+button that copies the whole section; a call that failed shows its plain row,
+with no failure label or fade. Rows for a call still running
 show whatever has arrived so far.
 
 ## Inline image actions

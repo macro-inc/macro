@@ -118,6 +118,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   ListTags: (whose) => `list tags in ${whose} workspace`,
   ListTeamMembers: (whose) => `look up ${whose} teammates`,
   LoadTools: null,
+  LogTime: (whose) => `log time on ${whose} tasks`,
   ManageBotChannelAccess: (whose) =>
     `change which channels ${whose} bots can use`,
   ManageChannelParticipants: (whose) => `change who is in ${whose} channels`,
@@ -140,6 +141,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   CreateAgentSession: (whose) => `start an agent session with ${whose} access`,
   ManageAgentSession: (whose) => `manage ${whose} agent sessions`,
   ReadAgentSessionSharing: (whose) => `read ${whose} session sharing`,
+  ReadTimeEntries: (whose) => `read time logged on ${whose} tasks`,
   UpdateAgentSessionSharing: (whose) => `change ${whose} session sharing`,
   ReadAgentSession: (whose) => `read ${whose} agent sessions`,
   ReadChat: (whose) => `read ${whose} chats`,

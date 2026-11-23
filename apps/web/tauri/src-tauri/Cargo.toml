@@ -19,6 +19,11 @@ tauri-build = { version = "2.3.1", features = [] }
 
 [dev-dependencies]
 tauri = { workspace = true, features = ["test"] }
+# Crash report tests build minidumps on any platform; the app reads them only
+# with the `cef` feature.
+minidump = { workspace = true }
+minidump-synth = { workspace = true }
+test-assembler = { workspace = true }
 specta = { version = "=2.0.0-rc.25", features = ["derive", "uuid"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
@@ -29,14 +34,16 @@ specta-typescript = "=0.0.12"
 # ios-build-no-update) so the embedded bundle / dev server is always served.
 auto_apply_update = []
 default = ["auto_apply_update"]
-# Set only by the macOS Chromium build in ../desktop-cef; adds no dependencies.
-cef = []
+# Set only by the macOS Chromium build in ../desktop-cef. Adds the minidump
+# reader for Chromium's crash dumps (src/crash_reports.rs).
+cef = ["dep:minidump"]
 
 [dependencies]
 http = "1"
 log = "0.4"
 logger = { path = "../logger" }
 mime_guess = "2"
+minidump = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -128,6 +135,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSDictionary",
   "NSEnumerator",
   "NSError",
+  "NSProcessInfo",
   "NSString",
   "NSValue",
 ] }

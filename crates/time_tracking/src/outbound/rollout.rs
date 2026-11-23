@@ -38,3 +38,14 @@ impl TimeTrackingRollout for LocalTimeTracking {
         true
     }
 }
+
+/// A host with no feature flag client: time tracking is off for everyone, as
+/// when a flag load fails.
+pub struct TimeTrackingOff;
+
+#[async_trait::async_trait]
+impl TimeTrackingRollout for TimeTrackingOff {
+    async fn enabled_for(&self, _user_id: &MacroUserIdStr<'_>) -> bool {
+        false
+    }
+}

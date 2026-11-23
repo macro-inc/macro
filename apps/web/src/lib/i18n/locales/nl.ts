@@ -691,7 +691,7 @@ export default {
     more: 'Meer',
     moreOptions: 'Meer opties',
     create: 'Maken',
-    getMobileApp: 'Download de mobiele app',
+    downloads: 'Downloads',
     signedInAs: 'Ingelogd als {{name}}',
     customizeSidebar: 'Zijbalk aanpassen',
     customizeSidebarDescription:
@@ -755,8 +755,7 @@ export default {
     tabShortcuts: 'Sneltoetsen',
     tabUsage: 'Gebruik',
     tabBilling: 'Facturering',
-    tabDesktopApp: 'Desktopapp',
-    tabMobileApp: 'Mobiele app',
+    tabDownloads: 'Downloads',
     tabTags: 'Tags',
     tabIntegrations: 'Integraties',
     tabRuntimes: 'Machines',

@@ -655,7 +655,7 @@ export default {
     more: 'เพิ่มเติม',
     moreOptions: 'ตัวเลือกเพิ่มเติม',
     create: 'สร้าง',
-    getMobileApp: 'ดาวน์โหลดแอปบนอุปกรณ์เคลื่อนที่',
+    downloads: 'ดาวน์โหลด',
     signedInAs: 'ลงชื่อเข้าใช้เป็น {{name}}',
     customizeSidebar: 'ปรับแต่งแถบด้านข้าง',
     customizeSidebarDescription:
@@ -718,8 +718,7 @@ export default {
     tabShortcuts: 'แป้นพิมพ์ลัด',
     tabUsage: 'การใช้งาน',
     tabBilling: 'การเรียกเก็บเงิน',
-    tabDesktopApp: 'แอปเดสก์ท็อป',
-    tabMobileApp: 'แอปบนอุปกรณ์เคลื่อนที่',
+    tabDownloads: 'ดาวน์โหลด',
     tabTags: 'แท็ก',
     tabIntegrations: 'การผสานรวม',
     tabRuntimes: 'เครื่อง',
