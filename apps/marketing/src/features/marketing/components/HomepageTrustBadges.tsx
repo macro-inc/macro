@@ -1,11 +1,38 @@
+import { onMount, Show } from 'solid-js';
+import {
+  ensureGithubStars,
+  formatStarCount,
+  githubStars,
+} from '../../../app/utils/utilGithubStars';
 import IconCasa from '../../../assets/designs/design-casa.svg';
 import IconIso from '../../../assets/designs/design-iso.svg';
 import IconSoc2 from '../../../assets/designs/design-soc2.svg';
+import IconGithub from '../../../assets/icons/icon-github.svg';
 import LogoA16z from '../../../assets/logos/a16z.svg';
 import './homepage-trust-badges.css';
 
-/** Backing and security certifications shared by public website sections. */
-export function HomepageTrustBadges() {
+function GithubBadge() {
+  onMount(ensureGithubStars);
+  // Use the last verified count for first paint and when GitHub is unavailable.
+  const stars = () => formatStarCount(githubStars() ?? 6447);
+  return (
+    <a
+      class="homepage-github-badge"
+      href="https://github.com/macro-inc/macro"
+      target="_blank"
+      rel="noreferrer"
+      aria-label={`Macro on GitHub, ${stars()} stars, #1 trending in August`}
+    >
+      <strong>
+        <IconGithub aria-hidden="true" />
+        <span aria-hidden="true">★</span> {stars()}
+      </strong>
+      <span>#1 trending in August</span>
+    </a>
+  );
+}
+
+export function HomepageTrustBadges(props: { showGithub?: boolean }) {
   return (
     <div class="homepage-open-source-badges">
       <div class="homepage-open-source-backing">
@@ -20,6 +47,9 @@ export function HomepageTrustBadges() {
         </div>
         <span>ISO 27001 · SOC 2 · CASA Tier 2</span>
       </div>
+      <Show when={props.showGithub}>
+        <GithubBadge />
+      </Show>
     </div>
   );
 }

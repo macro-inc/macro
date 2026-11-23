@@ -4,9 +4,37 @@
 .homepage-open-source-backing > svg { width: 120px; height: 36px; color: var(--color-ink-muted); }
 .homepage-open-source-security > div { display: flex; gap: 14px; }
 .homepage-open-source-security svg { width: 36px; height: 36px; }
+
+.macro-homepage .homepage-open-source-badges {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(660px, calc(100% - 24px));
+  gap: 0;
+  align-items: stretch;
+  text-align: center;
+}
+.macro-homepage .homepage-open-source-badges > * { position: relative; padding-inline: 6px; }
+.macro-homepage .homepage-open-source-badges > * + *::before {
+  content: '';
+  position: absolute;
+  inset: 2px auto 2px 0;
+  width: 1px;
+  background: linear-gradient(transparent, color-mix(in srgb, currentColor 38%, transparent), transparent);
+}
+.macro-homepage .homepage-open-source-badges + .feature-page-section::before { display: none; }
+.homepage-github-badge { display: flex; flex-direction: column; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
+.homepage-github-badge strong { display: flex; align-items: center; gap: 5px; height: 36px; color: var(--color-ink-muted); font-size: 20px; font-variant-numeric: tabular-nums; }
+.homepage-github-badge strong svg { width: 25px; height: 25px; margin-right: 2px; }
+.homepage-github-badge strong span { font-size: 14px; }
+.homepage-github-badge:hover strong { color: var(--color-ink); }
 @media (max-width: 767px) {
   .homepage-open-source-badges { gap: 34px; margin-top: 36px; flex-wrap: wrap; }
   .homepage-open-source-badges span { font-size: 10px; }
   .homepage-open-source-backing > svg { width: 100px; }
   .homepage-open-source-security svg { width: 30px; height: 36px; }
+  .macro-homepage .homepage-open-source-backing > svg { max-width: 100%; }
+  .macro-homepage .homepage-open-source-security > div { gap: 4px; }
+  .macro-homepage .homepage-open-source-security svg { width: clamp(20px, 6vw, 30px); }
+  .homepage-github-badge strong { font-size: 16px; gap: 3px; }
+  .homepage-github-badge strong svg { width: 20px; height: 20px; }
 }

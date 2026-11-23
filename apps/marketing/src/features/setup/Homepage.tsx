@@ -80,7 +80,7 @@ export function Homepage(props: { embedded?: boolean } = {}) {
             </div>
           </header>
           <HomepageTour />
-          <HomepageTrustBadges />
+          <HomepageTrustBadges showGithub />
           <Suspense>
             <HomepageSections />
           </Suspense>

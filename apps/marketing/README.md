@@ -25,7 +25,9 @@ captured app window on a `TutorialWallpaper`. The tour advances every five
 seconds until the visitor picks a tab, uses the arrow keys or the Next button,
 and never advances under reduced motion. A phone shows the window's left part
 at a readable size, and the tab strip fades at the edge where more tabs
-continue. The backing and security badges sit below the tour. `HomepageSections`
+continue. Below the tour, two faded vertical rules separate the backing, security,
+and GitHub badges. The GitHub badge links to the repository and refreshes its
+star count on mount above the August trending caption. `HomepageSections`
 then gives each product one
 `FeaturePageSection` in the feature pages' 640px reading column with an 800px
 graphic. Use the product page's hero heading and two or three sentences above
