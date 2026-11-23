@@ -21,6 +21,7 @@ import {
   MAX_DELTA_RETRIES,
   setActiveCalendarSyncController,
 } from '../graphql/sync-controller';
+import { fakeCalendarCache } from '../graphql/tests/fake-calendar-cache';
 import { graphqlEvent, graphqlOccurrence } from '../graphql/tests/fixtures';
 import {
   invalidateCalendarOccurrences,
@@ -452,6 +453,104 @@ describe('calendar week after REST showed what the cache missed', () => {
     await query.refetch();
     expect(cache.fetchChanges).toHaveBeenCalledOnce();
     expect(mocks.listOccurrences).not.toHaveBeenCalled();
+    cache.controller.dispose();
+  });
+});
+
+const booking = graphqlOccurrence({
+  id: 'booking-1:2026-10-08T14:00:00+00:00',
+  eventId: 'booking-1',
+  occurrenceKey: '2026-10-08T14:00:00+00:00',
+  time: {
+    __typename: 'GraphqlTimedEventTime',
+    startsAt: '2026-10-08T14:00:00+00:00',
+    endsAt: '2026-10-08T14:30:00+00:00',
+    timeZone: null,
+  },
+  event: graphqlEvent({ id: 'booking-1', title: "Pine's Booking Link" }),
+});
+
+/** A tab whose cache holds the week as current, with REST as the server. */
+async function currentCacheWithBooking() {
+  const cache = fakeCalendarCache([existing, booking]);
+  cacheHost = cache.host;
+  setActiveCalendarSyncController(cache.controller);
+  const server = { occurrences: [existing, booking] };
+  mocks.listOccurrences.mockImplementation(async () =>
+    ok({
+      items: server.occurrences.map(mapCalendarOccurrence),
+      syncStatus: 'ready' as const,
+      hasMore: false,
+      nextCursor: null,
+    })
+  );
+  await cache.controller.runDelta();
+  /** The guest cancels: the server deletes the booking and pokes this tab. */
+  const cancelBooking = () => {
+    server.occurrences = [existing];
+    cache.deleteOnServer('booking-1');
+    return invalidateCalendarOccurrences();
+  };
+  return { cache, cancelBooking };
+}
+
+describe('calendar week after an event is deleted elsewhere', () => {
+  it('drops it from the cache when the poke brings the cache forward', async () => {
+    const { cache, cancelBooking } = await currentCacheWithBooking();
+    const query = renderWeek();
+    await vi.waitFor(() =>
+      expect(eventIds(query.data)).toEqual(['event-1', 'booking-1'])
+    );
+
+    await cancelBooking();
+
+    await vi.waitFor(() => expect(eventIds(query.data)).toEqual(['event-1']));
+    expect(cache.holds('booking-1')).toBe(false);
+    expect(mocks.listOccurrences).not.toHaveBeenCalled();
+    cache.controller.dispose();
+  });
+
+  it('drops it through REST when the delta for its poke fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { cache, cancelBooking } = await currentCacheWithBooking();
+    const query = renderWeek();
+    await vi.waitFor(() =>
+      expect(eventIds(query.data)).toEqual(['event-1', 'booking-1'])
+    );
+
+    cache.delta.mode = 'fail';
+    await cancelBooking();
+
+    await vi.waitFor(() => expect(eventIds(query.data)).toEqual(['event-1']));
+    expect(cache.holds('booking-1')).toBe(true);
+    cache.controller.dispose();
+    warn.mockRestore();
+  });
+
+  it('drops it through REST while the delta for its poke is held, then reads the cache again', async () => {
+    vi.useFakeTimers();
+    const { cache, cancelBooking } = await currentCacheWithBooking();
+    const query = renderWeek();
+    await vi.waitFor(() =>
+      expect(eventIds(query.data)).toEqual(['event-1', 'booking-1'])
+    );
+
+    // A cache waiting on another tab's handoff can hold the delta for minutes.
+    cache.delta.mode = 'hold';
+    const poke = cancelBooking();
+    await vi.advanceTimersByTimeAsync(2 * CALENDAR_CACHE_READ_DEADLINE_MS);
+
+    await vi.waitFor(() => expect(eventIds(query.data)).toEqual(['event-1']));
+    const restReads = mocks.listOccurrences.mock.calls.length;
+    expect(restReads).toBeGreaterThan(0);
+
+    cache.release();
+    await poke;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(cache.holds('booking-1')).toBe(false);
+    await query.refetch();
+    expect(eventIds(query.data)).toEqual(['event-1']);
+    expect(mocks.listOccurrences).toHaveBeenCalledTimes(restReads);
     cache.controller.dispose();
   });
 });
