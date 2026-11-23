@@ -223,19 +223,7 @@ fn upgrade_cost_on_a_retained_cache() {
 /// page cache, as the upgrade's does, since a large `CREATE INDEX` sorts.
 fn step_phases(older: &Path, live: &Path) -> Vec<(String, Duration)> {
     copy_pair(older, live);
-    let io: Arc<dyn IO> = Arc::new(PlatformIO::new().unwrap());
-    let database = Database::open(
-        io,
-        live.to_str().unwrap(),
-        OpenOptions::new(Arc::new(SqliteDialect)),
-    )
-    .unwrap();
-    let connection = database.connect().unwrap();
-    connection.set_temp_store(TempStore::Memory);
-    connection
-        .execute(format!("PRAGMA cache_size = {NATIVE_PAGE_CACHE_PAGES}"))
-        .unwrap();
-    let connection = Db::uncached(connection);
+    let connection = native_connection(live);
     let mut phases = Vec::new();
     // `driver::write_transaction` opens the runner's transaction with a
     // deferred `BEGIN`, so the first statement takes the write lock here too.
@@ -251,4 +239,114 @@ fn step_phases(older: &Path, live: &Path) -> Vec<(String, Duration)> {
     phases.push(("COMMIT".to_owned(), started.elapsed()));
     connection.close().unwrap();
     phases
+}
+
+/// A connection to `path` that runs no open checks or upgrades, set up as a
+/// native open sets its own: sorts in memory, under the native page cache.
+fn native_connection(path: &Path) -> Db {
+    let io: Arc<dyn IO> = Arc::new(PlatformIO::new().unwrap());
+    let database = Database::open(
+        io,
+        path.to_str().unwrap(),
+        OpenOptions::new(Arc::new(SqliteDialect)),
+    )
+    .unwrap();
+    let connection = database.connect().unwrap();
+    connection.set_temp_store(TempStore::Memory);
+    connection
+        .execute(format!("PRAGMA cache_size = {NATIVE_PAGE_CACHE_PAGES}"))
+        .unwrap();
+    Db::uncached(connection)
+}
+
+/// Measures the first open of a retained production-size cache a previous
+/// cache format wrote: the format migration with the compaction swap after
+/// it, then the adoption's Reset that follows. It also times the migration's
+/// drop of the records alone both ways, deleting their rows as it did before
+/// and recreating their tables as it does now, each in its own transaction.
+#[test]
+#[ignore = "needs CACHE_MIGRATION_DB=<a cache-bench database>; run in release with --ignored --nocapture"]
+fn format_migration_cost_on_a_retained_cache() {
+    let Some(source) = std::env::var_os("CACHE_MIGRATION_DB").map(PathBuf::from) else {
+        return;
+    };
+    let runs: usize = std::env::var_os("CACHE_MIGRATION_RUNS")
+        .and_then(|runs| runs.to_str()?.parse().ok())
+        .unwrap_or(3);
+    let directory = tempfile::tempdir_in(source.parent().unwrap()).unwrap();
+    let previous = directory.path().join("previous.turso");
+    let live = directory.path().join("live.turso");
+    copy_pair(&source, &previous);
+    let storage = TursoFileDatabase::new(&previous)
+        .unwrap()
+        .open(BENCH_SCOPE)
+        .unwrap();
+    let records = count(&storage.connection(), "SELECT count(*) FROM records");
+    let documents = count(
+        &storage.connection(),
+        "SELECT count(*) FROM index_documents",
+    );
+    mark_previous_format(
+        &storage,
+        &cache_namespace_at(
+            BENCH_SCOPE,
+            cache_core::codec::MIGRATABLE_CACHE_FORMAT_VERSIONS[0],
+        ),
+    );
+    storage.try_close().unwrap();
+    eprintln!(
+        "{}: {} bytes at the previous format, {records} records, {documents} index documents",
+        source.display(),
+        file_bytes(&previous),
+    );
+    let schema = cache_core::meta::Schema::from_sdl("type Query { ping: String }").unwrap();
+    let inputs = cache_core::schema_change::ProjectionInputs::every();
+    let database = TursoFileDatabase::new(&live).unwrap();
+    for run in 1..=runs {
+        copy_pair(&previous, &live);
+        let open = timed_open(&database);
+        let storage = database.open(BENCH_SCOPE).unwrap();
+        let started = Instant::now();
+        let adoption = storage
+            .adopt_schema(&schema, &inputs, crate::Unrecorded::Guess)
+            .unwrap();
+        let adopt = started.elapsed();
+        storage.try_close().unwrap();
+        let migrated = file_bytes(&live);
+        let rows = drop_phase(&previous, &live, |connection| {
+            for sql in [
+                "DELETE FROM search_documents",
+                "DELETE FROM index_documents",
+                "DELETE FROM records",
+            ] {
+                driver::execute(connection, sql, vec![]).unwrap();
+            }
+            calendar::clear(connection).unwrap();
+        });
+        let tables = drop_phase(&previous, &live, |connection| {
+            crate::storage::schema_store::clear_records(connection).unwrap();
+        });
+        eprintln!(
+            "run {run}: open with migration and compaction {open}; adopt {:.1} ms {:?}; \
+             drop alone: deleting rows {:.1} ms, recreating tables {:.1} ms; file after {migrated} B",
+            adopt.as_secs_f64() * 1e3,
+            adoption.change,
+            rows.as_secs_f64() * 1e3,
+            tables.as_secs_f64() * 1e3,
+        );
+    }
+}
+
+/// `drop` run on a copy of `previous` in one write transaction, timed with
+/// its commit.
+fn drop_phase(previous: &Path, live: &Path, drop: impl FnOnce(&Db)) -> Duration {
+    copy_pair(previous, live);
+    let connection = native_connection(live);
+    let started = Instant::now();
+    driver::execute(&connection, "BEGIN", vec![]).unwrap();
+    drop(&connection);
+    driver::execute(&connection, "COMMIT", vec![]).unwrap();
+    let elapsed = started.elapsed();
+    connection.close().unwrap();
+    elapsed
 }

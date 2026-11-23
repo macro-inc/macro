@@ -2454,6 +2454,9 @@ fn raw_record_keys_include_unprojected_records_and_preserve_queued_writes() {
 /// Rewrites every record as cache format 3 stored it, untagged postcard
 /// bytes, and moves the file to `namespace`.
 fn mark_previous_format(storage: &TursoStorage, namespace: &str) {
+    // One transaction: a production-size cache has hundreds of thousands of
+    // records.
+    raw_execute(storage, "BEGIN", Vec::new());
     let rows = driver::query(
         &storage.connection(),
         "SELECT __typename, id, value FROM records",
@@ -2482,4 +2485,5 @@ fn mark_previous_format(storage: &TursoStorage, namespace: &str) {
         "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
         vec![text(namespace)],
     );
+    raw_execute(storage, "COMMIT", Vec::new());
 }
