@@ -42,25 +42,44 @@ export function EntryForm(props: EntryFormProps): JSX.Element {
   const [note, setNote] = createSignal(props.initial.note ?? '');
 
   const parsed = () => parseLength(length());
+  // A span left as it was keeps its exact instants: the fields show whole
+  // minutes, so a timer entry under a minute reads as the same start and end.
+  const spanKept = () =>
+    date() === props.initial.date &&
+    start() === timeOf(props.initial.startedAt) &&
+    end() === timeOf(props.initial.endedAt);
   const spanComplete = () => (start() === '') === (end() === '');
-  const spanOrdered = () => start() === '' || end() > start();
+  const spanOrdered = () => start() === '' || spanKept() || end() > start();
   const valid = () =>
     parsed().kind === 'length' &&
     date() !== '' &&
     spanComplete() &&
     spanOrdered();
 
+  const span = (): { startedAt: string | null; endedAt: string | null } => {
+    if (start() === '' || end() === '')
+      return { startedAt: null, endedAt: null };
+    if (spanKept()) {
+      return {
+        startedAt: props.initial.startedAt ?? null,
+        endedAt: props.initial.endedAt ?? null,
+      };
+    }
+    return {
+      startedAt: instantOn(date(), start()),
+      endedAt: instantOn(date(), end()),
+    };
+  };
+
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
     const current = parsed();
     if (!valid() || current.kind !== 'length') return;
-    const timed = start() !== '' && end() !== '';
     props.onSubmit({
       date: date(),
       minutes: current.minutes,
       note: note().trim() === '' ? null : note().trim(),
-      startedAt: timed ? instantOn(date(), start()) : null,
-      endedAt: timed ? instantOn(date(), end()) : null,
+      ...span(),
     });
   };
 
