@@ -2449,3 +2449,36 @@ fn raw_record_keys_include_unprojected_records_and_preserve_queued_writes() {
         );
     });
 }
+
+/// Rewrites every record as cache format 3 stored it, untagged postcard
+/// bytes, and moves the file to `namespace`.
+fn mark_previous_format(storage: &TursoStorage, namespace: &str) {
+    let rows = driver::query(
+        &storage.connection(),
+        "SELECT __typename, id, value FROM records",
+        Vec::new(),
+    )
+    .unwrap();
+    for row in rows {
+        let typename = required_text(&row, 0).unwrap();
+        let id = required_text(&row, 1).unwrap();
+        let Value::Blob(bytes) = required_value(&row, 2).unwrap() else {
+            panic!("records.value must be a blob");
+        };
+        let legacy = match bytes.first() {
+            Some(0) => bytes[1..].to_vec(),
+            Some(1) => miniz_oxide::inflate::decompress_to_vec(&bytes[1..]).unwrap(),
+            other => panic!("unexpected record encoding {other:?} for {typename}:{id}"),
+        };
+        raw_execute(
+            storage,
+            "UPDATE records SET value = ?1 WHERE __typename = ?2 AND id = ?3",
+            vec![Value::from_blob(legacy), text(&typename), text(&id)],
+        );
+    }
+    raw_execute(
+        storage,
+        "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
+        vec![text(namespace)],
+    );
+}

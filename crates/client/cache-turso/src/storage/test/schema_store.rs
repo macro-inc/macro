@@ -1056,13 +1056,12 @@ fn another_epochs_cache_keeps_its_queue_and_drops_its_records() {
         let database = TursoMemoryDatabase::new("schema-epoch-format.db");
         let storage = populate(database.open("scope").unwrap()).await;
         let previous = cache_core::codec::MIGRATABLE_CACHE_FORMAT_VERSIONS[0];
-        raw_execute(
+        mark_previous_format(
             &storage,
-            "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
-            vec![text(&format!(
+            &format!(
                 "graphql-cache:scope:s{}:v{previous}",
                 cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH - 1
-            ))],
+            ),
         );
         storage.try_close().unwrap();
         let mut storage = database.open("scope").unwrap();
@@ -1104,6 +1103,74 @@ fn another_epochs_cache_keeps_its_queue_and_drops_its_records() {
             database.open("scope").unwrap_err().physical_reset_reason(),
             Some(PhysicalResetReason::Compatibility)
         );
+    });
+}
+
+#[test]
+fn a_previous_formats_cache_keeps_its_identity_authority_and_aliases() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("schema-previous-format.db");
+        let mut storage = populate(database.open("scope").unwrap()).await;
+        let mut authority = Record::default();
+        authority.fields.insert(
+            "value".into(),
+            cache_core::value::CacheValue::String("granted".into()),
+        );
+        storage
+            .put_batch(vec![(key("__meta:authority"), authority.clone())])
+            .await
+            .unwrap();
+        settle_a_create(&mut storage).await;
+        let kept = [
+            key(IDENTITY_META_KEY),
+            key("__meta:authority"),
+            key("Note:local"),
+        ];
+        let before = storage.get_batch(&kept).await.unwrap();
+        let commands = storage
+            .load_mutation_queue()
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|queued| (queued.id, queued.mutation.request))
+            .collect::<Vec<_>>();
+        mark_previous_format(
+            &storage,
+            &cache_namespace_at(
+                "scope",
+                cache_core::codec::MIGRATABLE_CACHE_FORMAT_VERSIONS[0],
+            ),
+        );
+        storage.try_close().unwrap();
+
+        // The open rewrites what a reset keeps in this format, and the
+        // adoption after it resets the rest.
+        let mut storage = database.open("scope").unwrap();
+        assert_eq!(storage.get_batch(&kept).await.unwrap(), before);
+        assert_eq!(count(&storage, "SELECT count(*) FROM records"), 4);
+        let adoption = adopt(&storage, OLD, &ProjectionInputs::none());
+        assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Unreadable)));
+        assert_eq!(storage.get_batch(&kept).await.unwrap(), before);
+        let server = storage.get_batch(&[key("Note:server")]).await.unwrap();
+        let server = server[0].as_ref().unwrap();
+        assert!(
+            server
+                .fields
+                .contains_key(cache_core::identity::MUTATION_UUID_FIELD)
+        );
+        assert!(!server.fields.contains_key("value"));
+        assert_eq!(shadows(&storage, "Note:server"), 0);
+        assert_eq!(
+            storage
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|queued| (queued.id, queued.mutation.request))
+                .collect::<Vec<_>>(),
+            commands
+        );
+        storage.try_close().unwrap();
     });
 }
 

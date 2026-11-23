@@ -144,6 +144,12 @@ fn may_deflate(len: usize) -> bool {
     (RECORD_COMPRESSION_MIN_BYTES..=RECORD_MAX_INFLATED_BYTES).contains(&len)
 }
 
+/// Decodes a record as cache format 3 stored it: [`encode_record`]'s raw
+/// payload, without the encoding tag format 4 added.
+pub fn decode_format_3_record(bytes: &[u8]) -> Result<Record, CodecError> {
+    decode(bytes)
+}
+
 /// Decodes a normalized record written by [`encode_record`].
 pub fn decode_record(bytes: &[u8]) -> Result<Record, CodecError> {
     let (encoding, payload) = bytes.split_first().ok_or(CodecError::UnknownEncoding(0))?;

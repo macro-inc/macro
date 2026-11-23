@@ -4,6 +4,9 @@ use super::*;
 
 const BATCH_SIZE: usize = 128;
 
+/// Reads a stored record value in one cache format.
+pub(super) type RecordDecoder = fn(&[u8]) -> Result<Record, cache_core::codec::CodecError>;
+
 /// Statement sizes a batch is padded up to, so a few statement texts serve
 /// every batch and stay in the connection's statement cache, and a batch
 /// pads by at most half its size. Padding keys have an empty typename, which
@@ -33,6 +36,16 @@ pub(super) fn read(
     connection: &Db,
     keys: &[RecordKey],
 ) -> Result<Vec<Option<Record>>, TursoStorageError> {
+    read_with(connection, keys, decode_record)
+}
+
+/// [`read`], with records stored as `decode` reads them: an older cache
+/// format's, while a migration carries some of them forward.
+pub(super) fn read_with(
+    connection: &Db,
+    keys: &[RecordKey],
+    decode: RecordDecoder,
+) -> Result<Vec<Option<Record>>, TursoStorageError> {
     if let [key] = keys {
         let rows = driver::query(
             connection,
@@ -43,7 +56,7 @@ pub(super) fn read(
             [] => Ok(vec![None]),
             [row] => match required_value(row, 0)? {
                 Value::Blob(bytes) => {
-                    Ok(vec![Some(decode_record(bytes).map_err(|_| {
+                    Ok(vec![Some(decode(bytes).map_err(|_| {
                         TursoStorageError::reset(PhysicalResetReason::Codec)
                     })?)])
                 }
@@ -88,7 +101,7 @@ pub(super) fn read(
             records[offset + position] = match required_value(&row, 1)? {
                 Value::Null => None,
                 Value::Blob(bytes) => Some(
-                    decode_record(bytes)
+                    decode(bytes)
                         .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?,
                 ),
                 _ => return Err(invariant()),

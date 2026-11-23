@@ -3,7 +3,8 @@ use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
     CACHE_FORMAT_VERSION, MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace, cache_namespace_at,
-    decode_record, decode_record_updates, encode_record, encode_record_updates, namespace_versions,
+    decode_format_3_record, decode_record, decode_record_updates, encode_record,
+    encode_record_updates, namespace_versions,
 };
 use cache_core::predicate::reconciliation::{
     PredicateBaselineEntry, PredicateReconciliation, predicate_membership,
@@ -3595,12 +3596,15 @@ fn sql_bound(bound: RangeBound, lower: bool) -> (&'static str, i64) {
 
 /// Carry a cache written by a migratable older format forward.
 ///
-/// Records and the derived rows they feed are refetchable, so they are dropped.
-/// Queued mutations, optimistic layers, and their projections are kept, which is
-/// why this is not a physical reset. The namespace moves to this build inside the
-/// same transaction, so an interrupted migration leaves the previous state intact
-/// and is retried on the next open. A file of another schema compatibility
-/// epoch also leaves it there ([`schema_store::leave_epoch`]).
+/// Records and the derived rows they feed are refetchable, so they are dropped,
+/// except what a reset keeps: the identity and authority records and the
+/// identity metadata of the records queued writes name, read in that format and
+/// rewritten in this one. Queued mutations and their optimistic layers are kept,
+/// which is why this is not a physical reset. The stored schema is made
+/// unreadable, so the adoption after the open resets the cache in place and
+/// takes the projections the previous format composed. The namespace moves to
+/// this build inside the same transaction, so an interrupted migration leaves the
+/// previous state intact and is retried on the next open.
 fn migrate_previous_format(
     connection: &Db,
     scope: &str,
@@ -3609,16 +3613,21 @@ fn migrate_previous_format(
     let Some(format) = migratable_format(scope, previous_namespace) else {
         return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
     };
-    let other_epoch = cache_namespace_at(scope, format) != previous_namespace;
+    let decode = match format {
+        3 => decode_format_3_record,
+        _ => return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility)),
+    };
     driver::write_transaction(connection, || {
-        if other_epoch {
-            schema_store::mark_unreadable(connection)?;
-        }
+        // The adoption after the open resets the cache in place, which takes
+        // the shadows and overlays the previous format composed too.
+        schema_store::mark_unreadable(connection)?;
+        let identity = schema_store::keep_identity(connection, decode)?;
         driver::execute(connection, "DELETE FROM search_documents", Vec::new())?;
         // Facts cascade from their index documents.
         driver::execute(connection, "DELETE FROM index_documents", Vec::new())?;
         driver::execute(connection, "DELETE FROM records", Vec::new())?;
         calendar::clear(connection)?;
+        schema_store::restore_kept_identity(connection, &identity)?;
         driver::execute(
             connection,
             "UPDATE meta SET value = ?1 WHERE key = 'namespace'",

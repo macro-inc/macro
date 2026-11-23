@@ -90,7 +90,7 @@ fn previous_format_drops_records_and_keeps_pending_writes() {
         storage.enqueue_mutation(queued("Pending")).await.unwrap();
         let pending = storage.load_mutation_queue().await.unwrap();
 
-        mark_previous_format(&storage, "scope");
+        mark_previous_format(&storage, &cache_namespace_at("scope", 3));
         storage.try_close().unwrap();
 
         let storage = database.open("scope").unwrap();
@@ -129,39 +129,6 @@ fn previous_format_drops_records_and_keeps_pending_writes() {
     });
 }
 
-/// Rewrites every record as the previous format stored it: untagged postcard
-/// bytes under the previous namespace.
-fn mark_previous_format(storage: &TursoStorage, scope: &str) {
-    let rows = driver::query(
-        &storage.connection(),
-        "SELECT __typename, id, value FROM records",
-        Vec::new(),
-    )
-    .unwrap();
-    for row in rows {
-        let typename = required_text(&row, 0).unwrap();
-        let id = required_text(&row, 1).unwrap();
-        let Value::Blob(bytes) = required_value(&row, 2).unwrap() else {
-            panic!("records.value must be a blob");
-        };
-        let legacy = match bytes.first() {
-            Some(0) => bytes[1..].to_vec(),
-            Some(1) => miniz_oxide::inflate::decompress_to_vec(&bytes[1..]).unwrap(),
-            other => panic!("unexpected record encoding {other:?} for {typename}:{id}"),
-        };
-        raw_execute(
-            storage,
-            "UPDATE records SET value = ?1 WHERE __typename = ?2 AND id = ?3",
-            vec![Value::from_blob(legacy), text(&typename), text(&id)],
-        );
-    }
-    raw_execute(
-        storage,
-        "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
-        vec![text(&cache_namespace_at(scope, 3))],
-    );
-}
-
 fn namespace(storage: &TursoStorage) -> String {
     let rows = driver::query(
         &storage.connection(),
@@ -189,7 +156,7 @@ fn migrating_a_file_reclaims_space_and_keeps_pending_writes() {
             .unwrap();
         storage.enqueue_mutation(queued("Pending")).await.unwrap();
         let pending = storage.load_mutation_queue().await.unwrap();
-        mark_previous_format(&storage, "scope");
+        mark_previous_format(&storage, &cache_namespace_at("scope", 3));
         storage.try_close().unwrap();
         let before = std::fs::metadata(&path).unwrap().len();
         assert!(before > 100_000, "fixture file was only {before} bytes");
@@ -229,7 +196,7 @@ fn failed_compaction_keeps_the_migrated_database() {
             .unwrap();
         storage.enqueue_mutation(queued("Pending")).await.unwrap();
         let pending = storage.load_mutation_queue().await.unwrap();
-        mark_previous_format(&storage, "scope");
+        mark_previous_format(&storage, &cache_namespace_at("scope", 3));
         storage.try_close().unwrap();
 
         // A directory at the compaction target makes VACUUM INTO fail. The
@@ -266,7 +233,7 @@ fn failed_swap_keeps_the_migrated_database() {
             .unwrap();
         storage.enqueue_mutation(queued("Pending")).await.unwrap();
         let pending = storage.load_mutation_queue().await.unwrap();
-        mark_previous_format(&storage, "scope");
+        mark_previous_format(&storage, &cache_namespace_at("scope", 3));
         storage.try_close().unwrap();
 
         // A directory at the backup path fails the move of the original, which

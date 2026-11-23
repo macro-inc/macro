@@ -327,7 +327,7 @@ fn apply(
             changed,
             every_document,
         } => {
-            let identity = queue_identity(connection)?;
+            let identity = queue_identity(connection, decode_record)?;
             // Facts go before the documents, which would otherwise cascade
             // to them one document at a time.
             if *every_document {
@@ -367,7 +367,7 @@ fn apply(
             driver::execute(connection, STORAGE_GENERATION_DELETE, Vec::new())?;
         }
         Tier::Reset(_) => {
-            let identity = queue_identity(connection)?;
+            let identity = queue_identity(connection, decode_record)?;
             adoption.dropped_records = clear_records(connection)?;
             restore_identity(connection, &identity)?;
             // No queued projection is left to compose a shadow from.
@@ -595,8 +595,11 @@ struct QueueIdentity {
 }
 
 /// Reads [`QueueIdentity`]: the keys each queued write binds, projects or
-/// overlays, and the keys their aliases lead to.
-fn queue_identity(connection: &Db) -> Result<QueueIdentity, TursoStorageError> {
+/// overlays, and the keys their aliases lead to, from records `decode` reads.
+fn queue_identity(
+    connection: &Db,
+    decode: record_batch::RecordDecoder,
+) -> Result<QueueIdentity, TursoStorageError> {
     let mut named = BTreeSet::new();
     let mut bindings = Vec::new();
     for row in driver::query(connection, QUEUE_SELECT, Vec::new())? {
@@ -635,7 +638,7 @@ fn queue_identity(connection: &Db) -> Result<QueueIdentity, TursoStorageError> {
         if keys.is_empty() {
             break;
         }
-        let records = record_batch::read(connection, &keys)?;
+        let records = record_batch::read_with(connection, &keys, decode)?;
         for ((entity, key), record) in entities.into_iter().zip(keys).zip(records) {
             let Some(record) = record else {
                 continue;
@@ -670,6 +673,55 @@ fn queue_identity(connection: &Db) -> Result<QueueIdentity, TursoStorageError> {
     // shadows of the records a binding says share its ID too.
     identity::expand_reference_identities(&bindings, &mut aliases);
     Ok(QueueIdentity { aliases, metadata })
+}
+
+/// What dropping every record of a previous cache format keeps: the
+/// records a reset keeps ([`KEPT_RECORDS`]) and the queue's identity
+/// ([`QueueIdentity`]), read in that format and written back in this one.
+pub(super) struct KeptIdentity {
+    /// [`KEPT_RECORDS`]' rows, as `(typename, id, record)`.
+    kept: Vec<(String, String, Record)>,
+    queue: QueueIdentity,
+}
+
+/// Reads [`KeptIdentity`] from records `decode` reads. A record it cannot
+/// read resets the file, as any read of it would.
+pub(super) fn keep_identity(
+    connection: &Db,
+    decode: record_batch::RecordDecoder,
+) -> Result<KeptIdentity, TursoStorageError> {
+    let mut kept = Vec::new();
+    for row in driver::query(connection, KEPT_RECORDS, Vec::new())? {
+        let Value::Blob(bytes) = required_value(&row, 2)? else {
+            return Err(invariant());
+        };
+        let record =
+            decode(bytes).map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+        kept.push((required_text(&row, 0)?, required_text(&row, 1)?, record));
+    }
+    Ok(KeptIdentity {
+        kept,
+        queue: queue_identity(connection, decode)?,
+    })
+}
+
+/// Writes back what [`keep_identity`] read, once the records are gone.
+pub(super) fn restore_kept_identity(
+    connection: &Db,
+    identity: &KeptIdentity,
+) -> Result<(), TursoStorageError> {
+    for (typename, id, record) in &identity.kept {
+        driver::execute(
+            connection,
+            RECORD_RESTORE,
+            vec![
+                text(typename),
+                text(id),
+                Value::from_blob(encode_record(record)),
+            ],
+        )?;
+    }
+    restore_identity(connection, &identity.queue)
 }
 
 /// Puts back the identity metadata of each record the queue named that the
