@@ -114,8 +114,9 @@ writes to its draft without one.
 When every selected item has one entity type, the modal's property list asks
 the properties service for that type (`for_entity_type`), so it offers only
 what those items can take: Stage, Owner and Revenue only on companies, and
-Parent Task, Subtasks, Project and Time logged only on tasks. A mixed selection
-lists every definition. The create dialog uses the same type.
+Parent Task, Subtasks and Time logged only on tasks. A mixed selection lists
+every definition. The create dialog uses the same type. The Properties panel
+reads the same list for its entity, so the picker opens with it loaded.
 
 ## Creating a property
 
