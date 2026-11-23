@@ -284,7 +284,7 @@ test-channels-e2e instance *ARGS:
 # instance's services stay as they are. VITE_* variables set here go to the
 # build and to the run (tests/channels-e2e/README.md).
 test-channels-e2e-with instance source *ARGS:
-    tests/channels-e2e/run-with-bundle.sh "{{instance}}" "{{source}}" {{ARGS}}
+    tests/channels-e2e/run-with-bundle.sh "$@"
 
 # The bundle the email browser suite serves (tests/email-e2e): every service on
 # the page's own origin, where the suite's front proxies to the email stack.
