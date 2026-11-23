@@ -1,0 +1,185 @@
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type {
+  LinkProperty,
+  Property,
+  PropertyDefinitionDomain,
+} from '../types';
+import { PropertyEditorDialog } from './PropertyEditorModal';
+import type { PropertyEditorEntity } from './state/propertyEditor';
+
+vi.mock('@queries/properties/entity', () => ({
+  useEntityPropertiesQuery: () => ({ data: [] }),
+  useBulkUpdateEntityPropertyOptionsMutation: () => ({}),
+}));
+
+const LINKEDIN: LinkProperty = {
+  propertyDefinitionId: 'linkedin',
+  propertyId: 'linkedin-on-contact',
+  displayName: 'LinkedIn',
+  isMultiSelect: false,
+  owner: { scope: 'team', team_id: 'team' },
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  valueType: 'LINK',
+  value: null,
+};
+
+const NEW_LINKEDIN: PropertyDefinitionDomain = {
+  id: 'linkedin',
+  displayName: 'LinkedIn',
+  isMultiSelect: false,
+  isMetadata: false,
+  isSystem: false,
+  valueType: 'LINK',
+  owner: { scope: 'team', team_id: 'team' },
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+};
+
+const CONTACT: PropertyEditorEntity = {
+  id: 'contact',
+  name: 'Contact',
+  entityType: 'CONTACT',
+};
+const OTHER_CONTACT: PropertyEditorEntity = {
+  id: 'other-contact',
+  name: 'Other contact',
+  entityType: 'CONTACT',
+};
+
+function setup(
+  target: Property | PropertyDefinitionDomain,
+  entities: PropertyEditorEntity[] = [CONTACT]
+) {
+  const onSave = vi.fn();
+  render(() => (
+    <PropertyEditorDialog
+      isOpen
+      state={{
+        mode: 'direct',
+        selectedEntities: entities,
+        targetProperty: target,
+      }}
+      onModeChange={() => {}}
+      onTargetChange={() => {}}
+      onClose={() => {}}
+      onSave={onSave}
+    />
+  ));
+  const field = screen.getByRole<HTMLInputElement>('textbox');
+  return { onSave, field };
+}
+
+function type(field: HTMLInputElement, value: string) {
+  fireEvent.input(field, { target: { value } });
+}
+
+function savedValues(onSave: ReturnType<typeof vi.fn>) {
+  expect(onSave).toHaveBeenCalledOnce();
+  return onSave.mock.calls[0]![1];
+}
+
+afterEach(cleanup);
+
+describe('link property editor', () => {
+  it('sets the first link of a property created from Add property', () => {
+    const { onSave, field } = setup(NEW_LINKEDIN);
+
+    type(field, 'linkedin.com/in/someone');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(savedValues(onSave)).toEqual({
+      valueType: 'LINK',
+      values: ['https://linkedin.com/in/someone'],
+    });
+  });
+
+  it('replaces the link of a single-link property', () => {
+    const { onSave, field } = setup({
+      ...LINKEDIN,
+      value: ['https://linkedin.com/in/old'],
+    });
+
+    type(field, 'https://linkedin.com/in/new');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(savedValues(onSave)).toEqual({
+      valueType: 'LINK',
+      values: ['https://linkedin.com/in/new'],
+    });
+  });
+
+  it('adds to the links of a property that takes several', () => {
+    const { onSave, field } = setup({
+      ...LINKEDIN,
+      isMultiSelect: true,
+      value: ['https://example.com/one'],
+    });
+
+    type(field, 'example.com/two');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(savedValues(onSave)).toEqual({
+      valueType: 'LINK',
+      values: ['https://example.com/one', 'https://example.com/two'],
+    });
+  });
+
+  it('clears the value when its last link is removed', () => {
+    const { onSave } = setup({
+      ...LINKEDIN,
+      value: ['https://linkedin.com/in/old'],
+    });
+
+    fireEvent.click(
+      screen.getByRole('option', { name: /linkedin\.com\/in\/old/ })
+    );
+
+    expect(savedValues(onSave)).toEqual({ valueType: 'LINK', values: null });
+  });
+
+  it('keeps the remaining links when one of several is removed', () => {
+    const { onSave } = setup({
+      ...LINKEDIN,
+      isMultiSelect: true,
+      value: ['https://example.com/one', 'https://example.com/two'],
+    });
+
+    fireEvent.click(screen.getByRole('option', { name: /example\.com\/one/ }));
+
+    expect(savedValues(onSave)).toEqual({
+      valueType: 'LINK',
+      values: ['https://example.com/two'],
+    });
+  });
+
+  it('saves nothing for input that is not a URL or is already linked', () => {
+    const { onSave, field } = setup({
+      ...LINKEDIN,
+      value: ['https://linkedin.com/in/old'],
+    });
+
+    type(field, 'not a url');
+    fireEvent.keyDown(field, { key: 'Enter' });
+    type(field, 'linkedin.com/in/old');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('sets one link on every selected item', () => {
+    const { onSave, field } = setup(
+      { ...LINKEDIN, isMultiSelect: true, value: ['https://example.com/one'] },
+      [CONTACT, OTHER_CONTACT]
+    );
+
+    type(field, 'example.com/two');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(savedValues(onSave)).toEqual({
+      valueType: 'LINK',
+      values: ['https://example.com/two'],
+    });
+  });
+});

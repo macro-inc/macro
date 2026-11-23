@@ -78,6 +78,7 @@ import {
 import { EntityPropertyEditor } from './entity-property-editor';
 import { useAllProperties } from './hooks/useAllProperties';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
+import { LinkPropertyEditor } from './link-property-editor';
 import {
   closePropertyEditor,
   hasPropertyEditorPropertyAddedHandler,
@@ -1428,10 +1429,21 @@ function PropertyValueEditor(props: {
           setInputType={props.setInputType}
         />
       </Match>
-      <Match when={propertyType() === 'LINK'}>
-        <div class="p-4 text-center text-ink-muted">
-          Link editing not yet implemented
-        </div>
+      <Match when={propertyType() === 'LINK' && resolvedProperty()}>
+        {(property) => (
+          <LinkPropertyEditor
+            property={property()}
+            searchValue={props.searchValue}
+            selectedIndex={props.selectedIndex}
+            setSelectedIndex={props.setSelectedIndex}
+            onSave={props.onSave}
+            setKeybindings={props.setKeybindings}
+            setPlaceholder={props.setPlaceholder}
+            selectedEntityCount={
+              props.properties ? 1 : props.selectedEntities.length
+            }
+          />
+        )}
       </Match>
     </Switch>
   );
