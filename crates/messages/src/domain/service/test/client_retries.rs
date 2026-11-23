@@ -261,3 +261,96 @@ async fn a_repeated_edit_does_not_attach_the_same_entity_twice() {
         ["602", "new"]
     );
 }
+
+#[tokio::test]
+async fn a_repeated_delete_of_someone_elses_message_is_still_forbidden() {
+    let mut repo = fixture();
+    repo.message.deleted_at = Some(Utc::now());
+    repo.message.content = String::new();
+    let service = MessageService::new(repo.clone(), Events::default());
+    assert!(matches!(
+        service
+            .delete_once(
+                access("macro|other@example.com", "doc", AccessLevel::Comment),
+                repo.message.id,
+                None,
+            )
+            .await,
+        Err(MessageError::Forbidden),
+    ));
+}
+
+#[tokio::test]
+async fn a_repeated_edit_the_message_already_shows_writes_and_publishes_nothing() {
+    let mut repo = fixture();
+    repo.message.content = "Edited".into();
+    repo.message.attachments = vec![MessageAttachment {
+        id: Uuid::from_u128(602),
+        entity_type: "document".into(),
+        entity_id: "kept".into(),
+        width: None,
+        height: None,
+        created_at: Utc::now(),
+    }];
+    let events = Events::default();
+    let service =
+        MessageService::new(repo.clone(), events.clone()).with_references(ReferenceAccess {
+            allowed: true,
+            checked: Arc::default(),
+        });
+    let edit = || MessagePatch {
+        content: Some("Edited".into()),
+        attachments: AttachmentChange::DeltaOnce {
+            remove: vec![Uuid::from_u128(601)],
+            add: vec![NewAttachment {
+                entity_type: "document".into(),
+                entity_id: "kept".into(),
+                width: None,
+                height: None,
+            }],
+        },
+        ..Default::default()
+    };
+    let message = service
+        .patch_once(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            repo.message.id,
+            edit(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(message.content, "Edited");
+    assert!(repo.edits.lock().unwrap().is_empty());
+    assert!(events.0.lock().unwrap().is_empty());
+
+    // A plain patch keeps writing an identical edit, as REST always has.
+    service
+        .patch(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            repo.message.id,
+            edit(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(repo.edits.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_replayed_edit_that_changes_something_is_written() {
+    let repo = fixture();
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    service
+        .patch_once(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            repo.message.id,
+            MessagePatch {
+                content: Some("Changed".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(repo.edits.lock().unwrap().len(), 1);
+    assert_eq!(events.0.lock().unwrap().len(), 1);
+}

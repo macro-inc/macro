@@ -105,6 +105,16 @@ pub trait MessageCommands: Send + Sync + 'static {
     ) -> Result<Message, MessageError> {
         self.delete(access, id, nonce).await
     }
+    /// Edit for callers that retry: an edit the message already shows returns
+    /// it without another write or event. Defaults to a plain patch.
+    async fn patch_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        patch: MessagePatch,
+    ) -> Result<Message, MessageError> {
+        self.patch(access, id, patch).await
+    }
     /// Idempotently post a trusted server event, using its UUIDv7 as the message
     /// id without a client clock-skew limit. Replays return the original message,
     /// including tombstones, after checking its parent, author, and thread.
@@ -297,6 +307,14 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
         nonce: Option<String>,
     ) -> Result<Message, MessageError> {
         MessageService::delete_once(self, access, id, nonce).await
+    }
+    async fn patch_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        patch: MessagePatch,
+    ) -> Result<Message, MessageError> {
+        MessageService::patch_once(self, access, id, patch).await
     }
     async fn post_from_event(
         &self,

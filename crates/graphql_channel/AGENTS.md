@@ -42,11 +42,14 @@ separately from Soup's thread-root projection.
 - Reply keys include `import_order NULLS LAST`; timestamps alone do not describe their order.
 - Preserve microseconds in timestamps and cursors; message UUIDs break equal-time ties.
 - Message mutations are replayed by the client's queue: send goes through
-  `post_once` (the client id returns the stored message) and delete through
-  `delete_once` (the tombstone); edit and react are already repeatable. A root
+  `post_once` (the client id returns the stored message), edit through
+  `patch_once` (an edit the message already shows writes nothing) and delete
+  through `delete_once` (the tombstone); react is already repeatable. A root
   is returned with its thread summary so the cached row stays complete, and a
   reply (sent, replayed or deleted) with its root, read back on primary after
-  the commit; a root that cannot be read back is left out, never an error.
+  the commit. A reply's root that cannot be read back is left out; a written
+  root that cannot be read back answers `SERVICE_UNAVAILABLE`, so the queue
+  replays the write rather than cache a root without its summary.
 - `MessageError::Contended` maps to `SERVICE_UNAVAILABLE`; the client keeps the write queued and retries it without counting a failure.
 - Keep `id` for global identities; thread metadata and attachment references are embedded.
 

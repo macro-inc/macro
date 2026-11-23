@@ -222,31 +222,49 @@ where
     }
 }
 
+/// GraphQL error codes this adapter answers with, shared with REST's categories.
+mod code {
+    pub(crate) const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
+    pub(crate) const FORBIDDEN: &str = "FORBIDDEN";
+    pub(crate) const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
+    pub(crate) const SERVICE_UNAVAILABLE: &str = "SERVICE_UNAVAILABLE";
+}
+
+/// A GraphQL error with a stable message and code.
+fn coded_error(message: impl Into<String>, code: &'static str) -> async_graphql::Error {
+    async_graphql::Error::new(message.into()).extend_with(|_, e| e.set("code", code))
+}
+
+/// The answer to a caller without access, which names nothing it may not see.
+fn forbidden() -> async_graphql::Error {
+    coded_error("forbidden", code::FORBIDDEN)
+}
+
 /// Transport validation error with the shared GraphQL code.
 fn bad_input(message: impl Into<String>) -> async_graphql::Error {
-    use async_graphql::ErrorExtensions;
-    async_graphql::Error::new(message.into()).extend_with(|_, e| e.set("code", "BAD_USER_INPUT"))
+    coded_error(message, code::BAD_USER_INPUT)
 }
 
 /// Preserve REST's error categories without leaking persistence details.
 fn message_error(error: messages::domain::ports::MessageError) -> async_graphql::Error {
-    use async_graphql::ErrorExtensions;
     use messages::domain::ports::MessageError;
-    let (message, code) = match error {
-        MessageError::NotFound => ("message or parent not found", "NOT_FOUND"),
-        MessageError::Forbidden => ("forbidden", "FORBIDDEN"),
-        MessageError::Invalid(message) => (message, "BAD_USER_INPUT"),
-        MessageError::Conflict => ("message id already exists", "CONFLICT"),
-        MessageError::Contended(_) => (
+    match error {
+        MessageError::NotFound => coded_error("message or parent not found", "NOT_FOUND"),
+        MessageError::Forbidden => forbidden(),
+        MessageError::Invalid(message) => bad_input(message),
+        MessageError::Conflict => coded_error("message id already exists", "CONFLICT"),
+        MessageError::Contended(_) => coded_error(
             "conversation is busy; retry the request",
-            "SERVICE_UNAVAILABLE",
+            code::SERVICE_UNAVAILABLE,
         ),
         MessageError::Repository(error) => {
             tracing::error!(error = ?error, "channel message request failed");
-            ("channel messages are unavailable", "INTERNAL_SERVER_ERROR")
+            coded_error(
+                "channel messages are unavailable",
+                code::INTERNAL_SERVER_ERROR,
+            )
         }
-    };
-    async_graphql::Error::new(message).extend_with(|_, e| e.set("code", code))
+    }
 }
 
 /// Apply this adapter's validation code to the shared UUID parser.
@@ -410,6 +428,5 @@ impl GraphqlChannelUserQuery {
 /// repository's error text.
 fn channel_read_failed(error: ChannelMessagesErr, message: &'static str) -> async_graphql::Error {
     tracing::error!(error = ?error, message, "channel read failed");
-    async_graphql::Error::new(message)
-        .extend_with(|_, extensions| extensions.set("code", "INTERNAL_SERVER_ERROR"))
+    coded_error(message, code::INTERNAL_SERVER_ERROR)
 }

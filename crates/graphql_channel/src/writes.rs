@@ -204,7 +204,7 @@ impl AuthorizedWrite<'_> {
         channel_id: Uuid,
         message: Message,
     ) -> async_graphql::Result<GraphqlChannelMessageWrite> {
-        Ok(context.written(view, message, channel_id).await)
+        context.written(view, message, channel_id).await
     }
 }
 
@@ -221,9 +221,10 @@ async fn authorize<'a>(
         .copied()
         .filter(|actor| actor.human_session)
         .ok_or_else(|| {
-            use async_graphql::ErrorExtensions;
-            async_graphql::Error::new("channel message mutations require a personal session")
-                .extend_with(|_, e| e.set("code", "FORBIDDEN"))
+            crate::coded_error(
+                "channel message mutations require a personal session",
+                crate::code::FORBIDDEN,
+            )
         })?;
     let context = ctx.data::<ChannelGraphqlContext>()?;
     let (commands, access) = context
@@ -232,10 +233,7 @@ async fn authorize<'a>(
     let view = access
         .clone()
         .try_into_requirement::<MessageView>()
-        .map_err(|_| {
-            use async_graphql::ErrorExtensions;
-            async_graphql::Error::new("forbidden").extend_with(|_, e| e.set("code", "FORBIDDEN"))
-        })?;
+        .map_err(|_| crate::forbidden())?;
     Ok(AuthorizedWrite {
         context,
         view,
@@ -324,7 +322,7 @@ impl ChannelMessageMutationRoot {
         }
         let message = write
             .commands
-            .patch(
+            .patch_once(
                 write.access,
                 id,
                 MessagePatch {

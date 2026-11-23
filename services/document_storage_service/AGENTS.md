@@ -230,3 +230,6 @@ state requires acknowledged purge before ordinary cleanup; release the guard bef
 
 - `ChannelGraphqlContext` shares the primary-backed REST messages service and access
   service; insert it through `insert_graphql_context_data` for HTTP and websockets.
+  Its `with_commands` serves the channel message mutations, which need the
+  `ChannelWriteActor` only the HTTP handler inserts, for a person's own session:
+  mutations over the websocket, and from tokens or agents, are refused.

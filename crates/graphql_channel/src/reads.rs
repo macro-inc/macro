@@ -93,13 +93,20 @@ impl ChannelGraphqlContext {
     /// belongs to. A root carries its thread summary and call state, so the
     /// cached records stay whole and a reply's root counts the reply in the
     /// same commit. A replayed write reads both back the same way.
+    ///
+    /// The write has committed by now. A reply whose root cannot be read back
+    /// is answered without it. A root that cannot be read back is answered
+    /// `SERVICE_UNAVAILABLE`, since a root without its thread summary would
+    /// erase the cached one: the client's queue replays the write under the
+    /// same id, every mutation here answers a replay without another write, and
+    /// the replay reads the root again.
     pub(crate) async fn written(
         &self,
         access: EntityAccessReceipt<MessageView>,
         message: messages::domain::models::Message,
         channel_id: Uuid,
-    ) -> crate::GraphqlChannelMessageWrite {
-        match message.thread_id {
+    ) -> async_graphql::Result<crate::GraphqlChannelMessageWrite> {
+        Ok(match message.thread_id {
             Some(root_id) => crate::GraphqlChannelMessageWrite {
                 root: match self.read_back_root(access, root_id, channel_id).await {
                     ReadBack::Root(root) => Some(root),
@@ -110,18 +117,24 @@ impl ChannelGraphqlContext {
             None => crate::GraphqlChannelMessageWrite {
                 message: match self.read_back_root(access, message.id, channel_id).await {
                     ReadBack::Root(root) => root,
-                    ReadBack::NotRoot | ReadBack::Failed => {
+                    ReadBack::NotRoot => {
                         crate::GraphqlChannelMessage::from_message(message, channel_id)
+                    }
+                    ReadBack::Failed => {
+                        return Err(crate::coded_error(
+                            "the written message could not be read back; retry the request",
+                            crate::code::SERVICE_UNAVAILABLE,
+                        ));
                     }
                 },
                 root: None,
             },
-        }
+        })
     }
 
-    /// Read a root back after a write committed. A failure is logged and
-    /// answered with less, never as an error: failing here would tell the
-    /// client its write was refused, and a resend under a new id would post
+    /// Read a root back after a write committed. A failure is logged and left
+    /// to the caller, which answers with less or asks for a replay, never with
+    /// an error that reads as a refusal: a resend under a new id would post
     /// twice.
     async fn read_back_root(
         &self,
@@ -154,10 +167,11 @@ impl ChannelGraphqlContext {
         organization_id: Option<i64>,
         channel_id: Uuid,
     ) -> async_graphql::Result<(&dyn MessageCommands, EntityAccessReceipt<MessageWrite>)> {
-        use async_graphql::ErrorExtensions;
         let writes = self.writes.as_ref().ok_or_else(|| {
-            async_graphql::Error::new("channel message mutations are not configured")
-                .extend_with(|_, e| e.set("code", "INTERNAL_SERVER_ERROR"))
+            crate::coded_error(
+                "channel message mutations are not configured",
+                crate::code::INTERNAL_SERVER_ERROR,
+            )
         })?;
         let access = writes
             .access
@@ -166,11 +180,12 @@ impl ChannelGraphqlContext {
             .map_err(|error| match error {
                 AccessError::Unavailable(error) | AccessError::Internal(error) => {
                     tracing::error!(error = ?error, "channel access is unavailable");
-                    async_graphql::Error::new("channel access is unavailable")
-                        .extend_with(|_, e| e.set("code", "INTERNAL_SERVER_ERROR"))
+                    crate::coded_error(
+                        "channel access is unavailable",
+                        crate::code::INTERNAL_SERVER_ERROR,
+                    )
                 }
-                _ => async_graphql::Error::new("forbidden")
-                    .extend_with(|_, e| e.set("code", "FORBIDDEN")),
+                _ => crate::forbidden(),
             })?;
         Ok((writes.commands.as_ref(), access))
     }
@@ -184,17 +199,15 @@ impl ChannelGraphqlContext {
         self.access
             .authorize(viewer, channel_id)
             .await
-            .map_err(|error| {
-                use async_graphql::ErrorExtensions;
-                match error {
-                    AccessError::Unavailable(error) | AccessError::Internal(error) => {
-                        tracing::error!(error = ?error, "channel access is unavailable");
-                        async_graphql::Error::new("channel access is unavailable")
-                            .extend_with(|_, e| e.set("code", "INTERNAL_SERVER_ERROR"))
-                    }
-                    _ => async_graphql::Error::new("forbidden")
-                        .extend_with(|_, e| e.set("code", "FORBIDDEN")),
+            .map_err(|error| match error {
+                AccessError::Unavailable(error) | AccessError::Internal(error) => {
+                    tracing::error!(error = ?error, "channel access is unavailable");
+                    crate::coded_error(
+                        "channel access is unavailable",
+                        crate::code::INTERNAL_SERVER_ERROR,
+                    )
                 }
+                _ => crate::forbidden(),
             })
     }
 

@@ -141,16 +141,19 @@ async fn a_reply_edit_reaction_and_repeated_delete_return_the_stored_message(poo
     );
     assert_eq!(replayed, first_send);
 
+    let edit = format!(
+        "editChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{reply}\", content: \"Reply, edited\" }}) {{ message {{ content editedAt sortKey }} }}"
+    );
     let edited = data(
-        mutate(
-            &harness,
-            &context,
-            Some(PERSON),
-            &format!("editChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{reply}\", content: \"Reply, edited\" }}) {{ message {{ content editedAt sortKey }} }}"),
-        )
-        .await,
+        mutate(&harness, &context, Some(PERSON), &edit).await,
         "editChannelMessage",
     );
+    // A replayed edit finds nothing to change and keeps the first edit's time.
+    let replayed_edit = data(
+        mutate(&harness, &context, Some(PERSON), &edit).await,
+        "editChannelMessage",
+    );
+    assert_eq!(replayed_edit, edited);
     assert_eq!(edited["content"], json!("Reply, edited"));
     assert!(edited["editedAt"].is_string());
     assert_eq!(edited["sortKey"], sent["sortKey"]);
