@@ -130,6 +130,8 @@ export function decodeImportProgress(
       ? {
           owners: report.hubspot.owners,
           ownersMatched: report.hubspot.ownersMatched,
+          created: report.hubspot.created ?? 0,
+          linked: report.hubspot.linked ?? 0,
           losses: report.hubspot.losses,
         }
       : null,

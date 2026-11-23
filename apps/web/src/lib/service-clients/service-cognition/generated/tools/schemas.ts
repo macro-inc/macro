@@ -11461,6 +11461,8 @@ export const HubspotImportResponse = z.object({
           owners: z.number().int().gte(0),
           ownersMatched: z.number().int().gte(0),
           alreadyImported: z.number().int().gte(0),
+          created: z.number().int().gte(0).optional(),
+          linked: z.number().int().gte(0).optional(),
           losses: z.array(
             z.object({
               loss: z.any().superRefine((x, ctx) => {
@@ -11473,6 +11475,9 @@ export const HubspotImportResponse = z.object({
                   z.literal('unsupported_currency'),
                   z.literal('additional_domains'),
                   z.literal('company_owner'),
+                  z.literal('merged_company'),
+                  z.literal('merged_contact'),
+                  z.literal('contact_without_company'),
                 ];
                 const errors = schemas.reduce<z.ZodError[]>(
                   (errors, schema) =>
@@ -11722,6 +11727,8 @@ export const TrackerImportResponse = z.object({
           owners: z.number().int().gte(0),
           ownersMatched: z.number().int().gte(0),
           alreadyImported: z.number().int().gte(0),
+          created: z.number().int().gte(0).optional(),
+          linked: z.number().int().gte(0).optional(),
           losses: z.array(
             z.object({
               loss: z.any().superRefine((x, ctx) => {
@@ -11734,6 +11741,9 @@ export const TrackerImportResponse = z.object({
                   z.literal('unsupported_currency'),
                   z.literal('additional_domains'),
                   z.literal('company_owner'),
+                  z.literal('merged_company'),
+                  z.literal('merged_contact'),
+                  z.literal('contact_without_company'),
                 ];
                 const errors = schemas.reduce<z.ZodError[]>(
                   (errors, schema) =>
@@ -12036,6 +12046,8 @@ export const ImportFromNotionResponse = z.object({
           owners: z.number().int().gte(0),
           ownersMatched: z.number().int().gte(0),
           alreadyImported: z.number().int().gte(0),
+          created: z.number().int().gte(0).optional(),
+          linked: z.number().int().gte(0).optional(),
           losses: z.array(
             z.object({
               loss: z.any().superRefine((x, ctx) => {
@@ -12048,6 +12060,9 @@ export const ImportFromNotionResponse = z.object({
                   z.literal('unsupported_currency'),
                   z.literal('additional_domains'),
                   z.literal('company_owner'),
+                  z.literal('merged_company'),
+                  z.literal('merged_contact'),
+                  z.literal('contact_without_company'),
                 ];
                 const errors = schemas.reduce<z.ZodError[]>(
                   (errors, schema) =>

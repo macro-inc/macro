@@ -502,6 +502,8 @@ describe('HubSpot plans', () => {
       ...hubspotTotals({
         owners: 2,
         ownersMatched: 1,
+        created: 3,
+        linked: 1,
         losses: [
           { loss: 'owner_not_member', count: 25 },
           { loss: 'deal_without_company', count: 10 },
@@ -513,6 +515,8 @@ describe('HubSpot plans', () => {
       { label: 'Deals', value: '1' },
       { label: 'Skipped', value: '1' },
       { label: 'Owners matched', value: '1 of 2' },
+      { label: 'Created', value: '3' },
+      { label: 'Matched existing', value: '1' },
       { label: 'Owners not on your team', value: '25' },
       { label: 'Deals without a company', value: '10' },
     ]);

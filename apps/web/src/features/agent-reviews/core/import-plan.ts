@@ -110,12 +110,18 @@ export type HubspotLoss =
   | 'domain_rejected'
   | 'unsupported_currency'
   | 'additional_domains'
-  | 'company_owner';
+  | 'company_owner'
+  | 'merged_company'
+  | 'merged_contact'
+  | 'contact_without_company';
 
 /** A HubSpot plan's owner matching and losses. */
 export type HubspotPlanReport = {
   owners: number;
   ownersMatched: number;
+  /** Records the write created, and records it matched to ones already there. */
+  created: number;
+  linked: number;
   losses: { loss: HubspotLoss; count: number }[];
 };
 
@@ -512,6 +518,9 @@ function hubspotLossLabel(loss: HubspotLoss): string {
     .with('unsupported_currency', () => 'Unsupported currencies')
     .with('additional_domains', () => 'Extra company domains')
     .with('company_owner', () => 'Company owners')
+    .with('merged_company', () => 'Companies merged by domain')
+    .with('merged_contact', () => 'Contacts merged by email')
+    .with('contact_without_company', () => 'Contacts without their company')
     .exhaustive();
 }
 
@@ -528,6 +537,12 @@ export function hubspotTotals(
             value: `${report.ownersMatched} of ${report.owners}`,
           },
         ]
+      : []),
+    ...(report.created > 0
+      ? [{ label: 'Created', value: `${report.created}` }]
+      : []),
+    ...(report.linked > 0
+      ? [{ label: 'Matched existing', value: `${report.linked}` }]
       : []),
     ...report.losses.map((loss) => ({
       label: hubspotLossLabel(loss.loss),

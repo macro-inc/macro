@@ -5355,7 +5355,10 @@
           "domain_rejected",
           "unsupported_currency",
           "additional_domains",
-          "company_owner"
+          "company_owner",
+          "merged_company",
+          "merged_contact",
+          "contact_without_company"
         ]
       },
       "HubspotLossCount": {
@@ -5408,6 +5411,12 @@
             "description": "Contacts.",
             "minimum": 0
           },
+          "created": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records this import created in the CRM.",
+            "minimum": 0
+          },
           "customProperties": {
             "type": "array",
             "items": {
@@ -5419,6 +5428,12 @@
             "type": "integer",
             "format": "int32",
             "description": "Deals, each becoming an entry in its pipeline.",
+            "minimum": 0
+          },
+          "linked": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records this import matched to ones already in the CRM (same domain,\naddress or deal) or to a teammate's import, instead of creating them.",
             "minimum": 0
           },
           "losses": {

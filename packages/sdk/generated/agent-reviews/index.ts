@@ -237,7 +237,22 @@ export type HubspotLoss =
 /**  A company's further domains; only its primary domain is kept. */
 "additional_domains" |
 /**  A company's HubSpot owner; Macro companies have no owner. */
-"company_owner";
+"company_owner" |
+/**
+ *  A company sharing its domain with another planned company; both become
+ *  one CRM company.
+ */
+"merged_company" |
+/**
+ *  A contact sharing its primary address with another planned contact;
+ *  both become one CRM contact.
+ */
+"merged_contact" |
+/**
+ *  A contact whose company was left out of the import; it is created
+ *  without one.
+ */
+"contact_without_company";
 
 /**  How many records lost one thing. */
 export type HubspotLossCount = {
@@ -263,6 +278,13 @@ export type HubspotReport = {
 	ownersMatched: number,
 	/**  Records already in Macro from an earlier import, left as they are. */
 	alreadyImported: number,
+	/**  Records this import created in the CRM. */
+	created?: number,
+	/**
+	 *  Records this import matched to ones already in the CRM (same domain,
+	 *  address or deal) or to a teammate's import, instead of creating them.
+	 */
+	linked?: number,
 	/**  What cannot be carried over, by kind. */
 	losses: HubspotLossCount[],
 	/**  Portal-defined property names whose values stay in HubSpot. */

@@ -3762,7 +3762,10 @@ export type HubspotLoss =
   | 'domain_rejected'
   | 'unsupported_currency'
   | 'additional_domains'
-  | 'company_owner';
+  | 'company_owner'
+  | 'merged_company'
+  | 'merged_contact'
+  | 'contact_without_company';
 /**
  * Who a Notion workspace import shares what it writes with.
  */
@@ -11378,6 +11381,15 @@ export interface HubspotReport {
    * Records already in Macro from an earlier import, left as they are.
    */
   alreadyImported: number;
+  /**
+   * Records this import created in the CRM.
+   */
+  created?: number;
+  /**
+   * Records this import matched to ones already in the CRM (same domain,
+   * address or deal) or to a teammate's import, instead of creating them.
+   */
+  linked?: number;
   /**
    * What cannot be carried over, by kind.
    */

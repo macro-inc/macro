@@ -21,4 +21,7 @@ export const HubspotLoss = {
   unsupported_currency: 'unsupported_currency',
   additional_domains: 'additional_domains',
   company_owner: 'company_owner',
+  merged_company: 'merged_company',
+  merged_contact: 'merged_contact',
+  contact_without_company: 'contact_without_company',
 } as const;

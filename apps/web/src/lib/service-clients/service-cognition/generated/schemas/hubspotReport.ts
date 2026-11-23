@@ -25,6 +25,11 @@ export interface HubspotReport {
    * @minimum 0
    */
   contacts: number;
+  /**
+   * Records this import created in the CRM.
+   * @minimum 0
+   */
+  created?: number;
   /** Portal-defined property names whose values stay in HubSpot. */
   customProperties: string[];
   /**
@@ -32,6 +37,12 @@ export interface HubspotReport {
    * @minimum 0
    */
   deals: number;
+  /**
+   * Records this import matched to ones already in the CRM (same domain,
+address or deal) or to a teammate's import, instead of creating them.
+   * @minimum 0
+   */
+  linked?: number;
   /** What cannot be carried over, by kind. */
   losses: HubspotLossCount[];
   /**
