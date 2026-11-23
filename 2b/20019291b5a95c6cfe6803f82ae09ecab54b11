@@ -1,0 +1,47 @@
+apps/web/src/features/agent-permissions/components/action-accordion.tsx
+  s_0cc55d4013f523::t_862d99a87bf968 13,55,76-77,80,121-128
+apps/web/src/features/agent-permissions/components/exception-row.tsx
+  s_0cc55d4013f523::t_e75bcb3d734c44 2,4-5,8,11-14,19,27-30,33-62
+apps/web/src/features/agent-permissions/views/agent-permissions-panel.test.tsx
+  s_0cc55d4013f523::t_8ad074299eb150 48,60-78,102,106-108,115,124-125,127,138-139,152-156,168,172-193,209,212,214,266
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_0cc55d4013f523::t_4c1d1317af379b 125-128,130-133,140-141,143-144,157-158,160,169-172,179-181,231
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_0cc55d4013f523::t_64df3fae7c246e 20,26,29,32,56
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_9aaadd038e8bff::t_6190b47dde5c69 7,44,47,70-71
+apps/web/src/features/agent-permissions/components/labels.ts
+  s_9aaadd038e8bff::t_2f23dcf0fba742 8
+apps/web/src/features/agent-permissions/components/permission-state-control.tsx
+  s_9aaadd038e8bff::t_625d338962591f 15-17,23
+apps/web/src/features/agent-permissions/components/tool-permissions.tsx
+  s_9aaadd038e8bff::t_166f0998cb9b7c 96
+apps/web/src/features/agent-permissions/tests/fixtures.ts
+  s_9aaadd038e8bff::t_08813a151a4f40 276-278
+apps/web/src/features/agent-permissions/views/show-permissions-card.test.tsx
+  s_9aaadd038e8bff::t_6e70491b41a31b 60,138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2b20019291b5a95c6cfe6803f82ae09ecab54b11",
+  "prompts": {},
+  "sessions": {
+    "s_0cc55d4013f523": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca630804-2c38-4ccc-9ee3-17de52402d45",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
