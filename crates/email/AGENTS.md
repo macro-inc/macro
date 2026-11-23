@@ -745,9 +745,12 @@ tools — hexagonal, heavily feature-gated.
   release take the namespaced link advisory lock before child locks and wake the
   next event in their transaction, then wake it once more after commit in a new
   transaction using plain `FOR UPDATE`. This catches inserts after the first
-  wake's snapshot and waits out a claimer's deferral. A crash or failed wake
-  between the transactions, or an old binary without either wake, needs the
-  jittered one-to-two-hour backstop. Activation clears one FIFO page atomically,
+  wake's snapshot and waits out a claimer's deferral. Clear only a non-null
+  deferral from the locked successor's newest version, avoiding no-op writes.
+  A post-commit wake failure is logged without failing the committed finish.
+  A crash or failed wake between the transactions, or an old binary without
+  either wake, needs the jittered one-to-two-hour backstop. Activation clears
+  one FIFO page atomically,
   then bounded pages after commit. The separately fenced projection recovery
   sweep walks parked links every five minutes, including old-binary activations;
   dead-link cost is one index probe per cycle, independent of backlog size.

@@ -1,10 +1,77 @@
 //! Concurrency contracts for projection claim snapshots, finishes and recovery.
 use super::*;
+use crate::domain::mailbox::MessageRetry;
 use crate::domain::mailbox::projection::{
     MailboxProjectionRepository, ProjectionClaim, ProjectionLease,
 };
 use crate::domain::mailbox::projection_recovery::ProjectionRecoveryRepository;
 use std::time::Duration;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_post_commit_wake_does_not_fail_a_committed_finish(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(
+        r#"CREATE FUNCTION fail_only_post_commit_projection_wake() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            IF current_setting('application_name')='projection-post-wake-failure' THEN
+                IF NULLIF(current_setting('projection_test.first_wake_xid',true),'') IS NULL THEN
+                    PERFORM set_config('projection_test.first_wake_xid',txid_current()::text,false);
+                ELSIF current_setting('projection_test.first_wake_xid')<>txid_current()::text THEN
+                    RAISE EXCEPTION 'injected post-commit wake lock timeout' USING ERRCODE='55P03';
+                END IF;
+            END IF;
+            RETURN NULL;
+        END $$"#
+    ).execute(&db).await.unwrap();
+    sqlx::query!(
+        "CREATE TRIGGER fail_only_post_commit_projection_wake AFTER UPDATE ON email_projection_outbox FOR EACH STATEMENT EXECUTE FUNCTION fail_only_post_commit_projection_wake()"
+    ).execute(&db).await.unwrap();
+    let telemetry = crate::telemetry_capture::Telemetry::default();
+    let _guard = telemetry.install();
+    for retry in [None, Some(MessageRetry::Abandon)] {
+        sqlx::query!(
+            "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}')",
+            Uuid::now_v7(),link
+        ).execute(&db).await.unwrap();
+        let ProjectionClaim::Acquired(head) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+        else {
+            panic!("the head must be claimable")
+        };
+        let options = (*db.connect_options())
+            .clone()
+            .application_name("projection-post-wake-failure");
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let finisher = PgMailboxSync::new(pool.clone());
+        let result = finisher.finish_projection(&head, retry).await;
+        let retained = sqlx::query_scalar!(
+            "SELECT count(*) FROM email_projection_outbox WHERE id=$1",
+            head.id
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        pool.close().await;
+        assert_eq!(
+            retained,
+            Some(0),
+            "the first finish transaction must already have committed"
+        );
+        assert!(
+            result.is_ok(),
+            "a failed best-effort wake must not turn a committed finish into failure: {result:?}"
+        );
+    }
+    let warnings = telemetry.events("projection successor wake retained for backstop");
+    assert_eq!(warnings.len(), 2);
+    for (_, fields) in warnings {
+        assert_eq!(fields["projection.post_commit_wake"], "failed");
+        assert_eq!(fields["link_id"], link.to_string());
+    }
+}
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_projection_inserted_after_the_first_wake_is_woken_after_commit(db: PgPool) {

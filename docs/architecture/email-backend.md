@@ -65,6 +65,8 @@ a fresh READ COMMITTED statement. This preserves FIFO per serialized producer
 without losing a concurrent finish's successor wake. Local blocking and real
 retry times remain separate; finishes serialize per link and wake one successor
 in their transaction and again after commit to catch a concurrent insert. The
+post-commit wake is best effort: its failure is logged while the committed
+finish stays successful. Wakes write only when clearing a deferral. The
 backstop covers an interruption between those transactions and old binaries.
 Inactive work parks outside the due index and a bounded recovery sweep visits
 parked links rather than their whole backlogs.

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH successor AS MATERIALIZED (\n                    SELECT id, blocked_until FROM email_projection_outbox\n                    WHERE link_id=$1 AND id<>$2\n                    ORDER BY seq NULLS FIRST,id LIMIT 1 FOR UPDATE\n                )\n                UPDATE email_projection_outbox o SET blocked_until=NULL\n                FROM successor s WHERE o.id=s.id AND s.blocked_until IS NOT NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fabf316122550ea42ef9e81a5ac95e1b73f42a0438a2296d9a1f301984692cd3"
+}

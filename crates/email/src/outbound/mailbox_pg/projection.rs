@@ -122,8 +122,17 @@ impl MailboxProjectionRepository for PgMailboxSync {
             // A producer can insert a successor after the first wake snapshot
             // but before commit. A fresh transaction waits for any claim on it
             // and clears that claim's deferral. A crash here needs the backstop.
-            self.wake_projection_after_commit(lease.mailbox.link_id, lease.id)
-                .await?;
+            if let Err(error) = self
+                .wake_projection_after_commit(lease.mailbox.link_id, lease.id)
+                .await
+            {
+                tracing::warn!(
+                    projection.post_commit_wake = "failed",
+                    link_id = %lease.mailbox.link_id,
+                    ?error,
+                    "projection successor wake retained for backstop"
+                );
+            }
         }
         Ok(())
     }
@@ -151,12 +160,12 @@ impl PgMailboxSync {
         sqlx::query!(
             r#"
                 WITH successor AS MATERIALIZED (
-                    SELECT id FROM email_projection_outbox
+                    SELECT id, blocked_until FROM email_projection_outbox
                     WHERE link_id=$1 AND id<>$2
                     ORDER BY seq NULLS FIRST,id LIMIT 1 FOR UPDATE
                 )
                 UPDATE email_projection_outbox o SET blocked_until=NULL
-                FROM successor s WHERE o.id=s.id
+                FROM successor s WHERE o.id=s.id AND s.blocked_until IS NOT NULL
                 "#,
             link,
             exclude
