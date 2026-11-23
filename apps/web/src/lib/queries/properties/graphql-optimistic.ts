@@ -53,6 +53,7 @@ export function apiValuesToGraphqlPropertyValue(
         ? {
             __typename: 'GraphqlDatePropertyValue',
             dateValue: apiValues.value.toISOString(),
+            dateHasTime: apiValues.hasTime === true,
           }
         : null;
     case 'DATE_RANGE': {
