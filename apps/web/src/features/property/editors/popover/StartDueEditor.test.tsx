@@ -299,3 +299,22 @@ it('saves the due date first when a new start time passes the saved due date', a
   });
   expect(dueSave).toBeLessThan(startSave);
 });
+
+it('saves the time the arrows move to over the one typed', async () => {
+  const onSave = vi.fn(async () => {});
+  setup(onSave);
+  fireEvent.click(screen.getByRole('button', { name: /^Add time/ }));
+  const input = screen.getByPlaceholderText('Set end time...');
+
+  fireEvent.input(input, { target: { value: '2p' } });
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  fireEvent.keyDown(input, { key: 'Enter' });
+
+  await waitFor(() =>
+    expect(onSave).toHaveBeenLastCalledWith(due, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 27, 14, 15),
+      hasTime: true,
+    })
+  );
+});

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const calendarPreferences = vi.hoisted(() => ({ timeFormat: '12-hour' }));
 vi.mock('@app/features/calendar/utils/preferences', () => ({
@@ -246,7 +246,7 @@ describe('dates with times', () => {
       )
     ).toEqual({
       dates: { start: at(26, 14), due: at(28, 16), timed: true },
-      changed: 'due',
+      changed: ['due'],
     });
     expect(
       pickTimedDay(
@@ -256,7 +256,7 @@ describe('dates with times', () => {
       )
     ).toEqual({
       dates: { start: at(24, 14), due: at(27, 16), timed: true },
-      changed: 'start',
+      changed: ['start'],
     });
   });
 });
@@ -284,5 +284,63 @@ describe('formatStartDueCompact', () => {
     expect(
       formatStartDueCompact({ start: at(23, 0), due: at(27, 0) }, NOW)
     ).toBe('Nov 23 → Nov 27');
+  });
+});
+
+describe('dates with times, at the edges', () => {
+  it('rolls a first due time over to tomorrow late in the evening', () => {
+    expect(withTimes({ start: null, due: null }, at(20, 23, 41))).toEqual({
+      start: null,
+      due: at(21, 0),
+      timed: true,
+    });
+  });
+
+  it('moves the start with a due day picked back onto its day before it', () => {
+    expect(
+      pickTimedDay(
+        { start: at(26, 14), due: at(27, 9), timed: true },
+        'due',
+        at(26, 0)
+      )
+    ).toEqual({
+      dates: { start: at(26, 9), due: at(26, 9), timed: true },
+      changed: ['start', 'due'],
+    });
+  });
+
+  describe('on a daylight saving day', () => {
+    const systemTimeZone = process.env.TZ;
+    beforeAll(() => {
+      process.env.TZ = 'America/New_York';
+    });
+    afterAll(() => {
+      process.env.TZ = systemTimeZone;
+    });
+
+    it('keeps the clock time picked and the clock time carried to another day', () => {
+      expect(new Date(2026, 2, 9).getTimezoneOffset()).toBe(240);
+      const springForward = new Date(2026, 2, 8);
+      expect(
+        pickTime(
+          { start: null, due: null, timed: true },
+          'due',
+          springForward,
+          14 * 60
+        ).dates.due?.getHours()
+      ).toBe(14);
+      expect(
+        withTimes(
+          { start: null, due: springForward },
+          new Date(2026, 2, 8, 13, 41)
+        ).due?.getHours()
+      ).toBe(14);
+      const moved = pickTimedDay(
+        { start: null, due: new Date(2026, 10, 1, 14), timed: true },
+        'due',
+        new Date(2026, 10, 2)
+      ).dates.due;
+      expect([moved?.getDate(), moved?.getHours()]).toEqual([2, 14]);
+    });
   });
 });

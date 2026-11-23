@@ -147,16 +147,19 @@ export function StartDueTimes(props: StartDueTimesProps) {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       const typed = query().trim();
-      const option = typed
-        ? typedTimeOption(options(), typed, props.hour12)
-        : options().find((candidate) => candidate.id === highlighted());
+      const chosen = options().find((candidate) => candidate.id === moved());
+      const option =
+        chosen ??
+        (typed
+          ? typedTimeOption(options(), typed, props.hour12)
+          : options().find((candidate) => candidate.id === highlighted()));
       if (option) pick(option);
     }
   };
 
   const pickDay = (day: Date) => {
     const picked = pickTimedDay(props.dates, props.field, day);
-    props.onChange(picked.dates, [picked.changed]);
+    props.onChange(picked.dates, picked.changed);
     setShowCalendar(false);
   };
 

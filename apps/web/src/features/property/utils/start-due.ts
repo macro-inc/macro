@@ -11,6 +11,7 @@ import {
   differenceInMinutes,
   isSameDay,
   startOfDay,
+  startOfHour,
 } from 'date-fns';
 import { SYSTEM_PROPERTY_IDS } from '../identifiers';
 import type { Property } from '../types';
@@ -166,11 +167,26 @@ export function startDueLength(dates: StartDue): string | undefined {
  */
 export function withTimes(dates: StartDue, now = new Date()): StartDue {
   const hour = (now.getHours() + 1) % 24;
-  const at = (day: Date, hours: number) => addHours(startOfDay(day), hours);
-  const start = dates.start ? at(dates.start, hour) : null;
-  const dueDay = dates.due ?? (dates.start ? null : now);
-  const due = dueDay ? at(dueDay, start ? hour + 1 : hour) : null;
-  return { start, due, timed: true };
+  const start = dates.start ? atClock(dates.start, hour * 60) : null;
+  if (!dates.due) {
+    return { start, due: start ? null : nextFullHour(now), timed: true };
+  }
+  return {
+    start,
+    due: atClock(dates.due, (start ? hour + 1 : hour) * 60),
+    timed: true,
+  };
+}
+
+/** `day` at the local clock time `minutes` past its midnight, whatever DST does that day. */
+function atClock(day: Date, minutes: number): Date {
+  const at = new Date(day);
+  at.setHours(0, minutes, 0, 0);
+  return at;
+}
+
+function nextFullHour(now: Date): Date {
+  return addHours(startOfHour(now), 1);
 }
 
 /** The dates once Remove time makes each end a whole day again. */
@@ -193,7 +209,7 @@ export function pickTime(
   day: Date,
   minutes: number
 ): { dates: StartDue; changed: DateField[] } {
-  const at = addMinutes(startOfDay(day), minutes);
+  const at = atClock(day, minutes);
   if (field === 'start') {
     if (!dates.due || !dates.start) {
       return { dates: { ...dates, start: at }, changed: ['start'] };
@@ -256,10 +272,10 @@ export function pickTimedDay(
   dates: StartDue,
   field: DateField,
   day: Date
-): { dates: StartDue; changed: DateField } {
-  const timeOf = (end: DateField) => {
+): { dates: StartDue; changed: DateField[] } {
+  const clockOf = (end: DateField) => {
     const value = dates[end] ?? dates[end === 'start' ? 'due' : 'start'];
-    return value ? differenceInMinutes(value, startOfDay(value)) : 0;
+    return value ? value.getHours() * 60 + value.getMinutes() : 0;
   };
   const picked = pickDay(
     {
@@ -269,14 +285,19 @@ export function pickTimedDay(
     field,
     startOfDay(day)
   );
-  const changed = picked.changed;
-  return {
-    dates: {
-      ...dates,
-      [changed]: addMinutes(picked.dates[changed]!, timeOf(changed)),
-    },
-    changed,
+  const moved = picked.changed;
+  const next = {
+    ...dates,
+    [moved]: atClock(picked.dates[moved]!, clockOf(moved)),
   };
+  // Back on one day, the restored times can put the due date before the
+  // start; the end that moved wins, as a picked time does.
+  if (next.start && next.due && next.due < next.start) {
+    return moved === 'due'
+      ? { dates: { ...next, start: next.due }, changed: ['start', 'due'] }
+      : { dates: { ...next, due: next.start }, changed: ['start', 'due'] };
+  }
+  return { dates: next, changed: [moved] };
 }
 
 function dayOf(property: Property | undefined): Date | null {
