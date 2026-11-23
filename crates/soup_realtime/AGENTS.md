@@ -62,6 +62,7 @@ tasks itself.
   it uncommitted for redelivery, so downstream consumers must tolerate
   duplicate patches. The Soup-topic receiver (`SoupRealtimeConsumerService::run`)
   instead returns after five failed receives for its supervisor to restart.
+- Document Updated fanout requests explicit task roots through the neighbor port; the properties adapter checks subtype in the same indexed statement. Missing subtype does not qualify. Keep the original document patch, add only neighbors, and leave deletion/property fanout unfiltered.
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.

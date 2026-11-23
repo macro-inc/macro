@@ -1291,7 +1291,7 @@ fn imported_call_records_update_soup_and_native_call_events_are_ignored() {
 
 struct NoNeighbors;
 impl TaskDependencyNeighbors for NoNeighbors {
-    async fn neighbors(&self, _: &[Uuid]) -> Result<Vec<Entity<'static>>, Report> {
+    async fn neighbors(&self, _: &[Uuid], _: bool) -> Result<Vec<Entity<'static>>, Report> {
         Ok(Vec::new())
     }
 }

@@ -34,6 +34,7 @@ pub(super) async fn expand(
     patches: &mut Vec<SoupRealtimePatch>,
 ) -> Result<(), Report> {
     let mut task_ids = Vec::new();
+    let mut only_task_roots = false;
     match event {
         DeclaredMacroEvent::PropertyMacroEvent(event) => match &event.event().event {
             PropertyTopicEvent::EntityPropertyUpdated(metadata)
@@ -73,7 +74,10 @@ pub(super) async fn expand(
         },
         DeclaredMacroEvent::DocumentMacroEvent(event) => match &event.event().event {
             // Restorations use Updated, which has no dedicated restoration marker.
-            DocumentTopicEvent::Updated(metadata) => task_ids.push(&metadata.document_id),
+            DocumentTopicEvent::Updated(metadata) => {
+                only_task_roots = true;
+                task_ids.push(&metadata.document_id);
+            }
             DocumentTopicEvent::Deleted(metadata) => task_ids.push(&metadata.document_id),
             DocumentTopicEvent::EmailAttachmentsReleased(metadata) => {
                 task_ids.extend(metadata.trashed_document_ids.iter().map(String::as_str));
@@ -98,7 +102,7 @@ pub(super) async fn expand(
         .map(|patch| patch.patch.value().clone())
         .collect::<std::collections::HashSet<_>>();
     for batch in task_ids.chunks(500) {
-        for neighbor in neighbors.neighbors(batch).await? {
+        for neighbor in neighbors.neighbors(batch, only_task_roots).await? {
             // Deleted tasks must not receive Updated through a cycle.
             if seen.insert(neighbor.clone()) {
                 patches.push(SoupRealtimePatch::for_entity(Patch::Updated(neighbor)));

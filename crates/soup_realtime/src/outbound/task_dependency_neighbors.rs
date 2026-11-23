@@ -14,10 +14,14 @@ impl<R: TaskDependencyStateRepository> TaskDependencyNeighbors
     for PropertiesTaskDependencyNeighbors<R>
 {
     #[tracing::instrument(skip_all, fields(task_count = task_ids.len()), err)]
-    async fn neighbors(&self, task_ids: &[Uuid]) -> Result<Vec<Entity<'static>>, Report> {
+    async fn neighbors(
+        &self,
+        task_ids: &[Uuid],
+        only_task_roots: bool,
+    ) -> Result<Vec<Entity<'static>>, Report> {
         let ids = self
             .0
-            .neighbors(task_ids)
+            .neighbors(task_ids, only_task_roots)
             .await
             .map_err(|error| rootcause::report!(error))?;
         Ok(ids

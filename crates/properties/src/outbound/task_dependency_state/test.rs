@@ -136,3 +136,106 @@ async fn completion_admission_tries_only_its_task_endpoint(pool: PgPool) -> anyh
 }
 
 mod completion;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn updated_roots_require_explicit_task_subtype_but_deletions_keep_adjacency(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let (_, a, b) = seed(&pool).await?;
+    let repository = PgTaskDependencyStateRepository::new(pool.clone());
+    // Missing subtype must not count as a task, even with historical edges.
+    assert!(repository.neighbors(&[a, b], true).await?.is_empty());
+    sqlx::query!("INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, 'task'), ($2, 'snippet')", a.to_string(), b.to_string()).execute(&pool).await?;
+    assert_eq!(repository.neighbors(&[a, b], true).await?, vec![b]);
+    assert!(repository.neighbors(&[b], true).await?.is_empty());
+    sqlx::query!(
+        "DELETE FROM document_sub_type WHERE document_id = $1",
+        a.to_string()
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "UPDATE \"Document\" SET \"deletedAt\" = NOW() WHERE id = $1",
+        a.to_string()
+    )
+    .execute(&pool)
+    .await?;
+    // Lifecycle and property fanout does not depend on subtype or live roots.
+    assert_eq!(repository.neighbors(&[a], false).await?, vec![b]);
+    assert_eq!(repository.neighbors(&[b], false).await?, vec![a]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn neighbor_pool_preserves_options_and_enforces_server_deadline(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let options = (*pool.connect_options())
+        .clone()
+        .application_name("b11-neighbor-timeout")
+        .options([("statement_timeout", "1s"), ("search_path", "public")]);
+    let source = PgPoolOptions::new().connect_lazy_with(options);
+    let repository = PgTaskDependencyStateRepository::new(source.clone());
+    assert_eq!(repository.neighbor_pool.size(), 0);
+    assert_eq!(repository.neighbor_pool.options().get_max_connections(), 2);
+    assert_eq!(repository.neighbor_pool.options().get_min_connections(), 0);
+    let settings = sqlx::query!("SELECT current_setting('statement_timeout') AS \"timeout!\", current_setting('application_name') AS \"application!\", current_setting('search_path') AS \"search_path!\"")
+        .fetch_one(&repository.neighbor_pool).await?;
+    assert_eq!(settings.timeout, "10s");
+    assert_eq!(settings.application, "b11-neighbor-timeout");
+    assert_eq!(settings.search_path, "public");
+    let mut lock = pool.begin().await?;
+    sqlx::query!("LOCK TABLE task_dependency_edges IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *lock)
+        .await?;
+    let start = std::time::Instant::now();
+    let error = repository
+        .neighbors(&[Uuid::now_v7()], false)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error
+            .downcast_ref::<sqlx::Error>()
+            .unwrap()
+            .as_database_error()
+            .unwrap()
+            .code()
+            .as_deref(),
+        Some("57014")
+    );
+    eprintln!(
+        "neighbor server timeout: SQLSTATE 57014 after {:?}; startup statement_timeout=10s",
+        start.elapsed()
+    );
+    assert!(start.elapsed() >= std::time::Duration::from_secs(9));
+    lock.rollback().await?;
+    assert!(
+        repository
+            .neighbors(&[Uuid::now_v7()], false)
+            .await?
+            .is_empty()
+    );
+    repository.neighbor_pool.close().await;
+    source.close().await;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn neighbors_do_not_truncate_historical_adjacency(pool: PgPool) -> anyhow::Result<()> {
+    let root = Uuid::now_v7();
+    let endpoints = (0..5001).map(|_| Uuid::now_v7()).collect::<Vec<_>>();
+    let mut fixture = pool.begin().await?;
+    // Reproduce pre-cap historical data without invoking current admission triggers.
+    sqlx::query!("SET LOCAL session_replication_role = replica")
+        .execute(&mut *fixture)
+        .await?;
+    sqlx::query!("INSERT INTO task_dependency_edges (dependent_task_id, blocker_task_id, dependent_property_id, blocking_property_id) SELECT $1, id, $3, $4 FROM unnest($2::uuid[]) endpoint(id)", root, &endpoints, Uuid::now_v7(), Uuid::now_v7()).execute(&mut *fixture).await?;
+    fixture.commit().await?;
+    let repository = PgTaskDependencyStateRepository::new(pool);
+    let mut actual = repository.neighbors(&[root], false).await?;
+    actual.sort();
+    let mut expected = endpoints;
+    expected.sort();
+    assert_eq!(actual, expected);
+    Ok(())
+}

@@ -61,9 +61,11 @@ impl TaskDependencyState {
 /// Indexed storage reads for dependency facts.
 pub trait TaskDependencyStateRepository: Send + Sync + 'static {
     /// Find only endpoints for trusted background fanout; resolve each endpoint's audience separately.
+    /// For document updates, require an explicit task subtype; deletions and property events keep all roots.
     fn neighbors(
         &self,
         task_ids: &[Uuid],
+        only_task_roots: bool,
     ) -> impl Future<Output = anyhow::Result<Vec<Uuid>>> + Send;
     /// Load facts for exactly the requested task identifiers.
     fn load(

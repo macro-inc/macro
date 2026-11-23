@@ -3,11 +3,18 @@ use std::sync::Mutex;
 
 struct Neighbors {
     results: Vec<Entity<'static>>,
-    batches: Mutex<Vec<usize>>,
+    batches: Mutex<Vec<(usize, bool)>>,
 }
 impl TaskDependencyNeighbors for Neighbors {
-    async fn neighbors(&self, ids: &[Uuid]) -> Result<Vec<Entity<'static>>, Report> {
-        self.batches.lock().unwrap().push(ids.len());
+    async fn neighbors(
+        &self,
+        ids: &[Uuid],
+        only_task_roots: bool,
+    ) -> Result<Vec<Entity<'static>>, Report> {
+        self.batches
+            .lock()
+            .unwrap()
+            .push((ids.len(), only_task_roots));
         Ok(self.results.clone())
     }
 }
@@ -80,6 +87,7 @@ async fn canonical_relationship_events_avoid_fanout_and_legacy_status_events_use
             assert!(lookup.batches.lock().unwrap().is_empty());
             continue;
         }
+        assert_eq!(*lookup.batches.lock().unwrap(), vec![(1, false)]);
         let target = patches
             .iter()
             .find(|patch| patch.patch.value().entity_id == related.to_string())
@@ -153,5 +161,66 @@ async fn deleted_tasks_do_not_resurrect_through_cycles_and_folder_lookups_are_ba
     )
     .await
     .unwrap();
-    assert_eq!(*lookup.batches.lock().unwrap(), vec![500, 500, 1]);
+    assert_eq!(
+        *lookup.batches.lock().unwrap(),
+        vec![(500, false), (500, false), (1, false)]
+    );
+}
+
+#[tokio::test]
+async fn document_updates_filter_roots_without_publishing_a_second_root_update() {
+    let task = Uuid::now_v7();
+    let related = Uuid::now_v7();
+    for results in [
+        vec![],
+        vec![entity(EntityType::Document, related)],
+        vec![
+            entity(EntityType::Document, task),
+            entity(EntityType::Document, related),
+        ],
+    ] {
+        let lookup = Neighbors {
+            results: results.clone(),
+            batches: Mutex::new(vec![]),
+        };
+        let event = DocumentMacroEvent::updated(
+            task.to_string(),
+            documents::domain::events::DocumentUpdatedMetadata {
+                appearance_change: None,
+                document_id: task.to_string(),
+                owner: model_owner::Owner::Team(Uuid::now_v7()),
+                actor_user_id: None,
+                actor: None,
+                on_behalf_of: None,
+                document_name: None,
+                previous_project_id: None,
+                project_id: None,
+                file_type: None,
+                share_permission_updated: false,
+            },
+        );
+        let mut patches = vec![update(EntityType::Document, task)];
+        expand(
+            &lookup,
+            &DeclaredMacroEvent::DocumentMacroEvent(event),
+            &mut patches,
+        )
+        .await
+        .unwrap();
+        assert_eq!(*lookup.batches.lock().unwrap(), vec![(1, true)]);
+        assert_eq!(
+            patches.len(),
+            1 + results
+                .iter()
+                .filter(|entity| entity.entity_id != task.to_string())
+                .count()
+        );
+        assert_eq!(
+            patches
+                .iter()
+                .filter(|p| p.patch.value().entity_id == task.to_string())
+                .count(),
+            1
+        );
+    }
 }

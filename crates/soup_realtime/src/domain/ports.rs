@@ -106,8 +106,10 @@ pub trait PullRequestSessions: Send + Sync + 'static {
 /// Finds tasks whose displayed dependency state changes with a task.
 pub trait TaskDependencyNeighbors: Send + Sync + 'static {
     /// Returns both blockers and dependents; resolve each neighbor's own access.
+    /// For document updates, require an explicit task subtype; deletions and property events keep all roots.
     fn neighbors(
         &self,
         task_ids: &[uuid::Uuid],
+        only_task_roots: bool,
     ) -> impl Future<Output = Result<Vec<Entity<'static>>, Report>> + Send;
 }
