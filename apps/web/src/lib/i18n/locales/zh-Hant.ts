@@ -732,7 +732,6 @@ export default {
     searchNoResults: '找不到設定。試試「簽名」、「主題」或「行事曆」。',
     backToSettings: '返回設定',
     closeSettings: '關閉設定',
-    goToTab: '前往設定分頁 {{number}}',
     editProfile: '編輯個人資料',
     logOut: '登出',
     yourAccount: '我的帳號',
