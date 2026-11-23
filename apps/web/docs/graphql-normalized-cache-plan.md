@@ -1041,8 +1041,11 @@ shows at once in the cached option and tag-set lists, and through the
 definition's record in every cached list holding that definition. The add
 resolves only once the server has it (a queued add waits for its commit), so a
 caller never applies an option id to an entity that the server could still
-refuse. Creating a definition, provisioning a tag set, and sharing or replacing
-a tag wait for the server, then reload the mounted catalog lists they can
+refuse. Once the server has an add, or an option's new value or order, the
+mounted lists holding that definition's options reload: the server orders
+options of equal display order by value under the database's collation, which
+the cache cannot reproduce. Creating a definition, provisioning a tag set, and
+sharing or replacing a tag wait for the server, then reload the mounted catalog lists they can
 change (`lib/queries/properties/catalog`). A write the server answers waits
 while the app is offline, as TanStack paused it, and is dropped if another
 login took over the page meanwhile.
