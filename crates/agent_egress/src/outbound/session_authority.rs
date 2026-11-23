@@ -27,6 +27,7 @@ use tracing::Level;
 use crate::domain::error::EgressError;
 use crate::domain::model::{
     AgentSessionId, McpServerListing, McpServerSlug, RepoSlug, SessionGrant, SessionToken,
+    agent_selection,
 };
 use crate::domain::ports::SessionAuthority;
 
@@ -121,10 +122,9 @@ where
 
         // The agent's own names for the apps it listed, off the row's
         // snapshot, so a refusal can say "Google Sheets" rather than
-        // "google_sheets". Not a permission: any slug resolves against the
-        // owner's connections. A slug the strict parse refuses could never
-        // have been advertised, so skipping it changes nothing the sandbox
-        // can see.
+        // "google_sheets". A slug the strict parse refuses could never have
+        // been advertised, so skipping it changes nothing the sandbox can
+        // see. The permission is `selection`, read off the same snapshot.
         let mcp_servers = session
             .mcp_servers
             .servers()
@@ -136,6 +136,7 @@ where
                 })
             })
             .collect();
+        let selection = agent_selection(&session.mcp_servers);
 
         // Read beside the row rather than off it: the harness writes it at
         // every dispatch, and a call is judged by who prompted the turn
@@ -156,6 +157,7 @@ where
             agent: session.bot_id,
             repo,
             mcp_servers,
+            selection,
             prompter,
         })
     }

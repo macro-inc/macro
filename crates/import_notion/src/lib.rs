@@ -3,7 +3,7 @@
 //! The domain is the importer's view of Notion: typed pages, data sources and
 //! property values, the [`domain::ports::NotionApi`] port, and the
 //! inventory that walks everything in scope. The outbound adapter reaches
-//! Notion's REST API through the user's Pipedream Connect grant.
+//! Notion's REST API through the user's Notion connection.
 
 #![deny(missing_docs)]
 

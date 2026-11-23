@@ -6,10 +6,9 @@ use std::{
     time::Duration,
 };
 
-use chrono::NaiveDate;
 use email::domain::focus::{
     DueDateExtractor, DueDateInput, FocusClassifier, FocusClassifierError, FocusEnrollment,
-    FocusNotifier, ProfileSource,
+    FocusNotifier, ProfileSource, ThreadDates,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -105,7 +104,7 @@ impl FocusNotifier for NoReaders {
     fn focus_changed(&self, _owner: &MacroUserIdStr<'static>, _link_id: Uuid) {}
 }
 
-/// Finds no due date after `latency`, counting the calls.
+/// Finds no dates after `latency`, counting the calls.
 #[derive(Clone, Default)]
 pub struct NoDueDates {
     pub calls: Arc<Mutex<usize>>,
@@ -113,17 +112,17 @@ pub struct NoDueDates {
 }
 
 impl DueDateExtractor for NoDueDates {
-    async fn due_on(
+    async fn dates(
         &self,
         _owner: &MacroUserIdStr<'static>,
         _thread_id: Uuid,
         _input: &DueDateInput,
-    ) -> Result<Option<NaiveDate>, Report> {
+    ) -> Result<ThreadDates, Report> {
         if !self.latency.is_zero() {
             tokio::time::sleep(self.latency).await;
         }
         *self.calls.lock().unwrap() += 1;
-        Ok(None)
+        Ok(ThreadDates::default())
     }
 }
 
