@@ -25,6 +25,7 @@ export function TimezoneSelect(props: {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   fullWidth?: boolean;
+  size?: 'sm' | 'md';
 }) {
   let triggerRef: HTMLButtonElement | undefined;
   let searchRef: HTMLInputElement | undefined;
@@ -122,7 +123,7 @@ export function TimezoneSelect(props: {
                       : props.fullWidth
                         ? 'row'
                         : 'value',
-                  size: props.fullWidth ? 'sheet-row' : 'sm',
+                  size: props.fullWidth ? 'sheet-row' : (props.size ?? 'sm'),
                   fullWidth: props.fullWidth,
                   class: `min-w-0 ${props.fullWidth ? 'justify-between' : ''} ${props.class ?? ''}`,
                 })

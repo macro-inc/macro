@@ -13,6 +13,7 @@ export type ComposerDescriptionEditorProps = Pick<
   initialValue: string;
   inputRef?: (element: HTMLDivElement) => void;
   minLines?: number;
+  plain?: boolean;
 };
 
 export function ComposerDescriptionEditor(
@@ -24,11 +25,17 @@ export function ComposerDescriptionEditor(
   );
   return (
     <TextField.Surface
-      class="focus-within:border-accent focus-within:ring-[1.5px] focus-within:ring-accent"
+      class={
+        props.plain
+          ? 'min-h-0 max-h-32 overflow-y-auto rounded-lg border-0 bg-transparent px-3 py-1 shadow-none hover:bg-hover focus-within:bg-active'
+          : 'focus-within:border-accent focus-within:ring-[1.5px] focus-within:ring-accent'
+      }
       style={{
-        '--composer-description-min-height': props.minLines
-          ? `${props.minLines * 1.25 + 0.75}rem`
-          : '2.5rem',
+        '--composer-description-min-height': props.plain
+          ? '1.25rem'
+          : props.minLines
+            ? `${props.minLines * 1.25 + 0.75}rem`
+            : '2.5rem',
       }}
     >
       <MarkdownTextarea

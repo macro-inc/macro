@@ -12,7 +12,7 @@ export function ComposerPin(props: {
   return (
     <Button
       variant="ghost"
-      size="icon-sm"
+      size="icon-md"
       aria-label={label()}
       aria-pressed={props.pinned}
       tooltip={label()}

@@ -4,7 +4,9 @@ import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 
-export function ComposerSubmit(props: { fullWidth?: boolean } = {}) {
+export function ComposerSubmit(
+  props: { fullWidth?: boolean; f3?: boolean } = {}
+) {
   const model = useCalendarComposer();
   const label = () =>
     model.isEdit() ? t('calendar.saveEvent') : t('calendar.createEvent');
@@ -13,7 +15,8 @@ export function ComposerSubmit(props: { fullWidth?: boolean } = {}) {
       type="submit"
       form={model.ids.form}
       variant="primary"
-      size={props.fullWidth ? 'sheet' : undefined}
+      size={props.fullWidth ? 'sheet' : props.f3 ? 'field' : undefined}
+      class={props.f3 ? 'text-xs' : undefined}
       fullWidth={props.fullWidth}
       aria-label={label()}
       disabled={model.formIsDisabled() || !model.canSave()}

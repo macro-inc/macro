@@ -6,7 +6,7 @@ import { useCalendarComposer } from '../../../context/calendar-composer-context'
 import { useComposerWhenOptional } from '../../../context/composer-when-context';
 
 export function ComposerTimeZone(
-  props: { fullWidth?: boolean; ghost?: boolean } = {}
+  props: { fullWidth?: boolean; ghost?: boolean; size?: 'sm' | 'md' } = {}
 ) {
   const model = useCalendarComposer();
   const when = useComposerWhenOptional();
@@ -36,6 +36,7 @@ export function ComposerTimeZone(
           if (open) when.open('time-zone');
           else when.close('time-zone');
         }}
+        size={props.size}
         fullWidth={props.fullWidth}
         portalScope="local"
       />

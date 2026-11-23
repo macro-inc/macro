@@ -4,7 +4,7 @@ import { Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 
 /** Creation choices stay beneath the title, never in the draggable header. */
-export function ComposerKind() {
+export function ComposerKind(props: { f3?: boolean } = {}) {
   const model = useCalendarComposer();
   return (
     <Show when={!model.isEdit()}>
@@ -17,10 +17,10 @@ export function ComposerKind() {
         value={model.controller.eventKind()}
         onChange={model.controller.setEventKind}
         disabled={model.formIsDisabled() || model.detailsLocked()}
-        variant="choices"
+        variant={props.f3 ? 'choices-filled' : 'choices'}
         wrap
         touch="pills"
-        size="sm"
+        size={props.f3 ? 'md' : 'sm'}
       />
     </Show>
   );

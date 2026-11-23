@@ -6,7 +6,9 @@ import { useCalendarComposer } from '../../../context/calendar-composer-context'
 
 const VALUES = ['default', 'public', 'private'] as const;
 
-export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
+export function ComposerVisibility(
+  props: { fullWidth?: boolean; size?: 'sm' | 'md' } = {}
+) {
   const model = useCalendarComposer();
   const unavailable = () => model.editScope() === 'this_event';
   const reason = () =>
@@ -43,7 +45,7 @@ export function ComposerVisibility(props: { fullWidth?: boolean } = {}) {
         <Dropdown.Trigger
           variant={props.fullWidth ? 'row' : 'value'}
           finish="flat"
-          size={props.fullWidth ? 'sheet-row' : 'sm'}
+          size={props.fullWidth ? 'sheet-row' : (props.size ?? 'sm')}
           fullWidth={props.fullWidth}
           class={props.fullWidth ? 'justify-between' : undefined}
           disabled={model.visibilityIsDisabled()}

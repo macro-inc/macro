@@ -15,6 +15,7 @@ export interface ComposerConferenceProps {
   onChange: (value: EventEditorConferenceChoice) => void;
   disabled?: boolean;
   fullWidth?: boolean;
+  size?: 'sm' | 'md';
 }
 
 export function ComposerConference(props: ComposerConferenceProps) {
@@ -35,7 +36,7 @@ export function ComposerConference(props: ComposerConferenceProps) {
       <Dropdown.Trigger
         variant={props.fullWidth ? 'row' : 'value'}
         finish="flat"
-        size={props.fullWidth ? 'sheet-row' : 'sm'}
+        size={props.fullWidth ? 'sheet-row' : (props.size ?? 'sm')}
         fullWidth={props.fullWidth}
         class={props.fullWidth ? 'justify-between' : undefined}
         classList={{ 'text-ink-subtle': props.value === 'none' }}

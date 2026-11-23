@@ -8,7 +8,9 @@ import { useComposerWhenOptional } from '../../../context/composer-when-context'
 import { recurrencePresetsFor } from '../../../utils/recurrence';
 import { CustomRecurrenceDialog } from './CustomRecurrenceDialog';
 
-export function ComposerRecurrence(props: { fullWidth?: boolean } = {}) {
+export function ComposerRecurrence(
+  props: { fullWidth?: boolean; size?: 'sm' | 'md' } = {}
+) {
   const model = useCalendarComposer();
   const when = useComposerWhenOptional();
   const reason = model.recurrenceScopeReason;
@@ -41,7 +43,7 @@ export function ComposerRecurrence(props: { fullWidth?: boolean } = {}) {
           <Dropdown.Trigger
             variant={props.fullWidth ? 'row' : 'value'}
             finish="flat"
-            size={props.fullWidth ? 'sheet-row' : 'sm'}
+            size={props.fullWidth ? 'sheet-row' : (props.size ?? 'sm')}
             fullWidth={props.fullWidth}
             class={props.fullWidth ? 'justify-between' : undefined}
             aria-label={t('calendar.composerRepeats')}
