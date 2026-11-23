@@ -16,7 +16,6 @@
   lib,
   sandbox,
   desktopEnvironment,
-  home,
   ffmpeg,
   port ? 5902,
 }:
@@ -39,6 +38,9 @@ in
       # Each viewer is one x264 encoder.
       MaxConnections = 4;
       NoDelay = true;
+      # A burst of connections must not stop the socket for good (the
+      # default trigger limit fails it); MaxConnections bounds the work.
+      TriggerLimitIntervalSec = 0;
     };
   };
 
@@ -46,15 +48,18 @@ in
     description = "Encode the agent teammate's screen for one viewer";
     requisite = [ "macro-agent-display.service" ];
     after = [ "macro-agent-display.service" ];
-    environment = desktopEnvironment // {
-      HOME = home;
-    };
+    environment = desktopEnvironment;
     unitConfig = {
       # The display's /tmp, which holds :1's socket.
       JoinsNamespaceOf = "macro-agent-display.service";
+      # Every viewer is an instance, which a hang-up ends as failed
+      # (ffmpeg's write error): unload it either way.
+      CollectMode = "inactive-or-failed";
     };
     serviceConfig = sandbox // {
       ExecStart = lib.getExe encoder;
+      # ffmpeg needs only the display: none of the agent's home.
+      BindPaths = [ ];
       StandardInput = "socket";
       StandardOutput = "socket";
       StandardError = "journal";

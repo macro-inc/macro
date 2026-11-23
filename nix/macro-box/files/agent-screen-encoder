@@ -12,8 +12,8 @@ fi
 in_range() { [[ $1 =~ ^[0-9]+$ ]] && ((10#$1 >= $2 && 10#$1 <= $3)); }
 if [[ -n ${extra:-} ]] ||
   ! in_range "$fps" 1 60 ||
-  ! in_range "$width" 160 3840 || ((10#$width % 2)) ||
-  ! in_range "$height" 120 2160 || ((10#$height % 2)) ||
+  ! in_range "$width" 160 1920 || ((10#$width % 2)) ||
+  ! in_range "$height" 120 1080 || ((10#$height % 2)) ||
   ! in_range "$keyint" 1 600; then
   echo "agent-screen-encoder: invalid config line" >&2
   exit 64

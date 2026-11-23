@@ -311,7 +311,6 @@ let
       lib
       sandbox
       desktopEnvironment
-      home
       ;
     ffmpeg = ffmpegX11grab;
   };
@@ -352,10 +351,11 @@ in
     environment.systemPackages = [ cfg.computerUse.package ];
     users.groups.${agentGroup} = { };
     # macro's own desktop and browser are for macro's sessions, not the
-    # agent (its group), whose sandbox they would let it out of.
+    # agent (its group), whose sandbox they would let it out of; the screen
+    # encoder is for the person watching, whose viewers it could crowd out.
     networking.firewall.extraCommands = lib.concatMapStrings (iptables: ''
       ${iptables} -w -N macro-agent-out 2>/dev/null || ${iptables} -w -F macro-agent-out
-      ${iptables} -w -A macro-agent-out -p tcp -m multiport --dports 5900,9222 -m owner --gid-owner ${agentGroup} -j REJECT --reject-with tcp-reset
+      ${iptables} -w -A macro-agent-out -p tcp -m multiport --dports 5900,5902,9222 -m owner --gid-owner ${agentGroup} -j REJECT --reject-with tcp-reset
       ${iptables} -w -C OUTPUT -o lo -j macro-agent-out 2>/dev/null || ${iptables} -w -I OUTPUT -o lo -j macro-agent-out
     '') [ "iptables" "ip6tables" ];
     networking.firewall.extraStopCommands = lib.concatMapStrings (iptables: ''

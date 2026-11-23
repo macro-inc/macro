@@ -141,7 +141,7 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `/tmp` (`JoinsNamespaceOf` the display), which holds only `:1`'s socket.
   They keep user namespaces (Chromium's sandbox) and W+X memory (JITs). The
   firewall rejects group `macro-agent` on 127.0.0.1:5900 and :9222 (macro's
-  own VNC and DevTools), and neither Xvnc listens on an abstract socket.
+  own VNC and DevTools) and :5902 (the screen encoder), and neither Xvnc listens on an abstract socket.
 - agent.env is a systemd credential (`LoadCredential`), never process
   environment: the runtime reads `MUPPET_CREDENTIALS_FILE`
   (`/run/credentials/macro-agent.service/agent.env`). The runtime contract
@@ -182,12 +182,16 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
 - Agent computers (Docker and Firecracker images) also have `macro-agent-screen-encoder.socket`
   (`_agent-screen-encoder.nix`, `files/agent-screen-encoder`) on
   127.0.0.1:5902 for watching the agent in Macro: `Accept=yes`, one
-  instance per connection in the desktop's sandbox and `/tmp`, at most 4.
-  A connection sends `<fps> <width> <height> <keyint>\n` (fps 1-60, even
-  width 160-3840 and height 120-2160, keyint 1-600; anything else closes
-  it) and gets fragmented MP4 of `:1` until it closes: `ftyp` + `moov`, then
-  one `moof` + `mdat` per frame, Constrained Baseline H.264, no B-frames,
-  starting on a keyframe. The harness reaches it only through the fleet's
+  instance per connection in the desktop's sandbox and `/tmp` (none of the
+  agent's home), at most 4, unloaded when it ends. A connection sends
+  `<fps> <width> <height> <keyint>\n` (fps 1-60, even width 160-1920 and
+  height 120-1080, keyint 1-600; anything else closes it) and gets
+  fragmented MP4 of `:1` scaled to exactly that size until it closes:
+  `ftyp` + `moov`, then one `moof` + `mdat` per frame, Constrained Baseline
+  H.264, no B-frames, starting on a keyframe. A frame's fragment goes out
+  when the next frame is captured (1/fps behind). The agent's group can't
+  connect (the firewall, as for 5900 and 9222), so it can't crowd out
+  viewers. The harness reaches it only through the fleet's
   exec tunnel. On Firecracker `macro-agent.target` wants the socket, so a
   person's computer doesn't listen on 5902.
 - `harnessd.service` runs `harnessd serve` as `macro` (socket
@@ -369,13 +373,13 @@ existing credentials: no new pairing and no Claude login.
   encoder listens on 127.0.0.1:5902 only, runs each viewer as macro with group
   `macro-agent` in `macro-agent.slice` with no capabilities, sends Constrained
   Baseline fMP4 starting on a keyframe, ends with its connection, and closes
-  on a bad config line or a hang-up without one (a port probe), leaving no
-  instance; the agent rejects a credentialed repo URL without
+  on a bad config line or a hang-up without one (a port probe), with every
+  instance unloaded and the socket still listening; the agent rejects a credentialed repo URL without
   contacting the repo; a rewritten file restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its
   credentials in its environment or the rest of macro's home in its view;
   neither the agent's unit nor Openbox can reach `systemd-run --user`,
-  macro's session bus, its files, `:0`, 5900 or 9222, and the agent's
+  macro's session bus, its files, `:0`, 5900, 5902 or 9222, and the agent's
   browser can't open macro's files or DevTools;
   `claude` in its unit keeps the gateway environment without a sign-in and
   gets `CLAUDE_CODE_OAUTH_TOKEN` from a (fake) `credential.json`, which it

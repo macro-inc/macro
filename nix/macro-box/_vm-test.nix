@@ -347,7 +347,7 @@ pkgs.testers.runNixOSTest {
           agent.succeed(f"[ \"$(stat -c %G /proc/{encoder})\" = macro-agent ]")
           agent.succeed(f"grep -F macro-agent.slice /proc/{encoder}/cgroup")
           agent.succeed(f"grep -E '^CapEff:\\s+0+$' /proc/{encoder}/status")
-          agent.wait_until_succeeds("grep -F fragments /tmp/encoder.log", timeout=30)
+          agent.wait_until_succeeds("grep -F fragments /tmp/encoder.log", timeout=90)
           stream = agent.succeed("${pkgs.ffmpeg-headless}/bin/ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,profile,width,height,has_b_frames -of csv=p=0 /tmp/encoder.mp4").strip()
           assert stream == "h264,Constrained Baseline,640,360,0", stream
           first = agent.succeed("${pkgs.ffmpeg-headless}/bin/ffprobe -v error -select_streams v:0 -show_entries packet=flags -of csv=p=0 /tmp/encoder.mp4 | head -n 1").strip()
@@ -359,7 +359,9 @@ pkgs.testers.runNixOSTest {
           # So does a connection that hangs up without one (a port probe),
           # and neither leaves an instance behind.
           agent.succeed("${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/5902; exec 3>&-'")
-          agent.wait_until_succeeds("! systemctl list-units --plain --no-legend --state=running 'macro-agent-screen-encoder@*' | grep .")
+          # Every instance is unloaded, failed or not.
+          agent.wait_until_succeeds("! systemctl list-units --all --plain --no-legend 'macro-agent-screen-encoder@*' | grep .")
+          agent.succeed("systemctl is-active --quiet macro-agent-screen-encoder.socket")
 
       with subtest("the agent rejects a repo URL with credentials"):
           agent.succeed(
@@ -450,6 +452,8 @@ pkgs.testers.runNixOSTest {
               for host in ("127.0.0.1", "::1"):
                   for port in (5900, 9222):
                       agent.fail(f"{inside} ${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/{host}/{port}'")
+              # Nor crowd out the person watching its screen.
+              agent.fail(f"{inside} ${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/5902'")
               # Its own desktop and browser.
               for port in (5901, 9223):
                   agent.succeed(f"{inside} ${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{port}'")

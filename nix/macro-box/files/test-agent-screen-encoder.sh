@@ -9,7 +9,7 @@ trap 'kill $xvfb' EXIT
 until [ -S /tmp/.X11-unix/X7 ]; do sleep 0.1; done
 export DISPLAY=:7
 
-for line in "" "0 640 360 10" "10 641 360 10" "10 640 360 10 x" "10 640 360"; do
+for line in "" "0 640 360 10" "10 641 360 10" "10 1922 1080 10" "10 640 360 10 x" "10 640 360"; do
   if printf '%s\n' "$line" | agent-screen-encoder > refused.mp4 2> /dev/null; then
     echo "accepted config line '$line'" >&2
     exit 1
@@ -17,8 +17,9 @@ for line in "" "0 640 360 10" "10 641 360 10" "10 640 360 10 x" "10 640 360"; do
   [ ! -s refused.mp4 ] || { echo "wrote output for '$line'" >&2; exit 1; }
 done
 
-# ffmpeg ignores stdin (the connection), so stop it with SIGINT as a closed
-# connection's SIGPIPE would.
+# ffmpeg ignores stdin (the connection) and a hang-up only shows as a write
+# error, so stop it with SIGINT; that also writes an mfra index, which the
+# box check below skips.
 { printf '10 640 360 5\n'; sleep 10; } | timeout -s INT 3 agent-screen-encoder > out.mp4 || [ $? = 124 ]
 
 stream=$(ffprobe -v error -select_streams v:0 -count_packets \
