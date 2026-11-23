@@ -47,8 +47,8 @@ export function RoutineSectionHeader(props: {
 }
 
 /**
- * The page's card grid: three equal columns, two and then one as the page
- * narrows. Suggestions and routines share it, so their cards line up.
+ * The routines' card grid: cards of a fixed width, Discover's (25rem), as
+ * many to a row as fit, so its columns line up with the suggestions above.
  */
 export function RoutineCardGrid(
   props: JSX.HTMLAttributes<HTMLUListElement> & {
@@ -58,7 +58,7 @@ export function RoutineCardGrid(
   return (
     <ul
       {...props}
-      class="grid min-w-0 list-none grid-cols-3 gap-3 @max-[760px]/routines:grid-cols-2 @max-[480px]/routines:grid-cols-1"
+      class="grid min-w-0 list-none grid-cols-[repeat(auto-fill,minmax(0,25rem))] gap-3"
     />
   );
 }

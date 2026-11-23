@@ -1336,13 +1336,14 @@ The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **Create routine** and search on the right;
 **Cmd/Ctrl+F** focuses search, which matches name, Trigger and Steps.
 
-With a pointer (not touch), routines are cards in a grid of three (two below
-760px wide, one below 480px), under **When something happens** and **On a
-schedule**, each heading with its count. Cards have the surface of Discover's
-cards, and every card is the same height in every state. A card shows a tile with the
-routine's icon tinted by its colour (or its trigger's area; grey while off),
-its name, its description (or, without one, what it does), its **…** menu and
-an on/off switch, and one line under them:
+With a pointer (not touch), routines are cards under **When something
+happens** and **On a schedule**, each heading with its count. The page body
+has Discover's padding, so switching tabs moves nothing. Cards have the
+surface and the width of Discover's cards (25rem, as many to a row as fit,
+narrower only in a pane too small for one) and are compact: every card is
+64px tall in every state. A card shows a tile with the routine's icon tinted
+by its colour (or its trigger's area; grey while off), its name with one line
+under it, its **…** menu and an on/off switch. The line says:
 
 - what starts it and its last run, such as **Weekdays at 9:00 AM · Ran 9:00
   AM** after a green dot (grey for a skipped or stopped run), or **Not run
@@ -1370,13 +1371,9 @@ New routine already filled in from that template. The strip hides while
 searching and on **On**; on phones the cards scroll sideways. With
 `enable-routine-suggestions` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** (**Start with one of these** for someone
-with no routines) above the routines on **All** shows one row of suggestion
-cards in the same grid, as many as it has columns, with **N more in Discover**
-at the end of its heading, which opens a third tab, **Discover**. A suggestion
-card has its tile, title, what it does, why it was picked when there is a
-reason, and **Turn on** (or **Review** / **Use**, which open it in the editor);
-the × beside a suggestion dismisses it. Turning one on keeps the card in place,
-showing the new routine's switch, **On · <trigger>** and **Edit**. Discover
+with no routines) above the routines on **All** shows one row of Discover's
+cards, as many as fit, and after them a narrow **N more · In Discover**
+column, which opens a third tab, **Discover**. Discover
 replaces the list with every suggestion (AI's first, then Macro's) followed by
 the templates no suggestion already offers, as many cards to a row as fit, with
 **All** and one tab per area that has any (`Suggestion area`) and the hint

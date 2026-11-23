@@ -4,7 +4,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Badge, Button, Card, cn } from '@ui';
-import { Match, type ParentProps, Show, Switch } from 'solid-js';
+import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { RoutineSurface } from '../../routines/components/routine-editor';
 import {
@@ -307,6 +307,33 @@ export function SuggestionCard(
           <CardAction model={props.model} onTurnOn={props.onTurnOn} />
         </div>
       </CardSurface>
+    </li>
+  );
+}
+
+/** The row's last column, as tall as its cards: how many more there are, opening Discover. */
+export function SuggestionMoreCell(props: {
+  count: number;
+  onOpen(): void;
+}): JSX.Element {
+  return (
+    <li class="min-w-0 list-none">
+      <button
+        type="button"
+        aria-label={t('routineSuggestions.moreInDiscover', {
+          count: props.count,
+        })}
+        class="flex size-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-edge-frame px-3 text-center outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
+        onClick={() => props.onOpen()}
+      >
+        <span class="text-sm font-medium text-ink">
+          {t('routineSuggestions.more', { count: props.count })}
+        </span>
+        <span class="flex items-center gap-1 text-xs text-ink-extra-muted">
+          {t('routineSuggestions.inDiscover')}
+          <ArrowRightIcon class="size-3 shrink-0" aria-hidden="true" />
+        </span>
+      </button>
     </li>
   );
 }

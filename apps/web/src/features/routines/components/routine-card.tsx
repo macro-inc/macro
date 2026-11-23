@@ -86,7 +86,7 @@ function RoutineByline(props: {
   const failed = () =>
     props.row.lastRun?.outcome === 'failed' ? props.row.lastRun : undefined;
   return (
-    <div class="flex h-4 min-w-0 items-center gap-1.5 pl-11 text-xs leading-4 text-ink-placeholder">
+    <div class="flex h-4 min-w-0 items-center gap-1.5 text-xs leading-4 text-ink-placeholder">
       <Switch
         fallback={
           <>
@@ -186,9 +186,9 @@ function RoutineByline(props: {
 }
 
 /**
- * A routine as a card: its tile, name and what it is for, the "…" menu and
- * switch, and one line on its state. Every state keeps the same height, so a
- * grid of them stays even. Clicking the card opens the routine.
+ * A routine as a compact card of one fixed size: its tile, its name over one
+ * line on its state, the "…" menu and switch. Every state keeps that size, so
+ * a grid of them stays even. Clicking the card opens the routine.
  */
 export function RoutineCard(props: {
   row: RoutineRow;
@@ -204,65 +204,55 @@ export function RoutineCard(props: {
 }) {
   return (
     // Discover's card surface, so the two pages' cards match.
-    <RoutineSurface class="group/routine-card flex h-full flex-col gap-2 px-4 py-3.5">
-      <div class="flex min-w-0 items-center gap-3">
-        <RoutineTile row={props.row} />
-        <div class="flex min-w-0 flex-1 flex-col">
-          {/* The name's hit area covers the card; the controls sit above it. */}
-          <button
-            type="button"
-            class={cn(
-              'min-w-0 truncate text-left text-sm font-medium leading-5 outline-none after:absolute after:inset-0 after:rounded-xl after:content-[""] not-touch:group-hover/routine-card:after:bg-hover group-data-expanded/routine-menu:after:bg-hover focus-visible:static focus-visible:after:ring-2 focus-visible:after:ring-edge-focus',
-              props.row.enabled ? 'text-ink' : 'text-ink-muted'
-            )}
-            onClick={() => props.onOpen(props.row.id)}
-          >
-            {props.row.name}
-          </button>
-          <span
-            class={cn(
-              'min-w-0 truncate text-[13px] leading-[18px]',
-              props.row.enabled ? 'text-ink-muted' : 'text-ink-placeholder'
-            )}
-          >
-            {props.row.description ?? props.row.does}
-          </span>
-        </div>
-        <Show when={props.menu}>
-          {(menu) => (
-            <span class="relative z-[1] flex shrink-0">
-              <RoutineRowMenuButton
-                row={props.row}
-                pending={props.pending}
-                onToggle={props.onToggle}
-                actions={menu()}
-              />
-            </span>
+    <RoutineSurface class="group/routine-card flex h-16 items-center gap-3 px-3.5">
+      <RoutineTile row={props.row} />
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
+        {/* The name's hit area covers the card; the controls sit above it. */}
+        <button
+          type="button"
+          class={cn(
+            'min-w-0 truncate text-left text-sm font-medium leading-5 outline-none after:absolute after:inset-0 after:rounded-xl after:content-[""] not-touch:group-hover/routine-card:after:bg-hover group-data-expanded/routine-menu:after:bg-hover focus-visible:static focus-visible:after:ring-2 focus-visible:after:ring-edge-focus',
+            props.row.enabled ? 'text-ink' : 'text-ink-muted'
           )}
-        </Show>
-        <span class="relative z-[1] flex shrink-0">
-          <Tooltip label={toggleDescription(props.row, props.pending)}>
-            <ToggleSwitch
-              label={t('routinesList.enabledFor', { name: props.row.name })}
-              labelClass="sr-only"
-              aria-busy={props.pending}
-              checked={props.row.enabled}
-              disabled={!canToggleRoutine(props.row, props.pending)}
-              onChange={() => props.onToggle(props.row)}
-            />
-          </Tooltip>
-        </span>
+          onClick={() => props.onOpen(props.row.id)}
+        >
+          {props.row.name}
+        </button>
+        <RoutineByline
+          row={props.row}
+          stopPending={props.stopPending}
+          onStop={
+            // Only its owner can stop its run.
+            props.onStop && props.row.editable
+              ? () => props.onStop?.(props.row)
+              : undefined
+          }
+        />
       </div>
-      <RoutineByline
-        row={props.row}
-        stopPending={props.stopPending}
-        onStop={
-          // Only its owner can stop its run.
-          props.onStop && props.row.editable
-            ? () => props.onStop?.(props.row)
-            : undefined
-        }
-      />
+      <Show when={props.menu}>
+        {(menu) => (
+          <span class="relative z-[1] flex shrink-0">
+            <RoutineRowMenuButton
+              row={props.row}
+              pending={props.pending}
+              onToggle={props.onToggle}
+              actions={menu()}
+            />
+          </span>
+        )}
+      </Show>
+      <span class="relative z-[1] flex shrink-0">
+        <Tooltip label={toggleDescription(props.row, props.pending)}>
+          <ToggleSwitch
+            label={t('routinesList.enabledFor', { name: props.row.name })}
+            labelClass="sr-only"
+            aria-busy={props.pending}
+            checked={props.row.enabled}
+            disabled={!canToggleRoutine(props.row, props.pending)}
+            onChange={() => props.onToggle(props.row)}
+          />
+        </Tooltip>
+      </span>
     </RoutineSurface>
   );
 }

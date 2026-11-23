@@ -290,7 +290,7 @@ describe('routines list', () => {
     const card = (name: string) =>
       screen.getByRole('button', { name }).closest('li') as HTMLElement;
 
-    it('lays routines out in a section per kind of trigger, each card saying how it last ran', () => {
+    it('lays routines out in a section per kind of trigger, each compact card saying how it last ran', () => {
       setup();
       expect(screen.queryByRole('table')).toBeNull();
       expect(
@@ -301,8 +301,10 @@ describe('routines list', () => {
       expect(card('Morning briefing').textContent).toContain(
         'Weekdays at 9:00 AM · Ran 9:00 AM'
       );
-      // A routine with no description says what it does.
-      expect(card('Morning briefing').textContent).toContain('Sum up my day');
+      // A compact card: its name and one line on its state, no description.
+      expect(card('Morning briefing').textContent).not.toContain(
+        'Sum up my day'
+      );
       expect(card('Revenue signals').textContent).toContain(
         'New email received · Off'
       );

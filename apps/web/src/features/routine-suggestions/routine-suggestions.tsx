@@ -62,7 +62,6 @@ import {
   useRoutineSuggestionsEnabled,
 } from './queries/routine-suggestions';
 import {
-  type SuggestedRoutinesHost,
   SuggestionDialogGrid,
   SuggestionDiscoverGrid,
   SuggestionRow,
@@ -418,9 +417,10 @@ export function useForYouRoutineSuggestions() {
 }
 
 /** The one row of suggestions above the routines list. */
-function RoutinesSuggestionRow(
-  props: SuggestedRoutinesHost & { onOpenDiscover(): void }
-) {
+function RoutinesSuggestionRow(props: {
+  onOpenDiscover(): void;
+  empty: boolean;
+}) {
   const list = useSuggestionList(
     () => ({ kind: 'routines' }),
     () => {}
@@ -436,8 +436,6 @@ function RoutinesSuggestionRow(
           onOpenDiscover={props.onOpenDiscover}
           onOpenRoutine={list.openRoutine}
           empty={props.empty}
-          routine={props.routine}
-          onToggle={props.onToggle}
         />
       )}
     </Show>
@@ -542,8 +540,6 @@ export function useRoutinesDiscover(): Accessor<RoutinesDiscover | undefined> {
         <RoutinesSuggestionRow
           onOpenDiscover={openDiscover}
           empty={host.empty}
-          routine={host.routine}
-          onToggle={host.onToggle}
         />
       </TraceFlow>
     ),

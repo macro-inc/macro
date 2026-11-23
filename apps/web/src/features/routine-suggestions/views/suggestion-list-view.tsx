@@ -1,14 +1,9 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
-import {
-  RoutineCardGrid,
-  RoutineSectionHeader,
-} from '../../routines/components/routine-cards';
 import { withKnobValue } from '../../routines/core/knobs';
 import {
   RoutineSuggestionList,
@@ -17,11 +12,8 @@ import {
 import {
   SuggestionCard,
   type SuggestionCardModel,
+  SuggestionMoreCell,
 } from '../components/suggestion-card';
-import {
-  SuggestionCompactCard,
-  type TurnedOnRoutine,
-} from '../components/suggestion-compact-card';
 import {
   type SuggestionItem,
   suggestionAction,
@@ -238,80 +230,63 @@ export function SuggestionDiscoverGrid(props: {
     </RoutineSuggestionList>
   );
 }
+
 /**
  * Card columns a row starts with, until it is measured before the first
  * paint. One, so no card mounts (and counts as shown) only to be dropped.
  */
 const ROW_CARD_COLUMNS = 1;
 
-/** The routines list's side of the suggestions row. */
-export type SuggestedRoutinesHost = {
-  /** The person has no routines yet, so these are where to start. */
-  empty: boolean;
-  /** A routine a card turned on, as the routines list has it. */
-  routine(routineId: string): TurnedOnRoutine | undefined;
-  /** Switch a routine a card turned on. */
-  onToggle(routineId: string): void;
-};
-
 /**
- * The row above the routines on the Routines page: one row of Discover's
- * cards in the page's grid, as many as it has columns, and how many more
- * Discover has at the end of its heading. Nothing while loading, failed or
- * empty, so the routines never wait on it.
+ * The one row above the routines list: as many of Discover's cards as fit,
+ * each the dialog's card width (25rem), with how many more Discover has in
+ * a narrow column after them. Nothing while loading, failed or empty, so the
+ * list never waits on it.
  */
-export function SuggestionRow(
-  props: SuggestedRoutinesHost & {
-    items: SuggestionItem[];
-    actions: SuggestionActions;
-    onOpenDiscover(): void;
-    onOpenRoutine(routineId: string): void;
-  }
-): JSX.Element {
-  const [columns, setColumns] = createSignal(ROW_CARD_COLUMNS);
+export function SuggestionRow(props: {
+  items: SuggestionItem[];
+  actions: SuggestionActions;
+  onOpenDiscover(): void;
+  onOpenRoutine(routineId: string): void;
+  /** The person has no routines yet, so these are where to start. */
+  empty?: boolean;
+}): JSX.Element {
+  const [cardColumns, setCardColumns] = createSignal(ROW_CARD_COLUMNS);
   let grid: HTMLUListElement | undefined;
-  // The grid's columns follow the page's width. A grid that isn't laid out
-  // (a hidden ancestor) reports its template unexpanded, which counts nothing.
+  // The grid fits as many card columns as it has room for; its last column
+  // is always the more cell's. A grid that isn't laid out (a hidden
+  // ancestor) reports its template unexpanded, which counts nothing.
   createResizeObserver(
     () => grid,
     () => {
       if (!grid) return;
-      const template = getComputedStyle(grid).gridTemplateColumns;
-      if (template.includes('repeat(')) return;
-      const count = template.split(' ').filter(Boolean).length;
-      if (count > 0) setColumns(count);
+      const columns = getComputedStyle(grid).gridTemplateColumns;
+      if (columns.includes('repeat(')) return;
+      const count = columns.split(' ').filter(Boolean).length;
+      if (count > 1) setCardColumns(count - 1);
     }
   );
-  const visible = () => props.items.slice(0, columns());
+  const visible = () => props.items.slice(0, cardColumns());
   const more = () => props.items.length - visible().length;
   return (
     <section
       aria-labelledby="routine-suggestions-row-heading"
-      class="flex min-w-0 flex-col gap-3.5"
+      class="flex min-w-0 flex-col gap-2.5"
     >
-      <RoutineSectionHeader
-        id="routine-suggestions-row-heading"
-        icon={SparkleIcon}
-        title={
-          props.empty
+      <div class="flex h-[22px] min-w-0 items-center gap-2 px-0.5">
+        <SparkleIcon class="size-3 text-violet-ink" aria-hidden="true" />
+        <h2
+          id="routine-suggestions-row-heading"
+          class="text-[13px] font-medium text-ink-muted"
+        >
+          {props.empty
             ? t('routinesList.startWithOne')
-            : t('routineSuggestions.suggestedForYou')
-        }
-        end={
-          <Show when={more() > 0}>
-            <button
-              type="button"
-              class="flex shrink-0 items-center gap-1 rounded-md text-[13px] font-medium leading-5 text-ink-muted outline-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-edge-focus"
-              onClick={() => props.onOpenDiscover()}
-            >
-              {t('routineSuggestions.moreInDiscover', { count: more() })}
-              <ArrowRightIcon class="size-3.5" aria-hidden="true" />
-            </button>
-          </Show>
-        }
-      />
-      <RoutineCardGrid
+            : t('routineSuggestions.suggestedForYou')}
+        </h2>
+      </div>
+      <ul
         ref={(element) => (grid = element)}
+        class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(0,25rem))_8rem] gap-3"
         aria-label={t('routineSuggestions.listLabel')}
       >
         <For each={visible()}>
@@ -322,38 +297,19 @@ export function SuggestionRow(
               idsBefore(visible, index),
               props.onOpenRoutine
             );
-            const routineId = () => {
-              const status = props.actions.statusFor(item);
-              return status.kind === 'enabled' ? status.routineId : undefined;
-            };
-            const routine = () => {
-              const id = routineId();
-              return id ? props.routine(id) : undefined;
-            };
             return (
-              <SuggestionCompactCard
+              <SuggestionCard
+                on="page"
                 model={cardModel(item, props.actions)}
-                onOpen={handlers.onOpen}
-                onTurnOn={handlers.onTurnOn}
-                onDismiss={
-                  item.template
-                    ? undefined
-                    : () =>
-                        fireAndForget(
-                          props.actions.dismiss(item),
-                          'routine-suggestions.dismiss'
-                        )
-                }
-                routine={routine()}
-                onToggle={() => {
-                  const id = routineId();
-                  if (id) props.onToggle(id);
-                }}
+                {...handlers}
               />
             );
           }}
         </For>
-      </RoutineCardGrid>
+        <Show when={more() > 0}>
+          <SuggestionMoreCell count={more()} onOpen={props.onOpenDiscover} />
+        </Show>
+      </ul>
     </section>
   );
 }

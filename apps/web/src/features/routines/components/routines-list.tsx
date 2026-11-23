@@ -19,7 +19,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { canToggleRoutine } from '../core/routine-menu';
 import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import {
@@ -36,10 +35,6 @@ import { RoutineTemplateStrip } from './routine-template-strip';
 export type RoutinesDiscoverHost = {
   /** The person has no routines yet, so suggestions are where to start. */
   empty: boolean;
-  /** A routine a suggestion card turned on, as the list has it. */
-  routine(routineId: string): { enabled: boolean; locked: boolean } | undefined;
-  /** Switch a routine a suggestion card turned on. */
-  onToggle(routineId: string): void;
 };
 
 /**
@@ -136,18 +131,6 @@ export function RoutinesList(props: {
   const discoverHost: RoutinesDiscoverHost = {
     get empty() {
       return props.rows.length === 0 && !props.loading && !props.error;
-    },
-    routine(id) {
-      const row = props.rows.find((other) => other.id === id);
-      if (!row) return undefined;
-      return {
-        enabled: row.enabled,
-        locked: !canToggleRoutine(row, props.pendingId === row.id),
-      };
-    },
-    onToggle(id) {
-      const row = props.rows.find((other) => other.id === id);
-      if (row) props.onToggle(row);
     },
   };
   const tabs = (): JSX.Element => (
@@ -363,7 +346,7 @@ function RoutineCardsSkeleton() {
         <For each={[0, 1, 2]}>
           {() => (
             <li class="min-w-0">
-              <RoutineSurface class="flex h-[90px] flex-col justify-center gap-3 px-4">
+              <RoutineSurface class="flex h-16 flex-col justify-center gap-2 px-3.5">
                 <ListSkeleton.Bar class="w-1/2" />
                 <ListSkeleton.Bar class="w-3/4" />
               </RoutineSurface>
@@ -388,7 +371,8 @@ function RoutineCardsPage(props: ListBodyProps) {
       aria-label={t('routinesList.listLabel')}
       aria-busy={props.loading}
       tabIndex={-1}
-      class="flex min-w-0 flex-col gap-10 px-12 py-9 outline-none @max-[760px]/routines:px-6 @max-[760px]/routines:py-6"
+      // Discover's padding (px-4 pt-4 pb-6), so switching tabs moves nothing.
+      class="flex min-w-0 flex-col gap-8 px-4 pt-4 pb-6 outline-none"
     >
       <RoutinesAbove {...props} />
       <Switch
