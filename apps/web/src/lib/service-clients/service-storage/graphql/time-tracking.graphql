@@ -1,0 +1,182 @@
+# Time entries on a task and the viewer's running timer.
+#
+# A task's first page of entries is always `timeEntries(limit: 50)`, written
+# the same way here, in mutation replies and in the optimistic link fragment,
+# so every write lands on the cached page the Time popover reads.
+
+fragment TimeEntryFields on GraphqlTimeEntry {
+  id
+  taskId
+  userId
+  date
+  minutes
+  note
+  startedAt
+  endedAt
+  source
+  createdAt
+  updatedAt
+  canEdit
+}
+
+fragment TimeEntryPageFields on GraphqlTimeEntryPage {
+  entries {
+    ...TimeEntryFields
+  }
+  nextCursor
+}
+
+# What a time write changes on its task: Time logged (a property) and the
+# first page of entries.
+fragment TimeTrackedTaskFields on GraphqlSoupDocument {
+  __typename
+  id
+  properties {
+    ...SoupPropertyFields
+  }
+  timeEntries(limit: 50) {
+    ...TimeEntryPageFields
+  }
+}
+
+# Read before a typed write, to adjust Time logged in the optimistic reply.
+fragment TimeLoggedTaskProperties on GraphqlSoupDocument {
+  __typename
+  id
+  properties {
+    ...SoupPropertyFields
+  }
+}
+
+# Fragment-rooted link updates on a task's first page of entries.
+fragment TimeEntriesParent on GraphqlSoupDocument {
+  __typename
+  id
+  timeEntries(limit: 50) {
+    entries {
+      id
+    }
+  }
+}
+
+fragment TimeTrackingFields on GraphqlTimeTracking {
+  id
+  serverNow
+  runningTimer {
+    id
+    taskId
+    startedAt
+    task {
+      __typename
+      id
+      name
+    }
+  }
+}
+
+# soupEntity reads the primary, so a list read right after a write has it.
+query TaskTimeEntries($input: SoupEntityInput!) {
+  user {
+    id
+    soupEntity(input: $input) {
+      __typename
+      id
+      ... on GraphqlSoupDocument {
+        timeEntries(limit: 50) {
+          ...TimeEntryPageFields
+        }
+      }
+    }
+  }
+}
+
+query TaskTimeEntriesAfter($input: SoupEntityInput!, $after: String!) {
+  user {
+    id
+    soupEntity(input: $input) {
+      __typename
+      id
+      ... on GraphqlSoupDocument {
+        timeEntries(limit: 50, after: $after) {
+          ...TimeEntryPageFields
+        }
+      }
+    }
+  }
+}
+
+query RunningTimer {
+  user {
+    id
+    timeTracking {
+      ...TimeTrackingFields
+    }
+  }
+}
+
+mutation LogTime($input: LogTimeInput!) {
+  logTime(input: $input) {
+    entry {
+      ...TimeEntryFields
+    }
+    task {
+      ...TimeTrackedTaskFields
+    }
+  }
+}
+
+mutation UpdateTimeEntry($input: UpdateTimeEntryInput!) {
+  updateTimeEntry(input: $input) {
+    entry {
+      ...TimeEntryFields
+    }
+    task {
+      ...TimeTrackedTaskFields
+    }
+  }
+}
+
+mutation DeleteTimeEntry($input: DeleteTimeEntryInput!) {
+  deleteTimeEntry(input: $input) {
+    deletedEntryId
+    task {
+      ...TimeTrackedTaskFields
+    }
+  }
+}
+
+mutation StartTimer($input: StartTimerInput!) {
+  startTimer(input: $input) {
+    timeTracking {
+      ...TimeTrackingFields
+    }
+    stoppedEntry {
+      ...TimeEntryFields
+    }
+    stoppedTask {
+      ...TimeTrackedTaskFields
+    }
+  }
+}
+
+mutation StopTimer($input: StopTimerInput!) {
+  stopTimer(input: $input) {
+    timeTracking {
+      ...TimeTrackingFields
+    }
+    entry {
+      ...TimeEntryFields
+    }
+    task {
+      ...TimeTrackedTaskFields
+    }
+  }
+}
+
+mutation DiscardTimer($timerId: ID!) {
+  discardTimer(timerId: $timerId) {
+    timeTracking {
+      ...TimeTrackingFields
+    }
+  }
+}
