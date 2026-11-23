@@ -18,7 +18,7 @@ export interface WasmLoadPhase {
   phase: 'download' | 'compile';
   outcome: 'success' | 'error';
   durationMs: number;
-  /** Bytes of the binary; set on a successful download. */
+  /** Bytes of the binary; set on a successful download read whole, not streamed. */
   bytes?: number;
 }
 
@@ -43,6 +43,11 @@ export interface WasmModule<Glue> {
   load(options?: WasmLoadOptions): Promise<Glue>;
   /** The compiled binary, for handing to workers. A failed compile is tried again. */
   compiled(options?: WasmCompileOptions): Promise<WebAssembly.Module>;
+  /**
+   * A compile of its own, kept by no one here: for a module the caller may
+   * drop, such as one compiled ahead for a worker that might never start.
+   */
+  compile(options?: WasmCompileOptions): Promise<WebAssembly.Module>;
   /**
    * Drops the instance after a trap (a Rust panic can leave it unusable), so
    * the next `load` starts a fresh one with its own memory. Objects from the
@@ -72,6 +77,12 @@ export function defineWasmModule<Glue extends WasmGlue>(
   let memory: WebAssembly.Memory | undefined;
   let generation = 0;
 
+  const compile = (options?: WasmCompileOptions): Promise<WebAssembly.Module> =>
+    Telemetry.span('wasm.compile_module', (span) => {
+      span.setAttr('wasm.module', definition.name);
+      return compileBinary(definition, span, options?.onPhase);
+    });
+
   const compiled = (
     options?: WasmCompileOptions
   ): Promise<WebAssembly.Module> => {
@@ -80,10 +91,7 @@ export function defineWasmModule<Glue extends WasmGlue>(
     // Nothing replaces `compiling` while it is in flight.
     compiling = (async () => {
       try {
-        return await Telemetry.span('wasm.compile_module', (span) => {
-          span.setAttr('wasm.module', definition.name);
-          return compileBinary(definition, span, options?.onPhase);
-        });
+        return await compile(options);
       } catch (error) {
         compiling = undefined;
         throw error;
@@ -127,6 +135,7 @@ export function defineWasmModule<Glue extends WasmGlue>(
     binaryUrl: definition.binaryUrl,
     load,
     compiled,
+    compile,
     discard: () => {
       generation++;
       loading = undefined;
@@ -150,135 +159,130 @@ export function missingWasmModule<Glue>(
     binaryUrl: '',
     load: fail,
     compiled: fail,
+    compile: fail,
     discard: () => {},
     memory: () => undefined,
   };
 }
 
+type Streamed = { stream: Response };
+type Bytes = { bytes: ArrayBuffer };
+type OnPhase = ((phase: WasmLoadPhase) => void) | undefined;
+
 /**
- * Downloads and compiles the binary. Compilation streams while the bytes
- * arrive, so the compile span starts with the response and overlaps the
- * download span, which ends with the last byte.
+ * Downloads and compiles the binary. A response served as exactly
+ * `application/wasm` compiles from its stream, as it arrives: only a module
+ * compiled from the fetched response itself has its optimized code cached
+ * by Chromium for the next page load. Streamed, the download phase ends with
+ * the response's arrival and has no `bytes`, and the compile phase includes
+ * the body. A streamed compile that fails for any reason but an invalid
+ * binary (a dropped body, a runtime that won't stream this response) is
+ * reported as a failed download and retried once from bytes.
  */
 async function compileBinary(
   definition: WasmModuleDefinition<unknown>,
   span: Span,
-  onPhase: ((phase: WasmLoadPhase) => void) | undefined
+  onPhase: OnPhase
 ): Promise<WebAssembly.Module> {
-  const download = trackDownload(span, onPhase);
-
-  let response: Response;
+  const body = await download<Streamed | Bytes>(
+    definition,
+    span,
+    onPhase,
+    (response) =>
+      canCompileStreaming(response) ? { stream: response } : readBytes(response)
+  );
+  if ('bytes' in body) {
+    return compilePhase(span, onPhase, () => WebAssembly.compile(body.bytes));
+  }
   try {
-    response = await fetch(definition.binaryUrl);
+    return await compilePhase(span, onPhase, () =>
+      WebAssembly.compileStreaming(body.stream)
+    );
+  } catch (error) {
+    if (error instanceof WebAssembly.CompileError) throw error;
+  }
+  const { bytes } = await download(definition, span, onPhase, readBytes);
+  return compilePhase(span, onPhase, () => WebAssembly.compile(bytes));
+}
+
+function canCompileStreaming(response: Response): boolean {
+  // Exactly: some runtimes reject parameters or other casing mid-compile.
+  return (
+    typeof WebAssembly.compileStreaming === 'function' &&
+    response.headers.get('content-type') === 'application/wasm'
+  );
+}
+
+const readBytes = async (response: Response): Promise<Bytes> => ({
+  bytes: await response.arrayBuffer(),
+});
+
+async function download<Body extends Streamed | Bytes>(
+  definition: WasmModuleDefinition<unknown>,
+  span: Span,
+  onPhase: OnPhase,
+  read: (response: Response) => Body | Promise<Body>
+): Promise<Body> {
+  const downloading = span.span('wasm.download');
+  const startedAt = performance.now();
+  try {
+    const response = await fetch(definition.binaryUrl);
     if (!response.ok) {
       throw new Error(
         `${definition.name} wasm download returned HTTP ${response.status}`
       );
     }
+    const body = await read(response);
+    const bytes = 'bytes' in body ? body.bytes.byteLength : undefined;
+    if (bytes !== undefined) downloading.setAttr('wasm.bytes', bytes);
+    onPhase?.({
+      phase: 'download',
+      outcome: 'success',
+      durationMs: performance.now() - startedAt,
+      ...(bytes === undefined ? {} : { bytes }),
+    });
+    return body;
   } catch (error) {
-    download.failed(error);
+    downloading.error(error);
+    onPhase?.({
+      phase: 'download',
+      outcome: 'error',
+      durationMs: performance.now() - startedAt,
+    });
     throw error;
+  } finally {
+    downloading.end();
   }
+}
 
-  const compileStartedAt = performance.now();
+async function compilePhase(
+  span: Span,
+  onPhase: OnPhase,
+  source: () => Promise<WebAssembly.Module>
+): Promise<WebAssembly.Module> {
   const compiling = span.span('wasm.compile');
+  const startedAt = performance.now();
   try {
-    const module = await compileResponse(response, download.downloaded);
+    const module = await source();
     onPhase?.({
       phase: 'compile',
       outcome: 'success',
-      durationMs: performance.now() - compileStartedAt,
+      durationMs: performance.now() - startedAt,
     });
     return module;
   } catch (error) {
-    // A body that broke off mid-stream fails the compile.
-    if (!download.ended()) download.failed(error);
     compiling.error(error);
+    // Streamed, only a CompileError is the binary's fault; anything else is
+    // the body or the runtime refusing to stream it.
     onPhase?.({
-      phase: 'compile',
+      phase: error instanceof WebAssembly.CompileError ? 'compile' : 'download',
       outcome: 'error',
-      durationMs: performance.now() - compileStartedAt,
+      durationMs: performance.now() - startedAt,
     });
     throw error;
   } finally {
     compiling.end();
   }
-}
-
-/**
- * The download span and phase. Made apart from the response: the body
- * stream's callbacks reach `downloaded`, and WebKit never collects a stream
- * whose callbacks can reach it.
- */
-function trackDownload(
-  span: Span,
-  onPhase: ((phase: WasmLoadPhase) => void) | undefined
-) {
-  const downloadSpan = span.span('wasm.download');
-  const startedAt = performance.now();
-  let ended = false;
-
-  return {
-    ended: () => ended,
-    failed: (error: unknown) => {
-      ended = true;
-      downloadSpan.error(error);
-      downloadSpan.end();
-      onPhase?.({
-        phase: 'download',
-        outcome: 'error',
-        durationMs: performance.now() - startedAt,
-      });
-    },
-    downloaded: (bytes: number) => {
-      ended = true;
-      downloadSpan.setAttr('wasm.bytes', bytes);
-      downloadSpan.end();
-      onPhase?.({
-        phase: 'download',
-        outcome: 'success',
-        durationMs: performance.now() - startedAt,
-        bytes,
-      });
-    },
-  };
-}
-
-async function compileResponse(
-  response: Response,
-  downloaded: (bytes: number) => void
-): Promise<WebAssembly.Module> {
-  // Some desktop protocols do not serve the application/wasm MIME type,
-  // which streaming compilation requires.
-  const mime = response.headers.get('content-type')?.split(';')[0];
-  const body = mime === 'application/wasm' ? response.body : null;
-
-  if (!body) {
-    const bytes = await response.arrayBuffer();
-    downloaded(bytes.byteLength);
-    return WebAssembly.compile(bytes);
-  }
-
-  const counted = body.pipeThrough(countBytes(downloaded));
-  return WebAssembly.compileStreaming(
-    new Response(counted, { headers: response.headers })
-  );
-}
-
-/** Passes the body through, reporting its length at the end. */
-function countBytes(
-  downloaded: (bytes: number) => void
-): TransformStream<Uint8Array, Uint8Array> {
-  let bytes = 0;
-  return new TransformStream({
-    transform(chunk, controller) {
-      bytes += chunk.byteLength;
-      controller.enqueue(chunk);
-    },
-    flush() {
-      downloaded(bytes);
-    },
-  });
 }
 
 async function instantiate<Glue extends WasmGlue>(

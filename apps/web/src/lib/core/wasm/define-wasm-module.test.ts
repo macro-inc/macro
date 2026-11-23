@@ -60,15 +60,13 @@ describe('defineWasmModule', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('streams the binary when it is served as application/wasm, reporting its size', async () => {
+  it('compiles the fetched response itself when it is served as application/wasm', async () => {
+    const response = new Response(EMPTY_MODULE, {
+      headers: { 'content-type': 'application/wasm' },
+    });
     vi.stubGlobal(
       'fetch',
-      vi.fn(
-        async () =>
-          new Response(EMPTY_MODULE, {
-            headers: { 'content-type': 'application/wasm' },
-          })
-      )
+      vi.fn(async () => response)
     );
     const streaming = vi.spyOn(WebAssembly, 'compileStreaming');
     const phases: WasmLoadPhase[] = [];
@@ -88,12 +86,82 @@ describe('defineWasmModule', () => {
 
     expect(compiled).toBeInstanceOf(WebAssembly.Module);
     expect(await module.compiled()).toBe(compiled);
-    expect(streaming).toHaveBeenCalledTimes(1);
+    // Chromium caches compiled code only for the response it fetched.
+    expect(streaming).toHaveBeenCalledExactlyOnceWith(response);
     expect(
       phases.map(({ phase, outcome, bytes }) => ({ phase, outcome, bytes }))
     ).toEqual([
+      { phase: 'download', outcome: 'success', bytes: undefined },
+      { phase: 'compile', outcome: 'success', bytes: undefined },
+    ]);
+  });
+
+  it('compiles from bytes once when the stream fails for another reason, and keeps no compile from compile()', async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(EMPTY_MODULE, {
+          headers: { 'content-type': 'application/wasm' },
+        })
+    );
+    vi.stubGlobal('fetch', fetch);
+    vi.spyOn(WebAssembly, 'compileStreaming').mockRejectedValueOnce(
+      new TypeError('network error')
+    );
+    const phases: WasmLoadPhase[] = [];
+    const module = defineWasmModule({
+      name: 'example',
+      thread: 'worker',
+      checkThread: true,
+      binaryUrl: '/assets/example_bg-1.wasm',
+      glue: async () => {
+        throw new Error('not loaded');
+      },
+    });
+
+    const first = await module.compile({
+      onPhase: (phase) => phases.push(phase),
+    });
+
+    expect(first).toBeInstanceOf(WebAssembly.Module);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(
+      phases.map(({ phase, outcome, bytes }) => ({ phase, outcome, bytes }))
+    ).toEqual([
+      { phase: 'download', outcome: 'success', bytes: undefined },
+      { phase: 'download', outcome: 'error', bytes: undefined },
       { phase: 'download', outcome: 'success', bytes: 8 },
       { phase: 'compile', outcome: 'success', bytes: undefined },
+    ]);
+    expect(await module.compile()).not.toBe(first);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports a streamed binary that does not compile, without a second download', async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          headers: { 'content-type': 'application/wasm' },
+        })
+    );
+    vi.stubGlobal('fetch', fetch);
+    const phases: WasmLoadPhase[] = [];
+    const module = defineWasmModule({
+      name: 'example',
+      thread: 'worker',
+      checkThread: true,
+      binaryUrl: '/assets/example_bg-1.wasm',
+      glue: async () => {
+        throw new Error('not loaded');
+      },
+    });
+
+    await expect(
+      module.compiled({ onPhase: (phase) => phases.push(phase) })
+    ).rejects.toBeInstanceOf(WebAssembly.CompileError);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(phases.map(({ phase, outcome }) => ({ phase, outcome }))).toEqual([
+      { phase: 'download', outcome: 'success' },
+      { phase: 'compile', outcome: 'error' },
     ]);
   });
 
@@ -105,7 +173,8 @@ describe('defineWasmModule', () => {
         .mockResolvedValueOnce(new Response('', { status: 503 }))
         .mockResolvedValue(
           new Response(EMPTY_MODULE, {
-            headers: { 'content-type': 'application/octet-stream' },
+            // A parameter rules out streaming too.
+            headers: { 'content-type': 'application/wasm; charset=binary' },
           })
         )
     );
