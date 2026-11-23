@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use super::*;
 use ai_toolset::schema::generate_validated_input_schema;
+use models_properties::api::requests::SetPropertyValue;
 
 #[test]
 fn test_get_entity_properties_schema_validation() {
@@ -263,4 +264,33 @@ mod entity_type_aliases {
             models_properties::EntityType::Thread
         );
     }
+}
+
+#[test]
+fn set_entity_property_gives_a_date_its_time_only_when_asked() {
+    let input = |has_time: serde_json::Value| -> SetEntityProperty {
+        serde_json::from_value(serde_json::json!({
+            "entity_id": "task-1",
+            "entity_type": "document",
+            "property_definition_id": "00000001-0000-0000-0000-000000000004",
+            "date_value": "2026-11-26T19:00:00Z",
+            "date_has_time": has_time,
+        }))
+        .unwrap()
+    };
+    let has_time = |value: Option<SetPropertyValue>| match value {
+        Some(SetPropertyValue::Date { has_time, .. }) => has_time,
+        other => panic!("expected a date, got {other:?}"),
+    };
+
+    assert!(has_time(
+        input(serde_json::json!(true))
+            .to_set_property_value()
+            .unwrap()
+    ));
+    assert!(!has_time(
+        input(serde_json::Value::Null)
+            .to_set_property_value()
+            .unwrap()
+    ));
 }

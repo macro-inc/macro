@@ -188,6 +188,16 @@ pub trait Storage: MaybeSend {
         projections: Vec<ProjectionMutation>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// [`Self::put_batch_with_projections`] with borrowed records, for a caller
+    /// that keeps them. The default clones them.
+    fn put_records_with_projections(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+        self.put_batch_with_projections(entries.to_vec(), projections)
+    }
+
     /// Deletes records (absent keys are ignored).
     fn delete_batch(
         &mut self,

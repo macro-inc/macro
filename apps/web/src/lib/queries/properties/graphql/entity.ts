@@ -199,7 +199,9 @@ export function toGraphqlSetPropertyValue(
   if (value === null) return null;
   return match(value)
     .with({ type: 'boolean' }, (v) => ({ boolean: v.value }))
-    .with({ type: 'date' }, (v) => ({ date: v.value }))
+    .with({ type: 'date' }, (v) =>
+      v.has_time ? { dateWithTime: v.value } : { date: v.value }
+    )
     .with({ type: 'date_range' }, (v) => ({ dateRange: v.value }))
     .with({ type: 'number' }, (v) => ({ number: v.value }))
     .with({ type: 'string' }, (v) => ({ string: v.value }))
