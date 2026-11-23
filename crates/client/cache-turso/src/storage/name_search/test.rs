@@ -817,3 +817,181 @@ fn list_groups_match_complete_scan_with_small_groups_and_continuations() {
         );
     });
 }
+/// Pages a search to its end through the indexed reader, checking each page
+/// against the complete scan.
+async fn page_all(
+    engine: &mut Engine<TursoStorage>,
+    mut request: PeopleSearch,
+) -> Vec<(String, u8)> {
+    let mut listed = vec![];
+    loop {
+        let PeopleSearchResult::Page {
+            people,
+            next_cursor,
+            ..
+        } = parity(engine, &request, EPOCH).await
+        else {
+            panic!("page");
+        };
+        listed.extend(
+            people
+                .into_iter()
+                .map(|p| (p.user_id.to_string(), p.match_rank)),
+        );
+        let Some(cursor) = next_cursor else {
+            return listed;
+        };
+        request.cursor = Some(cursor);
+    }
+}
+#[test]
+fn list_group_leads_exact_over_word_prefix_on_broad_and_sparse_reads() {
+    block_on(async {
+        let (engine, scope) = seed(5000).await;
+        let mut storage = engine.into_storage();
+        // "other" is an exact first name for the 4800 "Other person" contacts
+        // and a word prefix of 300 "Person Other" ones, both far past a probe.
+        let p = |i: usize| format!("macro|p{i:06}@example.com");
+        let q = |i: usize| format!("macro|q{i:06}@example.com");
+        let mut rows = (0..400)
+            .map(|i| {
+                let lists: &[&str] = if i < 100 { &["gmail"] } else { &["interacted"] };
+                (key(&p(i)), listed_record(&p(i), "Other person", lists))
+            })
+            .chain((0..300).map(|i| {
+                let lists: &[&str] = if i < 150 { &["teammates"] } else { &[] };
+                (key(&q(i)), listed_record(&q(i), "Person Other", lists))
+            }))
+            .collect::<Vec<_>>();
+        // Sparse: a handful of "sam" names, and one contains-only and one
+        // address-only teammate for each query.
+        for (user, name, lists) in [
+            ("macro|brother@example.com", "Brother", &["teammates"][..]),
+            ("macro|other.zed@example.com", "Zed", &["teammates"][..]),
+            ("macro|sam@example.com", "Sam", &["gmail"][..]),
+            ("macro|sam.b@example.com", "Sam", &["gmail"][..]),
+            ("macro|nobody@example.com", "Sam", &[][..]),
+            ("macro|samantha@example.com", "Samantha Mate", &["teammates"][..]),
+            ("macro|sammy@example.com", "Sammy Mail", &["outlook"][..]),
+            ("macro|isam@example.com", "Isam", &["teammates"][..]),
+        ] {
+            rows.push((key(user), listed_record(user, name, lists)));
+        }
+        storage.put_batch(rows).await.unwrap();
+        let mut engine = Engine::new(storage);
+        engine
+            .update_people_context(&ContextUpdate {
+                scope: scope.clone(),
+                epoch: EPOCH,
+                action: ContextAction::Patch {
+                    updates: [(q(10), 3000), (p(200), 2000), (p(4000), 9000)]
+                        .into_iter()
+                        .chain([("macro|sam.b@example.com".to_owned(), 500)])
+                        .map(|(user, time)| PersonFactPatch {
+                            user_id: user.try_into().unwrap(),
+                            facts: PersonFacts {
+                                last_interaction_ms: Some(time),
+                                ..Default::default()
+                            },
+                        })
+                        .collect(),
+                },
+            })
+            .await
+            .unwrap();
+        let mention = vec![
+            vec!["teammates".to_owned()],
+            vec!["interacted".to_owned(), "invited".to_owned()],
+            vec!["gmail".to_owned(), "outlook".to_owned()],
+        ];
+
+        // Page sizes that put a boundary inside a group, at a group's last
+        // person, and between exact and word-prefix matches.
+        for limit in [500, 150, 149] {
+            let mut request = request(&scope, "other", PeopleMode::Mention);
+            request.list_priority = mention.clone();
+            request.limit = limit;
+            let listed = page_all(&mut engine, request).await;
+            assert_eq!(listed.len(), 5102, "{limit}");
+            assert_eq!(
+                listed
+                    .iter()
+                    .map(|(id, _)| id)
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len(),
+                5102,
+                "{limit}"
+            );
+            let within = |range: std::ops::Range<usize>, rank: u8, prefix: &str, ids: std::ops::Range<usize>| {
+                assert!(
+                    listed[range.clone()].iter().all(|(id, r)| {
+                        *r == rank
+                            && id
+                                .strip_prefix(prefix)
+                                .and_then(|id| id.strip_suffix("@example.com"))
+                                .and_then(|n| n.parse::<usize>().ok())
+                                .is_some_and(|n| ids.contains(&n))
+                    }),
+                    "{limit} {range:?}"
+                );
+            };
+            // Teammates whose name only starts with the query lead every
+            // exact name in a later group, most recent first.
+            assert_eq!(listed[0].0, q(10));
+            within(0..150, 2, "macro|q", 0..150);
+            assert_eq!(listed[150].0, p(200));
+            within(150..450, 3, "macro|p", 100..400);
+            within(450..550, 3, "macro|p", 0..100);
+            assert_eq!(listed[550].0, p(4000));
+            within(550..4950, 3, "macro|p", 400..4800);
+            within(4950..5100, 2, "macro|q", 150..300);
+            // A contains-only teammate never precedes a word-start match, nor
+            // an address-only teammate a contains-only one.
+            assert_eq!(listed[5100], ("macro|brother@example.com".to_owned(), 1));
+            assert_eq!(listed[5101], ("macro|other.zed@example.com".to_owned(), 0));
+        }
+
+        // Without a list order the name stage leads, messaged first.
+        let mut unordered = request(&scope, "other", PeopleMode::Mention);
+        unordered.limit = 500;
+        let listed = page_all(&mut engine, unordered).await;
+        assert_eq!(listed.len(), 5102);
+        assert_eq!(
+            listed[..4],
+            [
+                (p(4000), 5),
+                (p(200), 5),
+                (q(10), 4),
+                (p(0), 3),
+            ]
+        );
+
+        // Sparse posting sets take the probe path, one person per page.
+        let mut request = request(&scope, "sam", PeopleMode::Mention);
+        request.list_priority = mention;
+        request.limit = 1;
+        assert_eq!(
+            page_all(&mut engine, request.clone()).await,
+            [
+                ("macro|samantha@example.com".to_owned(), 2),
+                ("macro|sam.b@example.com".to_owned(), 3),
+                ("macro|sam@example.com".to_owned(), 3),
+                ("macro|sammy@example.com".to_owned(), 2),
+                ("macro|nobody@example.com".to_owned(), 3),
+                ("macro|isam@example.com".to_owned(), 1),
+            ]
+        );
+        request.list_priority = vec![];
+        assert_eq!(
+            page_all(&mut engine, request).await,
+            [
+                ("macro|sam.b@example.com".to_owned(), 5),
+                ("macro|nobody@example.com".to_owned(), 3),
+                ("macro|sam@example.com".to_owned(), 3),
+                ("macro|samantha@example.com".to_owned(), 2),
+                ("macro|sammy@example.com".to_owned(), 2),
+                ("macro|isam@example.com".to_owned(), 1),
+            ]
+        );
+    });
+}
