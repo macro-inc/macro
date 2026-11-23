@@ -79,8 +79,9 @@ the axum route constructors that declare each handler's category.
 - **Unscoped programs may use egress.** The `program` x `egress` cell is
   observed, not allowed, by design: agents fetch and search the web today, so
   the rollout must not enforce that cell without a replacement path. The
-  no-send, generation, dry-run, unknown and channel-mention callers are
-  refused egress.
+  scoped callers' egress cells are observed too, like the program's; the
+  scoped sessions are the first to enforce, since no run of theirs fetches
+  today.
 - Cells that must not be enforced without a replacement path: `program` x
   `egress`, and `bot` and `harness` x `connect` and `approval_gate` (the
   computers pair and approve through them today).
