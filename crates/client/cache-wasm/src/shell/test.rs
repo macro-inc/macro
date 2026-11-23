@@ -2971,12 +2971,13 @@ async fn idle_checkpoint_copies_a_due_wal_once_and_keeps_reads() {
             copied = Some(result);
             break;
         }
-        // Below 500 frames nothing is copied.
+        // The browser connection copies its own WAL: nothing below 4,000
+        // frames, in COMMIT or here.
         assert_eq!(result["backfilledFrames"], 0);
-        assert!(result["walFrames"].as_u64().unwrap() < 500);
+        assert!(result["walFrames"].as_u64().unwrap() < 4_000);
     }
-    let copied = copied.expect("the WAL reached 500 frames");
-    assert!(copied["walFrames"].as_u64().unwrap() >= 500);
+    let copied = copied.expect("the WAL reached 4,000 frames");
+    assert!(copied["walFrames"].as_u64().unwrap() >= 4_000);
     assert_eq!(copied["backfilledFrames"], copied["walFrames"]);
 
     // Nothing new since the copy: the next call skips it.

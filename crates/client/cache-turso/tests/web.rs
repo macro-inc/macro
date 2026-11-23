@@ -502,7 +502,7 @@ fn checkpoint_write(write: usize) -> Vec<(EntityKey<'static>, Record)> {
 }
 
 #[wasm_bindgen_test(async)]
-async fn the_idle_checkpoint_copies_the_wal_and_survives_a_reopen_over_opfs() {
+async fn the_idle_checkpoint_copies_from_4000_frames_and_survives_a_reopen_over_opfs() {
     let owner = OpfsOwner::acquire("cache-turso-idle-checkpoint.db")
         .await
         .unwrap()
@@ -514,8 +514,10 @@ async fn the_idle_checkpoint_copies_the_wal_and_survives_a_reopen_over_opfs() {
     };
     let mut storage =
         TursoStorage::from_opfs_session(session.connect().unwrap(), "checkpoint-scope").unwrap();
-    // About 27 frames a write: due after some 19 writes.
+    // Turso's own checkpoint is off over OPFS: the WAL passes its 1,000
+    // frames, and the idle copy waits for 4,000. About 27 frames a write.
     let mut writes = 0;
+    let mut previous = 0;
     let checkpoint = loop {
         storage.put_batch(checkpoint_write(writes)).await.unwrap();
         writes += 1;
@@ -523,11 +525,21 @@ async fn the_idle_checkpoint_copies_the_wal_and_survives_a_reopen_over_opfs() {
         if checkpoint.ran {
             break checkpoint;
         }
-        assert!(checkpoint.wal_frames < 500, "{checkpoint:?}");
-        assert!(writes < 40, "never due");
+        assert!(
+            checkpoint.wal_frames > previous,
+            "a commit copied the WAL at {previous} frames"
+        );
+        previous = checkpoint.wal_frames;
+        assert!(checkpoint.wal_frames < 4_000, "{checkpoint:?}");
+        assert!(writes < 200, "never due");
     };
-    assert!(checkpoint.wal_frames >= 500, "{checkpoint:?}");
+    assert!(checkpoint.wal_frames >= 4_000, "{checkpoint:?}");
     assert_eq!(checkpoint.backfilled_frames, checkpoint.wal_frames);
+    // The copy started the log over: the next write appends to an empty log.
+    storage.put_batch(checkpoint_write(writes)).await.unwrap();
+    writes += 1;
+    let after = storage.checkpoint_if_due().unwrap();
+    assert!(!after.ran && after.wal_frames < 100, "{after:?}");
     let last = checkpoint_write(writes - 1);
     let owner = healthy_close(storage.try_close().unwrap())
         .preserve()
