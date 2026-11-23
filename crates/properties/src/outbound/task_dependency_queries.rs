@@ -41,7 +41,7 @@ pub async fn targets(
 /// Replace one direction after checking the expected edge snapshot. Shared
 /// endpoint locks serialize reciprocal writes and direct-cycle admission without
 /// serializing unrelated tasks.
-#[tracing::instrument(skip(pool, expected, desired), fields(task_id = %task_id, property_definition_id = %property_definition_id, endpoint_count = desired.len()), err)]
+#[tracing::instrument(skip_all, fields(task_id = %task_id, property_definition_id = %property_definition_id, endpoint_count = desired.len() as i64, outcome = tracing::field::Empty), err)]
 pub async fn link(
     pool: &Pool<Postgres>,
     task_id: Uuid,
@@ -51,7 +51,16 @@ pub async fn link(
 ) -> anyhow::Result<TaskDependencyLinkOutcome> {
     // Database timeouts bound statements without abandoning COMMIT and losing
     // receipts for an edit that the server has already committed.
-    link_transaction(pool, task_id, property_definition_id, expected, desired).await
+    let result = link_transaction(pool, task_id, property_definition_id, expected, desired).await;
+    let outcome = match &result {
+        Ok(TaskDependencyLinkOutcome::Updated(..)) => "Updated",
+        Ok(TaskDependencyLinkOutcome::Stale) => "Stale",
+        Ok(TaskDependencyLinkOutcome::Cycle) => "Cycle",
+        Ok(TaskDependencyLinkOutcome::MissingTask) => "MissingTask",
+        Err(_) => "Error",
+    };
+    tracing::Span::current().record("outcome", outcome);
+    result
 }
 
 /// Keep endpoint locks and all edge work within one database transaction.

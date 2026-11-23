@@ -74,6 +74,7 @@ export function createTaskDependencyStatesSource(
   );
   return {
     states,
+    pending: () => queries().some((query) => query.isLoading),
     error: () => queries().find((query) => query.error)?.error,
   };
 }

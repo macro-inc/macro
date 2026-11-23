@@ -684,7 +684,7 @@ pub async fn delete_entity_property(
 
 /// Delete assignments and capture surviving dependency endpoints before cascades
 /// erase the edges needed to identify them. Return receipts only after commit.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip_all, fields(entity_id = tracing::field::Empty, entity_type = ?entity_reference.entity_type), err)]
 pub async fn delete_entity_properties(
     pool: &Pool<Postgres>,
     entity_reference: &EntityReference,
@@ -695,9 +695,11 @@ pub async fn delete_entity_properties(
         entity_reference.entity_type,
         EntityType::Document | EntityType::Task
     );
-    let task_id = Uuid::parse_str(&entity_reference.entity_id)
-        .ok()
-        .filter(|_| document_namespaces);
+    let entity_id = Uuid::parse_str(&entity_reference.entity_id).ok();
+    if let Some(entity_id) = entity_id {
+        tracing::Span::current().record("entity_id", tracing::field::display(entity_id));
+    }
+    let task_id = entity_id.filter(|_| document_namespaces);
     let mut tx = pool.begin().await?;
     sqlx::query!("SET LOCAL statement_timeout = '10s'")
         .execute(&mut *tx)

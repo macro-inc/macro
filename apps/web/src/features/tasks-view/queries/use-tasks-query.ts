@@ -13,6 +13,7 @@ import {
   useSearchContext,
 } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   type EntityData,
@@ -327,6 +328,7 @@ export function useTasksDataSource(
           .map((task) => task.id)
       : []
   );
+  usePending('tasks.dependencies.search', searchDependencies.pending);
 
   const groupedQueries = createGroupedSoupQueries({
     groupedPaging: () => query.groupedPaging,

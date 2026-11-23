@@ -16,6 +16,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
 - `@queries/properties/graphql/task-dependency-source`: normalized task facts; REST search rows hydrate facts in 500-ID arrival-order batches, retaining unchanged batch identities as pages append. Detail blocker names/statuses use the shared batched preview source.
+- Attach search dependency hydration to the route flow with `tasks.dependencies.search`; read the batch source's non-suspending pending accessor, never data, for loading status.
 - Keep search rows available without enrichment badges when dependency enrichment fails; expose only primary search errors, and replace all canonical Status/Depends On/Blocking assignments while preserving unrelated properties.
 
 ## Gotchas

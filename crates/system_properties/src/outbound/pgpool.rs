@@ -263,7 +263,7 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         Ok(())
     }
 
-    #[tracing::instrument(name = "tasks.completion.check", skip_all, fields(task_id), err)]
+    #[tracing::instrument(name = "tasks.status.update", skip_all, fields(task_id = %task_id, status = ?status), err)]
     async fn update_task_status(
         &self,
         task_id: &str,

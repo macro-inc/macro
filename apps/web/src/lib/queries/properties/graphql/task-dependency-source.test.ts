@@ -1,7 +1,7 @@
 import { createClient, type Exchange } from '@urql/core';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import { expect, it, onTestFinished, vi } from 'vitest';
-import { filter, map, pipe } from 'wonka';
+import { filter, fromPromise, map, mergeMap, pipe } from 'wonka';
 
 const fixture = vi.hoisted(() => ({
   client: undefined as ReturnType<typeof createClient> | undefined,
@@ -138,4 +138,43 @@ it('keeps sealed arrival-order batches when later pages append smaller IDs', asy
   await appendedReady.promise;
   expect(requests).toEqual([initial, appended]);
   expect(source.states().size).toBe(510);
+});
+
+it('tracks pending batch status without reading suspending data', async () => {
+  const response = Promise.withResolvers<void>();
+  const settled = Promise.withResolvers<void>();
+  const exchange: Exchange = () => (operations) =>
+    pipe(
+      operations,
+      filter((operation) => operation.kind === 'query'),
+      mergeMap((operation) =>
+        fromPromise(
+          response.promise.then(() => ({
+            operation,
+            stale: false,
+            hasNext: false,
+            data: { user: { id: 'viewer', taskDependencyStates: [] } },
+          }))
+        )
+      )
+    );
+  fixture.client = createClient({
+    url: 'https://example.test/graphql',
+    exchanges: [exchange],
+  });
+  const [ids, setIds] = createSignal(['00000000-0000-4000-8000-000000000001']);
+  const source = createRoot((dispose) => {
+    onTestFinished(dispose);
+    const source = createTaskDependencyStatesSource(ids);
+    createEffect(() => {
+      if (!source.pending()) settled.resolve();
+    });
+    return source;
+  });
+  expect(source.pending()).toBe(true);
+  response.resolve();
+  await settled.promise;
+  expect(source.pending()).toBe(false);
+  setIds([]);
+  expect(source.pending()).toBe(false);
 });

@@ -23,7 +23,11 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock('@queries/properties/graphql/task-dependency-source', () => ({
   createTaskDependencyStatesSource: () =>
-    fixture.dependencies ?? { states: () => new Map(), error: () => undefined },
+    fixture.dependencies ?? {
+      states: () => new Map(),
+      pending: () => false,
+      error: () => undefined,
+    },
 }));
 vi.mock('@queries/properties/definitions', () => ({
   useListPropertiesQuery: () => ({ isSuccess: false, data: [] }),
@@ -782,6 +786,7 @@ it.each([
     const primaryError = new Error('primary search failed');
     fixture.dependencies = {
       states: facts,
+      pending: () => false,
       error: () => {
         if (failed())
           return new CombinedError({

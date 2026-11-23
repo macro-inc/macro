@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { usePending } from '@app/observability/flow';
 import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { TaskBlockedBadge } from '@entity/components/TaskBlockedBadge';
@@ -53,6 +54,7 @@ function TaskDependencyLink(props: { taskId: string }) {
 /** Shared task detail dependency strip; unavailable tasks never reveal their names. */
 export function TaskDependencyDetail(props: { taskId: string }) {
   const query = createTaskDependencyQuery(() => props.taskId);
+  usePending('tasks.dependencies.detail', () => query.isLoading);
   const state = () => query.data?.taskDependencies;
   const completed = () => {
     const status = state()?.properties.find(
