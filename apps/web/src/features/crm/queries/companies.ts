@@ -20,6 +20,7 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CompanyImporter } from '../context/crm-sources';
+import type { CompanyDomainChange } from '../core/company';
 import { contactCompanySummary } from '../core/contact';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
@@ -335,6 +336,70 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
     }),
     () => deps.client
   );
+}
+
+/**
+ * Adds or removes a company domain via `PUT`/`DELETE
+ * /crm/companies/{id}/domains`. The server never changes the company's name
+ * or primary domain, so the answer replaces only the domain list of the
+ * cached company. Which of the company's contacts are on its domains changes
+ * with it, so their details and the company's Team list refresh, and soup
+ * refreshes the domains Customers listings show. Failures worth surfacing:
+ * 409 when another company has the domain (its name in the error message),
+ * 400 for a personal provider or the domain the company is named after, 403
+ * for a member removing a domain from a company whose email sync is off.
+ */
+export function useEditCompanyDomainMutation(deps: CrmRecordDependencies) {
+  return useMutation(
+    () => ({
+      mutationFn: ({
+        companyId,
+        domain,
+        change,
+      }: {
+        companyId: string;
+        domain: string;
+        change: CompanyDomainChange;
+      }) => editCompanyDomain(deps, companyId, domain, change),
+    }),
+    () => deps.client
+  );
+}
+
+async function editCompanyDomain(
+  deps: CrmRecordDependencies,
+  companyId: string,
+  domain: string,
+  change: CompanyDomainChange
+): Promise<CrmCompanyResponse> {
+  return Telemetry.span('crm.company_domain_edit', async (span) => {
+    span.setAttr('crm.record_id', companyId);
+    span.setAttr('crm.change', change);
+    const canCache = captureQueryAuthorization();
+    const write =
+      change === 'add'
+        ? deps.storage.addCompanyDomain
+        : deps.storage.removeCompanyDomain;
+    const company = await span.span('crm.company_domain_edit.save', () =>
+      throwOnErr(() => write({ companyId, domain }))
+    );
+    if (!canCache()) return company;
+
+    deps.client.setQueryData<CrmCompanyResponse>(
+      crmKeys.company(companyId).queryKey,
+      (current) => current && { ...current, domains: company.domains }
+    );
+    await span.span('crm.company_domain_edit.refresh', () =>
+      Promise.all([
+        refreshContactDetailsOfCompany(deps.client, companyId),
+        deps.client.invalidateQueries({
+          queryKey: crmKeys.companyContacts(companyId).queryKey,
+        }),
+        deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+      ])
+    );
+    return company;
+  });
 }
 
 /** Loaded contact details whose summary is of `companyId`. */

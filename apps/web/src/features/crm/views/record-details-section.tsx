@@ -1,9 +1,10 @@
 import { t } from '@app/lib/i18n';
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadataRow } from '@components/app/side-panel/EntityMetadata';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import type { CrmCompany } from '../core/company';
 import type { CrmContact } from '../core/contact';
+import { CompanyDomainField } from './company-domain-field';
 import { ContactCompanyField, ContactEmailField } from './contact-properties';
 
 /** Both records begin with factual details and References in the same order. */
@@ -26,9 +27,9 @@ export function RecordDetailsSection(props: {
         <Show when={props.company}>
           {(company) => (
             <EntityMetadataRow label="Website">
-              <For each={company().domains}>
-                {(domain) => <div>{domain.domain}</div>}
-              </For>
+              <Show when={company().id} keyed>
+                {(_id) => <CompanyDomainField company={company()} />}
+              </Show>
             </EntityMetadataRow>
           )}
         </Show>

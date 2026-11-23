@@ -8975,6 +8975,196 @@
         }
       }
     },
+    "/crm/companies/{company_id}/domains": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::company_domains"],
+        "summary": "Add a domain the organization uses to a company, so mail and new contacts\nfrom it are filed under this company instead of a company of its own. Any\nteam member who can see the company may add one. The company's name and\nprimary domain stay. Refused for a personal or generic email provider\n(400) and for a domain another company of the team tracks (409, naming it\nwhen the caller can see it). Returns the company without its contacts.\nIdempotent.",
+        "operationId": "add_crm_company_domain",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCompanyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyDomainTakenResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::company_domains"],
+        "summary": "Remove a domain from a company. Contacts, their addresses and mail stay;\nlater mail from the domain is filed as it was before the domain was\nadded. The domain the company is named after stays until the company is\nrenamed (400). Removing a domain from a company whose email sync is off\nrequires an admin or owner (403). Returns the company without its\ncontacts. Idempotent.",
+        "operationId": "remove_crm_company_domain",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCompanyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}/email-sync": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_email_sync"],
@@ -39183,6 +39373,37 @@
           "nextCursor": {
             "type": ["string", "null"],
             "description": "Cursor for the next page; absent on the last page."
+          }
+        }
+      },
+      "CompanyDomainRequest": {
+        "type": "object",
+        "description": "One of a company's domains. It travels in the body, as a contact's\naddresses do.",
+        "required": ["domain"],
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "A bare domain such as \"example.com\": no scheme, path or email. An\nidentical retry is accepted."
+          }
+        }
+      },
+      "CompanyDomainTakenResponse": {
+        "type": "object",
+        "description": "The 409 answer when another company of the team already tracks the domain.",
+        "required": ["message"],
+        "properties": {
+          "companyId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The company that tracks the domain. Absent when the caller cannot see\nit: an archived company, for a team member."
+          },
+          "companyName": {
+            "type": ["string", "null"],
+            "description": "That company's display name, when the caller can see it."
+          },
+          "message": {
+            "type": "string",
+            "description": "What happened, naming the other company when the caller can see it."
           }
         }
       },

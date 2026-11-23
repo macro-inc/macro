@@ -24,9 +24,13 @@ import {
 
 type ChangeEmail = (email: string, change: ContactEmailChange) => Promise<void>;
 
-/** One pending change at a time, with the rejection kept beside its control. */
-function createEmailChange(
-  change: ChangeEmail,
+/**
+ * One pending change at a time to one of a record's listed values (a
+ * contact's addresses, a company's domains), with the rejection kept beside
+ * its control.
+ */
+export function createValueChange<Kind>(
+  change: (value: string, kind: Kind) => Promise<void>,
   message: (e: unknown) => string
 ) {
   const [saving, setSaving] = createSignal(false);
@@ -41,12 +45,12 @@ function createEmailChange(
     error,
     clearError: () => setError(undefined),
     /** Resolves to whether the server committed the change. */
-    async run(email: string, kind: ContactEmailChange) {
+    async run(value: string, kind: Kind) {
       if (saving()) return false;
       setSaving(true);
       setError(undefined);
       try {
-        await change(email, kind);
+        await change(value, kind);
         return true;
       } catch (cause) {
         if (active) setError(message(cause));
@@ -58,8 +62,11 @@ function createEmailChange(
   };
 }
 
-/** The property popover on desktop and the shared dialog on touch. */
-function EmailEditor(props: {
+/**
+ * The property popover on desktop and the shared dialog on touch, shared by
+ * the contact email and company domain fields.
+ */
+export function ValueEditor(props: {
   open: boolean;
   onOpenChange(open: boolean): void;
   title: string;
@@ -107,7 +114,7 @@ function EmailEditor(props: {
   );
 }
 
-function EmailError(props: { message: string | undefined }) {
+export function ValueError(props: { message: string | undefined }) {
   return (
     <Show when={props.message}>
       {(message) => (
@@ -133,7 +140,7 @@ function ContactEmailAddress(props: {
   const [open, setOpen] = createSignal(false);
   // The kind of the change in flight, so its rejection reads correctly.
   let requested: ContactEmailChange = 'remove';
-  const request = createEmailChange(props.change, (error) =>
+  const request = createValueChange(props.change, (error) =>
     props.errorMessage(error, requested)
   );
   let triggerElement: HTMLButtonElement | undefined;
@@ -161,7 +168,7 @@ function ContactEmailAddress(props: {
       : props.email;
 
   return (
-    <EmailEditor
+    <ValueEditor
       open={open()}
       onOpenChange={changeOpen}
       title={t('crm.email')}
@@ -209,7 +216,7 @@ function ContactEmailAddress(props: {
             {t('crm.contactEmailLinksCompany')}
           </p>
         </Show>
-        <EmailError message={request.error()} />
+        <ValueError message={request.error()} />
         <div class="flex flex-wrap items-center justify-end gap-2">
           <Show when={request.saving()}>
             <span role="status" class="mr-auto text-sm text-ink-muted">
@@ -240,7 +247,7 @@ function ContactEmailAddress(props: {
           </Show>
         </div>
       </div>
-    </EmailEditor>
+    </ValueEditor>
   );
 }
 
@@ -257,7 +264,7 @@ function AddContactEmail(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   const [draft, setDraft] = createSignal('');
-  const request = createEmailChange(props.change, props.errorMessage);
+  const request = createValueChange(props.change, props.errorMessage);
   let triggerElement: HTMLButtonElement | undefined;
   const [emailInput, setEmailInput] = createSignal<HTMLInputElement>();
   useSearchInputFocus(emailInput, () => open() && !isTouchDevice());
@@ -278,7 +285,7 @@ function AddContactEmail(props: {
   };
 
   return (
-    <EmailEditor
+    <ValueEditor
       open={open()}
       onOpenChange={changeOpen}
       title={t('crm.addEmail')}
@@ -347,7 +354,7 @@ function AddContactEmail(props: {
             request.clearError();
           }}
         />
-        <EmailError message={request.error()} />
+        <ValueError message={request.error()} />
         <div class="flex flex-wrap items-center justify-end gap-2">
           <Button
             variant="ghost"
@@ -367,7 +374,7 @@ function AddContactEmail(props: {
           </Button>
         </div>
       </form>
-    </EmailEditor>
+    </ValueEditor>
   );
 }
 

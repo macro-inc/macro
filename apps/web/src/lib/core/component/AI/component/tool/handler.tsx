@@ -1,8 +1,10 @@
 import {
+  addCompanyDomainHandler,
   createCompanyHandler,
   createContactHandler,
   getCompanyHandler,
   listCompaniesHandler,
+  removeCompanyDomainHandler,
 } from '@app/features/crm/crm-tool-renderers';
 import { pipelineToolHandlers } from '@app/features/crm/pipeline-tool-renderers';
 import {
@@ -273,6 +275,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetCompany: getCompanyHandler,
   CreateCompany: createCompanyHandler,
   CreateContact: createContactHandler,
+  AddCompanyDomain: addCompanyDomainHandler,
+  RemoveCompanyDomain: removeCompanyDomainHandler,
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
   ...pipelineToolHandlers,
