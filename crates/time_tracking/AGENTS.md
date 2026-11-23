@@ -21,17 +21,22 @@ and each task's Time logged total. Served over REST by
 
 ## Scope
 
-- Owns: `time_entry`, `time_timer`, the `macro.time_entries` events, and the
-  only writes of the Time logged system property (`0x16`).
+- Owns: `time_entry`, `time_timer`, the `macro.time_entries` events, the
+  `time_logged` activity mapping (`domain/activity.rs`), the
+  `time_tracking_changed` gateway hint, and the only writes of the Time logged
+  system property (`0x16`).
 - Not here: the property's storage → `crates/system_properties`
   (`time_logged`); the guard refusing other writes of it → `crates/properties`.
 
 ## Boundaries
 
-- Depends on: `entity_access` (receipts), `system_properties` (feature
-  `outbound`), `feature_flags`, `macro_event_broker`, `macro_event_topics`,
-  `ai_toolset` (feature `toolset`).
-- Used by: `services/document_storage_service`, `ai_tools`.
+- Depends on: `entity_access` (receipts), `activity` (models only),
+  `system_properties`, `feature_flags` and `connection_gateway_client` (feature
+  `outbound`), `ai_toolset` (feature `toolset`), `macro_event_broker`,
+  `macro_event_topics`.
+- Used by: `services/document_storage_service` (the router, and the activity
+  consumer's `TimeEntryMacroEvent` arm), `crates/soup_realtime` (the events,
+  mapped to a patch on the task), `ai_tools` (the tools).
 
 ## Checks
 
@@ -55,8 +60,25 @@ and each task's Time logged total. Served over REST by
 - The tools mint the requesting user's receipt, never a bot's: the domain
   takes the author from an authenticated-user receipt, so an agent's entry
   is the person it acts for.
-- Events carry the task's new total and never the note. Nothing consumes the
-  topic yet.
+- Events carry the task's new total and never the note. Two grouped consumers
+  read the topic, both at `InitialOffset::Latest`: `soup_realtime` refreshes
+  the task's row on every event, and DSS's activity consumer records one
+  `time_logged` activity per `time_entry.logged` (edits and deletes record
+  none). Both deploy pipelines apply the `kafka-cluster` stack, which creates
+  the topic. A consumer that starts before the topic exists logs one receive
+  error for it and keeps reading its other topics; it takes the topic at its
+  next metadata refresh (5 minutes at most), starting at the latest offset,
+  so events published before then get no live patch or activity row.
+- Every committed write also sends `time_tracking_changed`
+  (`{ timer, taskId }`) to all of the person's open sessions through the
+  gateway: `timer` when their timer started, stopped or was discarded,
+  `taskId` for the task whose entries changed. It is a hint to read again,
+  spawned on the event broker's shutdown tracker so the response never waits,
+  and sent with the person in the request body (a failed request's error
+  names its URL). Replayed logs, starts and stops and refused writes send
+  nothing; a discard always sends one, since the repository does not say
+  whether a timer was there. The agent tools send it too: `ai_tools` gives
+  them the same gateway adapter on the host's event broker tracker.
 
 ## Related
 

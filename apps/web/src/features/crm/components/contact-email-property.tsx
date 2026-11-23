@@ -6,10 +6,21 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
 import { useSearchInputFocus } from '@property/utils';
-import { Badge, Button, Dialog, Dropdown, Input, Tooltip } from '@ui';
+import {
+  Badge,
+  Button,
+  buttonClasses,
+  Dialog,
+  Dropdown,
+  Input,
+  Tooltip,
+} from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import type { ContactEmailChange } from '../core/contact';
-import { contactPropertyTouchTarget } from './contact-property-styles';
+import {
+  contactPropertyIconTouchTarget,
+  contactPropertyTouchTarget,
+} from './contact-property-styles';
 
 type ChangeEmail = (email: string, change: ContactEmailChange) => Promise<void>;
 
@@ -156,7 +167,7 @@ function ContactEmailAddress(props: {
       title={t('crm.email')}
       anchor={() => triggerElement?.getBoundingClientRect()}
       trigger={
-        <Tooltip label={label()}>
+        <Tooltip label={label()} class="min-w-0 max-w-full">
           <button
             ref={triggerElement}
             type="button"
@@ -233,7 +244,11 @@ function ContactEmailAddress(props: {
   );
 }
 
-/** The add control: a labelled pill while blank, a plus beside addresses. */
+/**
+ * The add control: a labelled pill while blank, then the property panel's
+ * add-value button beside the addresses. One element serves both, so focus
+ * returned after the first address is added stays on it.
+ */
 function AddContactEmail(props: {
   blank: boolean;
   change: ChangeEmail;
@@ -276,10 +291,18 @@ function AddContactEmail(props: {
               props.ref(element);
             }}
             type="button"
-            class={propertyPillClasses({
-              empty: true,
-              class: contactPropertyTouchTarget,
-            })}
+            class={
+              props.blank
+                ? propertyPillClasses({
+                    empty: true,
+                    class: contactPropertyTouchTarget,
+                  })
+                : buttonClasses({
+                    variant: 'ghost',
+                    size: 'icon-xs',
+                    class: `text-ink-extra-muted not-data-disabled:focus-visible:text-ink focus-visible:ring-2 focus-visible:ring-accent/20 ${contactPropertyIconTouchTarget}`,
+                  })
+            }
             aria-label={t('crm.addEmail')}
             aria-expanded={open()}
             aria-haspopup="dialog"
@@ -352,6 +375,8 @@ function AddContactEmail(props: {
  * Every address of a contact, primary first. Each address opens its own
  * actions and a trailing control adds another. Without the server's address
  * list the addresses stay read-only and only a blank contact can add one.
+ * The addresses wrap among themselves, so the add control stays beside the
+ * last one instead of wrapping onto a line of its own.
  */
 export function ContactEmailProperty(props: {
   emails: string[];
@@ -366,29 +391,37 @@ export function ContactEmailProperty(props: {
   let addElement: HTMLButtonElement | undefined;
 
   return (
-    <div class="flex min-w-0 max-w-full flex-wrap items-center gap-1">
-      <For each={props.emails}>
-        {(email) => (
-          <Show
-            when={props.manageable}
-            fallback={
-              <Badge variant="ghost" size="sm" class="min-w-0 max-w-full">
-                <EnvelopeIcon class="size-3 shrink-0" />
-                <span class="ph-no-capture truncate">{email}</span>
-              </Badge>
-            }
-          >
-            <ContactEmailAddress
-              email={email}
-              primary={email === props.primary}
-              linksCompany={email === props.companyEmail}
-              change={props.change}
-              errorMessage={props.errorMessage}
-              focusAfterRemoval={() => addElement?.focus()}
-            />
-          </Show>
-        )}
-      </For>
+    <div
+      role="group"
+      aria-label={t('crm.email')}
+      class="flex min-w-0 max-w-full items-end gap-1"
+    >
+      <Show when={props.emails.length > 0}>
+        <div class="flex min-w-0 flex-wrap items-center gap-1">
+          <For each={props.emails}>
+            {(email) => (
+              <Show
+                when={props.manageable}
+                fallback={
+                  <Badge variant="ghost" size="sm" class="min-w-0 max-w-full">
+                    <EnvelopeIcon class="size-3 shrink-0" />
+                    <span class="ph-no-capture truncate">{email}</span>
+                  </Badge>
+                }
+              >
+                <ContactEmailAddress
+                  email={email}
+                  primary={email === props.primary}
+                  linksCompany={email === props.companyEmail}
+                  change={props.change}
+                  errorMessage={props.errorMessage}
+                  focusAfterRemoval={() => addElement?.focus()}
+                />
+              </Show>
+            )}
+          </For>
+        </div>
+      </Show>
       <Show when={props.manageable || props.emails.length === 0}>
         <AddContactEmail
           blank={props.emails.length === 0}

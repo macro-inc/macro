@@ -1757,18 +1757,23 @@ where the text is an ordinary prompt; the model's `AskUser` tool and user-tool
 review remain independent of this development setting.
 
 An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
-ask you something. A card titled `<bot> is asking` with trailing text `Waiting for you`
-appears in the transcript, and the notice `The agent is waiting for your answer above` sits
-over the composer. Forms have one control per field (radios for a choice, an `Other` text
-box when the agent allows a custom answer, checkboxes for multi-select, text/number inputs)
-plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and URL with an
-`Open` button that only opens a new tab after you click it. Once answered the card collapses
-to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
-continues. Messages typed while a question is open queue behind it; the composer's `Stop`
+ask you something. A card titled `<bot> is asking`, with the status `Waiting for you` under
+the title, appears in the transcript, and the notice `The agent is waiting for your answer above; Skip lets it continue without one`
+sits over the composer. The same card shows in a channel reply's live tail under the agent's
+typing row. Forms have one control per field (radios for a choice, a `Type your own answer`
+row when the agent allows a custom answer, checkboxes for multi-select, text/number inputs).
+The footer has `Skip` on the left (it declines, and the agent continues without an
+answer) and `Submit` on the right. There is no Cancel: stopping the agent is the
+composer's `Stop`. Submit is disabled until every required question has an answer. A skipped native question reaches the agent as `skipped`. A link
+request shows the target host and URL with an `Open` button that only opens a new tab after
+you click it. An email draft under review has `Skip` under the composer. Once resolved the card
+collapses to `Question · <text>` with `Answered` / `Skipped` / `Cancelled` on the right and
+the agent continues. Messages typed while a question is open queue behind it; the composer's `Stop`
 square cancels the question and the turn. A directly authenticated user with
 edit access to the session may answer; agent runs and runtimes cannot answer
 questions or permission requests, even using a user's credentials. Viewers see
-the form locked with `Waiting for an editor`. The owner and everyone
+the form locked with `Waiting for an editor` and `Only people who can edit this session can
+answer.`, on the session and in the channel tail alike. The owner and everyone
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
@@ -2277,6 +2282,18 @@ unsent notes persist per session in localStorage. A fresh capture expands files
 with at most 40 changed lines (additions + deletions) and collapses larger files,
 on desktop and phones. File toggles and **Collapse all / Expand all** override
 these defaults; selecting a file in the tree expands it.
+
+An agent's references to changed files in its reply are links: markdown links
+(`[pane.tsx:12](apps/web/src/pane.tsx#L12)`) and inline code that names a changed
+file (`apps/web/src/pane.tsx:12-14`, an absolute checkout path, or a path from a
+subdirectory that only one changed file ends in). Clicking one opens the Changes
+pane, expands and scrolls to the file, lights the referenced lines on the head side
+(old side for a deleted file), and scrolls the first referenced line into view; a
+line outside the diff's hunks lights nothing and leaves the file header in view.
+`file://` links and bare names with a line (`package.json:5`) work too. A relative
+link to an unchanged file opens it on GitHub at the capture's head commit; an
+absolute one, or one climbing out with `..`, shows a toast. Bare identifiers in code (`pane`) never link, and
+sessions without changes keep links as before.
 
 The Changes pane header and sidebar totals display the linked PR's `additions`
 and `deletions` returned by the GitHub API, without summing transcript edits.

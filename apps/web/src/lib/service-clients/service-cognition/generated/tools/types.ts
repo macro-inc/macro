@@ -26,6 +26,7 @@ export type ToolPropertyTargetEntityType =
   | 'call'
   | 'user'
   | 'company'
+  | 'contact'
   | 'chat';
 /**
  * A cell's new input, typed as the caller has it.
@@ -10707,7 +10708,7 @@ export interface CompanyPropertyOption {
   displayValue: string;
 }
 /**
- * Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType "tag"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. Start Date and Project appear only once set. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties.
+ * Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType "tag"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. Start Date and Project appear only once set. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties. For CRM contacts (entity_type=contact, entity_id=the contact UUID), this returns the contact's custom properties.
  */
 export interface GetEntityProperties {
   /**
@@ -15748,6 +15749,7 @@ export interface SendEmail {
  * - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
  * - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
  * Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
+ * CRM contacts (entity_type='contact', entity_id=the contact UUID) have no system properties of their own; they take the team's custom properties (a phone number, a LinkedIn link, ...) under the same access rules as companies.
  *
  * Any entity (task, document, call, ...) can be associated with CRM records through these system properties:
  * - Companies (00000001-0000-0000-0000-00000000000c): entity, multi. Use entity_refs with entity_type='company' and the company UUID.
