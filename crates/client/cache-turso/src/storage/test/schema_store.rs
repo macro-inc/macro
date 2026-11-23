@@ -527,6 +527,133 @@ fn a_type_other_documents_read_makes_them_incomplete() {
     });
 }
 
+/// A create that settled before the queued write after it: the write names
+/// the note by its local key, an alias leads that key to the one the server
+/// gave it, the note carries its coalescing UUID, and the write's shadow is
+/// under the server key, as settlement leaves them.
+async fn settle_a_create(storage: &mut TursoStorage) {
+    let mut server = record("note");
+    server.fields.insert(
+        cache_core::identity::MUTATION_UUID_FIELD.into(),
+        cache_core::value::CacheValue::String("created".into()),
+    );
+    storage
+        .put_batch(vec![
+            (
+                key("Note:local"),
+                cache_core::identity::alias_record(&key("Note:server")),
+            ),
+            (key("Note:server"), server),
+        ])
+        .await
+        .unwrap();
+    storage
+        .enqueue_mutation(pending(
+            "EditCreated",
+            "mutation EditCreated { edit(id: \"local\") { id value } }",
+            serde_json::json!({ "edit": { "id": "local", "value": "edited" } }),
+            &["Note:local"],
+        ))
+        .await
+        .unwrap();
+    let owner = storage.load_mutation_queue().await.unwrap()[2].id;
+    let server_key = PredicateRecordKey::new("Note:server").unwrap();
+    let mutations = [OptimisticProjectionMutation::Replace(
+        authoritative_projection("Note:server", "queued"),
+    )];
+    let shadow = cache_core::predicate::compose_effective_optimistic_projection(
+        &server_key,
+        None,
+        &[cache_core::predicate::ProjectionMutationLayer {
+            owner,
+            mutations: &mutations,
+        }],
+    )
+    .unwrap()
+    .unwrap();
+    storage
+        .replace_optimistic_layers(&[], &[server_key], &[shadow])
+        .await
+        .unwrap();
+}
+
+fn shadows(storage: &TursoStorage, key: &str) -> i64 {
+    count(
+        storage,
+        &format!("SELECT count(*) FROM optimistic_index_documents WHERE record_key = '{key}'"),
+    )
+}
+
+#[test]
+fn a_dropped_records_shadow_under_its_server_key_goes_and_its_identity_stays() {
+    block_on(async {
+        for (sdl, inputs, change) in [
+            (
+                BOTH_RETYPED,
+                ProjectionInputs::none(),
+                types(&["Note", "Thing"], false),
+            ),
+            (
+                RETYPED,
+                ProjectionInputs::none().nested("Thing", &["value"]),
+                types(&["Thing"], true),
+            ),
+            (
+                ROOTS,
+                ProjectionInputs::none(),
+                Some(Tier::Reset(ResetReason::Roots)),
+            ),
+        ] {
+            let mut storage =
+                populate(TursoStorage::open_in_memory("schema-settled-dropped").unwrap()).await;
+            settle_a_create(&mut storage).await;
+
+            assert_eq!(adopt(&storage, sdl, &inputs).change, change);
+            assert_eq!(shadows(&storage, "Note:server"), 0, "{change:?}");
+            assert_eq!(shadows(&storage, "Note:local"), 0, "{change:?}");
+            // The alias and the coalescing UUID stay for the queued write's
+            // settlement; a dropped note keeps nothing else.
+            let records = storage
+                .get_batch(&[key("Note:local"), key("Note:server")])
+                .await
+                .unwrap();
+            assert_eq!(
+                records[0],
+                Some(cache_core::identity::alias_record(&key("Note:server")))
+            );
+            let server = records[1].as_ref().unwrap();
+            assert!(
+                server
+                    .fields
+                    .contains_key(cache_core::identity::MUTATION_UUID_FIELD)
+            );
+            assert_eq!(
+                server.fields.contains_key("value"),
+                change == types(&["Thing"], true),
+                "{change:?}"
+            );
+        }
+    });
+}
+
+#[test]
+fn a_kept_records_shadow_under_its_server_key_is_composed_there() {
+    block_on(async {
+        let mut storage =
+            populate(TursoStorage::open_in_memory("schema-settled-kept").unwrap()).await;
+        settle_a_create(&mut storage).await;
+
+        let adoption = adopt(&storage, RETYPED, &ProjectionInputs::none());
+        assert_eq!(adoption.change, types(&["Thing"], false));
+        assert_eq!(adoption.retired_overlays, 1);
+        // The write still fits: its shadow is composed again where
+        // settlement put it, not under the key its source names.
+        assert_eq!(shadows(&storage, "Note:server"), 1);
+        assert_eq!(shadows(&storage, "Note:local"), 0);
+        assert!(!is_retired(&sources(&mut storage).await[2]));
+    });
+}
+
 #[test]
 fn a_reset_keeps_the_identity_and_the_queue() {
     block_on(async {

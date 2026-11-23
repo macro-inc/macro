@@ -21,10 +21,13 @@
 //!   native file of another schema compatibility epoch ([`leave_epoch`]).
 //!
 //! Queued writes are always kept: their mutations are still sent. Their
-//! index shadows are composed again over what is left.
+//! index shadows are composed again over what is left, under the keys
+//! settled creates gave the records they name, and the identity metadata of
+//! those records stays ([`QueueIdentity`]).
 
 use super::*;
 use cache_core::calendar::{CALENDAR_TYPENAME, EVENT_TYPENAME, OCCURRENCE_TYPENAME};
+use cache_core::identity::{self, IdentityMap};
 use cache_core::meta::Schema;
 use cache_core::normalize::RecordUpdates;
 use cache_core::queue::{decode_optimistic_source, encode_optimistic_source};
@@ -114,6 +117,10 @@ const SHADOW_TABLES: [&str; 5] = [
 /// than data. The storage generation goes, so the backfill starts over.
 const KEPT_RECORDS: &str = "SELECT __typename, id, value FROM records WHERE __typename = '__meta' AND id IN ('identity', 'authority')";
 const RECORD_COUNT: &str = "SELECT COUNT(*) FROM records";
+/// Puts back a record a tier dropped, but never over one it kept.
+const RECORD_RESTORE: &str =
+    "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING";
+const SHADOW_KEYS: &str = "SELECT record_key FROM optimistic_index_documents";
 /// A table's SQL and its indexes', as the file stores them, the table first.
 const TABLE_SQL: &str = "SELECT sql FROM sqlite_schema WHERE tbl_name = ?1 AND sql IS NOT NULL ORDER BY type DESC, name ASC";
 
@@ -319,6 +326,7 @@ fn apply(
             changed,
             every_document,
         } => {
+            let identity = queue_identity(connection)?;
             // Facts go before the documents, which would otherwise cascade
             // to them one document at a time.
             if *every_document {
@@ -327,6 +335,7 @@ fn apply(
                 drop_facts(connection, changed)?;
             }
             adoption.dropped_records = drop_types(connection, changed)?;
+            restore_identity(connection, &identity)?;
             if *every_document {
                 let marked = driver::execute(connection, EVERY_DOCUMENT_DIRTY, Vec::new())?;
                 adoption.incomplete_documents = u64::try_from(marked).map_err(|_| invariant())?;
@@ -334,26 +343,40 @@ fn apply(
             // When other documents read a changed type, any queued
             // projection may hold facts it fed, as the build before derived
             // them.
-            let queue = conform_queue(
+            let dropped = |key: &PredicateRecordKey| {
+                *every_document
+                    || key
+                        .as_str()
+                        .split_once(':')
+                        .is_some_and(|(typename, _)| changed.contains(typename))
+            };
+            let mut queue = conform_queue(
                 connection,
                 |request, source| overlay_fits(&change.stored, changed, request, source),
-                |key| {
-                    *every_document
-                        || key
-                            .as_str()
-                            .split_once(':')
-                            .is_some_and(|(typename, _)| changed.contains(typename))
-                },
+                &dropped,
+                &identity.aliases,
             )?;
+            // A shadow of a dropped record goes even when no queued write
+            // names its key, as one an older build left may.
+            for row in driver::query(connection, SHADOW_KEYS, Vec::new())? {
+                let key =
+                    PredicateRecordKey::new(required_text(&row, 0)?).map_err(|_| invariant())?;
+                if dropped(&key) {
+                    queue.projected.insert(key);
+                }
+            }
             adoption.retired_overlays = queue.retired;
-            recompose_queued_shadows(connection, queue.projected)?;
+            recompose_queued_shadows(connection, queue.projected, &identity.aliases)?;
             driver::execute(connection, STORAGE_GENERATION_DELETE, Vec::new())?;
         }
         Tier::Reset(_) => {
+            let identity = queue_identity(connection)?;
             adoption.dropped_records = clear_records(connection)?;
+            restore_identity(connection, &identity)?;
             // No queued projection is left to compose a shadow from.
             recreate_tables(connection, &SHADOW_TABLES)?;
-            adoption.retired_overlays = conform_queue(connection, |_, _| false, |_| true)?.retired;
+            adoption.retired_overlays =
+                conform_queue(connection, |_, _| false, |_| true, &identity.aliases)?.retired;
         }
     }
     store(connection, &change.stored, incoming.hash())?;
@@ -549,24 +572,136 @@ fn count(connection: &Db, sql: &str, parameters: Vec<Value>) -> Result<u64, Turs
     u64::try_from(required_i64(row, 0)?).map_err(|_| invariant())
 }
 
+/// What the queued writes read of the records a tier drops, read before it
+/// drops them. Settling a write that created a record stores an alias from
+/// the local key later queued writes name to the key the server gave it, and
+/// moves their shadows to that key. The records they name hold the identity
+/// metadata later settlements and replays read, which the engine's own
+/// snapshot retirement keeps too.
+struct QueueIdentity {
+    /// Each aliased key the queue names, to the key its aliases end at.
+    aliases: IdentityMap,
+    /// The identity metadata of each record the queue names or an alias
+    /// leads to ([`identity::identity_metadata`]).
+    metadata: Vec<(RecordKey, Record)>,
+}
+
+/// Reads [`QueueIdentity`]: the keys each queued write binds, projects or
+/// overlays, and the keys their aliases lead to.
+fn queue_identity(connection: &Db) -> Result<QueueIdentity, TursoStorageError> {
+    let mut named = BTreeSet::new();
+    for row in driver::query(connection, QUEUE_SELECT, Vec::new())? {
+        let layer = parse_queue_row(&row)?.optimistic.ok_or_else(invariant)?;
+        let source =
+            decode_optimistic_source(&layer.optimistic_data_json).map_err(|_| invariant())?;
+        named.extend(
+            source
+                .identity_bindings
+                .into_iter()
+                .map(|binding| binding.local_key),
+        );
+        named.extend(
+            source
+                .projection_mutations
+                .iter()
+                .map(|mutation| EntityKey(mutation.record_key().as_str().to_owned().into())),
+        );
+        named.extend(layer.normalized_updates.into_keys());
+    }
+    let mut targets = IdentityMap::new();
+    let mut metadata = Vec::new();
+    let mut seen = named.clone();
+    let mut next = named.into_iter().collect::<Vec<_>>();
+    for _ in 0..=identity::MAX_ALIAS_CHAIN_DEPTH {
+        // A key no record can have holds nothing to keep.
+        let (entities, keys): (Vec<_>, Vec<_>) = std::mem::take(&mut next)
+            .into_iter()
+            .filter_map(|entity| {
+                RecordKey::from_entity(&entity)
+                    .ok()
+                    .map(|key| (entity, key))
+            })
+            .unzip();
+        if keys.is_empty() {
+            break;
+        }
+        let records = record_batch::read(connection, &keys)?;
+        for ((entity, key), record) in entities.into_iter().zip(keys).zip(records) {
+            let Some(record) = record else {
+                continue;
+            };
+            if let Some(target) = identity::alias_target(&record) {
+                if seen.insert(target.clone()) {
+                    next.push(target.clone());
+                }
+                targets.insert(entity, target.clone());
+            }
+            if let Some(kept) = identity::identity_metadata(record) {
+                metadata.push((key, kept));
+            }
+        }
+    }
+    // Each alias leads to the end of its chain, as the engine reads it; a
+    // cycle stops where it would repeat.
+    let aliases = targets
+        .keys()
+        .map(|local| {
+            let mut target = &targets[local];
+            for _ in 0..identity::MAX_ALIAS_CHAIN_DEPTH {
+                match targets.get(target) {
+                    Some(further) if further != local => target = further,
+                    _ => break,
+                }
+            }
+            (local.clone(), target.clone())
+        })
+        .collect();
+    Ok(QueueIdentity { aliases, metadata })
+}
+
+/// Puts back the identity metadata of each record the queue named that the
+/// tier dropped.
+fn restore_identity(connection: &Db, identity: &QueueIdentity) -> Result<(), TursoStorageError> {
+    for (key, record) in &identity.metadata {
+        driver::execute(
+            connection,
+            RECORD_RESTORE,
+            vec![
+                text(&key.typename),
+                text(&key.id),
+                Value::from_blob(encode_record(record)),
+            ],
+        )?;
+    }
+    Ok(())
+}
+
 /// What [`conform_queue`] did to the queued writes.
 struct ConformedQueue {
     /// Overlays taken off.
     retired: u64,
-    /// Every record a queued write projected, before any projection went.
+    /// Every record a queued write projected before any projection went,
+    /// under the key it names and the key its alias leads to.
     projected: BTreeSet<PredicateRecordKey>,
 }
 
 /// Takes the optimistic overlay off each queued write that does not `fit`,
 /// keeping its mutation, and drops its projections of the records `dropped`
-/// holds for: their documents went with them, and a shadow composed from
-/// one would show a record the cache no longer holds, as the build before
-/// shaped it.
+/// holds for, under the key they name or the key its alias in `aliases`
+/// leads to: their documents went with them, and a shadow composed from one
+/// would show a record the cache no longer holds, as the build before shaped
+/// it.
 fn conform_queue(
     connection: &Db,
     fits: impl Fn(&MutationRequest, &cache_core::queue::OptimisticSource) -> bool,
     dropped: impl Fn(&PredicateRecordKey) -> bool,
+    aliases: &IdentityMap,
 ) -> Result<ConformedQueue, TursoStorageError> {
+    let aliased = |key: &PredicateRecordKey| {
+        aliases
+            .get(&EntityKey(key.as_str().to_owned().into()))
+            .and_then(|target| PredicateRecordKey::new(target.to_string()).ok())
+    };
     let mut queue = ConformedQueue {
         retired: 0,
         projected: BTreeSet::new(),
@@ -577,15 +712,14 @@ fn conform_queue(
         let mut source =
             decode_optimistic_source(&layer.optimistic_data_json).map_err(|_| invariant())?;
         let projections = source.projection_mutations.len();
-        queue.projected.extend(
-            source
-                .projection_mutations
-                .iter()
-                .map(|mutation| mutation.record_key().clone()),
-        );
-        source
-            .projection_mutations
-            .retain(|mutation| !dropped(mutation.record_key()));
+        for mutation in &source.projection_mutations {
+            queue.projected.insert(mutation.record_key().clone());
+            queue.projected.extend(aliased(mutation.record_key()));
+        }
+        source.projection_mutations.retain(|mutation| {
+            let key = mutation.record_key();
+            !dropped(key) && !aliased(key).is_some_and(|target| dropped(&target))
+        });
         let updates = if !is_retired(&source) && !fits(&row.mutation.request, &source) {
             retire_overlay(&mut source);
             queue.retired += 1;
@@ -612,10 +746,12 @@ fn conform_queue(
 }
 
 /// Composes the index shadow of each of `keys` again, from the queued
-/// projections left over the stored projections left.
+/// projections left, moved through `aliases`, over the stored projections
+/// left.
 fn recompose_queued_shadows(
     connection: &Db,
     keys: BTreeSet<PredicateRecordKey>,
+    aliases: &IdentityMap,
 ) -> Result<(), TursoStorageError> {
     let keys = keys.into_iter().collect::<Vec<_>>();
     let states = keys
@@ -624,7 +760,7 @@ fn recompose_queued_shadows(
         .zip(load_projection_states(connection, &keys)?)
         .filter_map(|(key, state)| state.map(|state| (key, state)))
         .collect::<HashMap<_, _>>();
-    recompose_shadows(connection, &keys, &states)
+    recompose_shadows(connection, &keys, &states, aliases)
 }
 
 /// Empties the records, but for [`KEPT_RECORDS`], and every table derived

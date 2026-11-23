@@ -2386,16 +2386,24 @@ fn write_projection_mutations(
     };
     // Network snapshots and realtime writes must rebase pending member edits
     // in the same transaction, not leave a shadow based on older authority.
-    recompose_shadows(connection, &keys, &states)
+    recompose_shadows(
+        connection,
+        &keys,
+        &states,
+        &cache_core::identity::IdentityMap::new(),
+    )
 }
 
 /// Composes the shadow of each of `keys`, which are sorted, again: the queued
 /// writes' projection mutations of the key over `states`, the stored
-/// projections they rebase onto (a key missing from it has none).
+/// projections they rebase onto (a key missing from it has none). A queued
+/// projection is moved through `identities` first: the server keys that
+/// settled creates gave the local keys a queued write names.
 fn recompose_shadows(
     connection: &Db,
     keys: &[PredicateRecordKey],
     states: &HashMap<PredicateRecordKey, ProjectionState>,
+    identities: &cache_core::identity::IdentityMap,
 ) -> Result<(), TursoStorageError> {
     if keys.is_empty() {
         return Ok(());
@@ -2422,7 +2430,8 @@ fn recompose_shadows(
     // page must not scan the whole queue again for each deleted key.
     let mut by_key: HashMap<_, BTreeMap<_, Vec<_>>> = HashMap::new();
     for (owner, source) in sources {
-        for mutation in source.projection_mutations {
+        for mut mutation in source.projection_mutations {
+            cache_core::identity::remap_projection(&mut mutation, identities);
             if keys.binary_search(mutation.record_key()).is_ok() {
                 by_key
                     .entry(mutation.record_key().clone())
