@@ -2291,6 +2291,74 @@ async fn mail_from_a_recent_contact_is_found_and_pinned_outside_the_signal_inbox
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn only_mail_the_owner_sent_lately_makes_a_sender_a_recent_contact(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    // The newsletter's sender is on mail the owner received, as a list address
+    // is on every message sent through it: that alone doesn't count.
+    sqlx::query!(
+        "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+         VALUES ('00000000-0000-0000-0000-00000000f611', '00000000-0000-0000-0000-0000000cf006', 'CC')",
+    )
+    .execute(&pool)
+    .await?;
+    assert!(!is_stale(&repo, NOISE).await?);
+
+    // Mail to the sender counts once it is sent, not drafted, and only from
+    // the last RECENT_CONTACT_DAYS before the window.
+    let note = |id: &'static str, days: i64, is_draft: bool| {
+        let pool = pool.clone();
+        async move {
+            let id = Uuid::parse_str(id)?;
+            sqlx::query!(
+                "INSERT INTO email_messages (id, thread_id, link_id, is_sent, is_draft, from_contact_id,
+                                             internal_date_ts, subject)
+                 VALUES ($1, '00000000-0000-0000-0000-00000000f305', '00000000-0000-0000-0000-000000000f01',
+                         NOT $3, $3, '00000000-0000-0000-0000-0000000cf002', NOW() - make_interval(days => ($2::bigint)::int), 'Numbers')",
+                id,
+                days,
+                is_draft,
+            )
+            .execute(&pool)
+            .await?;
+            sqlx::query!(
+                "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+                 VALUES ($1, '00000000-0000-0000-0000-0000000cf006', 'TO')",
+                id,
+            )
+            .execute(&pool)
+            .await?;
+            Ok::<_, Report>(())
+        }
+    };
+    note(
+        "00000000-0000-0000-0000-00000000f652",
+        30 + RECENT_CONTACT_DAYS + 5,
+        false,
+    )
+    .await?;
+    assert!(!is_stale(&repo, NOISE).await?, "sent before the look-back");
+    note("00000000-0000-0000-0000-00000000f653", 2, true).await?;
+    assert!(!is_stale(&repo, NOISE).await?, "only drafted");
+    note(
+        "00000000-0000-0000-0000-00000000f654",
+        30 + RECENT_CONTACT_DAYS - 5,
+        false,
+    )
+    .await?;
+    assert!(is_stale(&repo, NOISE).await?, "sent within the look-back");
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("email_focus"))
 )]
 async fn a_thread_that_lost_signal_leaves_focus_unless_pinned(

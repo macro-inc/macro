@@ -44,7 +44,7 @@ counted.
 | Due dates failing | under 5% of asks, hourly; the rules wait for 2 failures | `email_focus.due_date` spans, and the agent harness's `universal_input/thread-due-date` errors and latency. A failed ask stores the thread without a date. |
 | Mail waiting to be classified (p95) | under 2 minutes | `email_focus.queue` spans' `event_age_ms`, the Event stream lag panel, and classifier latency. |
 | Sweep duration | under 30 minutes | The "focus sweep finished" log (`inboxes`, `candidates`, `stopped_early`) and the `sweep` span; the stale-thread read below. |
-| Sweep failures | none | The "focus sweep failed" error log. |
+| Sweep failures | none | The "focus sweep failed" error log, and "focus sweep left out an inbox" for an inbox whose threads could not be read (the sweep goes on to the others; `inboxes_failed` on "focus sweep finished"). |
 | New inbox backfill time (p95) | under 15 minutes | `email_focus.backfill` spans: `candidates` per pass, and the classifier. Only inboxes that joined the rollout while the worker ran are timed; the inboxes its first look finds after a start are not. |
 | Stale-thread read (p95) | under 500 ms | MacroDB CPU and load on the Prod alerts dashboard; the read's plan for a large inbox. |
 | Worker restarts | at most 3 in 30 minutes | ECS stopped-task reasons for `email-focus-worker`, and the worker's last logs. A start counts only once the worker is up; a worker that fails earlier (configuration, database) shows only in ECS. No data for 30 minutes means the worker isn't publishing, and the rule fires. |
