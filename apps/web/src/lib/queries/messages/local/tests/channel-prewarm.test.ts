@@ -40,7 +40,7 @@ const page = (
   seq: string | null = '5'
 ): LoadedChannelPage => ({
   page: { entries: [], olderCursor: null, newerCursor: null },
-  stored: Promise.resolve(seq),
+  stored: Promise.resolve({ kind: 'stored', seq }),
   ...(source === 'server' ? { source, readSeq: seq ?? '0' } : { source }),
 });
 

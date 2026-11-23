@@ -62,3 +62,19 @@ export function cacheSessionChanged(error: unknown): boolean {
  * device stored what it read, as startup's first owner proof does.
  */
 export const SESSION_CHANGE_RELOADS = 2;
+
+/**
+ * A store acknowledgement settled into a value as soon as it is made: one a
+ * loader leaves unawaited (it failed on a later page, or moved on) then never
+ * rejects unhandled. Undefined once stored.
+ */
+export async function storeFailure(
+  cached: Promise<void>
+): Promise<{ error: unknown } | undefined> {
+  try {
+    await cached;
+    return undefined;
+  } catch (error) {
+    return { error };
+  }
+}

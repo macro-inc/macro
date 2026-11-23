@@ -178,6 +178,29 @@ describe('loadChannelThread', () => {
     expect(host.commits).toEqual([]);
   });
 
+  it('leaves no store rejection unhandled when a later page fails', async () => {
+    const host = fakeHost([devicePage([], { covered: false })]);
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async (input) => {
+      if (input.before) throw new Error('offline');
+      return {
+        page: {
+          root,
+          replies: [second],
+          olderCursor: 'older',
+          newerCursor: null,
+          seq: '12',
+        },
+        cached: Promise.reject(new Error('write lost')),
+      };
+    });
+
+    await expect(
+      loadChannelThread(host, CHANNEL_ID, ROOT_ID, { fetchPage })
+    ).rejects.toThrow('offline');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.commits).toEqual([]);
+  });
+
   it('reads over REST on a host that cannot serve channels', async () => {
     const host = fakeHost([{ kind: 'unsupported' }]);
 

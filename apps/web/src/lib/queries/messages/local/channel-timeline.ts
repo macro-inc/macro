@@ -12,7 +12,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
-import { cacheSessionChanged, SESSION_CHANGE_RELOADS } from './channel-network';
+import { SESSION_CHANGE_RELOADS } from './channel-network';
 import {
   type ChannelPage,
   type ChannelPageDeps,
@@ -253,14 +253,9 @@ export function createLocalChannelTimeline(
     epoch: number,
     token: number
   ): Promise<'held' | 'unheld' | 'session-changed'> => {
-    let seq: string | null;
-    try {
-      seq = await loaded.stored;
-    } catch (error) {
-      if (cacheSessionChanged(error)) return 'session-changed';
-      Telemetry.error(error, { surface: 'channel-local-sync' });
-      seq = null;
-    }
+    const stored = await loaded.stored;
+    if (stored.kind === 'session-changed') return 'session-changed';
+    const seq = stored.seq;
     if (token !== loadToken) return 'unheld';
     if (loaded.source === 'device') {
       deps.runtime.noteStoredSeq(channelId, seq);

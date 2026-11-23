@@ -1,3 +1,4 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import {
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
@@ -76,7 +77,7 @@ describe('loadChannelPage', () => {
       keyOf(newer),
       keyOf(older),
     ]);
-    expect(await loaded.stored).toBe('7');
+    expect(await loaded.stored).toEqual({ kind: 'stored', seq: '7' });
     expect(requests()).toBe(2);
     expect(fetchPage).not.toHaveBeenCalled();
   });
@@ -126,7 +127,7 @@ describe('loadChannelPage', () => {
     expect(host.commits).toHaveLength(0);
 
     storeRecords();
-    expect(await loaded.stored).toBe('9');
+    expect(await loaded.stored).toEqual({ kind: 'stored', seq: '9' });
     expect(host.commits).toEqual([
       {
         channelId: CHANNEL_ID,
@@ -166,7 +167,7 @@ describe('loadChannelPage', () => {
       note()(host, CHANNEL_ID);
       storeRecords();
 
-      expect(await loaded.stored).toBeNull();
+      expect(await loaded.stored).toEqual({ kind: 'stored', seq: null });
       expect(host.commits).toEqual([]);
       // The page itself still shows.
       expect(loaded.page.entries).toHaveLength(2);
@@ -191,9 +192,38 @@ describe('loadChannelPage', () => {
     expect(loaded.source).toBe('server');
     expect(loaded.page.entries).toHaveLength(2);
     // Nothing proves what the device holds, so nothing is committed.
-    expect(await loaded.stored).toBeNull();
+    expect(await loaded.stored).toEqual({ kind: 'stored', seq: null });
     expect(host.commits).toHaveLength(0);
   });
+
+  it.each([
+    ['failed', new Error('write lost'), { kind: 'stored', seq: null }],
+    [
+      'met a new cache session',
+      new StaleCacheAuthorityError(),
+      { kind: 'session-changed' },
+    ],
+  ])(
+    'settles a page whose store %s without rejecting',
+    async (_, error, outcome) => {
+      const { host } = countingHost([devicePage([], { covered: false })]);
+      const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+        page: serverPage(),
+        cached: Promise.reject(error),
+      }));
+
+      const loaded = await loadChannelPage(
+        { host, touches: { due: () => undefined }, fetchPage },
+        { channelId: CHANNEL_ID, limit: 50 }
+      );
+      if (loaded === 'unsupported') throw new Error('unexpected');
+      // A loader that moved on never reads it: it must not reject unhandled.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(await loaded.stored).toEqual(outcome);
+      expect(host.commits).toHaveLength(0);
+    }
+  );
 
   it('hands a host that cannot serve channels back to REST', async () => {
     const { host } = countingHost([{ kind: 'unsupported' }]);

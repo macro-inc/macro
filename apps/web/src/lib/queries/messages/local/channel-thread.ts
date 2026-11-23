@@ -29,6 +29,7 @@ import {
   cacheSessionChanged,
   queryChannelNetwork,
   SESSION_CHANGE_RELOADS,
+  storeFailure,
 } from './channel-network';
 import { channelResetMark, unchangedSince } from './channel-resets';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
@@ -181,7 +182,7 @@ async function fetchServerThread(
   const replies = new Map(
     first.page.replies.map((reply) => [reply.sortKey, reply])
   );
-  const stored = [first.cached];
+  const stored = [storeFailure(first.cached)];
   let seq = first.page.seq;
   let pages = 1;
   for (const direction of ['before', 'after'] as const) {
@@ -191,7 +192,7 @@ async function fetchServerThread(
       if (pages >= MAX_THREAD_PAGES) return undefined;
       const next = await ask({ [direction]: cursor });
       pages += 1;
-      stored.push(next.cached);
+      stored.push(storeFailure(next.cached));
       for (const reply of next.page.replies) replies.set(reply.sortKey, reply);
       if (BigInt(next.page.seq) < BigInt(seq)) seq = next.page.seq;
       cursor =
@@ -206,7 +207,8 @@ async function fetchServerThread(
   if (!thread) return undefined;
   let committed: string | null = null;
   try {
-    await Promise.all(stored);
+    const failed = (await Promise.all(stored)).find(Boolean);
+    if (failed) throw failed.error;
     // Deleted meanwhile: coverage would show records that may be gone.
     if (!unchangedSince(host, channelId, resets)) {
       return { thread, seq: null, readSeq: seq, sessionChanged: false };

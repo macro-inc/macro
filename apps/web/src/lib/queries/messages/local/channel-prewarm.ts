@@ -152,7 +152,10 @@ const warmChannel = (
         )
       );
       if (loaded === 'unsupported') return 'unsupported' as const;
-      const seq = await loaded.stored;
+      const stored = await loaded.stored;
+      // Not stored: the next pass reads it again, under the new session.
+      if (stored.kind === 'session-changed') return 'failed' as const;
+      const seq = stored.seq;
       if (loaded.source === 'server') {
         deps.runtime.noteServerRead(channelId, seq, epoch, loaded.readSeq);
         return 'fetched' as const;

@@ -29,7 +29,7 @@ import {
   channelMessageKey,
   mapChannelTimelineEntry,
 } from './channel-map';
-import { queryChannelNetwork } from './channel-network';
+import { cacheSessionChanged, queryChannelNetwork } from './channel-network';
 import { channelResetMark, unchangedSince } from './channel-resets';
 
 export type ChannelPageHost = Pick<
@@ -65,13 +65,22 @@ export interface ChannelPage {
   newerCursor: string | null;
 }
 
+/**
+ * What storing a page left on the device: the sequence it holds for the
+ * channel (null when it does not hold the page), or that the cache session
+ * changed first and the page must be read again.
+ */
+export type PageStored =
+  | { kind: 'stored'; seq: string | null }
+  | { kind: 'session-changed' };
 export type LoadedChannelPage = {
   page: ChannelPage;
   /**
    * The change sequence the device holds for the channel once the page is
    * stored: at once for a device page, after the commit for a server page.
+   * Never rejects.
    */
-  stored: Promise<string | null>;
+  stored: Promise<PageStored>;
 } & (
   | { source: 'device' }
   | {
@@ -373,7 +382,7 @@ async function loadPage(
       return {
         page: device.page,
         source: 'device',
-        stored: Promise.resolve(device.seq),
+        stored: Promise.resolve({ kind: 'stored', seq: device.seq }),
       };
     }
   }
@@ -381,16 +390,19 @@ async function loadPage(
     'page.source',
     device === 'not-ready' ? 'server-cold' : 'server'
   );
+  // The device read was awaited: the request joins the page's trace again.
   const fetched = await fetchOrDevice(
-    (deps.fetchPage ?? fetchChannelServerPage)(
-      {
-        channelId: request.channelId,
-        limit: request.limit,
-        before: request.before,
-        after: request.after,
-        around: request.aroundMessageId,
-      },
-      signal
+    span.run(() =>
+      (deps.fetchPage ?? fetchChannelServerPage)(
+        {
+          channelId: request.channelId,
+          limit: request.limit,
+          before: request.before,
+          after: request.after,
+          around: request.aroundMessageId,
+        },
+        signal
+      )
     ),
     device === 'not-ready' ? read : undefined
   );
@@ -400,13 +412,13 @@ async function loadPage(
     return {
       page: fetched.read.page,
       source: 'device',
-      stored: Promise.resolve(fetched.read.seq),
+      stored: Promise.resolve({ kind: 'stored', seq: fetched.read.seq }),
     };
   }
   const { page, cached } = fetched;
   span.setAttr('page.entries', page.entries.length);
   const coverage = serverPageCoverage(request, page);
-  const store = async (): Promise<string | null> => {
+  const commit = async (): Promise<string | null> => {
     await cached;
     // A cold host is asked again once it can answer.
     const held = device === 'not-ready' ? await read : device;
@@ -434,6 +446,9 @@ async function loadPage(
     );
     return committed.kind === 'committed' ? committed.channelSeq : held.seq;
   };
+  // A child of the page's span: the page answers before the device stores it.
+  const store = (child: Span): Promise<PageStored> =>
+    storedOutcome(commit(), child);
   return {
     page: {
       entries: pageEntries(page.entries),
@@ -442,6 +457,31 @@ async function loadPage(
     },
     source: 'server',
     readSeq: page.seq,
-    stored: store(),
+    stored: span.span('channel.page.store', store),
   };
+}
+
+/**
+ * How a store step ended, as a value: a loader that moved on leaves the
+ * promise unawaited, so it must not reject. Failures other than a session
+ * change are reported here.
+ */
+async function storedOutcome(
+  commit: Promise<string | null>,
+  span: Span
+): Promise<PageStored> {
+  try {
+    const seq = await commit;
+    span.setAttr('page.stored', seq === null ? 'unheld' : 'held');
+    return { kind: 'stored', seq };
+  } catch (error) {
+    if (cacheSessionChanged(error)) {
+      span.setAttr('page.stored', 'session-changed');
+      return { kind: 'session-changed' };
+    }
+    span.setAttr('page.stored', 'failed');
+    span.error(error);
+    Telemetry.error(error, { surface: 'channel-local-sync' });
+    return { kind: 'stored', seq: null };
+  }
 }
