@@ -26,6 +26,9 @@ export default {
   playVoiceMemo: 'Play voice memo',
   pauseVoiceMemo: 'Pause voice memo',
   seekVoiceMemo: 'Position in voice memo',
+  voiceMemoPosition: '{{position}} of {{length}}',
+  removeVoiceMemo: 'Remove voice memo',
+  voiceMemoUploading: 'Uploading voice memo',
   voiceMemoMicrophoneDenied:
     'Microphone access is blocked. Allow it in your browser settings and try again.',
   voiceMemoMicrophoneMissing: 'No microphone was found.',

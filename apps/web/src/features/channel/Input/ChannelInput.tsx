@@ -50,12 +50,10 @@ import {
 } from 'lexical';
 import {
   type Accessor,
-  createEffect,
   createMemo,
   createSignal,
   type JSX,
   Match,
-  on,
   Show,
   Switch,
 } from 'solid-js';
@@ -378,7 +376,14 @@ export function ChannelInput(props: ChannelInputProps) {
     onMentionRemove: (mention) => {
       mentionsTracker.onMentionRemove(mention);
     },
-    onChange,
+    onChange: (markdown: string) => {
+      // A note about the last recording is stale once the draft moves on.
+      if (markdown !== (inputState.view().value ?? '')) {
+        composerDictation.clearMessage();
+        composerVoiceMemo.clearNotice();
+      }
+      onChange(markdown);
+    },
     onEnter: () => {
       if (isTouchDevice()) return false;
       typingTracker.stop();
@@ -444,17 +449,6 @@ export function ChannelInput(props: ChannelInputProps) {
       await composerVoiceMemo.start();
     },
   };
-  // A note about the last recording is stale once the draft moves on.
-  createEffect(
-    on(
-      draft,
-      () => {
-        composerDictation.clearMessage();
-        composerVoiceMemo.clearNotice();
-      },
-      { defer: true }
-    )
-  );
   const showVoiceMemo = () =>
     features().attachments &&
     features().voiceMemos &&

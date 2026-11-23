@@ -150,7 +150,7 @@ function AudioAttachmentItem(props: {
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={`Remove ${props.attachment.name}`}
+            aria-label={t('channelComposer.removeVoiceMemo')}
             onClick={(event: MouseEvent) => {
               event.stopPropagation();
               props.onRemove(props.attachment);

@@ -23,19 +23,24 @@ export function RecordingPanel(props: {
   onCancel: () => void;
   mark: JSX.Element;
   children: JSX.Element;
+  /** Announced: what the panel is doing (Starting…, Transcribing…). */
   status?: string;
+  /** Shown, not announced: a timer would be read out every second. */
+  time?: string;
   primary: JSX.Element;
   onPrimary: () => void;
+  /** The primary action is busy or not ready; Enter and Space wait too. */
+  primaryInert?: boolean;
   'data-voice-memo-panel'?: string;
 }) {
   let row!: HTMLDivElement;
   const focusRow = () =>
     queueMicrotask(() => {
       if (!row.isConnected) return;
+      // A swapped or removed button drops focus to the page; focus the
+      // person moved elsewhere stays there.
       const focused = document.activeElement;
-      if (!focused || focused === document.body || !row.contains(focused)) {
-        row.focus();
-      }
+      if (!focused || focused === document.body) row.focus();
     });
 
   createEffect(
@@ -71,7 +76,7 @@ export function RecordingPanel(props: {
         ) {
           event.preventDefault();
           event.stopPropagation();
-          props.onPrimary();
+          if (!props.primaryInert) props.onPrimary();
         }
       }}
     >
@@ -95,6 +100,11 @@ export function RecordingPanel(props: {
         {props.mark}
       </span>
       <div class="flex min-w-0 flex-1 items-center">{props.children}</div>
+      <Show when={props.time}>
+        <span class="shrink-0 text-xs tabular-nums text-ink-muted">
+          {props.time}
+        </span>
+      </Show>
       <Show when={props.status}>
         <span
           class="shrink-0 text-xs tabular-nums text-ink-muted"

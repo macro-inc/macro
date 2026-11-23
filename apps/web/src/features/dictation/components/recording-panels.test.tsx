@@ -68,7 +68,40 @@ describe('voice memo panel', () => {
       'Discard voice memo',
       'Stop and attach',
     ]);
-    expect(screen.getByRole('status').textContent).toBe('0:03');
+    // The timer is shown but not a live region, which would read it out
+    // every second.
+    expect(screen.getByText('0:03').closest('[aria-live]')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('leaves focus the person moved elsewhere when its phase changes', async () => {
+    const { memo, setPhase } = memoController();
+    render(() => (
+      <>
+        <input aria-label="Elsewhere" />
+        <VoiceMemoPanel memo={memo} />
+      </>
+    ));
+    await settle();
+    const elsewhere = screen.getByRole('textbox', { name: 'Elsewhere' });
+    elsewhere.focus();
+    setPhase('failed');
+    await settle();
+    expect(document.activeElement).toBe(elsewhere);
+  });
+
+  it('ignores Enter while it uploads', async () => {
+    const { memo, setPhase } = memoController();
+    setPhase('attaching');
+    render(() => <VoiceMemoPanel memo={memo} />);
+    await settle();
+    fireEvent.keyDown(
+      screen.getByRole('group', { name: 'Recording voice memo' }),
+      { key: 'Enter' }
+    );
+    expect(memo.stop).not.toHaveBeenCalled();
+    expect(memo.retry).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toBe('Attaching…');
   });
 
   it('stops on Enter or Space and discards on Escape from the row', async () => {
@@ -129,7 +162,8 @@ describe('dictation panel', () => {
     expect(
       screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))
     ).toEqual(['Cancel dictation', 'Use dictation']);
-    expect(screen.getByRole('status').textContent).toBe('0:02');
+    expect(screen.getByText('0:02')).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('keeps Escape working after Use, while it transcribes', async () => {

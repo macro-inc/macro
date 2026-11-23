@@ -24,22 +24,11 @@ export function VoiceMemoPlayer(props: {
   const [playing, setPlaying] = createSignal(false);
   const [time, setTime] = createSignal(0);
   const [duration, setDuration] = createSignal(0);
-  // A WebM recording (Firefox) reports no duration until it is read to the
-  // end; seek past the end once to learn it.
-  let probing = false;
-
+  // A WebM memo (recorded in Firefox) reports an infinite duration until it
+  // has been played through; it shows its position and seeks once known.
+  // Learning it up front would download every memo in the channel.
   const readDuration = () => {
-    if (Number.isFinite(audio.duration)) {
-      setDuration(audio.duration);
-      if (probing) {
-        probing = false;
-        audio.currentTime = 0;
-      }
-      return;
-    }
-    if (probing) return;
-    probing = true;
-    audio.currentTime = Number.MAX_SAFE_INTEGER;
+    if (Number.isFinite(audio.duration)) setDuration(audio.duration);
   };
 
   const toggle = async () => {
@@ -55,8 +44,14 @@ export function VoiceMemoPlayer(props: {
     }
   };
 
+  // At rest the chip shows the length; once started, the position.
   const shownTime = () =>
     formatRecordingTime(1000 * (playing() || time() > 0 ? time() : duration()));
+  const positionLabel = () =>
+    t('channelComposer.voiceMemoPosition', {
+      position: formatRecordingTime(1000 * time()),
+      length: formatRecordingTime(1000 * duration()),
+    });
 
   return (
     <div
@@ -73,7 +68,11 @@ export function VoiceMemoPlayer(props: {
         when={props.src}
         fallback={
           <span class="flex size-8 shrink-0 items-center justify-center text-ink-muted">
-            <SpinnerIcon class="size-4 animate-spin" />
+            <SpinnerIcon
+              class="size-4 animate-spin"
+              role="img"
+              aria-label={t('channelComposer.voiceMemoUploading')}
+            />
           </span>
         }
       >
@@ -85,9 +84,7 @@ export function VoiceMemoPlayer(props: {
             preload="metadata"
             onLoadedMetadata={readDuration}
             onDurationChange={readDuration}
-            onTimeUpdate={() => {
-              if (!probing) setTime(audio.currentTime);
-            }}
+            onTimeUpdate={() => setTime(audio.currentTime)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onEnded={() => {
@@ -127,13 +124,13 @@ export function VoiceMemoPlayer(props: {
           audio.currentTime = value;
           setTime(value);
         }}
-        getValueLabel={() => shownTime()}
       >
         <Slider.Track class="my-0 h-1">
           <Slider.Fill />
           <Slider.Thumb
             class="size-3"
             aria-label={t('channelComposer.seekVoiceMemo')}
+            aria-valuetext={positionLabel()}
           >
             <Slider.Input />
           </Slider.Thumb>

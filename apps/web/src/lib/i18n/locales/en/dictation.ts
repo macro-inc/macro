@@ -7,7 +7,6 @@ export default {
   retry: 'Try transcribing again',
   starting: 'Starting…',
   transcribing: 'Transcribing…',
-  ready: 'Ready',
   limitReached: 'Limit reached',
   noSpeech: 'No speech was detected. Try again.',
   noAudio: 'No audio was recorded. Please try again.',

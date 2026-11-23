@@ -86,7 +86,7 @@ function MicrophoneMenu(props: {
   onMemo: () => void;
 }) {
   // Start after the menu closes, in place of its return of focus to the
-  // trigger: the recording panel focuses its own controls.
+  // trigger: the recording panel takes focus itself.
   let pending: (() => void) | undefined;
 
   return (

@@ -68,11 +68,12 @@ export function VoiceMemoPanel(props: { memo: VoiceMemoController }) {
     match(phase())
       .with('starting', () => t('channelComposer.voiceMemoStarting'))
       .with('attaching', () => t('channelComposer.voiceMemoAttaching'))
-      .with('failed', () => undefined)
-      .with('idle', 'recording', 'unavailable', () =>
-        formatRecordingTime(props.memo.elapsedMs())
-      )
+      .with('idle', 'recording', 'failed', 'unavailable', () => undefined)
       .exhaustive();
+  const time = () =>
+    phase() === 'recording'
+      ? formatRecordingTime(props.memo.elapsedMs())
+      : undefined;
 
   return (
     <Show when={props.memo.active()}>
@@ -101,7 +102,9 @@ export function VoiceMemoPanel(props: { memo: VoiceMemoController }) {
           </Switch>
         }
         status={status()}
+        time={time()}
         onPrimary={primary}
+        primaryInert={phase() === 'starting' || phase() === 'attaching'}
         primary={
           <PrimaryAction
             label={

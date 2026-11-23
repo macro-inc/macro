@@ -53,16 +53,18 @@ export function DictationPanel(props: { dictation: DictationController }) {
       .with('starting', () => t('dictation.starting'))
       .with('finishing', () => t('dictation.transcribing'))
       .with('review', () =>
-        failure()
-          ? undefined
-          : props.dictation.limitReached()
-            ? t('dictation.limitReached')
-            : formatRecordingTime(props.dictation.elapsedMs())
+        !failure() && props.dictation.limitReached()
+          ? t('dictation.limitReached')
+          : undefined
       )
-      .with('listening', 'idle', 'unavailable', () =>
-        formatRecordingTime(props.dictation.elapsedMs())
-      )
+      .with('listening', 'idle', 'unavailable', () => undefined)
       .exhaustive();
+  const time = () =>
+    (phase() === 'listening' || phase() === 'review') &&
+    !failure() &&
+    !props.dictation.limitReached()
+      ? formatRecordingTime(props.dictation.elapsedMs())
+      : undefined;
 
   return (
     <Show when={props.dictation.active()}>
@@ -80,7 +82,9 @@ export function DictationPanel(props: { dictation: DictationController }) {
           </Show>
         }
         status={status()}
+        time={time()}
         onPrimary={confirm}
+        primaryInert={phase() === 'starting' || phase() === 'finishing'}
         primary={
           <PrimaryAction
             label={failure() ? t('dictation.retry') : t('dictation.confirm')}
