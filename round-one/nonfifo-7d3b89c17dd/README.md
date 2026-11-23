@@ -45,6 +45,7 @@ rows and 128 locks; vacuum or state tuning was not added.
 
 No throughput or advisory-hold estimate is claimed: execution time excludes
 commit, WAL, round trips, lock waits and harness bookkeeping. These are
-database-only measurements: no Tempo or Datadog trace of a running service was
-checked for these claim paths here. Human playback and real-provider mailbox
+database-only measurements. A separate [runtime receipt](runtime.json) now verifies spans exported to Tempo from the actual current-head IMAP/API/worker executables: an acquired claim, one swept row in each parked family, projection post-commit wake and a quiet 180-second IDLE renewal. Its synthetic fixture used SQL setup plus real verify/promotion and sync; older frontend/support services were retained, so this is no current-head browser or real-provider proof. Human playback and real-provider mailbox
 verification remain pending. HOLD MERGE; no deployment.
+
+The runtime check observes separate traces; it does not prove claim-to-downstream parent/child linkage. Claim samples have zero maintenance writes: catalog claims and lazy parking/Progress are not runtime-proved here. Their bounded behavior is covered by the database measurements above.

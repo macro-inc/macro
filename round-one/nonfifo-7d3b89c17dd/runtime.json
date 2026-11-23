@@ -1,0 +1,49 @@
+{
+  "sourceCommit": "7d3b89c17dd5b4e2d7f5e61e3f2f6ae9fb41e609",
+  "scope": "Actual current-head IMAP/API/worker binaries; retained older frontend and other services. Synthetic lab fixture generation bump and parked rows set up with SQL; real verify/promote, provider sync, claims, sweep and projection executed. No browser proof claimed.",
+  "runningBinaries": [
+    {
+      "service": "imap_service",
+      "sha256": "7e9e9c8778f5910ec32c59d1cb7f8dcf9fbaed54da862ddd91b3b8abd86239dc",
+      "matches": true
+    },
+    {
+      "service": "email_service",
+      "sha256": "16d61825639b3fef704b6bc91b47a24893389854dac25f3c209600f7fc7b7d61",
+      "matches": true
+    },
+    {
+      "service": "email_pubsub_workers",
+      "sha256": "9af67678c4c25a4b523bcdabd353bffb80ac2e37f9f421c0b6614991f72168c1",
+      "matches": true
+    }
+  ],
+  "syntheticOnly": true,
+  "traceChecks": {
+    "claimAcquired": true,
+    "sweepRowsByFamily": {
+      "projection": 1,
+      "streams": 1,
+      "reconciliation": 1
+    },
+    "parkedRowsRemaining": 0,
+    "projectionPostCommitWake": true,
+    "quietIdle": {
+      "durationMs": 180026.318592,
+      "outcome": "restarted",
+      "changedAtArm": false
+    }
+  },
+  "privacyCanaryPassed": true,
+  "collectorConfigSha256": "81870d19d5f28c86ddccfe835245387c88535600add2d95187020ae6ae77cabc",
+  "realProvider": "not tested",
+  "humanPlayback": "pending",
+  "multiReplicaThroughput": "not measured",
+  "frontend": "retained earlier bundle, no current-head browser proof claimed",
+  "traceIds": "retained privately, not published",
+  "limitations": [
+    "Separate traces; no claim-to-downstream parent/child linkage proved.",
+    "Observed claim windows have maintained=0; catalog and lazy parking/Progress not exercised at runtime.",
+    "The recovery fixture parks rows with SQL; the running sweep unparked and drained them."
+  ]
+}
