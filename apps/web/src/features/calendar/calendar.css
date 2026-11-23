@@ -8,7 +8,7 @@
 	--fc-page-bg-color: transparent;
 	--fc-neutral-bg-color: transparent;
 	--fc-neutral-text-color: var(--color-ink-muted);
-	--fc-border-color: var(--color-border-secondary);
+	--fc-border-color: var(--border-tertiary);
 	--fc-event-bg-color: color-mix(
 		in oklch,
 		var(--color-calendar) 5%,
@@ -770,7 +770,7 @@
 }
 
 .calendar-view .fc .fc-timegrid-slot-minor {
-	border-top-color: var(--color-divider);
+	border-top-color: var(--divider);
 }
 
 .calendar-view .fc .fc-timegrid-axis-cushion,
