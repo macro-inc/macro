@@ -1022,6 +1022,10 @@ async fn run_server() -> anyhow::Result<()> {
             time_tracking::outbound::kafka_events::BrokerTimeEntryEventPublisher::new(
                 macro_event_broker.clone(),
             ),
+            time_tracking::outbound::gateway_updates::GatewayTimeTrackingUpdates::new(
+                conn_gateway_client.clone(),
+                event_broker_tracker.clone(),
+            ),
         ),
     );
     let time_tracking_state = time_tracking::inbound::axum_router::TimeTrackingRouterState::new(

@@ -19,6 +19,7 @@ use macro_event_broker::MacroEvent as _;
 use messages::outbound::broker::MessageMacroEvent;
 use projects_hex::domain::events::ProjectMacroEvent;
 use properties::domain::events::PropertyMacroEvent;
+use time_tracking::domain::events::TimeEntryMacroEvent;
 
 #[allow(clippy::enum_variant_names)]
 mod source {
@@ -38,6 +39,7 @@ mod source {
             DatabaseMacroEvent,
             FormMacroEvent,
             AgentSessionLifecycleMacroEvent,
+            TimeEntryMacroEvent,
     );
 }
 pub(crate) use source::ActivitySourceEvent;
@@ -82,6 +84,7 @@ pub(crate) async fn ingest(
             ActivitySourceEvent::DatabaseMacroEvent(e) => arm(e.event()),
             ActivitySourceEvent::FormMacroEvent(event) => arm(event.event()),
             ActivitySourceEvent::AgentSessionLifecycleMacroEvent(event) => arm(event.event()),
+            ActivitySourceEvent::TimeEntryMacroEvent(event) => arm(event.event()),
         }
     })
     .await
