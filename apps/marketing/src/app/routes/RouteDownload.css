@@ -54,8 +54,56 @@
 }
 
 /* Preserve the shared primary button's ink over the legacy anchor reset. */
-.downloads-action .site-nav-start {
+.downloads-installers .site-nav-start {
   color: #000;
+}
+
+.downloads-installers .site-nav-start,
+.downloads-installers .site-nav-demo {
+  width: 220px;
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.downloads-installers {
+  --nav-ink: #fff;
+  --nav-muted: #b8b8bd;
+  --nav-surface: rgb(18 18 20 / 78%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.downloads-installers li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.downloads-installers span,
+.downloads-page .downloads-note {
+  color: #777;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.downloads-page .downloads-note {
+  margin-top: 20px;
+}
+
+.downloads-note a {
+  color: #ccc;
+}
+
+.downloads-page .documentation-body {
+  margin-top: 56px;
 }
 
 .downloads-release {
@@ -78,13 +126,6 @@
   height: 13px;
 }
 
-.downloads-page .downloads-version {
-  margin-top: 8px;
-  color: #777;
-  font-size: 12px;
-  text-align: center;
-}
-
 @media (max-width: 600px) {
   .downloads-page {
     padding: 112px 12px 76px;
@@ -98,5 +139,22 @@
   .downloads-app-icon svg {
     width: 38px;
     height: 38px;
+  }
+}
+
+/* Phones get the mobile apps; computers get the desktop installers. */
+.downloads-page .downloads-phone-only {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .downloads-page .downloads-desktop-only {
+    display: none;
+  }
+  .downloads-page ul.downloads-phone-only {
+    display: flex;
+  }
+  .downloads-page p.downloads-phone-only {
+    display: block;
   }
 }

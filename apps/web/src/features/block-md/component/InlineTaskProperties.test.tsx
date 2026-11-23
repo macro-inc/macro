@@ -169,15 +169,28 @@ vi.mock('../context/markdown-document-context', () => ({
   }),
 }));
 vi.mock('./InlinePropertyValue', () => ({
-  InlinePropertyValue: (props: { property: Property; valueText?: string }) => {
+  InlinePropertyValue: (props: {
+    property: Property;
+    valueText?: string;
+    unlink?: { available: () => boolean; clear: () => Promise<unknown> };
+  }) => {
     const context = usePropertiesContext();
     return (
-      <button
-        onClick={() => context.onPropertyUnpinned?.(props.property.propertyId)}
-      >
-        Unpin {props.property.displayName}
-        {props.valueText ? ` (${props.valueText})` : ''}
-      </button>
+      <>
+        <button
+          onClick={() =>
+            context.onPropertyUnpinned?.(props.property.propertyId)
+          }
+        >
+          Unpin {props.property.displayName}
+          {props.valueText ? ` (${props.valueText})` : ''}
+        </button>
+        {props.unlink?.available() ? (
+          <button onClick={() => props.unlink?.clear()}>
+            Unlink {props.property.displayName}
+          </button>
+        ) : null}
+      </>
     );
   },
 }));
@@ -321,6 +334,55 @@ it("keeps a task's due date pill as it was without start dates", async () => {
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Unpin Due Date' })).toBeTruthy()
   );
+});
+
+const clearedDefinitions = () =>
+  entityWrite.mock.calls.flatMap(([variables]) =>
+    variables.properties
+      .filter(
+        (item: { apiValues: { value: unknown } }) =>
+          item.apiValues.value === null
+      )
+      .map((item: { property: Property }) => item.property.propertyDefinitionId)
+  );
+
+it('unlinks both dates from a range pill, as Clear both does', async () => {
+  mocks.kind = 'task';
+  mocks.startDates = true;
+  setup([dueDate, startDate]);
+
+  await fireEvent.click(
+    await screen.findByRole('button', { name: 'Unlink Due Date' })
+  );
+
+  await waitFor(() =>
+    expect(clearedDefinitions()).toEqual([
+      SYSTEM_PROPERTY_IDS.START_DATE,
+      SYSTEM_PROPERTY_IDS.DUE_DATE,
+    ])
+  );
+});
+
+it('offers Unlink on a pill that shows only a start date, and clears it', async () => {
+  mocks.kind = 'task';
+  mocks.startDates = true;
+  setup([{ ...dueDate, value: null } as Property, startDate]);
+
+  await fireEvent.click(
+    await screen.findByRole('button', { name: 'Unlink Due Date' })
+  );
+
+  await waitFor(() =>
+    expect(clearedDefinitions()).toEqual([SYSTEM_PROPERTY_IDS.START_DATE])
+  );
+});
+
+it('keeps the due date pill on its own Unlink without start dates', async () => {
+  mocks.kind = 'task';
+  setup([dueDate, startDate]);
+
+  await screen.findByRole('button', { name: 'Unpin Due Date' });
+  expect(screen.queryByRole('button', { name: 'Unlink Due Date' })).toBeNull();
 });
 
 const taskDefinitions = [

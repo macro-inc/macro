@@ -55,11 +55,12 @@ const due = dateProperty('due', 'Due Date', new Date(2026, 10, 27));
 
 function setup(
   onSave: PropertyRootContextValue['onSave'],
-  saveOther: StartDueEditorProps['saveOther'] = vi.fn(async () => {})
+  saveOther: StartDueEditorProps['saveOther'] = vi.fn(async () => {}),
+  ends: { start: DateProperty; due: DateProperty } = { start, due }
 ) {
   const [editorOpen, setEditorOpen] = createSignal(true);
   const context: PropertyRootContextValue = {
-    property: () => due,
+    property: () => ends.due,
     pickedEntityName: () => undefined,
     canEdit: () => true,
     editorOpen,
@@ -69,7 +70,11 @@ function setup(
   };
   render(() => (
     <PropertyRootContext.Provider value={context}>
-      <StartDueEditor field="due" other={() => start} saveOther={saveOther} />
+      <StartDueEditor
+        field="due"
+        other={() => ends.start}
+        saveOther={saveOther}
+      />
     </PropertyRootContext.Provider>
   ));
   return { saveOther };
@@ -317,4 +322,59 @@ it('saves the time the arrows move to over the one typed', async () => {
       hasTime: true,
     })
   );
+});
+
+it('saves the due date first when a start day is picked after it, moving it by the same length', async () => {
+  const onSave = vi.fn(async () => {});
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(onSave, saveOther);
+
+  pickStartInCalendar(30);
+
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenCalledWith(start, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 30),
+    })
+  );
+  expect(onSave).toHaveBeenCalledWith(due, {
+    valueType: 'DATE',
+    value: new Date(2026, 11, 4),
+  });
+  expect(onSave.mock.invocationCallOrder[0]).toBeLessThan(
+    saveOther.mock.invocationCallOrder[0] ?? 0
+  );
+});
+
+it('keeps a newer start time on screen when an older due save fails', async () => {
+  const timedDue = { ...due, value: new Date(2026, 10, 27, 15), hasTime: true };
+  const dueSave = Promise.withResolvers<void>();
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(
+    vi.fn(() => dueSave.promise),
+    saveOther,
+    { start, due: timedDue }
+  );
+  expect(field('Start')).toBe('StartMon, Nov 23');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Change day' }));
+  fireEvent.click(screen.getByRole('button', { name: '28' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Change day' }));
+  fireEvent.click(screen.getByRole('button', { name: '24' }));
+  dueSave.reject(new Error());
+
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenCalledWith(start, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 24),
+      hasTime: true,
+    })
+  );
+  expect(field('Start')).toBe('StartTue, Nov 2412:00 AM');
+  expect(field('Due')).toBe('DueFri, Nov 273:00 PM');
 });

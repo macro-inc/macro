@@ -67,7 +67,9 @@ their shared local order. The unnamed group has no grip or keyboard move control
 Accounts stays pinned at the top and is not a drop target. Section order is per
 account and survives reloads. `Tab`, `Shift+Tab` and `1`–`3` move between the Inbox
 tabs in the header (Focus, Signal, Noise) while the keyboard is on the list or
-nothing has focus, as after `Escape` closes a thread. On any control (a row's
+nothing has focus, as after `Escape` closes a thread, and right after a click on
+a sidebar folder or account (Inbox, after Favorites) or on Mail in the app rail.
+On any control (a row's
 sender name, checkbox or actions, Load more, a header button), in the search
 field, in an open thread, and in another mailbox, whose header has no tabs,
 `Tab` is browser focus order. Leaving the
@@ -137,9 +139,11 @@ result and `Escape` leaves the field with the search kept (see
 view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 `Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`
-opens every message including the collapsed middle run, and `N`/`P` step
-messages like the arrows. `B` in an open thread, or `Create event` in its
-title menu, opens the event composer with the subject as the title and every
+opens every message including the collapsed middle run, `N`/`P` step
+messages like the arrows, and `Space`/`Shift+Space` page the thread down and
+up by about a screen from wherever the keyboard is in it (a focused button
+keeps its own Space, and fields and the reply composer type it). `B` in an
+open thread, or `Create event` in its title menu, opens the event composer with the subject as the title and every
 From, To and Cc address except the viewer's as guests (Bcc and drafts are left
 out); both are hidden while the calendar is off. With `enable-universal-input`
 on, the composer also sends the subject and latest message to
@@ -178,6 +182,11 @@ toast and rolls back instead of waiting for reconnect, so pressing it again work
 
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
+A person already in the field still appears among the suggestions, dimmed with
+a check, and picking that row does nothing; the highlight starts on the first
+row that can be picked, so Enter and Tab never remove anyone. Remove a
+recipient with its chip's X or Backspace. `recipient-already-added.app.e2e.ts`
+in the app browser configuration checks this in To, Cc and Bcc, and To on a phone.
 Enter or a click picks the highlighted suggestion; on a complete typed address,
 Enter or Tab adds that address unless an arrow key picked another row. Type,
 paste, or Tab straight after picking one and check that both recipients stay

@@ -106,6 +106,32 @@ describe('StartDueSelector', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('keeps Start active after changing a start that existed, so a second click corrects it', () => {
+    const { changes, onClose } = renderSelector(
+      { start: new Date(2026, 10, 21), due: new Date(2026, 10, 27) },
+      'start'
+    );
+
+    fireEvent.click(screen.getByText('Custom date...'));
+    fireEvent.click(day(23));
+    fireEvent.click(day(24));
+
+    expect(changes.map((change) => change.changed)).toEqual([
+      ['start'],
+      ['start'],
+    ]);
+    expect(changes.at(-1)?.dates).toEqual({
+      start: new Date(2026, 10, 24),
+      due: new Date(2026, 10, 27),
+    });
+    expect(
+      screen
+        .getByRole('button', { name: /^Start/ })
+        .getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("shows the active end's month when switching ends in the calendar", () => {
     renderSelector(
       { start: new Date(2026, 10, 23), due: new Date(2026, 11, 9) },
@@ -118,6 +144,25 @@ describe('StartDueSelector', () => {
     expect(screen.getByText('November 2026')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Due/ }));
     expect(screen.getByText('December 2026')).toBeTruthy();
+  });
+
+  it('shows no time on an end saved as a whole day', () => {
+    renderSelector(
+      {
+        start: new Date(2026, 10, 20, 19),
+        due: new Date(2026, 10, 30, 15),
+        timed: true,
+        wholeDay: 'start',
+      },
+      'due'
+    );
+
+    expect(screen.getByRole('button', { name: /^Start/ }).textContent).toBe(
+      'StartFri, Nov 20'
+    );
+    expect(screen.getByRole('button', { name: /^Due/ }).textContent).toBe(
+      'DueMon, Nov 303:00 PM'
+    );
   });
 
   it('makes a due day before the start the new start instead', () => {

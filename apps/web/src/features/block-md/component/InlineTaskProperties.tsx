@@ -120,6 +120,7 @@ export function InlineTaskProperties() {
       (property) =>
         selected.includes(property.propertyId) &&
         !property.isMetadata &&
+        property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.TIME_LOGGED &&
         !tagDefinitionIds().has(property.propertyDefinitionId)
     );
     if (documentKind !== 'task') return visible;
@@ -182,6 +183,31 @@ export function InlineTaskProperties() {
       return undefined;
     }
     return formatStartDue(startDueOf(dateEnd('start'), property));
+  };
+  // Unlink on the dates pill clears what it shows: both ends, as Clear both.
+  const datesUnlink = (property: Property) => {
+    if (
+      documentKind !== 'task' ||
+      !startDateEnabled() ||
+      property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.DUE_DATE
+    ) {
+      return undefined;
+    }
+    const setEnds = () =>
+      (['start', 'due'] as const)
+        .map(dateEnd)
+        .filter(
+          (end): end is DateProperty =>
+            !!end && !end.propertyId.startsWith('pending:') && end.value != null
+        );
+    return {
+      available: () => setEnds().length > 0,
+      clear: async () => {
+        for (const end of setEnds()) {
+          await saveOne(end, { valueType: 'DATE', value: null });
+        }
+      },
+    };
   };
   const datesEditor = (definitionId: string) => {
     const field = dateFieldOf(definitionId);
@@ -250,6 +276,7 @@ export function InlineTaskProperties() {
                   }
                   valueText={datesText(property())}
                   editor={editor}
+                  unlink={datesUnlink(property())}
                 />
               );
             }}

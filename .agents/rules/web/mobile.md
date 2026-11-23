@@ -49,7 +49,19 @@ read their code, and follow that pattern rather than inventing a new one.
 - Keep tooltips disabled on touch devices, including focus and controlled-open states.
 - Keep `@ui` Button's touch sizing (no `noTouchResize` without cause); rows
   are 44px on touch (`touch:min-h-[44px]`).
-- Long-press goes through the `touchHandler` directive. On scrollable rows,
+- A tappable list row marks the element that paints it `data-press-surface`
+  (or sits in a `data-soup-entity` row) and gets the shared press grey from
+  `components/app/mobile/rowPress.ts`, with UIKit timing; never add a per-row
+  `active:` tint. The grey holds 350ms after a tap; a row whose open can take
+  longer (it awaits a split or a load) calls `holdRowPress` from its click to
+  keep it until the open settles. A row that must paint its own pressed fill
+  marks it `data-press-surface="self"`.
+- Long-press goes through the `touchHandler` directive, which ends the row's
+  press grey when the long press fires (`clearRowPress`) and marks its element
+  `data-long-press`, as context menu triggers are. A `data-soup-entity` row,
+  and a long-press element holding a press surface, draw no WebKit tap
+  highlight: iOS flashes the long-pressed element's highlight again on later
+  taps. On scrollable rows,
   selecting or dragging starts only after a long press; dedicated reorder
   handles instead drag after a small movement with no hold delay and reserve
   scrolling for the rest of the row. Horizontal swipes ignore the left edge

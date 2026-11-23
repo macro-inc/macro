@@ -276,18 +276,20 @@ app run. Set it to the separate `apps/web` origin for local signup testing. This
 website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phone clicks still open `/mobile-signup`. Verify a real document navigation, not only a changed URL. Production routing
 is unchanged; run `apps/web` separately when testing local signup changes.
 
-`/download` is headed “Download Macro Alpha”, says “Available for macOS and
-Linux”, and has one download button.
-Desktop Linux browsers receive the x86_64 AppImage; other browsers default to
-the Apple silicon DMG, with the selected platform named in the button.
-It searches recent stable GitHub releases for each installer, skipping CLI-only
-releases and unfinished platform uploads.
-Verified direct installer URLs remain usable while loading and if the API fails;
-update these fallbacks in `desktopDownloads.ts` when retiring older installers.
-The separate “All releases” link opens GitHub, with the selected installer's
-release version displayed beneath it.
-The page hides the header's Sign Up action, has no web-app download option,
-and has no header/footer navigation entry.
+`/download` is headed “Download Macro Alpha” and says “Available for macOS and
+Linux”. It offers both published installers, Apple silicon DMG and x86_64
+AppImage, with the visitor's platform first as the primary button; other
+browsers list macOS first, and Windows visitors are pointed to the web app.
+The buttons link to `/download/mac` and `/download/linux`, which redirect to
+the current release's installers (`seo/download-redirects.json`), so the page
+never names a version or calls GitHub. The separate “All releases” link opens
+GitHub. Below the installers, the page describes
+the desktop, web, iOS, and Android apps.
+Phones are not offered the desktop download page: the main navigation hides
+its link below 768px, and the homepage rail that holds “Download for Desktop”
+only shows at 1440px and wider. A phone that opens `/download` (below 768px)
+sees “Download Macro” with App Store and Google Play buttons, its own platform
+first, and no desktop installers, release link, or Desktop section.
 Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
 Before the first prerender build, install Chromium with
@@ -1139,7 +1141,7 @@ The build also runs `scripts/verify-docs-redirects.ts` against the permanent
 records in `apps/docs/docs.json`, the captured old-host sitemap, every current
 guide, Markdown export, and media file. Preserve the published URL baseline
 when adding redirects. `--origin=<static-preview-origin>` additionally checks
-HTTP responses. `seo/page-redirects.json` is the single map for retired website routes: local servers and CloudFront return 308 responses preserving queries and fragments, with static fallback pages for other hosts. Deploy the website stack with the site to activate edge records. The guides retain scoped styles for previews restored from the
+HTTP responses. `seo/page-redirects.json` is the single map for retired website routes: local servers and CloudFront return 308 responses preserving queries and fragments, with static fallback pages for other hosts. Deploy the website stack with the site to activate edge records. `seo/download-redirects.json` holds the stable desktop installer links (`/download/mac`, `/download/linux`): temporary 302s to the fixed-name assets on the `desktop-stable` GitHub release, served the same three ways. Link to these paths, never to a versioned installer. The guides retain scoped styles for previews restored from the
 live docs; these do not change the visual feature pages.
 
 ### Product comparison links
@@ -1268,7 +1270,7 @@ On `/replace-apps`, combine the replacement logos and savings calculator into on
 
 Feature, benefits, and documentation pages share `PageOutline`: the reading column is balanced between site navigation and a quiet section outline on wide screens. Use short topic labels from `page-outline-labels.ts` for feature and benefit sections, keyed to their heading IDs, and label question sections “FAQ”. Keep full headings in the page content. At narrower widths the outline is hidden so the content keeps its space. Sidebar groups use continuous subtle vertical guide lines, with a bright straight active marker and no rounded selection background, matching docs.macro.com. Match the right outline to the left sidebar: inactive links at 60% ink, its heading at 70%, and active or hovered links at full ink. Style “On this page” like the left group headings: 12px type, 1.6 line-height, weight 370, and an 8px gap below. The right outline uses 14px labels, 16px link indentation, and 32px horizontal padding inside a 241px column matching the left sidebar. On wide feature, benefit, and documentation pages, stack Sign Up above Book a demo in a 177px column aligned with the outline; retain the compact horizontal actions on smaller screens.
 
-The homepage uses the same wide-screen right rail and stacked signup/demo actions as feature pages. `HomepageResources` has two matching groups: Downloads for iOS, Mac, and Android, followed by Links for GitHub, X / Twitter, LinkedIn, YouTube, and Instagram. Separate the groups by 24px. Display Links as a horizontal row of social icons with accessible names and hover titles, without a star count. Keep Blog and Documentation out of this resource rail. Keep mobile downloads aligned with the native app's store URLs; resolve the Mac installer through `desktopDownloads.ts`, retaining a verified direct fallback when GitHub is unavailable. Below 1440px the resources follow the homepage content.
+The homepage uses the same wide-screen right rail and stacked signup/demo actions as feature pages. `HomepageResources` has two matching groups: Downloads (“Download for Desktop” to `/download`, then iOS and Android), followed by Links for GitHub, X / Twitter, LinkedIn, YouTube, and Instagram. Separate the groups by 24px. Display Links as a horizontal row of social icons with accessible names and hover titles, without a star count. Keep Blog and Documentation out of this resource rail. Keep mobile downloads aligned with the native app's store URLs in `desktopDownloads.ts`. Below 1440px the rail is hidden.
 
 Use full first and last names for people in channel mockups. Rotate stories across Peter Chinman, Wolf Mermelstein, Eric Hayes, Rahul Batra, and Austin Barron as well as the existing cast. Use the shared `homepagePeople` profile photos; Rahul has an initials avatar because his Macro profile has no photo. Keep Valentina out of demo fixtures and app captures.
 

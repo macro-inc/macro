@@ -103,7 +103,12 @@ enforced by the ordinary backend APIs.
   contacts; at most 20; each person carries `lists`)
   and the SDK seeds User handles with each name and agent flag, keeping that
   order. It is not a global directory, and the full `GET /contacts` list stays
-  out of the SDK.
+  out of the SDK. `users.inList(list, { maxItems, pageSize })` pages one
+  contacts list (`ContactListKey`) over `GET /contacts/lists/{list}/members`,
+  naming each page with one auth `getUserNamesWithEmail` batch
+  (`User.named`); `users.teammates()` collects the `teammates` list. The route
+  reads the list tables for every caller, whatever their `contacts-list-reads`
+  flag, so stored lists can be incomplete until the list backfill has run.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `Contact.addEmail` / `removeEmail` / `setEmail` (choose the primary) edit a

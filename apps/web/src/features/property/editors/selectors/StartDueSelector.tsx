@@ -57,18 +57,23 @@ export function StartDueSelector(props: StartDueSelectorProps) {
     }
     const day = field() === 'start' ? startOfDay(date) : date;
     const picked = pickDay(props.dates, field(), day);
-    props.onChange(picked.dates, [picked.changed]);
+    props.onChange(picked.dates, picked.changed);
   };
 
+  // A first start moves on to the due date, setting a range; a start that
+  // existed stays active, so a second click corrects it.
   const pickFromCalendar = (day: Date) => {
     const active = field();
+    const hadStart = props.dates.start != null;
     const picked = pickDay(props.dates, active, day);
-    props.onChange(picked.dates, [picked.changed]);
-    if (active === 'due' && picked.changed === 'due') {
+    props.onChange(picked.dates, picked.changed);
+    if (active === 'due' && picked.changed.includes('due')) {
       props.onClose?.();
       return;
     }
-    if (active === 'start' && picked.changed === 'start') setField('due');
+    if (active === 'start' && picked.changed.includes('start') && !hadStart) {
+      setField('due');
+    }
   };
 
   const fieldTime = (date: Date) =>
@@ -97,17 +102,26 @@ export function StartDueSelector(props: StartDueSelectorProps) {
         class={cn(
           'flex min-w-0 flex-col items-start rounded-md border px-2 py-1 text-left touch:min-h-12',
           field() === end
-            ? 'border-ink'
+            ? 'border-ink ring-1 ring-ink'
             : 'border-edge-muted not-touch:hover:bg-hover'
         )}
         aria-pressed={field() === end}
         onClick={() => setField(end)}
       >
-        <span class="text-xs text-ink-muted">{label}</span>
+        <span
+          class={cn(
+            'text-xs',
+            field() === end ? 'font-medium text-ink' : 'text-ink-muted'
+          )}
+        >
+          {label}
+        </span>
         <span class={cn('truncate', !value() && 'text-ink-muted')}>
           {value() ? FIELD_DAY_FORMAT.format(value()!) : 'None'}
         </span>
-        <Show when={props.dates.timed && value()}>
+        <Show
+          when={props.dates.timed && props.dates.wholeDay !== end && value()}
+        >
           {(at) => <span class="text-ink-muted">{fieldTime(at())}</span>}
         </Show>
       </button>

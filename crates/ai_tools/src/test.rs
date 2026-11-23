@@ -227,6 +227,26 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
     );
 }
 
+/// Every host that calls tools directly can log and read time; code mode
+/// does it through the SDK instead.
+#[test]
+fn direct_tool_hosts_log_and_read_time() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in ["LogTime", "ReadTimeEntries"] {
+            assert!(
+                tools.toolset.tools.contains_key(name),
+                "{host:?} lacks {name}"
+            );
+        }
+    }
+}
+
 /// Code mode hides direct tools whose work the SDK does, while other
 /// hosts keep them.
 #[test]
@@ -271,6 +291,8 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "DeleteInitiative",
         "ListAgents",
         "ConfigureAgent",
+        "LogTime",
+        "ReadTimeEntries",
     ] {
         assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
         assert!(
