@@ -96,6 +96,35 @@ its existing `android_mobile_plugin` export commands. Older iOS installations
 retain Web Share until the next native release; see
 [the bridge guide](../file_export_plugin/AGENTS.md).
 
+## iOS Share Extension
+
+`gen/apple/ShareExtension` puts Macro in the iOS share sheet for images,
+videos, and one web URL. It saves each item into the `group.com.macro.app.prod`
+App Group as `share_<UUID>.<ext>`, stamps the file's modification time, and
+opens `macro://share?files=…`. The app (`src/share_target`) moves the files into
+its cache and the web `ShareTargetProvider` opens the Share to Macro sheet.
+
+- iOS has no supported API for a share extension to open its app. The
+  extension calls `UIApplication.open` reached through the responder chain
+  (`extensionContext.open` when there is none) and finishes only once iOS
+  reports the result: finishing first can tear the process down before the
+  open happens. When iOS refuses, or says nothing within 5 seconds, the
+  extension shows "Saved. Open Macro to finish sharing." with a Done button.
+- `get_pending_share_filenames` returns the link's files plus any other
+  `share_*` file saved in the last 24 hours, so a share whose link never
+  arrived opens the next time Macro comes to the foreground. Older files are
+  deleted. The web provider asks on mount, on `share-files-ready`, and on every
+  return to the foreground, one request at a time; `pop_shared_files` takes the
+  files it returns out of the pending set.
+- The extension logs counts and outcomes (never content or names) under
+  subsystem `com.macro.app.prod.ShareExtension`, category `share`. Filter a
+  device's Console on that subsystem to see where a share stopped.
+- A simulator build made with `--no-sign` has no App Group entitlement: the
+  extension can't save anything and only shows "Macro couldn't read this
+  item." Re-sign the app and both extensions with an entitlements file that
+  holds just the App Group (`codesign --force --sign - --entitlements …`)
+  before testing shares on a simulator.
+
 ## Desktop pasted files
 
 The Tauri HTTP plugin copies an upload body into the renderer, so a large
@@ -395,8 +424,11 @@ frontend-ready buffer handles early delivery; no extra navigation path is needed
 
 Normal startup and cold/warm custom-scheme links were exercised on iOS 27;
 logs showed one event per tested link. Universal-link extraction/filtering is
-covered by simulator-executed Tao tests. Signed associated-domain delivery,
-physical devices, iOS 26, and share-sheet flows still need end-to-end testing.
+covered by simulator-executed Tao tests. The share-sheet handoff (Photos to
+the Share to Macro sheet, warm and cold) was exercised on an iOS 27.2
+simulator, and the extension's open of its app and its fallback card on iOS
+26.2. Signed associated-domain delivery, physical devices, and the rest of iOS
+26 still need end-to-end testing.
 See the fork's [FORK.md](https://github.com/macro-inc/tao/blob/6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8/FORK.md)
 for provenance and verification. Remove the patch once a compatible Tao release
 includes both the cold-start fix and nil handling.
