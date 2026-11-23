@@ -21,6 +21,9 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
 
+vi.mock('@channel/use-own-agent-mention-users', () => ({
+  useOwnAgentMentionTransform: () => (users: readonly unknown[]) => [...users],
+}));
 vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 
 vi.mock('@service-connection/websocket', () => ({

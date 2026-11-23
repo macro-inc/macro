@@ -10,6 +10,7 @@ import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
+import { useOwnAgentMentionTransform } from '@channel/use-own-agent-mention-users';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { preloadAgentFold } from '@core/agent-fold/client';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -132,10 +133,17 @@ export function ChatComposer(props: {
     hostMarkdown = undefined;
     props.onDraftChange(markdown);
   };
+  const ownAgentMentions = useOwnAgentMentionTransform();
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
-    .withMentions({ showOpenTabs: true, block: 'agent' })
+    .withMentions({
+      showOpenTabs: true,
+      block: 'agent',
+      // A new account has no contacts, but can still mention Macro and the
+      // agents of its own teams.
+      transformUsers: ownAgentMentions,
+    })
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })

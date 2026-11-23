@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fixture = vi.hoisted(() => ({
   agents: [] as Agent[],
   bots: [] as Bot[],
+  offline: new Set<string>(),
   pending: false,
   codexRollout: false,
   cursorRollout: false,
@@ -40,6 +41,9 @@ vi.mock('@queries/agents/agents', () => ({
       return fixture.agents;
     },
   }),
+}));
+vi.mock('@queries/agents/offline-runtimes', () => ({
+  useOfflineAgentBotIds: () => () => fixture.offline,
 }));
 vi.mock('@queries/bots/bots', () => ({
   useBotsQuery: () => ({
@@ -77,6 +81,7 @@ function agent(id: string, overrides: Partial<Bot> = {}): Agent {
 beforeEach(() => {
   fixture.agents = [];
   fixture.bots = [];
+  fixture.offline = new Set();
   fixture.pending = false;
   fixture.codexRollout = false;
   fixture.cursorRollout = false;
