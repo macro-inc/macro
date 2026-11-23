@@ -39,10 +39,11 @@ const EMPTY_TAG_SETS: TagSetResponse[] = [];
 /** The caller's tag sets: their personal set, plus their team's set when on a team. */
 export function useTagsQuery(): CatalogListResult<TagSetResponse> {
   const isAuthenticated = useIsAuthenticated();
-  const stamp = createListedAt();
+  const variables = () => (isAuthenticated() === true ? {} : undefined);
+  const stamp = createListedAt(PropertyCatalogTagSetsDocument, variables);
   const query = createLiveQuery(
     PropertyCatalogTagSetsDocument,
-    () => (isAuthenticated() === true ? {} : undefined),
+    variables,
     () => ({
       client: getGraphqlSoupClient(),
       requestPolicy: 'cache-and-network',

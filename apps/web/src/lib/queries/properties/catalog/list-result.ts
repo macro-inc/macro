@@ -1,8 +1,14 @@
 import type { UrqlQueryResult } from '@app/lib/urql-solid/types';
 import { normalizedCacheResultMetadata } from '@graphql-cache/index';
 import { onlineManager } from '@tanstack/solid-query';
-import type { AnyVariables, CombinedError, OperationResult } from '@urql/core';
-import { createSignal } from 'solid-js';
+import {
+  type AnyVariables,
+  type CombinedError,
+  createRequest,
+  type DocumentInput,
+  type OperationResult,
+} from '@urql/core';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 
 /**
  * A catalog list that always has data: an empty list stands in until the
@@ -32,9 +38,12 @@ export type CatalogListResult<T> = {
 export type CatalogListStamp = {
   /** When the list last changed from anything newer than the stored cache. */
   listedAt: () => number;
-  /** The server's refusal of the read with this operation key, if it stands. */
-  refusal: (operationKey: number | undefined) => CombinedError | null;
+  /** The server's refusal of the current read, if it stands. */
+  refusal: () => CombinedError | null;
 };
+
+// Refusals kept per reader: the reads it switched away from, newest last.
+const MAX_REFUSALS = 16;
 
 /**
  * Follows a reader's results: stamps those that carry news (a server answer
@@ -45,35 +54,51 @@ export type CatalogListStamp = {
  * longer visible to the viewer) would come back on screen from the cache.
  * TanStack kept a refused read failed until its next successful fetch. A
  * failure that reached no server neither sets nor clears a refusal.
+ *
+ * The current read is keyed from the reader's own document and variables, as
+ * urql keys its operation, so a reader that switches back to a refused read
+ * reports the refusal before that read answers again.
  */
-export function createListedAt(): CatalogListStamp & {
+export function createListedAt<V extends AnyVariables>(
+  document: DocumentInput<unknown, V>,
+  variables: Accessor<V | undefined>
+): CatalogListStamp & {
   onResult(result: OperationResult<unknown, AnyVariables>): void;
 } {
+  const currentKey = createMemo(() => {
+    const value = variables();
+    return value === undefined ? undefined : createRequest(document, value).key;
+  });
   const [listedAt, setListedAt] = createSignal(0);
   const [refusals, setRefusals] = createSignal<
     ReadonlyMap<number, CombinedError>
   >(new Map());
   const update = (key: number, error: CombinedError | undefined) => {
+    if (!error && !refusals().has(key)) return;
     const next = new Map(refusals());
+    next.delete(key);
     if (error) next.set(key, error);
-    else if (!next.delete(key)) return;
+    for (const oldest of next.keys()) {
+      if (next.size <= MAX_REFUSALS) break;
+      next.delete(oldest);
+    }
     setRefusals(next);
   };
   return {
     listedAt,
-    refusal(operationKey) {
-      if (operationKey === undefined) return null;
-      return refusals().get(operationKey) ?? null;
+    refusal() {
+      const key = currentKey();
+      if (key === undefined) return null;
+      return refusals().get(key) ?? null;
     },
     onResult(result) {
-      const source = normalizedCacheResultMetadata(result)?.source;
+      // A client without the normalized cache answers only from the server.
+      const metadata = normalizedCacheResultMetadata(result);
+      const source = metadata?.source;
+      const fromServer = !metadata || source === 'live-network';
       const key = result.operation.key;
       if (result.error?.graphQLErrors.length) update(key, result.error);
-      else if (
-        source === 'live-network' &&
-        !result.error &&
-        result.data != null
-      )
+      else if (fromServer && !result.error && result.data != null)
         update(key, undefined);
       if (result.data == null || source === 'normalized-cache-hit') return;
       setListedAt(Date.now());
@@ -151,7 +176,7 @@ export function catalogListResult<T, V extends AnyVariables, Q>(
 ): CatalogListResult<T> {
   const query = offlineAsSuccess(source);
   // A standing refusal outlasts the cache's later rereads of the same read.
-  const error = () => stamp.refusal(source.operation?.key) ?? query.error;
+  const error = () => stamp.refusal() ?? query.error;
   return {
     get data() {
       return query.data ?? empty;
