@@ -30,7 +30,8 @@ tools/HTTP/GraphQL surfaces over them.
   receipts: companies by domain (personal providers never key one), contacts
   with every free address, and company pipelines whose entries carry `Deal`,
   `Close date` and `Source link` beside the standard Stage, Outcome, Owner
-  and Revenue.
+  and Revenue. An existing deal entry is found from its company's entries
+  (`record_entries`, indexed by record), never by scanning the pipeline.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
 - `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
   and CSV transfers (entries by record, fields by name, options by label),

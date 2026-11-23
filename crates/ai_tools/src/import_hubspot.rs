@@ -144,14 +144,16 @@ impl CrmImportWriter for HubspotCrmWriter {
             .await?)
     }
 
-    async fn deal_links(
+    async fn deal_entry(
         &self,
         user: &MacroUserIdStr<'static>,
         pipeline: Uuid,
-    ) -> anyhow::Result<std::collections::HashMap<String, Uuid>> {
+        company: Uuid,
+        link: &str,
+    ) -> anyhow::Result<Option<Uuid>> {
         Ok(self
             .records
-            .deal_links(&self.viewer(user), pipeline)
+            .deal_entry(&self.viewer(user), pipeline, company, link)
             .await?)
     }
 

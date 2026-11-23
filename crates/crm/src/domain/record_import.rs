@@ -4,7 +4,6 @@
 //! viewer's own receipts, so an import keeps the access, validation and
 //! field rules of the single-record tools.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databases::domain::models::Viewer;
@@ -25,8 +24,8 @@ use super::{
     model::CrmError,
     pipeline_commercial::CURRENCIES,
     pipeline_workflows::{
-        EntryAddition, EntryQuery, FieldInput, FieldValue, MAX_SCANNED_ROWS, NewField,
-        NewFieldKind, NewPipeline, PipelineWorkflowService, RecordTarget,
+        EntryAddition, FieldInput, FieldValue, NewField, NewFieldKind, NewPipeline,
+        PipelineWorkflowService, RecordTarget,
     },
     pipelines::{PipelineRecordType, PipelineSharing},
     service::CrmService,
@@ -103,6 +102,24 @@ pub struct ImportedDeal {
     pub owner: Option<String>,
     /// Its page in the source CRM.
     pub link: String,
+}
+
+/// The entry of `pipeline` among `entries` whose source link is `link`.
+pub fn entry_with_link<'a>(
+    entries: impl IntoIterator<Item = (Uuid, Uuid, &'a [(String, FieldValue)])>,
+    pipeline: Uuid,
+    link: &str,
+) -> Option<Uuid> {
+    entries
+        .into_iter()
+        .filter(|(holder, _, _)| *holder == pipeline)
+        .find(|(_, _, fields)| {
+            fields.iter().any(|(name, value)| {
+                name == SOURCE_LINK_FIELD
+                    && matches!(value, FieldValue::Links(links) if links.iter().any(|l| l == link))
+            })
+        })
+        .map(|(_, entry, _)| entry)
 }
 
 /// Imported records through the CRM services, as the viewer.
@@ -354,50 +371,33 @@ where
         Ok(created.pipeline.pipeline.id)
     }
 
-    /// Entries already in `pipeline`, by their source link. A pipeline past
-    /// [`MAX_SCANNED_ROWS`] entries is read only that far.
-    #[tracing::instrument(skip_all, fields(%pipeline, entries), err)]
-    pub async fn deal_links(
+    /// The entry of `pipeline` tracking `company` with this source link, if
+    /// a write already added it. Read from the company's own entries, so its
+    /// cost follows the company, never the pipeline's size.
+    #[tracing::instrument(skip_all, fields(%pipeline, found), err)]
+    pub async fn deal_entry(
         &self,
         viewer: &Viewer,
         pipeline: Uuid,
-    ) -> Result<HashMap<String, Uuid>, TransferError> {
-        let found = self
-            .workflows
-            .find(
-                viewer,
-                pipeline,
-                EntryQuery {
-                    limit: MAX_SCANNED_ROWS,
-                    ..EntryQuery::default()
-                },
-            )
-            .await?;
-        // An entry past the scan limit would be added again on a retry, so a
-        // pipeline that large is refused rather than read in part.
-        if !found.complete {
-            return Err(TransferError::Invalid(format!(
-                "The pipeline has more than {MAX_SCANNED_ROWS} entries, so its imported deals cannot be checked."
-            )));
-        }
-        let links: HashMap<String, Uuid> = found
-            .entries
-            .into_iter()
-            .flat_map(|entry| {
-                let id = entry.entry_id.into_uuid();
-                entry
-                    .fields
-                    .into_iter()
-                    .filter(|(name, _)| name == SOURCE_LINK_FIELD)
-                    .filter_map(move |(_, value)| match value {
-                        FieldValue::Links(links) => Some((links, id)),
-                        _ => None,
-                    })
-                    .flat_map(|(links, id)| links.into_iter().map(move |link| (link, id)))
-            })
-            .collect();
-        tracing::Span::current().record("entries", links.len());
-        Ok(links)
+        company: Uuid,
+        link: &str,
+    ) -> Result<Option<Uuid>, TransferError> {
+        let entries = self.workflows.record_entries(viewer, &[company]).await?;
+        let found = entry_with_link(
+            entries.iter().flat_map(|group| {
+                group.entries.iter().map(|entry| {
+                    (
+                        group.pipeline.pipeline.id,
+                        entry.entry_id.into_uuid(),
+                        entry.fields.as_slice(),
+                    )
+                })
+            }),
+            pipeline,
+            link,
+        );
+        tracing::Span::current().record("found", found.is_some());
+        Ok(found)
     }
 
     /// Add one deal as an entry of `pipeline`.

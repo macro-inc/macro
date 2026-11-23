@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::ForbiddenReason;
 use connectors::fake::{FakeConnection, FakeConnectors};
 use serde_json::json;
 #[path = "../../../test_support.rs"]
@@ -137,4 +138,49 @@ async fn only_a_usable_connection_with_api_access_opens() {
         .with_connection(&user, FakeConnection::app("linear"));
     let connections = Connections::new(Arc::new(connect.build()), linear(), Duration::ZERO);
     assert!(connections.open(&user).await.is_ok());
+}
+
+#[tokio::test]
+async fn a_refusal_keeps_only_a_typed_reason_never_the_body() {
+    let (_, service) = support::connected(
+        "linear",
+        vec![
+            support::answer(
+                StatusCode::FORBIDDEN,
+                json!({"category": "MISSING_SCOPES", "message": "scope crm.objects.deals.read"}),
+            ),
+            support::answer(
+                StatusCode::FORBIDDEN,
+                json!({"message": "Ada Lovelace may not read this project"}),
+            ),
+        ],
+    );
+    let connections = Connections::new(service, linear(), Duration::ZERO);
+    let session = connections.open(&support::user()).await.unwrap();
+    let first = session
+        .read(Method::POST, "https://api.linear.app/graphql", None)
+        .await;
+    assert!(
+        matches!(
+            first,
+            Err(TrackerError::Forbidden {
+                status: 403,
+                reason: ForbiddenReason::MissingScopes
+            })
+        ),
+        "{first:?}"
+    );
+    let second = session
+        .read(Method::POST, "https://api.linear.app/graphql", None)
+        .await;
+    let error = second.unwrap_err();
+    assert!(matches!(
+        error,
+        TrackerError::Forbidden {
+            status: 403,
+            reason: ForbiddenReason::Other
+        }
+    ));
+    // Nothing the provider wrote about who may read what reaches a log.
+    assert!(!format!("{error:?} {error}").contains("Ada"));
 }

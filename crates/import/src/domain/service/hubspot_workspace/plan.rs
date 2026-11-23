@@ -210,8 +210,10 @@ pub(in crate::domain::service) fn rows(
             .as_deref()
             .or(company.website.as_deref().and_then(website_host));
         let domain = raw.and_then(|raw| crm.company_domain(raw));
+        // Counted the way CRM matches domains: trimmed, without a trailing
+        // dot, case-insensitively.
         if let Some(domain) = &domain
-            && !domains.insert(domain.clone())
+            && !domains.insert(domain.trim().trim_end_matches('.').to_ascii_lowercase())
         {
             losses.push(HubspotLoss::MergedCompany);
         }

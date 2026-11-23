@@ -332,9 +332,11 @@ owner match summary kept on the first row (`hubspotSummary`, not `summary`,
 which the shared report reads as text). Writes go pipelines, companies,
 contacts, deals. Each object is claimed for the team, then reuses a
 `WrittenKind::CrmRecord` marker from a stopped write, then a natural key
-(company domain, any of the contact's addresses, the deal's HubSpot URL in the
-pipeline's `Source link` field, read once per pipeline per write), and only
-then creates. Left open: a crash between creating a name-only company, an
+(company domain, the contact's primary address, the deal's HubSpot URL in
+the `Source link` of its company's entries in that pipeline), and only then
+creates. A contact or deal whose company is not imported yet fails and retries;
+only a company the owner left out leaves its contacts without one
+(`ContactWithoutCompany`, counted for this review only). Left open: a crash between creating a name-only company, an
 address-less contact or a pipeline and recording its marker duplicates that
 one record. Deleted CRM copies are not re-imported (their targets read as live).
 

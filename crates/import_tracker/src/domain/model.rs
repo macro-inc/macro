@@ -171,8 +171,9 @@ pub enum TrackerError {
     Forbidden {
         /// HTTP status: 401 or 403.
         status: u16,
-        /// Bounded provider explanation, so a caller can tell why.
-        message: String,
+        /// Why, as far as the transport can tell. The provider's text is
+        /// never kept: it can name people or projects.
+        reason: ForbiddenReason,
     },
     /// A malformed response or stalled cursor.
     #[error("Invalid issue tracker response: {0}")]
@@ -188,6 +189,15 @@ pub enum TrackerError {
     /// The connection lookup or the call through it failed.
     #[error("Issue tracker transport failed: {0}")]
     Transport(rootcause::Report),
+}
+
+/// Why a provider refused a read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForbiddenReason {
+    /// The grant lacks a scope the read needs (HubSpot's `MISSING_SCOPES`).
+    MissingScopes,
+    /// Any other refusal.
+    Other,
 }
 
 /// Read a user's tracker. Object-safe so the durable engine can host sources

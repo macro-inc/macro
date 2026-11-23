@@ -23,3 +23,5 @@ Macro belong to `import`; credentials belong to `connectors`.
 Never accept arbitrary GraphQL or request paths from callers. Inventory never
 writes to the connected provider. Keep pagination complete and reject cursors
 that repeat instead of silently truncating a workspace.
+A 401/403 becomes `TrackerError::Forbidden` with a typed `ForbiddenReason`;
+the provider's text is dropped at the transport because it can name people.

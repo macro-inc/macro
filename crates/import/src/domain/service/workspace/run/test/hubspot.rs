@@ -285,19 +285,20 @@ impl CrmImportWriter for Crm {
             .push((id, name.into(), stages.to_vec()));
         Ok(id)
     }
-    async fn deal_links(
+    async fn deal_entry(
         &self,
         _: &MacroUserIdStr<'static>,
         pipeline: Uuid,
-    ) -> anyhow::Result<std::collections::HashMap<String, Uuid>> {
+        company: Uuid,
+        link: &str,
+    ) -> anyhow::Result<Option<Uuid>> {
         Ok(self
             .entries
             .lock()
             .unwrap()
             .iter()
-            .filter(|(_, p, _)| *p == pipeline)
-            .map(|(id, _, e)| (e.link.clone(), *id))
-            .collect())
+            .find(|(_, p, e)| *p == pipeline && e.company == company && e.link == link)
+            .map(|(id, _, _)| *id))
     }
     async fn add_deal_entry(
         &self,

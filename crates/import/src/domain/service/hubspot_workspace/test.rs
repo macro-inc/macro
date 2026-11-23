@@ -6,7 +6,12 @@ use import_hubspot::domain::{
     PipelineKey, Portal, RecordId, Stage,
 };
 
-struct Rules;
+/// CRM's rules for domains and currencies; `keep_case` returns a domain as
+/// given, to prove the plan normalizes it itself.
+#[derive(Default)]
+struct Rules {
+    keep_case: bool,
+}
 
 #[async_trait::async_trait]
 impl CrmImportWriter for Rules {
@@ -14,7 +19,11 @@ impl CrmImportWriter for Rules {
         unimplemented!("planning reads the team from its caller")
     }
     fn company_domain(&self, raw: &str) -> Option<String> {
-        let domain = raw.trim().to_lowercase();
+        let domain = if self.keep_case {
+            raw.to_owned()
+        } else {
+            raw.trim().to_lowercase()
+        };
         (domain.contains('.') && domain != "gmail.com").then_some(domain)
     }
     fn supports_currency(&self, code: &str) -> bool {
@@ -57,11 +66,13 @@ impl CrmImportWriter for Rules {
     ) -> anyhow::Result<Uuid> {
         unimplemented!()
     }
-    async fn deal_links(
+    async fn deal_entry(
         &self,
         _: &MacroUserIdStr<'static>,
         _: Uuid,
-    ) -> anyhow::Result<HashMap<String, Uuid>> {
+        _: Uuid,
+        _: &str,
+    ) -> anyhow::Result<Option<Uuid>> {
         unimplemented!()
     }
     async fn add_deal_entry(
@@ -159,7 +170,7 @@ fn inventory() -> Inventory {
 
 #[test]
 fn plans_keys_titles_domains_and_stage_labels() {
-    let rows = plan::rows(&inventory(), &team(), &Rules).unwrap();
+    let rows = plan::rows(&inventory(), &team(), &Rules::default()).unwrap();
     assert_eq!(
         rows.iter()
             .map(|row| row.foreign_id.as_str())
@@ -194,7 +205,7 @@ fn plans_keys_titles_domains_and_stage_labels() {
 
 #[test]
 fn a_currency_macro_does_not_support_drops_the_amount() {
-    let rows = plan::rows(&inventory(), &team(), &Rules).unwrap();
+    let rows = plan::rows(&inventory(), &team(), &Rules::default()).unwrap();
     let deal = meta(&rows[2]);
     assert_eq!(deal.title, "Deal 30");
     assert_eq!(deal.plan.decision, Some(NotionDecision::Copy));
@@ -215,7 +226,7 @@ fn a_currency_macro_does_not_support_drops_the_amount() {
 fn the_portal_currency_covers_deals_without_one() {
     let mut inventory = inventory();
     inventory.deals[0].currency = None;
-    let rows = plan::rows(&inventory, &team(), &Rules).unwrap();
+    let rows = plan::rows(&inventory, &team(), &Rules::default()).unwrap();
     let HubspotObject::Deal(plan) = meta(&rows[2]).object else {
         panic!("deal payload lost")
     };
@@ -229,7 +240,7 @@ fn the_portal_currency_covers_deals_without_one() {
 fn a_deal_in_an_unknown_pipeline_is_skipped_and_counted() {
     let mut inventory = inventory();
     inventory.deals[0].pipeline = Some(key("retired"));
-    let rows = plan::rows(&inventory, &team(), &Rules).unwrap();
+    let rows = plan::rows(&inventory, &team(), &Rules::default()).unwrap();
     let deal = meta(&rows[2]);
     assert_eq!(deal.plan.decision, Some(NotionDecision::Skip));
     assert!(deal.losses.contains(&HubspotLoss::DealWithoutPipeline));
@@ -238,7 +249,7 @@ fn a_deal_in_an_unknown_pipeline_is_skipped_and_counted() {
 
 #[test]
 fn the_first_row_carries_the_summary_and_warnings() {
-    let rows = plan::rows(&inventory(), &team(), &Rules).unwrap();
+    let rows = plan::rows(&inventory(), &team(), &Rules::default()).unwrap();
     let first = meta(&rows[0]);
     assert_eq!(
         first.summary,
@@ -254,4 +265,100 @@ fn the_first_row_carries_the_summary_and_warnings() {
         let plan = meta(row).plan;
         assert!(plan.shared && !plan.shareable);
     }
+}
+
+#[test]
+fn merges_are_counted_whatever_the_case() {
+    let mut inventory = inventory();
+    let company = inventory.companies[0].clone();
+    inventory.companies = vec![
+        Company {
+            id: id("1"),
+            domain: Some("Acme.Example".into()),
+            ..company.clone()
+        },
+        Company {
+            id: id("2"),
+            domain: Some(" acme.example. ".into()),
+            ..company
+        },
+    ];
+    inventory.deals.clear();
+    let rows = plan::rows(&inventory, &team(), &Rules { keep_case: true }).unwrap();
+    let merged: Vec<_> = rows
+        .iter()
+        .filter(|row| meta(row).losses.contains(&HubspotLoss::MergedCompany))
+        .map(|row| row.foreign_id.as_str())
+        .collect();
+    assert_eq!(merged, ["7:company:2"]);
+}
+
+fn ledger_row(
+    key: &str,
+    kind: ImportKind,
+    status: ImportStatus,
+    review: Uuid,
+    meta: HubspotMeta,
+) -> ImportEntity {
+    ImportEntity {
+        id: Uuid::now_v7(),
+        user_id: "macro|owner@example.com".into(),
+        team_id: None,
+        source: crate::domain::models::ImportSource::Hubspot,
+        kind,
+        foreign_id: key.into(),
+        parent_id: None,
+        review_id: Some(review),
+        status,
+        initiator: crate::domain::models::Initiator::Chat,
+        metadata: serde_json::to_value(meta).unwrap(),
+        entity_id: None,
+        entity_type: None,
+        last_error: None,
+        waiting_on: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    }
+}
+
+#[test]
+fn only_this_reviews_left_out_companies_count_against_contacts() {
+    let rows = plan::rows(&inventory(), &team(), &Rules::default()).unwrap();
+    let company = meta(&rows[1]);
+    let contact = HubspotMeta {
+        title: "Ada".into(),
+        object: HubspotObject::Contact {
+            emails: vec![],
+            company: Some("7:company:10".into()),
+        },
+        losses: vec![],
+        summary: None,
+        warnings: vec![],
+        ..company.clone()
+    };
+    let (current, older) = (Uuid::now_v7(), Uuid::now_v7());
+    let contact_row = ledger_row(
+        "7:contact:20",
+        ImportKind::HubspotContact,
+        ImportStatus::Staged,
+        current,
+        contact,
+    );
+    let without = |review| {
+        let left_out = ledger_row(
+            "7:company:10",
+            ImportKind::HubspotCompany,
+            ImportStatus::Discarded,
+            review,
+            company.clone(),
+        );
+        report(Some(current), [&left_out, &contact_row])
+            .unwrap()
+            .losses
+            .iter()
+            .find(|loss| loss.loss == HubspotLoss::ContactWithoutCompany)
+            .map(|loss| loss.count)
+    };
+    assert_eq!(without(current), Some(1));
+    assert_eq!(without(older), None);
 }

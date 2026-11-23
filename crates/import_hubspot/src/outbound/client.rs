@@ -7,7 +7,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use connectors::ApiConnectionsService;
 use http::{Method, StatusCode};
-use import_tracker::domain::model::TrackerError;
+use import_tracker::domain::model::{ForbiddenReason, TrackerError};
 use import_tracker::outbound::connection::{Connections, Session};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::de::DeserializeOwned;
@@ -150,14 +150,14 @@ fn map_error(read: HubspotRead, error: TrackerError) -> HubspotError {
         TrackerError::NotConnected | TrackerError::Forbidden { status: 401, .. } => {
             HubspotError::NotConnected
         }
-        // HubSpot names a missing scope with this category; any other 403 is
-        // a refusal the scope list cannot explain.
-        TrackerError::Forbidden { message, .. } if message.contains("MISSING_SCOPES") => {
-            HubspotError::MissingScope(read.scope())
-        }
-        TrackerError::Forbidden { status, message } => HubspotError::Upstream {
+        TrackerError::Forbidden {
+            reason: ForbiddenReason::MissingScopes,
+            ..
+        } => HubspotError::MissingScope(read.scope()),
+        // A refusal the scope list cannot explain; HubSpot's text is not kept.
+        TrackerError::Forbidden { status, .. } => HubspotError::Upstream {
             status,
-            message: message.chars().take(MESSAGE_CHARS).collect(),
+            message: "HubSpot refused this read.".into(),
         },
         TrackerError::Upstream { status, .. }
             if status == StatusCode::TOO_MANY_REQUESTS.as_u16() || status >= 500 =>

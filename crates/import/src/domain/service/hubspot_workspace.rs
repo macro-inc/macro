@@ -114,17 +114,12 @@ pub(in crate::domain::service) struct HubspotMeta {
     pub summary: Option<PlanSummary>,
 }
 
-/// Each pipeline's entries by deal link, read once per write.
-type DealLinks = HashMap<Uuid, HashMap<String, Uuid>>;
-
 /// What a write links objects to, kept across its phases.
 struct Known {
     /// Earlier phases' records and earlier imports', by plan key.
     targets: HashMap<String, Uuid>,
     /// Records a stopped write made, by ledger row.
     earlier: HashMap<Uuid, Uuid>,
-    /// Pipeline entries by deal link.
-    links: DealLinks,
     /// Plan keys of objects the owner left out of this review.
     left_out: std::collections::HashSet<String>,
 }
@@ -279,7 +274,6 @@ where
                 })
                 .collect(),
             earlier,
-            links: DealLinks::default(),
             left_out: rows
                 .iter()
                 .filter(|row| {
@@ -438,10 +432,7 @@ where
         writer: &dyn CrmImportWriter,
     ) -> Result<(Uuid, bool)> {
         let Known {
-            targets,
-            links,
-            left_out,
-            ..
+            targets, left_out, ..
         } = known;
         match &meta.object {
             HubspotObject::Pipeline { stages } => Ok((
@@ -507,14 +498,8 @@ where
                         .ok_or(ImportError::NotReady(
                             "Its company has not been imported. Plan again to retry this deal.",
                         ))?;
-                let known = match links.entry(pipeline) {
-                    std::collections::hash_map::Entry::Occupied(known) => known.into_mut(),
-                    std::collections::hash_map::Entry::Vacant(slot) => {
-                        slot.insert(writer.deal_links(user, pipeline).await?)
-                    }
-                };
-                if let Some(existing) = known.get(link) {
-                    return Ok((*existing, false));
+                if let Some(existing) = writer.deal_entry(user, pipeline, company, link).await? {
+                    return Ok((existing, false));
                 }
                 let entry = NewDealEntry {
                     company,
@@ -527,9 +512,7 @@ where
                     owner: deal.owner.clone(),
                     link: link.to_owned(),
                 };
-                let added = writer.add_deal_entry(user, pipeline, &entry).await?;
-                known.insert(link.to_owned(), added);
-                Ok((added, true))
+                Ok((writer.add_deal_entry(user, pipeline, &entry).await?, true))
             }
         }
     }
@@ -542,6 +525,7 @@ fn link(row: &ImportEntity, meta: &HubspotMeta) -> String {
 
 /// The review card's HubSpot section, from the current plan's rows.
 pub(in crate::domain::service) fn report<'a>(
+    review: Option<Uuid>,
     rows: impl IntoIterator<Item = &'a ImportEntity>,
 ) -> Option<HubspotReport> {
     let mut report = HubspotReport::default();
@@ -552,7 +536,10 @@ pub(in crate::domain::service) fn report<'a>(
     let left_out: std::collections::HashSet<&str> = rows
         .iter()
         .filter(|row| {
-            row.kind == ImportKind::HubspotCompany && row.status == ImportStatus::Discarded
+            row.kind == ImportKind::HubspotCompany
+                && row.status == ImportStatus::Discarded
+                && review.is_some()
+                && row.review_id == review
         })
         .map(|row| row.foreign_id.as_str())
         .collect();
