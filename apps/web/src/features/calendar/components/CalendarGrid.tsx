@@ -309,6 +309,9 @@ export function CalendarGrid(props: CalendarGridProps) {
       }}
       moreLinkClick="popover"
       handleWindowResize={false}
+      eventClassNames={({ view }) =>
+        view.type === 'dayGridMonth' ? ['calendar-month-event'] : []
+      }
       allDayText={props.settings.compactAllDaySlot ? '' : 'All day'}
       nowIndicator
       headerToolbar={false}

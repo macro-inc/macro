@@ -28,6 +28,14 @@
 	max-width: min(24rem, calc(100vw - 2rem));
 }
 
+/* Month overflow sits one surface step above the normal menu, not a new list. */
+html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.calendar-month-event) {
+  --color-menu: var(--color-surface-3);
+}
+.calendar-view .fc .fc-more-popover:has(.calendar-month-event) .fc-popover-header {
+  padding: 0.75rem;
+}
+
 .calendar-view-content {
 	box-sizing: border-box;
 	padding: 0.5rem;
@@ -500,8 +508,8 @@
 	display: none;
 }
 
-/* Single-day timed events use a compact dot treatment in the month grid. */
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event {
+/* The same compact Month treatment applies inside the native more popover. */
+.calendar-view .fc .calendar-month-event:has(.calendar-event-response-dot):not(.calendar-event-out-of-office):not(:has(.calendar-event-content-selected)) {
 	border: 0;
 	background-color: transparent;
 	color: var(--color-ink-muted);
@@ -509,8 +517,7 @@
 
 .calendar-view
 	.fc
-	.fc-dayGridMonth-view
-	.fc-daygrid-dot-event
+	.calendar-month-event
 	.calendar-event-title {
 	min-width: 0;
 	flex-shrink: 1;
@@ -599,7 +606,7 @@
 		filter: brightness(0.94);
 	}
 
-	.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event:hover:not(.calendar-event-out-of-office):not(:has(.calendar-event-content-selected)) {
+	.calendar-view .fc .calendar-month-event:has(.calendar-event-response-dot):hover:not(.calendar-event-out-of-office):not(:has(.calendar-event-content-selected)) {
 		background-color: var(--color-hover);
 	}
 }
@@ -662,11 +669,11 @@
 	margin-inline: 0;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event {
+.calendar-view .fc .calendar-month-event {
 	padding-inline: 0.375rem;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event .calendar-event-content-layout {
+.calendar-view .fc .calendar-month-event .calendar-event-content-layout {
 	flex-direction: row;
 	align-items: center;
 	gap: 0.25rem;
@@ -686,14 +693,34 @@
 	margin-top: 6px;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-event {
-	height: 18px;
-	min-height: 18px;
+.calendar-view .fc .calendar-month-event {
+	display: flex;
+	align-items: center;
+	height: 20px;
+	min-height: 20px;
 	padding-block: 0;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .calendar-event-content-layout {
-	padding-block: 1px;
+.calendar-view .fc .calendar-month-event:has(.calendar-event-time) {
+	height: 24px;
+	min-height: 24px;
+}
+
+.calendar-view .fc .calendar-month-event > .fc-event-main {
+	width: 100%;
+	min-width: 0;
+}
+
+.calendar-view .fc .calendar-month-event .calendar-event-content-layout {
+	padding-block: 2px;
+}
+
+.calendar-view .fc .calendar-month-event .calendar-event-content-compact {
+	font-size: 11px;
+	line-height: 1.5;
+}
+.calendar-view .fc .calendar-month-event .calendar-event-title {
+	font-size: inherit;
 }
 
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-frame,
@@ -813,27 +840,13 @@
 	transform: translateY(-50%);
 }
 
-.calendar-embed
-	.calendar-view
-	.fc.fc-direction-ltr
-	.fc-timegrid-slot-lane,
-.calendar-embed
-	.calendar-view
-	.fc.fc-direction-ltr
-	.fc-timegrid-axis
-	+ .fc-timegrid-col {
+.calendar-view .fc.fc-direction-ltr .fc-timegrid-slot-lane,
+.calendar-view .fc.fc-direction-ltr .fc-timegrid-axis + .fc-timegrid-col {
 	border-left-width: 0;
 }
 
-.calendar-embed
-	.calendar-view
-	.fc.fc-direction-rtl
-	.fc-timegrid-slot-lane,
-.calendar-embed
-	.calendar-view
-	.fc.fc-direction-rtl
-	.fc-timegrid-axis
-	+ .fc-timegrid-col {
+.calendar-view .fc.fc-direction-rtl .fc-timegrid-slot-lane,
+.calendar-view .fc.fc-direction-rtl .fc-timegrid-axis + .fc-timegrid-col {
 	border-right-width: 0;
 }
 

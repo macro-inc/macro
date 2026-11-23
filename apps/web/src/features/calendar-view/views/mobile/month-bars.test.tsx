@@ -123,9 +123,16 @@ it('opens all events from the overflow count and selects a hidden event', async 
       onSelect={actions.select}
     />
   ));
+  const title = document.querySelector(
+    '.phone-month-bar .calendar-event-title'
+  );
+  expect(
+    title?.nextElementSibling?.classList.contains('calendar-event-time')
+  ).toBe(true);
+  expect(title?.nextElementSibling?.textContent).toBe('9am');
   const day = screen.getByRole('button', { name: 'Friday, November 20, 2026' });
-  // Three row slots fit: two events plus the five hidden events' count.
-  fireEvent.click(within(day).getByText('+5'));
+  // Two larger row slots fit: one event plus the six hidden events' count.
+  fireEvent.click(within(day).getByText('+6'));
   const sheet = await screen.findByRole('dialog', { name: 'Day events' });
   expect(sheet.querySelectorAll('[data-calendar-month-event]')).toHaveLength(7);
   fireEvent.click(within(sheet).getByRole('button', { name: /Planning 7/ }));

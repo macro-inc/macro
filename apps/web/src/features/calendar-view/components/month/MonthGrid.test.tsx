@@ -39,6 +39,7 @@ describe('Month weekday headers', () => {
             month={new Date(2026, 10, 1)}
             today={new Date(2026, 10, 1)}
             selected={undefined}
+            timeFormat="24-hour"
             capacity={3}
             cardRef={() => {}}
             isSupported={() => true}

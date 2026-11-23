@@ -21,29 +21,29 @@ describe('phone Month geometry', () => {
   });
 
   it('reduces visible slots when the sheet has less height', () => {
-    expect(phoneMonthBarCapacity(573, 5)).toBe(5);
-    expect(phoneMonthBarCapacity(573, 6)).toBe(4);
-    expect(phoneMonthBarCapacity(580, 6)).toBe(4);
+    expect(phoneMonthBarCapacity(573, 5)).toBe(3);
+    expect(phoneMonthBarCapacity(573, 6)).toBe(2);
+    expect(phoneMonthBarCapacity(580, 6)).toBe(2);
     expect(phoneMonthBarCapacity(360, 6)).toBe(1);
   });
 
   it.each([
     [0, 0],
-    [45, 0],
-    [46, 1],
-    [61, 1],
-    [62, 2],
-    [78, 3],
-    [190, 10],
+    [55, 0],
+    [56, 1],
+    [81, 1],
+    [82, 2],
+    [108, 3],
+    [290, 10],
   ])('fits %i pixels of cell height into %i rows', (height, rows) => {
     expect(phoneMonthBarCapacity(height, 1)).toBe(rows);
   });
 
   it('accounts for week dividers and never guesses unmeasured capacity', () => {
     expect(phoneMonthBarCapacity(null, 5)).toBe(0);
-    expect(phoneMonthBarCapacity(235, 5)).toBe(1);
-    expect(phoneMonthBarCapacity(234, 5)).toBe(0);
-    expect(phoneMonthBarCapacity(1200, 6)).toBe(10);
+    expect(phoneMonthBarCapacity(285, 5)).toBe(1);
+    expect(phoneMonthBarCapacity(284, 5)).toBe(0);
+    expect(phoneMonthBarCapacity(1200, 6)).toBe(6);
   });
 
   it.each([

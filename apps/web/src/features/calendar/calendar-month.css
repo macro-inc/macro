@@ -21,8 +21,12 @@ html[data-touch-device="true"] .calendar-view-content.phone-month-content {
   border-bottom-width: 0;
 }
 
+.calendar-view .fc .fc-dayGridMonth-view .fc-scrollgrid-section-header > * {
+  border-bottom-width: 0;
+}
+
 .calendar-view .fc .fc-dayGridMonth-view .fc-col-header-cell {
-  border-bottom: 1px solid var(--fc-border-color);
+  border-bottom: 0;
   text-align: start;
 }
 

@@ -179,6 +179,7 @@ export function PhoneMonthBars(props: {
         weeks={weeks()}
         month={currentMonth()}
         today={today()}
+        timeFormat={props.timeFormat}
         selected={
           sheetState.pickedMonth === monthKey() ? month.selected() : undefined
         }

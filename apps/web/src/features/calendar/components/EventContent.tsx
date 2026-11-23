@@ -58,7 +58,8 @@ export function EventContent(props: EventContentProps) {
     );
   };
   const timeText = () => {
-    if (props.isNarrow || props.event.allDay) return undefined;
+    if (props.event.allDay || (props.isNarrow && !isMonthView()))
+      return undefined;
 
     const start = new Date(props.event.start);
     const end = new Date(props.event.end);
@@ -93,14 +94,12 @@ export function EventContent(props: EventContentProps) {
         <Show when={showsMonthDot()}>
           <span class="calendar-event-response-dot" aria-hidden="true" />
         </Show>
-        <Show when={isMonthView() && timeText()}>
-          {(text) => (
-            <span class="calendar-event-time shrink-0 text-ink-extra-muted tabular-nums">
-              {text()}
-            </span>
+        <span
+          class={cn(
+            'calendar-event-title-row flex max-w-full min-w-0 items-center gap-0.5',
+            isMonthView() ? 'shrink' : 'shrink-0'
           )}
-        </Show>
-        <span class="calendar-event-title-row flex max-w-full min-w-0 shrink-0 items-center gap-0.5">
+        >
           <Show when={everyoneElseDeclined()}>
             <span
               role="img"
@@ -114,12 +113,21 @@ export function EventContent(props: EventContentProps) {
           <span
             class={cn(
               'calendar-event-title min-w-0 max-w-full shrink font-medium leading-tight',
-              props.isNarrow ? 'whitespace-nowrap' : 'truncate'
+              props.isNarrow && !isMonthView()
+                ? 'whitespace-nowrap'
+                : 'truncate'
             )}
           >
             {props.event.title}
           </span>
         </span>
+        <Show when={isMonthView() && timeText()}>
+          {(text) => (
+            <span class="calendar-event-time shrink-0 tabular-nums">
+              {text()}
+            </span>
+          )}
+        </Show>
         <Show when={!isMonthView() && timeText()}>
           {(text) => (
             <span class="calendar-event-time mt-0.5 shrink-0 truncate leading-tight opacity-85 tabular-nums">

@@ -1,8 +1,8 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
 
 export const PHONE_MONTH_DATE_HEIGHT = 32;
-export const PHONE_MONTH_EVENT_HEIGHT = 14;
-export const PHONE_MONTH_ROW_PITCH = 16;
+export const PHONE_MONTH_EVENT_HEIGHT = 24;
+export const PHONE_MONTH_ROW_PITCH = 26;
 export type MonthEvent = Pick<CalendarEvent, 'id' | 'start' | 'end' | 'allDay'>;
 export type MonthDay<T extends MonthEvent> = { date: Date; events: T[] };
 export type MonthBar<T extends MonthEvent> = {

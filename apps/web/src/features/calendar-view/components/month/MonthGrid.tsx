@@ -1,5 +1,9 @@
-import type { CalendarEvent } from '@app/features/calendar/types';
+import type {
+  CalendarEvent,
+  CalendarTimeFormat,
+} from '@app/features/calendar/types';
 import { isSameLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { formatCompactCalendarTime } from '@app/features/calendar/utils/time-format';
 import { formatLocale, t } from '@app/lib/i18n';
 import { Layer } from '@ui';
 import { createUniqueId, For, Show } from 'solid-js';
@@ -23,6 +27,7 @@ export function MonthGrid(props: {
   month: Date;
   today: Date;
   selected: Date | undefined;
+  timeFormat: CalendarTimeFormat;
   capacity: number;
   cardRef: (element: HTMLDivElement) => void;
   isSupported: (date: Date) => boolean;
@@ -170,6 +175,14 @@ export function MonthGrid(props: {
                       <span class="calendar-event-title">
                         {bar.event.title || t('calendar.agendaUntitled')}
                       </span>
+                      <Show when={!bar.event.allDay}>
+                        <span class="calendar-event-time">
+                          {formatCompactCalendarTime(
+                            new Date(bar.event.start),
+                            props.timeFormat
+                          )}
+                        </span>
+                      </Show>
                     </div>
                   )}
                 </For>
