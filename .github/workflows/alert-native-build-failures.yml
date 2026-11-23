@@ -24,10 +24,16 @@ jobs:
           if [[ "$SOURCE_CONCLUSION" == cancelled ]]; then
             # Only a tag's desktop run gets here. A newer run for the same tag cancels
             # the one it replaces (the workflow's concurrency group); that one reports.
-            newer=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$SOURCE_WORKFLOW_ID/runs?branch=$SOURCE_REF&per_page=20" |
-              jq --argjson id "$SOURCE_RUN_ID" '[.workflow_runs[] | select(.id > $id)] | length')
+            # A dispatch building the tag runs on the branch it was started from, so
+            # any newer dispatch counts too; Desktop Release Watch still checks the
+            # release's installers.
+            runs="repos/$GITHUB_REPOSITORY/actions/workflows/$SOURCE_WORKFLOW_ID/runs?per_page=20"
+            newer=$({
+              gh api "$runs&branch=$SOURCE_REF"
+              gh api "$runs&event=workflow_dispatch"
+            } | jq -s --argjson id "$SOURCE_RUN_ID" '[.[].workflow_runs[] | select(.id > $id)] | length')
             if [[ "$newer" != 0 ]]; then
-              echo "A newer run for $SOURCE_REF replaced this one"
+              echo "A newer run may have replaced this one"
               exit 0
             fi
           fi

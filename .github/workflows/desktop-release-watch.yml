@@ -33,8 +33,8 @@ jobs:
           // it.
           //
           // A release is checked once, by the first successful watch run after its
-          // deadline: each run covers the deadlines since the previous successful run
-          // started (at most LOOK_BACK_HOURS ago), so a late, skipped or failed run is
+          // deadline: each run covers the deadlines from when the previous successful
+          // run started (at most LOOK_BACK_HOURS ago) to when it started itself, so a late, skipped or failed run is
           // made up by the next one, and a run whose post failed fails, so the next run
           // posts again. The message names each release, its missing installers, the
           // tag's latest `Build Desktop on Tag` run and how it ended.
@@ -239,8 +239,9 @@ jobs:
           export async function main() {
             const repo = env('GITHUB_REPOSITORY');
             const id = Number(env('GITHUB_RUN_ID'));
-            const now = new Date();
-            const current = await github(`/repos/${repo}/actions/runs/${id}`);
+            const current: Run & { workflow_id: number } = await github(`/repos/${repo}/actions/runs/${id}`);
+            // Each window ends where this run started, and the next run's begins there.
+            const now = new Date(Date.parse(current.run_started_at ?? current.created_at));
             const previous: Run | undefined = (
               await github(`/repos/${repo}/actions/workflows/${current.workflow_id}/runs?status=success&per_page=10`)
             ).workflow_runs.find((run: Run) => run.id !== id);
