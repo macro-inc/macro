@@ -114,6 +114,7 @@ export default {
   stepSubmitted: 'Submitted',
   stepTaskAdded: 'Added a task',
   stepTaskRemoved: 'Removed a task',
+  stepTimeLogged: 'Logged time',
   stepUnblocked: 'Unblocked',
   stepUnlinked: 'Unlinked',
   stepUnshared: 'Unshared',

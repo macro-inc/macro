@@ -6,7 +6,10 @@
  */
 import type {
   AddContactRequest,
+  ContactList,
   GetContactsResponse,
+  ListContactListMembersParams,
+  ListMembersResponse,
   SearchPeopleParams,
   SearchPeopleResponse,
 } from './schemas';
@@ -126,6 +129,90 @@ export const addContact = async (
     status: res.status,
     headers: res.headers,
   } as addContactResponse;
+};
+
+/**
+ * @summary GET /contacts/lists/{list}/members handler: one page of the members of one
+of the viewer's contact lists. Read from the list-aware directory for every
+viewer, whatever store the `contacts-list-reads` flag picks for their
+other reads; stored lists may be incomplete until the list backfill has
+run. `teammates` is the viewer's current team.
+ */
+export type listContactListMembersResponse200 = {
+  data: ListMembersResponse;
+  status: 200;
+};
+
+export type listContactListMembersResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type listContactListMembersResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listContactListMembersResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listContactListMembersResponseSuccess =
+  listContactListMembersResponse200 & {
+    headers: Headers;
+  };
+export type listContactListMembersResponseError = (
+  | listContactListMembersResponse400
+  | listContactListMembersResponse401
+  | listContactListMembersResponse500
+) & {
+  headers: Headers;
+};
+
+export type listContactListMembersResponse =
+  | listContactListMembersResponseSuccess
+  | listContactListMembersResponseError;
+
+export const getListContactListMembersUrl = (
+  list: ContactList,
+  params?: ListContactListMembersParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/contacts/lists/${list}/members?${stringifiedParams}`
+    : `/contacts/lists/${list}/members`;
+};
+
+export const listContactListMembers = async (
+  list: ContactList,
+  params?: ListContactListMembersParams,
+  options?: RequestInit
+): Promise<listContactListMembersResponse> => {
+  const res = await fetch(getListContactListMembersUrl(list, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listContactListMembersResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listContactListMembersResponse;
 };
 
 /**

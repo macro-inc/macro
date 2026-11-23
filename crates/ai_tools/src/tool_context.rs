@@ -106,6 +106,9 @@ pub use initiatives::{
     ToolInitiativeService, ToolInitiativeToolContext, build_initiative_tool_context,
 };
 
+mod time_entries;
+pub use time_entries::{ToolTimeTrackingToolContext, build_time_tracking_tool_context};
+
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
 
@@ -2283,6 +2286,8 @@ pub struct ToolServiceContext {
     pub message_tool_context: ToolMessageToolContext,
     /// Native task project lifecycle, properties, sharing and history.
     pub initiative_tool_context: ToolInitiativeToolContext,
+    /// Time logged on tasks.
+    pub time_tracking_tool_context: ToolTimeTrackingToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
     /// CRM pipelines: deals by record, fields by name.

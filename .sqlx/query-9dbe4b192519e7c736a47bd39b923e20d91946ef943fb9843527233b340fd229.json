@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM \"User\" WHERE id = $1 AND macro_user_id = $2 RETURNING id, email, \"organizationId\" as organization_id",
+  "query": "DELETE FROM \"User\" WHERE macro_user_id = $2 AND lower(id) = lower($1) RETURNING id, email, \"organizationId\" as organization_id",
   "describe": {
     "columns": [
       {
@@ -31,5 +31,5 @@
       true
     ]
   },
-  "hash": "60ae20b86b2837cc1008b8dde5e0c7d64ff472e76d5bb30995d389fd2901b489"
+  "hash": "9dbe4b192519e7c736a47bd39b923e20d91946ef943fb9843527233b340fd229"
 }

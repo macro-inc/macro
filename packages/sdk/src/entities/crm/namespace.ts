@@ -32,6 +32,8 @@ import { PipelineNamespace } from './pipelines';
  * Find a company before creating one: `crm.companyByDomain` by its domain, `crm.searchCompanies` by its name. Create it only when neither finds it; `createCompany` refuses a domain the team already tracks.
  *
  * A company also has its own Stage, Owner and Revenue properties on its CRM page. They are separate from every pipeline and not kept in sync with it. When the user has pipelines, deal and stage requests mean pipeline entries; change the company's own properties only when the user asks for those properties specifically.
+ *
+ * Companies and contacts both take the team's custom properties, such as a phone number or a LinkedIn link: create the definition once with `properties.create` (scope `team`), then call `setProperty` on each company or contact and read them back with `properties()`.
  */
 export class CrmNamespace {
   /** Your email contribution. */

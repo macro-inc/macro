@@ -5,6 +5,7 @@ import {
   formatCompactCalendarTimeRange,
 } from '@app/features/calendar/utils/time-format';
 import {
+  addDays,
   addHours,
   addMinutes,
   differenceInCalendarDays,
@@ -28,6 +29,8 @@ export type StartDue = {
   start: Date | null;
   due: Date | null;
   timed?: boolean;
+  /** With times, an end saved as a whole day, read without a time. */
+  wholeDay?: DateField;
 };
 
 const DAY_FORMAT = new Intl.DateTimeFormat('en-US', {
@@ -104,44 +107,54 @@ function formatTimedStartDue(dates: StartDue, now: Date): string | undefined {
 }
 
 function timedStartDueText(dates: StartDue, now: Date): string | undefined {
-  const { start, due } = dates;
+  const { start, due, wholeDay } = dates;
   const thisYear = (date: Date) => date.getFullYear() === now.getFullYear();
-  if (!start)
-    return due ? dayTimeFormat(!thisYear(due)).format(due) : undefined;
-  if (!due) return `${dayTimeFormat(!thisYear(start)).format(start)} →`;
+  const text = (end: DateField, date: Date, withYear: boolean) =>
+    wholeDay === end
+      ? (withYear ? DAY_YEAR_FORMAT : DAY_FORMAT).format(date)
+      : dayTimeFormat(withYear).format(date);
+  if (!start) return due ? text('due', due, !thisYear(due)) : undefined;
+  if (!due) return `${text('start', start, !thisYear(start))} →`;
   if (isSameDay(start, due)) {
-    return dayTimeFormat(!thisYear(start)).formatRange(start, due);
+    // A whole-day start on the due date's day adds nothing to read.
+    if (wholeDay === 'start') return text('due', due, !thisYear(due));
+    if (!wholeDay) {
+      return dayTimeFormat(!thisYear(start)).formatRange(start, due);
+    }
   }
   const withYear = !thisYear(start) || !thisYear(due);
-  const format = dayTimeFormat(withYear);
-  return `${format.format(start)} → ${format.format(due)}`;
+  return `${text('start', start, withYear)} → ${text('due', due, withYear)}`;
 }
 
 /**
  * `formatStartDue` for a narrow list cell or card: times of day are compact,
- * as on a calendar event (`Nov 26, 2–4pm`, `Nov 26, 2pm → Nov 28, 4pm`).
- * Whole days read as `formatStartDue` gives them.
+ * as on a calendar event (`Nov 26, 2–4pm`, `Nov 26, 2pm`). A range across
+ * days reads as its days alone (`Nov 26 → Nov 28`), as whole days do, since
+ * both times do not fit; the pill and the picker show them.
  */
 export function formatStartDueCompact(
   dates: StartDue,
   now = new Date()
 ): string | undefined {
-  if (!dates.timed) return formatStartDue(dates, now);
-  const { start, due } = dates;
+  const { start, due, wholeDay } = dates;
+  if (!dates.timed || (start && due && !isSameDay(start, due))) {
+    return formatStartDue({ start, due }, now);
+  }
   const clock = clockIs12Hour() ? '12-hour' : '24-hour';
   const withYear =
     (start && start.getFullYear() !== now.getFullYear()) ||
     (due && due.getFullYear() !== now.getFullYear());
   const day = (date: Date) =>
     (withYear ? DAY_YEAR_FORMAT : DAY_FORMAT).format(date);
-  const at = (date: Date) =>
-    `${day(date)}, ${formatCompactCalendarTime(date, clock)}`;
-  if (!start) return due ? at(due) : undefined;
-  if (!due) return `${at(start)} →`;
-  if (isSameDay(start, due)) {
-    return `${day(start)}, ${formatCompactCalendarTimeRange(start, due, clock)}`;
-  }
-  return `${at(start)} → ${at(due)}`;
+  const at = (end: DateField, date: Date) =>
+    wholeDay === end
+      ? day(date)
+      : `${day(date)}, ${formatCompactCalendarTime(date, clock)}`;
+  if (!start) return due ? at('due', due) : undefined;
+  if (!due) return `${at('start', start)} →`;
+  if (wholeDay === 'start') return at('due', due);
+  if (wholeDay === 'due') return `${at('start', start)} → ${day(due)}`;
+  return `${day(start)}, ${formatCompactCalendarTimeRange(start, due, clock)}`;
 }
 
 /**
@@ -237,36 +250,43 @@ export function startDueDays(start: Date, due: Date): number {
 }
 
 /**
- * The dates after `day` is picked for `field`. A day on the far side of the
- * other end moves that end instead, so the range can never run backwards: a
- * due day before the start becomes the start, and a start day after the due
- * date becomes the due date. `changed` names the end that moved.
+ * The dates after `day` is picked for `field`, so the range never runs
+ * backwards. A due day before the start becomes the start. A start day after
+ * the due date becomes the start and moves the due date with it, keeping the
+ * range's length, as a calendar event's end follows its start; a start on or
+ * before the due date never moves it. `changed` names the ends that moved.
  */
 export function pickDay(
   dates: StartDue,
   field: DateField,
   day: Date
-): { dates: StartDue; changed: DateField } {
+): { dates: StartDue; changed: DateField[] } {
   if (
     field === 'due' &&
     dates.start &&
     differenceInCalendarDays(day, dates.start) < 0
   ) {
-    return { dates: { ...dates, start: day }, changed: 'start' };
+    return { dates: { ...dates, start: day }, changed: ['start'] };
   }
   if (
     field === 'start' &&
     dates.due &&
     differenceInCalendarDays(day, dates.due) > 0
   ) {
-    return { dates: { ...dates, due: day }, changed: 'due' };
+    const days = dates.start
+      ? Math.max(0, differenceInCalendarDays(dates.due, dates.start))
+      : 0;
+    return {
+      dates: { ...dates, start: day, due: addDays(startOfDay(day), days) },
+      changed: ['start', 'due'],
+    };
   }
-  return { dates: { ...dates, [field]: day }, changed: field };
+  return { dates: { ...dates, [field]: day }, changed: [field] };
 }
 
 /**
- * `pickDay` for dates with times: the day picked keeps the time its end had,
- * and an end moved for the other keeps its own time on the new day.
+ * `pickDay` for dates with times: each end that moves keeps its own time of
+ * day on its new day.
  */
 export function pickTimedDay(
   dates: StartDue,
@@ -285,19 +305,18 @@ export function pickTimedDay(
     field,
     startOfDay(day)
   );
-  const moved = picked.changed;
-  const next = {
-    ...dates,
-    [moved]: atClock(picked.dates[moved]!, clockOf(moved)),
-  };
+  const next = { ...dates };
+  for (const end of picked.changed) {
+    next[end] = atClock(picked.dates[end]!, clockOf(end));
+  }
   // Back on one day, the restored times can put the due date before the
-  // start; the end that moved wins, as a picked time does.
+  // start; the end that was picked wins, as a picked time does.
   if (next.start && next.due && next.due < next.start) {
-    return moved === 'due'
+    return field === 'due'
       ? { dates: { ...next, start: next.due }, changed: ['start', 'due'] }
       : { dates: { ...next, due: next.start }, changed: ['start', 'due'] };
   }
-  return { dates: next, changed: [moved] };
+  return { dates: next, changed: picked.changed };
 }
 
 function dayOf(property: Property | undefined): Date | null {
@@ -312,10 +331,17 @@ export function startDueOf(
   start: Property | undefined,
   due: Property | undefined
 ): StartDue {
-  const timed = [start, due].some(
-    (end) => end && isDateProperty(end) && end.hasTime === true
-  );
-  return { start: dayOf(start), due: dayOf(due), ...(timed ? { timed } : {}) };
+  const hasTime = (end: Property | undefined) =>
+    !!end && isDateProperty(end) && end.hasTime === true;
+  const dates = { start: dayOf(start), due: dayOf(due) };
+  if (!hasTime(start) && !hasTime(due)) return dates;
+  const wholeDay: DateField | undefined =
+    dates.start && dates.due && hasTime(start) !== hasTime(due)
+      ? hasTime(start)
+        ? 'due'
+        : 'start'
+      : undefined;
+  return { ...dates, timed: true, ...(wholeDay ? { wholeDay } : {}) };
 }
 
 /** The end a Start Date or Due Date definition holds, or none for others. */

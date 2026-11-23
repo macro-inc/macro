@@ -41,8 +41,11 @@ export type ToolCallCommon = {
   id: string;
   label: string;
   status: ToolStatus;
-  /** The chat block's failed treatment: faded row, quiet trailing label. */
-  muted: boolean;
+  /**
+   * The call did not succeed, or its outcome is unknown, so result renderers
+   * hold back. Rows never show it: a failure is the agent's to explain.
+   */
+  unsuccessful: boolean;
   /** The turn ended while the call was still running (see `settledToolStatus`). */
   stopped: boolean;
   trailing: JSX.Element | undefined;

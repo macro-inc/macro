@@ -113,6 +113,16 @@ impl ContactListReader for PagedRepo {
     ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
         unreachable!("fan-out reads the audience")
     }
+
+    async fn list_members(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        _list: crate::domain::models::list::ContactList,
+        _after: Option<&ContactCursor>,
+        _limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        unreachable!("fan-out reads the audience")
+    }
 }
 
 #[derive(Default, Clone)]

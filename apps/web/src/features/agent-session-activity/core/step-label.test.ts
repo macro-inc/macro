@@ -7,6 +7,7 @@ describe('stepLabelKey', () => {
     expect(stepLabelKey('property_changed')).toBe(
       'agentWork.stepPropertyChanged'
     );
+    expect(stepLabelKey('time_logged')).toBe('agentWork.stepTimeLogged');
   });
 
   it('reads an unknown tag as a generic change, never the raw tag', () => {
