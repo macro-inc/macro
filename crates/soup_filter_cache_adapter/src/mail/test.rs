@@ -14,6 +14,7 @@ mod optimistic;
 mod reconciliation;
 mod reminders;
 mod retention;
+mod stepping;
 mod through;
 
 const VIEWER: &str = "macro|mail@example.com";
@@ -73,7 +74,7 @@ fn row(n: u128) -> Value {
 fn seed() -> Value {
     json!({"user":{"id":VIEWER,"emailLinks":[{"id":id(1000)},{"id":id(1001)}],"soup":{"items":(1..=75).map(row).collect::<Vec<_>>()}}})
 }
-async fn write<S: Storage>(engine: &mut Engine<S>, query: &str, data: &Value) {
+async fn write<S: PredicateIndexStorage>(engine: &mut Engine<S>, query: &str, data: &Value) {
     let vars = Map::new();
     let projections = projection_updates(
         cache_core::meta::bundled_schema_ref(),

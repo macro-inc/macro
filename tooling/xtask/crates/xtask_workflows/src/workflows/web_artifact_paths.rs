@@ -16,6 +16,7 @@ pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("crates/folds/agent_fold/**"),
     RepoGlob::new("crates/agent_runtime_protocol/**"),
     RepoGlob::new("crates/client/cache-core/**"),
+    RepoGlob::new("crates/client/cache-schema/**"),
     RepoGlob::new("crates/client/cache-turso/**"),
     RepoGlob::new("crates/client/cache-wasm/**"),
     RepoGlob::new("crates/client/turso-opfs/**"),

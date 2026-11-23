@@ -13,6 +13,7 @@
     "get_native_update_status",
     "get_pending_share_filenames",
     "grant_bundle_update",
+    "graphql_cache_abandon",
     "graphql_cache_calendar_commit",
     "graphql_cache_calendar_range",
     "graphql_cache_claim_next_mutation",

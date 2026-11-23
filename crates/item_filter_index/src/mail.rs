@@ -124,18 +124,11 @@ pub fn compile(
             Box::new(boolean("mail-has-message", true)),
         );
     }
+    // A row matches only with a sort fact, and the Mail projection writes each
+    // timestamp as an integer and a sort fact together, so the Inbox and Sent
+    // views need no test that their timestamp exists: sorting by it is one.
     if view == "INBOX" {
-        predicate = PredicateExpr::And(
-            Box::new(predicate),
-            Box::new(PredicateExpr::And(
-                Box::new(boolean("mail-inbox", true)),
-                Box::new(PredicateExpr::I64Range {
-                    attribute: sort.clone(),
-                    lower: None,
-                    upper: None,
-                }),
-            )),
-        );
+        predicate = PredicateExpr::And(Box::new(predicate), Box::new(boolean("mail-inbox", true)));
     }
     if matches!(view, "DRAFTS" | "SENT") {
         let attribute = token(if view == "DRAFTS" {
@@ -147,16 +140,6 @@ pub fn compile(
             Box::new(predicate),
             Box::new(PredicateExpr::ExactExists { attribute }),
         );
-        if view == "SENT" {
-            predicate = PredicateExpr::And(
-                Box::new(predicate),
-                Box::new(PredicateExpr::I64Range {
-                    attribute: sort.clone(),
-                    lower: None,
-                    upper: None,
-                }),
-            );
-        }
     }
     Ok(LocalCompileOutcome::Supported(ValidatedIndexQuery::new(
         IndexQuery {
