@@ -1,0 +1,53 @@
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_9aaadd038e8bff::t_dade7befa469b7 33-34
+apps/web/src/features/agent-permissions/components/following-note.tsx
+  s_9aaadd038e8bff::t_c20bc06ba0917e 3,7,9-15,24,30-32
+apps/web/src/features/agent-permissions/components/policy-avatar.tsx
+  s_9aaadd038e8bff::t_dabea2c2bfd9e2 3-6,10,12-13
+apps/web/src/features/agent-permissions/components/policy-source-card.tsx
+  s_9aaadd038e8bff::t_4ffd19fa7ab3a4 2-6,11,15,18-20,25,37,39,44-51
+apps/web/src/features/agent-permissions/components/policy-source-picker.tsx
+  s_9aaadd038e8bff::t_65b10cdaefba87 3,8,16,20,42,53
+apps/web/src/features/agent-permissions/components/source-labels.ts
+  s_9aaadd038e8bff::t_100e2969c03d3b 2-5,8-26,31
+apps/web/src/features/agent-permissions/core/references.test.ts
+  s_9aaadd038e8bff::t_71ceaa9eebe4ac 115
+apps/web/src/features/agent-permissions/core/references.ts
+  s_9aaadd038e8bff::t_4bcd49ee5b913f 7-8,37,141,143,148-158
+apps/web/src/features/agent-permissions/queries/permissions.ts
+  s_9aaadd038e8bff::t_2c1cb29ecf2f08 53
+apps/web/src/features/agent-permissions/queries/references.ts
+  s_9aaadd038e8bff::t_cc54a6980aeff4 4-7,29-30,43,78,95,114,116-117
+apps/web/src/features/agent-permissions/tests/fixtures.ts
+  s_9aaadd038e8bff::t_913fb14d06e208 6,78,340,387,434
+apps/web/src/features/agent-permissions/views/agent-permissions-form.test.tsx
+  s_9aaadd038e8bff::t_d6ffdf21e09088 6,87,136-140,255
+apps/web/src/features/agent-permissions/views/agent-permissions-form.tsx
+  s_9aaadd038e8bff::t_5bab85f3781850 10,191,341-342,349,357,379
+apps/web/src/features/agent-permissions/views/agent-permissions-panel.tsx
+  s_9aaadd038e8bff::t_5963dcd2316242 12-15,49
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_9aaadd038e8bff::t_78419a86c1e73c 257
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_9aaadd038e8bff::t_658c631990f218 109-110
+apps/web/src/lib/service-clients/service-agent-harness/tool-permissions.ts
+  s_9aaadd038e8bff::t_fdc3a0099d3cc7 7-9,12,49,60-61,115,117,120,136,138,141,157,162-168,172-173
+docs/agent-guide/settings.md
+  s_9aaadd038e8bff::t_06d2a5765bfc70 1284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c30b0b2d08bfa59ceffae7b5595d30795b5675f0",
+  "prompts": {},
+  "sessions": {
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
