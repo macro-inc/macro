@@ -620,6 +620,19 @@ cache and excludes concurrent frontend OTA reloads. Neither update channel wipes
 user data. Mobile updates remain managed by the app stores. Debug, recording,
 branch, and `--no-default-features` builds do not auto-install native updates.
 
+When an install fails, the old app is still in place (the updater restores or
+never moves it). **Restart to update** then relaunches that version; a quit
+stays quit, because the person asked to quit. The next launch reads the
+install record (see [update telemetry](#update-telemetry)), reports
+`install_failed`, and keeps the target version as `failedInstallVersion` in
+the status it gives the webview (`get_native_update_status`, generated as
+`src/lib/tauri/generated/native-update-status.ts` by
+`UPDATE_NATIVE_UPDATE_STATUS_TYPES=1 cargo test --manifest-path apps/web/tauri/Cargo.toml --locked -p app --lib native_update_status_wire_types`).
+The download is gone with the old process, so the launch downloads the update
+again; meanwhile the rail's update popover and Settings → Account say the last
+update couldn't be installed, and once it is ready the popover offers **Try
+again**, which restarts to install it.
+
 `../desktop-release.json` is the public release configuration; its checked-in
 defaults disable updates for local builds. `bun apps/web/scripts/desktop-release.mjs prepare <ref>`
 (run from the repository root) updates this tracked file in CI

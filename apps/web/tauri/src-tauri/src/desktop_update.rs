@@ -3,7 +3,7 @@
 mod report;
 mod state;
 
-use state::Status;
+use state::Snapshot;
 use tauri::{AppHandle, Runtime};
 
 #[cfg(desktop)]
@@ -12,13 +12,13 @@ mod desktop;
 pub use desktop::{on_exit_requested, setup};
 
 #[tauri::command]
-pub fn get_native_update_status<R: Runtime>(app: AppHandle<R>) -> Status {
+pub fn get_native_update_status<R: Runtime>(app: AppHandle<R>) -> Snapshot {
     #[cfg(desktop)]
     return desktop::status(&app);
     #[cfg(mobile)]
     {
         let _ = app;
-        Status::Disabled
+        Snapshot::disabled()
     }
 }
 

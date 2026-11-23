@@ -1,4 +1,7 @@
-export { nativeUpdateDescription } from './native-updates';
+export {
+  nativeUpdateDescription,
+  retryingFailedInstall,
+} from './native-updates';
 export type {
   PendingShareFile,
   UploadPendingShareFileArgs,

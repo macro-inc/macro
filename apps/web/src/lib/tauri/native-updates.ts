@@ -9,14 +9,35 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
+import type { Snapshot, Status } from './generated/native-update-status';
 import { createNativeUpdatePreparation } from './native-update-preparation';
 
-export type NativeUpdateStatus =
-  | { status: 'Disabled' | 'Idle' | 'Checking' | 'Installing' }
-  | { status: 'Downloading' | 'Ready'; data: { version: string } }
-  | { status: 'Error'; data: { message: string } };
+/**
+ * The host's `Snapshot`. Binaries from before failed installs were reported
+ * send the status alone, without `failedInstallVersion`.
+ */
+export type NativeUpdateStatus = Status &
+  Partial<Pick<Snapshot, 'failedInstallVersion'>>;
+
+/**
+ * True while the previous launch's failed install can be tried again: the
+ * update is downloading again or is ready.
+ */
+export function retryingFailedInstall(status: NativeUpdateStatus): boolean {
+  if (!status.failedInstallVersion) return false;
+  return (
+    status.status === 'Checking' ||
+    status.status === 'Downloading' ||
+    status.status === 'Ready'
+  );
+}
 
 export function nativeUpdateDescription(status: NativeUpdateStatus): string {
+  if (retryingFailedInstall(status)) {
+    return status.status === 'Ready'
+      ? "The last app update couldn't be installed. Restart to try again."
+      : "The last app update couldn't be installed. Downloading it again…";
+  }
   return match(status)
     .with(
       { status: 'Disabled' },
@@ -48,6 +69,7 @@ export function createNativeUpdates(flush: () => Promise<void>) {
   const [preparing, setPreparing] = createSignal(false);
   const [status, setStatus] = createSignal<NativeUpdateStatus>({
     status: 'Disabled',
+    failedInstallVersion: null,
   });
   let disposed = false;
   let unsubscribe = () => {};

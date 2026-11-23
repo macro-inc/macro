@@ -457,6 +457,13 @@ update also installs on normal app quit. Closing a window only triggers
 installation if it exits the app. Browser, mobile, and development builds do not
 show this native updater row.
 
+If installing fails, **Restart and update** reopens Macro on the version it
+had; a failed install on quit leaves the app closed. The next launch says the
+last update couldn't be installed, in the popover (**Couldn't install the
+desktop app update**) and the Account row, while the update downloads again (the action reads **Downloading…** and is
+disabled; the popover can still be dismissed), then opens the popover again with
+**Try again**, which restarts to install it.
+
 Below Profile, **Account** shows a card naming the current plan (**Free plan**,
 **Pro plan**, or **Max plan**; **Loading plan…** until the billing summary
 arrives). Clicking it opens **Billing** settings.

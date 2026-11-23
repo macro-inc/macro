@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { pendingWebUpdate } from '@core/util/reloadForNewerBuild';
-import { useTauri } from '@macro/tauri';
+import { retryingFailedInstall, useTauri } from '@macro/tauri';
 import { invoke } from '@tauri-apps/api/core';
 import { type Accessor, createMemo } from 'solid-js';
 
@@ -14,6 +14,8 @@ export type AppUpdate = {
   actionLabel: string;
   /** The action is running and the popover must stay open. */
   busy: boolean;
+  /** The action isn't available yet; the popover can still close. */
+  waiting: boolean;
   apply: () => void;
 };
 
@@ -69,6 +71,28 @@ export const UPDATE_COPY = {
       return t('nav.updateRestartAndUpdate');
     },
   },
+  nativeFailedDownloading: {
+    get title() {
+      return t('nav.updateDesktopFailedTitle');
+    },
+    get description() {
+      return t('nav.updateNativeFailedDownloadingDescription');
+    },
+    get actionLabel() {
+      return t('nav.updateDownloading');
+    },
+  },
+  nativeFailed: {
+    get title() {
+      return t('nav.updateDesktopFailedTitle');
+    },
+    get description() {
+      return t('nav.updateNativeFailedDescription');
+    },
+    get actionLabel() {
+      return t('nav.updateTryAgain');
+    },
+  },
   nativePreparing: {
     get title() {
       return t('nav.updateDesktopReadyTitle');
@@ -92,20 +116,50 @@ function runningBuild(): string {
 }
 
 /**
- * The update ready to apply, if any: a downloaded desktop app update, a
- * downloaded web bundle in the desktop app, or a newer web build.
+ * The update ready to apply, if any: a desktop app update that failed to
+ * install last time (offered again once it has downloaded again), a
+ * downloaded desktop app update, a downloaded web bundle in the desktop app,
+ * or a newer web build.
  */
 export function useAppUpdate(): Accessor<AppUpdate | undefined> {
   const tauri = useTauri();
 
   return createMemo(() => {
     const native = tauri?.nativeUpdateStatus();
+    if (tauri && native && retryingFailedInstall(native)) {
+      const id = `native-failed:${native.failedInstallVersion}`;
+      if (native.status !== 'Ready') {
+        // A new id once it is ready, so the popover opens again for Try again.
+        return {
+          id: `${id}:downloading`,
+          ...UPDATE_COPY.nativeFailedDownloading,
+          busy: false,
+          waiting: true,
+          apply: () => {},
+        };
+      }
+      const preparing = tauri.nativeUpdatePreparing();
+      return {
+        id,
+        ...UPDATE_COPY.nativeFailed,
+        ...(preparing && {
+          description: UPDATE_COPY.nativePreparing.description,
+          actionLabel: UPDATE_COPY.nativePreparing.actionLabel,
+        }),
+        busy: preparing,
+        waiting: false,
+        apply: () =>
+          fireAndForget(tauri.restartNativeUpdate(), 'native-updates'),
+      };
+    }
+
     if (tauri && native?.status === 'Ready') {
       const preparing = tauri.nativeUpdatePreparing();
       return {
         id: `native:${native.data.version}`,
         ...(preparing ? UPDATE_COPY.nativePreparing : UPDATE_COPY.native),
         busy: preparing,
+        waiting: false,
         apply: () =>
           fireAndForget(tauri.restartNativeUpdate(), 'native-updates'),
       };
@@ -116,6 +170,7 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
         id: `bundle:${runningBuild()}`,
         ...UPDATE_COPY.bundle,
         busy: false,
+        waiting: false,
         apply: () => fireAndForget(invoke('perform_update'), 'bundle-update'),
       };
     }
@@ -128,6 +183,7 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
         id: `web:${web.build ?? runningBuild()}${failed}`,
         ...(web.failedLoads ? UPDATE_COPY.webFailedLoad : UPDATE_COPY.web),
         busy: false,
+        waiting: false,
         apply: web.reload,
       };
     }
