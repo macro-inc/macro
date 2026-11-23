@@ -469,6 +469,18 @@ The same suite covers where a sheet puts focus as it opens: on itself, leaving
 its first row unringed, unless the first tab stop is a text field, the sheet
 focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
+Its `row-press.browser.e2e.ts` presses the real touch rows of Chat (a
+conversation and a pinned favorite), Home, a Soup list, the Notifications
+inbox, Agents (sidebar and phone list), Projects and Search on phone and
+tablet: each shows the same rendered grey at its centre and edge, holds it
+after release and through a quick tap's click, never shows it for a press that
+turns into a scroll, and drops it when a phone long press opens the row's
+action drawer (`ROW_PRESS_SCREENSHOT_DIR` saves the pressed screenshots); no
+element from a long-pressable row's owner down to its surface draws WebKit's
+tap highlight. `long-press-tap.browser.e2e.ts` long-presses a row of Mail's
+phone list (the real context menu and action drawer), dismisses the drawer and
+taps other rows, recording every press marker change: only the tapped row is
+ever pressed.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,

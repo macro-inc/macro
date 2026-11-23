@@ -719,7 +719,7 @@ export default {
     more: 'Más',
     moreOptions: 'Más opciones',
     create: 'Crear',
-    getMobileApp: 'Obtener la app móvil',
+    downloads: 'Descargas',
     signedInAs: 'Sesión iniciada como {{name}}',
     customizeSidebar: 'Personalizar barra lateral',
     customizeSidebarDescription:
@@ -784,8 +784,7 @@ export default {
     tabShortcuts: 'Atajos de teclado',
     tabUsage: 'Uso',
     tabBilling: 'Facturación',
-    tabDesktopApp: 'App de escritorio',
-    tabMobileApp: 'App móvil',
+    tabDownloads: 'Descargas',
     tabTags: 'Etiquetas',
     tabIntegrations: 'Integraciones',
     tabRuntimes: 'Máquinas',

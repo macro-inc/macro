@@ -249,7 +249,10 @@ rows reads on until one matches or the directory ends; only a failed page shows 
 **Retry options** button. Closing and reopening starts at the first page, without
 clearing selected/custom chips.
 Explicit participant/agent/thread choices remain scoped extras. Matching addresses
-are deduplicated while keeping the caller's selected representation. Other recipient surfaces
+are deduplicated while keeping the caller's selected representation. Picking a
+selected row again removes it, except where the picker sets
+`markAlreadyAdded` (the email composers): there it is dimmed with its check and
+can't be picked; its chip's X or Backspace removes it. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
 ## Property people pickers

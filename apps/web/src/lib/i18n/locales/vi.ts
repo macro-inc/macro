@@ -662,7 +662,7 @@ export default {
     more: 'Thêm',
     moreOptions: 'Tùy chọn khác',
     create: 'Tạo',
-    getMobileApp: 'Tải ứng dụng di động',
+    downloads: 'Tải xuống',
     signedInAs: 'Đã đăng nhập với tên {{name}}',
     customizeSidebar: 'Tùy chỉnh thanh bên',
     customizeSidebarDescription:
@@ -727,8 +727,7 @@ export default {
     tabShortcuts: 'Phím tắt',
     tabUsage: 'Mức sử dụng',
     tabBilling: 'Thanh toán',
-    tabDesktopApp: 'Ứng dụng máy tính',
-    tabMobileApp: 'Ứng dụng di động',
+    tabDownloads: 'Tải xuống',
     tabTags: 'Thẻ',
     tabIntegrations: 'Tích hợp',
     tabRuntimes: 'Máy',

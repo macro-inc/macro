@@ -660,7 +660,7 @@ export default {
     more: 'その他',
     moreOptions: 'その他のオプション',
     create: '作成',
-    getMobileApp: 'モバイルアプリを入手',
+    downloads: 'ダウンロード',
     signedInAs: '{{name}}としてログイン中',
     customizeSidebar: 'サイドバーをカスタマイズ',
     customizeSidebarDescription:
@@ -725,8 +725,7 @@ export default {
     tabShortcuts: 'キーボードショートカット',
     tabUsage: '使用状況',
     tabBilling: '請求',
-    tabDesktopApp: 'デスクトップアプリ',
-    tabMobileApp: 'モバイルアプリ',
+    tabDownloads: 'ダウンロード',
     tabTags: 'タグ',
     tabIntegrations: '連携',
     tabRuntimes: 'マシン',

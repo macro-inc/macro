@@ -688,7 +688,7 @@ export default {
     more: 'Mer',
     moreOptions: 'Flere alternativer',
     create: 'Opprett',
-    getMobileApp: 'Last ned mobilappen',
+    downloads: 'Nedlastinger',
     signedInAs: 'Logget på som {{name}}',
     customizeSidebar: 'Tilpass sidefeltet',
     customizeSidebarDescription:
@@ -752,8 +752,7 @@ export default {
     tabShortcuts: 'Hurtigtaster',
     tabUsage: 'Bruk',
     tabBilling: 'Fakturering',
-    tabDesktopApp: 'Skrivebordsapp',
-    tabMobileApp: 'Mobilapp',
+    tabDownloads: 'Nedlastinger',
     tabTags: 'Etiketter',
     tabIntegrations: 'Integrasjoner',
     tabRuntimes: 'Maskiner',

@@ -182,6 +182,11 @@ toast and rolls back instead of waiting for reconnect, so pressing it again work
 
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
+A person already in the field still appears among the suggestions, dimmed with
+a check, and picking that row does nothing; the highlight starts on the first
+row that can be picked, so Enter and Tab never remove anyone. Remove a
+recipient with its chip's X or Backspace. `recipient-already-added.app.e2e.ts`
+in the app browser configuration checks this in To, Cc and Bcc, and To on a phone.
 Enter or a click picks the highlighted suggestion; on a complete typed address,
 Enter or Tab adds that address unless an arrow key picked another row. Type,
 paste, or Tab straight after picking one and check that both recipients stay

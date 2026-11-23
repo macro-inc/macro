@@ -822,13 +822,20 @@ async fn run_server() -> anyhow::Result<()> {
         .get_maybe_secret_value(env, CalEventTypeContentNamesKey::new()?)
         .await?;
 
-    let analytics_client = Arc::new(AnalyticsClient::new(AnalyticsClientConfig {
-        google_analytics: None,
-        meta: Some(MetaConfig {
+    let meta = match env {
+        Environment::Production => Some(MetaConfig {
             pixel_id: MetaPixelId::new()?.as_ref().to_string(),
             access_token: MetaAccessToken::new()?.as_ref().to_string(),
             test_event_code: MetaTestEventCode::new().map(|v| v.as_ref().to_string()),
         }),
+        Environment::Develop | Environment::Local => {
+            tracing::info!("skipping Meta Conversions API outside production");
+            None
+        }
+    };
+    let analytics_client = Arc::new(AnalyticsClient::new(AnalyticsClientConfig {
+        google_analytics: None,
+        meta,
         posthog: None,
     }));
 
