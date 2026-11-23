@@ -12,14 +12,15 @@ const STRICTNESS: Record<ToolPermissionState, number> = {
 };
 
 /**
- * Allow · Ask · Never for one group action or tool. The full state name is
- * each option's description and tooltip. Options looser than `floor` (a
+ * Allow · Ask · Never for an action's default, an entity's exception, or a
+ * tool, with the saved state highlighted (none while a new exception has no
+ * state yet). The full state name is each option's description and tooltip. Options looser than `floor` (a
  * limit for this session) are disabled, with `floorHint` saying why.
  */
 export function PermissionStateControl(props: {
   /** The control's accessible name, e.g. "Email: Send". */
   label: string;
-  value: ToolPermissionState;
+  value: ToolPermissionState | undefined;
   floor?: ToolPermissionState;
   floorHint?: string;
   disabled?: boolean;

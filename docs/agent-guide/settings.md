@@ -1258,23 +1258,24 @@ flag turns off, and a link waits until it is on.
 
 The component is a table, **Action** / **Default permission**, with one
 accordion row per action in display order Read, Create, Edit, Send, Delete.
-Each row shows `<n> exceptions` (and `· <n> tool settings`) and a default
-dropdown (`<Action> default permission`: Allow ✓ · Ask · Deny; choosing Allow
-clears the saved default). Expanded (region `<Action> exceptions`), it lists
-each entity's exception with its own dropdown (`<Entity>: <Action>`: the
-states other than the default, the row's own state when it equals the
-default, and `Use default (X)`, which removes the exception), then `The other
-<n> entities follow the <Action> default.` (`All <n> entities …` with none).
-`+ Add exception` (`Add a <Action> exception`) opens a searchable list of the
-entities (registry groups) that have tools for that action and no exception
-yet; picking one adds a row whose `Choose permission` menu opens at once, and
-choosing a state saves it. `Channels & messages` covers messaging; creating
-and deleting channels, their settings, members, join links, access requests
-and channel bots are under `Channel settings & members`. Only pairs with at least one tool are shown or
-counted: a rule saved on a hidden pair stays saved and enforced. Saved rules
-on single tools (the agent's own restrictions, older settings) are listed
-under their action as **Individual tools**, with `Set by agent` and a remove
-button (`Remove the setting for <tool>`); the settings never create them.
+Each row shows `<n> exceptions` (and `· <n> tool settings`) and an
+`Allow · Ask · Never` segmented control (radio group `<Action> default
+permission`, the saved state highlighted; choosing Allow clears the saved
+default). Expanded (region `<Action> exceptions`), it lists each entity's
+exception with its own segmented control (`<Entity>: <Action>`) and a ✕
+(`<Entity>: use default (X)`, tooltip `Use default (X)`) that removes the
+exception, then `The other <n> entities follow the <Action> default.` (`All
+<n> entities …` with none). `+ Add exception` (`Add a <Action> exception`)
+opens a searchable list of the entities (registry groups) that have tools for
+that action and no exception yet; picking one adds a row with nothing
+highlighted, choosing a state saves it, and its ✕ cancels it. `Channels &
+messages` covers messaging; creating and deleting channels, their settings,
+members, join links, access requests and channel bots are under `Channel
+settings & members`. Only pairs with at least one tool are shown or counted:
+a rule saved on a hidden pair stays saved and enforced. Saved rules on single
+tools (the agent's own restrictions, older settings) are listed under their
+action as **Individual tools**, with `Set by agent` and a remove button
+(`Remove the setting for <tool>`); the settings never create them.
 Every click saves at once (one `PUT`, queued per agent); a failure puts the
 control back and shows a toast.
 
@@ -1286,10 +1287,11 @@ the agent runs (`Applies to every program <agent> runs in sessions where agent
 permissions are on.`): a program reaches Macro only through steps the
 settings check, and the code it runs on the side can't reach Macro at all;
 the agent's other tools and connected apps aren't covered, even where a
-setting says Deny. People who can't edit the agent see the dropdowns
+setting says Never. People who can't edit the agent see the controls
 disabled, no `+ Add exception`, no Reset, and `Only people who can edit
 <agent> can change these.` On phones the agent row's buttons wrap under its
-name and the panel spans the row; dropdowns narrow.
+name and the panel spans the row; each segmented control takes the full
+width under its name.
 
 Backend-free check of the component (desktop and phone):
 `bunx playwright test --config src/features/block-agent/browser-test/permissions.playwright.config.ts -g settings`

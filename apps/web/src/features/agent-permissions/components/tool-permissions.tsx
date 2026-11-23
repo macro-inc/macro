@@ -93,7 +93,7 @@ export function ToolPermissions(props: {
           class="flex h-8.5 items-center gap-3 border-b border-edge-muted text-[13px] text-ink-muted"
         >
           <span class="flex-1">{t('agentPermissions.actionHeader')}</span>
-          <span class="w-44 shrink-0 @max-md:w-32">
+          <span class="shrink-0 text-right">
             {t('agentPermissions.defaultHeader')}
           </span>
         </div>

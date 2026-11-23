@@ -45,7 +45,7 @@ function renderPanel(view: AgentToolPermissions = ENTITY_VIEW) {
   ));
 }
 
-/** Opens a dropdown from its trigger and picks a row by keyboard. */
+/** Picks a dropdown row by keyboard (the entity picker). */
 function choose(trigger: HTMLElement, name: string) {
   fireEvent.keyDown(trigger, { key: 'Enter' });
   const menu = screen
@@ -55,6 +55,25 @@ function choose(trigger: HTMLElement, name: string) {
   const item = within(menu).getByRole('menuitem', { name });
   item.focus();
   fireEvent.keyDown(item, { key: 'Enter' });
+}
+
+/** A segmented control's option. */
+function option(
+  control: string,
+  state: 'Allow' | 'Ask' | 'Never',
+  scope: HTMLElement = document.body
+) {
+  return within(
+    within(scope).getByRole('radiogroup', { name: control })
+  ).getByRole('radio', { name: state });
+}
+
+/** The highlighted option of a segmented control. */
+function saved(control: string, scope: HTMLElement = document.body) {
+  const states = ['Allow', 'Ask', 'Never'] as const;
+  return states.find(
+    (state) => (option(control, state, scope) as HTMLInputElement).checked
+  );
 }
 
 function sentChanges() {
@@ -80,20 +99,20 @@ afterEach(() => {
 describe('AgentPermissionsPanel', () => {
   it('lists the actions in display order with their defaults', async () => {
     renderPanel();
-    const defaults = await screen.findAllByRole('button', {
+    const defaults = await screen.findAllByRole('radiogroup', {
       name: / default permission$/,
     });
     expect(
-      defaults.map((button) => [
-        button.getAttribute('aria-label'),
-        button.textContent,
+      defaults.map((group) => [
+        group.getAttribute('aria-label'),
+        saved(group.getAttribute('aria-label') ?? ''),
       ])
     ).toEqual([
       ['Read default permission', 'Allow'],
       ['Create default permission', 'Ask'],
       ['Edit default permission', 'Ask'],
       ['Send default permission', 'Ask'],
-      ['Delete default permission', 'Deny'],
+      ['Delete default permission', 'Never'],
     ]);
     expect(
       screen.getByRole('button', { name: /^Read(?! default)/ }).textContent
@@ -102,15 +121,10 @@ describe('AgentPermissionsPanel', () => {
 
   it('saves a default, and Allow clears it', async () => {
     renderPanel();
-    choose(
-      await screen.findByRole('button', { name: 'Read default permission' }),
-      'Ask'
-    );
+    await screen.findByRole('radiogroup', { name: 'Read default permission' });
+    fireEvent.click(option('Read default permission', 'Ask'));
     await waitFor(() => expect(client.set).toHaveBeenCalledTimes(1));
-    choose(
-      await screen.findByRole('button', { name: 'Send default permission' }),
-      'Allow'
-    );
+    fireEvent.click(option('Send default permission', 'Allow'));
     await waitFor(() => expect(client.set).toHaveBeenCalledTimes(2));
     expect(sentChanges()).toEqual([
       [{ target: { kind: 'action', action: 'read' }, state: 'ask' }],
@@ -121,14 +135,8 @@ describe('AgentPermissionsPanel', () => {
   it('shows the exceptions and the entities following the default', async () => {
     renderPanel();
     const read = await expandRead();
-    expect(
-      within(read).getByRole('button', { name: 'Contacts & CRM: Read' })
-        .textContent
-    ).toBe('Ask');
-    expect(
-      within(read).getByRole('button', { name: 'Outside chats: Read' })
-        .textContent
-    ).toBe('Deny');
+    expect(saved('Contacts & CRM: Read', read)).toBe('Ask');
+    expect(saved('Outside chats: Read', read)).toBe('Never');
     expect(read.textContent).toContain(
       'The other 4 entities follow the Read default.'
     );
@@ -141,30 +149,11 @@ describe('AgentPermissionsPanel', () => {
       within(read).getByRole('button', { name: 'Add a Read exception' }),
       'Email'
     );
-    // The new row's menu opens at once, which hides the rest from
-    // assistive tech while it's open.
-    const choosing = await within(read).findByRole('button', {
-      name: 'Email: Read',
-      hidden: true,
-    });
-    expect(choosing.textContent).toBe('Choose permission');
-    const menu = await waitFor(() => {
-      const found = screen
-        .getAllByRole('menu')
-        .find(
-          (element) => element.getAttribute('aria-labelledby') === choosing.id
-        );
-      if (!found) throw new Error('menu not open yet');
-      return found;
-    });
-    expect(
-      within(menu)
-        .getAllByRole('menuitem')
-        .map((item) => item.textContent)
-    ).toEqual(['Ask', 'Deny', 'Use default (Allow)']);
-    const ask = within(menu).getByRole('menuitem', { name: 'Ask' });
-    ask.focus();
-    fireEvent.keyDown(ask, { key: 'Enter' });
+    // The new row has nothing highlighted until a state is picked.
+    await within(read).findByRole('radiogroup', { name: 'Email: Read' });
+    expect(saved('Email: Read', read)).toBeUndefined();
+    expect(client.set).not.toHaveBeenCalled();
+    fireEvent.click(option('Email: Read', 'Ask', read));
     await waitFor(() => expect(client.set).toHaveBeenCalledTimes(1));
     expect(sentChanges()).toEqual([
       [
@@ -176,12 +165,32 @@ describe('AgentPermissionsPanel', () => {
     ]);
   });
 
-  it('Use default removes an exception', async () => {
+  it('cancels a new exception without saving', async () => {
     renderPanel();
     const read = await expandRead();
     choose(
-      within(read).getByRole('button', { name: 'Contacts & CRM: Read' }),
-      'Use default (Allow)'
+      within(read).getByRole('button', { name: 'Add a Read exception' }),
+      'Email'
+    );
+    await within(read).findByRole('radiogroup', { name: 'Email: Read' });
+    fireEvent.click(
+      within(read).getByRole('button', {
+        name: 'Email: use default (Allow)',
+      })
+    );
+    expect(
+      within(read).queryByRole('radiogroup', { name: 'Email: Read' })
+    ).toBe(null);
+    expect(client.set).not.toHaveBeenCalled();
+  });
+
+  it('Use default removes an exception', async () => {
+    renderPanel();
+    const read = await expandRead();
+    fireEvent.click(
+      within(read).getByRole('button', {
+        name: 'Contacts & CRM: use default (Allow)',
+      })
     );
     await waitFor(() => expect(client.set).toHaveBeenCalledTimes(1));
     expect(sentChanges()).toEqual([
@@ -197,15 +206,12 @@ describe('AgentPermissionsPanel', () => {
   it('keeps an exception row in place while its change saves', async () => {
     renderPanel();
     const read = await expandRead();
-    const outside = within(read).getByRole('button', {
+    const outside = within(read).getByRole('radiogroup', {
       name: 'Outside chats: Read',
     });
-    choose(
-      within(read).getByRole('button', { name: 'Contacts & CRM: Read' }),
-      'Deny'
-    );
+    fireEvent.click(option('Contacts & CRM: Read', 'Never', read));
     await waitFor(() => expect(client.set).toHaveBeenCalledTimes(1));
-    // The other row was not remounted, so focus and open menus survive.
+    // The other row was not remounted, so focus survives.
     expect(outside.isConnected).toBe(true);
   });
 
@@ -257,11 +263,7 @@ describe('AgentPermissionsPanel', () => {
     renderPanel({ ...ENTITY_VIEW, canEdit: false });
     const read = await expandRead();
     expect(
-      (
-        screen.getByRole('button', {
-          name: 'Read default permission',
-        }) as HTMLButtonElement
-      ).disabled
+      (option('Read default permission', 'Ask') as HTMLButtonElement).disabled
     ).toBe(true);
     expect(
       within(read).queryByRole('button', { name: 'Add a Read exception' })

@@ -10,7 +10,7 @@ import { createSignal, createUniqueId, For, Show } from 'solid-js';
 import type { Exception, ToolSetting } from '../core/model';
 import { EntityPicker } from './entity-picker';
 import { ExceptionRow } from './exception-row';
-import { defaultOptions, PermissionStateMenu } from './permission-state-menu';
+import { PermissionStateControl } from './permission-state-control';
 import { ToolSettingsList } from './tool-settings-list';
 
 /**
@@ -52,7 +52,7 @@ export function ActionAccordion(props: {
   const chooseNew = (state: ToolPermissionState | null) => {
     const group = adding();
     setAdding(undefined);
-    // "Use default" on a new exception just cancels it.
+    // ✕ on a new exception just cancels it.
     if (group && state !== null) props.onException(group.id, state);
   };
 
@@ -73,10 +73,11 @@ export function ActionAccordion(props: {
 
   return (
     <div class="flex flex-col">
-      <div class="flex min-h-12 items-center gap-3">
+      {/* On touch the control is full width, so it wraps under the name. */}
+      <div class="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-2 py-2">
         <button
           type="button"
-          class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-0.5 self-stretch rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          class="flex min-h-8 min-w-0 flex-1 basis-40 flex-wrap items-center gap-x-2.5 gap-y-0.5 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           aria-expanded={props.open}
           aria-controls={panelId}
           onClick={() => props.onToggle()}
@@ -117,17 +118,14 @@ export function ActionAccordion(props: {
             </span>
           </Show>
         </button>
-        <PermissionStateMenu
-          label={t('agentPermissions.defaultMenu', { action: props.name })}
-          value={props.defaultState}
-          options={defaultOptions()}
-          disabled={!props.editable}
-          onSelect={(state) => {
-            if (state !== null && state !== props.defaultState) {
-              props.onDefault(state);
-            }
-          }}
-        />
+        <div class="ml-auto shrink-0 touch:w-full">
+          <PermissionStateControl
+            label={t('agentPermissions.defaultMenu', { action: props.name })}
+            value={props.defaultState}
+            disabled={!props.editable}
+            onChange={props.onDefault}
+          />
+        </div>
       </div>
       <Show when={props.open}>
         <section
@@ -187,10 +185,6 @@ export function ActionAccordion(props: {
                 })}
                 defaultState={props.defaultState}
                 editable={props.editable}
-                open
-                onOpenChange={(open) => {
-                  if (!open) setAdding(undefined);
-                }}
                 onSelect={chooseNew}
               />
             )}

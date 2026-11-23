@@ -8,7 +8,6 @@ import {
   changeForException,
   changeForTool,
   entitiesFor,
-  exceptionStates,
   exceptionsFor,
   focusedAction,
   followingCount,
@@ -120,12 +119,6 @@ describe('exceptions', () => {
         (group) => group.id
       )
     ).toEqual(['documents', 'tasks', 'email', 'channels']);
-  });
-
-  it("offers every state but the default, and the row's own", () => {
-    expect(exceptionStates('always')).toEqual(['ask', 'never']);
-    expect(exceptionStates('ask', 'ask')).toEqual(['always', 'ask', 'never']);
-    expect(exceptionStates('never', 'always')).toEqual(['always', 'ask']);
   });
 });
 

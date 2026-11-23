@@ -57,7 +57,7 @@ function renderCard(view: AgentToolPermissions = VIEW) {
   ));
 }
 
-function option(control: string, state: 'Allow' | 'Ask' | 'Deny') {
+function option(control: string, state: 'Allow' | 'Ask' | 'Never') {
   return within(screen.getByRole('radiogroup', { name: control })).getByRole(
     'radio',
     { name: state }
@@ -135,7 +135,7 @@ describe('ShowPermissionsCard', () => {
     expect(
       screen.queryByRole('button', { name: 'All permissions' })
     ).toBeNull();
-    fireEvent.click(option('Email: Send', 'Deny'));
+    fireEvent.click(option('Email: Send', 'Never'));
     expect(client.set).not.toHaveBeenCalled();
   });
 

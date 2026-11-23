@@ -281,19 +281,6 @@ export function changeForException(
   return { target: groupActionTarget(group, action), state };
 }
 
-/**
- * The states an exception's menu offers: every state but the default, plus
- * the row's own state when it equals the default (an explicit choice is
- * kept).
- */
-export function exceptionStates(
-  defaultState: ToolPermissionState,
-  current?: ToolPermissionState
-): ToolPermissionState[] {
-  const states: readonly ToolPermissionState[] = ['always', 'ask', 'never'];
-  return states.filter((state) => state !== defaultState || state === current);
-}
-
 /** Whether a rule is shown: defaults always, an exception on a visible pair, a tool in the catalog. */
 function ruleVisible(
   catalog: ToolPermissionCatalog,

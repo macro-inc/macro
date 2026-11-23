@@ -273,9 +273,9 @@ const ENTITY_DEFAULTS: Record<PermissionAction, ToolPermissionState> = {
 const at = '2026-11-20T10:00:00Z';
 
 /**
- * Read Allow with two exceptions (Contacts & CRM Ask, Outside chats Deny),
- * Create, Edit and Send Ask, Delete Deny; a hidden Tasks · Send exception;
- * and the agent's own Deny on Email's Send message tool.
+ * Read Allow with two exceptions (Contacts & CRM Ask, Outside chats Never),
+ * Create, Edit and Send Ask, Delete Never; a hidden Tasks · Send exception;
+ * and the agent's own Never on Email's Send message tool.
  */
 const ENTITY_RULES: ToolPermissionRule[] = [
   {

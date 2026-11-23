@@ -4,7 +4,7 @@
 
 The web side of agent permissions: per agent, what its code-mode programs may
 call. Each action (Read, Create, Edit, Send, Delete) has a default (Allow ·
-Ask · Deny) and per-entity exceptions (an entity is a registry group); saved
+Ask · Never, a compact segmented control) and per-entity exceptions (an entity is a registry group); saved
 rules on single tools are listed and removable. Shown inline under an agent's
 row in Settings → Agents (its Permissions button), in the agent editor's
 Permissions section, and reached from chat by `requestAgentPermissions`. The
@@ -41,10 +41,10 @@ changes.
 ## Gotchas
 
 - Wire names stay `always`/`ask`/`never` and `update`/`destroy`; only labels
-  say Allow/Ask/Deny, Edit, Delete (`components/labels.ts`).
+  say Allow/Ask/Never, Edit, Delete (`components/labels.ts`).
 - A default set to Allow sends `null` (no saved default is Allow). In the
   settings an exception keeps any state, even one equal to the default; `Use
-  default (X)` sends `null`. In the chat cards, setting a group's action to
+  default (X)` (the row's ✕) sends `null`. In the chat cards, setting a group's action to
   its action's default sends `null` (`changeForAction`), and a tool set to
   its action's state sends `null` (`PendingChanges.setTool`).
 - The view's states are the server's: an exception the agent set on itself
@@ -67,8 +67,8 @@ changes.
   whose operations the harness checks before it runs (with the flag on, a
   program reaches Macro only that way; its TypeScript module has no network
   at all). Its other tools and connected apps are not covered, even on
-  Deny; never word it so a person could think they are.
-- Color is on glyphs only (Ask amber hand, Deny failure prohibit); text stays
+  Never; never word it so a person could think they are.
+- Color is on glyphs only (Ask amber hand, Never failure prohibit); text stays
   ink.
 
 ## Checks

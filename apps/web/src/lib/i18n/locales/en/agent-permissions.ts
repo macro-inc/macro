@@ -17,19 +17,19 @@ export default {
   scopeLead:
     'Applies to every program {{agent}} runs in sessions where agent permissions are on.',
   scopeBody:
-    'A program reaches Macro only through steps these settings check; the code it runs on the side can’t reach Macro at all. {{agent}}’s other tools and your connected apps aren’t covered: they work as before, even where a setting says Deny.',
+    'A program reaches Macro only through steps these settings check; the code it runs on the side can’t reach Macro at all. {{agent}}’s other tools and your connected apps aren’t covered: they work as before, even where a setting says Never.',
   readOnly: 'Only people who can edit {{agent}} can change these.',
   loading: 'Loading permissions',
 
   allow: 'Allow',
   ask: 'Ask',
-  never: 'Deny',
+  never: 'Never',
   alwaysAllow: 'Always allow',
   askPermission: 'Ask permission',
-  neverAllow: 'Deny',
+  neverAllow: 'Never allow',
   allowHint: 'Always allow: runs without asking',
   askHint: 'Ask permission: waits for your approval each time',
-  neverHint: 'Deny: refused before anything runs',
+  neverHint: 'Never allow: refused before anything runs',
   controlLabel: '{{group}}: {{action}}',
   defaultLabel: '{{action}} default',
 
@@ -53,6 +53,7 @@ export default {
   noEntityMatch: 'No entity matches',
   choosePermission: 'Choose permission',
   useDefault: 'Use default ({{state}})',
+  clearException: '{{entity}}: use default ({{state}})',
   othersFollow: {
     one: 'The other entity follows the {{action}} default.',
     other: 'The other {{count}} entities follow the {{action}} default.',

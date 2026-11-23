@@ -1865,7 +1865,7 @@ to the agent's permissions. Every surface and its flag:
 
 When the agent calls `ShowPermissions`, the transcript shows **<Agent>'s
 permissions**: its one-line reason, then the asked groups' actions (only those
-some tool has) and tools with `Allow · Ask · Deny` controls, reading the
+some tool has) and tools with `Allow · Ask · Never` controls, reading the
 session's view (the agent's own limits for the session carry a **This
 session** badge). Setting a group's action to its default clears the
 exception; any other state saves one. A click saves to the agent at once;

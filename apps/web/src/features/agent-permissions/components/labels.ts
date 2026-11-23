@@ -5,7 +5,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { match } from 'ts-pattern';
 
-/** The short label on a state control: Allow, Ask, Deny. */
+/** The short label on a state control: Allow, Ask, Never. */
 export function stateLabel(state: ToolPermissionState): string {
   return match(state)
     .with('always', () => t('agentPermissions.allow'))

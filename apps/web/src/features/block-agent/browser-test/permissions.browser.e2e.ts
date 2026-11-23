@@ -122,20 +122,26 @@ test('the settings set action defaults and entity exceptions', async ({
       exact: false,
     })
   ).toBeVisible();
+  const control = (
+    scope: import('@playwright/test').Page | import('@playwright/test').Locator,
+    name: string
+  ) => scope.getByRole('radiogroup', { name });
   await expect(
-    page.getByRole('button', { name: 'Delete default permission' })
-  ).toContainText('Deny');
+    control(page, 'Delete default permission').getByRole('radio', {
+      name: 'Never',
+    })
+  ).toBeChecked();
   await shot(page, 'settings-collapsed', isMobile);
 
   // Read: two exceptions, the other entities follow the default.
   await page.getByRole('button', { name: /^Read(?! default)/ }).click();
   const read = page.getByRole('region', { name: 'Read exceptions' });
   await expect(
-    read.getByRole('button', { name: 'Contacts & CRM: Read' })
-  ).toContainText('Ask');
+    control(read, 'Contacts & CRM: Read').getByRole('radio', { name: 'Ask' })
+  ).toBeChecked();
   await expect(
-    read.getByRole('button', { name: 'Outside chats: Read' })
-  ).toContainText('Deny');
+    control(read, 'Outside chats: Read').getByRole('radio', { name: 'Never' })
+  ).toBeChecked();
   await expect(read).toContainText(
     'The other 4 entities follow the Read default.'
   );
@@ -148,11 +154,10 @@ test('the settings set action defaults and entity exceptions', async ({
   ).toHaveCount(0);
   await shot(page, 'settings-choose-entity', isMobile);
   await page.getByRole('menuitem', { name: 'Email' }).click();
-  await expect(
-    page.getByRole('menuitem', { name: 'Use default (Allow)' })
-  ).toBeVisible();
+  const email = control(read, 'Email: Read');
+  await expect(email).toBeVisible();
   await shot(page, 'settings-choose-permission', isMobile);
-  await page.getByRole('menuitem', { name: 'Ask', exact: true }).click();
+  await email.getByText('Ask', { exact: true }).click();
   await expect(page.locator('body')).toHaveAttribute(
     'data-saved',
     /"email.read":"ask"/
@@ -161,23 +166,22 @@ test('the settings set action defaults and entity exceptions', async ({
     'The other 3 entities follow the Read default.'
   );
 
-  // Use default removes it.
-  await read.getByRole('button', { name: 'Email: Read' }).click();
-  await page.getByRole('menuitem', { name: 'Use default (Allow)' }).click();
+  // Its ✕ (Use default) removes it.
+  await read
+    .getByRole('button', { name: 'Email: use default (Allow)' })
+    .click();
   await expect(page.locator('body')).not.toHaveAttribute(
     'data-saved',
     /email.read/
   );
 
   // The Send default.
-  await page.getByRole('button', { name: 'Send default permission' }).click();
-  await page.getByRole('menuitem', { name: 'Allow', exact: true }).click();
+  await control(page, 'Send default permission')
+    .getByText('Allow', { exact: true })
+    .click();
   await expect(page.locator('body')).toHaveAttribute(
     'data-defaults',
     /^(?!.*send)/
-  );
-  await page.evaluate(() =>
-    Promise.all(document.getAnimations().map((animation) => animation.finished))
   );
   await shot(page, 'settings-changed', isMobile);
 });
@@ -224,6 +228,6 @@ test('someone else sees the cards read-only and can only stop waiting', async ({
     page.getByText('Only people who can edit Scout can change this.')
   ).toBeVisible();
   const send = page.getByRole('radiogroup', { name: 'Email: Send' });
-  await expect(send.getByRole('radio', { name: 'Deny' })).toBeDisabled();
+  await expect(send.getByRole('radio', { name: 'Never' })).toBeDisabled();
   await shot(page, 'readonly', isMobile);
 });
