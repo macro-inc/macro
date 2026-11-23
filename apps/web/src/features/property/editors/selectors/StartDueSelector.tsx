@@ -57,7 +57,7 @@ export function StartDueSelector(props: StartDueSelectorProps) {
     }
     const day = field() === 'start' ? startOfDay(date) : date;
     const picked = pickDay(props.dates, field(), day);
-    props.onChange(picked.dates, [picked.changed]);
+    props.onChange(picked.dates, picked.changed);
   };
 
   // A first start moves on to the due date, setting a range; a start that
@@ -66,12 +66,12 @@ export function StartDueSelector(props: StartDueSelectorProps) {
     const active = field();
     const hadStart = props.dates.start != null;
     const picked = pickDay(props.dates, active, day);
-    props.onChange(picked.dates, [picked.changed]);
-    if (active === 'due' && picked.changed === 'due') {
+    props.onChange(picked.dates, picked.changed);
+    if (active === 'due' && picked.changed.includes('due')) {
       props.onClose?.();
       return;
     }
-    if (active === 'start' && picked.changed === 'start' && !hadStart) {
+    if (active === 'start' && picked.changed.includes('start') && !hadStart) {
       setField('due');
     }
   };
