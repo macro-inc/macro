@@ -57,8 +57,8 @@ Tasks always have these system properties (use these property_definition_id valu
 - Assignees (00000001-0000-0000-0000-000000000001): entity type, multi-select. Use entity_refs with entity_type='user' and entity_id='macro|email@domain.com' for people or 'bot|<agent UUID>' for agents. Adding an agent starts its session and replies in the task discussion.
 - Status (00000001-0000-0000-0000-000000000002): select_string, single. Options: Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), In Review (...0003), Completed (...0004), Canceled (...0005).
 - Priority (00000001-0000-0000-0000-000000000003): select_string, single. Options: Low (...0001), Medium (...0002), High (...0003), Urgent (...0004). Option IDs: 00000001-0000-0000-0003-0000000000XX.
-- Due Date (00000001-0000-0000-0000-000000000004): date, single. Use date_value with ISO 8601, and date_has_time true when the user gave a time of day.
-- Start Date (00000001-0000-0000-0000-000000000015): date, single, optional (absent until set). When work on the task begins; Due Date ends the range. Use date_value with ISO 8601, and date_has_time true when the user gave a time of day. The start never lands after the due date: a start set after it is saved as the due date, and a Due Date set before the start moves the start to it. When changing both dates, set the Due Date first.
+- Due Date (00000001-0000-0000-0000-000000000004): date, single. Use date_value with ISO 8601, and date_has_time true when the user gave a time of day (see date_has_time for the time zone).
+- Start Date (00000001-0000-0000-0000-000000000015): date, single, optional (absent until set). When work on the task begins; Due Date ends the range. Use date_value with ISO 8601, and date_has_time true when the user gave a time of day (see date_has_time for the time zone). The start never lands after the due date: a start set after it is saved as the due date, and a Due Date set before the start moves the start to it. When changing both dates, set the Due Date first.
 - Parent Task (00000001-0000-0000-0000-000000000005): entity, single. Use entity_ref with entity_type='task'.
 - Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'.
 - Story Points (00000001-0000-0000-0000-000000000009): number, single. Use number_value.
@@ -102,7 +102,7 @@ pub struct SetEntityProperty {
     pub date_value: Option<DateTime<Utc>>,
 
     #[schemars(
-        description = "For date properties: true when date_value is a time of day the user asked for (an exact moment, such as 3 PM). Leave it out for a whole day."
+        description = "For date properties: true when date_value is a time of day the user asked for (an exact moment, such as 3 PM). Leave it out for a whole day. A time of day is in the user's time zone, the zone current_time names, unless the user names another: write date_value with that zone's UTC offset on that date, which daylight saving time can make different from today's (\"3 PM\" on a winter day in New York is 15:00:00-05:00). When current_time says the user's time zone is unknown, it is in UTC: say in your reply which time zone you used."
     )]
     #[serde(default)]
     pub date_has_time: Option<bool>,

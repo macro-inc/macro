@@ -285,10 +285,11 @@ so that restoration happens there first. Unfiled people restore directly. Compan
 **Archive / Restore** actions also confirm the cascade. Record details and References
 appear first in both information panels, then Properties; company Lists and Email
 sharing follow. Neither panel has a duplicate visibility control. A contact's
-Properties hold the team's custom properties only (Stage, Owner and Revenue are
-company-only): **Add property** attaches one, such as a Phone text or a LinkedIn
-link, and it saves, clears and survives a reload like a company property. On a
-phone the panel opens from **Show details** in the record header.
+Properties hold the team's custom properties only: Stage, Owner and Revenue are
+company-only, so its **Add property** list leaves them out (a company's leaves
+out task-only properties). **Add property** attaches one, such as a Phone text
+or a LinkedIn link, and it saves, clears and survives a reload like a company
+property. On a phone the panel opens from **Show details** in the record header.
 
 Verify successful changes update open People, Companies, Team and ordinary Cmd-K;
 late responses must not reintroduce archived rows or hide restored rows with an

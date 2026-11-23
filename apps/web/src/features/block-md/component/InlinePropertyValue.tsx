@@ -30,6 +30,11 @@ type InlinePropertyValueProps = {
   editor?: ComponentProps<typeof PropertyValuePill>['editor'];
   /** Text shown in place of the value; see `PropertyValuePill`. */
   valueText?: string;
+  /**
+   * Unlink for a pill that shows more than `property`, such as the dates pill:
+   * when it is offered and what it clears, in place of clearing `property`.
+   */
+  unlink?: { available: () => boolean; clear: () => Promise<unknown> };
 };
 
 /**
@@ -46,19 +51,29 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
     ['STRING', 'NUMBER', 'BOOLEAN', 'LINK'].includes(props.property.valueType);
   const canManage = () =>
     props.canManage && ctx.canEdit && !props.property.isMetadata;
-  const canUnlink = () =>
-    canManage() &&
-    !props.property.isRequired &&
-    !props.property.propertyId.startsWith('pending:') &&
-    hasValue(props.property);
+  const canUnlink = () => {
+    if (!canManage()) return false;
+    if (props.unlink) return props.unlink.available();
+    return (
+      !props.property.isRequired &&
+      !props.property.propertyId.startsWith('pending:') &&
+      hasValue(props.property)
+    );
+  };
   const [unlinking, setUnlinking] = createSignal(false);
-  const unlink = async () => {
-    if (unlinking()) return;
+  const clear = () => {
+    if (props.unlink) return props.unlink.clear;
     const cleared = toPropertyApiValue(props.property, null);
     if (!cleared) return;
+    return () => ctx.saveHandler.saveProperty(props.property, cleared);
+  };
+  const unlink = async () => {
+    if (unlinking()) return;
+    const run = clear();
+    if (!run) return;
     setUnlinking(true);
     try {
-      await ctx.saveHandler.saveProperty(props.property, cleared);
+      await run();
     } catch {
       // The save handler reports the failure and keeps the value.
     } finally {

@@ -4,7 +4,8 @@
 
 Part of Tasks: the time people log on a task, typed or with a running timer,
 and each task's Time logged total. Served over REST by
-`document_storage_service` at `/time`.
+`document_storage_service` at `/time`, and over GraphQL for the web app
+through `crates/graphql_time_tracking`.
 
 ## Start here
 
@@ -36,7 +37,8 @@ and each task's Time logged total. Served over REST by
   `macro_event_topics`.
 - Used by: `services/document_storage_service` (the router, and the activity
   consumer's `TimeEntryMacroEvent` arm), `crates/soup_realtime` (the events,
-  mapped to a patch on the task), `ai_tools` (the tools).
+  mapped to a patch on the task), `crates/graphql_time_tracking`, `ai_tools`
+  (the tools).
 
 ## Checks
 

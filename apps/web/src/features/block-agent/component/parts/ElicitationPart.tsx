@@ -193,7 +193,7 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
             label: reviewed().request.tool,
             status:
               reviewed().toolOutcome.kind === 'failed' ? 'failed' : 'completed',
-            muted: reviewed().toolOutcome.kind === 'failed',
+            unsuccessful: reviewed().toolOutcome.kind === 'failed',
             stopped: false,
             trailing: undefined,
           }}

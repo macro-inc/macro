@@ -286,6 +286,7 @@ dependencies = [
  "reqwest",
  "rootcause",
  "rustls-platform-verifier",
+ "semver",
  "serde",
  "serde_json",
  "serde_qs",

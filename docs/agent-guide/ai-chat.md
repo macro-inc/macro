@@ -1463,12 +1463,13 @@ returned JSON, or code-mode wording. An `ExecuteCode` call joins the tool group
 of its turn segment and shows only its observed SDK operations, each a compact
 row (label plus status) counted as one step; `SearchTools`, `LoadTools`,
 `DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group
-never opens on its own, so a step that failed and was recovered from is counted
-on the finished row (**Used 6 tools · 1 failed**) and shown in the expanded
-list; a program that failed or timed out before reporting a step is one failed
-step, one that reported steps counts the ones that failed, and one that was
-cancelled is not counted as failed. While the program
-runs, the group's live line names its observed operations. There is no
+never opens on its own. The finished row counts every step alike (**Used 6
+tools**), and the expanded list shows a failed, timed out, or cancelled step
+like any other: the transcript never names a tool failure, and the agent
+explains one in its reply. A program that failed before reporting a step is
+one step. While the program runs, the group's live line names its observed
+operations; a program that fails or stops without naming one leaves the line
+on the step before it. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
 survives reload, and is capped at the first 128 requests. These are advisory
@@ -1523,8 +1524,8 @@ code runs, using the same execution journal as the full session view. The final
 tool receipt carries those operations into the shared fold, so posted step
 snapshots retain the names and outcomes without exposing source or returned JSON.
 A code run without observed SDK requests reads only as how far it got:
-**Working on it**, **Finished a step**, **A step failed**, or
-**Step interrupted**.
+**Working on it** or **Finished a step**; one that failed or was interrupted
+without naming a step is left out of the line and the summary.
 People never see that the agent works in code: no surface names `ExecuteCode`,
 shows a program or its JSON, or words a step as code, scripts, the SDK or
 requests. `DescribeCodeTools`, `ReadCodeDocs`, `SearchTools` and `LoadTools`
@@ -1979,9 +1980,10 @@ adding a second nested disclosure. Counts come from structured responses,
 edits show additions/deletions, and other tools show their outcome. A Macro
 tool call keeps the same label as its successful row in every state,
 never the tool's code name: while it runs its text shimmers; a call cut off when
-its turn ends reads **Stopped**; a failed call is faded with **Failed** in the failure
-color after its label (for example **Add to calendar Failed**), and when the
-tool gave a reason, the row's caret opens it. Only a call whose arguments do
+its turn ends reads **Stopped**; a failed call looks like a finished one, with
+no **Failed** label, failure color, or fade, and when the tool gave a reason,
+the row's caret opens it. A terminal call that exited non-zero shows its exit
+code only inside its output. Only a call whose arguments do
 not fit the tool (still arriving, or malformed) keeps the summary row with the
 tool's name. Labels stay in the present tense (**Fetch**, **Read email**) until
 a result arrives.
@@ -2006,11 +2008,11 @@ dots and the step the agent is on (**Reading AgentMessage.tsx**, **Running bun
 run check**), taking turns every 2s among steps running at once and otherwise
 naming the latest; **Thinking** while the trailing thought streams. No working
 row stacks under it, and an earlier group never shows as working. Once the turn
-moves on, the group settles to **Used N tools**, with failed steps counted in
-the failure color (**· 2 failed**).
+moves on, the group settles to **Used N tools**, with no failure count.
 
 A subagent row is titled by the call's short description, else the first line
-of its brief, and says **Running**, **Done**, or **Failed**; expanding it shows
+of its brief, and says **Running** or **Done** (a failed one says nothing);
+expanding it shows
 the **Instructions** and the **Result**, its own steps in a bounded scrolling
 area inside its card. A long title truncates before the state, never over it,
 on phones too.
@@ -2050,8 +2052,8 @@ side-by-side project groups stack below 672px of available container width,
 including a narrow split on a wide screen. Check full long and unbroken titles
 at phone width and in a narrow split, then open a task from its title.
 A finished call
-with no view shows **Couldn't render dashboard**; failed calls show a
-**Failed** summary row without a disclosure.
+with no view shows **Couldn't render dashboard**; a failed call shows only its
+plain row, without a disclosure.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
