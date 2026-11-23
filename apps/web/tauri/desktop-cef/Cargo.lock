@@ -1038,7 +1038,6 @@ dependencies = [
  "lru",
  "macro_user_id",
  "maybe_send",
- "miniz_oxide 0.8.9",
  "postcard",
  "predicate-index",
  "serde",
@@ -1047,6 +1046,7 @@ dependencies = [
  "subsequence_match",
  "thiserror 2.0.21",
  "uuid",
+ "zlib-rs",
 ]
 
 [[package]]

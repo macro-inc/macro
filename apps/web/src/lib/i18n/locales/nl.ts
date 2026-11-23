@@ -777,7 +777,6 @@ export default {
       'Geen instellingen gevonden. Probeer “handtekening”, “thema” of “agenda”.',
     backToSettings: 'Terug naar instellingen',
     closeSettings: 'Instellingen sluiten',
-    goToTab: 'Ga naar instellingentabblad {{number}}',
     editProfile: 'Profiel bewerken',
     logOut: 'Uitloggen',
     yourAccount: 'Je account',

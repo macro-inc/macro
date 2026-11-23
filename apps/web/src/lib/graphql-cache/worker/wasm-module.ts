@@ -53,6 +53,7 @@ import type {
 import { workerCacheTelemetry } from '../telemetry-relay';
 import type { CompiledEngineExchange } from './compiled-engine';
 import type { StaleDatabaseRemovalOutcome } from './stale-databases';
+import { compileCacheWasm } from './wasm-compile';
 
 /** Stable, payload-free marker latched on reset-required WASM errors. */
 export interface CacheStorageResetRequiredError extends Error {
@@ -65,6 +66,13 @@ export type CacheOpenOutcome =
   | 'reset-incompatible'
   | 'reset-corrupt'
   | 'reset-storage-uncertain';
+
+/** What `checkpointIfDue` did; frame counts are far below 2^53. */
+export type CacheWalCheckpoint = {
+  ran: boolean;
+  walFrames: number;
+  backfilledFrames: number;
+};
 
 export type CacheQueueDiagnostics =
   | {
@@ -88,6 +96,8 @@ export interface CacheOpenResult {
 export type CacheEngineHydrationResult = WriteResult &
   HydrationSearchChanges & {
     data: unknown | null;
+    /** A write committed between `prepareHydrate` and `commitHydrate`. */
+    projectionsReread?: true;
   };
 
 export interface CacheEngine {
@@ -105,6 +115,8 @@ export interface CacheEngine {
   boundIdentity(): Promise<string | null>;
   /** Optional for compatibility engines; absence means unavailable. */
   queueDiagnostics?(): Promise<CacheQueueDiagnostics>;
+  /** Optional for compatibility engines; absence leaves the checkpoint to COMMIT. */
+  checkpointIfDue?(): Promise<CacheWalCheckpoint>;
   readQuery(
     opId: string | undefined,
     query: string,
@@ -167,6 +179,33 @@ export interface CacheEngine {
     identity: string | undefined,
     hydrationScope?: HydrationScope
   ): Promise<CacheEngineHydrationResult>;
+  /**
+   * `hydrateQuery` in two halves: `prepareHydrate` reads what the response
+   * changes and writes nothing, `commitHydrate` writes it. Between them the
+   * worker runs only requests that read. Optional for compatibility engines.
+   */
+  prepareHydrate?(
+    query: string,
+    operationName: string | undefined,
+    variables: Record<string, unknown> | undefined,
+    data: unknown,
+    identity: string | undefined,
+    hydrationScope?: HydrationScope
+  ): Promise<void>;
+  /**
+   * Optional, after `prepareHydrate`: runs the kept hydrate's next projection
+   * pass without writing, and resolves whether one ran. Reads may run after
+   * each; `stageHydrate` and `commitHydrate` run the passes left.
+   */
+  stepHydrate?(): Promise<boolean>;
+  /**
+   * Optional, between the halves: computes the kept hydrate's write without
+   * writing, so `commitHydrate` only writes. Reads may run before and after.
+   * Rejects when staging fails, keeping nothing to commit: the hydrate fails
+   * with that error.
+   */
+  stageHydrate?(): Promise<void>;
+  commitHydrate?(): Promise<CacheEngineHydrationResult>;
   inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,
@@ -321,61 +360,8 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
       // an opaque asset, so its internal relative `cache_wasm_bg.wasm` URL
       // would 404 in production. This `new URL` pattern is statically
       // analyzable, so vite emits exactly one lazy hashed binary. Explicit
-      // fetch/compile keeps download, compile, and instantiate separately observable.
+      // fetch/compile keeps download, compile, and instantiate observable.
       const wasmUrl = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
-      const compileFresh = async (): Promise<WebAssembly.Module> => {
-        const downloadStartedAt = now();
-        let bytes: ArrayBuffer;
-        try {
-          const response = await fetch(wasmUrl);
-          if (!response.ok) {
-            throw new Error(
-              `cache WASM download returned HTTP ${response.status}`
-            );
-          }
-          bytes = await response.arrayBuffer();
-          telemetry.record({
-            name: 'graphql_cache.wasm_download',
-            operationCategory: 'initialization',
-            outcome: 'success',
-            errorCode: 'none',
-            durationMs: now() - downloadStartedAt,
-            bytes: bytes.byteLength,
-          });
-        } catch (error) {
-          telemetry.record({
-            name: 'graphql_cache.wasm_download',
-            operationCategory: 'initialization',
-            outcome: 'error',
-            errorCode: 'wasm-download',
-            durationMs: now() - downloadStartedAt,
-          });
-          throw error;
-        }
-
-        const compileStartedAt = now();
-        try {
-          const compiled = await WebAssembly.compile(bytes);
-          telemetry.record({
-            name: 'graphql_cache.wasm_compile',
-            operationCategory: 'initialization',
-            outcome: 'success',
-            errorCode: 'none',
-            durationMs: now() - compileStartedAt,
-          });
-          return compiled;
-        } catch (error) {
-          telemetry.record({
-            name: 'graphql_cache.wasm_compile',
-            operationCategory: 'initialization',
-            outcome: 'error',
-            errorCode: 'wasm-compile',
-            durationMs: now() - compileStartedAt,
-          });
-          throw error;
-        }
-      };
-
       const start = (compiled: WebAssembly.Module): Promise<EngineExports> =>
         mod.default({ module_or_path: compiled }) as Promise<EngineExports>;
 
@@ -451,7 +437,7 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
         }
       }
 
-      const compiled = await compileFresh();
+      const compiled = await compileCacheWasm(wasmUrl, telemetry, now);
       compiledEngineExchange?.report({
         assetUrl: wasmUrl.href,
         module: compiled,

@@ -105,7 +105,13 @@ fn is_change(invite: &CalendarInvitation) -> bool {
 
 fn start_of_date(value: &str) -> Option<DateTime<Utc>> {
     let date = NaiveDate::parse_from_str(value, "%Y-%m-%d").ok()?;
-    Some(date.and_time(NaiveTime::MIN).and_utc() + Duration::hours(DATE_BEGUN_EVERYWHERE_HOURS))
+    Some(begun_everywhere(date))
+}
+
+/// The first instant at which `date` has begun everywhere on Earth, for a day
+/// with no zone of its own.
+pub(super) fn begun_everywhere(date: NaiveDate) -> DateTime<Utc> {
+    date.and_time(NaiveTime::MIN).and_utc() + Duration::hours(DATE_BEGUN_EVERYWHERE_HOURS)
 }
 
 fn instant(value: &str) -> Option<DateTime<Utc>> {

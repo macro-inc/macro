@@ -2,7 +2,7 @@ import { PillTabs } from '@components/app/mobile/PillTabs';
 import { Tabs } from '@ui';
 import type { ActivityScope } from '../core/event';
 
-const SCOPE_TABS: { value: ActivityScope; label: string }[] = [
+export const SCOPE_TABS: { value: ActivityScope; label: string }[] = [
   { value: 'mine', label: 'You' },
   { value: 'team', label: 'Team' },
 ];
@@ -11,9 +11,11 @@ const SCOPE_TABS: { value: ActivityScope; label: string }[] = [
 export function ActivityScopeTabs(props: {
   value: ActivityScope;
   onChange: (scope: ActivityScope) => void;
+  ref?: (element: HTMLElement) => void;
 }) {
   return (
     <Tabs
+      ref={props.ref}
       aria-label="Whose activity"
       options={SCOPE_TABS}
       value={props.value}

@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use futures::{StreamExt as _, stream};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -17,10 +17,11 @@ use tracing::{Instrument as _, field::Empty};
 use uuid::Uuid;
 
 use super::{
-    input::{due_date_input, jev_input},
+    dates::focus_dates,
+    input::{due_date_input, jev_input, last_written_on},
     models::{
-        FocusAnswers, FocusInboxOwner, FocusMessage, FocusRecord, FocusThread, FocusVerdict,
-        StaleThread, StoredClassification, ThreadFocus,
+        FocusAnswers, FocusDates, FocusInboxOwner, FocusMessage, FocusRecord, FocusThread,
+        FocusVerdict, StaleThread, StoredClassification, ThreadDates, ThreadFocus,
     },
     ports::{
         DueDateExtractor, FocusClassifier, FocusClassifierError, FocusEnrollment, FocusNotifier,
@@ -35,7 +36,8 @@ use super::{
 const MAX_FOCUS_THREADS: i64 = 500;
 /// Longest window the Focus list looks back over, in days.
 const MAX_WINDOW_DAYS: u16 = 90;
-/// Days the owner waits on an answer before a thread joins Focus to follow up.
+/// Days the owner waits on an answer before a thread they wrote last on comes
+/// back to Focus to follow up.
 const FOLLOW_UP_AFTER_DAYS: i64 = 3;
 /// Rejections in a row that end a sweep: the classifier is refusing every
 /// request (a revoked key, say), not one thread.
@@ -58,8 +60,8 @@ pub enum ClassifyOutcome {
     /// The thread is out of the inbox, or outside the signal inbox without
     /// being key mail right now.
     NotSignal,
-    /// Nobody whose Focus tab shows the inbox is in the rollout, so nothing
-    /// left the system.
+    /// Nobody whose Focus tab shows the inbox is in the rollout (which leaves
+    /// out people away from Macro), so nothing left the system.
     NotEnabled,
     /// The classifier was unavailable; a later sweep retries.
     Unavailable,
@@ -346,17 +348,17 @@ where
         }
         let signals = signals(&thread);
         // Same mail, older rule: nothing new for the classifier or the due date
-        // extractor to read, so the stored date stands.
+        // extractor to read, so the stored dates stand.
         if let Some(StoredClassification {
             answers: Some(answers),
             model,
-            due_on,
+            dates,
             ..
         }) = stored
         {
             let verdict = decide(answers, &signals);
             let saved = self
-                .save_verdict(&thread, latest, verdict, *answers, model.clone(), *due_on)
+                .save_verdict(&thread, latest, verdict, *answers, model.clone(), *dates)
                 .await?;
             if !saved {
                 return Ok(ClassifyOutcome::UpToDate);
@@ -395,13 +397,13 @@ where
         };
         let verdict = decide(&answers, &signals);
         let model = self.classifier.model().to_owned();
-        let due_on = if read_due_date {
-            self.due_on(&thread, &verdict).await
+        let dates = if read_due_date {
+            self.dates(&thread, &verdict, &answers, latest.at).await
         } else {
-            None
+            FocusDates::default()
         };
         let saved = self
-            .save_verdict(&thread, latest, verdict, answers, model, due_on)
+            .save_verdict(&thread, latest, verdict, answers, model, dates)
             .await?;
         if !saved {
             // A concurrent classification of a later message won.
@@ -411,22 +413,32 @@ where
         Ok(ClassifyOutcome::Classified(verdict))
     }
 
-    /// The day newly classified mail says the thread is due, for a thread that can
-    /// be in Focus for a reason other than a calendar hold. A failure costs the date,
-    /// never the classification, and the wait for one is bounded.
-    async fn due_on(&self, thread: &FocusThread, verdict: &FocusVerdict) -> Option<NaiveDate> {
+    /// What newly classified mail says about a thread's days, for a thread that
+    /// can be in Focus for a reason other than a calendar hold, and when they take
+    /// effect for its owner. A failure costs the dates, never the classification,
+    /// and the wait for them is bounded.
+    async fn dates(
+        &self,
+        thread: &FocusThread,
+        verdict: &FocusVerdict,
+        answers: &FocusAnswers,
+        latest_at: DateTime<Utc>,
+    ) -> FocusDates {
         if !verdict.is_focus && !verdict.awaiting_reply {
-            return None;
+            return FocusDates::default();
         }
         let span = tracing::info_span!(
             "email_focus.due_date",
             thread_id = %thread.thread_id,
             messages = Empty,
             outcome = Empty,
+            event_found = Empty,
+            event_counts = Empty,
             otel.status_code = Empty,
         );
         let extraction = async {
-            // Only sharpens which day a message counts from; carry on without it.
+            // Only sharpens which day a message counts from and when a day begins
+            // for the owner; carry on without it.
             let time_zone = self
                 .profiles
                 .time_zone(&thread.owner)
@@ -438,30 +450,50 @@ where
             let input = due_date_input(thread, time_zone);
             tracing::Span::current().record("messages", input.messages.len());
             if input.messages.is_empty() {
-                return Ok(None);
+                return Ok((ThreadDates::default(), time_zone));
             }
             self.due_dates
-                .due_on(&thread.owner, thread.thread_id, &input)
+                .dates(&thread.owner, thread.thread_id, &input)
                 .await
+                .map(|dates| (dates, time_zone))
         };
         async {
             let current = tracing::Span::current();
             match tokio::time::timeout(DUE_DATE_TIMEOUT, extraction).await {
-                Ok(Ok(due_on)) => {
-                    current.record("outcome", if due_on.is_some() { "due" } else { "no_date" });
-                    due_on
+                Ok(Ok((dates, time_zone))) => {
+                    current.record(
+                        "outcome",
+                        if dates.due_on.is_some() {
+                            "due"
+                        } else {
+                            "no_date"
+                        },
+                    );
+                    current.record("event_found", dates.event_on.is_some());
+                    let last_written_on = last_written_on(thread, time_zone);
+                    let dates = focus_dates(
+                        dates,
+                        time_zone,
+                        verdict,
+                        answers,
+                        latest_at,
+                        last_written_on,
+                    );
+                    // Whether the meeting's day decides when the thread leaves.
+                    current.record("event_counts", dates.event_over_at.is_some());
+                    dates
                 }
                 Ok(Err(error)) => {
                     current.record("outcome", "failed");
                     current.record("otel.status_code", "error");
                     tracing::warn!(error = ?error, "focus due date unavailable");
-                    None
+                    FocusDates::default()
                 }
                 Err(_) => {
                     current.record("outcome", "timeout");
                     current.record("otel.status_code", "error");
                     tracing::warn!("focus due date timed out");
-                    None
+                    FocusDates::default()
                 }
             }
         }
@@ -476,7 +508,7 @@ where
         verdict: FocusVerdict,
         answers: FocusAnswers,
         model: String,
-        due_on: Option<NaiveDate>,
+        dates: FocusDates,
     ) -> Result<bool, Report> {
         let stored = self
             .store
@@ -489,7 +521,7 @@ where
                 answers,
                 model,
                 classified_at: Utc::now(),
-                due_on,
+                dates,
             })
             .await?;
         if stored {
