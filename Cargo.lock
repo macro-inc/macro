@@ -13984,6 +13984,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
+ "unicode-segmentation",
  "utoipa",
  "uuid",
  "workspace-hack",
