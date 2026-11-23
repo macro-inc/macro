@@ -107,8 +107,9 @@ is searched as a word. Picking a tab while a search runs narrows it to that
 tab's view and keeps the words (All mail goes back to all mail, the sidebar's
 Inbox gives `in:inbox`); Scheduled, Reminders, Spam and Trash, which the index
 has no view of, end the search. While a search runs, the sidebar and the
-header show the view it searches: the one its `in:` filter names, else All
-mail. Check from Inbox with a
+header show the view its `in:` filter names (the Inbox tabs only while it is
+in the Inbox); a search with no `in:` selects nothing, and the header says
+Search. Check from Inbox with a
 term that only Noise or archived mail holds, then the same term with each
 `in:`, then pick Sent, Signal and All mail while it runs.
 

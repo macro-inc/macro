@@ -363,7 +363,7 @@ function EmailMobileLayout(props: ParentProps) {
   // A search of all mail selects no tab.
   const shownPill = () => {
     const tab = shownTab();
-    return tab === 'inbox' ? undefined : tab;
+    return tab === 'inbox' || tab === 'search' ? undefined : tab;
   };
   const tabs = () =>
     inboxSelected()

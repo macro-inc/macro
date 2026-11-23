@@ -149,6 +149,9 @@ type EmailListController = ListController<
   EmailListActivationMetadata
 >;
 
+/** What the navigation and the header show as selected; see `shownTab`. */
+export type EmailShownView = EmailTab | 'inbox' | 'search';
+
 export type EmailViewContext = {
   state: Store<EmailViewState>;
   setState: SetStoreFunction<EmailViewState>;
@@ -162,10 +165,10 @@ export type EmailViewContext = {
   selectInbox: () => void;
   /**
    * The view the navigation and the header show as selected: the open tab,
-   * or while a search runs the view it searches: the one its `in:` filter
-   * names (`inbox` for the whole Inbox), else All mail.
+   * or while a search runs the view its `in:` filter names (`inbox` for the
+   * whole Inbox); `search` for a search of all mail, which selects none.
    */
-  shownTab: Accessor<EmailTab | 'inbox'>;
+  shownTab: Accessor<EmailShownView>;
   setInboxIds: (ids: string[] | undefined) => void;
   setAliasFilter: (alias: NonNullable<EmailViewState['aliasFilter']>) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
@@ -454,11 +457,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const parsedSearch = createMemo(() => parseEmailSearch(state.search));
   const searching = () =>
     canSearchEmailTab(state.tab) && parsedSearch().query !== '';
-  const shownTab = (): EmailTab | 'inbox' => {
+  const shownTab = (): EmailShownView => {
     if (!searching()) return state.tab;
 
     const scope = parsedSearch().scope;
-    if (!scope) return 'all';
+    if (!scope) return 'search';
     return emailSearchScopeTab(scope) ?? 'inbox';
   };
   const listInput: EmailDataSourceInput = {

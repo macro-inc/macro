@@ -26,7 +26,7 @@ import {
   EMAIL_TABS,
   isEmailInboxTab,
 } from '../constants';
-import { useEmailView } from '../email-view-context';
+import { type EmailShownView, useEmailView } from '../email-view-context';
 import type { EmailSearchSuggestions } from '../search/create-email-search-suggestions';
 import { emailSearchTextParts } from '../search/email-search-scope';
 import type { EmailTab } from '../tabs';
@@ -57,8 +57,15 @@ export type EmailHeaderProps = {
 };
 
 /** Whether the view shown belongs to the Inbox: Inbox itself, or one of its tabs. */
-const showsInbox = (tab: EmailTab | 'inbox') =>
-  tab === 'inbox' || isEmailInboxTab(tab);
+const showsInbox = (tab: EmailShownView) =>
+  tab === 'inbox' || (tab !== 'search' && isEmailInboxTab(tab));
+
+/** A search of all mail names no view, so its title says Search. */
+const shownViewTitle = (tab: EmailShownView, inboxSelected: boolean) => {
+  if (tab === 'search') return t('common.search');
+  if (inboxSelected) return 'Inbox';
+  return EMAIL_TABS.find((entry) => entry.id === tab)?.label ?? 'Email';
+};
 
 export function EmailViewBreadcrumbItem() {
   const { shownTab, tagViewTitle, savedViewActive, savedViews } =
@@ -70,9 +77,7 @@ export function EmailViewBreadcrumbItem() {
   const tabTitle = () =>
     savedViewTitle() ??
     tagViewTitle() ??
-    (inboxSelected()
-      ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === shownTab())?.label ?? 'Email'));
+    shownViewTitle(shownTab(), inboxSelected());
   const appearance = () => {
     const view = savedViews?.view();
     return view?.kind === 'saved' ? view.record.appearance : undefined;
@@ -139,7 +144,9 @@ export function EmailHeader(props: EmailHeaderProps) {
   // A search of the whole Inbox selects none of its tabs.
   const shownInboxTab = () => {
     const tab = shownTab();
-    return tab !== 'inbox' && isEmailInboxTab(tab) ? tab : undefined;
+    return tab !== 'inbox' && tab !== 'search' && isEmailInboxTab(tab)
+      ? tab
+      : undefined;
   };
   let releaseSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
@@ -172,9 +179,7 @@ export function EmailHeader(props: EmailHeaderProps) {
   const selectedTabLabel = () =>
     savedViewTitle() ??
     tagViewTitle() ??
-    (inboxSelected()
-      ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === shownTab())?.label ?? 'Email'));
+    shownViewTitle(shownTab(), inboxSelected());
 
   const canSearch = () => canSearchEmailTab(state.tab);
   const savedAppearance = () => {
