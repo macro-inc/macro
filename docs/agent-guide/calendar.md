@@ -36,10 +36,10 @@ Midnight remains fully visible at scroll zero. The current-time line crosses the
 card with an accent time in its gutter. Only the timed card has the shared 32px top
 fade past the opening scroll position; the hour gutter never fades. Bottom clearance
 is limited to the floating New row and a small gap.
-Calendar grid boundaries use the theme's semantic secondary border in both loading
-and live grids; half-hour lines use its divider token. This covers day columns,
-month cells, and retained all-day boundaries without restoring deliberately hidden
-chrome. The hover-time guide uses the same secondary border, not a locally dimmed text color.
+Calendar grid boundaries use the theme's quieter tertiary border in both loading
+and live grids; half-hour lines use its still-quieter divider token. This covers
+day columns, month cells, and retained all-day boundaries without restoring
+intentionally hidden chrome. The hover-time guide remains a distinct secondary border.
 Day, 3 days, Week, and Month page with a shared five-page native scroll-snap ring
 on phone and desktop. A single unhurried arrow animates through native scrolling.
 Rapid arrows accumulate without dropping presses and jump to the latest target;
@@ -65,9 +65,11 @@ Desktop event creation and editing use one 384px composer, not a second split.
 Anchored, pinned, and agent-draft placements have separate view components over
 shared fields and setup; pinning retains the field tree. The registered legacy
 split route also uses the new composer views, not the preserved old form files.
-Composer containers have a semantic secondary border in dark themes, including
-floating/pinned panels, agent cards, and the phone sheet. Light-theme frames stay
-unchanged.
+Composer containers have a semantic secondary-border inset outline in dark themes,
+including floating/pinned panels, agent cards, and the phone sheet. The outline
+paints over child fills without depending on glass's border width or masked rim;
+light-theme frames stay unchanged. A floating composer retains its natural height
+and moves up to fit the viewport; only a card taller than the viewport scrolls.
 A selected grid range or event anchors the floating composer beside that selection.
 **Pin event composer** and **Pin event details** replace the calendar's left sidebar;
 unpinning restores navigation without changing the mounted draft. Drag the empty
@@ -78,9 +80,9 @@ different card takes the slot. Escape, pointer cancellation, or lost window focu
 cancels a drag without discarding edits. Header controls keep their normal behavior.
 Dragging replaces navigation with a dashed **Pin here** target, including when
 navigation starts collapsed. A drop there opens the left panel; an outside drop
-or Escape restores navigation. Pinned cards follow both axes when lifted. Floating
-cards cap their height to the available calendar/viewport space; fixed headers
-and footers frame the scrolling body. Agenda day headers are opaque at the card's
+or Escape restores navigation. Pinned cards follow both axes when lifted.
+Only viewport-oversized floating cards scroll; fixed headers and footers frame
+the scrolling body. Agenda day headers are opaque at the card's
 layer depth. Agenda rows only open event details; RSVP remains in event details and Needs Reply.
 Agenda day groups have a 24px gap. Adjacent confirmed empty days, including across
 loaded windows, share a date-range row with one quiet No events line; Today stays
@@ -105,7 +107,8 @@ Desktop guest removal overlays the trailing end on hover or keyboard focus witho
 phone guest rows keep their visible removal control.
 **More options** appends extra fields after the existing ones, above the footer.
 It never inserts a newly revealed description between existing fields.
-Pinning keeps options expanded. Visibility offers **Calendar default**, **Public**,
+Pinning keeps all options expanded and removes the redundant options toggle.
+Visibility offers **Calendar default**, **Public**,
 and **Private**. A synced confidential event displays Private, but an untouched
 save preserves confidential. Single-occurrence visibility remains unavailable
 because reads do not expose its override.

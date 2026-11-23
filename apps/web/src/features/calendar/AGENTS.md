@@ -33,8 +33,8 @@ host lives in `../block-calendar/`.
   and `create-composer-header-drag.ts`. `create-calendar-panel-state.ts` owns
   exclusive sidebar occupancy and guarded card/editor handoff. Pinned occurrence changes use
   `create-pinned-composer-selection.ts` and `replacePinned`; resolve selection again after discard approval.
-  During drag, hide sidebar contents behind its dashed target. Keep the pointer's
-  two-axis position after release and cap the floating body below fixed chrome.
+  During drag, hide sidebar contents behind its dashed target. Preserve the floating
+  card's natural height and move it up to fit; cap only at viewport height.
   Keep replaced form and split components unwired for reference.
 - `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
   the optional metadata argument to `useEventEditor.save` preserves legacy callers.
@@ -98,6 +98,7 @@ host lives in `../block-calendar/`.
   `create-calendar-composer-setup.ts` constructs the shared controller/model;
   normal and agent hosts supply transport and lifecycle callbacks. Anchored and
   pinned views share one mounted `DesktopComposer` field tree and own their chrome.
+  Show the options disclosure only when the placement can collapse its fields.
   The legacy `EventComposerSplit` route delegates to `StandaloneComposer`.
   Both layouts use creation-only Event/Out of office choices below the title,
   with the agent mark in the title icon column. Creation choices use 24px faces
@@ -138,11 +139,10 @@ host lives in `../block-calendar/`.
 - Wrap the desktop content card in `Layer offset={1}` and use `bg-surface`, with
   12px gaps and clipped rounded corners; keep Agenda headers opaque at the same
   depth. Keep navigation outside and the opening hour label inside the viewport.
-- Keep composer placement borders on `border-secondary` in dark themes only, including
-  pinned, agent, and phone-sheet containers; preserve light-theme borders. On glass
-  containers, color the existing rim instead of overriding its zero border width.
-- Use `border-secondary` for live and loading calendar grid boundaries and `divider`
-  for half-hour lines; never derive grid lines from surface colors or local opacity mixes.
+- Paint dark-only composer edges with a `border-secondary` inset outline on the
+  actual outer host, above its child fills; preserve light frames and avoid glass rim dependency.
+- Use `border-tertiary` for live and loading grid boundaries and `divider` for
+  half-hour lines; never derive grid lines from surface colors or local opacity mixes.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
 - Keep the phone Month switch in `../calendar-view/calendar-month.tsx`; render Bars through `views/mobile/month-bars.tsx` over a Sunday-start, five/six-week range, shared span lanes and overflow counts. Keep the old PhoneMonth unwired. Open the picked day's sheet without leaving Month; only its title changes to Day. Let explicit day taps and sheet dismissal retire pending focus requests. Give each day an accessible description of all its event titles, including overflow. Preserve the bounded source and visible-row focus path.
