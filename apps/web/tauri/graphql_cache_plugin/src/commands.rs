@@ -183,8 +183,9 @@ const LEGACY_SCHEMA_FILE: &str = "schema.json";
 
 /// Opens the cache in `dir` for `scope` and brings its records and queued
 /// writes to `incoming`, this webview's schema, returning the schema the
-/// engine runs with. A tier that fails resets the cache, and only one that
-/// cannot even reset is replaced and opened empty. An older build's schema
+/// engine runs with. A tier that fails or runs out of space resets the
+/// cache; a corrupt file, an uncertain write, or a cache that cannot even
+/// reset is replaced and opened empty. An older build's schema
 /// file names what wrote a cache that stores no schema yet, and goes once the
 /// cache stores one; a file that cannot be read names nothing, and the
 /// records it described go.

@@ -146,15 +146,15 @@ type:
   marked incomplete.
 - **Reset**: an operation root was renamed, the stored schema cannot be read
   (another compatibility epoch or artifact format), the schema to store would
-  not validate, or applying the Types tier failed and rolled back. Every
-  refetchable row goes.
+  not validate, or applying the Types tier failed or ran out of space and
+  rolled back. Every refetchable row goes.
 
 Every tier keeps the cache's identity, authority and queued mutations. Types
 and Reset drop the storage generation record, so the backfill starts over and
 refetches what went. A queued write's optimistic overlay that no longer fits is retired:
-the mutation is still sent, but its overlay adds no records. Queued projections
-of the records that went go with them, so no optimistic list entry outlives its
-record. The stored schema
+the mutation is still sent, but its overlay adds no records and its queued
+projections go with it. Queued projections of the records that went go too, so
+no optimistic list entry outlives its record. The stored schema
 is the incoming one plus the definitions it removed that kept records may still
 hold, so a later build that adds a field back with another shape drops the old
 values instead of reading them as the new type. A cache stored before schema 13
@@ -162,8 +162,9 @@ is read as written under `cache-core/src/schema_change/unrecorded.schema`, the
 schema the last builds without a stored copy shipped. It does not change once
 it ships, and an epoch bump retires it. An older native build's `schema.json`
 names what wrote its cache instead, and one that cannot be read resets it. An
-epoch bump makes every stored schema unreadable: a native file moves to the new
-namespace and resets on adoption, keeping its queued writes, while a browser
+epoch bump makes every stored schema unreadable: a native file, even one at a
+previous cache format, moves to the new namespace and resets on adoption,
+keeping its queued writes, while a browser
 database's name holds the epoch, so the browser opens a new, empty file. A removed enum value or a changed
 argument or default is not visible in the schema and leaves stale values, as a
 server change without a schema change would.
@@ -172,12 +173,16 @@ Both hosts pass `soup_filter_cache_adapter::projection_inputs()`, the record
 fields their index projections read, and storage adds the fields its own
 derived rows read (`ProjectionInputs`' derived list in
 `cache-core/src/schema_change/inputs.rs`). Removing a field no projection reads
-is free; removing one a projection reads changes its type. A new store of rows
+is free; removing one a projection reads changes its type. Adoption sees only
+what the incoming build's projections read, so a change that also stops a
+projection reading a field leaves the facts the previous build derived from it
+until their records are written again. A new store of rows
 derived from records lists its tables in `DERIVED_STORES` and the fields it
 reads in that derived list.
 
-Natively, `open_cache` adopts the bundle's schema on every open, and only a
-cache that cannot even reset is replaced and opened empty; `graphql_cache.native.adopt_schema`
+Natively, `open_cache` adopts the bundle's schema on every open. A tier that
+finds the file corrupt or leaves a write's outcome uncertain, or a cache that
+cannot even reset, is replaced and opened empty; `graphql_cache.native.adopt_schema`
 records the tier, counts and duration. The browser worker adopts its built-in
 schema on open and records the same as `cache.schema.*` attributes on the open
 span. Types deletes the changed types' rows, so it costs about in proportion
