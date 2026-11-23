@@ -334,7 +334,7 @@ async fn check<R: Runtime>(
     if let Some(minimum) = unsupported_minimum(&update.raw_json, os_version()) {
         tracing::info!(version = %update.version, minimum, "native update needs a newer OS");
         publish(app, coordinator, Status::Idle);
-        return Ok(());
+        return Ok(true);
     }
     let version = update.version.clone();
     report(
