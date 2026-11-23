@@ -12,6 +12,7 @@ async fn submission_admission_wait_is_bounded_without_marking_or_sending() {
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -21,10 +22,17 @@ async fn submission_admission_wait_is_bounded_without_marking_or_sending() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: None,
     });
-    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
+    let engine = Engine::new(
+        repository.clone(),
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let held = engine.operation_capacity.acquire_many(16).await.unwrap();
     let started = tokio::time::Instant::now();
     let result = tokio::time::timeout(
@@ -63,6 +71,7 @@ async fn smtp_receives_the_original_deadline_after_waiting_for_admission() {
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -72,10 +81,17 @@ async fn smtp_receives_the_original_deadline_after_waiting_for_admission() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: None,
     });
-    let engine = Engine::new(repository, Arc::new(TestCipher), transport.clone());
+    let engine = Engine::new(
+        repository,
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let binding = Binding {
         link_id: Uuid::now_v7(),
         sync_generation: 1,
@@ -128,6 +144,7 @@ async fn interactive_message_lookup_is_not_queued_behind_sync_admission() {
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -137,10 +154,17 @@ async fn interactive_message_lookup_is_not_queued_behind_sync_admission() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: None,
     });
-    let engine = Engine::new(repository, Arc::new(TestCipher), transport);
+    let engine = Engine::new(
+        repository,
+        Arc::new(TestCipher),
+        transport,
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let binding = Binding {
         link_id: Uuid::now_v7(),
         sync_generation: 1,
@@ -228,6 +252,7 @@ async fn ingestion_burst_does_not_queue_a_user_message_read() {
             owner_claims: std::sync::atomic::AtomicU32::new(0),
             owner_gate: std::sync::Mutex::new(None),
             owner_errors: std::sync::atomic::AtomicU32::new(0),
+            renewal: Default::default(),
             releases: std::sync::atomic::AtomicU32::new(0),
             acquire_gate: None,
         });
@@ -246,10 +271,17 @@ async fn ingestion_burst_does_not_queue_a_user_message_read() {
             deadline: AtomicBool::new(false),
             sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
             submission_deadline: std::sync::Mutex::new(None),
+            submit_control: None,
             refusal: None,
             provider_work: Some(control),
         });
-        let engine = Engine::new(repository, Arc::new(TestCipher), transport);
+        let engine = Engine::new(
+            repository,
+            Arc::new(TestCipher),
+            transport,
+            tokio_util::task::TaskTracker::new(),
+            tokio_util::sync::CancellationToken::new(),
+        );
         let binding = Binding {
             link_id: Uuid::now_v7(),
             sync_generation: 1,
@@ -314,6 +346,7 @@ async fn queued_accounts_rotate_after_stalled_and_cancelled_sync_rounds() {
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -324,6 +357,7 @@ async fn queued_accounts_rotate_after_stalled_and_cancelled_sync_rounds() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
             idle: None,
@@ -334,7 +368,13 @@ async fn queued_accounts_rotate_after_stalled_and_cancelled_sync_rounds() {
             released: tokio::sync::Semaphore::new(0),
         })),
     });
-    let engine = Engine::new(repository, Arc::new(TestCipher), transport);
+    let engine = Engine::new(
+        repository,
+        Arc::new(TestCipher),
+        transport,
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let bindings = (0..7)
         .map(|_| Binding {
             link_id: Uuid::now_v7(),
@@ -400,6 +440,7 @@ async fn configured_sync_capacity_bounds_started_rounds_without_limiting_binding
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -410,6 +451,7 @@ async fn configured_sync_capacity_bounds_started_rounds_without_limiting_binding
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
             idle: None,
@@ -423,8 +465,14 @@ async fn configured_sync_capacity_bounds_started_rounds_without_limiting_binding
     for invalid in [0, 17] {
         assert!(matches!(SyncConcurrency::new(invalid), Err(Error::Invalid)));
     }
-    let engine = Engine::new(repository, Arc::new(TestCipher), transport)
-        .with_sync_concurrency(SyncConcurrency::new(1).unwrap());
+    let engine = Engine::new(
+        repository,
+        Arc::new(TestCipher),
+        transport,
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    )
+    .with_sync_concurrency(SyncConcurrency::new(1).unwrap());
     let first = Binding {
         link_id: Uuid::now_v7(),
         sync_generation: 1,
@@ -460,6 +508,7 @@ async fn sync_state_loading_counts_toward_the_round_work_budget() {
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: Some(Arc::new(tokio::sync::Semaphore::new(0))),
     });
@@ -469,10 +518,17 @@ async fn sync_state_loading_counts_toward_the_round_work_budget() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: None,
     });
-    let engine = Engine::new(repository, Arc::new(TestCipher), transport);
+    let engine = Engine::new(
+        repository,
+        Arc::new(TestCipher),
+        transport,
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let binding = Binding {
         link_id: Uuid::now_v7(),
         sync_generation: 1,
@@ -526,6 +582,7 @@ async fn saturation_is_exportable_while_the_admission_wait_is_still_pending() {
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -535,10 +592,17 @@ async fn saturation_is_exportable_while_the_admission_wait_is_still_pending() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: None,
     });
-    let engine = Engine::new(repository, Arc::new(TestCipher), transport);
+    let engine = Engine::new(
+        repository,
+        Arc::new(TestCipher),
+        transport,
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let held = engine
         .synchronization_capacity
         .acquire_many(2)

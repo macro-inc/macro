@@ -44,6 +44,7 @@ async fn a_planned_idle_restart_stays_stable_and_rearms_without_rescanning() {
         owner_claims: Default::default(),
         owner_gate: Default::default(),
         owner_errors: Default::default(),
+        renewal: Default::default(),
         releases: Default::default(),
         acquire_gate: None,
         command_leases: None,
@@ -71,11 +72,18 @@ async fn a_planned_idle_restart_stays_stable_and_rearms_without_rescanning() {
         submissions: Default::default(),
         deadline: AtomicBool::new(false),
         submission_deadline: Default::default(),
+        submit_control: None,
         refusal: None,
         sent_found: Default::default(),
         provider_work: Some(control.clone()),
     });
-    let engine = Engine::new(repository, Arc::new(TestCipher), transport);
+    let engine = Engine::new(
+        repository,
+        Arc::new(TestCipher),
+        transport,
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let binding = Binding {
         link_id: Uuid::now_v7(),
         sync_generation: 1,
@@ -143,6 +151,7 @@ async fn an_unavailable_baseline_backs_off_full_scans_to_the_periodic_walk() {
         owner_claims: Default::default(),
         owner_gate: Default::default(),
         owner_errors: Default::default(),
+        renewal: Default::default(),
         releases: Default::default(),
         acquire_gate: None,
         command_leases: Some(Default::default()),
@@ -162,6 +171,7 @@ async fn an_unavailable_baseline_backs_off_full_scans_to_the_periodic_walk() {
         submissions: Default::default(),
         deadline: AtomicBool::new(false),
         submission_deadline: Default::default(),
+        submit_control: None,
         refusal: None,
         sent_found: Default::default(),
         provider_work: Some(Arc::new(ProviderWorkControl {
@@ -173,7 +183,13 @@ async fn an_unavailable_baseline_backs_off_full_scans_to_the_periodic_walk() {
             released: tokio::sync::Semaphore::new(20),
         })),
     });
-    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
+    let engine = Engine::new(
+        repository.clone(),
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let binding = Binding {
         link_id: Uuid::now_v7(),
         sync_generation: 1,

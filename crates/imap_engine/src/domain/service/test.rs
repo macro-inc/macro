@@ -8,6 +8,7 @@ mod fakes;
 mod idle;
 mod ownership;
 mod reads;
+pub(crate) mod send_lifetime;
 pub(crate) use fakes::{MemoryRepository, ProviderWorkControl, TestCipher, UncertainTransport};
 
 #[test]
@@ -292,6 +293,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -301,6 +303,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: None,
     });
@@ -309,7 +312,13 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         sync_generation: 1,
         grant_generation: 1,
     };
-    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
+    let engine = Engine::new(
+        repository.clone(),
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let correlation = Uuid::now_v7();
     let input = DraftInput {
         correlation,
@@ -360,7 +369,13 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
     )
     .unwrap();
     assert_eq!(first, SubmissionOutcome::Unknown);
-    let restarted = Engine::new(repository, Arc::new(TestCipher), transport.clone());
+    let restarted = Engine::new(
+        repository,
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let second: SubmissionOutcome = serde_json::from_value(
         restarted
             .execute(
@@ -430,6 +445,7 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -439,6 +455,7 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
         deadline: AtomicBool::new(true),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: None,
     });
@@ -447,7 +464,13 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
         sync_generation: 1,
         grant_generation: 1,
     };
-    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
+    let engine = Engine::new(
+        repository.clone(),
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let first = Uuid::now_v7();
     let second = Uuid::now_v7();
     for correlation in [first, second] {
@@ -638,6 +661,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -647,6 +671,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: None,
     });
@@ -712,7 +737,13 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         state.drafts.insert(id.clone(), draft);
         state.messages.insert(id.clone(), fallback.clone());
     }
-    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
+    let engine = Engine::new(
+        repository.clone(),
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let credentials = TestCipher
         .decrypt(binding.link_id, "owner", &[])
         .await
@@ -733,7 +764,13 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
             state.messages.insert(later.id.clone(), later);
         }
     }
-    let restarted = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
+    let restarted = Engine::new(
+        repository.clone(),
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let mut account = repository.acquire(binding).await.unwrap();
     restarted
         .reconcile_sent(&mut account, &credentials)
@@ -764,6 +801,7 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -773,10 +811,17 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: None,
     });
-    let engine = Engine::new(repository, Arc::new(TestCipher), transport.clone());
+    let engine = Engine::new(
+        repository,
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let binding = Binding {
         link_id: Uuid::now_v7(),
         sync_generation: 1,
@@ -804,6 +849,7 @@ async fn a_definite_refusal_clears_the_unknown_fence_without_persisting_new_outc
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -813,6 +859,7 @@ async fn a_definite_refusal_clears_the_unknown_fence_without_persisting_new_outc
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: Some(SubmissionRefusal {
             phase: SubmissionRefusalPhase::Recipient,
             recipient_index: Some(0),
@@ -825,7 +872,13 @@ async fn a_definite_refusal_clears_the_unknown_fence_without_persisting_new_outc
         sync_generation: 1,
         grant_generation: 1,
     };
-    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
+    let engine = Engine::new(
+        repository.clone(),
+        Arc::new(TestCipher),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let correlation = Uuid::now_v7();
     let input = DraftInput {
         correlation,

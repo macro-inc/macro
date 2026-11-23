@@ -402,6 +402,7 @@ async fn real_tls_mail_after_snapshot_commit_is_indexed_without_an_idle_timeout(
         owner_claims: AtomicU32::new(0),
         owner_gate: Default::default(),
         owner_errors: AtomicU32::new(0),
+        renewal: Default::default(),
         releases: AtomicU32::new(0),
         acquire_gate: None,
         command_leases: None,
@@ -415,6 +416,8 @@ async fn real_tls_mail_after_snapshot_commit_is_indexed_without_an_idle_timeout(
         repository.clone(),
         Arc::new(LabCipher(credentials.clone())),
         transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
     );
     engine.execute(binding, Operation::Sync).await.unwrap();
     let committed = repository.state.lock().unwrap().clone();

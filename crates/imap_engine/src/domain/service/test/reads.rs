@@ -62,6 +62,7 @@ fn read_fixture(
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -80,10 +81,17 @@ fn read_fixture(
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: Some(control.clone()),
     });
-    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport);
+    let engine = Engine::new(
+        repository.clone(),
+        Arc::new(TestCipher),
+        transport,
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     let binding = Binding {
         link_id: Uuid::now_v7(),
         sync_generation: 1,

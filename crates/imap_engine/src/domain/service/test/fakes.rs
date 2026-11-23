@@ -1,6 +1,15 @@
 use super::*;
 
+#[derive(Default)]
+pub(crate) struct RenewalControl {
+    pub(crate) blocked: std::sync::Mutex<Option<Arc<tokio::sync::Semaphore>>>,
+    pub(crate) failures: std::sync::atomic::AtomicU32,
+    pub(crate) calls: std::sync::atomic::AtomicU32,
+    pub(crate) attempted: tokio::sync::Notify,
+}
+
 pub(crate) struct MemoryRepository {
+    pub(crate) renewal: RenewalControl,
     pub(crate) revision: std::sync::atomic::AtomicI64,
     pub(crate) scoped_acquire_errors: std::sync::atomic::AtomicU32,
     pub(crate) owner_claims: std::sync::atomic::AtomicU32,
@@ -138,7 +147,26 @@ impl Repository for MemoryRepository {
     }
     async fn renew(&self, account: &Account) -> Result<(), Error> {
         account.lease_id.ok_or(Error::Conflict)?;
-        Ok(())
+        self.renewal.calls.fetch_add(1, Ordering::AcqRel);
+        self.renewal.attempted.notify_one();
+        let blocked = self.renewal.blocked.lock().unwrap().clone();
+        if let Some(blocked) = blocked {
+            blocked
+                .acquire()
+                .await
+                .map_err(|_| Error::ConnectionUnavailable)?
+                .forget();
+        }
+        let failed = self
+            .renewal
+            .failures
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+            .is_ok();
+        if failed {
+            Err(Error::ConnectionUnavailable)
+        } else {
+            Ok(())
+        }
     }
     async fn release(&self, account: &Account) -> Result<(), Error> {
         account.lease_id.ok_or(Error::Conflict)?;
@@ -236,6 +264,7 @@ pub(crate) struct UncertainTransport {
     pub(crate) refusal: Option<SubmissionRefusal>,
     pub(crate) sent_found: std::sync::Mutex<std::collections::BTreeSet<String>>,
     pub(crate) provider_work: Option<Arc<ProviderWorkControl>>,
+    pub(crate) submit_control: Option<Arc<ProviderWorkControl>>,
 }
 #[async_trait::async_trait]
 impl MailTransport for UncertainTransport {
@@ -361,7 +390,7 @@ impl MailTransport for UncertainTransport {
     }
     async fn submit(
         &self,
-        _: &Credentials,
+        credentials: &Credentials,
         _: &str,
         _: &[String],
         _: &[u8],
@@ -370,6 +399,26 @@ impl MailTransport for UncertainTransport {
         assert!(self.repository.saved_unknown.load(Ordering::Acquire));
         *self.submission_deadline.lock().unwrap() = Some(pre_body_deadline);
         self.submissions.fetch_add(1, Ordering::AcqRel);
+        if let Some(control) = &self.submit_control {
+            match tokio::time::timeout_at(
+                pre_body_deadline + SUBMISSION_DATA_BUDGET,
+                control.wait(credentials),
+            )
+            .await
+            {
+                Ok(result) => result?,
+                Err(_) => {
+                    return Ok(TransportSubmission {
+                        outcome: SubmissionOutcome::Unknown,
+                        deadline_exceeded: true,
+                    });
+                }
+            }
+            control
+                .started
+                .send(credentials.binding.ok_or(Error::Invalid)?.link_id)
+                .map_err(|_| Error::ConnectionUnavailable)?;
+        }
         Ok(TransportSubmission {
             outcome: self.refusal.map_or(SubmissionOutcome::Unknown, |refusal| {
                 SubmissionOutcome::Rejected { refusal }

@@ -66,6 +66,7 @@ fn fixture(failure: Error) -> Fixture {
         owner_claims: AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: AtomicU32::new(0),
+        renewal: Default::default(),
         releases: AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -82,6 +83,7 @@ fn fixture(failure: Error) -> Fixture {
         deadline: AtomicBool::new(false),
         sent_found: Default::default(),
         submission_deadline: Default::default(),
+        submit_control: None,
         refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
             idle: None,
@@ -92,8 +94,14 @@ fn fixture(failure: Error) -> Fixture {
             released: tokio::sync::Semaphore::new(1),
         })),
     });
-    let engine = Engine::new(repository.clone(), cipher.clone(), transport.clone())
-        .with_notifier(notifier.clone());
+    let engine = Engine::new(
+        repository.clone(),
+        cipher.clone(),
+        transport.clone(),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    )
+    .with_notifier(notifier.clone());
     Fixture {
         engine,
         repository,

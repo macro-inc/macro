@@ -381,6 +381,17 @@ pub struct Stream {
     meter: ReadMeter,
 }
 impl Stream {
+    #[cfg(test)]
+    pub(crate) fn test_duplex(stream: tokio::io::DuplexStream) -> Self {
+        Self {
+            inner: Box::new(stream),
+            permit: None,
+            attempt: None,
+            line: Vec::new(),
+            literal: 0,
+            meter: ReadMeter::default(),
+        }
+    }
     pub(crate) fn attach_sync_budget(&mut self, budget: Arc<TransferBudget>) -> Result<(), Error> {
         budget
             .charge(self.meter.lifetime)

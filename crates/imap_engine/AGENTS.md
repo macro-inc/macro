@@ -201,6 +201,16 @@ the typed size issue with durable backoff. `enable-imap-connections` defaults of
 resumable paging and incremental scans belong to stacked follow-up
 `mac-imap-smtp.23`, not this initial bounded-snapshot implementation.
 
+Pass the service TaskTracker and shutdown token explicitly to Engine::new.
+Keep Submit tracked after an HTTP request disappears. Reject unadmitted sends
+when shutdown starts, preserving a prior sticky outcome instead of claiming
+non-delivery. Persist Unknown before provider work; renew concurrently after
+sixty seconds with a ten-second bound, so database waits cannot stop SMTP or its
+deadline. Count and log renewal failures without dropping the submission. A stale final
+save cannot overwrite another lease; the Unknown fence forbids sending it again.
+Connect/envelope have sixty seconds; DATA and its final reply share the absolute
+six-minute admission-to-completion deadline. Expiry after DATA remains Unknown.
+
 Report row-lock and command-lease contention as AccountBusy so a due send never
 inherits provider-throttle pacing. A pre-body refusal returns a typed command
 phase and recipient position, never an address or raw reply; abandon the whole

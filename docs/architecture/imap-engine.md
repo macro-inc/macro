@@ -54,8 +54,18 @@ being retried as a fresh send. SMTP telemetry records only phase and reply class
 Pooled SMTP sessions receive a three-second RSET check before reuse. A transport
 failure before any message-body byte gets one fresh-connection retry using the same frozen MIME
 and send identity. Admission, connection setup and envelope commands share one 60-second
-deadline; a retry needs at least 30 seconds remaining. Body IO lies outside that
-deadline and remains uncertain on failure. Exhausted pre-body connection failures return the closed
+deadline; a retry needs at least 30 seconds remaining. DATA transmission and its
+final reply share the absolute six-minute deadline from admission and remain
+uncertain on failure or expiry. Submit is tracked independently of the HTTP
+request. The composition root supplies its tracker and shutdown token explicitly;
+shutdown refuses unadmitted sends while preserving any prior sticky outcome.
+Its first command-lease renewal is after sixty seconds; a concurrent heartbeat
+bounds each database renewal at ten seconds, so it cannot stop polling SMTP or
+its single transport deadline. Renewal failures are counted and logged while
+SMTP continues, since Unknown already prevents resending. A
+stale final save cannot overwrite newer state. HTTP and tracked-work shutdown
+share thirty seconds, below the ECS stop timeout; a process cut-off retains
+Unknown. Exhausted pre-body connection failures return the closed
 `SendUnavailable` category: the email coordinator fails that attempt visibly,
 clears its submitting marker, and releases later work on the same link. A generic
 HTTP 503 or timeout does not carry this certainty and remains an uncertain send.

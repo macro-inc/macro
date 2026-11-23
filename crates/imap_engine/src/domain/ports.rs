@@ -339,6 +339,8 @@ pub trait MailTransport: Send + Sync {
     ) -> Result<RemoteWriteReceipt, ApplyError>;
     /// SMTP submit once. The caller persisted Unknown before invoking this.
     /// Preserve the admission deadline through every pre-body connection attempt.
+    /// DATA and its final reply finish no later than that deadline plus
+    /// SUBMISSION_DATA_BUDGET; expiry after DATA remains Unknown.
     async fn submit(
         &self,
         credentials: &Credentials,

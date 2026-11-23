@@ -30,6 +30,7 @@ impl Visit for Writes {
 #[derive(Clone, Default)]
 pub(super) struct FieldWrites {
     spans: Arc<Mutex<Vec<Fields>>>,
+    deadlines: Arc<Mutex<Vec<Fields>>>,
     probe_errors: Arc<Mutex<Vec<tracing::Level>>>,
 }
 
@@ -47,6 +48,10 @@ impl FieldWrites {
         self.spans.lock().unwrap().clone()
     }
 
+    pub(super) fn deadlines(&self) -> Vec<Fields> {
+        self.deadlines.lock().unwrap().clone()
+    }
+
     pub(super) fn probe_errors(&self) -> Vec<tracing::Level> {
         self.probe_errors.lock().unwrap().clone()
     }
@@ -54,7 +59,10 @@ impl FieldWrites {
 
 impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S> for FieldWrites {
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
-        if attrs.metadata().name() == "smtp.submit" {
+        if matches!(
+            attrs.metadata().name(),
+            "smtp.submit" | "imap.protocol.submit"
+        ) {
             let mut writes = Writes::default();
             attrs.record(&mut writes);
             ctx.span(id).unwrap().extensions_mut().insert(writes);
@@ -71,6 +79,12 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
 
     fn on_close(&self, id: Id, ctx: Context<'_, S>) {
         let span = ctx.span(&id).unwrap();
+        if span.name() == "imap.protocol.submit" {
+            self.deadlines
+                .lock()
+                .unwrap()
+                .push(span.extensions().get::<Writes>().unwrap().0.clone());
+        }
         if span.name() == "smtp.submit" {
             self.spans
                 .lock()

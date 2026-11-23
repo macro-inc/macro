@@ -17,6 +17,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 mod config;
 mod scheduler;
+mod shutdown;
 
 #[tokio::main]
 async fn main() -> Result<(), rootcause::Report> {
@@ -79,6 +80,8 @@ async fn main() -> Result<(), rootcause::Report> {
         config.internal_auth_key.to_string(),
     )?;
     let repository = Arc::new(PgRepository::new(pool));
+    let tasks = TaskTracker::new();
+    let cancel = CancellationToken::new();
     let engine = Arc::new(
         Engine::new(
             repository.clone(),
@@ -87,6 +90,8 @@ async fn main() -> Result<(), rootcause::Report> {
                 config.imap_credential_kms_key_id.to_string(),
             )),
             Arc::new(ProtocolTransport::new(connector).with_settings(repository.clone())),
+            tasks.clone(),
+            cancel.clone(),
         )
         .with_settings(repository)
         .with_notifier(Arc::new(notifier))
@@ -94,8 +99,6 @@ async fn main() -> Result<(), rootcause::Report> {
             macro_service_urls::ThunderbirdAutoconfigUrl::new_for_environment(config.environment)?,
         ))),
     );
-    let cancel = CancellationToken::new();
-    let tasks = TaskTracker::new();
     tasks.spawn(scheduler::configuration_notifications(
         configuration_notifications,
         engine.clone(),
@@ -115,16 +118,28 @@ async fn main() -> Result<(), rootcause::Report> {
         .layer(axum::extract::DefaultBodyLimit::max(40 * 1024 * 1024));
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port)).await?;
     tracing::info!("imap_service is up and running");
-    let stopping = cancel.clone();
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            shutdown_signal().await;
-            stopping.cancel();
-        })
-        .await?;
+    let stop_server = CancellationToken::new();
+    let stopping = stop_server.clone();
+    let server = axum::serve(listener, app).with_graceful_shutdown(stopping.cancelled_owned());
+    let server = std::future::IntoFuture::into_future(server);
+    tokio::pin!(server);
+    let server_result = tokio::select! {
+        result = &mut server => Some(result),
+        _ = shutdown_signal() => None,
+    };
     cancel.cancel();
+    stop_server.cancel();
     tasks.close();
-    tokio::time::timeout(Duration::from_secs(30), tasks.wait()).await?;
+    let drained = shutdown::drain(
+        async move {
+            match server_result {
+                Some(result) => result,
+                None => server.await,
+            }
+        },
+        &tasks,
+    )
+    .await;
     telemetry.shutdown();
-    Ok(())
+    drained
 }

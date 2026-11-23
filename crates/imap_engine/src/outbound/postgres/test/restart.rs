@@ -50,6 +50,7 @@ async fn graceful_restart_releases_both_leases_before_their_expiry(pool: PgPool)
         owner_available: AtomicBool::new(true),
         owner_claims: AtomicU32::new(0),
         owner_errors: AtomicU32::new(0),
+        renewal: Default::default(),
         releases: AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         acquire_gate: None,
@@ -61,6 +62,7 @@ async fn graceful_restart_releases_both_leases_before_their_expiry(pool: PgPool)
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(Default::default()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
             idle: None,
@@ -74,7 +76,13 @@ async fn graceful_restart_releases_both_leases_before_their_expiry(pool: PgPool)
         })),
     });
     for _ in 0..2 {
-        let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
+        let engine = Engine::new(
+            repository.clone(),
+            Arc::new(TestCipher),
+            transport.clone(),
+            tokio_util::task::TaskTracker::new(),
+            tokio_util::sync::CancellationToken::new(),
+        );
         let cancellation = CancellationToken::new();
         let stop = cancellation.clone();
         let actor = tokio::spawn(async move { engine.run_account(binding, stop).await });

@@ -12,6 +12,8 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument;
 mod host_notifications;
 mod recent;
 use uuid::Uuid;
@@ -33,6 +35,8 @@ enum AdmissionOutcome {
 
 /// Engine orchestrator. Authorization and state transitions live here, not in HTTP handlers.
 pub struct Engine {
+    submission_tasks: TaskTracker,
+    shutdown: CancellationToken,
     repository: Arc<dyn Repository>,
     cipher: Arc<dyn CredentialCipher>,
     transport: Arc<dyn MailTransport>,
@@ -56,8 +60,12 @@ impl Engine {
         repository: Arc<dyn Repository>,
         cipher: Arc<dyn CredentialCipher>,
         transport: Arc<dyn MailTransport>,
+        submission_tasks: TaskTracker,
+        shutdown: CancellationToken,
     ) -> Self {
         Self {
+            submission_tasks,
+            shutdown,
             repository,
             notifier: None,
             settings: None,
@@ -76,6 +84,34 @@ impl Engine {
             idle_policy: std::sync::Mutex::new(super::adaptive_idle::IdlePolicy::new()),
             cipher,
             transport,
+        }
+    }
+
+    /// Keep an admitted submission alive when its request stops waiting.
+    /// Other operations retain their caller's cancellation semantics.
+    pub async fn execute_tracked(
+        self: Arc<Self>,
+        binding: Binding,
+        operation: Operation,
+        class: OperationClass,
+    ) -> Result<Value, Error> {
+        if matches!(&operation, Operation::Submit { .. }) {
+            let engine = self.clone();
+            self.submission_tasks
+                .spawn(
+                    async move { engine.execute_in_class(binding, operation, class).await }
+                        .in_current_span(),
+                )
+                .await
+                .map_err(|error| {
+                    tracing::error!(
+                        is_panic = error.is_panic(),
+                        "tracked SMTP task ended unexpectedly"
+                    );
+                    Error::ConnectionUnavailable
+                })?
+        } else {
+            self.execute_in_class(binding, operation, class).await
         }
     }
 
@@ -266,6 +302,32 @@ impl Engine {
         self.repository.bindings(limit, retained_links).await
     }
 
+    // Shutdown can refuse a new attempt, but must not turn an earlier durable
+    // Unknown into proof of non-delivery. This uses the existing scoped read;
+    // it neither acquires a command lease nor opens a provider connection.
+    async fn submission_during_shutdown(&self, binding: Binding, id: &str) -> Result<Value, Error> {
+        let account = self
+            .repository
+            .read_scoped(
+                binding,
+                StateSelection::Draft {
+                    id: id.to_owned(),
+                    reply_to: None,
+                },
+            )
+            .await?;
+        self.repository.validate_read(&account).await?;
+        match account
+            .state
+            .drafts
+            .get(id)
+            .and_then(|draft| draft.submission.as_ref())
+        {
+            Some(outcome) => value(outcome),
+            None => Err(Error::SendUnavailable),
+        }
+    }
+
     /// Execute an operation using the trusted caller's workload class.
     #[tracing::instrument(skip_all, fields(operation.busy_retry_count = tracing::field::Empty), err)]
     pub async fn execute_in_class(
@@ -336,10 +398,18 @@ impl Engine {
             .as_ref()
             .map(|(_, stopped)| stopped.clone())
             .unwrap_or_default();
-        let capacity = tokio::select! {
-            biased;
-            _ = stopped.cancelled() => return Err(Error::Conflict),
-            capacity = self.admit_capacity(&operation, class, submission_deadline) => capacity?,
+        let capacity = if let Operation::Submit { id } = &operation {
+            tokio::select! {
+                biased;
+                _ = self.shutdown.cancelled() => return self.submission_during_shutdown(binding, id).await,
+                capacity = self.admit_capacity(&operation, class, submission_deadline) => capacity?,
+            }
+        } else {
+            tokio::select! {
+                biased;
+                _ = stopped.cancelled() => return Err(Error::Conflict),
+                capacity = self.admit_capacity(&operation, class, submission_deadline) => capacity?,
+            }
         };
         let mut account = None;
         let work = async {

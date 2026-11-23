@@ -259,7 +259,7 @@ async fn operation(
     Ok(Json(
         state
             .engine
-            .execute_in_class(binding(link, &headers)?, input, operation_class(&headers)?)
+            .execute_tracked(binding(link, &headers)?, input, operation_class(&headers)?)
             .await?,
     ))
 }

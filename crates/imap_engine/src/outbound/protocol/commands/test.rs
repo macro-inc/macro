@@ -309,6 +309,7 @@ fn indexed_engine(transport: Arc<ProtocolTransport>) -> Arc<crate::domain::servi
         owner_available: AtomicBool::new(true),
         owner_claims: AtomicU32::new(0),
         owner_errors: AtomicU32::new(0),
+        renewal: Default::default(),
         releases: AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         acquire_gate: None,
@@ -317,6 +318,8 @@ fn indexed_engine(transport: Arc<ProtocolTransport>) -> Arc<crate::domain::servi
         repository,
         Arc::new(PeerCipher),
         transport,
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
     ))
 }
 

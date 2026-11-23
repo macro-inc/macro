@@ -21,6 +21,7 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             owner_claims: std::sync::atomic::AtomicU32::new(0),
             owner_gate: std::sync::Mutex::new(None),
             owner_errors: std::sync::atomic::AtomicU32::new(0),
+            renewal: Default::default(),
             releases: std::sync::atomic::AtomicU32::new(0),
             acquire_gate: None,
         });
@@ -30,10 +31,17 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             deadline: AtomicBool::new(false),
             sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
             submission_deadline: std::sync::Mutex::new(None),
+            submit_control: None,
             refusal: None,
             provider_work: None,
         });
-        let engine = Arc::new(Engine::new(repository, Arc::new(TestCipher), transport));
+        let engine = Arc::new(Engine::new(
+            repository,
+            Arc::new(TestCipher),
+            transport,
+            tokio_util::task::TaskTracker::new(),
+            tokio_util::sync::CancellationToken::new(),
+        ));
         let app = router(ApiState {
             engine,
             internal_key: configured.into(),
@@ -170,4 +178,59 @@ fn provider_limits_keep_a_minute_floor_while_local_account_contention_retries_in
         assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(response.headers().get("retry-after").unwrap(), expected);
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn cancelling_the_request_does_not_cancel_an_admitted_submission() {
+    use crate::domain::service::test::send_lifetime::PendingSubmission;
+
+    let mut fixture = PendingSubmission::new().await;
+    let state = ApiState {
+        engine: fixture.engine.clone(),
+        internal_key: "synthetic-internal-key".into(),
+    };
+    let mut headers = HeaderMap::new();
+    headers.insert("x-mailbox-binding", "1.1".parse().unwrap());
+    let link = fixture.binding.link_id;
+    let id = fixture.draft.id.clone();
+    // Abort the actual request-handler future after SMTP has started, exactly
+    // where an HTTP client disconnect would drop it.
+    let request = tokio::spawn(operation(
+        State(state),
+        Path(link),
+        headers,
+        Json(Operation::Submit { id }),
+    ));
+    assert_eq!(fixture.started.recv().await, Some(link));
+    request.abort();
+    assert!(matches!(request.await, Err(error) if error.is_cancelled()));
+    assert!(
+        fixture
+            .repository
+            .saved_unknown
+            .load(std::sync::atomic::Ordering::Acquire)
+    );
+    fixture.control.released.add_permits(1);
+    // The controlled provider reports both entry and completion. Cancellation
+    // must not consume the completion with a dropped provider future.
+    assert_eq!(
+        tokio::time::timeout(std::time::Duration::from_secs(1), fixture.started.recv())
+            .await
+            .unwrap(),
+        Some(link)
+    );
+    assert_eq!(
+        fixture
+            .transport
+            .submissions
+            .load(std::sync::atomic::Ordering::Acquire),
+        1
+    );
+    assert_eq!(
+        fixture
+            .repository
+            .releases
+            .load(std::sync::atomic::Ordering::Acquire),
+        2
+    );
 }

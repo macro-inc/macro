@@ -153,6 +153,7 @@ async fn scoped_reads_share_a_snapshot_and_cannot_mutate_or_outlive_access(pool:
         owner_available: AtomicBool::new(true),
         owner_claims: AtomicU32::new(0),
         owner_errors: AtomicU32::new(0),
+        renewal: Default::default(),
         releases: AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         acquire_gate: None,
@@ -172,6 +173,7 @@ async fn scoped_reads_share_a_snapshot_and_cannot_mutate_or_outlive_access(pool:
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(Default::default()),
         submission_deadline: std::sync::Mutex::new(None),
+        submit_control: None,
         refusal: None,
         provider_work: Some(control.clone()),
     });
@@ -179,6 +181,8 @@ async fn scoped_reads_share_a_snapshot_and_cannot_mutate_or_outlive_access(pool:
         Arc::new(PgRepository::new(one.clone())),
         Arc::new(TestCipher),
         transport,
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
     );
     let reading = tokio::spawn(async move {
         engine

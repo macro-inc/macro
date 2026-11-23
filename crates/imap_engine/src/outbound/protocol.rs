@@ -463,7 +463,7 @@ impl MailTransport for ProtocolTransport {
         .await
         .map_err(|_| ApplyError::Uncertain(Error::ConnectionUnavailable))?
     }
-    #[tracing::instrument(skip_all, err)]
+    #[tracing::instrument(skip_all, name = "imap.protocol.submit", fields(smtp.deadline_exceeded = tracing::field::Empty), err)]
     async fn submit(
         &self,
         c: &Credentials,
@@ -472,8 +472,8 @@ impl MailTransport for ProtocolTransport {
         mime: &[u8],
         pre_body_deadline: tokio::time::Instant,
     ) -> Result<TransportSubmission, Error> {
-        match timeout(
-            Duration::from_secs(8 * 60),
+        let result = match tokio::time::timeout_at(
+            pre_body_deadline + SUBMISSION_DATA_BUDGET,
             self.submit_inner(c, from, recipients, mime, pre_body_deadline),
         )
         .await
@@ -486,7 +486,14 @@ impl MailTransport for ProtocolTransport {
                 outcome: SubmissionOutcome::Unknown,
                 deadline_exceeded: true,
             }),
-        }
+        };
+        tracing::Span::current().record(
+            "smtp.deadline_exceeded",
+            result
+                .as_ref()
+                .is_ok_and(|outcome| outcome.deadline_exceeded),
+        );
+        result
     }
     #[tracing::instrument(skip_all, err)]
     async fn save_sent(

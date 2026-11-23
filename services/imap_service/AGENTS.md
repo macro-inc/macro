@@ -20,7 +20,15 @@ shutdown. User-facing routes live in email_service.
 - Reject IMAP test endpoint/trust-root overrides outside Environment::Local.
 - The service requires a dedicated KMS key and internal key. It has no public
   gateway route and cannot decrypt credentials owned by another link or user.
-- Stop and drain tracked scheduler work on shutdown.
+- Pass the actual service shutdown token and tracker into Engine; refuse new
+  unadmitted sends during shutdown without replacing a prior Unknown outcome.
+  Track admitted Submit work with scheduler tasks, independently of HTTP cancellation.
+  Give HTTP and tracked-work shutdown one shared thirty-second drain, below the
+  120-second ECS stop timeout; warn with remaining task count on expiry, and
+  flush telemetry before returning either result.
+  Retain the existing thirty-second service drain: a longer send can be cut off
+  during deployment, deliberately keeping Unknown for confirmation instead of
+  automatic resend.
 - Keep code-level `AccountCapacity::DEFAULT` at 150 owned actors and 25 new
   actors per thirty-second tick; retain existing owners when a cap is reached.
   Host watches use 150 of 200 connector sockets. Beyond that, primary and extra

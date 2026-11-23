@@ -456,6 +456,7 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
         owner_claims: std::sync::atomic::AtomicU32::new(0),
         owner_gate: std::sync::Mutex::new(None),
         owner_errors: std::sync::atomic::AtomicU32::new(0),
+        renewal: Default::default(),
         releases: std::sync::atomic::AtomicU32::new(0),
         acquire_gate: None,
     });
@@ -494,6 +495,8 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
         repository.clone(),
         cipher.clone(),
         Arc::new(proxy.transport()),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
     );
     let correlation = uuid::Uuid::now_v7();
     let input = DraftInput {
@@ -545,7 +548,13 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
         serde_json::json!("unknown")
     );
     assert_eq!(proxy.accepted.load(Ordering::Acquire), 1);
-    let restarted = Engine::new(repository, cipher, Arc::new(proxy.transport()));
+    let restarted = Engine::new(
+        repository,
+        cipher,
+        Arc::new(proxy.transport()),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    );
     assert_eq!(
         restarted
             .execute(binding, Operation::Submit { id: draft.id })

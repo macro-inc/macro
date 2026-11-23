@@ -450,7 +450,8 @@ async fn deliver<S: ResponseReader + AsyncWrite>(
     if tokio::time::Instant::now() >= deadline {
         return Err(Error::SendUnavailable);
     }
-    // Admission was persisted before IO. Lost DATA delivery acknowledgments remain Unknown.
+    // The transport entry point owns the one absolute deadline, including DATA
+    // and its final reply. It retains Unknown if this exchange is cut off.
     if stream.write_all(&data).await.is_err() {
         tracing::warn!(
             smtp.phase = "data-body",
@@ -514,6 +515,8 @@ async fn submission_command<S: ResponseReader + AsyncWrite>(
     }
 }
 
+#[cfg(test)]
+mod timeout_test;
 #[cfg(test)]
 mod transcript_test;
 

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO imap_accounts(link_id,user_id,sync_generation,grant_generation,credential_ciphertext,state) VALUES($1,'owner',1,1,decode('01','hex'),$2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "322dd10dbfb23073a31cf2a60dd7e68a049665ebdd1d4db4209b2b7dc38c18fa"
+}

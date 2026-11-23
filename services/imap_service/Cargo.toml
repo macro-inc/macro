@@ -37,3 +37,6 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 [[bin]]
 name = "imap_service_doppler_config"
 path = "src/doppler_config.rs"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

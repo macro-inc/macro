@@ -55,6 +55,10 @@ pub(crate) const SYNC_ROUND_BUDGET: std::time::Duration =
 pub(crate) const SUBMISSION_PRE_BODY_BUDGET: std::time::Duration =
     std::time::Duration::from_secs(60);
 
+/// DATA transmission and its final reply share the remainder of one absolute
+/// six-minute submission budget after the sixty-second envelope budget.
+pub(crate) const SUBMISSION_DATA_BUDGET: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// Exact mailbox credential binding, authorized by the email domain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

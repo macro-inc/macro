@@ -139,6 +139,7 @@ impl Engine {
         }
         Ok(())
     }
+    #[tracing::instrument(skip_all, name = "imap.submit", fields(smtp.renew_failures = tracing::field::Empty, smtp.penalty_applied = tracing::field::Empty), err)]
     pub(super) async fn submit(
         &self,
         a: &mut Account,
@@ -148,6 +149,9 @@ impl Engine {
         let draft = a.state.drafts.get(id).ok_or(Error::NotFound)?;
         if let Some(outcome) = &draft.submission {
             return value(outcome);
+        }
+        if self.shutdown.is_cancelled() {
+            return self.submission_during_shutdown(a.binding, id).await;
         }
         if a.state
             .send_penalty_until
@@ -212,6 +216,9 @@ impl Engine {
             return Err(Error::Invalid);
         }
         let frozen_input = serde_json::to_value(&send).map_err(|_| Error::Invalid)?;
+        if self.shutdown.is_cancelled() {
+            return self.submission_during_shutdown(a.binding, id).await;
+        }
         let draft = a.state.drafts.get_mut(id).ok_or(Error::NotFound)?;
         draft.frozen_content = Some(frozen_input);
         // This sticky tombstone is committed under the distributed fence BEFORE any SMTP delivery bytes.
@@ -219,22 +226,29 @@ impl Engine {
         draft.submission = Some(SubmissionOutcome::Unknown);
         a.state.sends_today = a.state.sends_today.saturating_add(1);
         self.repository.save(a).await?;
-        let submission = self.transport.submit(
-            &c,
-            &send.from.email,
-            &recipients,
-            &mime,
-            submission_deadline,
-        );
-        tokio::pin!(submission);
-        let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(60));
-        heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        let transport_result = loop {
+        let mut renew_failures = 0_u64;
+        let transport_result = {
+            let submission = self.transport.submit(
+                &c,
+                &send.from.email,
+                &recipients,
+                &mime,
+                submission_deadline,
+            );
+            // Renewal is a separate polled future: database waits must never
+            // stop SMTP IO or its absolute deadline from being polled.
+            let heartbeat =
+                renew_during_submission(self.repository.as_ref(), a, &mut renew_failures);
+            tokio::pin!(submission, heartbeat);
             tokio::select! {
-                result = &mut submission => break result,
-                _ = heartbeat.tick() => self.repository.renew(a).await?,
+                result = &mut submission => result,
+                never = &mut heartbeat => match never {},
             }
         };
+        tracing::Span::current().record("smtp.renew_failures", renew_failures);
+        let deadline_exceeded = transport_result
+            .as_ref()
+            .is_ok_and(|result| result.deadline_exceeded);
         let outcome = match transport_result {
             Ok(result) => {
                 if result.deadline_exceeded {
@@ -276,6 +290,9 @@ impl Engine {
             accept_submission(a, id, &mime, true)?;
         }
         self.repository.save(a).await?;
+        if deadline_exceeded {
+            tracing::Span::current().record("smtp.penalty_applied", true);
+        }
         if outcome == SubmissionOutcome::Accepted {
             self.reconcile_sent(a, &c).await?;
         }
@@ -322,4 +339,30 @@ fn accept_submission(
         },
     );
     Ok(())
+}
+
+async fn renew_during_submission(
+    repository: &dyn Repository,
+    account: &Account,
+    failures: &mut u64,
+) -> std::convert::Infallible {
+    let interval = std::time::Duration::from_secs(60);
+    let mut heartbeat = tokio::time::interval_at(tokio::time::Instant::now() + interval, interval);
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        heartbeat.tick().await;
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            repository.renew(account),
+        )
+        .await
+        {
+            Ok(Ok(())) => continue,
+            Ok(Err(error)) => {
+                tracing::warn!(?error, "SMTP lease renewal failed; submission continues")
+            }
+            Err(_) => tracing::warn!("SMTP lease renewal timed out; submission continues"),
+        }
+        *failures = failures.saturating_add(1);
+    }
 }

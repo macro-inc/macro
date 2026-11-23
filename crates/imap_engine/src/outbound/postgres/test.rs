@@ -1,6 +1,7 @@
 mod credential_health;
 mod reads;
 mod restart;
+mod send_lifetime;
 use super::*;
 use chrono::{Duration, Utc};
 
@@ -139,6 +140,8 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
         std::sync::Arc::new(crate::outbound::protocol::ProtocolTransport::new(
             crate::outbound::network::Connector::new(Default::default()).unwrap(),
         )),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
     );
     assert_eq!(
         reader
