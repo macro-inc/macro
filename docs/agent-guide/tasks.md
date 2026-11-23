@@ -377,7 +377,9 @@ state, and saved task views (`startDate` in the definition). There is no Start
 date column: the Due date column shows the range. Boards show Status columns
 when grouped by Start date, as for the other list-only groupings, and the Gantt
 does not move bars between Start date groups. With the flag off, the Start date
-choices are hidden and a stored start-date filter does not apply.
+choices are hidden, and once the flag is known off (not while it loads) a stored
+start grouping runs as the tab's default grouping, a start sort as Updated, and
+a start filter not at all; the URL and saved view keep what they hold.
 
 ### Start dates
 

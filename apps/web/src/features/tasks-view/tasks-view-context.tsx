@@ -43,6 +43,7 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
+import { useStartDatesOff } from '@property/hooks/useStartDateEnabled';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
@@ -63,7 +64,11 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import { TASK_DEFAULT_GROUP_BY } from './constants';
+import {
+  TASK_DEFAULT_GROUP_BY,
+  withoutStartDateGrouping,
+  withoutStartDateSort,
+} from './constants';
 import { toTaskBoardGrouping } from './core/task-board';
 import type { DateBucketBoundaries } from './core/task-due-date';
 import { isProjectTab } from './core/task-navigation';
@@ -261,6 +266,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         scopeKey: props.scopeKey,
       })
     );
+  const startDatesOff = useStartDatesOff();
   const [persistedState, setState] = props.scopeKey
     ? withSplitPanelOwner(ownedSlot('view-state'), createState)
     : createState();
@@ -281,11 +287,23 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return persistedState.layout;
     },
     get groupBy() {
+      const groupBy = startDatesOff()
+        ? withoutStartDateGrouping(persistedState.groupBy, persistedState.tab)
+        : persistedState.groupBy;
       if (state.layout !== 'board') {
-        return persistedState.groupBy;
+        return groupBy;
       }
 
-      return toTaskBoardGrouping(persistedState.groupBy);
+      return toTaskBoardGrouping(groupBy);
+    },
+    get sort() {
+      return startDatesOff()
+        ? withoutStartDateSort(persistedState.sort)
+        : persistedState.sort;
+    },
+    // A start-date filter from a URL or saved view has no control with start dates off.
+    get startDate() {
+      return startDatesOff() ? undefined : persistedState.startDate;
     },
     get tab(): TasksTab {
       return persistedState.tab;
@@ -318,15 +336,16 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         isTouchDevice() && !state.savedViewActive
           ? 'list'
           : persistedState.layout,
-      sort: state.sort[0]?.id,
-      sortReversed: state.sort[0]
-        ? state.sort[0].reversed
+      // Layout and rollout fallbacks must not overwrite the selected sort,
+      // grouping or date filters.
+      sort: persistedState.sort[0]?.id,
+      sortReversed: persistedState.sort[0]
+        ? persistedState.sort[0].reversed
           ? 'true'
           : 'false'
         : undefined,
-      // Layout and rollout fallbacks must not overwrite the selected grouping.
       groupBy: persistedState.groupBy,
-      ...taskDateFilterSearch(state),
+      ...taskDateFilterSearch(persistedState),
     });
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);

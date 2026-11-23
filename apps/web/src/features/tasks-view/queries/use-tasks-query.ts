@@ -22,7 +22,6 @@ import {
   taskCustomPropertyReferences,
 } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
@@ -189,12 +188,7 @@ export function useTasksDataSource(
   const notificationSource = useGlobalNotificationSource();
   const calendar = options.calendar ?? createDateBucketBoundariesSignal();
   const dueDate = () => taskDueDatePredicate(state.dueDate, calendar());
-  const startDates = useStartDateEnabled();
-  // A stored start-date filter has no control with start dates off.
-  const startDate = () =>
-    startDates()
-      ? taskStartDatePredicate(state.startDate, calendar())
-      : undefined;
+  const startDate = () => taskStartDatePredicate(state.startDate, calendar());
   const attachNotifications = (entity: TaskEntityWithProperties) =>
     withEntityNotifications(entity, notificationSource);
 

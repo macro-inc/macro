@@ -210,6 +210,24 @@ export function taskGroupOptions(startDates: boolean) {
     : TASK_GROUP_OPTIONS.filter((option) => option.id !== 'start_date');
 }
 
+/** The grouping a view runs with when start dates are off. */
+export function withoutStartDateGrouping(
+  groupBy: TaskGroupBy,
+  tab: TasksTab
+): TaskGroupBy {
+  return groupBy === 'start_date' ? TASK_DEFAULT_GROUP_BY[tab] : groupBy;
+}
+
+/** The sort a view runs with when start dates are off. */
+export function withoutStartDateSort(
+  sort: SortSelection<TaskSortId>[]
+): SortSelection<TaskSortId>[] {
+  const primary = sort[0];
+  return primary && START_DATE_SORTS.includes(primary.id)
+    ? [{ id: 'updated_at' }]
+    : sort;
+}
+
 /**
  * Date sorts keep tasks without the date last whichever way they run, so
  * they are never reversed.

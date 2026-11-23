@@ -1,6 +1,11 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  TASK_DEFAULT_GROUP_BY,
+  withoutStartDateGrouping,
+  withoutStartDateSort,
+} from '../constants';
+import {
   createDateBucketBoundaries,
   taskDueDatePredicate,
   taskStartDatePredicate,
@@ -11,7 +16,6 @@ import {
   materializeTaskSavedView,
   readTaskSavedView,
 } from '../filters/task-saved-view';
-
 import { type BuildTaskQueryOptions, buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
@@ -368,6 +372,32 @@ describe('start dates', () => {
         start: '2026-11-02T05:00:00.000Z',
         end: '2026-11-04T05:00:00.000Z',
       },
+    });
+  });
+
+  it('falls back to the tab grouping and Updated sort when start dates are off', () => {
+    expect(withoutStartDateGrouping('start_date', 'my-tasks')).toBe(
+      TASK_DEFAULT_GROUP_BY['my-tasks']
+    );
+    expect(withoutStartDateGrouping('start_date', 'created-by-me')).toBe(
+      TASK_DEFAULT_GROUP_BY['created-by-me']
+    );
+    expect(withoutStartDateGrouping('due_date', 'my-tasks')).toBe('due_date');
+    expect(withoutStartDateSort([{ id: 'start_date_latest' }])).toEqual([
+      { id: 'updated_at' },
+    ]);
+    const due = [{ id: 'due_date_earliest' as const }];
+    expect(withoutStartDateSort(due)).toBe(due);
+    const query = buildTaskQuery({
+      ...options,
+      groupBy: withoutStartDateGrouping('start_date', 'team-tasks'),
+      sort: withoutStartDateSort([{ id: 'start_date_earliest' }]),
+      calendar,
+    });
+    expect(query.params).toMatchObject({ sort_method: 'updated_at' });
+    expect(query.groupBy).toEqual({
+      type: 'property',
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
     });
   });
 
