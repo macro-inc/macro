@@ -117,7 +117,7 @@ export function VoiceMemoPlayer(props: {
         class="min-w-0 flex-1"
         minValue={0}
         maxValue={Math.max(duration(), 0.1)}
-        step={0.1}
+        step={1}
         value={[Math.min(time(), duration())]}
         disabled={!props.src || duration() === 0}
         onChange={([value]) => {
@@ -132,8 +132,11 @@ export function VoiceMemoPlayer(props: {
             class="size-3 border-0 bg-ink shadow-none"
             aria-label={t('channelComposer.seekVoiceMemo')}
             aria-valuetext={positionLabel()}
+            // Seeking keys (Home, End, arrows) stay here, not with the
+            // app's list and pane shortcuts.
+            data-keyboard-input
           >
-            <Slider.Input />
+            <Slider.Input aria-hidden="true" />
           </Slider.Thumb>
         </Slider.Track>
       </Slider>
