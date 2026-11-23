@@ -1968,6 +1968,37 @@ describe('soup backfill checkpoint locks', () => {
     ).toBe(false);
   });
 
+  it('leaves the mark to a tab that saves while a lane that never got its locks gives up', async () => {
+    vi.useFakeTimers();
+    const core = lane('core-entities', done());
+    const coreTab = hold(key(core));
+    const rejected = rejectWaits(key(core));
+    const suite = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [core])
+    );
+    await rejected;
+    await vi.advanceTimersByTimeAsync(30_000);
+    // The tab holding the lane saves its pass start while this one reads
+    // the generation for the failure mark.
+    mockCacheHost.currentStorageGeneration.mockImplementationOnce(async () => {
+      saveSoupBackfillCheckpoint(
+        {
+          ...initialSoupBackfillCheckpoint('user-1', 'storage-1'),
+          scanStartedAt: '2026-09-03T00:00:00.000Z',
+        },
+        testLane('core-entities')
+      );
+      return 'storage-1';
+    });
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    await suite;
+    expect(
+      soupBackfillLaneFailed('user-1', testLane('core-entities'), 'storage-1')
+    ).toBe(false);
+    await coreTab.release();
+  });
+
   it('marks a lane that gave up when no other tab took it', async () => {
     vi.useFakeTimers();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
