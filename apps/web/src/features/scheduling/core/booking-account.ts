@@ -13,33 +13,39 @@ export type BookingAccount = {
 
 /**
  * The account a personal link books on: the one it names, or the primary
- * inbox's when it names none. Undefined while accounts load, or when the
- * named inbox is no longer connected.
+ * inbox's when it names none. Undefined while accounts load, when the named
+ * inbox is no longer connected, and for a link on the primary inbox when
+ * that inbox has no calendar it can book on.
  */
 export function bookingAccountFor(
   event: Pick<EventType, 'emailLinkId'>,
   accounts: readonly BookingAccount[]
 ): BookingAccount | undefined {
-  if (!event.emailLinkId)
-    return accounts.find((account) => account.primary) ?? accounts[0];
+  if (!event.emailLinkId) return accounts.find((account) => account.primary);
   return accounts.find((account) => account.emailLinkId === event.emailLinkId);
 }
 
 /**
- * The account to show for a personal link: its address, or that the inbox it
+ * The account to show for a personal link: its address, "Primary account"
+ * for a link on a primary inbox that isn't listed, or that the inbox it
  * names is gone. Undefined while accounts load, and when there is nothing to
- * choose: one account, and the link names none.
+ * choose: the primary inbox is the only account and the link names none.
  */
 export function bookingAccountLabel(
   event: Pick<EventType, 'emailLinkId'>,
   accounts: readonly BookingAccount[]
 ): string | undefined {
   if (!accounts.length) return undefined;
-  if (accounts.length < 2 && !event.emailLinkId) return undefined;
-  return (
-    bookingAccountFor(event, accounts)?.emailAddress ?? 'Disconnected account'
-  );
+  const account = bookingAccountFor(event, accounts);
+  if (!event.emailLinkId) {
+    if (accounts.length === 1 && account) return undefined;
+    return account?.emailAddress ?? PRIMARY_ACCOUNT_LABEL;
+  }
+  return account?.emailAddress ?? 'Disconnected account';
 }
+
+/** A link on the primary inbox, when that inbox lists no bookable calendar. */
+export const PRIMARY_ACCOUNT_LABEL = 'Primary account';
 
 /** Why a personal link cannot book on the account it names, if it cannot. */
 export function bookingAccountIssue(

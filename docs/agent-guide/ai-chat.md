@@ -2678,8 +2678,10 @@ Ask the AI to find or reuse an existing booking link before creating another.
 shareable URLs (including paused links). It also supplies the revision used to
 protect edits from concurrent settings changes, and the connected accounts a
 personal link can book on: a draft's `emailLinkId` puts its bookings on that
-account's calendar, with invitations from its address, and saving refuses an
-account you can't book on or Google Meet on one that can't add a video meeting.
+account's calendar, with invitations from its address. Saving refuses a newly
+chosen account you can't book on, and Google Meet newly asked of an account that
+can't add a video meeting; an unchanged choice whose account was removed since
+still saves, and that link takes no bookings until another account is chosen.
 
 Booking links are confirmed in conversation, with no special booking form. The AI
 first explains the proposed meeting details, ownership and named hosts, the

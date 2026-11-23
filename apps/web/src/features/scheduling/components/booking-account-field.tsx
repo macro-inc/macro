@@ -2,6 +2,7 @@ import { createMemo, Show } from 'solid-js';
 import {
   type BookingAccount,
   bookingAccountFor,
+  PRIMARY_ACCOUNT_LABEL,
 } from '../core/booking-account';
 import { BookingFieldInfo } from './booking-field-info';
 import { SelectInput } from './fields';
@@ -16,6 +17,8 @@ export function BookingAccountField(props: {
 }) {
   const account = () =>
     bookingAccountFor({ emailLinkId: props.emailLinkId }, props.accounts);
+  const shownAccountId = () =>
+    account()?.emailLinkId ?? props.emailLinkId ?? '';
   // Kobalte re-asserts its selection when given a new options array, so the
   // options keep their identity until an account or the named inbox changes.
   const options = createMemo(() => {
@@ -25,6 +28,10 @@ export function BookingAccountField(props: {
     }));
     if (props.emailLinkId && !account())
       items.push({ value: props.emailLinkId, label: 'Disconnected account' });
+    // A link on a primary inbox that lists no bookable calendar still needs
+    // an option to show, and choosing it keeps the link on the primary inbox.
+    if (!props.emailLinkId && !account())
+      items.unshift({ value: '', label: PRIMARY_ACCOUNT_LABEL });
     return items;
   });
   // Only a chosen account is named here: a link left on the primary account
@@ -32,11 +39,11 @@ export function BookingAccountField(props: {
   const staleAccount = () =>
     props.emailLinkId && account()?.needsReconnect ? account() : undefined;
   const choose = (emailLinkId: string) => {
-    if (emailLinkId === (account()?.emailLinkId ?? props.emailLinkId)) return;
+    if (emailLinkId === shownAccountId()) return;
     const chosen = props.accounts.find(
       (item) => item.emailLinkId === emailLinkId
     );
-    props.onChange(chosen?.primary ? null : emailLinkId);
+    props.onChange(!emailLinkId || chosen?.primary ? null : emailLinkId);
   };
   return (
     <section class="flex min-w-0 flex-col gap-2">
@@ -51,7 +58,7 @@ export function BookingAccountField(props: {
       </div>
       <SelectInput
         label="Calendar account"
-        value={account()?.emailLinkId ?? props.emailLinkId ?? ''}
+        value={shownAccountId()}
         class="h-9 rounded-lg px-3 text-sm"
         disabled={props.disabled}
         error={props.error}

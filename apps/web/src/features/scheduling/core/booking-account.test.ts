@@ -31,6 +31,11 @@ describe('booking accounts', () => {
     expect(bookingAccountLabel({ emailLinkId: null }, [PERSONAL])).toBe(
       undefined
     );
+    // The primary inbox lists no bookable calendar: the other account is
+    // still offered, beside the link's current primary choice.
+    expect(bookingAccountLabel({ emailLinkId: null }, [WORK])).toBe(
+      'Primary account'
+    );
   });
 
   it('refuses an account that is gone, but not while accounts load', () => {

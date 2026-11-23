@@ -164,9 +164,9 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
     }
     /// A personal link books only on a connected account its host can write,
     /// and a video meeting needs an account that can add one. Only a changed
-    /// choice is checked, so a link whose account was removed since does not
-    /// block saving the profile's other links; it takes no bookings until
-    /// its owner picks another.
+    /// account, or one newly asked for a video meeting, is checked, so a link
+    /// whose account was removed since does not block saving the profile's
+    /// other links; it takes no bookings until its owner picks another.
     async fn validate_accounts(
         &self,
         owner: &OwnedProfile,
@@ -185,7 +185,7 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
                 event.email_link_id.is_some()
                     && !old.is_some_and(|old| {
                         old.email_link_id == event.email_link_id
-                            && old.google_meet == event.google_meet
+                            && (old.google_meet || !event.google_meet)
                     })
             })
             .collect::<Vec<_>>();

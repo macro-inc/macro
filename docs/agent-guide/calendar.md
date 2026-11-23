@@ -1310,9 +1310,12 @@ shows a Calendar account select below Availability, listing each inbox whose
 primary calendar they can write by its address (the primary first). Bookings
 land on that account's calendar and their invitations come from its address;
 choosing the primary account stores none, so the link follows the primary
-inbox. A link whose account is no longer connected shows "Disconnected account"
-and cannot be saved until another is chosen, and Google Meet on an account that
-cannot add video meetings (an Outlook inbox without Teams) blocks saving too.
+inbox ("Primary account" when that inbox lists no calendar to book on). In the
+editor, a link whose account is no longer connected shows "Disconnected account"
+and asks for another before that link is saved, as it does for former team
+hosts; saving the profile's other links is not blocked. Google Meet on an
+account that cannot add video meetings (an Outlook inbox without Teams) blocks
+saving too.
 A chosen account that needs reconnecting shows a note that the link offers no
 times until it is reconnected. Review and the link's details list the account.
 Team links group Scheduling type and Team hosts under Team scheduling

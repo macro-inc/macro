@@ -98,11 +98,25 @@ async fn a_link_books_only_on_an_account_that_can_take_its_bookings() {
     service.save("admin", None, p).await.unwrap();
 
     // An account removed after it was chosen does not block saving the
-    // profile's other changes; the link just takes no bookings.
+    // profile's other changes, or turning its video meeting off; the link
+    // just takes no bookings.
     for owned in memory.profiles.lock().unwrap().values_mut() {
         owned.profile.event_types[0].email_link_id = Some(removed);
+        owned.profile.event_types[0].google_meet = true;
     }
     let mut renamed = service.settings("admin", None).await.unwrap();
     renamed.name = "Renamed".into();
-    assert!(service.save("admin", None, renamed).await.is_ok());
+    let renamed = service.save("admin", None, renamed).await.unwrap();
+    let mut video_off = renamed;
+    video_off.event_types[0].google_meet = false;
+    let video_off = service.save("admin", None, video_off).await.unwrap();
+    let mut video_on = video_off;
+    video_on.event_types[0].google_meet = true;
+    assert!(
+        matches!(
+            service.save("admin", None, video_on).await,
+            Err(Error::Invalid(_))
+        ),
+        "asking a removed account for a video meeting is a new choice"
+    );
 }
