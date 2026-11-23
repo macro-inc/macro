@@ -349,6 +349,9 @@ impl TursoStorage {
             connection,
             ..
         } = self;
+        if reason.is_none() {
+            connection.checkpoint_before_close();
+        }
         connection.release_statements();
         drop(connection);
         let closed = session.try_close().map_err(TursoStorageCloseFailure::new)?;
@@ -931,6 +934,9 @@ impl TursoStorage {
     /// Consumes and explicitly closes the native Turso connection.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageError> {
         let reason = self.latched_reason();
+        if reason.is_none() {
+            self.connection.checkpoint_before_close();
+        }
         self.connection.release_statements();
         self.connection.close().map_err(|_| {
             TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
@@ -955,12 +961,20 @@ impl TursoStorage {
     /// ran and how many frames it copied. A host that never calls it keeps
     /// Turso's own checkpoint.
     ///
+    /// On a connection with Turso's own checkpoint off (the browser's), the
+    /// storage copies the WAL itself: here from 4,000 frames, starting the
+    /// log over, and after any COMMIT that takes it to 10,000.
+    ///
     /// A failure is never a reset: like Turso's own checkpoint, it leaves the
     /// WAL whole, and the next call tries again.
     pub fn checkpoint_if_due(&self) -> Result<WalCheckpoint, TursoStorageError> {
         self.require_healthy()?;
-        self.connection
-            .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
+        let due = if self.connection.owns_checkpoints() {
+            driver::OWNED_CHECKPOINT_DUE_FRAMES
+        } else {
+            driver::CHECKPOINT_DUE_FRAMES
+        };
+        self.connection.checkpoint_over(due)
     }
 
     /// The end of the WAL. A caller that computed something from storage

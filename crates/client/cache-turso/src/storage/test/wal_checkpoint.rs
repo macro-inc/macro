@@ -271,3 +271,150 @@ fn the_wal_position_moves_with_every_committed_write_and_only_then() {
     assert_eq!(wal_frames(&storage), restarted_frames);
     assert_ne!(storage.wal_position().unwrap(), restarted);
 }
+
+/// A fresh database on a connection with Turso's own checkpoint off, as the
+/// browser opens it.
+fn open_owned(io: &Arc<FaultIo>, path: &str) -> TursoStorage {
+    let storage = open(io, path, true);
+    storage.connection.disable_turso_checkpoints();
+    assert!(storage.connection.owns_checkpoints());
+    storage
+}
+
+/// Writes from `first` until the WAL holds `frames` frames, checking that no
+/// COMMIT copied it on the way; returns the last write.
+fn write_until(storage: &mut TursoStorage, first: usize, frames: u64) -> usize {
+    let mut previous = wal_frames(storage);
+    let mut next = first;
+    while previous < frames {
+        write(storage, next).unwrap();
+        let now = wal_frames(storage);
+        assert!(
+            now > previous,
+            "a commit copied the WAL at {previous} frames"
+        );
+        previous = now;
+        next += 1;
+    }
+    next - 1
+}
+
+#[test]
+fn an_owned_wal_passes_turso_s_mark_and_copies_when_idle_from_4000_frames() {
+    let io = FaultIo::new();
+    let mut storage = open_owned(&io, "owned-idle.db");
+    block_on(storage.put_batch(vec![(key(SENTINEL), sentinel())])).unwrap();
+
+    // Past Turso's 1,000 and the 500 the idle call uses elsewhere: not due.
+    let last = write_until(&mut storage, 0, 1_500);
+    let early = storage.checkpoint_if_due().unwrap();
+    assert!(!early.ran, "{early:?}");
+
+    let last = write_until(&mut storage, last + 1, driver::OWNED_CHECKPOINT_DUE_FRAMES);
+    let before = wal_frames(&storage);
+    let checkpoint = storage.checkpoint_if_due().unwrap();
+    assert!(checkpoint.ran, "{checkpoint:?}");
+    assert_eq!(checkpoint.wal_frames, before);
+    assert_eq!(checkpoint.backfilled_frames, before);
+    // The copy started the log over itself; no write had to.
+    assert_eq!(wal_frames(&storage), 0);
+    assert_holds(&storage, last);
+
+    write(&mut storage, AFTER).unwrap();
+    assert!(wal_frames(&storage) < before / 4);
+    end_and_reopen(&io, "owned-idle.db", storage, AFTER, End::WriteAndCrash);
+}
+
+#[test]
+fn an_owned_wal_is_copied_after_the_commit_that_takes_it_to_the_cap() {
+    let io = FaultIo::new();
+    let mut storage = open_owned(&io, "owned-cap.db");
+    block_on(storage.put_batch(vec![(key(SENTINEL), sentinel())])).unwrap();
+    let mut previous = 0;
+    let mut most = 0;
+    let mut next = 0;
+    // No idle call: the WAL grows until a COMMIT reaches the cap.
+    let last = loop {
+        write(&mut storage, next).unwrap();
+        let now = wal_frames(&storage);
+        if now < previous {
+            break next;
+        }
+        previous = now;
+        most = most.max(now);
+        next += 1;
+        assert!(next < 1_000, "no copy at {now} frames");
+    };
+    assert!(
+        most < driver::CHECKPOINT_CAP_FRAMES,
+        "the WAL reached {most} frames"
+    );
+    assert!(
+        most + 2 * RECORDS as u64 >= driver::CHECKPOINT_CAP_FRAMES,
+        "copied early at {most} frames"
+    );
+    assert_eq!(wal_frames(&storage), 0, "the copy started the log over");
+    assert_holds(&storage, last);
+    end_and_reopen(&io, "owned-cap.db", storage, last, End::Close);
+}
+
+#[test]
+fn an_owned_wal_survives_a_crash_and_a_failed_copy() {
+    for (fault, end) in [IoFault::Sync, IoFault::DatabaseSync]
+        .into_iter()
+        .flat_map(|fault| [End::WriteAndCrash, End::Close].map(|end| (fault, end)))
+    {
+        let io = FaultIo::new();
+        let path = format!("owned-sync-{fault:?}-{end:?}.db");
+        let mut storage = open_owned(&io, &path);
+        block_on(storage.put_batch(vec![(key(SENTINEL), sentinel())])).unwrap();
+        write_until(&mut storage, 0, driver::OWNED_CHECKPOINT_DUE_FRAMES);
+        let before = wal_frames(&storage);
+        io.arm(fault);
+        assert_eq!(
+            storage.checkpoint_if_due(),
+            Err(TursoStorageError::Database)
+        );
+        assert!(io.is_clear(), "the checkpoint never hit {fault:?}");
+        // The log was not started over the frames the copy may have lost.
+        write(&mut storage, AFTER).unwrap();
+        let after = wal_frames(&storage);
+        assert!(after > before, "{fault:?}: {before} -> {after}");
+        end_and_reopen(&io, &path, storage, AFTER, end);
+    }
+}
+
+#[test]
+fn an_owned_wal_is_copied_and_emptied_on_close() {
+    let io = FaultIo::new();
+    let mut storage = open_owned(&io, "owned-close.db");
+    block_on(storage.put_batch(vec![(key(SENTINEL), sentinel())])).unwrap();
+    let last = write_until(&mut storage, 0, 1_500);
+    assert_eq!(
+        storage.try_close().unwrap(),
+        TursoStorageCloseOutcome::Healthy
+    );
+    let reopened = open(&io, "owned-close.db", false);
+    // The open itself writes a frame or two.
+    let frames = wal_frames(&reopened);
+    assert!(frames < 10, "the close left {frames} frames to read back");
+    assert_holds(&reopened, last);
+}
+
+#[test]
+fn an_owned_checkpoint_keeps_the_page_cache() {
+    let io = FaultIo::new();
+    let mut storage = open_owned(&io, "owned-page-cache.db");
+    block_on(storage.put_batch(vec![(key(SENTINEL), sentinel())])).unwrap();
+    let last = write_until(&mut storage, 0, driver::OWNED_CHECKPOINT_DUE_FRAMES);
+    assert_holds(&storage, last);
+    let warm = io.reads();
+    let checkpoint = storage.checkpoint_if_due().unwrap();
+    assert!(checkpoint.ran, "{checkpoint:?}");
+    // The copy reads the WAL; what follows is served from the cache, since
+    // starting the log over leaves this connection's view of it current.
+    let copied = io.reads();
+    assert!(copied > warm);
+    assert_holds(&storage, last);
+    assert_eq!(io.reads(), copied, "the checkpoint dropped cached pages");
+}
