@@ -8,6 +8,9 @@ import type { EmailAttachment } from './attachment';
 import { EmailMessage } from './message';
 import type { EmailThread } from './thread';
 
+// The largest page the thread route returns.
+const THREAD_PAGE_SIZE = 100;
+
 /** Draft content; relationships use message and thread handles. */
 export type DraftOptions = Omit<
   ApiDraftInput,
@@ -211,27 +214,17 @@ export class EmailDraft extends EmailMessage {
   }
 
   /**
-   * The files attached to this draft, from its thread's first 100 messages:
-   * uploads reserved with {@link addAttachment} (`pending` until `complete()`
-   * runs) and attachments forwarded with {@link forwardAttachment}. A draft's
-   * files are not among {@link attachments}, which lists a message's received
-   * or sent files.
+   * The files attached to this draft: uploads reserved with
+   * {@link addAttachment} (`pending` until `complete()` runs) and attachments
+   * forwarded with {@link forwardAttachment}. A draft's files are not among
+   * {@link attachments}, which lists a message's received or sent files.
    *
    * @readonly
    */
   async draftAttachments(): Promise<DraftAttachment[]> {
     const { thread_db_id } = await this.detail.get();
-    const { thread } = unwrap(
-      await this.client.email.getThread({
-        path: { thread_id: thread_db_id },
-        query: { limit: 100 },
-      }),
-    );
-    const record = thread.messages.find((m) => m.db_id === this.id);
-    if (!record)
-      throw new Error(
-        `Draft ${this.id} is not among its thread's first 100 messages`,
-      );
+    const record = await this.threadRecord(thread_db_id);
+    if (!record) throw new Error(`Draft ${this.id} is not in its thread`);
     return [
       ...record.attachments_draft.map((a) =>
         DraftAttachment.byId(
@@ -264,6 +257,21 @@ export class EmailDraft extends EmailMessage {
         ),
       ),
     ];
+  }
+
+  // The thread route is the one that returns a draft's files; read it a page
+  // at a time until the draft appears or the thread ends.
+  private async threadRecord(threadId: string) {
+    for (let offset = 0; ; offset += THREAD_PAGE_SIZE) {
+      const { thread } = unwrap(
+        await this.client.email.getThread({
+          path: { thread_id: threadId },
+          query: { offset, limit: THREAD_PAGE_SIZE },
+        }),
+      );
+      const record = thread.messages.find((m) => m.db_id === this.id);
+      if (record || thread.messages.length < THREAD_PAGE_SIZE) return record;
+    }
   }
 
   /**
