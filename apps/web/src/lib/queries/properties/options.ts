@@ -62,6 +62,8 @@ export type AddPropertyOptionAsyncMutation = ReturnType<
 type AddPropertyOptionParams = {
   propertyDefinitionId: string;
   body: AddPropertyOptionRequest;
+  /** The login session a flow that began earlier (provisioning a set first) began under. */
+  session?: number;
 };
 
 type UpdatePropertyOptionParams = {
@@ -126,7 +128,9 @@ export function useAddPropertyOptionMutation(
 ) {
   return createCatalogMutation(
     (vars: AddPropertyOptionParams) =>
-      addPropertyOption(vars.propertyDefinitionId, vars.body),
+      addPropertyOption(vars.propertyDefinitionId, vars.body, {
+        session: vars.session,
+      }),
     {
       onError(error) {
         console.error('Failed to add property option', error);

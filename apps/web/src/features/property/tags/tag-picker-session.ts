@@ -2,6 +2,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useDropdownSearch } from '@property/editors/selectors/PropertyOptionSelector';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
   type CreateTagResult,
@@ -312,6 +313,8 @@ export function createTagPickerSession(props: {
     const value = createDraftLabel().trim();
     if (!value) return;
 
+    // The add is dropped if another login takes over before it is sent.
+    const session = queryAccountSession();
     try {
       if (!(await persistSelection())) return;
 
@@ -319,6 +322,7 @@ export function createTagPickerSession(props: {
       if (!provisioned.definition) return;
 
       const created = await addOption.mutateAsync({
+        session,
         propertyDefinitionId: provisioned.definition.id,
         body: {
           type: 'select_string',

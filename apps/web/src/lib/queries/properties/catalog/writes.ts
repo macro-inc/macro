@@ -20,6 +20,7 @@
  *   the cache queues shows at once and the queue sends it.
  */
 
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -467,13 +468,22 @@ async function optionListLinks(
  * the option the first attempt made. Resolves once the server has it (a
  * queued add waits for its commit, as TanStack paused an offline write), so
  * callers never apply an id the server could still refuse; a refusal rejects
- * after the cache has removed the option.
+ * after the cache has removed the option. A caller whose flow began before
+ * this call (a tag created after its set was provisioned) passes the login
+ * session it began under; the add is dropped if another login took over.
  */
 export async function addPropertyOption(
   propertyDefinitionId: string,
-  request: AddPropertyOptionRequest
+  request: AddPropertyOptionRequest,
+  started: { session?: number } = {}
 ): Promise<PropertyOption> {
+  const session = started.session ?? queryAccountSession();
   return Telemetry.span('property_catalog.add_option', async (span) => {
+    if (queryAccountSession() !== session)
+      throw new CatalogMutationError(
+        'Another login took over before the add was sent',
+        'ACCOUNT_CHANGED'
+      );
     span.setAttr('property.definition_id', propertyDefinitionId);
     const id = uuidv7();
     span.setAttr('property.option_id', id);
@@ -493,9 +503,11 @@ export async function addPropertyOption(
     };
     // Context does not survive the await for the links, so the enqueue runs
     // in the trace the add started in, and only under the login that made it.
+    // The links are read from the cache, so they carry the cache generation
+    // they were read under.
     const parent = Telemetry.captureContext();
-    const session = queryAccountSession();
     const enqueue = async (cacheHost: CacheHost) => {
+      const authorizationEpoch = crmSnapshotAuthorization().epoch;
       const updates = await optionListLinks(
         cacheHost,
         propertyDefinitionId,
@@ -512,7 +524,7 @@ export async function addPropertyOption(
           AddPropertyOptionDocument,
           { input },
           { addPropertyOption: option },
-          { uuid: id, updates }
+          { uuid: id, updates, authorizationEpoch }
         ).toPromise()
       );
     };
