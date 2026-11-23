@@ -386,6 +386,22 @@ Start Date is never offered in Add property menus. With the flag off nothing
 shows it, apart from a row already set (by an agent or the SDK), which the
 Properties panel lists like any other property.
 
+**Add time**, under the calendar, gives both ends a time of day (`has_time` on
+the stored value): the start takes the next full hour and the due date an hour
+after it, as a new calendar event does. The picker then lists clock times for
+the active field (**Set start time…** / **Set end time…**; typed times such as
+`3p` work); due times on the start's day show the length each gives (`1h`,
+`1h 30min`). A new start time moves the due date with it, keeping the length;
+**Change day** moves the active end to another day, keeping its time. Times
+follow the calendar's 12/24-hour setting. The footer then reads `2h` with
+**Remove time**, which makes both ends whole days again, and **Clear both**.
+With times, the range reads `Nov 26, 2:00 – 4:00 PM` (`Nov 26, 2:00 PM →
+Nov 28, 4:00 PM` across days), the Properties rows show the time, and a due
+date with a time is overdue from that moment. A date without a time is read and
+written exactly as before. Agents set a time with `date_has_time` on
+SetEntityProperty; the SDK with `tasks.create({ dueDate, startDate, withTimes:
+true })` or `setProperty` with `has_time: true`.
+
 Writers other than the picker (agents, the SDK, quick input, routines, the
 board's deadline move) go through one server rule: the start never lands after
 the due date. A start set after it is saved as the due date, a due date set
