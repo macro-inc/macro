@@ -17,7 +17,9 @@ import { Timer } from './timer';
  * (`logAll: true`, up to 24 hours) or to discard it. Starting a timer stops
  * and saves any timer already running, even on the same task, so read
  * `macro.time.timer()` before starting one. The task's Time logged property
- * is the sum of its entries and cannot be set directly.
+ * is the sum of its entries and cannot be set directly. A 404 "time tracking
+ * not found" when logging, starting or stopping means time tracking is not
+ * turned on for this user yet: the task exists, so tell them and don't retry.
  */
 export class TimeNamespace {
   constructor(private readonly client: MacroClient) {}

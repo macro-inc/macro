@@ -48,7 +48,9 @@ function spanChanges(changes: TimeEntryChanges): {
 
 /** Whether a `YYYY-MM-DD` string names a day on the calendar (not February 30). */
 function isCalendarDay(date: string): boolean {
-  const [year, month, day] = date.split('-').map(Number);
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7));
+  const day = Number(date.slice(8, 10));
   const parsed = new Date(Date.UTC(year, month - 1, day));
   return (
     parsed.getUTCFullYear() === year &&
