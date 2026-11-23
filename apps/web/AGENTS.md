@@ -1487,8 +1487,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Pass persistent touch row controls through `ListEntity.touchActions`; hover actions are hidden on touch, and the narrow inbox layout must retain the touch controls.
 
 Conventions for this app live in `.agents/rules/web/` and load when you touch
-matching files: data fetching, Solid reactivity, architecture, UI, UI primitives,
-the startup bundle, Lexical nodes, and translated menu labels.
+matching files: data fetching, Solid reactivity, architecture, UI, UI copy, UI
+primitives, the startup bundle, Lexical nodes, and translated menu labels.
 
 ### Good Reference
 - https://github.com/solidjs-community/solid-primitives
