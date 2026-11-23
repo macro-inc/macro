@@ -80,10 +80,10 @@ async fn initiative_initialization_preserves_values_and_folder_namespace(
 
 /// Helper to count task properties
 async fn count_task_properties(pool: &Pool<Postgres>, entity_id: &str) -> i64 {
-    sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK'",
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK'"#,
+        entity_id,
     )
-    .bind(entity_id)
     .fetch_one(pool)
     .await
     .unwrap()
@@ -94,13 +94,16 @@ async fn get_task_property_values(
     pool: &Pool<Postgres>,
     entity_id: &str,
 ) -> Vec<(Uuid, Option<serde_json::Value>)> {
-    sqlx::query_as::<_, (Uuid, Option<serde_json::Value>)>(
+    sqlx::query!(
         "SELECT property_definition_id, values FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK' ORDER BY property_definition_id",
+        entity_id,
     )
-    .bind(entity_id)
     .fetch_all(pool)
     .await
     .unwrap()
+    .into_iter()
+    .map(|row| (row.property_definition_id, row.values))
+    .collect()
 }
 
 // ============================================================================
