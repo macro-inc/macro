@@ -129,9 +129,18 @@ export async function failsSometimes(
 }
 
 /**
- * Marks the test as one a known product defect fails in every run. The test
- * is listed in `ledger/known-defects.tsv`.
+ * Whether the app under test was built with `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`,
+ * which the page cannot show. CI sets the variable for the build and the run
+ * alike; a local run against a stack built with it must set it too.
  */
-export function knownDefect(): void {
-  test.fail();
+export const LOCAL_SYNC_BUILD =
+  process.env.VITE_ENABLE_CHANNEL_LOCAL_SYNC === 'true';
+
+/**
+ * Marks the test as one a known product defect fails in every run, on the
+ * builds named: without the flag, with it, or both. The test is listed in
+ * `ledger/known-defects.tsv` with the same builds.
+ */
+export function knownDefect(builds: 'off' | 'on' | 'both'): void {
+  test.fail(builds === 'both' || (builds === 'on') === LOCAL_SYNC_BUILD);
 }

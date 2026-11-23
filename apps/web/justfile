@@ -278,6 +278,14 @@ test-channels-e2e instance *ARGS:
     export CHANNELS_E2E_STACK_URL="$proxy"
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/channels-e2e/playwright.config.ts {{ARGS}}
 
+# The channels suite, or with `fuzz` after the source its fuzzer, of this
+# checkout against the app of another branch: builds the web bundle of a git
+# ref or of a checkout directory, serves it from the instance and runs. The
+# instance's services stay as they are. VITE_* variables set here go to the
+# build and to the run (tests/channels-e2e/README.md).
+test-channels-e2e-with instance source *ARGS:
+    tests/channels-e2e/run-with-bundle.sh "{{instance}}" "{{source}}" {{ARGS}}
+
 # The bundle the email browser suite serves (tests/email-e2e): every service on
 # the page's own origin, where the suite's front proxies to the email stack.
 # Suggestions are off: they are on in a development build only, and replace

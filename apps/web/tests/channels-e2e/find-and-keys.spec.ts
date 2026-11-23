@@ -216,8 +216,10 @@ test('KEY-06 Enter on a selected message opens a reply to that message', async (
   const view = new ChannelView(page, channel.id);
   await view.open();
   await view.expectEndsWith(['first', 'second']);
-  // Escape, not ArrowUp, to reach the list: KEY-05 has the defect of ArrowUp.
-  await selectLast(view, 'second');
+  await view.composerText.click();
+
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('[data-channel-message-list]')).toBeFocused();
   await page.keyboard.press('ArrowUp');
   await expect(selected(view)).toContainText('first');
   await page.keyboard.press('Enter');

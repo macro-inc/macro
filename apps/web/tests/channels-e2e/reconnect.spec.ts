@@ -1,5 +1,7 @@
 import { ChannelView } from './harness/channel';
-import { expect, test } from './harness/fixtures';
+import { leaveAlone } from './harness/device';
+import { expect, knownDefect, test } from './harness/fixtures';
+import { goOffline, goOfflineAtOnce } from './harness/network';
 
 // If this fails, someone whose connection dropped for a while comes back to
 // a channel that is missing what was said meanwhile, until they reload.
@@ -46,7 +48,9 @@ test('REC-02 a message sent with no connection is neither lost nor sent twice', 
   await view.open();
   await expect(view.message('before')).toBeVisible();
 
-  await context.setOffline(true);
+  // Once the page has its code: cut off before that, a page fails on the
+  // code it lacks (REC-04), which is not what this test is about.
+  await goOffline(context);
   await view.send('written offline');
   // What the app does with it now is its own business: it may keep the text
   // in the composer and say sending failed, or hold the message to send
@@ -99,4 +103,31 @@ test('REC-03 a message that arrives while the page is hidden is there when the p
   await page.bringToFront();
 
   await view.expectEndsWith(['before', 'while hidden one', 'while hidden two']);
+});
+
+// If this fails, a person whose connection drops in the first seconds after
+// the app opened is told that a new version is out and asked to reload,
+// which without a connection loses the app.
+test('REC-04 losing the connection just after the app opened does not say that a new version is out', async ({
+  page,
+  context,
+  ada,
+  people,
+}) => {
+  // Defect, with and without the flag: the code the app fetches in its first
+  // seconds fails to load, which it takes for a new version being out.
+  knownDefect('both');
+  const channel = await ada.createChannel({ members: [people.ben] });
+  await ada.post(channel.id, 'before');
+  const view = new ChannelView(page, channel.id);
+  await view.open();
+  await expect(view.message('before')).toBeVisible();
+
+  await goOfflineAtOnce(context);
+  // The app goes on fetching code for some seconds after it opens, while
+  // nothing else is asked of it.
+  await leaveAlone(page, 10);
+
+  await expect(page.getByText('New version available')).toHaveCount(0);
+  await expect(view.message('before')).toBeVisible();
 });

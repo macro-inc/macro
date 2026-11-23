@@ -174,10 +174,9 @@ test('UNR-04 scrolled up in an open channel, a new message shows “1 unread …
   const chip = page.getByRole('button', {
     name: '1 unread notification stack below',
   });
-  // Known defect, in about 1 run in 10: the
-  // notice never appears, or appears and is gone again before it can be
-  // clicked. The click is bounded so that the second form is recorded here
-  // rather than running out the test's time.
+  // Known defect, in about 1 run in 10: the notice never appears, or appears
+  // and is gone again before it can be clicked. The click is bounded so that
+  // the second form is recorded here rather than running out the test's time.
   await failsSometimes(async () => {
     await expect(chip).toBeVisible();
     await expect(view.message('came in below')).not.toBeInViewport();
@@ -231,7 +230,17 @@ test('UNR-06 a muted channel shows a crossed bell and is not marked unread by ne
   await expect(row).toBeVisible();
   await expect(mutedBell(row)).toHaveCount(0);
 
-  await chooseFromRowMenu(page, row, 'Mute', 'Until I turn it off');
+  // The submenu's entries are sometimes made again while it is open; the one
+  // with the keyboard is then gone, and Enter chooses nothing.
+  const mute = () =>
+    chooseFromRowMenu(page, row, 'Mute', 'Until I turn it off');
+  await failsSometimes(async () => {
+    await mute();
+    await expect(mutedBell(row)).toBeVisible({ timeout: 5_000 });
+  });
+  // Only while the submenu is still open: once muted, the menu offers Unmute.
+  const entry = page.getByRole('menuitem', { name: 'Until I turn it off' });
+  if ((await entry.count()) > 0) await mute();
   await expect(mutedBell(row)).toBeVisible();
 
   await ben.post(made.muted, 'while muted');
@@ -350,7 +359,7 @@ test('UNR-09 the first message in a new channel marks it unread for the other me
 }) => {
   // Product defect: the first message ever posted in a channel puts no
   // unread mark on the other member's row; the second message does.
-  knownDefect();
+  knownDefect('both');
   const made = await channelsNamed(ada, [people.ben], 'open', 'fresh', 'used');
   await ada.post(made.used, 'earlier');
   await new ChannelView(page, made.open).open();
@@ -376,6 +385,8 @@ test('UNR-10 a row found with “Search conversations” is marked unread at onc
   ben,
   people,
 }) => {
+  // Was a defect in every run; since the base of 2026-11-21 the row is marked
+  // in most runs (4 of 5 on each build).
   const made = await channelsNamed(ada, [people.ben], 'open', 'found');
   await ada.post(made.found, 'read before');
   await new ChannelView(page, made.open).open();
@@ -386,5 +397,5 @@ test('UNR-10 a row found with “Search conversations” is marked unread at onc
 
   await ben.post(made.found, 'while you were searching');
 
-  await expect(unreadDot(found)).toBeVisible();
+  await failsSometimes(() => expect(unreadDot(found)).toBeVisible());
 });

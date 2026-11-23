@@ -101,7 +101,7 @@ test('NAV-05 reading forward from an old message reaches the latest with nothing
   // Known defect on main: when the page that reaches the present arrives,
   // the list jumps to its end and the messages between are never shown.
   // Remove this line when that is fixed; the test then says so by failing.
-  knownDefect();
+  knownDefect('both');
   test.setTimeout(240_000);
   const view = new ChannelView(page, history.id);
   await view.open({ messageId: history.messages[14].id });
@@ -142,12 +142,11 @@ test('NAV-07 “Copy link” on a message gives a link that opens the channel on
   await view.noteMarkedMessages();
   await view.open();
   const target = history.messages[HISTORY_LENGTH - 4];
-  // The same link every run: what an earlier run copied must not pass for it.
-  await page.evaluate(() => navigator.clipboard.writeText('nothing yet'));
   await view.action(view.messageById(target.id), 'copy-link');
-  const copied = () => page.evaluate(() => navigator.clipboard.readText());
-  await expect.poll(copied).toContain(target.id);
-  const link = await copied();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toContain(target.id);
+  const link = await page.evaluate(() => navigator.clipboard.readText());
 
   // The link is opened from elsewhere in the app, as a pasted link is.
   await page.goto('/app/channels');

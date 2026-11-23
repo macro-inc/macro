@@ -18,6 +18,7 @@ threads	Replies show under their message in order for both people, live and afte
 thread-changes	Editing, deleting and reacting to a reply show to the other person without reload	THR-04,THR-05	
 reply-focus	Reply puts the keyboard in the reply box	THR-10	
 reconnect	After a lost connection or a hidden page, missed messages appear; a message written offline is neither lost nor doubled	REC-01,REC-02,REC-03	
+offline-just-after-open	Losing the connection in the first seconds after the app opened does not ask for a reload	REC-04	
 two-windows	What a person does in one window shows in their other window	TAB-01,TAB-02	
 drafts	A draft stays with its channel, survives reload, and is cleared by sending	CMP-01,CMP-02,CMP-03,CMP-13	
 composer	The send button is off when empty; the composer is ready again after sending and takes the cursor when a channel is chosen	CMP-04,KEY-10	
@@ -32,7 +33,7 @@ first-unread	The first message in a new channel marks it unread for the other me
 direct-messages	A direct message or named group I start reaches the others, continues one conversation, and can be answered	DM-01,DM-02,DM-03,DM-04,DM-05	
 dm-by-name	A teammate is offered by name in New direct message	DM-06	
 create	A private or team channel made in the app opens, lists and takes messages; its history starts with a created line	CHN-01,CHN-02,CHN-13,CHN-14	
-rename	Renaming a channel updates header and list for every member and is announced	CHN-03,CHN-04	
+rename	Renaming a channel updates header and list for every member and is announced	CHN-03,CHN-04,CHN-16	
 favorites	A channel can be made a favorite and taken out again	CHN-05	
 channel-link	Copy Link on a channel gives an address that opens it for another member	CHN-06	
 delete-channel	Deleting a channel removes it for owner and members at once; only the owner is offered it	CHN-07,CHN-08,CHN-09,CHN-15	
@@ -54,3 +55,31 @@ attachment-editing	Removing an attachment before sending, drag and drop, pasting
 reply-details	Reply-to-reply, the reply box's send button, collapsing a thread by pointer		Not written; reply by Enter and by hotkey are covered
 other-browsers	Safari and Firefox		Chromium only
 scale	Channels with tens of thousands of messages, hundreds of members, many channels		The long history is 230 messages; larger volumes stall every open page of their authors
+device-open-offline	A channel the device holds opens whole with no connection, for a member and for a team owner, without a notice that asks for a reload		Tested with the client that keeps channels on the device, in the tests that follow it
+device-not-held	A channel the device has never held says it cannot load offline and loads when the connection is back		Tested with the client that keeps channels on the device, in the tests that follow it
+device-slow-link	On a very slow connection a held channel shows at once and is brought up to date when the answer arrives		Tested with the client that keeps channels on the device, in the tests that follow it
+device-scroll-offline	History read while connected can be scrolled through offline; past the oldest held message the held ones stay		Tested with the client that keeps channels on the device, in the tests that follow it
+device-many-channels-offline	A held channel opens offline however many newer channels the person has		Tested with the client that keeps channels on the device, in the tests that follow it
+device-jump-offline	Going back to a link to an older held message opens at that message offline		Tested with the client that keeps channels on the device, in the tests that follow it
+device-threads-offline	Threads show their replies offline, long ones included		Tested with the client that keeps channels on the device, in the tests that follow it
+device-cut-off-reload	A thread read on a page that was left, by loading the app again, before the device kept it is kept by the next page		Tested with the client that keeps channels on the device, in the tests that follow it
+device-first-visit	A channel seen once and left at once is held; a message that arrived while it was open is held		Tested with the client that keeps channels on the device, in the tests that follow it
+sync-current	A channel changed while the person was in another channel, offline, reloading or had the app closed is right when they see it again	SYN-01,SYN-02,SYN-03,SYN-04,SYN-09,SYN-10	
+sync-device-equals-server	What the device holds after catching up is what the services hold	SYN-05	
+sync-far-behind	A channel more than a thousand changes behind is right when opened again	SYN-06	
+sync-link-after-change	An edit made while away shows after arriving through a link to an older message		A test of it was written and dropped: no break of the device copy made it fail, so it showed nothing about it
+sync-removed	A person removed from a channel while away is not shown the messages their device kept	SYN-08	
+sync-sequence-lowered	A page fetched during a catch-up that lowers the device's sequence is replayed from there		Cannot be staged from the screen; unit tests in src/lib/queries/messages/local/tests/catch-up
+prewarm	A device left alone fetches unread channels it has never opened, so they open offline		Tested with the client that keeps channels on the device, in the tests that follow it
+prewarm-limits	Prewarm takes at most forty unread and twenty recent channels, fifty messages each		Tested with the client that keeps channels on the device, in the tests that follow it
+prewarm-one-at-a-time	Prewarm fetches one channel at a time, and only while the person leaves the app alone		Not visible on screen; unit tests in src/lib/queries/messages/local/tests/prewarm
+eviction	A channel not opened for thirty days is dropped from the device		Tested with the client that keeps channels on the device, in the tests that follow it
+queued-writes	A message, reply, edit, deletion and reaction made offline show at once and reach the services once, in order, as last left		Tested with the client that keeps channels on the device, in the tests that follow it
+queue-reload	Writes that could not be sent survive a reload and are sent once when the services can be reached		Tested with the client that keeps channels on the device, in the tests that follow it
+queue-lost-answer	A write the services took but whose answer was lost is in the channel once		Tested with the client that keeps channels on the device, in the tests that follow it
+queue-refused	A write the services refuse is taken back off the screen and shown as failed		Tested with the client that keeps channels on the device, in the tests that follow it
+queue-waiting-mark	A message still waiting to be sent says so		Tested with the client that keeps channels on the device, in the tests that follow it
+queue-two-windows	Two windows of one device show each other's offline writes and send each once		Tested with the client that keeps channels on the device, in the tests that follow it
+queue-two-devices	Two devices of one person, one of them offline, end up showing what the services hold		Tested with the client that keeps channels on the device, in the tests that follow it
+queue-storage-reset	Writes still queued when the device's storage is reset are not sent later or shown as sent		Tested with the client that keeps channels on the device, in the tests that follow it
+discussions-unchanged	Document discussions, and channels without the flag, read and write as before the device cache		Not written for discussions: the suite covers channels only; without the flag the whole earlier suite runs as before

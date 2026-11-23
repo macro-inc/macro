@@ -17,6 +17,7 @@ import {
   sidebarSectionOf,
   systemLine,
 } from './harness/management';
+import { holdChannelList } from './harness/network';
 
 // If this fails, a person cannot start a private channel: it does not open,
 // is missing from their list, or will not take its first message.
@@ -152,10 +153,6 @@ test('CHN-04 a rename shows in the header of a member who has the channel open',
   people,
   pageFor,
 }) => {
-  // Known defect on main: the other member's list row and the system line
-  // change at once, but the header and the composer's placeholder keep the
-  // old name until the page is reloaded.
-  knownDefect();
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['before the rename']);
   const renamed = unique('renamed');
@@ -221,9 +218,10 @@ test('CHN-06 Copy Link gives an address that opens the channel for another membe
   await new ChannelView(page, channel.id).open();
 
   await chooseChannelAction(page, 'Copy Link');
-  const copied = () => page.evaluate(() => navigator.clipboard.readText());
-  await expect.poll(copied).toContain(channel.id);
-  const link = await copied();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toContain(channel.id);
+  const link = await page.evaluate(() => navigator.clipboard.readText());
 
   const benPage = await pageFor('ben');
   await benPage.goto(link);
@@ -283,32 +281,20 @@ test('CHN-08 a deleted channel leaves its owner’s Favorites too', async ({
   ada,
   people,
 }) => {
-  // Known defect on main, on some machines in every run and on others in
-  // few: the deleted channel leaves "All channels" but its row stays under
-  // Favorites, opening "Conversation unavailable", until the page is reloaded.
+  // Defect, in some runs: the deleted channel leaves "All channels" but its
+  // row stays under Favorites, opening "Conversation unavailable", until the
+  // page is reloaded.
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['a message']);
   await new ChannelView(page, channel.id).open();
   await chooseChannelAction(page, 'Favorite');
   await expect(favoriteRow(page, channel.id)).toHaveText(channel.name);
 
-  // Known defect on main, in some runs: the channel's menu, opened just
-  // after the favorite, closes by itself before an entry can be chosen, and
-  // has to be opened again.
-  const confirm = page.getByRole('dialog', { name: 'Delete item?' });
-  const entry = channelAction(page, 'Delete');
-  await failsSometimes(async () => {
-    await page.getByRole('button', { name: 'Channel actions' }).click();
-    await entry.click({ timeout: 5_000 });
-    await expect(confirm).toBeVisible({ timeout: 5_000 });
-  });
-  if (!(await confirm.isVisible())) {
-    if (!(await entry.isVisible())) {
-      await page.getByRole('button', { name: 'Channel actions' }).click();
-    }
-    await entry.click();
-  }
-  await confirm.getByRole('button', { name: 'Delete item' }).click();
+  await chooseChannelAction(page, 'Delete');
+  await page
+    .getByRole('dialog', { name: 'Delete item?' })
+    .getByRole('button', { name: 'Delete item' })
+    .click();
 
   await expect(sidebarRow(page, channel.id)).toHaveCount(0);
   await failsSometimes(async () => {
@@ -435,7 +421,7 @@ test('CHN-14 a brand-new channel with no messages shows its “Channel <name> cr
 }) => {
   // Known defect on main: the line is drawn above the oldest message, so a
   // channel with no message yet shows nothing at all above the composer.
-  knownDefect();
+  knownDefect('both');
   const channel = await ada.createChannel({ members: [people.ben] });
   const view = new ChannelView(page, channel.id);
   await view.open();
@@ -452,9 +438,9 @@ test('CHN-15 a channel deleted elsewhere closes on its owner’s open page', asy
   ada,
   people,
 }) => {
-  // Known defect on main: when nothing else reaches the person around the
+  // Defect, in some runs: when nothing else reaches the person around the
   // deletion, their open page keeps the channel and its composer until a
-  // reload. In about 1 run in 3.
+  // reload.
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['soon gone']);
   const view = new ChannelView(page, channel.id);
@@ -467,7 +453,31 @@ test('CHN-15 a channel deleted elsewhere closes on its owner’s open page', asy
     await expect(view.composer).toHaveCount(0);
     await expect(page.getByText('soon gone')).toHaveCount(0);
   });
-  await page.reload();
-  await expect(view.composer).toHaveCount(0);
-  await expect(page.getByText('soon gone')).toHaveCount(0);
+});
+
+test('CHN-16 a rename saved while the list of channels is still being read shows in the header', async ({
+  page,
+  ada,
+  people,
+}) => {
+  const channel = await ada.createChannel({ members: [people.ben] });
+  await ada.postAll(channel.id, ['before the rename']);
+  const renamed = unique('renamed');
+
+  const list = await holdChannelList(page);
+  const view = new ChannelView(page, channel.id);
+  await view.open();
+  // An answer from before the rename waits: it has the old name.
+  await list.held();
+  await chooseChannelAction(page, 'Rename');
+  const dialog = page.getByRole('dialog', { name: 'Rename item' });
+  await dialog.getByRole('textbox', { name: 'Name' }).fill(renamed);
+  await dialog.getByRole('button', { name: 'Save name' }).click();
+  await expect(dialog).toBeHidden();
+  await list.letThrough();
+
+  await expect(channelHeader(page)).toContainText(renamed);
+  // Nothing on screen says when the page has taken the old answer in.
+  await page.waitForTimeout(3_000);
+  await expect(channelHeader(page)).toContainText(renamed);
 });

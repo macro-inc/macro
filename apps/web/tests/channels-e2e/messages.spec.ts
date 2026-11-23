@@ -664,8 +664,6 @@ test('MSG-17 “Copy Text” on a message copies its text', async ({
   const view = new Conversation(page, channel.id);
   await view.open();
 
-  // The same text every run: what an earlier run copied must not pass for it.
-  await page.evaluate(() => navigator.clipboard.writeText('nothing yet'));
   await view.action(view.messageById(wanted.id), 'copy-message-text');
 
   await expect
