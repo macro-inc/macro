@@ -106,6 +106,32 @@ describe('StartDueSelector', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('keeps Start active after changing a start that existed, so a second click corrects it', () => {
+    const { changes, onClose } = renderSelector(
+      { start: new Date(2026, 10, 21), due: new Date(2026, 10, 27) },
+      'start'
+    );
+
+    fireEvent.click(screen.getByText('Custom date...'));
+    fireEvent.click(day(23));
+    fireEvent.click(day(24));
+
+    expect(changes.map((change) => change.changed)).toEqual([
+      ['start'],
+      ['start'],
+    ]);
+    expect(changes.at(-1)?.dates).toEqual({
+      start: new Date(2026, 10, 24),
+      due: new Date(2026, 10, 27),
+    });
+    expect(
+      screen
+        .getByRole('button', { name: /^Start/ })
+        .getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("shows the active end's month when switching ends in the calendar", () => {
     renderSelector(
       { start: new Date(2026, 10, 23), due: new Date(2026, 11, 9) },
