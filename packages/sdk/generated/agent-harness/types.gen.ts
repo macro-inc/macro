@@ -1321,27 +1321,23 @@ export type ConnectMcpServer = {
  */
 export type ConnectMcpServerResponse = {
     /**
-     * Whether the user already had this server before the call.
-     */
-    alreadyConnected: boolean;
-    /**
-     * Whether the server holds the user's sign-in.
-     */
-    authenticated: boolean;
-    /**
-     * Whether the server's tools are turned on.
+     * Whether its tools are turned on.
      */
     enabled: boolean;
     /**
-     * The server's display name.
+     * The connector's display name.
      */
     serverName: string;
+    /**
+     * Where the user stands with it.
+     */
+    status: ConnectorStatus;
     /**
      * What happened and what the user still has to do.
      */
     summary: string;
     /**
-     * The server's URL.
+     * The server's URL, normalized.
      */
     url: string;
 };
@@ -1439,6 +1435,11 @@ export type ConnectedToolSearch = {
      */
     unsearched: Array<ConnectedApp>;
 };
+
+/**
+ * Where a user stands with an app or server.
+ */
+export type ConnectorStatus = 'connected' | 'disabled' | 'needsReauth' | 'notConnected';
 
 /**
  * An advertised action, not a tool loaded into the current turn.
@@ -1792,9 +1793,7 @@ export type DiscoveryResult = {
      */
     app: DiscoveredApp;
     /**
-     * Whether this caller has an enabled connection. For an app that
-     * connects through its own MCP server, that connection is checked
-     * there, not in Pipedream.
+     * Whether this caller's connection to the app is usable now.
      */
     connected: boolean;
     operation: 'inspect';

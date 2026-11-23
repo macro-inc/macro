@@ -614,11 +614,6 @@ async function mount(page: Page, state: LinkedServer, query = '') {
       }
       return route.fulfill({ status: 404, json: {} });
     }
-    // Chat's channel list feeds the composer's `@` menu; this account has none.
-    if (url.pathname === '/dss/channels/activity')
-      return route.fulfill({ json: [] });
-    if (url.pathname === '/dss/comms/channels')
-      return route.fulfill({ json: { items: [], next_cursor: null } });
     // Stored attachments are static files, like Chat's media.
     if (url.pathname.startsWith('/static-file/file/')) {
       const file = state.files[url.pathname.split('/').at(-1) ?? ''];
