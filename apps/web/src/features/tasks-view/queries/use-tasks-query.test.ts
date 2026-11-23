@@ -1,6 +1,11 @@
 import type { TaskEntityWithProperties } from '@entity/types/entity';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { PROPERTY_OPTION_IDS } from '@property/identifiers';
+import type { createTaskDependencyStatesSource } from '@queries/properties/graphql/task-dependency-source';
 import type { GroupedSoupPaging } from '@queries/soup/graphql/create-grouped-soup-live-query';
 import type { CreateGroupedSoupQueriesArgs } from '@queries/soup/grouped/create-grouped-soup-queries';
+import { mapGraphqlProperties } from '@service-storage/graphql-soup';
+import { CombinedError } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 
@@ -11,6 +16,14 @@ const fixture = vi.hoisted(() => ({
   calls: [] as { args: () => unknown; options?: () => unknown }[],
   searchState: vi.fn(),
   mapItem: vi.fn(),
+  search: undefined as Record<string, unknown> | undefined,
+  dependencies: undefined as
+    | ReturnType<typeof createTaskDependencyStatesSource>
+    | undefined,
+}));
+vi.mock('@queries/properties/graphql/task-dependency-source', () => ({
+  createTaskDependencyStatesSource: () =>
+    fixture.dependencies ?? { states: () => new Map(), error: () => undefined },
 }));
 vi.mock('@queries/properties/definitions', () => ({
   useListPropertiesQuery: () => ({ isSuccess: false, data: [] }),
@@ -26,6 +39,7 @@ vi.mock('@app/features/soup', async () => ({
   }),
   createSearchState: () => {
     fixture.searchState();
+    if (fixture.search) return fixture.search;
     return {
       isSearching: () => false,
       usesServiceSearch: () => false,
@@ -689,3 +703,188 @@ it('pauses task reads across project views and resumes when returning to tasks',
     }
   });
 });
+
+it.each([
+  'merge',
+  'missing',
+  'failure',
+  'recovery',
+  'primary failure',
+  'cleared',
+])(
+  'keeps search rows and canonical assignments correct during %s',
+  (scenario) => {
+    type DependencySource = ReturnType<typeof createTaskDependencyStatesSource>;
+    type Facts = ReturnType<DependencySource['states']>;
+    const canonical: Facts extends Map<string, infer State> ? State : never = {
+      __typename: 'GraphqlTaskDependencyState',
+      id: 'search-first',
+      isBlocked: true,
+      openBlockerIds: ['blocker'],
+      visibleBlockerIds: ['blocker'],
+      properties: [
+        {
+          id: 'canonical-status',
+          propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS,
+          displayName: 'Status',
+          dataType: 'SELECT_STRING',
+          isMultiSelect: false,
+          specificEntityType: null,
+          isSystem: true,
+          isMetadata: false,
+          value: {
+            __typename: 'GraphqlSelectOptionPropertyValue',
+            optionIds: [PROPERTY_OPTION_IDS.STATUS.COMPLETED],
+          },
+        },
+      ],
+    };
+    const stale = mapGraphqlProperties([
+      { ...canonical.properties[0], id: 'stale-status' },
+      {
+        ...canonical.properties[0],
+        id: 'stale-depends',
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.DEPENDS_ON,
+      },
+      {
+        ...canonical.properties[0],
+        id: 'stale-blocking',
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.BLOCKING,
+      },
+      {
+        ...canonical.properties[0],
+        id: 'priority',
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
+      },
+      {
+        ...canonical.properties[0],
+        id: 'custom',
+        propertyDefinitionId: 'custom-definition',
+      },
+    ]);
+    const first: TaskEntityWithProperties = {
+      type: 'document',
+      fileType: 'md',
+      id: 'search-first',
+      name: 'Zebra',
+      ownerId: 'viewer',
+      subType: { type: 'task', is_completed: false },
+      properties: stale,
+    };
+    const second: TaskEntityWithProperties = {
+      ...first,
+      id: 'search-second',
+      name: 'Alpha',
+      properties: [],
+    };
+    const [facts, setFacts] = createSignal<Facts>(new Map());
+    const [failed, setFailed] = createSignal(false);
+    const primaryError = new Error('primary search failed');
+    fixture.dependencies = {
+      states: facts,
+      error: () => {
+        if (failed())
+          return new CombinedError({
+            networkError: new Error('enrichment failed'),
+          });
+        return undefined;
+      },
+    };
+    fixture.search = {
+      isSearching: () => true,
+      usesServiceSearch: () => true,
+      isSettling: () => false,
+      isLocalSearchSettling: () => false,
+      data: () => [first, second],
+      error: () => (scenario === 'primary failure' ? primaryError : undefined),
+      isLoading: () => false,
+      isFetching: () => false,
+      hasNextPage: () => false,
+    };
+    fixture.query = { isLoading: false, data: { entities: [] } };
+    createRoot((dispose) => {
+      try {
+        const source = useTasksDataSource(
+          {
+            tab: 'team-tasks',
+            search: 'task',
+            facets: {},
+            groupBy: 'none',
+            sort: [{ id: 'title' }],
+          },
+          {
+            userId: () => 'viewer',
+            tagSets: () => [],
+            tagSetsReady: () => true,
+            isGroupExpanded: () => true,
+          }
+        );
+        const rows = () =>
+          source
+            .items()
+            .flatMap((row) => (row.kind === 'entity' ? [row.entity] : []));
+        expect(rows().map((task) => task.id)).toEqual([
+          'search-first',
+          'search-second',
+        ]);
+        expect(rows()[0].isBlocked).toBeUndefined();
+        if (scenario !== 'missing') {
+          setFacts(
+            new Map([
+              [
+                first.id,
+                scenario === 'cleared'
+                  ? { ...canonical, properties: [] }
+                  : canonical,
+              ],
+            ])
+          );
+        }
+        if (
+          scenario === 'failure' ||
+          scenario === 'recovery' ||
+          scenario === 'primary failure'
+        ) {
+          setFailed(true);
+          expect(source.error()).toBe(
+            scenario === 'primary failure' ? primaryError : undefined
+          );
+          expect(rows()[0].isBlocked).toBeUndefined();
+          expect(rows()[0].properties).toEqual(stale);
+        }
+        if (scenario === 'recovery') setFailed(false);
+        expect(rows().map((task) => task.id)).toEqual([
+          'search-first',
+          'search-second',
+        ]);
+        if (
+          scenario === 'merge' ||
+          scenario === 'recovery' ||
+          scenario === 'cleared'
+        ) {
+          expect(rows()[0].isBlocked).toBe(true);
+          expect(rows()[0].openBlockerIds).toEqual(['blocker']);
+          expect(rows()[0].subType?.is_completed).toBe(scenario !== 'cleared');
+          expect(rows()[0].properties?.map((property) => property.id)).toEqual(
+            scenario === 'cleared'
+              ? ['priority', 'custom']
+              : ['priority', 'custom', 'canonical-status']
+          );
+          expect(rows()[0].properties?.slice(0, 2)).toEqual(stale.slice(3));
+          expect(rows()[1].properties).toEqual([]);
+        } else {
+          expect(rows()[0].properties).toEqual(stale);
+          expect(rows()[0].isBlocked).toBeUndefined();
+          expect(rows()[0].subType?.is_completed).toBe(false);
+        }
+        expect(source.error()).toBe(
+          scenario === 'primary failure' ? primaryError : undefined
+        );
+      } finally {
+        dispose();
+        fixture.search = undefined;
+        fixture.dependencies = undefined;
+      }
+    });
+  }
+);

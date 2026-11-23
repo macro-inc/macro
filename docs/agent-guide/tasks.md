@@ -13,6 +13,8 @@ Search uses the same 40px glass island as Filters. Tasks and Projects lists rese
 - Self-dependencies and direct two-task cycles are rejected; longer cycles are allowed. Deleted prerequisites no longer block a task; losing access hides their details without changing the dependency.
 - If unreadable prerequisites prevent proving an optimistic unblock, the badge stays conservative until the authoritative response arrives. The team completion guard still uses the full canonical dependency graph, not the viewer's redacted prerequisite list.
 
+Search keeps its original result order and index-based filter membership while refreshing dependency and Status assignments; unrelated properties stay intact. If dependency enrichment fails, search rows remain available without enrichment badges. Primary search failures still show the normal list error. A later successful dependency refresh restores badges.
+
 ## Surface
 
 The main Tasks list (List layout, not project or CRM task lists) starts with the Tasks `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows, so list keyboard focus skips it.

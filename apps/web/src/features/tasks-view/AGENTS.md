@@ -15,7 +15,8 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
   mobile header through `SplitHeaderScope`.
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
-- `@queries/properties/graphql/task-dependency-source`: normalized task facts; REST search rows hydrate missing facts in 500-ID batches without changing search order. Detail blocker names/statuses use the shared batched preview source.
+- `@queries/properties/graphql/task-dependency-source`: normalized task facts; REST search rows hydrate missing facts in 500-ID batches without changing search order or index-based filter membership. Detail blocker names/statuses use the shared batched preview source.
+- Keep search rows available without enrichment badges when dependency enrichment fails; expose only primary search errors, and replace all canonical Status/Depends On/Blocking assignments while preserving unrelated properties.
 
 ## Gotchas
 

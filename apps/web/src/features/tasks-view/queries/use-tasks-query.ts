@@ -370,12 +370,16 @@ export function useTasksDataSource(
 
     const facts = searchDependencies.states();
     const results = transformEntities(search.data()).map((task) => {
-      const dependency = facts.get(task.id);
+      const dependency = searchDependencies.error()
+        ? undefined
+        : facts.get(task.id);
       if (!dependency) return task;
       const updated = mapGraphqlProperties(dependency.properties);
-      const replaced = new Set(
-        updated.map((property) => property.definition.id)
-      );
+      const replaced = new Set<string>([
+        SYSTEM_PROPERTY_IDS.STATUS,
+        SYSTEM_PROPERTY_IDS.DEPENDS_ON,
+        SYSTEM_PROPERTY_IDS.BLOCKING,
+      ]);
       const properties = [
         ...(task.properties ?? []).filter(
           (property) => !replaced.has(property.definition.id)
@@ -498,7 +502,7 @@ export function useTasksDataSource(
 
   const error = () => {
     if (!usesServiceSearch()) return query.error ?? undefined;
-    return search.error() ?? searchDependencies.error();
+    return search.error();
   };
 
   const hasMore = () => {
