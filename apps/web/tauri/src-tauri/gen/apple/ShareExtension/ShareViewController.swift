@@ -1,13 +1,21 @@
 import ImageIO
 import UIKit
 import UniformTypeIdentifiers
+import os
+
+/// Counts and outcomes only: shared content and file names stay out of the log.
+private let log = Logger(subsystem: "com.macro.app.prod.ShareExtension", category: "share")
 
 class ShareViewController: UIViewController {
 
     private let appGroupId = "group.com.macro.app.prod"
     private let appURLScheme = "macro"
+    /// How long to wait for iOS to report whether it opened Macro before
+    /// telling the person to open it themselves.
+    private let openResultTimeout: TimeInterval = 5
     private var timeoutWorkItem: DispatchWorkItem?
     private var didComplete = false
+    private var didFinishOpening = false
 
     // MARK: - Lifecycle
 
@@ -29,9 +37,11 @@ class ShareViewController: UIViewController {
             let attachments = extensionItem.attachments,
             !attachments.isEmpty
         else {
+            log.error("share has no attachments")
             complete()
             return
         }
+        log.info("share started attachments=\(attachments.count, privacy: .public)")
 
         let group = DispatchGroup()
         var savedFilenames = Array<String?>(repeating: nil, count: attachments.count)
@@ -70,9 +80,18 @@ class ShareViewController: UIViewController {
         group.notify(queue: .main) { [weak self] in
             guard let self = self else { return }
             let orderedFilenames = savedFilenames.compactMap { $0 }
+            log.info(
+                "share saved files=\(orderedFilenames.count, privacy: .public) of \(attachments.count, privacy: .public)"
+            )
             if orderedFilenames.isEmpty {
-                self.complete()
+                self.showMessage(
+                    NSLocalizedString(
+                        "Macro couldn't read this item.",
+                        comment: "Share extension: nothing could be saved from the shared item"
+                    )
+                )
             } else {
+                orderedFilenames.forEach(self.markSavedNow)
                 self.openMainApp(filenames: orderedFilenames)
             }
         }
@@ -213,25 +232,110 @@ class ShareViewController: UIViewController {
             return
         }
 
-        // Walk up the responder chain looking for the UIApplication instance.
-        var foundViaChain = false
+        // There is no public API for a share extension to open its app.
+        // `UIApplication` reached through the responder chain is what works in
+        // practice; `extensionContext.open` is documented for other extension
+        // types only. Either can be refused, so wait for the result: finishing
+        // the request first tears this process down before iOS acts on it.
         var responder: UIResponder? = self
-        while let r = responder {
-            if let app = r as? UIApplication {
-                app.open(url, options: [:], completionHandler: nil)
-                foundViaChain = true
-                break
+        while let current = responder, !(current is UIApplication) {
+            responder = current.next
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + openResultTimeout) { [weak self] in
+            self?.finishOpening(opened: false, via: "timeout")
+        }
+
+        if let application = responder as? UIApplication {
+            application.open(url, options: [:]) { [weak self] opened in
+                DispatchQueue.main.async {
+                    self?.finishOpening(opened: opened, via: "application")
+                }
             }
-            responder = r.next
+        } else if let extensionContext {
+            extensionContext.open(url) { [weak self] opened in
+                DispatchQueue.main.async {
+                    self?.finishOpening(opened: opened, via: "extension_context")
+                }
+            }
+        } else {
+            finishOpening(opened: false, via: "unavailable")
         }
+    }
 
-        // Fallback: use extensionContext to open the URL.
-        // UIApplication.shared is unavailable in extensions; extensionContext?.open
-        // is the supported API for launching the host app from any extension type.
-        if !foundViaChain {
-            extensionContext?.open(url, completionHandler: nil)
+    /// The files stay in the App Group container, so when iOS won't open Macro
+    /// the share still appears the next time the person opens it.
+    private func finishOpening(opened: Bool, via route: String) {
+        guard !didFinishOpening else { return }
+        didFinishOpening = true
+        log.info("open macro opened=\(opened, privacy: .public) via=\(route, privacy: .public)")
+        if opened {
+            complete()
+        } else {
+            showMessage(
+                NSLocalizedString(
+                    "Saved. Open Macro to finish sharing.",
+                    comment: "Share extension: iOS did not open Macro; the share waits in the app"
+                )
+            )
         }
+    }
 
+    // MARK: - Message
+
+    /// A small card over the host app, for when the extension can't hand the
+    /// share to Macro by itself. It replaces the silent dismissal that looked
+    /// like nothing happened.
+    private func showMessage(_ text: String) {
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
+
+        let card = UIView()
+        card.backgroundColor = .secondarySystemBackground
+        card.layer.cornerRadius = 16
+        card.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = UILabel()
+        label.text = text
+        label.font = .preferredFont(forTextStyle: .body)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .label
+        label.textAlignment = .center
+        label.numberOfLines = 0
+
+        let done = UIButton(type: .system)
+        done.setTitle(NSLocalizedString("Done", comment: "Share extension: dismiss the message"), for: .normal)
+        done.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        done.titleLabel?.adjustsFontForContentSizeCategory = true
+        done.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
+
+        let stack = UIStackView(arrangedSubviews: [label, done])
+        stack.axis = .vertical
+        stack.spacing = 16
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+        view.addSubview(card)
+
+        NSLayoutConstraint.activate([
+            card.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            card.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            card.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
+            card.widthAnchor.constraint(lessThanOrEqualToConstant: 320),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -12),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+        ])
+        let preferredWidth = card.widthAnchor.constraint(equalToConstant: 320)
+        preferredWidth.priority = .defaultHigh
+        preferredWidth.isActive = true
+
+        UIView.animate(withDuration: 0.2) {
+            self.view.backgroundColor = UIColor.black.withAlphaComponent(0.3)
+        }
+    }
+
+    @objc private func doneTapped() {
         complete()
     }
 
@@ -449,6 +553,22 @@ class ShareViewController: UIViewController {
         let normalizedExt = normalizedFilenameExtension(ext)
         let filename = "share_\(UUID().uuidString).\(normalizedExt)"
         return (filename, container.appendingPathComponent(filename))
+    }
+
+    /// The app ignores shared files older than a day. A copied file keeps its
+    /// source's modification time, so stamp the time it was shared.
+    private func markSavedNow(_ filename: String) {
+        guard let container = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupId
+        ) else {
+            return
+        }
+        let path = container.appendingPathComponent(filename).path
+        do {
+            try FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
+        } catch {
+            log.error("failed to stamp shared file time")
+        }
     }
 
     private func normalizedFilenameExtension(_ ext: String) -> String {
