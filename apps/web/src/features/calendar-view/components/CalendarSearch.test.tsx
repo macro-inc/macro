@@ -165,11 +165,11 @@ it('opens a result or displays its out-of-range read-only preview', () => {
   expect(screen.getByRole('searchbox', { name: 'Search events' })).toBeTruthy();
 });
 
-it('places the focused phone search field beside Back in the page header', () => {
+it('focuses the full-page phone search below the navigation header', () => {
   const back = vi.fn();
   render(() => <MobileCalendarSearchPage onBack={back} />);
   const input = screen.getByRole('searchbox', { name: 'Search events' });
-  expect(input.closest('header')).not.toBeNull();
+  expect(input.closest('header')).toBeNull();
   expect(document.activeElement).toBe(input);
   fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
   expect(back).toHaveBeenCalledOnce();

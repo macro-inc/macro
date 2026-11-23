@@ -725,7 +725,7 @@ function CalendarSearchControl(props: {
 
   const pageField = () => (
     <Show when={!previewTarget()}>
-      <div class="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-surface px-3 py-2">
+      <div class="flex w-full min-w-0 shrink-0 items-center gap-2 rounded-full bg-surface px-3 py-2">
         <SearchIcon class="size-5 shrink-0 text-ink-muted" />
         <input
           ref={inputRef}

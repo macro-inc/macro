@@ -34,10 +34,11 @@ export function MonthDaySheet(props: {
           targetHeight={50}
           ref={props.ref}
         >
-          <MobileDrawer.Handle />
-          <div class="flex shrink-0 items-center justify-between gap-2 px-3 pb-2">
+          <MobileDrawer.Handle class="pb-1" />
+          <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-4">
             <Button
               variant="ghost"
+              class="h-auto min-w-0 justify-start px-0 text-left text-xl font-semibold text-ink"
               onClick={props.onOpenDay}
               aria-label="Open day view"
             >
@@ -48,15 +49,16 @@ export function MonthDaySheet(props: {
               })}
             </Button>
             <Button
-              variant="ghost"
-              size="icon-md"
+              variant="secondary"
+              size="icon-lg"
+              class="shrink-0"
               aria-label="Create event on selected day"
               onClick={props.onCreate}
             >
-              <PlusIcon class="size-6" />
+              <PlusIcon class="size-5" />
             </Button>
           </div>
-          <MobileDrawer.ScrollBody class="gap-2 px-3">
+          <MobileDrawer.ScrollBody class="gap-2 px-6">
             <For
               each={props.events}
               fallback={

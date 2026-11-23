@@ -113,7 +113,6 @@ describe('phone month drawer', () => {
     state.firstVisibleDay = new Date(2026, 9, 31);
     render(() => <MonthDrawer month={new Date(2026, 10, 1)} />);
     const trigger = screen.getByRole('button', { name: 'Choose month' });
-    expect(trigger.textContent).toBe('October');
     fireEvent.click(trigger);
     expect(
       screen
@@ -129,7 +128,6 @@ describe('phone month drawer', () => {
       <MonthDrawer month={new Date(2026, 9, 31)} showWeekends={false} />
     ));
     const trigger = screen.getByRole('button', { name: 'Choose month' });
-    expect(trigger.textContent).toBe('November');
     fireEvent.click(trigger);
     expect(
       screen

@@ -9,7 +9,7 @@ export function MobileCalendarGridAxis(props: {
   viewport: Accessor<HTMLElement | undefined>;
 }) {
   const axis = createMobileGridAxis(props.root, props.viewport);
-  // Let centered hour labels extend above the card without clipping midnight.
+  // Preserve the half-label above midnight while keeping other hours out of the date row.
   const labelBleed = () => Math.ceil((axis.state.labels[0]?.height ?? 14) / 2);
   return (
     <>
@@ -17,43 +17,51 @@ export function MobileCalendarGridAxis(props: {
         data-calendar-hour-axis
         class="pointer-events-none absolute left-0 z-10 overflow-hidden bg-panel text-xxs font-medium text-ink-extra-muted"
         style={{
-          top: `${axis.state.top - labelBleed()}px`,
-          height: `${axis.state.height + labelBleed()}px`,
+          top: '0',
+          height: `${axis.state.top + axis.state.height}px`,
           width: 'var(--calendar-phone-axis-width)',
         }}
       >
         <div
+          class="absolute inset-x-0 overflow-hidden"
           style={{
-            transform: `translateY(${labelBleed() - axis.state.scrollTop}px)`,
+            top: `${axis.state.top - labelBleed()}px`,
+            height: `${axis.state.height + labelBleed()}px`,
           }}
         >
-          <For each={axis.state.labels}>
-            {(label) => (
-              <div
-                class="absolute inset-x-0 text-right"
-                style={{
-                  top: `${label.top}px`,
-                  height: `${label.height}px`,
-                  'padding-right': 'var(--calendar-phone-axis-gap)',
-                }}
-              >
-                {label.text}
-              </div>
-            )}
-          </For>
-          <Show when={axis.state.now}>
-            {(now) => (
-              <div
-                class="absolute inset-x-0 -translate-y-1/2 text-right font-semibold leading-normal text-accent"
-                style={{
-                  top: `${now().top + now().height / 2}px`,
-                  'padding-right': 'var(--calendar-phone-axis-gap)',
-                }}
-              >
-                {now().text}
-              </div>
-            )}
-          </Show>
+          <div
+            style={{
+              transform: `translateY(${labelBleed() - axis.state.scrollTop}px)`,
+            }}
+          >
+            <For each={axis.state.labels}>
+              {(label) => (
+                <div
+                  class="absolute inset-x-0 text-right"
+                  style={{
+                    top: `${label.top}px`,
+                    height: `${label.height}px`,
+                    'padding-right': 'var(--calendar-phone-axis-gap)',
+                  }}
+                >
+                  {label.text}
+                </div>
+              )}
+            </For>
+            <Show when={axis.state.now}>
+              {(now) => (
+                <div
+                  class="absolute inset-x-0 -translate-y-1/2 text-right font-semibold leading-normal text-accent"
+                  style={{
+                    top: `${now().top + now().height / 2}px`,
+                    'padding-right': 'var(--calendar-phone-axis-gap)',
+                  }}
+                >
+                  {now().text}
+                </div>
+              )}
+            </Show>
+          </div>
         </div>
       </div>
       <Show when={axis.scrollElement()?.parentElement}>

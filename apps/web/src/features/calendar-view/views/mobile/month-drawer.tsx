@@ -5,7 +5,6 @@ import {
   WheelColumn,
   WheelPicker,
 } from '@components/app/mobile/wheel-picker/WheelPicker';
-import { isMobile } from '@core/mobile/isMobile';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Button } from '@ui';
 import { addDays, isWeekend } from 'date-fns';
@@ -125,7 +124,7 @@ export function MonthDrawer(props: { month: Date; showWeekends?: boolean }) {
         <span class="min-w-0 truncate">
           {new Intl.DateTimeFormat(formatLocale(), {
             month: 'long',
-            ...(isMobile() ? {} : { year: 'numeric' }),
+            year: 'numeric',
           }).format(firstVisibleDay())}
         </span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
