@@ -146,6 +146,10 @@ type NetworkEmailTimes = ReadonlyMap<
  * replacement too, until the list's next network read. */
 const SPARE_EMAIL_TIME_PAGES = 8;
 
+/** Chain rebuilds a notified list starts in a row before its pages agree
+ * again: each one follows a server that moved during the last. */
+const MAX_CHAIN_REPAIRS = 3;
+
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
  * Data is a non-suspending accessor of reactive GraphQL records, before UI mapping.
  * This is the one GraphQL Soup list source; feature code reads it through
@@ -592,35 +596,92 @@ export function createSoupLiveQuery(
   });
   loadedCursors = () => query.data?.pageParams ?? [];
 
+  const refresh = async () => {
+    const input = firstPageInput();
+    if (input === undefined) return;
+    // A fully cached lookup still participates in explicit refreshes.
+    if (cacheFirstEntities() && !networkInput()) {
+      setEntityHydration({
+        scope: input,
+        generation: cacheGeneration,
+        entities: options().cacheFirstEntities ?? [],
+        input,
+      });
+      await runWithOwner(owner, () =>
+        until(() => !query.isFetching && (query.isSuccess || query.error))
+      );
+      if (query.error) throw query.error;
+      return;
+    }
+    // An explicit list refresh rebuilds the cursor chain in order. The
+    // notification queue observes isFetching and waits for this to finish.
+    await query.refetch({
+      requestPolicy: 'network-only',
+      throwOnError: true,
+    });
+  };
+
   // A notified list shows its pages as they came (it has no local projection
   // to place rows), and each continuation page was read with the cursor the
   // page before it ended on. A loaded page read again on its own, as a
   // revalidation replays every page's variables, can end on another row once
   // a row above it left or joined the list: the next page then repeats a row
-  // the list already shows, or starts past one it now skips. Rebuild the
-  // chain in order, as an explicit refresh does, once for each such state.
-  let rebuiltChain: string | undefined;
-  createEffect(() => {
-    if (firstPageInput()?.initial.sortMethod !== 'NOTIFIED_AT') return;
-    if (query.isFetching) return;
+  // the list already shows, or starts past one it now skips. Such a chain is
+  // read again in order, as an explicit refresh does (and through it, so a
+  // strict caller that joins the read still sees its failure).
+  const brokenChain = createMemo((): string | undefined => {
+    const current = options();
+    if (
+      firstPageInput()?.initial.sortMethod !== 'NOTIFIED_AT' ||
+      current.enabled === false ||
+      current.localOnly ||
+      current.networkPaused ||
+      query.isFetching
+    )
+      return;
     const data = query.data;
-    if (!data) return;
+    if (!data || baselineInputKey() !== inputKey()) return;
     const broken = data.pageParams.some((cursor, index) => {
       const ended = data.nextCursors[index - 1];
       return index > 0 && ended !== undefined && ended !== cursor;
     });
-    if (!broken) {
-      rebuiltChain = undefined;
-      return;
-    }
-    const chain = JSON.stringify([data.pageParams, data.nextCursors]);
-    if (chain === rebuiltChain) return;
-    rebuiltChain = chain;
-    fireAndForget(
-      query.refetch({ requestPolicy: 'network-only' }),
-      'soup-live-query'
-    );
+    if (!broken) return;
+    return JSON.stringify([inputKey(), data.pageParams, data.nextCursors]);
   });
+  // Each repair answers one broken state; a state a repair leaves broken
+  // (its read failed, or the server moved again meanwhile) waits for the
+  // next result that changes it, and a run of repairs stops at the bound.
+  let repairing = false;
+  let repairs = 0;
+  const repairChain = async () => {
+    const chain = brokenChain();
+    if (chain === undefined || repairing) return;
+    if (repairs >= MAX_CHAIN_REPAIRS) return;
+    repairing = true;
+    repairs += 1;
+    try {
+      await refresh();
+    } catch {
+      // The rows already shown stay; the next revalidation reads them again.
+    } finally {
+      repairing = false;
+    }
+    const after = brokenChain();
+    if (after !== undefined && after !== chain) chainRepair.request();
+  };
+  const chainRepair = createHiddenDeferral(() =>
+    fireAndForget(repairChain(), 'soup-live-query')
+  );
+  onCleanup(chainRepair.dispose);
+  createEffect(
+    on(brokenChain, (chain) => {
+      if (chain === undefined) {
+        if (!query.isFetching) repairs = 0;
+        return;
+      }
+      chainRepair.request();
+    })
+  );
 
   /** The updatedAt NOTIFIED_AT pages' own network responses gave each email
    * thread on the loaded pages, by record key, which the thread's shared
@@ -1426,29 +1487,6 @@ export function createSoupLiveQuery(
         }
       });
     },
-    refresh: async () => {
-      const input = firstPageInput();
-      if (input === undefined) return;
-      // A fully cached lookup still participates in explicit refreshes.
-      if (cacheFirstEntities() && !networkInput()) {
-        setEntityHydration({
-          scope: input,
-          generation: cacheGeneration,
-          entities: options().cacheFirstEntities ?? [],
-          input,
-        });
-        await runWithOwner(owner, () =>
-          until(() => !query.isFetching && (query.isSuccess || query.error))
-        );
-        if (query.error) throw query.error;
-        return;
-      }
-      // An explicit list refresh rebuilds the cursor chain in order. The
-      // notification queue observes isFetching and waits for this to finish.
-      await query.refetch({
-        requestPolicy: 'network-only',
-        throwOnError: true,
-      });
-    },
+    refresh,
   };
 }
