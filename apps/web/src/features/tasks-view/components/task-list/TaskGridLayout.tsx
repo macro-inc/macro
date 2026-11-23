@@ -200,6 +200,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
       <Switch>
         <Match when={props.compact}>
           <NarrowLayout {...props}>
+            <TaskTimerCount taskId={props.entity.id} compact />
             <div class="w-8 min-w-0">
               <ListPropertyValue
                 entityId={props.entity.id}

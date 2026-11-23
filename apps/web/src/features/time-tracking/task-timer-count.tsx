@@ -4,11 +4,14 @@ import { type JSX, Show } from 'solid-js';
 import { TimerCount } from './components/timer-count';
 import { useRunningTimer } from './running-timer-root';
 
-function TimedTaskCount(props: { taskId: string }): JSX.Element {
+function TimedTaskCount(props: {
+  taskId: string;
+  compact?: boolean;
+}): JSX.Element {
   const timer = useRunningTimer();
   return (
     <Show when={timer.timer()?.taskId === props.taskId}>
-      <TimerCount chip seconds={timer.seconds()} />
+      <TimerCount chip compact={props.compact} seconds={timer.seconds()} />
     </Show>
   );
 }
@@ -17,11 +20,15 @@ function TimedTaskCount(props: { taskId: string }): JSX.Element {
  * The live count beside a task the viewer is timing, on its row, card and
  * pill. Other people's timers show nowhere.
  */
-export function TaskTimerCount(props: { taskId: string }): JSX.Element {
+export function TaskTimerCount(props: {
+  taskId: string;
+  /** `42:10` instead of `0:42:10`, for a narrow row. */
+  compact?: boolean;
+}): JSX.Element {
   const flag = useFeatureFlag(enableTimeTracking);
   return (
     <Show when={flag().enabled}>
-      <TimedTaskCount taskId={props.taskId} />
+      <TimedTaskCount taskId={props.taskId} compact={props.compact} />
     </Show>
   );
 }

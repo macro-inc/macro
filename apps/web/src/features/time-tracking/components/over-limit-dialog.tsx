@@ -22,7 +22,8 @@ export type OverLimitDialogProps = ManagedDialogProps & {
   onChoose: (choice: OverLimitChoice) => void;
 };
 
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 const LOCAL_INPUT = "yyyy-MM-dd'T'HH:mm";
 
 function minutesBetween(fromMs: number, toMs: number): number {
@@ -64,8 +65,15 @@ export function OverLimitDialog(props: OverLimitDialogProps): JSX.Element {
   const start = () => new Date(props.startedAt);
   const startMs = () => start().getTime();
   const ranMinutes = () => minutesBetween(startMs(), props.nowMs);
+  // The field has whole minutes, so the default rounds up to keep a full hour.
   const [stoppedAt, setStoppedAt] = createSignal(
-    format(Math.min(startMs() + HOUR_MS, props.nowMs), LOCAL_INPUT)
+    format(
+      Math.min(
+        Math.ceil((startMs() + HOUR_MS) / MINUTE_MS) * MINUTE_MS,
+        props.nowMs
+      ),
+      LOCAL_INPUT
+    )
   );
   const stoppedMs = () => new Date(stoppedAt()).getTime();
   const stoppedValid = () =>

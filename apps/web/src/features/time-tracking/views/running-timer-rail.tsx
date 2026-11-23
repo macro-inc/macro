@@ -54,7 +54,7 @@ export function RunningTimerRail(props: {
             </span>
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content class="menu-surface z-modal w-72 p-3 outline-none">
+            <Popover.Content class="menu-surface z-modal w-80 p-3 outline-none">
               <TimerPanel
                 taskName={taskName()}
                 startedAt={running().startedAt}
