@@ -1,0 +1,19 @@
+docs/design/acp-elicitation.md
+  s_b6e2032407f232::t_6123cb6f9562f8 269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "323d3288dd12cf1605b906dc710bfb3aebc671a6",
+  "prompts": {},
+  "sessions": {
+    "s_b6e2032407f232": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a821cdcf-505c-4d83-9ab7-42b78ab94514",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
