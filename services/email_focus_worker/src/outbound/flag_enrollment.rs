@@ -1,7 +1,8 @@
 //! The Focus rollout is each user's `enable-email-focus` flag, the same flag
 //! that shows them the Focus tab. An inbox is classified while anyone whose tab
 //! shows it has the flag (its owner, or a user it is linked to), so whoever has
-//! the tab gets it filled and nobody else's mail is classified.
+//! the tab gets it filled and nobody else's mail is classified. The worker
+//! narrows it to people who have used Macro lately (`active_enrollment`).
 
 use email::domain::focus::FocusEnrollment;
 use feature_flags::FeatureFlags;
