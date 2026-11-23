@@ -28,12 +28,7 @@ export function DisplayResultsToolCall(props: {
     <Show
       when={!failed()}
       fallback={
-        <ToolCard
-          title={props.common.label}
-          status="failed"
-          muted
-          trailing="Failed"
-        />
+<ToolCard title={props.common.label} status="failed" />
       }
     >
       <ErrorBoundary
