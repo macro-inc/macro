@@ -1,0 +1,21 @@
+apps/web/tests/native/fixtures/server.ts
+  s_1a305126e29b2f::t_e6665a6a8078f3 149-151
+apps/web/tests/native/driver.ts
+  s_1a305126e29b2f::t_e6665a6a8078f3 37-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f55fca846d9836f3556075022e81dfc182b7598c",
+  "prompts": {},
+  "sessions": {
+    "s_1a305126e29b2f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "268fc09b-96a7-4932-9edb-a3d21b534515",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
