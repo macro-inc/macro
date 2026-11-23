@@ -183,6 +183,7 @@ members = [
   "crates/upstream_error",
   "crates/account_manager",
   "crates/user_api_key",
+  "crates/route_policy",
   "crates/user_events",
   "crates/user_language",
   "crates/webhook_signature",

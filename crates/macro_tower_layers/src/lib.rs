@@ -106,6 +106,28 @@ impl CustomOnResponse {
 
 const HTTP_REQUEST_SPAN_TARGET: &str = "macro_http_request";
 
+/// The span fields the request span itself owns: a layer's
+/// [`ResponseSpanFields`] never overwrite them.
+const CORE_SPAN_FIELDS: &[&str] = &[
+    "otel.kind",
+    "http.request.method",
+    "http.route",
+    "url.path",
+    "request.id",
+    "http.response.status_code",
+    "latency_ms",
+    "otel.status_code",
+    "otel.status_description",
+];
+
+/// Fields a layer below the request span asks it to record, put in the
+/// response's extensions by layers that other middleware's spans keep from
+/// reaching it (such as `route_policy`'s). Only names [`MakeHttpRequestSpan`]
+/// declares are recorded, and never the core fields it records itself
+/// (route, path, method, status, latency).
+#[derive(Clone, Debug, Default)]
+pub struct ResponseSpanFields(pub Vec<(&'static str, &'static str)>);
+
 /// Creates INFO-level HTTP server spans with safe OpenTelemetry attributes.
 ///
 /// Request and response headers are intentionally excluded. Add
@@ -131,6 +153,10 @@ impl<B> MakeSpan<B> for MakeHttpRequestSpan {
             "url.path" = url_path.as_ref(),
             "request.id" = request_id,
             "http.response.status_code" = tracing::field::Empty,
+            "route_policy.category" = tracing::field::Empty,
+            "route_policy.caller" = tracing::field::Empty,
+            "route_policy.outcome" = tracing::field::Empty,
+            "route_policy.code" = tracing::field::Empty,
             latency_ms = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
@@ -183,6 +209,13 @@ impl<B> OnResponse<B> for CustomOnResponse {
         let latency_ms = latency_millis(latency);
         span.record("http.response.status_code", u64::from(status.as_u16()));
         span.record("latency_ms", latency_ms);
+        if let Some(fields) = response.extensions().get::<ResponseSpanFields>() {
+            for (name, value) in &fields.0 {
+                if !CORE_SPAN_FIELDS.contains(name) {
+                    span.record(*name, *value);
+                }
+            }
+        }
 
         // Server errors are logged once by CustomOnFailure after this callback returns.
         if !status.is_server_error() && latency >= self.warning_threshold {

@@ -193,6 +193,93 @@ fn successful_response_records_telemetry_without_completion_event() {
 }
 
 #[test]
+fn response_span_fields_are_recorded_on_the_request_span() {
+    let (subscriber, captured) = TracingCapture::new();
+
+    with_default(subscriber, || {
+        let request = Request::builder().uri("/v1/keys").body(()).unwrap();
+        let span = MakeHttpRequestSpan.make_span(&request);
+        let mut response = Response::builder().status(403).body(()).unwrap();
+        response.extensions_mut().insert(ResponseSpanFields(vec![
+            ("route_policy.category", "credential_mint"),
+            ("route_policy.caller", "program"),
+            ("route_policy.outcome", "refused"),
+            ("route_policy.code", "person_only"),
+            ("an.undeclared.field", "dropped"),
+        ]));
+        CustomOnResponse::new_with_threshold(Duration::from_millis(200)).on_response(
+            &response,
+            Duration::from_millis(5),
+            &span,
+        );
+    });
+
+    let fields = captured.recorded_span_fields.lock().unwrap();
+    assert_eq!(
+        fields.get("route_policy.category").unwrap(),
+        "\"credential_mint\""
+    );
+    assert_eq!(fields.get("route_policy.caller").unwrap(), "\"program\"");
+    assert_eq!(fields.get("route_policy.outcome").unwrap(), "\"refused\"");
+    assert_eq!(fields.get("route_policy.code").unwrap(), "\"person_only\"");
+    assert!(!fields.contains_key("an.undeclared.field"));
+}
+
+#[test]
+fn response_span_fields_never_overwrite_the_core_request_fields() {
+    let (subscriber, captured) = TracingCapture::new();
+
+    with_default(subscriber, || {
+        let request = Request::builder().uri("/keys").body(()).unwrap();
+        let span = MakeHttpRequestSpan.make_span(&request);
+        let mut response = Response::builder().status(204).body(()).unwrap();
+        response.extensions_mut().insert(ResponseSpanFields(vec![
+            ("http.response.status_code", "999"),
+            ("latency_ms", "1"),
+            ("http.route", "/forged"),
+            ("otel.status_code", "OK"),
+            ("route_policy.outcome", "allowed"),
+        ]));
+        CustomOnResponse::new_with_threshold(Duration::from_millis(200)).on_response(
+            &response,
+            Duration::from_millis(50),
+            &span,
+        );
+    });
+
+    let fields = captured.recorded_span_fields.lock().unwrap();
+    assert_eq!(fields.get("http.response.status_code").unwrap(), "204");
+    assert_eq!(fields.get("latency_ms").unwrap(), "50");
+    assert!(!fields.contains_key("http.route"));
+    assert!(!fields.contains_key("otel.status_code"));
+    assert_eq!(fields.get("route_policy.outcome").unwrap(), "\"allowed\"");
+}
+
+#[test]
+fn a_response_without_span_fields_records_no_policy_fields() {
+    let (subscriber, captured) = TracingCapture::new();
+
+    with_default(subscriber, || {
+        let request = Request::builder().uri("/health").body(()).unwrap();
+        let span = MakeHttpRequestSpan.make_span(&request);
+        let response = Response::builder().status(200).body(()).unwrap();
+        CustomOnResponse::new_with_threshold(Duration::from_millis(200)).on_response(
+            &response,
+            Duration::from_millis(5),
+            &span,
+        );
+    });
+
+    let declared = captured.declared_span_fields.lock().unwrap();
+    assert!(declared.contains("route_policy.category"));
+    assert!(declared.contains("route_policy.caller"));
+    assert!(declared.contains("route_policy.outcome"));
+    assert!(declared.contains("route_policy.code"));
+    let fields = captured.recorded_span_fields.lock().unwrap();
+    assert!(!fields.contains_key("route_policy.outcome"));
+}
+
+#[test]
 fn slow_response_emits_one_warning() {
     let (subscriber, captured) = TracingCapture::new();
 
