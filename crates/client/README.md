@@ -156,7 +156,12 @@ refetches what went. A queued write's optimistic overlay that no longer fits is 
 the mutation is still sent, but its overlay adds no records and its queued
 projections go with it. Queued projections of the records that went go too,
 and every queued projection when every document is marked incomplete, so no
-optimistic list entry outlives its record or the facts it was derived from. The stored schema
+optimistic list entry outlives its record or the facts it was derived from.
+Settling a create moves the shadows of the writes queued after it to the key
+the server gave the record while their sources keep the local key, so a tier
+follows the alias settlement stored from one to the other, and keeps the
+alias, coalescing UUID and deletion tombstone of each record the queue names,
+as the engine's own snapshot retirement does. The stored schema
 is the incoming one plus the definitions it removed that kept records may still
 hold, so a later build that adds a field back with another shape drops the old
 values instead of reading them as the new type. A cache stored before schema 13
