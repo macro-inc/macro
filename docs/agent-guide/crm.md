@@ -246,6 +246,21 @@ moving it. Personal-email sync reuses a unique existing contact, preserving its
 chosen company through sent/received refreshes and source cleanup. Ambiguous
 matches are left unchanged. CRM settings and domain admission still apply.
 
+A company's **Record details** lists its domains under **Website**, the primary
+first, followed by **Add domain** (a plus button once it has one). Adding a
+domain the organization also uses files its mail and new contacts under this
+company instead of a company of their own; the company keeps its name and
+primary domain, and contacts already filed elsewhere stay where they are.
+Personal email providers are refused, and so is a domain another company of the
+team has: the message names that company, or says an archived company has it.
+Each domain pill opens **Remove**. Removing deletes no contact or mail; new mail
+from the domain is then filed as before it was added. The domain the company is
+named after can't be removed until the company is renamed, and only a team
+admin can remove a domain from a company whose email sync is off. The SDK
+(`company.addDomain`, `company.removeDomain`), `PUT`/`DELETE
+/crm/companies/{id}/domains` and the `AddCompanyDomain` and
+`RemoveCompanyDomain` agent tools do the same.
+
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 With the keyboard on the record pane (as a record opens, with nothing focused,
