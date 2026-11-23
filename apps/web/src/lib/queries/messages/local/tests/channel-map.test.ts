@@ -7,6 +7,7 @@ import {
   unplacedSortKey,
 } from '../channel-map';
 import { CHANNEL_ID, graphqlActivity, graphqlMessage } from './fixtures';
+
 const ID = '0198c0de-0000-7000-8000-00000000000a';
 
 describe('channel sort keys', () => {

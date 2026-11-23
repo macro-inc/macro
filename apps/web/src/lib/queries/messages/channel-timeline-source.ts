@@ -1,9 +1,9 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   type EntityLoadError,
   toEntityLoadError,
 } from '@core/component/EntityLoadGate';
 import { enableChannelLocalSync } from '@core/constant/featureFlags';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { CacheHost } from '@graphql-cache/index';
 import {
   getGraphqlSoupCacheHost,

@@ -1,5 +1,5 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityLoadError } from '@core/component/EntityLoadGate';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { MessageTimelineEntry } from '@service-storage/messages';
 import { CombinedError } from '@urql/core';

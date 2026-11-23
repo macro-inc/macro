@@ -27,6 +27,8 @@ import type {
   CombinedError,
   OperationResult,
 } from '@urql/core';
+import * as Deferred from 'effect/Deferred';
+import * as Effect from 'effect/Effect';
 import { createStore, produce } from 'solid-js/store';
 import {
   CHANNEL_MESSAGE_TYPENAME,
@@ -170,44 +172,58 @@ function refusalOf(error: CombinedError): ThrownResultError {
  * Waits for the queue to settle a transaction, or the one that replaced it.
  * Listening starts before the write is handed over, so a settlement that lands
  * between the queue's answer and the wait is not missed. A storage reset
- * empties the queue: the write is gone and will never settle.
+ * empties the queue: the write is gone and will never settle, so each wait
+ * races the reset.
  */
 function watchSettlements(host: ChannelWriteHost) {
-  const settled = new Map<string, MutationSettlement>();
-  let wake: (() => void) | undefined;
-  let reset = false;
+  const settlements = new Map<string, Deferred.Deferred<MutationSettlement>>();
+  const reset = Deferred.makeUnsafe<void>();
+  const settlementOf = (transactionId: string) => {
+    let deferred = settlements.get(transactionId);
+    if (!deferred) {
+      deferred = Deferred.makeUnsafe<MutationSettlement>();
+      settlements.set(transactionId, deferred);
+    }
+    return deferred;
+  };
   const stopSettled = host.onMutationSettled((settlement) => {
-    settled.set(settlement.transactionId, settlement);
-    wake?.();
+    Deferred.doneUnsafe(
+      settlementOf(settlement.transactionId),
+      Effect.succeed(settlement)
+    );
   });
   const stopReset = host.onCacheGenerationChanged((change) => {
-    if (change.storage !== 'reset') return;
-    reset = true;
-    wake?.();
+    if (change.storage === 'reset') Deferred.doneUnsafe(reset, Effect.void);
   });
+  const settledOrReset = (transactionId: string) =>
+    Effect.raceFirst(
+      Deferred.await(settlementOf(transactionId)),
+      Deferred.await(reset).pipe(
+        Effect.andThen(
+          Effect.fail(refusal('CACHE_RESET', 'device cache was reset'))
+        )
+      )
+    );
+  const committed = (
+    transactionId: string
+  ): Effect.Effect<void, ThrownResultError> =>
+    Effect.gen(function* () {
+      const settlement = yield* settledOrReset(transactionId);
+      if (settlement.status === 'committed') return;
+      if (settlement.status === 'permanently-failed') {
+        return yield* Effect.fail(
+          refusal(settlement.errorCode, settlement.error)
+        );
+      }
+      return yield* committed(settlement.replacementTransactionId);
+    });
   return {
     stop() {
       stopSettled();
       stopReset();
     },
-    async committed(transactionId: string): Promise<void> {
-      let current = transactionId;
-      for (;;) {
-        if (reset) throw refusal('CACHE_RESET', 'device cache was reset');
-        const settlement = settled.get(current);
-        if (!settlement) {
-          await new Promise<void>((resolve) => {
-            wake = resolve;
-          });
-          continue;
-        }
-        if (settlement.status === 'committed') return;
-        if (settlement.status === 'permanently-failed') {
-          throw refusal(settlement.errorCode, settlement.error);
-        }
-        current = settlement.replacementTransactionId;
-      }
-    },
+    committed: (transactionId: string): Promise<void> =>
+      Effect.runPromise(committed(transactionId)),
   };
 }
 
@@ -314,7 +330,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   const addPending = (channelId: string, write: PendingWrite) =>
     setPending(
       produce((state) => {
-        (state[channelId] ??= []).push(write);
+        state[channelId] = [...(state[channelId] ?? []), write];
       })
     );
   const removePending = (channelId: string, uuid: string) =>

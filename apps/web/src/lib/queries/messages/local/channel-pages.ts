@@ -1,8 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
+  type CacheHost,
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
-  type CacheHost,
   type ChannelCoverageWire,
   type ChannelTimelineCacheArgs,
   readRecordsByKeys,
@@ -24,12 +24,12 @@ import {
   markChannelCacheAnswered,
   markChannelCacheUnsupported,
 } from './channel-flag';
-import { queryChannelNetwork } from './channel-network';
 import {
   type ChannelTimelineRecord,
   channelMessageKey,
   mapChannelTimelineEntry,
 } from './channel-map';
+import { queryChannelNetwork } from './channel-network';
 
 export type ChannelPageHost = Pick<
   CacheHost,

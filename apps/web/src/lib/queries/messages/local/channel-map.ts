@@ -16,6 +16,7 @@ import {
   normalizeChannelMessageSender,
   normalizeMessageSender,
 } from '../message-sender';
+
 const MICROS_DIGITS = 20;
 const FRACTION_DIGITS = 6;
 const TIMESTAMP_FRACTION = /\.(\d+)/;
