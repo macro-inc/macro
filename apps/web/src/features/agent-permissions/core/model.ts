@@ -188,13 +188,19 @@ export function exceptionsFor(
   catalog: ToolPermissionCatalog,
   view: AgentToolPermissions,
   action: PermissionAction,
-  pending: PendingLookup = NOTHING_PENDING
+  pending: PendingLookup = NOTHING_PENDING,
+  /** Rules that make a pair an exception too: what a follower inherits. */
+  alsoExceptions: readonly ToolPermissionRule[] = []
 ): Exception[] {
   return entitiesFor(catalog, action).flatMap((group) => {
-    const saving = pending(groupActionTarget(group.id, action));
+    const target = groupActionTarget(group.id, action);
+    const saving = pending(target);
     if (saving !== undefined) return [{ group, state: saving }];
     const pair = actionPermission(groupPermissions(view, group.id), action);
-    if (!pair?.exception) return [];
+    if (!pair) return [];
+    const exception =
+      pair.exception || ruleFor(alsoExceptions, target) !== undefined;
+    if (!exception) return [];
     return [{ group, state: pair.state }];
   });
 }

@@ -10,13 +10,16 @@ import { toolPermissionsClient } from '@service-agent-harness/tool-permissions';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentToolPermissionKeys } from './keys';
+import type { ReferencesView } from './references-view';
 
 /**
  * The routes answer 404 while the feature is off for the caller (or the
  * agent has no permissions to show), which reads as `null`: callers hide
  * the surface rather than showing an error.
  */
-async function orUnavailable<T>(load: () => Promise<T>): Promise<T | null> {
+export async function orUnavailable<T>(
+  load: () => Promise<T>
+): Promise<T | null> {
   try {
     return await load();
   } catch (error) {
@@ -48,7 +51,9 @@ export function agentToolPermissionsQueryOptions(
   return queryOptions({
     queryKey: agentToolPermissionKeys.agent(agentId).queryKey,
     queryFn: () =>
-      orUnavailable(() => throwOnErr(() => toolPermissionsClient.get(agentId))),
+      orUnavailable(() =>
+        throwOnErr(() => toolPermissionsClient.get<ReferencesView>(agentId))
+      ),
     enabled,
     refetchOnWindowFocus: true,
   });
@@ -98,11 +103,20 @@ export function useSessionToolPermissionsQuery(
   );
 }
 
-function storeView(view: AgentToolPermissions) {
+export function storeView(view: AgentToolPermissions) {
   queryClient.setQueryData(
     agentToolPermissionKeys.agent(view.agentId).queryKey,
     view
   );
+  // Agents following this one resolve through it, so every other agent's
+  // view and every policy preview is read again.
+  queryClient.invalidateQueries({
+    queryKey: agentToolPermissionKeys.agent._def,
+    predicate: (query) => query.queryKey[2] !== view.agentId,
+  });
+  queryClient.invalidateQueries({
+    queryKey: agentToolPermissionKeys.policy._def,
+  });
   // A session's view layers its own limits over the agent's, so it is read
   // again rather than patched. The save settles once that read lands, so a
   // control reading the session view never shows the old state between.

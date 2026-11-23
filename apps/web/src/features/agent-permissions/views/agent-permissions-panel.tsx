@@ -9,13 +9,11 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import { queryReadyGate } from '@queries/gate';
-import type {
-  AgentToolPermissions,
-  ToolPermissionCatalog,
-} from '@service-agent-harness/generated/schemas';
+import type { ToolPermissionCatalog } from '@service-agent-harness/generated/schemas';
 import { Button } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Match, Show, Switch } from 'solid-js';
+import { FollowingNote } from '../components/following-note';
 import {
   PermissionsLoadError,
   PermissionsReadOnlyNote,
@@ -30,11 +28,13 @@ import {
   settingCounts,
   targetKey,
 } from '../core/model';
+import { followerExceptionRules } from '../core/references';
 import {
   useAgentToolPermissionsQuery,
   useResetAgentToolPermissionsMutation,
   useToolPermissionCatalogQuery,
 } from '../queries/permissions';
+import type { ReferencesView } from '../queries/references-view';
 import { refusalMessage, usePermissionChanges } from './permission-changes';
 
 type PanelData =
@@ -44,7 +44,7 @@ type PanelData =
   | {
       kind: 'ready';
       catalog: ToolPermissionCatalog;
-      view: AgentToolPermissions;
+      view: ReferencesView;
     };
 
 const EMPTY_CATALOG: ToolPermissionCatalog = {
@@ -67,6 +67,8 @@ export function AgentPermissionsPanel(props: {
   focus?: PermissionFocus;
   /** Shows the "Tool permissions" title and its description. */
   heading?: boolean;
+  /** Leaves out what the agent follows, when the caller shows it. */
+  hideSource?: boolean;
 }) {
   const catalogQuery = useToolPermissionCatalogQuery();
   const viewQuery = useAgentToolPermissionsQuery(() => props.agentId);
@@ -161,10 +163,31 @@ export function AgentPermissionsPanel(props: {
           <Match when={ready()}>
             {(loaded) => (
               <>
+                <Show when={!props.hideSource && loaded().view.source}>
+                  {(source) => (
+                    <>
+                      <FollowingNote source={source()} />
+                      <Show when={loaded().view.canSetSource}>
+                        <p class="px-1 text-xs text-ink-extra-muted">
+                          {t('agentPermissions.followsEditHint')}
+                        </p>
+                      </Show>
+                    </>
+                  )}
+                </Show>
                 <ToolPermissions
                   catalog={loaded().catalog}
                   view={loaded().view}
-                  editable={loaded().view.canEdit}
+                  editable={loaded().view.canEdit && !loaded().view.source}
+                  follower={
+                    loaded().view.source
+                      ? {
+                          inherited: followerExceptionRules(loaded().view),
+                          restrictions: loaded().view.rules,
+                          canRemove: loaded().view.canEdit,
+                        }
+                      : undefined
+                  }
                   heading={props.heading}
                   initialAction={
                     props.focus

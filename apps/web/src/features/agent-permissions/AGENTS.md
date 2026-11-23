@@ -19,7 +19,19 @@ changes.
   `action-accordion.tsx`, `exception-row.tsx`, `entity-picker.tsx`,
   `permission-state-menu.tsx`, `tool-settings-list.tsx` are its parts.
 - `views/agent-permissions-panel.tsx`: loads, saves (`permission-changes.ts`),
-  Reset, notes; what `Agents.tsx` renders.
+  Reset, notes; what `Agents.tsx` renders. A following agent shows its
+  source (`components/following-note.tsx`) and the component read-only, with
+  its own restrictions marked and removable.
+- `views/agent-permissions-form.tsx`: the agent form's Permissions tabs.
+  `NewAgentPermissions` keeps a draft (follow a picked policy, or own
+  permissions over the source's) that `applyPermissionsDraft` saves once
+  the agent exists; `EditAgentPermissions` sets the source (confirming when
+  the agent had its own) or uses its own (`detach`) at once.
+- `core/references.ts`: draft application, default candidate, follower
+  exceptions (pure, tested).
+- `queries/references.ts`: source candidates, policy previews, set source
+  and detach. `queries/references-view.ts` holds their types ahead of the
+  generated client (see its TODO).
 - `queries/permissions.ts`: catalog, per-agent and per-session queries,
   set/reset mutations (a save re-reads every session view). A 404 (feature
   off for the caller) reads as `null`: hide the UI.
@@ -61,6 +73,11 @@ changes.
 - Count and show only visible pairs: an exception or tool rule counts when its
   entity has a tool for its action (`ruleVisible`). Rules on hidden pairs
   stay saved; Reset clears them too.
+- A save to any agent re-reads every other agent's view and every policy
+  preview (`storeView`): agents following it resolve through it.
+- A new agent follows its scope's default (personal Macro for a private
+  agent, the team default for a team agent) without any request; only a
+  different pick sends `PUT .../source`.
 - The Macro persona's permissions use `MACRO_NEW_BOT_ID`, not
   `MACRO_AGENT_BOT_ID` (the row id).
 - Gate every entry point, and every read of the permissions API, on

@@ -4,6 +4,7 @@ import type {
   PermissionAction,
   ToolPermissionCatalog,
   ToolPermissionChange,
+  ToolPermissionRule,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
 import { createSignal, For, Show } from 'solid-js';
@@ -16,7 +17,9 @@ import {
   defaultFor,
   exceptionsFor,
   followingCount,
+  groupActionTarget,
   type PendingLookup,
+  ruleFor,
   type ToolSetting,
   toolSettingsFor,
   toolTarget,
@@ -40,6 +43,16 @@ export function ToolPermissions(props: {
   initialAction?: PermissionAction;
   pendingState: PendingLookup;
   onChange: (change: ToolPermissionChange, shown: ToolPermissionState) => void;
+  /**
+   * For an agent that follows another's permissions (not `editable`): the
+   * rules it inherits, shown as exceptions, and its own restrictions,
+   * marked on their rows and removable when `canRemove`.
+   */
+  follower?: {
+    inherited: readonly ToolPermissionRule[];
+    restrictions: readonly ToolPermissionRule[];
+    canRemove: boolean;
+  };
 }) {
   const [expanded, setExpanded] = createSignal<PermissionAction[]>(
     props.initialAction ? [props.initialAction] : []
@@ -56,7 +69,27 @@ export function ToolPermissions(props: {
     props.pendingState(actionTarget(action)) ?? defaultFor(props.view, action);
 
   const exceptions = (action: PermissionAction) =>
-    exceptionsFor(props.catalog, props.view, action, props.pendingState);
+    exceptionsFor(
+      props.catalog,
+      props.view,
+      action,
+      props.pendingState,
+      props.follower?.inherited
+    );
+
+  const removeRestriction = (rule: ToolPermissionRule) =>
+    props.onChange({ target: rule.target, state: null }, rule.state);
+
+  const restrictions = (action: PermissionAction) => {
+    const follower = props.follower;
+    if (!follower) return undefined;
+    return {
+      onDefault: ruleFor(follower.restrictions, actionTarget(action)),
+      onEntity: (group: string) =>
+        ruleFor(follower.restrictions, groupActionTarget(group, action)),
+      onRemove: follower.canRemove ? removeRestriction : undefined,
+    };
+  };
 
   const setDefault = (action: PermissionAction, state: ToolPermissionState) =>
     props.onChange(changeForDefault(action, state), state);
@@ -121,6 +154,10 @@ export function ToolPermissions(props: {
                   action
                 )}
                 editable={props.editable}
+                restrictions={restrictions(action)}
+                toolsRemovable={
+                  props.editable || (props.follower?.canRemove ?? false)
+                }
                 open={expanded().includes(action)}
                 onToggle={() => toggle(action)}
                 onDefault={(state) => setDefault(action, state)}

@@ -95,4 +95,46 @@ export default {
     "Limits {{agent}} set for a single session stay until that session ends. This can't be undone.",
   resetConfirm: 'Reset',
   cancel: 'Cancel',
+
+  restrictedByAgent: 'Restricted by the agent: {{state}}',
+  restrictedHere: 'Restricted here: {{state}}',
+  removeRestriction: 'Remove the restriction on {{target}}',
+  permissionMode: 'Permissions',
+  useAnotherAgents: 'Use another agent’s permissions',
+  setMyOwn: 'Set my own permissions',
+  useMyOwn: 'Use my own permissions',
+  useSamePermissionsAs: 'Use same permissions as',
+  setAgent: 'Set agent',
+  scopePersonal: 'Personal',
+  scopeTeam: 'Team · {{team}}',
+  sourceDeletedBadge: 'Deleted',
+  sourceWouldLoop: 'Would follow itself',
+  sourceTooDeep: 'Too many agents in a row',
+  followsChanges:
+    'This agent automatically follows permission changes made to {{source}}.',
+  followsVia: '{{source}} follows {{via}}.',
+  followsEditHint:
+    'To follow another agent or use its own permissions, edit the agent.',
+  sourceLost:
+    'The agent this one followed is gone, so it asks before everything. Pick another agent or use its own permissions.',
+  sourceDeleted:
+    '{{source}} was deleted. Its permissions stay as they were and can’t be changed.',
+  sourceOutOfScope:
+    '{{source}} is no longer one this agent can follow. Pick another agent or use its own permissions.',
+  showSourcePermissions: 'Show {{source}}’s permissions',
+  hideSourcePermissions: 'Hide {{source}}’s permissions',
+  noSourcePicked:
+    'No agent to follow yet. Pick one, or set this agent’s own permissions.',
+  pickSource: 'Pick an agent whose permissions this one follows.',
+  ownDescription: 'Set defaults for this agent and add exceptions by entity.',
+  useOwnExplained:
+    'Copies what it follows into its own settings and stops following. Nothing changes until you edit them.',
+  setSourceFailed: 'Couldn’t change what this agent follows',
+  detachFailed: 'Couldn’t switch to its own permissions',
+  followTitle: 'Follow {{source}}?',
+  followConfirm: 'Follow',
+  followBody:
+    '{{agent}}’s own settings will be replaced by what it follows. Restrictions the agent set on itself stay.',
+  draftFailed: 'Agent created, but its permissions weren’t saved',
+  draftFailedBody: 'It follows its default permissions for now.',
 };

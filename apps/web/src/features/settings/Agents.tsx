@@ -1,7 +1,12 @@
 import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
 import {
   AgentPermissionsPanel,
+  applyPermissionsDraft,
+  EditAgentPermissions,
+  NewAgentPermissions,
   type PermissionFocus,
+  type PermissionsDraft,
+  refusalMessage,
   useAgentPermissionsAvailable,
   useAgentPermissionsFlag,
 } from '@app/features/agent-permissions';
@@ -31,6 +36,7 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
+import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
@@ -1401,6 +1407,29 @@ function AgentEditorPage(props: {
       : props.currentTeamId;
   };
 
+  // The new agent's Permissions section hands over what to save once the
+  // agent exists.
+  let readPermissionsDraft: (() => PermissionsDraft) | undefined;
+  const savePermissions = async (
+    agentId: string,
+    draft: PermissionsDraft
+  ): Promise<void> => {
+    const result = await applyPermissionsDraft(agentId, draft);
+    if (result.isOk()) return;
+    toast.failure(t('agentPermissions.draftFailed'), {
+      subtext:
+        refusalMessage(result.error) ?? t('agentPermissions.draftFailedBody'),
+      actions: [
+        {
+          label: t('common.retry'),
+          icon: ArrowCounterClockwiseIcon,
+          onClick: () =>
+            fireAndForget(savePermissions(agentId, draft), 'agent-settings'),
+        },
+      ],
+    });
+  };
+
   const submit = async () => {
     if (!canCreate()) return;
 
@@ -1426,6 +1455,9 @@ function AgentEditorPage(props: {
     });
     if (!saved) return;
     await saveApiKey(saved);
+    if (!props.agent && readPermissionsDraft) {
+      await savePermissions(saved, readPermissionsDraft());
+    }
     close();
   };
 
@@ -1746,6 +1778,20 @@ function AgentEditorPage(props: {
               <Show when={permissionsFlag() && props.agent}>
                 {(agent) => <AgentEditorPermissions agent={agent()} />}
               </Show>
+              <Show when={permissionsFlag() && !props.agent}>
+                <AgentFormSection
+                  title={t('agentPermissions.title')}
+                  description={t('agentPermissions.sectionDescription')}
+                >
+                  <NewAgentPermissions
+                    share={share()}
+                    teamId={selectedTeamId()}
+                    draft={(read) => {
+                      readPermissionsDraft = read;
+                    }}
+                  />
+                </AgentFormSection>
+              </Show>
 
               <AgentFormSection
                 title="Advanced"
@@ -1986,7 +2032,7 @@ function AgentEditorPermissions(props: { agent: AgentWithHarnessId }) {
         title={t('agentPermissions.title')}
         description={t('agentPermissions.sectionDescription')}
       >
-        <AgentPermissionsPanel
+        <EditAgentPermissions
           agentId={props.agent.bot.id}
           agentName={props.agent.bot.name}
         />

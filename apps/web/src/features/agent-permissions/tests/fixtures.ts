@@ -5,6 +5,10 @@ import type {
   ToolPermissionRule,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
+import type {
+  ReferencesView,
+  SourceCandidate,
+} from '../queries/references-view';
 
 /**
  * Email (with a Send override), Documents (Delete only) and Tasks, which has
@@ -378,4 +382,94 @@ export const ENTITY_VIEW: AgentToolPermissions = {
         };
       }),
   })),
+};
+
+/** The policies a private agent may follow: personal Macro, then Scout. */
+export const CANDIDATES: SourceCandidate[] = [
+  {
+    policyId: 'policy-macro',
+    kind: 'persona',
+    agent: {
+      id: 'macro',
+      name: 'Macro',
+      handle: 'macro',
+      avatarUrl: null,
+      deleted: false,
+    },
+    scope: { kind: 'personal' },
+    current: false,
+  },
+  {
+    policyId: 'policy-scout',
+    kind: 'agent',
+    agent: {
+      id: 'scout',
+      name: 'Scout',
+      handle: 'scout',
+      avatarUrl: null,
+      deleted: false,
+    },
+    scope: { kind: 'personal' },
+    current: false,
+  },
+  {
+    policyId: 'policy-analyst',
+    kind: 'agent',
+    agent: {
+      id: 'analyst',
+      name: 'Analyst',
+      handle: 'analyst',
+      avatarUrl: null,
+      deleted: false,
+    },
+    scope: { kind: 'personal' },
+    current: false,
+    unavailable: 'cycle',
+  },
+];
+
+/**
+ * `ENTITY_VIEW`, as an agent following Scout sees it: Scout's exceptions
+ * are inherited, and the agent restricted itself to Never on Email · Read.
+ */
+export const FOLLOWING_VIEW: ReferencesView = {
+  ...ENTITY_VIEW,
+  canSetSource: true,
+  rules: [
+    {
+      target: { kind: 'group_action', group: 'email', action: 'read' },
+      state: 'never',
+      viaAgent: true,
+      updatedAt: at,
+    },
+  ],
+  groups: ENTITY_VIEW.groups.map((group) =>
+    group.group === 'email'
+      ? {
+          ...group,
+          actions: group.actions.map((pair) =>
+            pair.action === 'read'
+              ? { ...pair, state: 'never' as const, exception: true }
+              : pair
+          ),
+        }
+      : group
+  ),
+  inherited: ENTITY_RULES,
+  source: {
+    policyId: 'policy-scout',
+    kind: 'agent',
+    agent: {
+      id: 'scout',
+      name: 'Scout',
+      handle: 'scout',
+      avatarUrl: null,
+      deleted: false,
+    },
+    scope: { kind: 'personal' },
+    status: 'live',
+    inScope: true,
+    canEdit: false,
+    via: [{ name: 'Macro', handle: 'macro' }],
+  },
 };
