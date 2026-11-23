@@ -2,6 +2,7 @@ import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EventEditorSubmitValues } from '../components/composer/event-form-model';
 import { type CalendarEvent, DEFAULT_GUEST_POLICY } from '../types';
+import { createStandaloneComposerSetup } from '../views/composer/create-standalone-composer-setup';
 import { useEventEditor } from './use-event-editor';
 
 const mocks = vi.hoisted(() => ({
@@ -37,6 +38,17 @@ vi.mock('@queries/call/meetings', () => ({
   useCreateMeetingMutation: () => ({ mutateAsync: vi.fn() }),
   useUpdateMeetingMutation: () => ({ mutateAsync: vi.fn() }),
   fetchMeeting: vi.fn(),
+}));
+vi.mock('@app/observability/flow', () => ({ usePending: vi.fn() }));
+vi.mock('./use-calendar-ui-flag', () => ({
+  useCalendarGuestInvitesFlag: () => () => false,
+  useCalendarInvitationForwardFlag: () => () => false,
+}));
+vi.mock('./use-synced-calendar-event', () => ({
+  useSyncedCalendarEvent: () => () => undefined,
+}));
+vi.mock('../utils/preferences', () => ({
+  useCalendarPreferences: () => [{ timeFormat: '12-hour' }],
 }));
 
 const VALUES: EventEditorSubmitValues = {
@@ -138,6 +150,70 @@ describe('event composer metadata writes', () => {
       dispose();
     }
   });
+  it('carries explicit metadata and time-zone-only changes into a conference replacement', () => {
+    const { editor, dispose } = editorFor({ ...EVENT, transparency: 'opaque' });
+    try {
+      const request = editor.replacementRequest(VALUES, 'all', {
+        transparency: 'transparent',
+        visibility: 'private',
+        timeZoneChanged: true,
+      });
+      expect(request?.changes).toMatchObject({
+        transparency: 'transparent',
+        visibility: 'private',
+        time: VALUES.time,
+      });
+      expect(request?.changes).not.toHaveProperty('conference');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('forwards metadata from the mounted composer model into replacement preparation', () => {
+    createRoot((dispose) => {
+      try {
+        const setup = createStandaloneComposerSetup({
+          event: {
+            ...EVENT,
+            transparency: 'opaque',
+            conferenceProvider: 'microsoft_teams',
+            conferenceUrl: 'https://teams.microsoft.com/l/meetup-join/example',
+          },
+          macroCallsEnabled: () => false,
+          onClose: vi.fn(),
+        });
+        setup.model.controller.setField('conference', 'none');
+        setup.model.setTransparency('transparent');
+        setup.model.setVisibility('private');
+        expect(setup.replacementRequest()?.changes).toMatchObject({
+          transparency: 'transparent',
+          visibility: 'private',
+        });
+      } finally {
+        dispose();
+      }
+    });
+  });
+  it('keeps unedited replacement metadata omitted and rejects write-only occurrence visibility', () => {
+    const { editor, dispose } = editorFor({
+      ...EVENT,
+      transparency: 'transparent',
+      visibility: 'confidential',
+    });
+    try {
+      const changes = editor.replacementRequest(VALUES, 'all')?.changes;
+      expect(changes).not.toHaveProperty('transparency');
+      expect(changes).not.toHaveProperty('visibility');
+      expect(
+        editor.replacementRequest(VALUES, 'this_event', {
+          visibility: 'private',
+        })
+      ).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
   it('does not send an occurrence visibility change whose readback is unavailable', async () => {
     const { editor, dispose } = editorFor(EVENT);
     try {

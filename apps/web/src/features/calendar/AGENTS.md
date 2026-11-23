@@ -38,7 +38,7 @@ host lives in `../block-calendar/`.
   Gate composer pinning on its host container: reserve 384px for the dock, 520px for the grid, and 24px for its margins, and preserve the requested pin while temporarily floating below that width.
   Keep replaced form and split components unwired for reference.
 - `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
-  the optional metadata argument to `useEventEditor.save` preserves legacy callers.
+  optional metadata arguments to `useEventEditor.save` and `replacementRequest` preserve legacy callers; pass the model's metadata changes through both paths.
   Initialize the zone to the zone represented by the form's wall-clock fields.
   Single-occurrence visibility stays unavailable because neither read API returns its override.
 - `primitives/default-composer-values.ts` seeds only unsupplied new drafts at the

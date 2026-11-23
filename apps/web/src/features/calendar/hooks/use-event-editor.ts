@@ -441,11 +441,18 @@ export function useEventEditor(props: UseEventEditorProps) {
    */
   const replacementRequest = (
     values: EventEditorSubmitValues,
-    scope?: CalendarUpdateScope
+    scope?: CalendarUpdateScope,
+    metadata: ComposerMetadataChanges = {}
   ): EventReplacementRequest | undefined => {
     const event = props.event();
-    if (!event) return undefined;
-    const { patch, recurrenceId } = editUpdate(event, values, scope).updateArgs;
+    if (!event || (scope === 'this_event' && metadata.visibility))
+      return undefined;
+    const { patch, recurrenceId } = editUpdate(
+      event,
+      values,
+      scope,
+      metadata
+    ).updateArgs;
     return {
       target: {
         eventId: event.eventId,
@@ -460,6 +467,8 @@ export function useEventEditor(props: UseEventEditorProps) {
         attendees: patch.attendees,
         recurrenceLines: patch.recurrenceLines,
         reminders: patch.reminders,
+        ...(patch.visibility ? { visibility: patch.visibility } : {}),
+        ...(patch.transparency ? { transparency: patch.transparency } : {}),
       },
     };
   };

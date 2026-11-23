@@ -147,7 +147,9 @@ Guests use one full-width multiselect value, with selection and removal inside
 its dropdown and no separate person chips. Existing protected guests remain protected.
 Reminders use one multiselect, including Custom minute offsets, while preserving
 non-popup methods. Busy/Free saves through existing create/update transparency
-fields; unavailable edit metadata stays read-only. The footer keeps Cancel and
+fields; unavailable edit metadata stays read-only. Replacing an event to remove
+its conference carries the same explicit availability, visibility, and time-zone
+edits as Save, while omitted metadata preserves saved values. The footer keeps Cancel and
 Create event/Save and the unchanged recurring **Apply changes to** control.
 
 Phone and agent layouts remain separate. Their kind choices and filled optional
