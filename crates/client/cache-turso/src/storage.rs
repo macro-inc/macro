@@ -1147,20 +1147,20 @@ impl Storage for TursoStorage {
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
-            let entries = prepare_records(entries)?;
+            let mut entries = prepare_records(entries)?;
             if entries.is_empty() {
                 return Ok(());
             }
             let connection = self.connection();
             driver::write_transaction(&connection, || {
                 let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
+                for (index, entry) in entries.iter_mut().enumerate() {
                     let changed = driver::execute_prepared(
                         &mut statement,
                         vec![
                             text(&entry.key.typename),
                             text(&entry.key.id),
-                            Value::from_blob(entry.value.clone()),
+                            Value::from_blob(std::mem::take(&mut entry.value)),
                         ],
                     )?;
                     require_changed(changed, 1)?;
@@ -1177,31 +1177,18 @@ impl Storage for TursoStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<(), Self::Error> {
-        self.require_healthy()?;
-        let result = (|| {
-            let entries = prepare_records(entries)?;
-            let connection = self.connection();
-            driver::write_transaction(&connection, || {
-                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
-                    require_changed(
-                        driver::execute_prepared(
-                            &mut statement,
-                            vec![
-                                text(&entry.key.typename),
-                                text(&entry.key.id),
-                                Value::from_blob(entry.value.clone()),
-                            ],
-                        )?,
-                        1,
-                    )?;
-                    self.fault_after(TestFaultSite::Put, index)?;
-                }
-                write_derived_rows(&connection, &entries)?;
-                write_projection_mutations(&connection, projections)
-            })
-        })();
-        self.latch_result(result)
+        self.put_encoded_with_projections(|| prepare_records(entries), projections)
+    }
+
+    async fn put_records_with_projections(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.put_encoded_with_projections(
+            || prepare_records(entries.iter().map(|(key, record)| (key, record))),
+            projections,
+        )
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
@@ -5168,18 +5155,62 @@ struct EncodedRecord {
     contact: Option<Record>,
 }
 
-fn prepare_records(
-    entries: Vec<(EntityKey<'static>, Record)>,
-) -> Result<Vec<EncodedRecord>, TursoStorageError> {
+impl TursoStorage {
+    /// Writes the records `prepare` encodes, with projection changes, in one
+    /// transaction. Encoding runs once storage is known healthy.
+    fn put_encoded_with_projections(
+        &mut self,
+        prepare: impl FnOnce() -> Result<Vec<EncodedRecord>, TursoStorageError>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        let result = (|| {
+            let mut entries = prepare()?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                for (index, entry) in entries.iter_mut().enumerate() {
+                    require_changed(
+                        driver::execute_prepared(
+                            &mut statement,
+                            vec![
+                                text(&entry.key.typename),
+                                text(&entry.key.id),
+                                Value::from_blob(std::mem::take(&mut entry.value)),
+                            ],
+                        )?,
+                        1,
+                    )?;
+                    self.fault_after(TestFaultSite::Put, index)?;
+                }
+                write_derived_rows(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)
+            })
+        })();
+        self.latch_result(result)
+    }
+}
+
+/// Encodes records for storage. An owned batch drops each decoded record once
+/// it is encoded.
+fn prepare_records<K, R>(
+    entries: impl IntoIterator<Item = (K, R)>,
+) -> Result<Vec<EncodedRecord>, TursoStorageError>
+where
+    K: std::borrow::Borrow<EntityKey<'static>>,
+    R: std::borrow::Borrow<Record>,
+{
     entries
         .into_iter()
         .map(|(key, record)| {
-            let value = encode_record(&record);
+            let (key, record) = (key.borrow(), record.borrow());
+
+            let value = encode_record(record);
             Ok(EncodedRecord {
-                key: RecordKey::from_entity(&key)?,
-                search_documents: project_encoded_search_documents(&key, &record, &value),
+                key: RecordKey::from_entity(key)?,
+                search_documents: project_encoded_search_documents(key, record, &value),
                 value,
-                calendar_range: cache_core::calendar::project_calendar_range(&key, &record),
+                calendar_range: cache_core::calendar::project_calendar_range(key, record),
                 contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
                     fields: record
                         .fields
