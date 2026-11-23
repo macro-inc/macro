@@ -117,6 +117,26 @@ async fn timeline_returns_image_bytes_and_video_urls_including_previews() {
 }
 
 #[tokio::test]
+async fn voice_memos_are_linked_for_an_audio_capable_tool() {
+    let resolver = RecordingResolver::default();
+    let value =
+        json!({"messages": [message("static/audio", "memo-1")], "navigation": {}, "omissions": []});
+
+    let result = render(&resolver, "ReadChannelMessages", value).await;
+
+    let enriched = assert_matching_json(&result);
+    assert_eq!(
+        enriched["messages"][0]["attachments"][0]["url"],
+        "https://static.example/file/memo-1"
+    );
+    // A voice memo is never fetched inline like an image.
+    assert!(resolver.urls.lock().unwrap().is_empty());
+    let memo = result.content[1].as_resource_link().unwrap();
+    assert_eq!(memo.uri, "https://static.example/file/memo-1");
+    assert!(memo.name.contains("memo-1"));
+}
+
+#[tokio::test]
 async fn thread_includes_parent_replies_and_nearby_messages() {
     let resolver = RecordingResolver::default();
     let value = json!({

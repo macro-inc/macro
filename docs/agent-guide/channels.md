@@ -466,9 +466,11 @@ and use the lightbox toolbar instead. Videos have their own toolbar; see
 
 When an agent reads a channel through Macro MCP, `ReadChannelMessages`,
 `ReadChannelThread`, and `ReadChannelMessageContext` include download URLs for
-image and video attachments, including attachments in replies and previews.
+image, video and voice memo attachments, including attachments in replies and
+previews.
 Up to eight distinct images per response are also returned as inline images.
-Videos are linked for inspection with a video-capable tool. If an image cannot
+Videos and voice memos are linked for inspection with a video- or
+audio-capable tool. If an image cannot
 be loaded or exceeds the inline limit, its URL remains available. To check this,
 ask the agent to inspect an image on a channel message and a video on a reply;
 verify that its tool response includes the matching attachment URLs.
@@ -508,16 +510,29 @@ in the DM (`<m-account-manager-request>{"id":"<grant>"}</...>`).
 
 ## Message composer
 
-Channel messages and thread replies have a microphone next to Send on pointer
-devices. It uses the same OpenAI Whisper dictation and scrolling volume
-timeline as AI chat. **Use dictation** appends text to the draft without
-sending; **Cancel dictation** or Escape preserves the existing draft. Sending
-is blocked during dictation, including keyboard and external send actions.
-Confirming uploads the in-memory audio to Whisper, which is available on all
-plans without consuming chat credits. Browsers without microphone recording
-show a disabled button. Touch devices have no microphone in either the
-collapsed or the expanded composer — their keyboards already dictate — so Send
-is the only control on that edge.
+Channel messages and thread replies have a microphone next to Send, in the
+expanded composer and in the resting one-line pill. On pointer devices it opens
+a menu: **Dictate** or **Voice memo**. Dictate uses the same OpenAI Whisper
+dictation and scrolling volume timeline as AI chat: **Use dictation** appends
+text to the draft without sending; **Cancel dictation** or Escape preserves the
+existing draft. Confirming uploads the in-memory audio to Whisper, which is
+available on all plans without consuming chat credits. Touch devices and the
+iOS app skip the menu (their keyboards already dictate): the microphone
+(`Record a voice memo`) records a memo at once. Browsers that cannot record
+show the dictation-only button, disabled.
+
+A voice memo records in the browser (AAC in MP4 where the browser can, else
+WebM/Opus) with a level timeline and an `m:ss` timer. **Stop and attach**
+(focused while recording, so Space works) uploads it as a `static/audio`
+attachment with a player in the draft; the typed draft is never touched.
+Escape or **Discard voice memo** throws the recording away without uploading.
+A failed upload keeps the recording and offers **Try attaching again**.
+Recordings stop and attach themselves at five minutes. A blocked or missing
+microphone says so under the composer. Sending is blocked while dictating or
+recording, including keyboard and external send actions. Recipients play the
+memo with a native audio player in the message. WhatsApp chats offer
+dictation only. To check: record a memo, type before and after it, send, and
+play it as the other participant; repeat at 390px with touch emulation.
 
 Composer and conversation body text use `text-base` (15px at the default root
 size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
