@@ -102,8 +102,64 @@
   color: #ccc;
 }
 
-.downloads-page .documentation-body {
-  margin-top: 56px;
+.downloads-page .downloads-alternatives {
+  margin-top: 14px;
+  color: #777;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.downloads-alternatives a {
+  color: #ccc;
+}
+
+.downloads-alternatives a:hover {
+  color: #fff;
+}
+
+.downloads-mobile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  margin-top: 72px;
+  padding-top: 56px;
+  border-top: 1px solid #ffffff14;
+  text-align: center;
+}
+
+.downloads-mobile h2 {
+  margin: 0;
+  font:
+    calc(315 + var(--cream-slab-weight-increase, 0)) 24px / 1.2 "Roboto Slab Variable",
+    display,
+    serif;
+  letter-spacing: -0.02em;
+}
+
+.downloads-mobile p {
+  margin: -8px 0 0;
+  color: #999;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.downloads-qr {
+  display: block;
+  width: 160px;
+  height: auto;
+  color: #eee;
+}
+
+.downloads-store-link {
+  color: #ccc;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.downloads-store-link:hover {
+  color: #fff;
 }
 
 .downloads-release {
@@ -148,7 +204,8 @@
 }
 
 @media (max-width: 767px) {
-  .downloads-page .downloads-desktop-only {
+  .downloads-page .downloads-desktop-only,
+  .downloads-page .downloads-mobile.downloads-desktop-only {
     display: none;
   }
   .downloads-page ul.downloads-phone-only {

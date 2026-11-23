@@ -32,29 +32,48 @@ export const DESKTOP_PLATFORM_DETAILS: Record<
   linux: { label: 'Linux', requirement: 'x86_64 AppImage' },
 };
 
-export type VisitorPlatform = DesktopPlatform | 'windows';
+export type VisitorPlatform = DesktopPlatform | 'windows' | 'chromeos';
 
 /** The visitor's desktop operating system; phones and others are undefined. */
 export function detectVisitorPlatform(
   userAgent: string
 ): VisitorPlatform | undefined {
-  if (/android|iphone|ipad|ipod|cros/i.test(userAgent)) return undefined;
+  if (/android|iphone|ipad|ipod/i.test(userAgent)) return undefined;
+  if (/cros/i.test(userAgent)) return 'chromeos';
   if (/macintosh|mac os x/i.test(userAgent)) return 'macos';
   if (/windows/i.test(userAgent)) return 'windows';
   if (/linux/i.test(userAgent)) return 'linux';
   return undefined;
 }
 
-export type PhonePlatform = 'ios' | 'android';
+/** The visitor's platform when Macro publishes an installer for it. */
+export function installerPlatform(
+  visitor: VisitorPlatform | undefined
+): DesktopPlatform | undefined {
+  return DESKTOP_PLATFORMS.find((platform) => platform === visitor);
+}
+
+/** Phone platforms with store apps, in default display order. */
+export const PHONE_PLATFORMS = ['ios', 'android'] as const;
+
+export type PhonePlatform = (typeof PHONE_PLATFORMS)[number];
 
 export const PHONE_PLATFORM_DETAILS: Record<
   PhonePlatform,
-  { label: string; store: string; url: string }
+  { label: string; device: string; store: string; prompt: string; url: string }
 > = {
-  ios: { label: 'iOS', store: 'App Store', url: IOS_APP_STORE_URL },
+  ios: {
+    label: 'iOS',
+    device: 'iPhone',
+    store: 'App Store',
+    prompt: 'Download Macro on the App Store',
+    url: IOS_APP_STORE_URL,
+  },
   android: {
     label: 'Android',
+    device: 'Android',
     store: 'Google Play',
+    prompt: 'Get Macro on Google Play',
     url: ANDROID_PLAY_STORE_URL,
   },
 };
@@ -73,13 +92,4 @@ export function phonePlatformOrder(
   phone: PhonePlatform | undefined
 ): PhonePlatform[] {
   return phone === 'android' ? ['android', 'ios'] : ['ios', 'android'];
-}
-
-/** Desktop installers with the visitor's own platform first. */
-export function desktopPlatformOrder(
-  visitor: VisitorPlatform | undefined
-): DesktopPlatform[] {
-  return [...DESKTOP_PLATFORMS].sort(
-    (a, b) => Number(b === visitor) - Number(a === visitor)
-  );
 }

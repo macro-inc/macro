@@ -3,9 +3,9 @@ import downloadRedirects from '../../../../seo/download-redirects.json';
 import {
   DESKTOP_DOWNLOAD_URLS,
   DESKTOP_PLATFORMS,
-  desktopPlatformOrder,
   detectPhonePlatform,
   detectVisitorPlatform,
+  installerPlatform,
   phonePlatformOrder,
 } from './desktopDownloads';
 
@@ -26,7 +26,7 @@ describe('detectVisitorPlatform', () => {
     ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'windows'],
     ['Mozilla/5.0 (Linux; Android 14; Pixel 8)', undefined],
     ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', undefined],
-    ['Mozilla/5.0 (X11; CrOS x86_64)', undefined],
+    ['Mozilla/5.0 (X11; CrOS x86_64 14541.0.0)', 'chromeos'],
     ['', undefined],
   ])('detects %s', (userAgent, platform) => {
     expect(detectVisitorPlatform(userAgent)).toBe(platform);
@@ -50,14 +50,14 @@ describe('phone platforms', () => {
   });
 });
 
-describe('desktopPlatformOrder', () => {
-  it('lists the visitor platform first', () => {
-    expect(desktopPlatformOrder('linux')).toEqual(['linux', 'macos']);
-    expect(desktopPlatformOrder('macos')).toEqual(['macos', 'linux']);
+describe('installerPlatform', () => {
+  it('names the installer for a computer Macro publishes one for', () => {
+    expect(installerPlatform('macos')).toBe('macos');
+    expect(installerPlatform('linux')).toBe('linux');
   });
 
-  it('keeps the default order for other platforms', () => {
-    for (const visitor of ['windows', undefined] as const)
-      expect(desktopPlatformOrder(visitor)).toEqual(['macos', 'linux']);
+  it('has none for other computers', () => {
+    for (const visitor of ['windows', 'chromeos', undefined] as const)
+      expect(installerPlatform(visitor)).toBeUndefined();
   });
 });

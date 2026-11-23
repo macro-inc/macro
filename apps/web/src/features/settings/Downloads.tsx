@@ -22,6 +22,8 @@ import {
   SettingsSection,
 } from './primitives';
 
+// The website's /download page has copies of these QR codes
+// (apps/marketing/src/assets/mobile-qr); change both together.
 const STORES = {
   ios: {
     device: 'iPhone',
