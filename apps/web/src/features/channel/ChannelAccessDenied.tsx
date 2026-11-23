@@ -61,7 +61,10 @@ export function ChannelAccessDenied(props: {
           request.status !== 'approved'
         )
           return request;
-        fireAndForget(refreshJoinedChannel(), 'channel-access-request');
+        fireAndForget(
+          refreshJoinedChannel(props.channelId),
+          'channel-access-request'
+        );
         props.onRefreshChannel();
         return request;
       }

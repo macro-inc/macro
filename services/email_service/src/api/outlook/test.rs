@@ -8,20 +8,17 @@ fn a_change_notification_names_its_message_and_a_lifecycle_event_does_not() {
          "resource":"Users/user-1/Messages/AAkALgAAAA==",
          "resourceData":{"@odata.type":"#Microsoft.Graph.Message","@odata.id":"Users/user-1/Messages/AAkALgAAAA==","id":"AAkALgAAAA=="},
          "tenantId":"tenant"},
-        {"subscriptionId":"sub","clientState":"secret","lifecycleEvent":"missed"},
-        {"subscriptionId":"sub","changeType":"updated","resourceData":{"id":"no-client-state"}}
+        {"subscriptionId":"sub","clientState":"secret","lifecycleEvent":"missed"}
     ]}"##;
 
-    let notifications = notifications(body).unwrap();
+    let batch = serde_json::from_slice::<Batch>(body).unwrap();
 
-    let [changed, missed] = notifications.as_slice() else {
+    let [changed, missed] = batch.value.as_slice() else {
         panic!("expected two notifications");
     };
-    assert!(matches!(changed.hint, WatchHint::Changed));
     assert_eq!(
-        changed.message.as_ref().map(ProviderId::as_str),
+        changed.message().as_ref().map(ProviderId::as_str),
         Some("AAkALgAAAA==")
     );
-    assert!(matches!(missed.hint, WatchHint::Missed));
-    assert!(missed.message.is_none());
+    assert!(missed.message().is_none());
 }

@@ -10,6 +10,7 @@ import type { CompanySection } from '../workspace/WorkspaceCompanies';
 import { CompanyPipelineEntry } from './CompanyPipelineEntry';
 import { CrmRecordWorkspace } from './CrmRecordWorkspace';
 import { seedCrmFollowup } from './crm-followup-data';
+import './crm-page.css';
 
 /** Tab the walkthrough points at, then opens, for each step. */
 const tour: (CompanySection | undefined)[] = [

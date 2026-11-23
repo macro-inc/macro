@@ -84,6 +84,17 @@ export function LoginPopupSuccess() {
   );
 }
 
+/** GitHub's connect step; its code loads only when someone connects GitHub. */
+const GithubConnectPage = lazy(async () => ({
+  default: (
+    await import('@app/features/settings/connections/github-connect-page')
+  ).GithubConnectPage,
+}));
+
+export function GithubConnectRoutePage() {
+  return <GithubConnectPage />;
+}
+
 export function TaskSlugPage() {
   const params = useRouteParams(taskSlugRoute);
   return <TaskRoute taskSlug={params.taskSlug} />;
