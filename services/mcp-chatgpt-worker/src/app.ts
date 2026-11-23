@@ -83,6 +83,13 @@ const EVENTS_REQUEST_META = {
   },
 };
 
+/**
+ * Where the public MCP server names the profile it answered under. A server
+ * from before profiles ignores the header and answers as MCP's, and its
+ * subscriptions would deliver unredacted, so an answer without it is refused.
+ */
+const EVENTS_PROFILE_META = 'com.macro/eventsProfile';
+
 /** A JSON-RPC error relayed with its code, message and data as the public MCP server sent them. */
 class RelayedError extends Error {
   constructor(
@@ -384,8 +391,9 @@ export function createHandler(config: Config) {
 
   /**
    * An MCP Events request, answered by the public MCP server as the bearer's
-   * user. Person tokens in its arguments go back to the ids they replaced, and
-   * any that come back are sealed again.
+   * user. Person tokens in its arguments go back to the ids they replaced
+   * (only there: the callback URL and secret are forwarded as sent), and any
+   * that come back are sealed again.
    */
   async function forwardEvents(
     method: EventsMethod,
@@ -403,9 +411,10 @@ export function createHandler(config: Config) {
       let revealed: Record<string, unknown>;
       try {
         revealed = {
-          ...z
-            .record(z.string(), z.unknown())
-            .parse(await people.reveal(ownParams)),
+          ...ownParams,
+          ...('arguments' in ownParams
+            ? { arguments: await people.reveal(ownParams.arguments) }
+            : {}),
           _meta: EVENTS_REQUEST_META,
         };
       } catch (error) {
@@ -464,11 +473,21 @@ export function createHandler(config: Config) {
           await people.conceal(data)
         );
       }
+      const { _meta: meta, ...result } = relayed.data.result;
+      if (
+        typeof meta !== 'object' ||
+        meta === null ||
+        (meta as Record<string, unknown>)[EVENTS_PROFILE_META] !== 'chatgpt'
+      ) {
+        span.setAttr('mcp.outcome', 'profile_ignored');
+        throw new RelayedError(
+          ErrorCode.InternalError,
+          "Macro's events service isn't ready for ChatGPT yet.",
+          undefined
+        );
+      }
       span.setAttr('mcp.outcome', 'ok');
-      return (await people.conceal(relayed.data.result)) as Record<
-        string,
-        unknown
-      >;
+      return (await people.conceal(result)) as Record<string, unknown>;
     });
   }
 

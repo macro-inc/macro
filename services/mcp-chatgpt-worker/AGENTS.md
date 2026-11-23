@@ -26,9 +26,13 @@ own permission checks and agent attribution apply.
   `AUTHORIZATION_SERVER_URL` + `/mcp` with `x-macro-events-profile: chatgpt`,
   which keeps the subscription, answers in the draft ChatGPT follows, and has
   document storage deliver to ChatGPT's webhook (see
-  `services/agent_harness_service`'s AGENTS.md). Person tokens in the
-  arguments are revealed first; the answer, or its error with code, message
-  and data, is relayed as is. Span: `mcp_chatgpt.events` (method, event
+  `services/agent_harness_service`'s AGENTS.md). Person tokens in
+  `arguments` are revealed first (only there: the callback URL and secret
+  go as sent). A result must name the profile in
+  `_meta["com.macro/eventsProfile"]`, which is removed; one without it
+  came from a public MCP server too old to know the profile and is refused
+  with an internal error. Otherwise the answer, or its error with code,
+  message and data, is relayed as is. Span: `mcp_chatgpt.events` (method, event
   name, outcome).
 
 ## Start here

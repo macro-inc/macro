@@ -379,6 +379,7 @@ describe('createHandler', () => {
                 refreshBefore: '2027-01-01T00:00:00Z',
                 cursor: null,
                 truncated: false,
+                _meta: { 'com.macro/eventsProfile': 'chatgpt' },
               },
             }
           : { owner_id: 'macro|someone@example.com' }
@@ -436,6 +437,9 @@ describe('MCP Events', () => {
     return forwarded;
   }
 
+  /** What the public MCP server adds to a result answered in ChatGPT's profile. */
+  const PROFILE_META = { _meta: { 'com.macro/eventsProfile': 'chatgpt' } };
+
   const LISTED = {
     events: [
       {
@@ -471,7 +475,11 @@ describe('MCP Events', () => {
 
   test('events/list is answered by the public MCP server as the bearer, in the ChatGPT profile', async () => {
     const forwarded = stubPublicMcp(() =>
-      Response.json({ jsonrpc: '2.0', id: 1, result: LISTED })
+      Response.json({
+        jsonrpc: '2.0',
+        id: 1,
+        result: { ...LISTED, ...PROFILE_META },
+      })
     );
     const handle = createHandler(parseConfig(BINDINGS));
 
@@ -479,6 +487,7 @@ describe('MCP Events', () => {
       rpc('events/list', { _meta: { 'openai/locale': 'en' } }, 'user-token')
     );
 
+    // The profile marker is checked and removed.
     expect((await response.json()).result).toEqual(LISTED);
     expect(forwarded).toHaveLength(1);
     const { headers, body } = forwarded[0] ?? {};
@@ -544,7 +553,7 @@ describe('MCP Events', () => {
 
   test('unsubscribe relays the empty result', async () => {
     const forwarded = stubPublicMcp(() =>
-      Response.json({ jsonrpc: '2.0', id: 1, result: {} })
+      Response.json({ jsonrpc: '2.0', id: 1, result: { ...PROFILE_META } })
     );
     const handle = createHandler(parseConfig(BINDINGS));
 
@@ -564,6 +573,85 @@ describe('MCP Events', () => {
     const { headers } = forwarded[0] ?? {};
     expect(headers?.get('mcp-method')).toBe('events/unsubscribe');
     expect(headers?.get('mcp-name')).toBe('message.posted');
+  });
+
+  test('an answer without the ChatGPT profile is refused, not relayed', async () => {
+    // A public MCP server from before profiles ignores the header and would
+    // store a subscription that delivers unredacted.
+    stubPublicMcp(() =>
+      Response.json({
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+          resultType: 'complete',
+          id: 'sub-1',
+          refreshBefore: '2027-01-01T00:00:00Z',
+          cursor: null,
+          truncated: false,
+        },
+      })
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc(
+        'events/subscribe',
+        {
+          name: 'message.posted',
+          arguments: {},
+          delivery: {
+            mode: 'webhook',
+            url: 'https://chatgpt.test/hook',
+            secret: 'whsec_secret',
+          },
+          cursor: null,
+        },
+        'user-token'
+      )
+    );
+
+    const body = await response.json();
+    expect(body.result).toBeUndefined();
+    expect(body.error.code).toBe(-32603);
+  });
+
+  test('the callback URL and secret are forwarded as sent, even when token-shaped', async () => {
+    const forwarded = stubPublicMcp(() =>
+      Response.json({
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+          id: 'sub-1',
+          refreshBefore: '2027-01-01T00:00:00Z',
+          cursor: null,
+          truncated: false,
+          ...PROFILE_META,
+        },
+      })
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+    // A path segment shaped like a person token this server never issued.
+    const url = `https://chatgpt.test/hook/person_u_${'A'.repeat(40)}`;
+
+    const response = await handle(
+      rpc(
+        'events/subscribe',
+        {
+          name: 'message.posted',
+          arguments: {},
+          delivery: { mode: 'webhook', url, secret: 'whsec_secret' },
+          cursor: null,
+        },
+        'user-token'
+      )
+    );
+
+    expect((await response.json()).result.id).toBe('sub-1');
+    expect(forwarded[0]?.body).toMatchObject({
+      params: {
+        delivery: { mode: 'webhook', url, secret: 'whsec_secret' },
+      },
+    });
   });
 
   test('an answer that is not JSON-RPC is an internal error', async () => {
