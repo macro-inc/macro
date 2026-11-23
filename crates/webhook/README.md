@@ -455,9 +455,12 @@ encrypts the secret before calling it.
   signatures (space-separated in `webhook-signature`), so a receiver still
   holding the old secret accepts them. A stored secret that cannot be
   decrypted fails the refresh, which the client retries. Which secret is
-  kept depends on the row as read, so the upsert writes only over a row
-  that still holds the secret it read (`read_secret`); after a concurrent
-  refresh it reads the row again (up to three times).
+  kept depends on the row as read, so the write locks the row and goes
+  ahead only if it is still the one read: still absent, or still holding
+  the secret read (`read_secret`) and the same profile. Otherwise (a
+  concurrent refresh, an unsubscribe, the expiry sweep) it reads the row
+  again, up to three times, so a deleted row never comes back carrying the
+  old secret's overlap.
 - **Delivery profiles.** `delivery_profile` says whose conventions a row's
   deliveries follow; the subscribe body names it (`profile`, left out for
   the default). `mcp`, the default, follows the MCP Events specification:
@@ -492,18 +495,22 @@ encrypts the secret before calling it.
   old and new tasks overlap, including ones the remaining new tasks publish
   during it; ordinary webhook messages are unaffected.
 - **ChatGPT rollout and rollback.** Roll out this service (with the
-  migration), then the MCP server, then `mcp-chatgpt-worker`. Each hop
-  refuses an answer from a server too old to know the profile: the MCP
-  server checks the profile the subscribe result names, and the Worker
-  checks the `com.macro/eventsProfile` the MCP server puts in `_meta`, so
-  a version skew fails ChatGPT's subscribe instead of storing a row that
-  delivers unredacted. A worker from before profiles reads every row as
-  `mcp`, so before rolling this service back past this change, remove the
-  ChatGPT rows first (`DELETE FROM mcp_event_subscription WHERE
-  delivery_profile = 'chatgpt'`; their queued deliveries then find no row
-  and are dropped, and ChatGPT's next refresh fails until the roll forward).
-  Rolling back only the MCP server or the Worker leaves stored rows
-  delivering correctly and makes ChatGPT's refreshes fail, so its
+  migration), then the MCP server, then `mcp-chatgpt-worker`. No build from
+  before the profile can store a ChatGPT subscription: this service's
+  internal route refuses the unknown `profile` field, and the MCP server
+  takes ChatGPT's profile only from methods under `com.macro/chatgpt/`,
+  which an older server answers with method-not-found. Each hop also checks
+  the answer (the profile the subscribe result names; the
+  `com.macro/eventsProfile` in `_meta`). A row keeps the profile it was
+  created with: a subscribe under another one is refused.
+  A worker from before profiles reads every row as `mcp`, so to roll this
+  service back past this change: first roll back the Worker or the MCP
+  server, which stops every ChatGPT subscribe and refresh; wait out the
+  internal subscribe timeout (30 s) for calls already in flight; run
+  `DELETE FROM mcp_event_subscription WHERE delivery_profile = 'chatgpt'`
+  (their queued deliveries then find no row and are dropped); then roll this
+  service back. Rolling back only the MCP server or the Worker leaves stored
+  rows delivering correctly and makes ChatGPT's refreshes fail, so its
   subscriptions lapse at `refreshBefore`.
 
 ## Operations

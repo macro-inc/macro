@@ -236,8 +236,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   the exact arguments its payload carries (`parent_type`, `actor`, and for
   `message.mentioned` `mentioned_type`/`mentioned_id`; `"me"` is the
   subscriber), parsed in `catalog.rs`. ChatGPT reaches MCP Events through
-  `services/mcp-chatgpt-worker`, which forwards `events/*` here with
-  `x-macro-events-profile: chatgpt` (`protocol.rs`; it grants nothing): the
+  `services/mcp-chatgpt-worker`, which forwards `events/*` here under the
+  method prefix `com.macro/chatgpt/` (`protocol.rs`; it grants nothing,
+  and a build from before it answers method-not-found): the
   draft OpenAI follows, so the named types only (no `macro.events`),
   webhook delivery, its `-32011`–`-32015` codes, a bare subscribe result,
   idempotent unsubscribe answering `{}`, and a stored `chatgpt` delivery

@@ -22,7 +22,8 @@ nearly every Rust service's `main.rs` calls.
   `traceparent` with Trace Context Level 2's random flag (`-03`, what
   `otel-cf-workers` sends from Cloudflare Workers) for its sampled bit;
   `opentelemetry_sdk`'s own propagator refuses it, so each Worker request
-  started a trace of its own.
+  started a trace of its own. A version-00 header whose flags are not two
+  lowercase hex digits is refused outright (the SDK reads `+1` as sampled).
 - `src/shutdown.rs`: `shutdown_signal` — the standard graceful-shutdown
   future every service awaits on.
 
