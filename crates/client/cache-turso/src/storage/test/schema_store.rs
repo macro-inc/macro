@@ -760,19 +760,29 @@ fn a_write_whose_response_the_new_schema_cannot_hold_settles_as_failed() {
             .adopt_schema(&old, &inputs, Unrecorded::Guess)
             .unwrap();
         let mut engine = Engine::with_schema(storage, 32, old);
-        let query = "mutation Save { save { id label } }";
+        let query = "mutation Save { save { __typename id label } }";
         let variables = serde_json::Map::new();
+        // A create: the server gives the record its ID.
+        let bindings = [cache_core::identity::IdentityBinding {
+            local_key: key("Saved:local"),
+            delete_record: false,
+            response_path: vec!["save".into()],
+            reference_fields: Vec::new(),
+            revalidation_variables: Vec::new(),
+        }];
         let (transaction, _) = engine
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
                     client_metadata: None,
-                    identity_bindings: &[],
+                    identity_bindings: &bindings,
                     uuid: "11111111-1111-4111-8111-111111111111",
                     query,
                     operation_name: None,
                     variables: &variables,
-                    data: &serde_json::json!({ "save": { "id": "9", "label": "pending" } }),
+                    data: &serde_json::json!({
+                        "save": { "__typename": "Saved", "id": "local", "label": "pending" }
+                    }),
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 0,
@@ -808,11 +818,18 @@ fn a_write_whose_response_the_new_schema_cannot_hold_settles_as_failed() {
                 query,
                 None,
                 &variables,
-                &serde_json::json!({ "save": { "id": "9", "label": "accepted" } }),
+                &serde_json::json!({
+                    "save": { "__typename": "Saved", "id": "9", "label": "accepted" }
+                }),
             )
             .await
             .unwrap();
-        assert!(matches!(outcome, CommitOptimisticWriteResult::Failed(_)));
+        // It settles without its content, so the queue moves on, and keeps
+        // the ID the server gave it for the writes that name the local one.
+        let CommitOptimisticWriteResult::Committed(result) = outcome else {
+            panic!("settles: {outcome:?}");
+        };
+        assert_eq!(result.identity_errors.len(), 1, "{result:?}");
         assert!(
             engine
                 .storage()
@@ -820,6 +837,26 @@ fn a_write_whose_response_the_new_schema_cannot_hold_settles_as_failed() {
                 .await
                 .unwrap()
                 .is_empty()
+        );
+        let records = engine
+            .storage()
+            .get_batch(&[key("Saved:local"), key("Saved:9")])
+            .await
+            .unwrap();
+        assert_eq!(
+            records[0],
+            Some(cache_core::identity::alias_record(&key("Saved:9")))
+        );
+        let server = records[1].as_ref().unwrap();
+        assert!(
+            server
+                .fields
+                .contains_key(cache_core::identity::MUTATION_UUID_FIELD)
+        );
+        assert!(!server.fields.contains_key("label"));
+        assert_eq!(
+            server.fields.get("id"),
+            Some(&cache_core::value::CacheValue::String("9".into()))
         );
     });
 }

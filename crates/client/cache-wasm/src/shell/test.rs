@@ -1728,7 +1728,8 @@ async fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
         .await,
     );
 
-    // No retry of this response can be written, so the queue moves on.
+    // No retry of this response can be written, so it settles without its
+    // content and the queue moves on.
     let commit: serde_json::Value = from_js(
         resolved(
             engine.commit_optimistic_write(
@@ -1747,7 +1748,7 @@ async fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
         )
         .await,
     );
-    assert_eq!(commit["kind"], "failed");
+    assert_eq!(commit["kind"], "committed");
     let queued: serde_json::Value = from_js(resolved(engine.inspect_mutations()).await);
     assert_eq!(queued, serde_json::json!([]));
 

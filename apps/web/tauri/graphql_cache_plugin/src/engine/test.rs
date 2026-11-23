@@ -1131,7 +1131,8 @@ fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
         panic!("new queue head should be claimed")
     };
 
-    // No retry of this response can be written, so the queue moves on.
+    // No retry of this response can be written, so it settles without its
+    // content and the queue moves on.
     let committed = block_on(handle.commit_optimistic_write(
         optimistic.transaction_id,
         "runner".to_string(),
@@ -1144,7 +1145,7 @@ fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
     .unwrap();
     assert!(matches!(
         committed,
-        CommitOptimisticWriteResultWire::Failed { .. }
+        CommitOptimisticWriteResultWire::Committed { .. }
     ));
     assert!(block_on(handle.inspect_mutations()).unwrap().is_empty());
 }

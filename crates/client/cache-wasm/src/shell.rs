@@ -2739,13 +2739,6 @@ impl CacheEngine {
                 serde_json::json!({})
             };
 
-            let projections = authoritative_projection_mutations(
-                &state.engine_mut()?.schema_snapshot(),
-                &query,
-                operation_name.as_deref(),
-                &projection_data,
-            )
-            .map_err(err_js)?;
             // The passes below share one normalization of the response.
             let response_schema = state.engine_mut()?.schema_snapshot();
             let response = WriteResponse::new(
@@ -2755,12 +2748,21 @@ impl CacheEngine {
                 &vars,
                 &projection_data,
             );
-            let projections = write_passes(state.engine_mut()?, &response, true, projections).await;
-            let projections = match projections {
-                // The engine retires a write whose response does not
-                // normalize; the passes have nothing to project from it.
-                Err(_) if !response.normalizes() => Vec::new(),
-                projections => state.write_passes_result(projections)?,
+            // The engine settles a response that does not normalize without
+            // its content, so nothing is projected from it.
+            let projections = if response.normalizes() {
+                let projections = authoritative_projection_mutations(
+                    &response_schema,
+                    &query,
+                    operation_name.as_deref(),
+                    &projection_data,
+                )
+                .map_err(err_js)?;
+                let projections =
+                    write_passes(state.engine_mut()?, &response, true, projections).await;
+                state.write_passes_result(projections)?
+            } else {
+                Vec::new()
             };
             let result = state
                 .engine_mut()?

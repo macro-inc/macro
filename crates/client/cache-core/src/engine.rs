@@ -112,10 +112,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     },
     #[error("invalid optimistic projection: {0}")]
     InvalidOptimisticProjection(String),
-    /// A confirmed response did not normalize under the schema; the
-    /// mutation was durably discarded.
-    #[error("unwritable mutation response: {}", .0.error)]
-    UnwritableResponse(Box<FailedMutationResult>),
+    /// Identity resolution and normalization failed; the mutation was durably discarded.
+    #[error("invalid optimistic identity: {}", .0.error)]
+    IdentityResolutionFailed(Box<FailedMutationResult>),
     #[error("invalid optimistic mutation UUID `{0}`")]
     InvalidMutationUuid(String),
     #[error("durable optimistic queue changed while staging UUID upsert")]
@@ -221,7 +220,8 @@ pub struct QueryRegistration<'a> {
 pub struct WriteResult {
     /// Effective scalar changes; absent when consumers must re-read queries.
     pub field_changes: Option<Vec<crate::field_changes::RecordFieldChange>>,
-    /// Identity bindings omitted while committing otherwise normalizable server data.
+    /// Identity bindings omitted while committing otherwise normalizable server
+    /// data, or why a settled response's content was not written.
     pub identity_errors: Vec<String>,
     /// Revision installed after this logical cache mutation.
     pub revision: CacheRevision,
@@ -245,6 +245,21 @@ pub struct WriteResult {
     pub revalidations: Vec<QueryRevalidation>,
     /// Stable caller identity of a settled mutation.
     pub mutation_uuid: Option<String>,
+}
+
+/// The `id` and `__typename` of a server-assigned key, the content a settled
+/// outcome keeps of the record it names.
+fn identity_record(key: &EntityKey<'static>) -> Record {
+    let mut record = Record::default();
+    for (field, value) in [("__typename", key.typename()), ("id", key.id())] {
+        if let Some(value) = value {
+            record.fields.insert(
+                field.into(),
+                crate::value::CacheValue::String(value.to_owned()),
+            );
+        }
+    }
+    record
 }
 
 /// Internal durable deltas; viewer field proof is never sent across host boundaries.
@@ -327,7 +342,7 @@ pub enum CommitOptimisticWriteResult {
     Committed(WriteResult),
     /// The response committed beneath a newer optimistic replacement.
     CommittedSuperseded(SupersededMutationResult),
-    /// A response that did not normalize permanently failed this attempt.
+    /// Invalid identity data and an unnormalizable response permanently failed this attempt.
     Failed(FailedMutationResult),
 }
 
@@ -336,8 +351,7 @@ pub enum CommitOptimisticWriteResult {
 pub struct FailedMutationResult {
     /// Changes caused by removing the failed optimistic layer.
     pub write_result: WriteResult,
-    /// Normalization and identity diagnostic for the host's cache error
-    /// handler.
+    /// Identity-resolution diagnostic for the host's cache error handler.
     pub error: String,
     /// Newer intent preserved when the failed attempt was superseded.
     pub replacement_transaction_id: Option<OptimisticTransactionId>,
@@ -2883,8 +2897,10 @@ impl<S: Storage> Engine<S> {
     /// network response without flickering through the pre-mutation value.
     /// Real records and queue deletion commit in one storage transaction.
     /// Invalid response identities are reported in [`WriteResult::identity_errors`].
-    /// A response that cannot normalize discards the attempt, and
-    /// [`EngineError::UnwritableResponse`] carries the rollback changes.
+    /// A response that cannot normalize settles without its content, keeping
+    /// the identities it resolved, unless some failed to resolve: then the
+    /// attempt is discarded and [`EngineError::IdentityResolutionFailed`]
+    /// carries the rollback changes.
     pub async fn commit_optimistic_write(
         &mut self,
         transaction: OptimisticTransactionId,
@@ -2990,7 +3006,7 @@ impl<S: Storage> Engine<S> {
             .await
         {
             Ok(result) => result,
-            Err(EngineError::UnwritableResponse(result)) => {
+            Err(EngineError::IdentityResolutionFailed(result)) => {
                 return Ok(CommitOptimisticWriteResult::Failed(*result));
             }
             Err(error) => return Err(error),
@@ -3090,16 +3106,27 @@ impl<S: Storage> Engine<S> {
         };
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
+        let mut unwritable = None;
         let mut updates = match normalize(&self.schema, op, variables, data) {
             Ok(updates) => updates,
+            Err(error) if identity_errors.is_empty() => {
+                // The server accepted the write, but no retry of this response
+                // normalizes: the schema dropped a field a write queued under
+                // an older one selects, or the response is malformed. Settle it
+                // as a stale outcome is settled, keeping the IDs it resolved
+                // without its content, rather than holding the queue head or
+                // losing an ID a later queued write names.
+                unwritable = Some(error.to_string());
+                projections.clear();
+                identities
+                    .values()
+                    .map(|target| (target.clone(), identity_record(target)))
+                    .collect()
+            }
             Err(error) => {
-                // No safe authoritative write is possible, and a retry of the
-                // same response never normalizes: the schema dropped a field
-                // a write queued under an older one selects, or the response
-                // is malformed. Retire this attempt rather than holding the
-                // queue head or replaying an already successful mutation.
-                identity_errors.push(error.to_string());
-                let error = identity_errors.join("; ");
+                // No safe authoritative write is possible. Retire this attempt
+                // rather than replaying an already successful server mutation.
+                let error = format!("{}; {error}", identity_errors.join("; "));
                 let rollback = self
                     .rollback_optimistic_write_with_outcome(transaction, claim)
                     .await?;
@@ -3109,7 +3136,7 @@ impl<S: Storage> Engine<S> {
                         (result.write_result, Some(result.replacement_transaction_id))
                     }
                 };
-                return Err(EngineError::UnwritableResponse(Box::new(
+                return Err(EngineError::IdentityResolutionFailed(Box::new(
                     FailedMutationResult {
                         write_result,
                         error,
@@ -3118,6 +3145,7 @@ impl<S: Storage> Engine<S> {
                 )));
             }
         };
+        let publish_snapshot = publish_snapshot && unwritable.is_none();
         if publish_snapshot && let Some(records) = self.response_records {
             updates.extend(records(&self.schema, op, variables, data, &updates)?);
         }
@@ -3259,6 +3287,7 @@ impl<S: Storage> Engine<S> {
                 projections: live_projection_keys,
             },
         );
+        identity_errors.extend(unwritable);
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors,
