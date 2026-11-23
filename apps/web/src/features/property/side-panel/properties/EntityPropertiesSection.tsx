@@ -118,7 +118,12 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.entityType,
     props.includeMetadata ?? false
   );
-  const allProperties = useAllProperties();
+  // The definitions this entity can take: the same list Add property asks for,
+  // so it is already loaded when the picker opens.
+  const allProperties = useAllProperties(
+    () => true,
+    () => props.entityType
+  );
   const [pendingDefinitionIds, setPendingDefinitionIds] = createSignal<
     Set<string>
   >(new Set());

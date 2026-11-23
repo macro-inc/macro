@@ -281,9 +281,11 @@ export function PropertyEditorDialog(props: {
     setCreatePropertyInitialName(initialName);
   };
 
-  // The create dialog offers a built-in property only where it applies, so it
-  // needs the entity type when every selected entity shares one. A host with
-  // no selection (a draft) supplies it through its properties context.
+  // The property list and the create dialog offer a property only where the
+  // server lets it apply (Stage on a company, Parent Task on a task), so they
+  // need the entity type when every selected entity shares one. A host with
+  // no selection (a draft) supplies it to the create dialog through its
+  // properties context.
   const selectedEntityType = () => {
     const [first, ...rest] = props.state.selectedEntities.map(
       propertyEditorEntityType
@@ -448,6 +450,7 @@ export function PropertyEditorDialog(props: {
                   existingPropertyIds={props.properties?.map(
                     (p) => p.propertyDefinitionId
                   )}
+                  forEntityType={selectedEntityType()}
                   onTagSelected={
                     !props.onPropertyAdded &&
                     props.state.selectedEntities.length > 0 &&
@@ -553,8 +556,12 @@ function PropertyList(props: {
   onTagSelected?: () => void;
   properties?: PropertyDefinitionDomain[];
   existingPropertyIds?: string[];
+  forEntityType?: EntityType;
 }) {
-  const allProperties = useAllProperties(() => !props.properties);
+  const allProperties = useAllProperties(
+    () => !props.properties,
+    () => props.forEntityType
+  );
   const properties = () => props.properties ?? allProperties();
 
   const { filteredProperties } = usePropertySelection(
