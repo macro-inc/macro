@@ -72,6 +72,48 @@ export type ImportPlanCounts = {
 
 export type ImportReportItem = { id: string; title: string; reason: string };
 
+export type ReviewOmission = NonNullable<
+  NotionImportReport['details']
+>['notImported'][number];
+
+/** Use the server totals, or derive them when reading an older report. */
+export function omissionTotals(
+  details: NotionImportReport['details'],
+  kind?: ReviewOmission['kind']
+) {
+  const totals = { pages: 0, databases: 0, other: 0, total: 0 };
+  if (details?.omissionCounts) {
+    for (const count of details.omissionCounts) {
+      if (kind && count.kind !== kind) continue;
+      totals.pages += count.pages;
+      totals.databases += count.databases;
+      totals.other += count.other;
+    }
+  } else {
+    for (const omission of details?.notImported ?? []) {
+      if (kind && omission.kind !== kind) continue;
+      if (omission.item.kind === 'page') totals.pages += 1;
+      else if (omission.item.kind === 'data_source') totals.databases += 1;
+      else totals.other += 1;
+    }
+  }
+  totals.total = totals.pages + totals.databases + totals.other;
+  return totals;
+}
+
+/** Share the count and noun between the outcome and report section. */
+export function omissionCountLabel(
+  totals: ReturnType<typeof omissionTotals>
+): string {
+  if (totals.total === totals.pages) {
+    return plural(totals.total, 'page', 'pages');
+  }
+  if (totals.total === totals.databases) {
+    return plural(totals.total, 'database', 'databases');
+  }
+  return plural(totals.total, 'item', 'items');
+}
+
 /** Where the import run stands, as the server reports it. */
 export type ImportProgress = {
   warnings?: string[];
@@ -96,6 +138,7 @@ export type ImportProgress = {
   waiting: number;
   writing: number;
   failures: ImportReportItem[];
+  failureCount?: number;
 };
 
 export type ImportReviewPhase =

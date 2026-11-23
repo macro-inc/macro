@@ -1,6 +1,20 @@
 use super::*;
+use crate::domain::model::{
+    NotionDataSource, NotionOption, NotionParent, NotionPropertyKind, NotionPropertySchema,
+};
 use models_databases::{CellValue, OptionId, OptionRef};
 use std::collections::HashMap;
+
+fn source_schema(view: &NotionView, properties: Vec<NotionPropertySchema>) -> NotionDataSource {
+    NotionDataSource {
+        id: view.data_source_id.clone().unwrap(),
+        database_id: view.parent.database_id.clone(),
+        title: "Example".into(),
+        database_parent: NotionParent::Workspace,
+        in_trash: false,
+        properties,
+    }
+}
 
 #[test]
 fn decoded_saved_view_ids_keep_status_board_query_and_lanes() {
@@ -46,7 +60,31 @@ fn decoded_saved_view_ids_keep_status_board_query_and_lanes() {
             snapshot: false,
         },
     ];
-    let translation = translate(&view, &bindings);
+    let source = source_schema(
+        &view,
+        vec![
+            NotionPropertySchema {
+                id: "a%7D".into(),
+                name: "Status".into(),
+                kind: NotionPropertyKind::Status {
+                    options: ["Doing", "Done"]
+                        .into_iter()
+                        .map(|name| NotionOption {
+                            id: name.into(),
+                            name: name.into(),
+                            color: "blue".into(),
+                        })
+                        .collect(),
+                },
+            },
+            NotionPropertySchema {
+                id: "b%7C".into(),
+                name: "Due".into(),
+                kind: NotionPropertyKind::Date,
+            },
+        ],
+    );
+    let translation = translate_with_schema(&view, &source, &bindings);
     assert_eq!(
         translation.view.query.sort,
         [
@@ -87,7 +125,11 @@ fn decoded_saved_view_ids_keep_status_board_query_and_lanes() {
         {"property": "a}", "status": {"does_not_equal": "Done"}},
         {"property": "a}", "status": {"is_empty": true}}
     ]}));
-    let filter = translate(&compound, &bindings).view.query.filter.unwrap();
+    let filter = translate_with_schema(&compound, &source, &bindings)
+        .view
+        .query
+        .filter
+        .unwrap();
     assert_eq!(filter.conjunction, Conjunction::Or);
     assert_eq!(filter.conditions.len(), 2);
     assert!(eval::matches(&filter, &HashMap::new()));
@@ -154,9 +196,6 @@ fn decoded_binding_defers_to_exact_ids_and_rejects_ambiguous_alternates() {
 
 #[test]
 fn an_exact_unimportable_property_cannot_bind_another_columns_alias() {
-    use crate::domain::model::{
-        NotionDataSource, NotionParent, NotionPropertyKind, NotionPropertySchema,
-    };
     let view: NotionView = serde_json::from_value(json!({
         "id": "00000000-0000-4000-8000-000000000001",
         "parent": {"database_id": "00000000-0000-4000-8000-000000000002"},
@@ -165,13 +204,9 @@ fn an_exact_unimportable_property_cannot_bind_another_columns_alias() {
         "filter": {"property": "a}", "title": {"equals": "A title"}}
     }))
     .unwrap();
-    let source = NotionDataSource {
-        id: view.data_source_id.clone().unwrap(),
-        database_id: view.parent.database_id.clone(),
-        title: "Example".into(),
-        database_parent: NotionParent::Workspace,
-        in_trash: false,
-        properties: vec![
+    let source = source_schema(
+        &view,
+        vec![
             NotionPropertySchema {
                 id: "a%7D".into(),
                 name: "Name".into(),
@@ -185,7 +220,7 @@ fn an_exact_unimportable_property_cannot_bind_another_columns_alias() {
                 },
             },
         ],
-    };
+    );
     let plan = crate::domain::macro_cells::ColumnPlan::new(&source, Uuid::from_u128(7));
     let columns = bindings(&source, &plan, ColumnId::from_uuid(Uuid::from_u128(1)));
     let translated = translate_with_schema(&view, &source, &columns);
@@ -215,7 +250,24 @@ fn missing_hidden_relation_reports_visibility_and_metadata_is_silent() {
         options: BTreeMap::new(),
         snapshot: false,
     };
-    let translated = translate(&view, &[title]);
+    let source = source_schema(
+        &view,
+        vec![
+            NotionPropertySchema {
+                id: "title".into(),
+                name: "Name".into(),
+                kind: NotionPropertyKind::Title,
+            },
+            NotionPropertySchema {
+                id: "related".into(),
+                name: "Relation".into(),
+                kind: NotionPropertyKind::Unsupported {
+                    notion_type: "relation".into(),
+                },
+            },
+        ],
+    );
+    let translated = translate_with_schema(&view, &source, &[title]);
     assert_eq!(translated.losses.len(), 1, "{:?}", translated.losses);
     assert_eq!(translated.losses[0].setting, ViewSetting::HiddenColumn);
     assert_eq!(

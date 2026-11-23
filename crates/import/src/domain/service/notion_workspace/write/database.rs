@@ -628,25 +628,30 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                 if let Some(document) = progress.get_for(WrittenKind::Body, row.id.as_str()) {
                     return Ok(Some(change(document)));
                 }
-                let (markdown, database_links) =
-                    match super::super::databases::body_links(api, &row.id, destinations, progress)
-                        .await
-                    {
-                        Ok(body) => body,
-                        Err(error) => {
-                            progress.loss(crate::domain::models::SourceLossFact {
-                                object: row.id.clone(),
-                                detail: crate::domain::models::SourceLossDetail::Notice {
-                                    notice: ImportNotice::new(
-                                        &row.id,
-                                        &row.title,
-                                        ImportNoticeKind::RowBodyUnavailable,
-                                    ),
-                                },
-                            })?;
-                            return Err(error);
-                        }
-                    };
+                let (markdown, database_links) = match super::super::databases::body_links(
+                    api,
+                    &row.id,
+                    &row.title,
+                    destinations,
+                    progress,
+                )
+                .await
+                {
+                    Ok(body) => body,
+                    Err(error) => {
+                        progress.loss(crate::domain::models::SourceLossFact {
+                            object: row.id.clone(),
+                            detail: crate::domain::models::SourceLossDetail::Notice {
+                                notice: ImportNotice::new(
+                                    &row.id,
+                                    &row.title,
+                                    ImportNoticeKind::RowBodyUnavailable,
+                                ),
+                            },
+                        })?;
+                        return Err(error);
+                    }
+                };
                 if markdown.trim().is_empty() {
                     progress.record_all(progress.loss_markers(&row.id)?).await?;
                     return Ok(None);

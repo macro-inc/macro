@@ -33,7 +33,10 @@ the due date read from an email thread for Focus.
   weeks: the caller judges what that mail means, and later mail is about
   something else.
   Anything uncertain resolves to no date, since a wrong date costs more than a
-  missing one, and a wrong event day takes a thread out of Focus early.
+  missing one, and a wrong event day takes a thread out of Focus early. A
+  deadline or closure citing a message or text the thread lacks makes the
+  whole answer `rejected`: no days, with its usage, and a 200, since the model
+  did answer; only a model that could not answer fails the request.
   `/universal_input/thread-due-date` is internal-only and meters against the
   acting user as `AiFeature::EmailFocus`, which no allowance pays for:
   never open it to user credentials, or it becomes a free model proxy. It has no

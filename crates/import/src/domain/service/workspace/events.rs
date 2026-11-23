@@ -12,9 +12,9 @@ use agent_runtime_protocol::domain::notification::{
     NotificationEvent, ReviewSettlement,
 };
 use agent_session::domain::notifications::{PendingNotification, ProduceNotification};
+use connectors::McpConnectionsService;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use uuid::Uuid;
 
 use super::super::ImportServiceImpl;
@@ -33,7 +33,7 @@ const MAX_TEXT_CHARS: usize = 300;
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -135,10 +135,10 @@ where
         let notices = self.repo.task_notice_counts(user, &ids).await?;
         let mut report = report(run.as_ref(), &rows, &notices)?;
         if self.workspace_source == ImportSource::Notion
-            && (settling_write || report.status == Some(RunStatus::Completed))
+            && let Some(writes) = self
+                .confirmed_report_writes(run.as_ref(), user, &rows, settling_write)
+                .await?
         {
-            let ids = confirmed_import_ids(run.as_ref(), &rows);
-            let writes = self.repo.confirmed_notion_writes(user, &ids).await?;
             report.imported = writes
                 .documents
                 .saturating_add(writes.databases)
@@ -151,6 +151,27 @@ where
         }
         report.on_team = self.repo.user_team_id(user).await?.is_some();
         Ok(report)
+    }
+
+    async fn confirmed_report_writes(
+        &self,
+        run: Option<&crate::domain::models::ImportRun>,
+        user: &MacroUserIdStr<'static>,
+        rows: &[crate::domain::models::ImportEntity],
+        settling_write: bool,
+    ) -> Result<Option<crate::domain::models::ConfirmedNotionWrites>> {
+        let finished = settling_write || run.is_some_and(|run| run.status == RunStatus::Completed);
+        let stopped = run.is_some_and(|run| {
+            run.review_id.is_some()
+                && matches!(run.status, RunStatus::Failed | RunStatus::Dismissed)
+        });
+        if !(finished || stopped) {
+            return Ok(None);
+        }
+        let ids = confirmed_import_ids(run, rows);
+        let writes = self.repo.confirmed_notion_writes(user, &ids).await?;
+        // A failed or dismissed planning run can have a review but no write receipts.
+        Ok((finished || writes != Default::default()).then_some(writes))
     }
 }
 

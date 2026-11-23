@@ -5,17 +5,21 @@ use std::collections::{BTreeMap, BTreeSet};
 use import_notion::domain::model::NotionId;
 use import_notion::domain::views::{ViewLossKind, ViewSetting, ViewType};
 
+use super::REPORT_LIST_LIMIT;
 use crate::domain::models::{
-    FidelityWarning, ImportNotice, ImportNoticeKind, NotionChangedView, NotionDatabaseViewChanges,
-    NotionReportDetails, NotionReportNote, NotionReportNoteKind, NotionTabChoice, NotionViewChange,
-    NotionViewChangeKind, ViewWarning,
+    FidelityWarning, ImportKind, ImportNotice, ImportNoticeKind, NotionChangedView,
+    NotionDatabaseViewChanges, NotionReportDetails, NotionReportNote, NotionReportNoteCount,
+    NotionReportNoteKind, NotionReviewOmission, NotionReviewOmissionCount,
+    NotionReviewOmissionKind, NotionTabChoice, NotionViewChange, NotionViewChangeKind, ViewWarning,
 };
 
 #[derive(Default)]
 pub(super) struct Details {
     views: BTreeMap<NotionId, BTreeMap<NotionId, Vec<ViewWarning>>>,
-    tabs: BTreeMap<(NotionId, NotionId), NotionTabChoice>,
-    pub report: NotionReportDetails,
+    tabs: BTreeMap<(Option<NotionId>, NotionId, NotionId), NotionTabChoice>,
+    omissions: BTreeMap<NotionReviewOmissionKind, NotionReviewOmissionCount>,
+    notes: BTreeMap<NotionReportNoteKind, NotionReportNoteCount>,
+    report: NotionReportDetails,
 }
 
 impl Details {
@@ -35,13 +39,20 @@ impl Details {
                     ImportNotice {
                         object,
                         source,
-                        kind: ImportNoticeKind::TabChosen { view_id, view },
+                        kind:
+                            ImportNoticeKind::TabChosen {
+                                view_id,
+                                view,
+                                page_id,
+                                container_title,
+                            },
                     },
             } => {
                 self.tabs
-                    .entry((object.clone(), view_id.clone()))
+                    .entry((page_id.clone(), object.clone(), view_id.clone()))
                     .or_insert_with(|| NotionTabChoice {
                         container_id: object.to_string(),
+                        container_title: container_title.clone(),
                         database: source.clone(),
                         tab: view.clone(),
                     });
@@ -61,23 +72,56 @@ impl Details {
             | FidelityWarning::SourceStopped { .. }
             | FidelityWarning::Text(_) => (NotionReportNoteKind::Other, 1),
         };
-        self.report.notes.push(NotionReportNote {
-            kind,
-            count,
-            message: rendered.to_owned(),
-        });
+        self.note(kind, count, rendered.to_owned());
     }
 
     pub fn other(&mut self, message: String) {
-        self.report.notes.push(NotionReportNote {
-            kind: NotionReportNoteKind::Other,
-            count: 1,
-            message,
+        self.note(NotionReportNoteKind::Other, 1, message);
+    }
+
+    fn note(&mut self, kind: NotionReportNoteKind, count: u32, message: String) {
+        let total = self.notes.entry(kind).or_insert(NotionReportNoteCount {
+            kind,
+            lines: 0,
+            count: 0,
         });
+        total.lines += 1;
+        total.count = total.count.saturating_add(count);
+        if total.lines as usize <= REPORT_LIST_LIMIT {
+            self.report.notes.push(NotionReportNote {
+                kind,
+                count,
+                message,
+            });
+        }
+    }
+
+    pub fn omission(&mut self, omission: NotionReviewOmission) {
+        let kind = omission.kind;
+        let total = self
+            .omissions
+            .entry(kind)
+            .or_insert(NotionReviewOmissionCount {
+                kind,
+                pages: 0,
+                databases: 0,
+                other: 0,
+            });
+        match omission.item.kind {
+            ImportKind::Page => total.pages += 1,
+            ImportKind::DataSource => total.databases += 1,
+            _ => total.other += 1,
+        }
+        if (total.pages + total.databases + total.other) as usize <= REPORT_LIST_LIMIT {
+            self.report.not_imported.push(omission);
+        }
     }
 
     pub fn finish(mut self) -> NotionReportDetails {
-        self.report.tab_choices = self.tabs.into_values().collect();
+        self.report.omission_counts = self.omissions.into_values().collect();
+        self.report.note_counts = self.notes.into_values().collect();
+        self.report.tab_choice_count = u32::try_from(self.tabs.len()).unwrap_or(u32::MAX);
+        self.report.tab_choices = self.tabs.into_values().take(REPORT_LIST_LIMIT).collect();
         self.report.view_changes = self
             .views
             .into_iter()
@@ -120,6 +164,29 @@ impl Details {
                 .cmp(&b.views.first().and_then(first_change))
                 .then_with(|| a.title.cmp(&b.title))
         });
+        let views = self
+            .report
+            .view_changes
+            .iter()
+            .flat_map(|database| &database.views);
+        self.report.view_count = u32::try_from(views.clone().count()).unwrap_or(u32::MAX);
+        self.report.view_change_count =
+            u32::try_from(views.map(|view| view.changes.len()).sum::<usize>()).unwrap_or(u32::MAX);
+        // Give each view a line before including additional settings. The first
+        // line is the most consequential change for that view.
+        let mut remaining_views = REPORT_LIST_LIMIT;
+        let mut remaining_details = REPORT_LIST_LIMIT;
+        for database in &mut self.report.view_changes {
+            database.views.truncate(remaining_views);
+            remaining_views -= database.views.len();
+            for view in &mut database.views {
+                view.changes.truncate(1 + remaining_details);
+                remaining_details -= view.changes.len().saturating_sub(1);
+            }
+        }
+        self.report
+            .view_changes
+            .retain(|database| !database.views.is_empty());
         self.report
     }
 }

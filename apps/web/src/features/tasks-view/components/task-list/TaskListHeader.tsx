@@ -8,7 +8,9 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { Tooltip } from '@ui';
+import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import { useTasksView } from '../../tasks-view-context';
 import type { TaskSortId } from '../../types';
@@ -61,10 +63,14 @@ export function TaskListHeader(props: {
   onTimestampWidthChange?: (width: number) => void;
 }) {
   const showTaskProject = () => props.columns.includes('initiative');
+  const startDateEnabled = useStartDateEnabled();
   return (
     <div
       role="row"
-      class="task-grid-row task-grid-icon-creator grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
+      class={cn(
+        'task-grid-row task-grid-icon-creator grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted',
+        startDateEnabled() && 'task-grid-dates'
+      )}
       style={taskGridTemplate(props.columns)}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />

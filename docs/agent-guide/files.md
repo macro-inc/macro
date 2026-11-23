@@ -150,7 +150,8 @@ title column stays first so related-record chips show row names; a row-body
 Row bodies are checked while importing: a reference to a source absent from the
 review stays a named Notion link, with the reason and count in the report.
 A missing selected-tab hint uses the first Notion tab. The completed card shows
-this choice under **Tab choices** when Notion returned more than one tab.
+this choice under **Tab choices**, with the containing page or row named,
+when Notion returned more than one tab.
 If a selected saved view is unavailable but its database is ready, the card stays
 editable on the default view and the report names that approximation. Saved view
 names are readable and unique, without source identifiers.
@@ -158,8 +159,11 @@ Unsupported filter clauses broaden the view rather than hide source rows; its
 name ends in **≈** and the report explains every translation loss using view and property titles, without importer paths.
 While reviewing, row and task counts are estimates. The completed card shows
 confirmed writes and separates **Needs attention**, **Not imported**, and
-**View changes**. Expand the sections to see reasons and affected databases and
-views. Hidden Notion columns that stay visible are named in the view details.
+**View changes**. **Needs attention** opens with the run error, failed objects,
+and any rows written before a database stopped. Expand the other sections for
+reasons and affected databases and views. Large reports show totals and label
+the samples they display. Hidden Notion columns that stay visible are named in
+the view details.
 Formula and rollup columns are labelled snapshots. Database sharing is separate
 from page sharing; if a personal database's folder or an ancestor has explicit
 sharing grants, it uses the owner-only **Notion (personal)** folder and mirrored

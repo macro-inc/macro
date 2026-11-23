@@ -10,7 +10,7 @@
  */
 export interface ConfirmedNotionWrites {
   /**
-   * Rows inserted into copied databases.
+   * Rows inserted into databases, including writes from unfinished copies.
    * @minimum 0
    */
   databaseRows: number;
@@ -25,12 +25,22 @@ export interface ConfirmedNotionWrites {
    */
   documents: number;
   /**
+   * The subset of database rows written before their source stopped.
+   * @minimum 0
+   */
+  partialDatabaseRows?: number;
+  /**
+   * The subset of tasks written before their source stopped.
+   * @minimum 0
+   */
+  partialTasks?: number;
+  /**
    * Databases copied as task lists.
    * @minimum 0
    */
   taskLists: number;
   /**
-   * Tasks inserted into those lists.
+   * Tasks inserted into task lists, including writes from unfinished lists.
    * @minimum 0
    */
   tasks: number;

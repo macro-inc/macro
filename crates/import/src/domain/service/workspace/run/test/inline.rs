@@ -113,6 +113,10 @@ async fn databases_and_views_exist_before_page_and_row_cards_and_sharing_stays_i
     let details = report.details.as_ref().unwrap();
     assert_eq!(details.tab_choices.len(), 1);
     assert_eq!(details.tab_choices[0].tab, "Work");
+    assert_eq!(
+        details.tab_choices[0].container_title.as_deref(),
+        Some("Project")
+    );
     assert!(
         report
             .warnings

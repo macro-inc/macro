@@ -33,7 +33,7 @@ use crate::domain::ports::{
     SharedEntity, SourceDates, TeamMember,
 };
 use crate::domain::service::NotionWorkspaceImporter;
-use crate::domain::service::test::admission::NoConnector;
+use crate::domain::service::test::admission::{NoConnector, no_connections};
 use crate::outbound::pg_import_repo::PgImportRepo;
 
 fn page_id(hex: char) -> NotionId {
@@ -207,7 +207,7 @@ fn service(
 ) -> Service {
     ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -365,6 +365,74 @@ async fn a_write_cut_off_by_shutdown_hands_its_run_over(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_database_keeps_confirmed_rows_without_counting_a_completed_copy(pool: PgPool) {
+    use crate::domain::models::{WrittenKind, WrittenObject};
+
+    let owner = user("partial-database");
+    let mut source = planned_page('c', "Projects", false);
+    source.kind = ImportKind::DataSource;
+    source.metadata["plan"]["rows"] = serde_json::json!(99);
+    let repo = PgImportRepo::new(pool.clone());
+    repo.start_run(&owner, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+    let (review, rows) = approved(&pool, &owner, &[source]).await;
+    let id = rows[0];
+    repo.transition_run(
+        &owner,
+        ImportSource::Notion,
+        &[RunStatus::Running],
+        RunStatus::Importing,
+        None,
+    )
+    .await
+    .unwrap();
+    repo.mark_importing(&owner, &rows).await.unwrap();
+    let first = WrittenObject::for_row(id, WrittenKind::Row, &page_id('e'), Uuid::now_v7());
+    repo.record_written(
+        &owner,
+        &[
+            WrittenObject::own(id, WrittenKind::Database, Uuid::now_v7()),
+            first.clone(),
+            first,
+            WrittenObject::for_row(id, WrittenKind::Row, &page_id('f'), Uuid::now_v7()),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.mark_import_failed(&owner, id, "Database write stopped")
+            .await
+            .unwrap()
+    );
+    let service = ImportServiceImpl::new(
+        repo,
+        no_connections(),
+        Arc::new(Writer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Connected));
+
+    // A per-source failure still lets the writer account for the remaining plan.
+    assert!(
+        service
+            .end_write(&owner, RunStatus::Completed, None)
+            .await
+            .unwrap()
+    );
+    let report = service.current_report(&owner).await.unwrap();
+    assert_eq!(report.review_id, Some(review));
+    assert_eq!(report.failures.len(), 1);
+    assert_eq!(report.database_rows, 2);
+    assert_eq!(report.imported, 0);
+    assert_eq!(report.databases, 0);
+    assert_eq!(
+        serde_json::to_value(report.confirmed.unwrap()).unwrap()["partialDatabaseRows"],
+        2,
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool: PgPool) {
     use crate::domain::models::{WrittenKind, WrittenObject};
 
@@ -428,7 +496,7 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -603,7 +671,7 @@ async fn a_write_shares_what_the_plan_shares_and_keeps_the_rest_with_the_owner(p
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -698,7 +766,7 @@ async fn a_teammate_writing_the_same_page_waits_and_links_to_the_first_copy(pool
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -769,7 +837,7 @@ async fn a_page_a_teammate_already_shared_is_linked_without_writing(pool: PgPool
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )

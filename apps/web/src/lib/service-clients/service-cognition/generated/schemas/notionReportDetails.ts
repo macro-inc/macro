@@ -7,19 +7,40 @@
 
 import type { NotionDatabaseViewChanges } from './notionDatabaseViewChanges';
 import type { NotionReportNote } from './notionReportNote';
+import type { NotionReportNoteCount } from './notionReportNoteCount';
 import type { NotionReviewOmission } from './notionReviewOmission';
+import type { NotionReviewOmissionCount } from './notionReviewOmissionCount';
 import type { NotionTabChoice } from './notionTabChoice';
 
 /**
  * Details alongside the outcome on a Notion import card.
  */
 export interface NotionReportDetails {
-  /** Items deliberately left out, with every reviewed reason. */
+  /** A sample of items deliberately left out, with the reviewed reasons. */
   notImported: NotionReviewOmission[];
-  /** Remaining notices, including legacy entries and non-view fidelity changes. */
+  /** Totals for each kind of notice. */
+  noteCounts?: NotionReportNoteCount[];
+  /** A sample of legacy notices and non-view fidelity changes. */
   notes: NotionReportNote[];
-  /** Tab selections caused by an unspecified Notion tab. */
+  /** Totals for each review choice. */
+  omissionCounts?: NotionReviewOmissionCount[];
+  /**
+   * Total number of placements that used a default tab.
+   * @minimum 0
+   */
+  tabChoiceCount?: number;
+  /** A sample of tab selections caused by an unspecified Notion tab. */
   tabChoices: NotionTabChoice[];
-  /** Saved view differences, grouped by source and view identity. */
+  /**
+   * Total number of displayed and undisplayed change lines.
+   * @minimum 0
+   */
+  viewChangeCount?: number;
+  /** Saved view differences, sampled by impact and grouped by source and view. */
   viewChanges: NotionDatabaseViewChanges[];
+  /**
+   * Total number of changed views.
+   * @minimum 0
+   */
+  viewCount?: number;
 }

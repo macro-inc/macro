@@ -6,7 +6,10 @@ mod translate;
 
 pub(crate) use model::ViewList;
 pub use model::*;
-pub use translate::{bindings, translate, translate_with_schema};
+pub use translate::{bindings, translate_with_schema};
+
+#[cfg(test)]
+use translate::translate;
 
 #[cfg(test)]
 mod test;

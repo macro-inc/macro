@@ -1,10 +1,20 @@
-import { isMobile } from '@core/mobile/isMobile';
 import type { NotionImportReport } from '@queries/import';
-import { For, type JSX, Show } from 'solid-js';
-import { match } from 'ts-pattern';
-import type { ImportReportItem } from '../core/import-plan';
+import { cn } from '@ui/utils/classname';
+import { createMemo, For, type JSX, Show } from 'solid-js';
+import {
+  type ImportReportItem,
+  omissionCountLabel,
+  omissionTotals,
+  type ReviewOmission,
+} from '../core/import-plan';
 
 type Details = NonNullable<NotionImportReport['details']>;
+
+const choicesByKind = [
+  { kind: 'left_out', label: 'Left out by the reviewed plan' },
+  { kind: 'excluded', label: 'Excluded in the review' },
+  { kind: 'by_hand', label: 'Left for the agent' },
+] satisfies { kind: ReviewOmission['kind']; label: string }[];
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -12,12 +22,17 @@ function plural(count: number, noun: string): string {
 
 function Disclosure(props: {
   label: string;
-  open?: boolean;
+  failure?: boolean;
   children: JSX.Element;
 }) {
   return (
-    <details open={props.open} class="min-w-0 text-xs text-ink-muted">
-      <summary class="min-h-11 content-center font-medium text-ink">
+    <details open={props.failure} class="min-w-0 text-xs text-ink-muted">
+      <summary
+        class={cn(
+          'min-h-8 content-center font-medium touch:min-h-11',
+          props.failure ? 'text-failure' : 'text-ink'
+        )}
+      >
         {props.label}
       </summary>
       <div class="flex min-w-0 flex-col gap-2 pb-2 pl-3 wrap-break-word">
@@ -27,131 +42,259 @@ function Disclosure(props: {
   );
 }
 
+function SampleHint(props: { shown: number; total: number; noun: string }) {
+  return (
+    <Show when={props.shown < props.total}>
+      <p>
+        Showing {props.shown} of {plural(props.total, props.noun)}.
+      </p>
+    </Show>
+  );
+}
+
+function PartialWrites(props: { confirmed: NotionImportReport['confirmed'] }) {
+  const rows = () => props.confirmed?.partialDatabaseRows ?? 0;
+  const tasks = () => props.confirmed?.partialTasks ?? 0;
+  return (
+    <>
+      <Show when={rows() > 0}>
+        <p>
+          {plural(rows(), 'row')} {rows() === 1 ? 'was' : 'were'} copied into
+          databases that did not finish importing.
+        </p>
+      </Show>
+      <Show when={tasks() > 0}>
+        <p>
+          {plural(tasks(), 'task')} {tasks() === 1 ? 'was' : 'were'} copied into
+          lists that did not finish importing.
+        </p>
+      </Show>
+    </>
+  );
+}
+
 /** Expandable outcome details shared by the thread card and full review. */
 export function ImportReportDetails(props: {
   details: Details;
   failures: ImportReportItem[];
+  failureCount: number;
+  confirmed: NotionImportReport['confirmed'];
   error: string | null;
 }) {
-  const viewCount = () =>
-    props.details.viewChanges.reduce(
-      (count, database) => count + database.views.length,
-      0
+  const views = () =>
+    props.details.viewChanges.flatMap((database) =>
+      database.views.map((view) => ({ database: database.title, view }))
     );
-  const omissions = () =>
-    props.details.notes.filter((note) => note.kind === 'omitted');
-  const otherNotes = () =>
-    props.details.notes.filter((note) => note.kind !== 'omitted');
-  const omittedCount = () =>
-    props.details.notImported.length +
-    omissions().reduce((count, note) => count + note.count, 0);
-  const noteCount = () =>
-    otherNotes().reduce((count, note) => count + note.count, 0);
+  const choices = createMemo(() =>
+    choicesByKind.map(({ kind, label }) => ({
+      label,
+      totals: omissionTotals(props.details, kind),
+      items: props.details.notImported.filter((choice) => choice.kind === kind),
+    }))
+  );
+  const omissions = createMemo(() =>
+    props.details.notes.filter((note) => note.kind === 'omitted')
+  );
+  const otherNotes = createMemo(() =>
+    props.details.notes.filter((note) => note.kind !== 'omitted')
+  );
+  const reviewed = () => omissionTotals(props.details);
+  const omitted = () =>
+    props.details.noteCounts?.find((entry) => entry.kind === 'omitted') ?? {
+      count: omissions().reduce((count, note) => count + note.count, 0),
+      lines: omissions().length,
+    };
+  const otherCount = () =>
+    props.details.noteCounts
+      ?.filter((entry) => entry.kind !== 'omitted')
+      .reduce((total, entry) => total + entry.lines, 0) ?? otherNotes().length;
+  const viewCount = () => props.details.viewCount ?? views().length;
+  const shownViewChanges = () =>
+    views().reduce((total, entry) => total + entry.view.changes.length, 0);
+  const tabCount = () =>
+    props.details.tabChoiceCount ?? props.details.tabChoices.length;
+  const needsAttention = () =>
+    props.failureCount > 0 ||
+    Boolean(
+      props.error ||
+        props.confirmed?.partialDatabaseRows ||
+        props.confirmed?.partialTasks
+    );
+
   return (
-    <section
-      aria-label="Import report"
-      class="flex max-h-[40dvh] min-w-0 shrink-0 flex-col overflow-y-auto"
+    <Show
+      when={
+        needsAttention() ||
+        reviewed().total ||
+        viewCount() ||
+        tabCount() ||
+        omitted().count ||
+        otherCount()
+      }
     >
-      <Show when={props.failures.length > 0 || props.error}>
-        <Disclosure label="Needs attention" open={!isMobile()}>
-          <Show
-            when={props.failures.length > 0}
-            fallback={<p>{props.error}</p>}
+      <section
+        aria-label="Import report"
+        class="flex max-h-[40dvh] min-w-0 shrink-0 flex-col overflow-y-auto"
+      >
+        <Show when={needsAttention()}>
+          <Disclosure
+            label={`Needs attention · ${plural(props.failureCount || 1, 'item')}`}
+            failure
           >
-            <ul class="flex flex-col gap-1">
-              <For each={props.failures}>
-                {(failure) => (
+            <Show when={props.error}>{(error) => <p>{error()}</p>}</Show>
+            <PartialWrites confirmed={props.confirmed} />
+            <Show when={props.failures.length > 0}>
+              <ul class="list-disc space-y-2 pl-4">
+                <For each={props.failures}>
+                  {(failure) => (
+                    <li>
+                      <span class="text-ink">
+                        {failure.title || 'Untitled'}
+                      </span>
+                      <Show when={failure.reason}> — {failure.reason}</Show>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+            <SampleHint
+              shown={props.failures.length}
+              total={props.failureCount}
+              noun="item"
+            />
+          </Disclosure>
+        </Show>
+        <Show when={reviewed().total > 0}>
+          <Disclosure
+            label={`Not imported · ${omissionCountLabel(reviewed())}`}
+          >
+            <For each={choices()}>
+              {({ label, items, totals }) => (
+                <Show when={totals.total > 0}>
+                  <p class="font-medium text-ink">
+                    {label} · {omissionCountLabel(totals)}
+                  </p>
+                  <ul class="list-disc space-y-2 pl-4">
+                    <For each={items}>
+                      {({ item }) => (
+                        <li>
+                          <span class="text-ink">
+                            {item.title || 'Untitled'}
+                          </span>
+                          <Show when={item.reason}>
+                            {(reason) => <p>{reason()}</p>}
+                          </Show>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                  <SampleHint
+                    shown={items.length}
+                    total={totals.total}
+                    noun="item"
+                  />
+                </Show>
+              )}
+            </For>
+          </Disclosure>
+        </Show>
+        <Show when={omitted().count > 0}>
+          <Disclosure
+            label={`Couldn’t be copied · ${plural(omitted().count, 'item')}`}
+          >
+            <ul class="list-disc space-y-2 pl-4">
+              <For each={omissions()}>{(note) => <li>{note.message}</li>}</For>
+            </ul>
+            <SampleHint
+              shown={omissions().length}
+              total={omitted().lines}
+              noun="notice"
+            />
+          </Disclosure>
+        </Show>
+        <Show when={viewCount() > 0}>
+          <Disclosure label={`View changes · ${plural(viewCount(), 'view')}`}>
+            <ul class="list-disc space-y-2 pl-4">
+              <For each={views()}>
+                {({ database, view }) => (
                   <li>
-                    <span class="text-ink">{failure.title || 'Untitled'}</span>
-                    <Show when={failure.reason}> — {failure.reason}</Show>
+                    <p>
+                      <span class="font-medium text-ink">
+                        {database} › {view.title}
+                      </span>
+                      <Show when={view.changes[0]}>
+                        {(change) => <> · {change().message}</>}
+                      </Show>
+                    </p>
+                    <Show when={view.changes.length > 1}>
+                      <ul class="list-disc space-y-2 pl-4">
+                        <For each={view.changes.slice(1)}>
+                          {(change) => <li>{change.message}</li>}
+                        </For>
+                      </ul>
+                    </Show>
                   </li>
                 )}
               </For>
             </ul>
-          </Show>
-        </Disclosure>
-      </Show>
-      <Show when={omittedCount() > 0}>
-        <Disclosure label={`Not imported · ${plural(omittedCount(), 'item')}`}>
-          <ul class="flex flex-col gap-2">
-            <For each={props.details.notImported}>
-              {({ kind, item }) => (
-                <li>
-                  <span class="text-ink">{item.title || 'Untitled'}</span>
-                  {' · '}
-                  {match(kind)
-                    .with('left_out', () => 'Left out by the reviewed plan')
-                    .with('excluded', () => 'Excluded in the review')
-                    .with('by_hand', () => 'Left for you to handle')
-                    .exhaustive()}
-                  <Show when={item.reason}>
-                    {(reason) => <p>{reason()}</p>}
-                  </Show>
-                </li>
-              )}
-            </For>
-          </ul>
-          <Show when={omissions().length > 0}>
-            <h4 class="font-medium text-ink">Couldn’t be copied</h4>
-            <ul class="flex flex-col gap-1">
-              <For each={omissions()}>{(note) => <li>{note.message}</li>}</For>
+            <SampleHint
+              shown={views().length}
+              total={viewCount()}
+              noun="view"
+            />
+            <SampleHint
+              shown={shownViewChanges()}
+              total={props.details.viewChangeCount ?? shownViewChanges()}
+              noun="change"
+            />
+          </Disclosure>
+        </Show>
+        <Show when={tabCount() > 0}>
+          <Disclosure
+            label={`Tab choices · ${plural(tabCount(), 'placement')}`}
+          >
+            <ul class="list-disc space-y-2 pl-4">
+              <For each={props.details.tabChoices}>
+                {(choice) => (
+                  <li>
+                    <span class="font-medium text-ink">
+                      {choice.containerTitle
+                        ? `${choice.containerTitle} › `
+                        : ''}
+                      {choice.database}
+                    </span>
+                    {' · '}
+                    Notion didn't say which tab was showing; we used{' '}
+                    {choice.tab}.
+                  </li>
+                )}
+              </For>
             </ul>
-          </Show>
-        </Disclosure>
-      </Show>
-      <Show when={viewCount() > 0}>
-        <Disclosure label={`View changes · ${plural(viewCount(), 'view')}`}>
-          <For each={props.details.viewChanges}>
-            {(database) => (
-              <section aria-label={database.title} class="flex flex-col gap-1">
-                <h4 class="font-medium text-ink">{database.title}</h4>
-                <For each={database.views}>
-                  {(view) => (
-                    <section
-                      aria-label={view.title}
-                      class="flex flex-col gap-1"
-                    >
-                      <h5 class="text-ink">{view.title}</h5>
-                      <ul class="flex flex-col gap-1 pl-3">
-                        <For each={view.changes}>
-                          {(change) => <li>{change.message}</li>}
-                        </For>
-                      </ul>
-                    </section>
-                  )}
-                </For>
-              </section>
-            )}
-          </For>
-        </Disclosure>
-      </Show>
-      <Show when={props.details.tabChoices.length > 0}>
-        <Disclosure
-          label={`Tab choices · ${plural(props.details.tabChoices.length, 'placement')}`}
-        >
-          <p>
-            For these references, Macro used the first tab returned by Notion.
-          </p>
-          <ul class="flex flex-col gap-1">
-            <For each={props.details.tabChoices}>
-              {(choice) => (
-                <li>
-                  <span class="text-ink">{choice.database}</span>
-                  {' · '}
-                  Notion didn't say which tab was showing; we used {choice.tab}.
-                </li>
-              )}
-            </For>
-          </ul>
-        </Disclosure>
-      </Show>
-      <Show when={noteCount() > 0}>
-        <Disclosure label={`Other details · ${plural(noteCount(), 'notice')}`}>
-          <ul class="flex flex-col gap-1">
-            <For each={otherNotes()}>{(note) => <li>{note.message}</li>}</For>
-          </ul>
-        </Disclosure>
-      </Show>
-    </section>
+            <p>
+              For these references, Macro used the first tab returned by Notion.
+            </p>
+            <SampleHint
+              shown={props.details.tabChoices.length}
+              total={tabCount()}
+              noun="placement"
+            />
+          </Disclosure>
+        </Show>
+        <Show when={otherCount() > 0}>
+          <Disclosure
+            label={`Other details · ${plural(otherCount(), 'notice')}`}
+          >
+            <ul class="list-disc space-y-2 pl-4">
+              <For each={otherNotes()}>{(note) => <li>{note.message}</li>}</For>
+            </ul>
+            <SampleHint
+              shown={otherNotes().length}
+              total={otherCount()}
+              noun="notice"
+            />
+          </Disclosure>
+        </Show>
+      </section>
+    </Show>
   );
 }

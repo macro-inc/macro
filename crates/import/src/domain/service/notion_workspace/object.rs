@@ -3,13 +3,12 @@
 
 use std::collections::HashMap;
 
+use connectors::McpConnectionsService;
 use futures::FutureExt;
-
 use import_notion::domain::macro_cells::PeopleMap;
 use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::{NotionApi, NotionConnections};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use uuid::Uuid;
 
 use super::super::ImportServiceImpl;
@@ -38,7 +37,7 @@ const KEPT_MOVING: &str =
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -314,6 +313,7 @@ where
                 let (markdown, database_links) = databases::body_links(
                     api,
                     &item.notion_id,
+                    &item.title,
                     &target.reservations.destinations,
                     progress,
                 )

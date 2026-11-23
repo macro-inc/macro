@@ -34,7 +34,7 @@ use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionPlanRepo,
     NotionRunRepo, Result, SlackWorkspaceSource, WorkspaceWriter, WrittenObjects,
 };
-use mcp_select::ConnectorSelect;
+use connectors::McpConnectionsService;
 use object::{Outcome, Target};
 use run::{IMPORT_STOPPED, JobControl, Stop, WriteSet};
 
@@ -179,7 +179,7 @@ impl Throttle {
 impl<R, S, C, W, N> NotionWorkspaceImporter for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -287,7 +287,7 @@ where
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,

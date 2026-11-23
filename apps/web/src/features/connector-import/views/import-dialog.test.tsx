@@ -84,7 +84,7 @@ describe('connector import dialog', () => {
     const { context, open } = setup('tasks');
     fireEvent.click(screen.getByRole('button', { name: 'Connect Jira' }));
     expect(context.connect).toHaveBeenCalledWith(
-      { appSlug: 'jira', name: 'Jira', mcpUrl: undefined },
+      { appSlug: 'jira', name: 'Jira' },
       expect.anything()
     );
     const importButton = await screen.findByRole('button', {
@@ -96,6 +96,16 @@ describe('connector import dialog', () => {
       expect.objectContaining({
         input: 'Import my Jira workspace into Macro.',
       })
+    );
+  });
+
+  it('offers no import when the connection cannot provide one', () => {
+    setup('files', { connected: ['dropbox'], withoutImport: ['dropbox'] });
+    expect(screen.queryByRole('button', { name: 'Import from Dropbox' })).toBe(
+      null
+    );
+    expect(screen.queryByRole('button', { name: 'Connect Dropbox' })).toBe(
+      null
     );
   });
 
@@ -125,12 +135,12 @@ describe('connector import dialog', () => {
     );
   });
 
-  it('connects GitHub as an overlaid app, without its own MCP authorization', async () => {
+  it('waits for a connection that finishes in another tab', async () => {
     const fake = setup('tasks');
-    fake.setConnectOutcome('started');
+    fake.setConnectOutcome('closed');
     fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
     expect(fake.context.connect).toHaveBeenCalledWith(
-      { appSlug: 'github', name: 'GitHub', mcpUrl: undefined },
+      { appSlug: 'github', name: 'GitHub' },
       expect.anything()
     );
     // Authorization finishes in another tab; the row waits for the result.

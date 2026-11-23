@@ -18,6 +18,7 @@ use crate::domain::ports::{
 pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
     api: &Api,
     page: &NotionId,
+    page_title: &str,
     destinations: &DatabaseDestinations,
     progress: &Progress<'_, Store>,
 ) -> anyhow::Result<(String, Vec<NotionDatabaseOccurrence>)> {
@@ -121,6 +122,8 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
                             ImportNoticeKind::TabChosen {
                                 view_id: view.id.clone(),
                                 view: view.name.clone(),
+                                page_id: Some(page.clone()),
+                                container_title: Some(page_title.to_owned()),
                             },
                         ));
                     }

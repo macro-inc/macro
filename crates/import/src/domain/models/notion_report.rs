@@ -16,12 +16,18 @@ pub struct ConfirmedNotionWrites {
     pub documents: u32,
     /// Copied databases.
     pub databases: u32,
-    /// Rows inserted into copied databases.
+    /// Rows inserted into databases, including writes from unfinished copies.
     pub database_rows: u32,
+    /// The subset of database rows written before their source stopped.
+    #[serde(default)]
+    pub partial_database_rows: u32,
     /// Databases copied as task lists.
     pub task_lists: u32,
-    /// Tasks inserted into those lists.
+    /// Tasks inserted into task lists, including writes from unfinished lists.
     pub tasks: u32,
+    /// The subset of tasks written before their source stopped.
+    #[serde(default)]
+    pub partial_tasks: u32,
 }
 
 /// The kind and severity of a user-visible change to a saved view.
@@ -103,6 +109,9 @@ pub struct NotionDatabaseViewChanges {
 pub struct NotionTabChoice {
     /// Container identity. Different linked placements may choose different tabs.
     pub container_id: String,
+    /// Title of the page or row containing the reference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container_title: Option<String>,
     /// Database name shown in the reference.
     pub database: String,
     /// Name of the returned first tab.
@@ -111,7 +120,18 @@ pub struct NotionTabChoice {
 
 /// Why an item was left for the user in the reviewed plan.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    specta::Type,
+    ToSchema,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum NotionReviewOmissionKind {
@@ -134,9 +154,35 @@ pub struct NotionReviewOmission {
     pub item: NotionReportItem,
 }
 
+/// Counts for one review choice, including items outside the sample.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+)]
+pub struct NotionReviewOmissionCount {
+    /// The reviewed choice responsible.
+    pub kind: NotionReviewOmissionKind,
+    /// Pages left out.
+    pub pages: u32,
+    /// Databases left out.
+    pub databases: u32,
+    /// Other objects left out.
+    pub other: u32,
+}
+
 /// Content-level notes that do not describe a saved view or a reviewed skip.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    specta::Type,
+    ToSchema,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum NotionReportNoteKind {
@@ -163,18 +209,46 @@ pub struct NotionReportNote {
     pub message: String,
 }
 
+/// Counts for one kind of content note, including notes outside the sample.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+)]
+pub struct NotionReportNoteCount {
+    /// Semantic category.
+    pub kind: NotionReportNoteKind,
+    /// Number of notices.
+    pub lines: u32,
+    /// Number of incidents described by the notices.
+    pub count: u32,
+}
+
 /// Details alongside the outcome on a Notion import card.
 #[derive(
     Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct NotionReportDetails {
-    /// Items deliberately left out, with every reviewed reason.
+    /// A sample of items deliberately left out, with the reviewed reasons.
     pub not_imported: Vec<NotionReviewOmission>,
-    /// Saved view differences, grouped by source and view identity.
+    /// Totals for each review choice.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub omission_counts: Vec<NotionReviewOmissionCount>,
+    /// Saved view differences, sampled by impact and grouped by source and view.
     pub view_changes: Vec<NotionDatabaseViewChanges>,
-    /// Tab selections caused by an unspecified Notion tab.
+    /// Total number of changed views.
+    #[serde(default)]
+    pub view_count: u32,
+    /// Total number of displayed and undisplayed change lines.
+    #[serde(default)]
+    pub view_change_count: u32,
+    /// A sample of tab selections caused by an unspecified Notion tab.
     pub tab_choices: Vec<NotionTabChoice>,
-    /// Remaining notices, including legacy entries and non-view fidelity changes.
+    /// Total number of placements that used a default tab.
+    #[serde(default)]
+    pub tab_choice_count: u32,
+    /// A sample of legacy notices and non-view fidelity changes.
     pub notes: Vec<NotionReportNote>,
+    /// Totals for each kind of notice.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub note_counts: Vec<NotionReportNoteCount>,
 }

@@ -99,6 +99,79 @@ function entity(
   };
 }
 
+function completedReport() {
+  return {
+    status: 'completed' as const,
+    reviewId: 'review',
+    pages: 3,
+    dataSources: 1,
+    copy: 1,
+    tasks: 1,
+    skip: 1,
+    hand: 0,
+    documents: 1,
+    databases: 1,
+    databaseRows: 3,
+    taskRows: 0,
+    imported: 2,
+    waiting: 0,
+    writing: 0,
+    confirmed: {
+      documents: 1,
+      databases: 1,
+      databaseRows: 9,
+      taskLists: 0,
+      tasks: 0,
+    },
+    details: {
+      notImported: [
+        {
+          kind: 'left_out' as const,
+          item: {
+            importId: 'scratch',
+            title: 'Scratch',
+            kind: 'page' as const,
+            reason: 'Empty template',
+          },
+        },
+      ],
+      viewChanges: [
+        {
+          databaseId: 'roadmap',
+          title: 'Roadmap',
+          views: [
+            {
+              viewId: 'board',
+              title: 'Task Board',
+              changes: [
+                {
+                  kind: 'filter' as const,
+                  count: 1,
+                  message: 'The filter may include rows with an empty status.',
+                },
+                {
+                  kind: 'visibility' as const,
+                  count: 1,
+                  message: 'Shown here, hidden in Notion: Meeting.',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      tabChoices: [
+        {
+          containerId: 'inline',
+          containerTitle: 'Project Home',
+          database: 'Roadmap',
+          tab: 'Task Board',
+        },
+      ],
+      notes: [],
+    },
+  };
+}
+
 beforeEach(() => {
   vi.stubGlobal('innerWidth', 1024);
   imports.entities = [
@@ -233,73 +306,7 @@ describe('import review', () => {
 
   it('shows one confirmed outcome and keeps each kind of import detail reachable', () => {
     vi.stubGlobal('innerWidth', 390);
-    const completed = {
-      status: 'completed' as const,
-      reviewId: 'review',
-      pages: 3,
-      dataSources: 1,
-      copy: 1,
-      tasks: 1,
-      skip: 1,
-      hand: 0,
-      documents: 1,
-      databases: 1,
-      databaseRows: 3,
-      taskRows: 0,
-      imported: 2,
-      waiting: 0,
-      writing: 0,
-      confirmed: {
-        documents: 1,
-        databases: 1,
-        databaseRows: 9,
-        taskLists: 0,
-        tasks: 0,
-      },
-      details: {
-        notImported: [
-          {
-            kind: 'left_out' as const,
-            item: {
-              importId: 'scratch',
-              title: 'Scratch',
-              kind: 'page' as const,
-              reason: 'Empty template',
-            },
-          },
-        ],
-        viewChanges: [
-          {
-            databaseId: 'roadmap',
-            title: 'Roadmap',
-            views: [
-              {
-                viewId: 'board',
-                title: 'Task Board',
-                changes: [
-                  {
-                    kind: 'filter' as const,
-                    count: 1,
-                    message:
-                      'The filter may include rows with an empty status.',
-                  },
-                  {
-                    kind: 'visibility' as const,
-                    count: 1,
-                    message: 'Shown here, hidden in Notion: Meeting.',
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-        tabChoices: [
-          { containerId: 'inline', database: 'Roadmap', tab: 'Task Board' },
-        ],
-        notes: [],
-      },
-    };
-    imports.report = completed;
+    imports.report = completedReport();
     setup({ item: { status: 'completed' } });
 
     expect(
@@ -319,7 +326,7 @@ describe('import review', () => {
       return within(disclosure);
     };
     expect(
-      expand('Not imported · 1 item').getByText(/Empty template/)
+      expand('Not imported · 1 page').getByText(/Empty template/)
     ).toBeTruthy();
     const views = expand('View changes · 1 view');
     const filter = views.getByText(/may include rows/);
@@ -334,6 +341,224 @@ describe('import review', () => {
       )
     ).toBeTruthy();
     expect(screen.getByRole('list', { name: 'Import plan' })).toBeTruthy();
+  });
+
+  it.each([390, 1024])(
+    'shows failures and the run error at %i pixels',
+    (width) => {
+      vi.stubGlobal('innerWidth', width);
+      imports.report = {
+        ...completedReport(),
+        error: 'Notion stopped responding',
+        failures: [
+          {
+            importId: 'first',
+            title: 'Handbook',
+            kind: 'page',
+            reason: 'Not enough access',
+          },
+          {
+            importId: 'second',
+            title: 'Milestones',
+            kind: 'data_source',
+            reason: 'Source was deleted',
+          },
+        ],
+      };
+      setup({ item: { status: 'completed' } });
+
+      expect(screen.getByRole('status').textContent).toContain(
+        "2 couldn't be imported."
+      );
+      const summary = screen.getByText('Needs attention · 2 items');
+      expect(summary.classList.contains('text-failure')).toBe(true);
+      const disclosure = summary.closest('details')!;
+      expect(disclosure.open).toBe(true);
+      const details = within(disclosure);
+      const error = details.getByText('Notion stopped responding');
+      const list = details.getByRole('list');
+      expect(
+        error.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(within(list).getByText('Handbook')).toBeTruthy();
+      expect(within(list).getByText('Milestones')).toBeTruthy();
+    }
+  );
+
+  it('uses complete totals even when the report lists only samples', () => {
+    const report = completedReport();
+    imports.report = {
+      ...report,
+      failureCount: 55,
+      failures: [
+        {
+          importId: 'first',
+          title: 'Handbook',
+          kind: 'page',
+          reason: 'Not enough access',
+        },
+      ],
+      confirmed: {
+        ...report.confirmed,
+        databaseRows: 11,
+        partialDatabaseRows: 2,
+      },
+      details: {
+        ...report.details,
+        omissionCounts: [
+          { kind: 'left_out', pages: 60, databases: 0, other: 0 },
+        ],
+      },
+    };
+    setup({ item: { status: 'completed' } });
+
+    expect(screen.getByRole('status').textContent).toContain(
+      "Imported 1 page and 1 database (9 rows). 60 pages left out. 55 couldn't be imported."
+    );
+    expect(screen.getByText('Not imported · 60 pages')).toBeTruthy();
+    const disclosure = screen
+      .getByText('Needs attention · 55 items')
+      .closest('details')!;
+    expect(
+      within(disclosure).getByText(
+        '2 rows were copied into databases that did not finish importing.'
+      )
+    ).toBeTruthy();
+    expect(within(disclosure).getByText('Showing 1 of 55 items.')).toBeTruthy();
+  });
+
+  it('shows surviving rows on a stopped import without treating cancellation as a run failure', () => {
+    const report = completedReport();
+    imports.report = {
+      ...report,
+      status: 'dismissed',
+      error: 'Cancelled',
+      confirmed: {
+        ...report.confirmed,
+        databaseRows: 11,
+        partialDatabaseRows: 2,
+      },
+    };
+    setup({ item: { status: 'completed' } });
+
+    expect(screen.getByRole('status').textContent).toContain('Import stopped');
+    const disclosure = screen
+      .getByText('Needs attention · 1 item')
+      .closest('details')!;
+    expect(
+      within(disclosure).getByText(
+        '2 rows were copied into databases that did not finish importing.'
+      )
+    ).toBeTruthy();
+    expect(within(disclosure).queryByText('Cancelled')).toBeNull();
+  });
+
+  it('shows an actionable run error without a failed object', () => {
+    imports.report = {
+      ...completedReport(),
+      error: 'Notion stopped responding',
+      details: { notImported: [], viewChanges: [], tabChoices: [], notes: [] },
+    };
+    setup({ item: { status: 'completed' } });
+    const disclosure = screen
+      .getByText('Needs attention · 1 item')
+      .closest('details')!;
+    expect(disclosure.open).toBe(true);
+    expect(
+      within(disclosure).getByText('Notion stopped responding')
+    ).toBeTruthy();
+    expect(screen.getByRole('status').textContent).not.toContain(
+      "couldn't be imported"
+    );
+  });
+
+  it('omits the empty report landmark when everything succeeded', () => {
+    imports.report = {
+      ...completedReport(),
+      details: { notImported: [], viewChanges: [], tabChoices: [], notes: [] },
+    };
+    setup({ item: { status: 'completed' } });
+    expect(screen.queryByRole('region', { name: 'Import report' })).toBeNull();
+  });
+
+  it('groups choices and view changes and labels tab placements', () => {
+    const report = completedReport();
+    const item = report.details.notImported[0].item;
+    const board = report.details.viewChanges[0].views[0];
+    imports.report = {
+      ...report,
+      details: {
+        ...report.details,
+        notImported: [
+          ...report.details.notImported,
+          {
+            kind: 'left_out',
+            item: {
+              ...item,
+              importId: 'example',
+              title: 'Example page',
+              reason: 'Example content',
+            },
+          },
+          {
+            kind: 'by_hand',
+            item: {
+              ...item,
+              importId: 'billing',
+              title: 'Billing page',
+              reason: 'Manual review',
+            },
+          },
+        ],
+        viewChanges: [
+          {
+            ...report.details.viewChanges[0],
+            views: [board, { ...board, viewId: 'table', title: 'All records' }],
+          },
+          {
+            databaseId: 'archive',
+            title: 'Archive',
+            views: [{ ...board, viewId: 'archived' }],
+          },
+        ],
+        tabChoices: [
+          ...report.details.tabChoices,
+          { ...report.details.tabChoices[0], containerTitle: 'Team Home' },
+        ],
+        notes: [
+          {
+            kind: 'omitted',
+            count: 3,
+            message: 'Three assignments could not be mapped.',
+          },
+          { kind: 'other', count: 8, message: 'An older warning.' },
+        ],
+      },
+    };
+    setup({ item: { status: 'completed' } });
+
+    expect(screen.getByRole('status').textContent).toContain(
+      '3 pages left out.'
+    );
+    const imported = screen
+      .getByText('Not imported · 3 pages')
+      .closest('details')!;
+    const choices = within(imported);
+    expect(
+      choices.getByText('Left out by the reviewed plan · 2 pages')
+    ).toBeTruthy();
+    expect(choices.getByText('Left for the agent · 1 page')).toBeTruthy();
+    expect(choices.getByText('Empty template')).toBeTruthy();
+    expect(screen.getByText('Couldn’t be copied · 3 items')).toBeTruthy();
+    expect(screen.getByText('Other details · 1 notice')).toBeTruthy();
+    const views = within(
+      screen.getByText('View changes · 3 views').closest('details')!
+    );
+    expect(views.getAllByText(/ › /).map((label) => label.textContent)).toEqual(
+      ['Roadmap › Task Board', 'Roadmap › All records', 'Archive › Task Board']
+    );
+    expect(screen.getByText('Project Home › Roadmap')).toBeTruthy();
+    expect(screen.getByText('Team Home › Roadmap')).toBeTruthy();
   });
 
   it.each([390, 1024])(

@@ -4,6 +4,7 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { NotionTabChoiceContainerTitle } from './notionTabChoiceContainerTitle';
 
 /**
  * A first-tab choice when Notion omitted the view from a reference.
@@ -11,6 +12,8 @@
 export interface NotionTabChoice {
   /** Container identity. Different linked placements may choose different tabs. */
   containerId: string;
+  /** Title of the page or row containing the reference. */
+  containerTitle?: NotionTabChoiceContainerTitle;
   /** Database name shown in the reference. */
   database: string;
   /** Name of the returned first tab. */

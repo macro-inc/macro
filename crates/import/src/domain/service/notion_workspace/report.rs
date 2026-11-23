@@ -1,7 +1,7 @@
 //! The report on a workspace import: what the current plan holds and how far
 //! writing it got.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::domain::ports::{
     FolderSeparation, Result, TaskImportNoticeCount, TaskImportNoticeReason,
@@ -17,7 +17,7 @@ mod details;
 #[cfg(test)]
 mod test;
 
-/// Failures and by-hand items a report lists, at most.
+/// Maximum sample size for each kind of report detail.
 const REPORT_LIST_LIMIT: usize = 50;
 
 /// Summarize the ledger for the current plan: the rows tied to the newest
@@ -44,6 +44,7 @@ pub(in crate::domain::service) fn report(
         ..NotionImportReport::default()
     };
     let mut importers: HashMap<&str, u32> = HashMap::new();
+    let mut unique_warnings = HashSet::new();
     let mut details = (run.is_some_and(|run| run.source == ImportSource::Notion)
         || current
             .iter()
@@ -82,9 +83,10 @@ pub(in crate::domain::service) fn report(
                 } else {
                     warning.render()
                 };
-                if let Some(details) = &mut details
-                    && (!deduplicate || !report.warnings.contains(&rendered))
-                {
+                if deduplicate && !unique_warnings.insert(rendered.clone()) {
+                    continue;
+                }
+                if let Some(details) = &mut details {
                     details.warning(&warning, &rendered);
                 }
                 // Tab choices are useful context outside the loss totals.
@@ -99,9 +101,7 @@ pub(in crate::domain::service) fn report(
                 ) {
                     continue;
                 }
-                // Counts belong to distinct source rows; only legacy prose and
-                // the generic malformed-reference notice deduplicate across them.
-                if !deduplicate || !report.warnings.contains(&rendered) {
+                if report.warnings.len() < REPORT_LIST_LIMIT {
                     report.warnings.push(rendered);
                 }
             }
@@ -238,10 +238,7 @@ pub(in crate::domain::service) fn report(
             if kind == NotionReviewOmissionKind::Excluded {
                 item.reason = None;
             }
-            details
-                .report
-                .not_imported
-                .push(NotionReviewOmission { kind, item });
+            details.omission(NotionReviewOmission { kind, item });
         }
         match row.status {
             ImportStatus::Imported => report.imported += 1,
@@ -257,13 +254,14 @@ pub(in crate::domain::service) fn report(
                 } else if decision != NotionDecision::Skip {
                     report.waiting += 1;
                 }
-                if let Some(error) = &row.last_error
-                    && (details.is_some() || report.failures.len() < REPORT_LIST_LIMIT)
-                {
-                    report.failures.push(NotionReportItem {
-                        reason: Some(error.clone()),
-                        ..reported()
-                    });
+                if let Some(error) = &row.last_error {
+                    report.failure_count += 1;
+                    if report.failures.len() < REPORT_LIST_LIMIT {
+                        report.failures.push(NotionReportItem {
+                            reason: Some(error.clone()),
+                            ..reported()
+                        });
+                    }
                 }
             }
             ImportStatus::Discarded => {}
@@ -305,6 +303,7 @@ pub(in crate::domain::service) fn report(
         })
         .collect();
     importers.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.by.cmp(&b.by)));
+    importers.truncate(REPORT_LIST_LIMIT);
     report.already_imported_by = importers;
     report.details = details.map(details::Details::finish);
     Ok(report)
@@ -318,7 +317,9 @@ fn add_note(
     if let Some(details) = details {
         details.other(message.clone());
     }
-    report.warnings.push(message);
+    if report.warnings.len() < REPORT_LIST_LIMIT {
+        report.warnings.push(message);
+    }
 }
 struct CurrentPlan<'a> {
     review_id: Option<uuid::Uuid>,
@@ -373,7 +374,7 @@ pub(in crate::domain::service) fn notice_import_ids(
         .collect()
 }
 
-/// Completed write candidates from the same reviewed plan as the report.
+/// Write candidates, including unfinished sources with surviving row receipts.
 pub(in crate::domain::service) fn confirmed_import_ids(
     run: Option<&ImportRun>,
     rows: &[ImportEntity],
@@ -383,7 +384,10 @@ pub(in crate::domain::service) fn confirmed_import_ids(
         .into_iter()
         .filter_map(|(row, meta)| {
             let plan = meta.plan?;
-            (row.status == ImportStatus::Imported
+            (row.status != ImportStatus::Discarded
+                && run
+                    .and_then(|run| run.review_id)
+                    .is_none_or(|review| row.review_id == Some(review))
                 && plan.already_imported.is_none()
                 && matches!(
                     plan.decision,

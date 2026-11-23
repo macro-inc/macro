@@ -7,6 +7,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { requireNativeUpdate } from '@core/mobile/nativeUpdateRequired';
+import { firstOrAborted } from '@core/util/abort-signal';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -89,6 +90,7 @@ import {
 } from 'graphql-ws';
 import { batch, createSignal, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
+import { filter, pipe } from 'wonka';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
@@ -98,6 +100,7 @@ import {
   canRetryCacheFailure,
   createCacheRecovery,
 } from './cache-recovery';
+import { channelMembershipReceiptExchange } from './channel-membership';
 import {
   initializeCrmCacheOwner,
   installCrmCacheHost,
@@ -588,6 +591,7 @@ function getUncachedRealtimeClient(): Client {
       captureTraceParentExchange,
       networkRevalidationExchange(),
       notificationReceiptExchange(publishNotificationPatch),
+      channelMembershipReceiptExchange(),
       sessionSubscriptionExchange(
         websocketClient,
         stripGraphqlSoupClientDirectives
@@ -1057,6 +1061,7 @@ export function getGraphqlSoupClient(): Client {
             isUncachedSubscription: isActivityUpdatesSubscription,
           }),
           notificationReceiptExchange(publishNotificationPatch),
+          channelMembershipReceiptExchange(),
           sessionSubscriptionExchange(
             graphqlWsClient,
             stripGraphqlSoupClientDirectives
@@ -1165,10 +1170,14 @@ function mapGraphqlPropertyValue(
       type: 'String' as const,
       value: stringValue,
     }))
-    .with({ __typename: 'GraphqlDatePropertyValue' }, ({ dateValue }) => ({
-      type: 'Date' as const,
-      value: dateValue,
-    }))
+    .with(
+      { __typename: 'GraphqlDatePropertyValue' },
+      ({ dateValue, dateHasTime }) => ({
+        type: 'Date' as const,
+        value: dateValue,
+        ...(dateHasTime ? { has_time: true } : {}),
+      })
+    )
     .with(
       { __typename: 'GraphqlDateRangePropertyValue' },
       ({ rangeStart, rangeEnd }) => ({
@@ -2676,18 +2685,27 @@ export async function hydrateGraphqlSoup<
   if (!getGraphqlCacheHost()) {
     throw new Error('GraphQL cache hydration requires an active cache');
   }
-  const result = await client
-    .query<SoupBackfillResult, Variables>(
-      document as DocumentInput<SoupBackfillResult, Variables>,
-      variables,
-      {
-        requestPolicy: 'network-only',
-        [HYDRATE_ONLY_CONTEXT_KEY]: true,
-        ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
-      }
-    )
-    .toPromise();
-
+  // An abort leaves the query's result source, which is what ends urql's
+  // request: urql replaces a `fetchOptions.signal` with its own.
+  const settled = await firstOrAborted(
+    pipe(
+      client.query<SoupBackfillResult, Variables>(
+        document as DocumentInput<SoupBackfillResult, Variables>,
+        variables,
+        { requestPolicy: 'network-only', [HYDRATE_ONLY_CONTEXT_KEY]: true }
+      ),
+      // The answer, as urql's own toPromise takes it.
+      filter((result) => !result.stale && !result.hasNext)
+    ),
+    options.signal
+  );
+  if (settled.kind === 'aborted') {
+    options.signal?.throwIfAborted();
+    throw new Error('GraphQL Soup hydration was cancelled');
+  }
+  if (settled.kind === 'ended')
+    throw new Error('GraphQL Soup hydration ended without an answer');
+  const result = settled.value;
   if (result.error) throw result.error;
   if (!result.data) {
     throw new Error('GraphQL Soup hydration returned no cursor projection');

@@ -634,8 +634,14 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         }
                         return Ok(());
                     }
-                    let (content, database_links) =
-                        super::databases::body_links(api, &row.id, destinations, progress).await?;
+                    let (content, database_links) = super::databases::body_links(
+                        api,
+                        &row.id,
+                        &row.title,
+                        destinations,
+                        progress,
+                    )
+                    .await?;
                     let body = task_body(&row, &content, &item.task_fields, people);
                     let properties = task_properties(&row, &item.task_fields, people);
                     let title = if row.title.trim().is_empty() {

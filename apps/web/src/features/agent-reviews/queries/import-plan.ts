@@ -116,6 +116,7 @@ export function decodeImportProgress(
     warnings: report.warnings ?? [],
     details: report.details,
     confirmed: report.confirmed,
+    failureCount: report.failureCount,
     reviewId: report.reviewId ?? null,
     status: report.status ?? null,
     error: report.error ?? null,

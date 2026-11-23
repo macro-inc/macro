@@ -506,8 +506,7 @@ impl SourceLossFact {
     /// Keep display text out of the ledger key's btree tuple budget. Source
     /// identities and occurrence ordinals remain exact for deduplication.
     pub fn bound_display_text(&mut self) {
-        fn bounded(text: &mut String) {
-            const MAX_BYTES: usize = 512;
+        fn bound_bytes(text: &mut String, max_bytes: usize) {
             let mut output = String::new();
             let mut truncated = false;
             for character in text.chars() {
@@ -516,7 +515,7 @@ impl SourceLossFact {
                 } else {
                     character
                 };
-                if output.len() + character.len_utf8() > MAX_BYTES - '…'.len_utf8() {
+                if output.len() + character.len_utf8() > max_bytes - '…'.len_utf8() {
                     truncated = true;
                     break;
                 }
@@ -527,6 +526,7 @@ impl SourceLossFact {
             }
             *text = output;
         }
+        let bounded = |text: &mut String| bound_bytes(text, 512);
         match &mut self.detail {
             SourceLossDetail::Reference { title, .. } => bounded(title),
             SourceLossDetail::Option {
@@ -541,7 +541,15 @@ impl SourceLossFact {
                 bounded(source);
                 bounded(property);
             }
-            SourceLossDetail::Notice { notice } => notice.bound_text(bounded),
+            SourceLossDetail::Notice { notice } => {
+                // Three display strings share the key's byte budget for a tab choice.
+                let limit = if matches!(notice.kind, ImportNoticeKind::TabChosen { .. }) {
+                    256
+                } else {
+                    512
+                };
+                notice.bound_text(|text| bound_bytes(text, limit));
+            }
             SourceLossDetail::Text { message } => bounded(message),
         }
     }

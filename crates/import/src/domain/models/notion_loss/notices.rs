@@ -47,6 +47,12 @@ pub enum ImportNoticeKind {
         view_id: NotionId,
         /// The selected tab's visible title.
         view: String,
+        /// The page or database row containing the reference.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        page_id: Option<NotionId>,
+        /// The containing page's title, when recorded.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container_title: Option<String>,
     },
     /// A saved view belongs to another source.
     ViewSourceMismatch,
@@ -181,8 +187,17 @@ impl ImportNotice {
             ImportNoticeKind::RowsOnlyPlacement { sources } => sources.iter_mut().for_each(bound),
             ImportNoticeKind::PropertyChanged { property }
             | ImportNoticeKind::PropertyAdded { property }
-            | ImportNoticeKind::DateEndDrift { property }
-            | ImportNoticeKind::TabChosen { view: property, .. } => bound(property),
+            | ImportNoticeKind::DateEndDrift { property } => bound(property),
+            ImportNoticeKind::TabChosen {
+                view,
+                container_title,
+                ..
+            } => {
+                bound(view);
+                if let Some(title) = container_title {
+                    bound(title);
+                }
+            }
             ImportNoticeKind::PageDatabaseOccurrence { database, .. } => bound(database),
             ImportNoticeKind::SchemaMetadataDrift
             | ImportNoticeKind::DateScanIncomplete

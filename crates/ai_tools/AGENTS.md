@@ -89,7 +89,8 @@ ids or messages; never select another table or column by position.
 ## Boundaries
 
 - Depends on: nearly every domain crate with tools (`forms`,
-  `agent_session`, `anthropic` (code execution), `web_search` (`WebSearch`,
+  `agent_session`, `anthropic` (wire types for the legacy code-execution
+  schemas), `web_search` (`WebSearch`,
   `WebFetch` via Tavily), `initiative`, `collab_surface`, `favorites`,
   `messages`, `routines`, `ai_billing`, `ai_usage`, `ai_toolset`, `agent`),
   plus `bot_id`, `attachment`, `static_file`.

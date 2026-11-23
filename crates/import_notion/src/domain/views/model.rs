@@ -251,6 +251,7 @@ pub fn resolve_property<'a, T>(
     named.next().is_none().then_some(candidate)
 }
 
+#[cfg(test)]
 pub(super) fn column<'a>(
     columns: &'a [ViewColumnBinding],
     property: &str,

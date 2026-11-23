@@ -63,6 +63,7 @@ async fn an_unavailable_saved_view_keeps_an_editable_default_database_card() {
     let (_, links) = crate::domain::service::notion_workspace::databases::body_links(
         &notion,
         &row,
+        "Projects",
         &destinations,
         &Progress::new(&store, &user, item.import_id, &[]),
     )
@@ -125,6 +126,8 @@ async fn saved_view_names_are_readable_and_unique_without_notion_identifiers() {
 
 #[tokio::test]
 async fn resumed_body_markers_restore_counted_losses_without_rereading_bodies() {
+    use crate::domain::models::{FidelityWarning, ImportNoticeKind};
+
     let rows: Vec<_> = (1..=8).map(numbered_row).collect();
     let bodies = rows.iter().map(|row| (row.id.clone(), "<database url=\"https://www.notion.so/ffffffffffffffffffffffffffffffff\">Work</database>".to_owned())).collect();
     let views = [(id('b'), "All work"), (id('c'), "Finished work")].into_iter()
@@ -171,7 +174,7 @@ async fn resumed_body_markers_restore_counted_losses_without_rereading_bodies() 
     let reads = *notion.fetched.lock().unwrap();
     let recorded = store.written(&user, &[item.import_id]).await.unwrap();
     // Only written markers survive an interruption before the aggregate warning flush.
-    store.warnings.lock().unwrap().clear();
+    store.typed_warnings.lock().unwrap().clear();
     write_database(
         &notion,
         &writer,
@@ -192,9 +195,24 @@ async fn resumed_body_markers_restore_counted_losses_without_rereading_bodies() 
         reads,
         "completed bodies are not read again"
     );
-    let warnings = store.warnings.lock().unwrap();
-    assert_eq!(warnings.len(), 1, "one tab choice per container");
-    assert!(warnings[0].contains("we used “All work”"));
+    let warnings = FidelityWarning::merge(store.typed_warnings.lock().unwrap().clone());
+    let titles: std::collections::BTreeSet<_> = warnings
+        .iter()
+        .filter_map(|warning| match warning {
+            FidelityWarning::Notice { notice } => match &notice.kind {
+                ImportNoticeKind::TabChosen {
+                    view,
+                    container_title,
+                    ..
+                } if view == "All work" => container_title.as_deref(),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    let expected: std::collections::BTreeSet<_> =
+        notion.rows.iter().map(|row| row.title.as_str()).collect();
+    assert_eq!(titles, expected, "one tab choice per containing row");
 }
 
 #[tokio::test]

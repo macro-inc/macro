@@ -60,6 +60,11 @@ planning is still `running`.
   documents: number;
   /** Why the run failed, when it did. */
   error?: NotionImportReportError;
+  /**
+   * Total objects that failed, including those outside the sample.
+   * @minimum 0
+   */
+  failureCount?: number;
   /** Objects that failed to import, with the failure. */
   failures?: NotionReportItem[];
   /**

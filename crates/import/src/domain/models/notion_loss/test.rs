@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn a_tab_choice_with_three_escaped_titles_fits_the_written_key() {
+    let object = NotionId::parse(&"a".repeat(32)).unwrap();
+    let escaped_title = r#"\""#.repeat(512);
+    let mut fact = SourceLossFact {
+        object: object.clone(),
+        detail: SourceLossDetail::Notice {
+            notice: ImportNotice {
+                object: object.clone(),
+                source: escaped_title.clone(),
+                kind: ImportNoticeKind::TabChosen {
+                    view_id: object.clone(),
+                    view: escaped_title.clone(),
+                    page_id: Some(object),
+                    container_title: Some(escaped_title),
+                },
+            },
+        },
+    };
+    fact.bound_display_text();
+    // Leave space for the other columns in the written marker's btree key.
+    assert!(serde_json::to_string(&fact).unwrap().len() < 2500);
+}
+
+#[test]
 fn reference_losses_agree_with_one_and_two_occurrences() {
     for (reason, one, two) in [
         (

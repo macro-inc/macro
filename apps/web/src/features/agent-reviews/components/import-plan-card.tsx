@@ -19,6 +19,8 @@ import {
   type ImportReviewPhase,
   type ImportTotal,
   type ImportVolume,
+  omissionCountLabel,
+  omissionTotals,
   volumeLabel,
 } from '../core/import-plan';
 import { ImportPlanRow } from './import-plan-row';
@@ -55,24 +57,26 @@ function PhaseStatus(props: {
   const imported = () => props.progress?.imported ?? 0;
   const outcome = () => {
     const confirmed = props.progress?.confirmed;
-    if (!confirmed) return `Imported ${plural(imported(), 'object')}`;
+    const failures =
+      props.progress?.failureCount ?? props.progress?.failures.length ?? 0;
+    const failed = failures > 0 ? ` ${failures} couldn't be imported.` : '';
+    if (!confirmed) {
+      return `Imported ${plural(imported(), 'object')}${failed ? `.${failed}` : ''}`;
+    }
     const parts = [
       confirmed.documents > 0 ? plural(confirmed.documents, 'page') : '',
       confirmed.databases > 0
-        ? `${plural(confirmed.databases, 'database')} (${plural(confirmed.databaseRows, 'row')})`
+        ? `${plural(confirmed.databases, 'database')} (${plural(confirmed.databaseRows - (confirmed.partialDatabaseRows ?? 0), 'row')})`
         : '',
       confirmed.taskLists > 0
-        ? `${plural(confirmed.taskLists, 'task list')} (${plural(confirmed.tasks, 'task')})`
+        ? `${plural(confirmed.taskLists, 'task list')} (${plural(confirmed.tasks - (confirmed.partialTasks ?? 0), 'task')})`
         : '',
     ].filter(Boolean);
     const volume = new Intl.ListFormat('en', { type: 'conjunction' }).format(
       parts
     );
-    const leftOut = props.progress?.details?.notImported ?? [];
-    const noun = leftOut.every(({ item }) => item.kind === 'page')
-      ? 'page'
-      : 'item';
-    return `Imported ${volume || 'nothing'}.${leftOut.length > 0 ? ` ${plural(leftOut.length, noun)} left out.` : ''}`;
+    const leftOut = omissionTotals(props.progress?.details);
+    return `Imported ${volume || 'nothing'}.${leftOut.total > 0 ? ` ${omissionCountLabel(leftOut)} left out.` : ''}${failed}`;
   };
   const total = () =>
     imported() +
@@ -288,7 +292,11 @@ function PlanContents(
     props.phase.kind === 'starting' || props.phase.kind === 'importing';
   const failures = () => props.progress?.failures ?? [];
   const details = () =>
-    props.phase.kind === 'completed' ? props.progress?.details : undefined;
+    props.phase.kind === 'completed' ||
+    ((props.phase.kind === 'failed' || props.phase.kind === 'stopped') &&
+      props.progress?.confirmed)
+      ? props.progress?.details
+      : undefined;
   return (
     <>
       <header class="flex min-w-0 flex-col gap-0.5">
@@ -372,7 +380,13 @@ function PlanContents(
           <ImportReportDetails
             details={report()}
             failures={failures()}
-            error={props.progress?.error ?? null}
+            failureCount={props.progress?.failureCount ?? failures().length}
+            confirmed={props.progress?.confirmed}
+            error={
+              props.phase.kind === 'stopped'
+                ? null
+                : (props.progress?.error ?? null)
+            }
           />
         )}
       </Show>
@@ -454,7 +468,11 @@ function PlanContents(
       <Show when={!details() && failures().length > 0}>
         <section aria-label="Failures" class="flex flex-col gap-1">
           <h4 class="text-xs font-medium text-ink-muted">
-            {plural(failures().length, 'object')} couldn't be imported
+            {plural(
+              props.progress?.failureCount ?? failures().length,
+              'object'
+            )}{' '}
+            couldn't be imported
           </h4>
           <ul class="flex flex-col gap-0.5">
             <For each={failures()}>

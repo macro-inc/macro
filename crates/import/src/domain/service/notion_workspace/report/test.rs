@@ -9,6 +9,139 @@ use crate::domain::models::{
 };
 
 #[test]
+fn report_counts_omissions_failures_and_notices_beyond_its_sample() {
+    let limit = REPORT_LIST_LIMIT;
+    let input = 0..limit + 5;
+    let rows: Vec<_> = input
+        .flat_map(|index| {
+            let mut failure = row(
+                &format!("Database {index}"),
+                ImportKind::DataSource,
+                ImportStatus::Staged,
+                NotionDecision::Copy,
+                None,
+                None,
+            );
+            failure.last_error = Some("Database write stopped".into());
+            failure.metadata["warnings"] = serde_json::json!([format!("Import notice {index}")]);
+            let omitted = row(
+                &format!("Template {index}"),
+                ImportKind::Page,
+                ImportStatus::Discarded,
+                NotionDecision::Skip,
+                None,
+                None,
+            );
+            [failure, omitted]
+        })
+        .collect();
+    let report = serde_json::to_value(report(None, &rows)).unwrap();
+    assert_eq!(report["failures"].as_array().unwrap().len(), limit);
+    assert_eq!(report["failureCount"], limit + 5);
+    assert_eq!(report["warnings"].as_array().unwrap().len(), limit);
+    let details = &report["details"];
+    assert_eq!(details["notImported"].as_array().unwrap().len(), limit);
+    assert_eq!(details["omissionCounts"][0]["pages"], limit + 5);
+    assert_eq!(details["notes"].as_array().unwrap().len(), limit);
+    assert_eq!(details["noteCounts"][0]["lines"], limit + 5);
+}
+
+#[test]
+fn report_bounds_view_and_placement_samples_but_keeps_totals() {
+    use import_notion::domain::{
+        model::NotionId,
+        views::{ViewLossKind, ViewSetting, ViewType},
+    };
+    let id = |index| NotionId::parse(&format!("{index:032x}")).unwrap();
+    let mut database = row(
+        "Projects",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    let count = REPORT_LIST_LIMIT + 5;
+    let warnings: Vec<_> = (1..=count)
+        .flat_map(|index| {
+            let view_id = id(index);
+            let main = ViewWarning {
+                source_id: id(0),
+                view_id: view_id.clone(),
+                source: "Projects".into(),
+                view: format!("View {index}"),
+                kind: ViewLossKind::Layout,
+                setting: ViewSetting::Other,
+                layout: ViewType::Table,
+                properties: Vec::new(),
+                count: 1,
+            };
+            [
+                FidelityWarning::ViewLoss(main.clone()),
+                FidelityWarning::ViewLoss(ViewWarning {
+                    kind: ViewLossKind::Sort,
+                    ..main
+                }),
+                FidelityWarning::Notice {
+                    notice: crate::domain::models::ImportNotice::new(
+                        &id(0),
+                        "Projects",
+                        crate::domain::models::ImportNoticeKind::TabChosen {
+                            view_id,
+                            view: format!("View {index}"),
+                            page_id: Some(id(index + count)),
+                            container_title: Some(format!("Page {index}")),
+                        },
+                    ),
+                },
+            ]
+        })
+        .collect();
+    database.metadata["warnings"] = serde_json::json!(warnings);
+    let details = report(None, &[database]).details.unwrap();
+    assert_eq!(details.view_count, count as u32);
+    assert_eq!(details.view_change_count, (2 * count) as u32);
+    assert_eq!(details.view_changes[0].views.len(), REPORT_LIST_LIMIT);
+    assert_eq!(details.tab_choice_count, count as u32);
+    assert_eq!(details.tab_choices.len(), REPORT_LIST_LIMIT);
+}
+
+#[test]
+fn tab_choices_keep_each_containing_page_and_its_title() {
+    let mut database = row(
+        "Projects",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    let notice = |page_id, container_title| {
+        serde_json::json!({
+            "notice": {
+                "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "source": "Projects",
+                "kind": {
+                    "type": "tab_chosen",
+                    "view_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "view": "Board",
+                    "page_id": page_id,
+                    "container_title": container_title,
+                }
+            }
+        })
+    };
+    let project = notice("cccccccccccccccccccccccccccccccc", "Project Home");
+    let teams = notice("dddddddddddddddddddddddddddddddd", "Team Home");
+    database.metadata["warnings"] = serde_json::json!([project.clone(), teams, project]);
+    let details = report(None, &[database]).details.unwrap();
+    let choices = serde_json::to_value(details).unwrap();
+    assert_eq!(choices["tabChoices"].as_array().unwrap().len(), 2);
+    assert_eq!(choices["tabChoices"][0]["containerTitle"], "Project Home");
+    assert_eq!(choices["tabChoices"][1]["containerTitle"], "Team Home");
+}
+
+#[test]
 fn view_changes_keep_ids_counts_and_impact_and_review_skips_keep_reasons() {
     use import_notion::domain::{
         model::NotionId,

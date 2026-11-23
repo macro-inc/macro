@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'document' AND owned.finished), 0)::bigint AS \"documents!\",\n                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'database' AND owned.finished), 0)::bigint AS \"databases!\",\n                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'row'), 0)::bigint AS \"database_rows!\",\n                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'row' AND NOT owned.finished), 0)::bigint AS \"partial_database_rows!\",\n                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'tasks_folder' AND owned.finished), 0)::bigint AS \"task_lists!\",\n                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'task'), 0)::bigint AS \"tasks!\",\n                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'task' AND NOT owned.finished), 0)::bigint AS \"partial_tasks!\"\n            FROM unnest($2::uuid[]) AS wanted(id)\n            CROSS JOIN LATERAL (\n                SELECT entity.id, entity.status = 'imported' AS finished\n                FROM import_entity AS entity\n                WHERE entity.id = wanted.id AND entity.user_id = $1\n                  AND entity.source = 'notion' AND entity.status <> 'discarded'\n                OFFSET 0\n            ) AS owned\n            CROSS JOIN (\n                VALUES ('document', $3::text), ('database', $4::text), ('row', $5::text),\n                    ('tasks_folder', $6::text), ('task', $7::text)\n            ) AS kinds(kind, marker)\n            CROSS JOIN LATERAL (\n                SELECT count(*) AS writes\n                FROM import_entity_written AS written\n                WHERE written.import_id = owned.id AND written.kind = kinds.marker\n            ) AS output\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "documents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "databases!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "database_rows!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "partial_database_rows!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "task_lists!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "tasks!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "partial_tasks!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "90cc1798a660b5de8ced87b44f094fa7ce90ebcc18a5405585f5d3781a0b84c8"
+}

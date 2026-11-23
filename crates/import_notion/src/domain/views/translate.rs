@@ -60,7 +60,8 @@ pub fn bindings(
 
 /// Translate using the imported schema. Unsupported AND clauses and incomplete
 /// OR groups are omitted with losses, preserving a superset of the source rows.
-pub fn translate(view: &NotionView, columns: &[ViewColumnBinding]) -> TranslatedView {
+#[cfg(test)]
+pub(super) fn translate(view: &NotionView, columns: &[ViewColumnBinding]) -> TranslatedView {
     translate_view(view, &|property| column(columns, property))
 }
 

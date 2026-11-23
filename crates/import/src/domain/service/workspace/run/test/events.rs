@@ -60,7 +60,7 @@ async fn a_plan_presented_while_planning_tells_its_session_once_it_is_ready(pool
     let sessions = Arc::new(Sessions::default());
     let service = ImportServiceImpl::new(
         notifying_repo(&pool, &sessions),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Writer::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -118,7 +118,7 @@ async fn a_linear_plan_tells_its_session_it_came_from_linear(pool: PgPool) {
     let sessions = Arc::new(Sessions::default());
     let service = ImportServiceImpl::new(
         notifying_repo(&pool, &sessions),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Writer::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -148,7 +148,7 @@ async fn a_plan_that_fails_tells_no_session_it_is_ready(pool: PgPool) {
     let sessions = Arc::new(Sessions::default());
     let service = ImportServiceImpl::new(
         notifying_repo(&pool, &sessions),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Writer::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     );
@@ -191,7 +191,7 @@ async fn a_finished_write_tells_its_session_once_with_the_final_report(pool: PgP
     let tracker = TaskTracker::new();
     let service = ImportServiceImpl::new(
         notifying_repo(&pool, &sessions),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Writer::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -260,7 +260,7 @@ async fn an_adopted_write_tells_its_session_once_when_it_finishes(pool: PgPool) 
     let tracker = TaskTracker::new();
     let service = ImportServiceImpl::new(
         notifying_repo(&pool, &sessions),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Writer::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -315,7 +315,7 @@ async fn a_write_given_up_on_tells_its_session_it_failed(pool: PgPool) {
     let tracker = TaskTracker::new();
     let service = ImportServiceImpl::new(
         notifying_repo(&pool, &sessions),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Writer::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
