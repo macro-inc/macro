@@ -53297,6 +53297,37 @@ export const getItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
+                  bot_participants: zod
+                    .array(
+                      zod
+                        .object({
+                          bot_id: zod.uuid().describe('Participant bot id.'),
+                          channel_id: zod
+                            .uuid()
+                            .describe(
+                              'Channel id for the participant membership.'
+                            ),
+                          joined_at: zod.iso
+                            .datetime({})
+                            .describe(
+                              'Timestamp when the bot joined the channel.'
+                            ),
+                          left_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'Timestamp when the bot left the channel, if any.'
+                            ),
+                          role: zod
+                            .enum(['owner', 'admin', 'member'])
+                            .describe('The role a user has within a channel.'),
+                        })
+                        .describe(
+                          "A bot's membership in a channel, stored under the principal `bot|<id>`."
+                        )
+                    )
+                    .optional()
+                    .describe('Bots that are participants in the channel.'),
                   channel: zod
                     .object({
                       auto_join_team: zod
@@ -53363,7 +53394,9 @@ export const getItemsSoupResponse = zod
                         })
                         .describe("A user's membership in a channel.")
                     )
-                    .describe('Participants in the channel.'),
+                    .describe(
+                      'Participants in the channel. Bots are in `bot_participants`.'
+                    ),
                 })
                 .describe('Channel metadata together with its participants.')
                 .and(
@@ -56015,7 +56048,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .nullish()
           .describe(
-            "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels.\nNone to ignore (participant channels only, today's default)."
+            "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels,\nand, when the filter admits only channels it names by id, to public\nchannels too. Soup listings apply the filter and its widening; channel\nsearch (`\/search`) reads only the channels the user joined and ignores it.\nNone to ignore (participant channels only, today's default)."
           ),
         mentions: zod
           .array(zod.string())
@@ -58567,6 +58600,37 @@ export const postItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
+                  bot_participants: zod
+                    .array(
+                      zod
+                        .object({
+                          bot_id: zod.uuid().describe('Participant bot id.'),
+                          channel_id: zod
+                            .uuid()
+                            .describe(
+                              'Channel id for the participant membership.'
+                            ),
+                          joined_at: zod.iso
+                            .datetime({})
+                            .describe(
+                              'Timestamp when the bot joined the channel.'
+                            ),
+                          left_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'Timestamp when the bot left the channel, if any.'
+                            ),
+                          role: zod
+                            .enum(['owner', 'admin', 'member'])
+                            .describe('The role a user has within a channel.'),
+                        })
+                        .describe(
+                          "A bot's membership in a channel, stored under the principal `bot|<id>`."
+                        )
+                    )
+                    .optional()
+                    .describe('Bots that are participants in the channel.'),
                   channel: zod
                     .object({
                       auto_join_team: zod
@@ -58633,7 +58697,9 @@ export const postItemsSoupResponse = zod
                         })
                         .describe("A user's membership in a channel.")
                     )
-                    .describe('Participants in the channel.'),
+                    .describe(
+                      'Participants in the channel. Bots are in `bot_participants`.'
+                    ),
                 })
                 .describe('Channel metadata together with its participants.')
                 .and(
@@ -63248,6 +63314,37 @@ export const postItemsSoupAstResponse = zod
             .object({
               data: zod
                 .object({
+                  bot_participants: zod
+                    .array(
+                      zod
+                        .object({
+                          bot_id: zod.uuid().describe('Participant bot id.'),
+                          channel_id: zod
+                            .uuid()
+                            .describe(
+                              'Channel id for the participant membership.'
+                            ),
+                          joined_at: zod.iso
+                            .datetime({})
+                            .describe(
+                              'Timestamp when the bot joined the channel.'
+                            ),
+                          left_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'Timestamp when the bot left the channel, if any.'
+                            ),
+                          role: zod
+                            .enum(['owner', 'admin', 'member'])
+                            .describe('The role a user has within a channel.'),
+                        })
+                        .describe(
+                          "A bot's membership in a channel, stored under the principal `bot|<id>`."
+                        )
+                    )
+                    .optional()
+                    .describe('Bots that are participants in the channel.'),
                   channel: zod
                     .object({
                       auto_join_team: zod
@@ -63316,7 +63413,9 @@ export const postItemsSoupAstResponse = zod
                         })
                         .describe("A user's membership in a channel.")
                     )
-                    .describe('Participants in the channel.'),
+                    .describe(
+                      'Participants in the channel. Bots are in `bot_participants`.'
+                    ),
                 })
                 .describe('Channel metadata together with its participants.')
                 .and(
@@ -68430,6 +68529,43 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
+                        bot_participants: zod
+                          .array(
+                            zod
+                              .object({
+                                bot_id: zod
+                                  .uuid()
+                                  .describe('Participant bot id.'),
+                                channel_id: zod
+                                  .uuid()
+                                  .describe(
+                                    'Channel id for the participant membership.'
+                                  ),
+                                joined_at: zod.iso
+                                  .datetime({})
+                                  .describe(
+                                    'Timestamp when the bot joined the channel.'
+                                  ),
+                                left_at: zod.iso
+                                  .datetime({})
+                                  .nullish()
+                                  .describe(
+                                    'Timestamp when the bot left the channel, if any.'
+                                  ),
+                                role: zod
+                                  .enum(['owner', 'admin', 'member'])
+                                  .describe(
+                                    'The role a user has within a channel.'
+                                  ),
+                              })
+                              .describe(
+                                "A bot's membership in a channel, stored under the principal `bot|<id>`."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Bots that are participants in the channel.'
+                          ),
                         channel: zod
                           .object({
                             auto_join_team: zod
@@ -68505,7 +68641,9 @@ export const postItemsSoupAstGroupedResponse = zod
                               })
                               .describe("A user's membership in a channel.")
                           )
-                          .describe('Participants in the channel.'),
+                          .describe(
+                            'Participants in the channel. Bots are in `bot_participants`.'
+                          ),
                       })
                       .describe(
                         'Channel metadata together with its participants.'
@@ -73085,6 +73223,43 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
+                        bot_participants: zod
+                          .array(
+                            zod
+                              .object({
+                                bot_id: zod
+                                  .uuid()
+                                  .describe('Participant bot id.'),
+                                channel_id: zod
+                                  .uuid()
+                                  .describe(
+                                    'Channel id for the participant membership.'
+                                  ),
+                                joined_at: zod.iso
+                                  .datetime({})
+                                  .describe(
+                                    'Timestamp when the bot joined the channel.'
+                                  ),
+                                left_at: zod.iso
+                                  .datetime({})
+                                  .nullish()
+                                  .describe(
+                                    'Timestamp when the bot left the channel, if any.'
+                                  ),
+                                role: zod
+                                  .enum(['owner', 'admin', 'member'])
+                                  .describe(
+                                    'The role a user has within a channel.'
+                                  ),
+                              })
+                              .describe(
+                                "A bot's membership in a channel, stored under the principal `bot|<id>`."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Bots that are participants in the channel.'
+                          ),
                         channel: zod
                           .object({
                             auto_join_team: zod
@@ -73160,7 +73335,9 @@ export const postItemsSoupAstGroupedResponse = zod
                               })
                               .describe("A user's membership in a channel.")
                           )
-                          .describe('Participants in the channel.'),
+                          .describe(
+                            'Participants in the channel. Bots are in `bot_participants`.'
+                          ),
                       })
                       .describe(
                         'Channel metadata together with its participants.'

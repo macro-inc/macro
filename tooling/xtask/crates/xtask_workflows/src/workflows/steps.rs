@@ -5,7 +5,8 @@
 //! generated from their pins in `actions.lock`.
 
 use gh_workflow::expr::typed::{
-    Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, always, github, input,
+    Bool, Expr, Flag, JobHandle, JobOutput, Secret, StepHandle, StepOutput, Str, Var, always,
+    github, input,
 };
 use gh_workflow::{Env, Job, Run, Step, Use};
 use xtask_paths::RuntimePath;
@@ -572,9 +573,27 @@ pub fn node_script_calling(source: &str, function: &str) -> String {
 /// `message`, which the channel renders as markdown. Needs `jq` and `curl`,
 /// which [`runners::Runner::Small`] has.
 pub fn post_to_macro_alerts(name: &str, set_message: &str) -> Step<Run> {
+    post_to_macro_channel(
+        name,
+        set_message,
+        "Macro Alerts",
+        vars::MACRO_BUILD_ALERT_WEBHOOK_URL,
+        vars::MACRO_BUILD_ALERT_BOT_TOKEN,
+    )
+}
+
+/// [`post_to_macro_alerts`], to the Macro channel `channel` whose webhook is
+/// `webhook` (a repo variable), posting with the bot token `token`.
+pub fn post_to_macro_channel(
+    name: &str,
+    set_message: &str,
+    channel: &str,
+    webhook: Var,
+    token: Secret,
+) -> Step<Run> {
     let post = indoc::indoc! {r#"
         if [[ -z "$MACRO_WEBHOOK_URL" || -z "$MACRO_BOT_TOKEN" ]]; then
-          echo 'Configure the Macro Alerts webhook URL and bot token' >&2
+          echo 'Configure the CHANNEL webhook URL and bot token' >&2
           exit 1
         fi
         jq -n --arg content "$message" '{content: $content}' |
@@ -582,15 +601,16 @@ pub fn post_to_macro_alerts(name: &str, set_message: &str) -> Step<Run> {
             --header 'Content-Type: application/json' \
             --header "x-macro-channel-bot-token: $MACRO_BOT_TOKEN" \
             --data-binary @- "$MACRO_WEBHOOK_URL"
-    "#};
+    "#}
+    .replace("CHANNEL", channel);
     Step::new(name)
         .run(format!(
             "set -euo pipefail\n{}\n{post}",
             set_message.trim_end()
         ))
         .shell("bash")
-        .add_env(("MACRO_WEBHOOK_URL", vars::MACRO_BUILD_ALERT_WEBHOOK_URL))
-        .add_env(("MACRO_BOT_TOKEN", vars::MACRO_BUILD_ALERT_BOT_TOKEN))
+        .add_env(("MACRO_WEBHOOK_URL", webhook))
+        .add_env(("MACRO_BOT_TOKEN", token))
 }
 
 /// `sccache --show-stats` at the end of a job (never fails the job).

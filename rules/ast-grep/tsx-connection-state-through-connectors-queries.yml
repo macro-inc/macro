@@ -1,0 +1,80 @@
+id: tsx-connection-state-through-connectors-queries
+language: tsx
+# Twin of ts-connection-state-through-connectors-queries — ast-grep rules are
+# single-language, and `typescript` only scans .ts files.
+severity: error
+message: Read and change connections only through lib/queries/connectors/ (useConnectors); never the cognition client's connector endpoints or types, or the macro-connect flag.
+note: |-
+  The server decides what a user has connected (crates/connectors): which
+  source counts, whether the connection is usable, and how to connect. The
+  web shows that answer and asks the server what to open; it never picks a
+  mechanism itself. So outside apps/web/src/lib/queries/connectors/:
+  - no call of a connector, MCP server or Pipedream method on
+    `cognitionApiServiceClient`;
+  - no import of the cognition client's connector, MCP server or Pipedream
+    types, from the client or its generated schemas;
+  - no reading of the `macro-connect` flag, by key or by `macroConnect`.
+  Use the hook and mutations in lib/queries/connectors/ and the types they
+  export.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/lib/queries/connectors/**
+  - apps/web/src/lib/service-clients/**
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+utils:
+  connector-name:
+    regex: (?i:pipedream|mcp|connector|macroconnect)|^(start|complete)?[Cc]onnect($|[A-Z_])|^(Add|Update)?Server(Request|Response)|^StartAuth
+  cognition-client-source:
+    kind: string
+    regex: ^['"](@service-cognition|(\.{1,2}/)+(.+/)?service-clients/service-cognition)/client(\.ts)?['"]$
+rule:
+  any:
+    # The flag by its key.
+    - kind: string
+      regex: ^['"]macro-connect['"]$
+    - kind: template_string
+      regex: ^`macro-connect`$
+    # The flag by its definition.
+    - kind: import_specifier
+      has:
+        field: name
+        regex: ^macroConnect$
+    # Connector types and values imported from the cognition client.
+    - kind: import_specifier
+      has:
+        field: name
+        matches: connector-name
+      inside:
+        kind: import_statement
+        stopBy: end
+        has:
+          field: source
+          matches: cognition-client-source
+    # The client's generated connector schemas.
+    - kind: string
+      regex: service-cognition/generated/schemas/(pipedream|mcp|connect|addServer|updateServer|updateConnector|startAuth|serverResponse|catalog)
+      any:
+        - inside:
+            kind: import_statement
+            field: source
+        - inside:
+            kind: export_statement
+            field: source
+        - inside:
+            kind: arguments
+            inside:
+              kind: call_expression
+              has:
+                field: function
+                kind: import
+    # A connector endpoint called on the client.
+    - kind: member_expression
+      all:
+        - has:
+            field: object
+            regex: ^cognitionApiServiceClient$
+        - has:
+            field: property
+            matches: connector-name

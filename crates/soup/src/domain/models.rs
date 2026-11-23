@@ -6,6 +6,8 @@ pub mod sort;
 pub use sort::{DynamicSort, DynamicSortValue};
 
 #[cfg(feature = "ports")]
+mod channel_directory;
+#[cfg(feature = "ports")]
 pub(crate) mod exclusions;
 
 #[cfg(all(test, feature = "ports"))]
@@ -459,6 +461,45 @@ impl<T> SoupRequest<T> {
     /// this is used to prevent passing back the full ast on each server request
     pub(crate) fn filters(&self) -> &T {
         self.cursor.filter()
+    }
+}
+
+/// The largest page a channel directory read may ask for.
+pub const CHANNEL_DIRECTORY_PAGE_LIMIT: u16 = 100;
+
+#[cfg(feature = "ports")]
+impl SoupRequest<EntityFilterAst> {
+    /// Whether this is a channel directory page: an initial page or a
+    /// continuation of a timestamp-sorted Soup, newest first, at most
+    /// [`CHANNEL_DIRECTORY_PAGE_LIMIT`] items, with channel threads left out
+    /// and a channel filter the request bounds (`channel_directory::bounded`).
+    /// It carries no `favorites_only: true`, which Soup turns into the ids of
+    /// every favorite, and no CRM association of any kind (company, contact
+    /// or activity), whether the request's association or a `CrmAssociated`
+    /// literal anywhere in its document filter, under NOT too. Soup resolves
+    /// each such record before any source query, reading a company's or a
+    /// contact's references through the channel repository; it rewrites a
+    /// document literal into the record's document ids, and the request's
+    /// association also restricts every source to the record's entities,
+    /// the channel filter to as many channel ids as the record holds. A CRM
+    /// email scope is a separate field the email leg reads, and stays
+    /// allowed. Only such a page may read its channels from the primary
+    /// database, where its channel query is the REST channel list's joined
+    /// query or, for named ids whose filter tests participation without
+    /// requiring it, the named read those ids bound.
+    ///
+    /// Newest first because the channel query fetches descending and an
+    /// ascending page reverses that slice, so its next page would read nearly
+    /// the same rows again.
+    pub fn is_channel_directory_page(&self) -> bool {
+        let filter = self.cursor.filter();
+        self.limit <= CHANNEL_DIRECTORY_PAGE_LIMIT
+            && self.sort_direction == SoupSortDirection::Desc
+            && matches!(self.cursor, SoupQuery::Simple(_))
+            && filter.favorites_only != Some(true)
+            && filter.crm_associations().is_empty()
+            && exclusions::channel_thread(Some(filter))
+            && channel_directory::bounded(filter.channel_filter.as_deref())
     }
 }
 

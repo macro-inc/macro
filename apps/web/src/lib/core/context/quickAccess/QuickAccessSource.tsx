@@ -11,7 +11,7 @@ import { scheduleToEntity } from '@app/features/routines/queries/entities';
 import { useSchedulesQuery } from '@app/features/routines/queries/schedules';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import {
-  useChannelsContext,
+  useChannelDirectory,
   useDmActivityByUserId,
 } from '@core/context/channels';
 import { useEmailLinksContext } from '@core/context/emailLinks';
@@ -29,6 +29,7 @@ import type {
   SnippetEntity,
 } from '@entity';
 import { useCachedGraphqlChannelsQuery } from '@queries/channel/channels';
+import { toChannelListItem } from '@queries/channel/directory-core';
 import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
@@ -413,7 +414,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   // queries
   const historyQuery = useHistoryQueryWhileRead(listsReadCache);
-  const { channels, isLoading: channelsLoading } = useChannelsContext();
+  const directory = useChannelDirectory();
+  const channelsLoading = () => !directory.complete();
   const directoryScope = useContactDirectoryScope();
   const rawDmActivityByUserId = useDmActivityByUserId();
   const dmActivityByUserId = createMemo(rawDmActivityByUserId, undefined, {
@@ -422,8 +424,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const { links: emailLinks, isConnectedSecondaryInbox } =
     useEmailLinksContext();
   // Read reactively: if the session abandons its cache mid-session, Quick
-  // Access falls back to the REST channel list instead of the dead host. The
-  // memo keeps the subscription below until the host itself changes.
+  // Access falls back to the directory's in-memory pages instead of the dead
+  // host. The memo keeps the subscription below until the host itself changes.
   const cacheHost = createMemo(() => getGraphqlSoupCacheHost());
   const localDrafts = createLocalDraftSource(() => true);
   const draftItems = createMemo(() =>
@@ -558,20 +560,20 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const startedAt = performance.now();
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
-    const completeChannels = channels();
+    const completeChannels = directory.channels();
     const cachedChannels =
       cacheHost() && queryReadyGate(cachedChannelsQuery)
         ? cachedChannelsQuery.data
         : [];
 
-    // A partial cache must not hide channels already available in the complete
-    // channel list. Cached metadata wins for duplicates, retaining newer views,
-    // unless the complete list changed later: the cached list rereads only
-    // while a list here reads the cache.
+    // The recent cached list must not hide channels already in the directory.
+    // Cached metadata wins for duplicates, retaining newer views, unless the
+    // directory changed later: the cached list rereads only while a list here
+    // reads the cache.
     const channelData = new Map(
       completeChannels.map((channel) => [
         channel.id,
-        apiChannelToQuickAccessChannel(channel),
+        apiChannelToQuickAccessChannel(toChannelListItem(channel)),
       ])
     );
     for (const channel of cachedChannels) {
@@ -1160,6 +1162,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               ? viewer?.split('@')[1]
               : undefined,
           excluded: personExclusions.native(),
+          listPriority: options?.peopleListPriority?.(),
         };
       },
       activity: dmActivityByUserId,

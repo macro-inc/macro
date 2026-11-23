@@ -171,6 +171,17 @@ export const loginPopupSuccessRoute = defineRoute({
   externalSearch: '*',
 });
 
+/**
+ * GitHub's connect step: starts the Macro GitHub account link, which is
+ * GitHub's connection, then returns to Settings → Integrations. Registered
+ * with the sign-in pages so `:documentType/:documentId` never claims it.
+ */
+export const githubConnectRoute = defineRoute({
+  id: 'github-connect',
+  path: 'connect/github',
+  externalSearch: '*',
+});
+
 export const loginRoute = defineRoute({
   id: 'login',
   path: 'login',

@@ -12,32 +12,11 @@ only_keys AS MATERIALIZED (
     FROM unnest($10::text[], $11::text[]) AS k(entity_type, entity_id)
 ),
 -- The viewer's own work: their latest work on each item they may see,
--- newest first.
+-- newest first. A read of known items looks up only those items' work.
 own_work AS NOT MATERIALIZED (
     SELECT nc.entity_type, nc.entity_id, nc.touched_at
     FROM (
-        SELECT ae.entity_type, ae.entity_id, ae.occurred_at AS touched_at
-        FROM activity_events ae
-        WHERE $9
-        AND ae.subject_id = $1
-        AND {own_work_ae}
-        AND ae.entity_type = ANY($2)
-        AND ae.entity_type <> 'channel_message'
-        AND ($3::timestamptz IS NULL OR (ae.occurred_at, ae.entity_id) < ($3, $4))
-        AND ($10::text[] IS NULL OR (ae.entity_type, ae.entity_id) IN (
-            SELECT entity_type, entity_id FROM only_keys
-        ))
-        AND NOT EXISTS (
-            SELECT 1 FROM activity_events newer
-            WHERE newer.subject_id = $1
-            AND newer.entity_type = ae.entity_type
-            AND newer.entity_id = ae.entity_id
-            AND {own_work_newer}
-            AND (newer.occurred_at, newer.id) > (ae.occurred_at, ae.id)
-        )
-        ORDER BY ae.occurred_at DESC, ae.entity_id DESC
-        OFFSET 0
-    ) nc
+{own_work_latest}    ) nc
     WHERE CASE nc.entity_type
         WHEN 'document' THEN {document_gate}
         WHEN 'chat' THEN {chat_gate}

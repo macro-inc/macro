@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of inbox owners in owner order (idx_email_links_macro_id), each\n-- with their inboxes. Inboxes being disconnected are left out: their rows\n-- would be removed with them.\nSELECT\n    l.macro_id AS owner,\n    array_agg(l.id ORDER BY l.id) AS \"link_ids!\",\n    array_agg(l.provider::text ORDER BY l.id) AS \"providers!\"\nFROM email_links l\nWHERE l.macro_id > $1\n  AND l.deleting_at IS NULL\n  AND l.disconnect_requested_at IS NULL\nGROUP BY l.macro_id\nORDER BY l.macro_id\nLIMIT $2\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_ids!",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 2,
+        "name": "providers!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "8e82b6e9250623f4bc398a4aa038e254d711be4360a271a59e8df3c550a85ab4"
+}
