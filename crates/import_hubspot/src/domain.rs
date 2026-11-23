@@ -333,6 +333,9 @@ pub enum HubspotError {
 /// engine can hold it without a type parameter.
 #[async_trait]
 pub trait HubspotConnections: Send + Sync + 'static {
+    /// Whether the user has a HubSpot connection to read through. Reads
+    /// nothing from HubSpot.
+    async fn connected(&self, user: &MacroUserIdStr<'static>) -> Result<bool, HubspotError>;
     /// Read every non-archived company, contact and deal, with owners and
     /// pipelines, reporting counts as pages arrive.
     async fn inventory(

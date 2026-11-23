@@ -70,6 +70,11 @@ impl<T: WorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromHubspot
                 "Importing into the CRM needs a team whose CRM the user may use. Tell them to join a team or ask an admin for CRM access.".into(),
                 error,
             ),
+            ImportError::Hubspot(import_hubspot::domain::HubspotError::NotConnected) => tool_error(
+                "HubSpot is not connected. Ask the user to connect HubSpot, then plan again."
+                    .into(),
+                error,
+            ),
             other => import_error("HubSpot import failed", other),
         })?;
         let message = message(self.action, &report);

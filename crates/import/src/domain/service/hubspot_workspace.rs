@@ -154,7 +154,8 @@ where
     W: SlackWorkspaceSource,
     N: NotionConnections,
 {
-    /// Refuse before a run starts when the user may not write the team's CRM.
+    /// Refuse before a run starts when the user may not write the team's CRM
+    /// or has not connected HubSpot, so neither leaves a failed import.
     pub(super) async fn check_crm_access(&self, user: &MacroUserIdStr<'static>) -> Result<()> {
         let hubspot = self.hubspot.as_ref().ok_or(NOT_AVAILABLE)?;
         hubspot
@@ -162,6 +163,9 @@ where
             .crm_team(user)
             .await?
             .ok_or(ImportError::CrmAccessRequired)?;
+        if !hubspot.reader.connected(user).await? {
+            return Err(import_hubspot::domain::HubspotError::NotConnected.into());
+        }
         Ok(())
     }
 

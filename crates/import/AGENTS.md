@@ -319,8 +319,9 @@ paths reject workspace-plan rows so approval cannot be bypassed.
 `import_hubspot::domain::HubspotConnections` reader and a `CrmImportWriter`
 (`ai_tools::HubspotCrmWriter`, over `crm::domain::record_import`) with
 `with_hubspot`; hosts without them answer "not available". A plan needs a team
-whose CRM the user may use (`ImportError::CrmAccessRequired`, checked before the
-run starts); every row is shared with the team and not shareable, so the card
+whose CRM the user may use (`ImportError::CrmAccessRequired`) and a HubSpot
+connection (`HubspotError::NotConnected`, which the tool turns into a connect
+prompt), both checked before the run starts, so neither leaves a failed import; every row is shared with the team and not shareable, so the card
 offers no sharing choice. Rows are keyed `{portal}:{type}:{id}` (pipeline ids
 are words, record ids numbers), so re-runs and teammates dedupe through the
 ledger and the `import_entity_hubspot_team_object_key` index.

@@ -190,6 +190,15 @@ impl<S: ApiConnectionsService> HubspotApi<S> {
 
 #[async_trait]
 impl<S: ApiConnectionsService> HubspotConnections for HubspotApi<S> {
+    #[tracing::instrument(name = "import.hubspot.connected", skip_all, err)]
+    async fn connected(&self, user: &MacroUserIdStr<'static>) -> Result<bool, HubspotError> {
+        match self.0.open(user).await {
+            Ok(_) => Ok(true),
+            Err(TrackerError::NotConnected) => Ok(false),
+            Err(error) => Err(map_error(HubspotRead::AccountDetails, error)),
+        }
+    }
+
     #[tracing::instrument(
         name = "import.hubspot.read",
         skip_all,

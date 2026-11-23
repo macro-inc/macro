@@ -453,3 +453,13 @@ fn bodies_never_reach_errors() {
         other => panic!("{other:?}"),
     }
 }
+
+#[tokio::test(start_paused = true)]
+async fn whether_hubspot_is_connected_is_known_without_reading_it() {
+    let fake = FakeConnectors::new().with_catalog_app(HUBSPOT_APP);
+    let unconnected = connections(Arc::new(fake.build()));
+    assert!(!unconnected.connected(&user()).await.unwrap());
+
+    let (_, service) = connected(Vec::new());
+    assert!(connections(service).connected(&user()).await.unwrap());
+}

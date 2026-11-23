@@ -161,6 +161,12 @@ struct Reader(Inventory);
 
 #[async_trait]
 impl HubspotConnections for Reader {
+    async fn connected(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> std::result::Result<bool, HubspotError> {
+        Ok(true)
+    }
     async fn inventory(
         &self,
         _: &MacroUserIdStr<'static>,
@@ -172,6 +178,26 @@ impl HubspotConnections for Reader {
             deals: self.0.deals.len(),
         });
         Ok(self.0.clone())
+    }
+}
+
+/// A user who has not connected HubSpot.
+struct Disconnected;
+
+#[async_trait]
+impl HubspotConnections for Disconnected {
+    async fn connected(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> std::result::Result<bool, HubspotError> {
+        Ok(false)
+    }
+    async fn inventory(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &(dyn Fn(ReadProgress) + Send + Sync),
+    ) -> std::result::Result<Inventory, HubspotError> {
+        Err(HubspotError::NotConnected)
     }
 }
 
@@ -683,6 +709,38 @@ async fn without_crm_access_nothing_is_planned(pool: PgPool) {
             .unwrap()
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn without_a_connection_the_user_is_asked_to_connect_and_no_import_fails(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-unconnected", team).await;
+    let crm = crm_for(team, &[&owner]);
+    let service = service(
+        &pool,
+        Writer::default(),
+        CancellationToken::new(),
+        TaskTracker::new(),
+    )
+    .with_hubspot(Arc::new(Disconnected), crm);
+
+    let result = service
+        .prepare_workspace_import(&owner, ImportSource::Hubspot, None, Duration::from_secs(5))
+        .await;
+
+    assert!(
+        matches!(
+            result,
+            Err(ImportError::Hubspot(HubspotError::NotConnected))
+        ),
+        "{result:?}"
+    );
+    // No run was started, so nothing shows a failed import.
+    let report = service
+        .workspace_import_report(&owner, ImportSource::Hubspot)
+        .await
+        .unwrap();
+    assert_eq!(report.status, None, "{report:?}");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
