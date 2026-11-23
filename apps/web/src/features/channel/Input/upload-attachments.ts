@@ -6,7 +6,11 @@ import {
   getUploadFilePreviewSource,
   type UploadFile,
 } from '@core/util/uploadFile';
-import type { InputAttachmentData, InputAttachmentTracker } from './types';
+import type {
+  InputAttachmentData,
+  InputAttachmentKind,
+  InputAttachmentTracker,
+} from './types';
 import {
   buildUploadedAttachment,
   getAttachmentKindFromFile,
@@ -18,7 +22,7 @@ export { getAttachmentKindFromFile } from './utils/file-helpers';
 
 function createAttachmentPreviewSrc(
   file: UploadFile,
-  kind: 'image' | 'video' | 'document'
+  kind: InputAttachmentKind
 ): string | undefined {
   if (kind === 'document') return undefined;
 
@@ -55,9 +59,9 @@ function replacePendingAttachment(
  */
 async function resolveMediaDimensions(
   file: UploadFile,
-  kind: 'image' | 'video' | 'document'
+  kind: InputAttachmentKind
 ): Promise<{ width: number; height: number } | undefined> {
-  if (kind === 'document') return undefined;
+  if (kind !== 'image' && kind !== 'video') return undefined;
   try {
     const source = getUploadFilePreviewSource(file);
     const dims =
@@ -77,13 +81,16 @@ export async function uploadInputAttachments(options: {
   uploadFile: (file: File) => Promise<UploadResult>;
   /** Stop publishing uploads after the owning draft is disposed. */
   isActive?: () => boolean;
-}): Promise<void> {
+  /** Overrides classifying each file by its type, as for a voice memo. */
+  kind?: InputAttachmentKind;
+}): Promise<number> {
   const isActive = options.isActive ?? (() => true);
+  let attached = 0;
   for (const file of options.files) {
     if (!isActive()) break;
     const uploadSource = createUploadFile(file);
     const pendingId = crypto.randomUUID();
-    const pendingKind = getAttachmentKindFromFile(uploadSource);
+    const pendingKind = options.kind ?? getAttachmentKindFromFile(uploadSource);
     const previewSrc = createAttachmentPreviewSrc(uploadSource, pendingKind);
 
     options.tracker.addAttachment({
@@ -143,6 +150,7 @@ export async function uploadInputAttachments(options: {
         pendingId,
         uploaded
       );
+      if (retainedPreview) attached += 1;
     } catch (error) {
       console.error('failed to upload attachment', error);
       if (isActive()) toast.failure(`Failed to upload ${file.name}`);
@@ -153,4 +161,5 @@ export async function uploadInputAttachments(options: {
       }
     }
   }
+  return attached;
 }

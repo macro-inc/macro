@@ -10,7 +10,12 @@ import {
 } from '../core/voice-memo';
 import { appendLevel, type VolumeLevel } from '../core/volume';
 
-type VoiceMemoTrace = Pick<Span, 'event' | 'run' | 'setAttr' | 'error' | 'end'>;
+type VoiceMemoTrace = Pick<Span, 'event' | 'setAttr' | 'error' | 'end'> & {
+  span<T>(
+    name: string,
+    operation: (span: Pick<Span, 'setAttr'>) => Promise<T>
+  ): Promise<T>;
+};
 
 const ACTIVE_PHASES: readonly VoiceMemoPhase[] = [
   'starting',
@@ -99,10 +104,18 @@ export function createVoiceMemo(options: {
     setPhase('attaching');
     setNotice(undefined);
     trace?.event('voice_memo.attach_started', { audioBytes: file.size });
-    const request = () => options.attach(file);
+    // The browser drops the active context at the first await, so the upload
+    // span parents explicitly on the session.
+    const upload = async (span?: Pick<Span, 'setAttr'>) => {
+      const ok = await options.attach(file);
+      span?.setAttr('voice_memo.attached', ok);
+      return ok;
+    };
     let attached = false;
     try {
-      attached = await (trace ? trace.run(request) : request());
+      attached = await (trace
+        ? trace.span('voice_memo.upload', upload)
+        : upload());
     } catch {
       // A thrown upload is a failed one: keep the recording for a retry.
     }

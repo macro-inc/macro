@@ -20,7 +20,10 @@ function setup(attach = vi.fn(async (_file: File) => true)) {
   let now = 1_000;
   const trace = {
     event: vi.fn(),
-    run: <T>(operation: () => T) => operation(),
+    span: <T>(
+      _name: string,
+      operation: (span: { setAttr: () => void }) => Promise<T>
+    ) => operation({ setAttr: vi.fn() }),
     setAttr: vi.fn(),
     error: vi.fn(),
     end: vi.fn(),
@@ -138,10 +141,14 @@ describe('voice memo', () => {
     const test = setup();
     await test.result.start();
     FakeRecorder.latest.callbacks.onLimit?.();
-    FakeRecorder.latest.callbacks.onRecording(
-      new Blob(['audio'], { type: 'audio/webm;codecs=opus' })
-    );
-    await vi.waitFor(() => expect(test.attach).toHaveBeenCalledOnce());
+    // The browser recorder stops itself at the limit; its stop hands over
+    // the audio exactly as this one does.
+    FakeRecorder.nextAudio = new Blob(['audio'], {
+      type: 'audio/webm;codecs=opus',
+    });
+    await test.result.stop();
+    FakeRecorder.nextAudio = new Blob(['audio'], { type: 'audio/mp4' });
+    expect(test.attach).toHaveBeenCalledOnce();
     expect(test.attach.mock.calls[0][0].name).toBe('Voice memo 09.05.webm');
     expect(test.result.notice()).toBe('limit');
   });

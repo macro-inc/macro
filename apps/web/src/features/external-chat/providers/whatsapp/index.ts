@@ -16,5 +16,7 @@ export const whatsappProvider: ChatProvider = {
     createItems: false,
     gifs: false,
     richBlocks: false,
+    // WhatsApp sends staged uploads; a static voice memo would not reach it.
+    voiceMemos: false,
   },
 };

@@ -1,0 +1,132 @@
+import { t } from '@app/lib/i18n';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import MicrophoneIcon from '@icon/system/regular/microphone.svg?component-solid';
+import TextAaIcon from '@icon/system/regular/text-aa.svg?component-solid';
+import WaveformIcon from '@icon/system/regular/waveform.svg?component-solid';
+import { Button, Dropdown } from '@ui';
+import { Match, Switch } from 'solid-js';
+import { DictationButton } from '../../dictation/components/dictation-controls';
+import type { DictationController } from '../../dictation/core/types';
+import type { VoiceMemoController } from '../../dictation/core/voice-memo';
+
+/**
+ * The channel composer's microphone. Touch keyboards dictate on their own, so
+ * on touch it records a voice memo; on desktop it asks whether to dictate into
+ * the draft or record a memo, unless only one of them is offered.
+ */
+export function MicrophoneAction(props: {
+  dictation: DictationController;
+  memo: VoiceMemoController;
+  showDictation: boolean;
+  showMemo: boolean;
+}) {
+  const startMemo = () => fireAndForget(props.memo.start(), 'voice-memo');
+  const canDictate = () =>
+    props.showDictation && props.dictation.phase() !== 'unavailable';
+
+  return (
+    <Switch>
+      <Match when={props.showMemo && (isTouchDevice() || !canDictate())}>
+        <Button
+          aria-label={t('channelComposer.recordVoiceMemo')}
+          tooltip={t('channelComposer.recordVoiceMemo')}
+          variant="ghost"
+          size="icon-md"
+          class="text-composer-ink"
+          disabled={props.memo.disabled() || props.dictation.active()}
+          // Keep the editor focused so the draft and caret stay put.
+          onMouseDown={(event: MouseEvent) => {
+            if (event.button === 0) event.preventDefault();
+          }}
+          onClick={startMemo}
+        >
+          <MicrophoneIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
+        </Button>
+      </Match>
+      <Match when={props.showMemo && canDictate()}>
+        <MicrophoneMenu
+          dictation={props.dictation}
+          memo={props.memo}
+          onMemo={startMemo}
+        />
+      </Match>
+      <Match when={props.showDictation}>
+        <DictationButton dictation={props.dictation} />
+      </Match>
+    </Switch>
+  );
+}
+
+function MicrophoneMenu(props: {
+  dictation: DictationController;
+  memo: VoiceMemoController;
+  onMemo: () => void;
+}) {
+  // Start after the menu closes, in place of its return of focus to the
+  // trigger: the recording panel focuses its own controls.
+  let pending: (() => void) | undefined;
+
+  return (
+    <Dropdown placement="top-end" gutter={8}>
+      <Dropdown.Trigger
+        tooltip={t('channelComposer.microphone')}
+        aria-label={t('channelComposer.microphone')}
+        variant="ghost"
+        size="icon-md"
+        class="text-composer-ink"
+        disabled={props.memo.disabled() || props.dictation.disabled()}
+      >
+        <MicrophoneIcon class="size-5 shrink-0 pointer-events-none" />
+      </Dropdown.Trigger>
+      <Dropdown.Content
+        class="min-w-56 max-w-80"
+        onCloseAutoFocus={(event: Event) => {
+          const run = pending;
+          pending = undefined;
+          if (!run) return;
+          event.preventDefault();
+          run();
+        }}
+      >
+        <Dropdown.Group>
+          <Dropdown.Item
+            onSelect={() => {
+              pending = () =>
+                fireAndForget(props.dictation.start(), 'dictation');
+            }}
+          >
+            <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted">
+              <TextAaIcon class="size-4" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <Dropdown.ItemLabel class="block truncate">
+                {t('channelComposer.dictate')}
+              </Dropdown.ItemLabel>
+              <Dropdown.ItemDescription class="block truncate text-sm text-ink-muted">
+                {t('channelComposer.dictateDescription')}
+              </Dropdown.ItemDescription>
+            </span>
+          </Dropdown.Item>
+          <Dropdown.Item
+            onSelect={() => {
+              pending = props.onMemo;
+            }}
+          >
+            <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted">
+              <WaveformIcon class="size-4" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <Dropdown.ItemLabel class="block truncate">
+                {t('channelComposer.voiceMemo')}
+              </Dropdown.ItemLabel>
+              <Dropdown.ItemDescription class="block truncate text-sm text-ink-muted">
+                {t('channelComposer.voiceMemoDescription')}
+              </Dropdown.ItemDescription>
+            </span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}

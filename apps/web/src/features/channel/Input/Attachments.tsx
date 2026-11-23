@@ -2,6 +2,7 @@ import { MediaImage } from '@channel/Media/MediaImage';
 import { MediaVideo } from '@channel/Media/MediaVideo';
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
+import { VoiceMemoPlayer } from '@channel/Media/VoiceMemoPlayer';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
   staticFileIdEndpoint,
@@ -134,6 +135,34 @@ function MediaAttachmentItem(props: {
   );
 }
 
+function AudioAttachmentItem(props: {
+  attachment: InputAttachmentData;
+  onRemove: (attachment: InputAttachmentData) => void;
+}) {
+  return (
+    <div class="ph-no-capture group flex items-center gap-1 rounded-2xl border border-edge-muted p-1">
+      <Show
+        when={!props.attachment.pending}
+        fallback={
+          <span class="flex h-9 items-center gap-2 px-2 text-sm text-ink-muted">
+            <SpinnerIcon class="size-4 animate-spin" />
+            {truncateFilename(props.attachment.name)}
+          </span>
+        }
+      >
+        <VoiceMemoPlayer
+          src={
+            props.attachment.previewSrc ??
+            staticFileIdEndpoint(props.attachment.id)
+          }
+          label={props.attachment.name}
+        />
+      </Show>
+      <RemoveButton attachment={props.attachment} onRemove={props.onRemove} />
+    </div>
+  );
+}
+
 function DocumentAttachmentItem(props: {
   attachment: InputAttachmentData;
   onRemove: (attachment: InputAttachmentData) => void;
@@ -258,6 +287,12 @@ export function Attachments(props: AttachmentsProps) {
                       attachment={attachment}
                       onRemove={handleRemove}
                       onOpen={() => handleOpen(attachment)}
+                    />
+                  </Match>
+                  <Match when={attachment.kind === 'audio'}>
+                    <AudioAttachmentItem
+                      attachment={attachment}
+                      onRemove={handleRemove}
                     />
                   </Match>
                   <Match when={attachment.kind === 'document'}>
