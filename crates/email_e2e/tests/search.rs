@@ -309,6 +309,55 @@ async fn outlook_an_odd_message_does_not_keep_its_thread_out_of_search() -> Resu
     an_odd_message_does_not_keep_its_thread_out_of_search(Provider::Outlook).await
 }
 
+/// A thread trashed or reported as junk from Macro leaves search, as the
+/// thread menu does it: Outlook keeps that state as folder facts, not labels.
+/// When this fails, mail the user threw away is still found.
+async fn a_thread_trashed_or_junked_in_macro_leaves_search(
+    provider: Provider,
+) -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    for subject in ["Kept wombat", "Trashed wombat", "Junk wombat"] {
+        inbox.deliver(&Mail::new(
+            "Grace <grace@example.com>",
+            subject,
+            "A wombat dug under the fence.",
+        ))?;
+    }
+    wait_for_found(
+        &ada,
+        "wombat",
+        &["Junk wombat", "Kept wombat", "Trashed wombat"],
+    )
+    .await?;
+
+    for (subject, field) in [("Trashed wombat", "trashed"), ("Junk wombat", "junk")] {
+        let preview = inbox.wait_for_preview("inbox", subject).await?;
+        let thread_id = preview["id"].as_str().unwrap_or_default();
+        inbox
+            .patch(
+                &format!("/email/threads/{thread_id}/state"),
+                Some(&json!({ "field": field, "value": true })),
+            )
+            .await?
+            .ok()?;
+    }
+
+    wait_for_found(&ada, "wombat", &["Kept wombat"]).await?;
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_thread_trashed_or_junked_in_macro_leaves_search() -> Result<(), Report> {
+    a_thread_trashed_or_junked_in_macro_leaves_search(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_thread_trashed_or_junked_in_macro_leaves_search() -> Result<(), Report> {
+    a_thread_trashed_or_junked_in_macro_leaves_search(Provider::Outlook).await
+}
+
 /// The words of the messages that arrive together in one new thread.
 const TOGETHER: [&str; 8] = [
     "quince",

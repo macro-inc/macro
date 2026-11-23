@@ -94,6 +94,8 @@ export function TaskGanttView(props: {
   onToggleGroup: (id: string) => void;
   onOpen: (task: TaskEntityWithProperties, event: MouseEvent) => void;
   onCreate?: (dates: GanttCreation) => void;
+  /** Bars start at the Start Date and the zoom reaches hours for timed dates. */
+  startDates?: boolean;
   renderEntity: (
     task: Accessor<TaskEntityWithProperties>,
     label: JSX.Element
@@ -102,7 +104,9 @@ export function TaskGanttView(props: {
 }) {
   const dates = createMemo(() =>
     (props.source.boardRows ?? props.source.items)().flatMap((row) =>
-      row.kind === 'entity' ? [taskGanttDates(row.entity)] : []
+      row.kind === 'entity'
+        ? [taskGanttDates(row.entity, props.startDates)]
+        : []
     )
   );
   const range = createMemo(() => deriveGanttRange(dates()));
@@ -165,7 +169,7 @@ export function TaskGanttView(props: {
               Could not refresh tasks. Showing the last loaded timeline.
             </p>
           </Show>
-          <Gantt.Root range={range()} labelWidth={0}>
+          <Gantt.Root range={range()} labelWidth={0} hours={props.startDates}>
             <Gantt.SidebarToggle />
             <Gantt.Controls>
               <Gantt.TodayButton />
@@ -193,7 +197,7 @@ export function TaskGanttView(props: {
                     return (
                       task?.kind === 'entity' && (
                         <Gantt.DropPreview
-                          {...taskGanttDates(task.entity)}
+                          {...taskGanttDates(task.entity, props.startDates)}
                           title={task.entity.name}
                         />
                       )
@@ -247,7 +251,10 @@ export function TaskGanttView(props: {
                                           {item().entity.name}
                                         </span>
                                         <Gantt.DateHint
-                                          {...taskGanttDates(item().entity)}
+                                          {...taskGanttDates(
+                                            item().entity,
+                                            props.startDates
+                                          )}
                                           class="leading-3"
                                         />
                                       </span>

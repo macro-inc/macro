@@ -1,0 +1,4 @@
+{
+	"/download/mac": "https://github.com/macro-inc/macro/releases/download/desktop-stable/Macro-macos-arm64.dmg",
+	"/download/linux": "https://github.com/macro-inc/macro/releases/download/desktop-stable/Macro-linux-x86_64.AppImage"
+}

@@ -1604,7 +1604,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Assigned hosts."
+            "description": "Assigned hosts. Empty in responses to the booker, since a Macro user\nidentity carries the host's sign-in address."
           },
           "id": {
             "type": "string",
@@ -1659,6 +1659,27 @@
             "description": "Snapshot of the meeting title."
           }
         }
+      },
+      "BookingAccount": {
+        "type": "object",
+        "description": "A connected account whose primary calendar the host can write, so a\npersonal link can book on it.",
+        "required": ["emailLinkId", "emailAddress", "videoMeetings"],
+        "properties": {
+          "emailAddress": {
+            "type": "string",
+            "description": "The account's address, which invitations for its bookings come from."
+          },
+          "emailLinkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Connected inbox identity, set as a link's `emailLinkId`."
+          },
+          "videoMeetings": {
+            "type": "boolean",
+            "description": "Whether its calendar adds a video meeting to a booking that asks for\none (`googleMeet`): Google Meet on Google, Microsoft Teams on Outlook."
+          }
+        },
+        "additionalProperties": false
       },
       "BookingAttendance": {
         "type": "string",
@@ -1793,6 +1814,11 @@
             "format": "int32",
             "description": "Meeting duration.",
             "minimum": 0
+          },
+          "emailLinkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Connected inbox whose primary calendar takes this link's bookings, so\nthe event lands there and its invitation comes from that address.\nAbsent books on the host's primary inbox. Personal links only: team\nlinks book on each host's primary inbox."
           },
           "enabled": {
             "type": "boolean",
@@ -1999,6 +2025,11 @@
             "description": "Meeting duration.",
             "minimum": 0
           },
+          "emailLinkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The connected account, an `emailLinkId` from the listing's `accounts`,\nwhose primary calendar takes this link's bookings and sends their\ninvitations from its address. Omit to book on the host's primary\naccount. Personal links only; team links book on each host's primary\naccount. `googleMeet` needs an account whose `videoMeetings` is true."
+          },
           "enabled": {
             "type": "boolean",
             "description": "Whether new bookings are accepted."
@@ -2075,9 +2106,17 @@
           "profileId",
           "revision",
           "schedules",
+          "accounts",
           "links"
         ],
         "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingAccount"
+            },
+            "description": "Connected accounts a personal link can book on, as its `emailLinkId`;\nempty for a team."
+          },
           "links": {
             "type": "array",
             "items": {

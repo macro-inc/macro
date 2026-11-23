@@ -489,10 +489,10 @@ devices. In a desktop browser its **Desktop app (Alpha)** section offers
 **Download for macOS** and **Download for Linux**: the one for the browser's
 computer is primary and listed first, with that installer's system
 requirement under the row. On a computer with no installer (Windows, ChromeOS) both are secondary
-under "Available for macOS and Linux." The links point at the newest stable
-GitHub release that carries each installer (the same lookup as the marketing
-`/download` page), with pinned installers until GitHub answers or when it
-can't be reached. A click sends the PostHog event `desktop_download_clicked`
+under "Available for macOS and Linux." The links are the website's stable
+installer links, `https://macro.com/download/mac` and `/download/linux`
+(the same ones as the marketing `/download` page), which redirect to the
+current release's installers. A click sends the PostHog event `desktop_download_clicked`
 with `platform` (`macos` or `linux`) and `source: 'app_settings'`. Its
 **Mobile app** section has an **iPhone** / **Android** switch for the App
 Store or Google Play QR code, with **Copy link** for that store's URL. Inside
