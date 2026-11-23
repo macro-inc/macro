@@ -68,7 +68,7 @@ it('resends an unreadable answer by itself but unlocks rejected requests', async
     expect(book.mock.calls[1]).toEqual(book.mock.calls[0]);
     expect(flow.receipt()).toEqual(receipt);
     expect(flow.finishing()).toBe(false);
-    for (const status of [413, 422]) {
+    for (const status of [413, 422, 429]) {
       flow.reset();
       flow.select(receipt.booking.startsAt);
       book.mockResolvedValueOnce(

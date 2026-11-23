@@ -113,3 +113,28 @@ it('keeps the visitor’s own clock whatever the calendar is set to', () => {
   });
   expect(screen.getByText(visitorClock)).toBeTruthy();
 });
+
+it('says a processing booking updates by itself, and a cancelled one does not', () => {
+  const [current, setCurrent] = createSignal(
+    receipt({ status: 'processing', abandonedAt: null })
+  );
+  render(() => (
+    <BookingReceiptView
+      receipt={current()}
+      unavailable={false}
+      cancel={vi.fn()}
+      loadSlots={async () => []}
+      reschedule={async () => {}}
+    />
+  ));
+  expect(
+    screen.getByRole('heading', { name: 'Finishing your booking' })
+  ).toBeTruthy();
+  expect(screen.getByText(/this page updates by itself/)).toBeTruthy();
+
+  setCurrent(receipt({ status: 'cancelled', abandonedAt: null }));
+  expect(
+    screen.getByRole('heading', { name: 'Booking cancelled' })
+  ).toBeTruthy();
+  expect(screen.queryByText(/this page updates by itself/)).toBeNull();
+});

@@ -1,6 +1,9 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BookingRejectedError } from '../core/booking-error';
+import {
+  BookingRateLimitedError,
+  BookingRejectedError,
+} from '../core/booking-error';
 import type { BookingReceipt } from '../core/types';
 import { type BookingSource, createBookingFlow } from './booking-flow';
 
@@ -169,6 +172,62 @@ describe('a booking without an answer', () => {
     expect(flow.error()).toBe('Time taken');
     flow.back();
     expect(flow.selected()).toBeUndefined();
+  });
+
+  it('keeps a resend that the booking budget refuses held, since the first send may still be reserving', async () => {
+    const book = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new BookingRateLimitedError('Too many'))
+      .mockResolvedValueOnce({ token: 't' } as BookingReceipt);
+    const flow = createRoot(() =>
+      createBookingFlow({ slots: vi.fn(), book }, 'profile')
+    );
+    const start = '2026-10-02T09:00:00Z';
+    flow.select(start);
+    const submitted = flow.submit('event', DETAILS);
+    await vi.advanceTimersByTimeAsync(1000);
+    await submitted;
+    expect(flow.finishState()).toBe('paused');
+    expect(flow.error()).toBe('');
+    flow.back();
+    expect(flow.selected()).toBe(start);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(book).toHaveBeenCalledTimes(2);
+
+    await flow.submit('event', DETAILS);
+    expect(book.mock.calls[2]).toEqual(book.mock.calls[0]);
+    expect(flow.receipt()?.token).toBe('t');
+  });
+
+  it('settles a first send that the booking budget refuses', async () => {
+    const book = vi
+      .fn()
+      .mockRejectedValueOnce(new BookingRateLimitedError('Too many'));
+    const flow = createRoot(() =>
+      createBookingFlow({ slots: vi.fn(), book }, 'profile')
+    );
+    flow.select('2026-10-02T09:00:00Z');
+    await flow.submit('event', DETAILS);
+    expect(flow.finishing()).toBe(false);
+    expect(flow.error()).toBe('Too many');
+  });
+
+  it('takes no one to a receipt that arrives after the page closed', async () => {
+    const answer = deferred<BookingReceipt>();
+    const { flow, dispose } = createRoot((dispose) => ({
+      flow: createBookingFlow(
+        { slots: vi.fn(), book: vi.fn().mockReturnValue(answer.promise) },
+        'profile'
+      ),
+      dispose,
+    }));
+    flow.select('2026-10-02T09:00:00Z');
+    const submitted = flow.submit('event', DETAILS);
+    dispose();
+    answer.resolve({ token: 't' } as BookingReceipt);
+    await submitted;
+    expect(flow.receipt()).toBeUndefined();
   });
 
   it('stops resending once the page closes', async () => {

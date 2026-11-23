@@ -25,8 +25,11 @@ async function details(page: Page) {
   await page.getByLabel('Email address').fill('grace@example.com');
 }
 
-const confirm = (page: Page) =>
-  page.getByRole('button', { name: 'Confirm booking' }).click();
+/** Confirm with time paused, so only `clock.runFor` fires the resends. */
+async function confirm(page: Page) {
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  await page.getByRole('button', { name: 'Confirm booking' }).click();
+}
 
 test('a booking whose answer was lost finishes by itself', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 });

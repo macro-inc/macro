@@ -9,6 +9,7 @@ import {
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import {
+  BookingRateLimitedError,
   BookingRejectedError,
   RescheduleRefusedError,
 } from '../core/booking-error';
@@ -139,9 +140,14 @@ export function createPublicBookingSource() {
                 /status: (400|413|422|429)$/.test(e.message ?? ''))
           )
         ) {
-          throw new BookingRejectedError(
-            'The request was not accepted. Check your details and refresh availability before trying again.'
-          );
+          const message =
+            'The request was not accepted. Check your details and refresh availability before trying again.';
+          throw error.errors.every(
+            (e) =>
+              e.code === 'HTTP_ERROR' && /status: 429$/.test(e.message ?? '')
+          )
+            ? new BookingRateLimitedError(message)
+            : new BookingRejectedError(message);
         }
         throw error;
       }

@@ -1,6 +1,9 @@
 import { sleep } from '@core/util/sleep';
 import { createSignal, onCleanup } from 'solid-js';
-import { BookingRejectedError } from '../core/booking-error';
+import {
+  BookingRateLimitedError,
+  BookingRejectedError,
+} from '../core/booking-error';
 import type { BookingReceipt, BookingRequest } from '../core/types';
 
 export type BookingSource = {
@@ -80,23 +83,36 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
       if (current === generation) setLoading(false);
     }
   };
-  /** Send the held request once; true when the server settled it. */
-  const send = async (held: PendingBooking) => {
+  /**
+   * Send the held request once. `settled` when the server answered it for
+   * good, `held` when a resend was refused while an earlier send may still
+   * be reserving, `unanswered` otherwise.
+   */
+  const send = async (
+    held: PendingBooking,
+    resend: boolean
+  ): Promise<'settled' | 'held' | 'unanswered'> => {
     try {
-      setReceipt(await source.book(profileId, held.eventId, held.request));
+      const answer = await source.book(profileId, held.eventId, held.request);
+      // A page already closed takes no visitor anywhere; the booking stands.
+      if (!disposed) setReceipt(answer);
     } catch (error) {
-      if (!(error instanceof BookingRejectedError)) return false;
+      if (resend && error instanceof BookingRateLimitedError) return 'held';
+      if (!(error instanceof BookingRejectedError)) return 'unanswered';
       setError(error.message);
     }
     pending = undefined;
     setFinishState(undefined);
-    return true;
+    return 'settled';
   };
   const finish = async (held: PendingBooking) => {
     setFinishState('resending');
     for (const [resend, delay] of RESEND_DELAYS_MS.entries()) {
       await sleep(delay);
-      if (disposed || (await send(held))) return;
+      if (disposed) return;
+      const answer = await send(held, true);
+      if (answer === 'settled') return;
+      if (answer === 'held') break;
       if (resend + 1 >= SLOW_AFTER_RESENDS) setFinishState('slow');
     }
     setFinishState('paused');
@@ -110,12 +126,14 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
     if (finishing() && finishState() !== 'paused') return;
     pending ??= { eventId, request: { ...details, startsAt, requestId } };
     const held = pending;
-    if (finishing()) setFinishState('resending');
+    const resend = finishing();
+    if (resend) setFinishState('resending');
     setSubmitting(true);
     setError('');
-    const settled = await send(held);
+    const answer = await send(held, resend);
     setSubmitting(false);
-    if (!settled) await finish(held);
+    if (answer === 'held') setFinishState('paused');
+    if (answer === 'unanswered') await finish(held);
   };
   return {
     reset: () => {
