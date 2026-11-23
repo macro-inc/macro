@@ -39,7 +39,7 @@ pub enum TaskDependencyChange {
 }
 
 pub(crate) const DEPENDS_ON: &str = "00000001-0000-0000-0000-000000000007";
-pub(crate) const BLOCKING: &str = "00000001-0000-0000-0000-000000000015";
+pub(crate) const BLOCKING: &str = "00000001-0000-0000-0000-000000000017";
 pub(crate) const STATUS: &str = "00000001-0000-0000-0000-000000000002";
 pub(crate) const COMPLETED: &str = "00000001-0000-0000-0002-000000000004";
 

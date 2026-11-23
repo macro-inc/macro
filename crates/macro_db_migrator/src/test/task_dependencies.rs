@@ -58,10 +58,10 @@ async fn dependency_backfill_commits_multiple_batches_and_keeps_legacy_writers_c
     "#).execute(&pool).await.unwrap();
     let stale = sqlx::query_scalar!("SELECT count(*) FROM task_dependency_edges WHERE dependent_task_id = md5('task-1')::uuid AND blocker_task_id = md5('task-2')::uuid").fetch_one(&pool).await.unwrap();
     assert_eq!(stale, Some(0));
-    let inverse_count = sqlx::query_scalar!("SELECT jsonb_array_length(values->'value') FROM entity_properties WHERE entity_id=md5('task-3')::uuid::text AND property_definition_id='00000001-0000-0000-0000-000000000015'").fetch_one(&pool).await.unwrap();
+    let inverse_count = sqlx::query_scalar!("SELECT jsonb_array_length(values->'value') FROM entity_properties WHERE entity_id=md5('task-3')::uuid::text AND property_definition_id='00000001-0000-0000-0000-000000000017'").fetch_one(&pool).await.unwrap();
     assert_eq!(inverse_count, Some(2));
 
-    sqlx::raw_sql("UPDATE entity_properties SET values=NULL WHERE entity_id=md5('task-3')::uuid::text AND property_definition_id='00000001-0000-0000-0000-000000000015'").execute(&pool).await.unwrap();
+    sqlx::raw_sql("UPDATE entity_properties SET values=NULL WHERE entity_id=md5('task-3')::uuid::text AND property_definition_id='00000001-0000-0000-0000-000000000017'").execute(&pool).await.unwrap();
     let remaining = sqlx::query_scalar!("SELECT count(*) FROM task_dependency_edges WHERE dependent_task_id = ANY(ARRAY[md5('task-1')::uuid,md5('task-2')::uuid])").fetch_one(&pool).await.unwrap();
     assert_eq!(remaining, Some(0));
 }

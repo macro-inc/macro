@@ -160,17 +160,20 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         ];
 
         // Step 1: Fetch source properties. Do not copy relationships that
-        // need authorization and updates to the other task.
+        // need authorization and updates to the other task, the source's project
+        // (which needs project edit access), or derived Time logged (the copy has
+        // no time entries).
         let source_properties = sqlx::query!(
             r#"
             SELECT property_definition_id, values
             FROM entity_properties
             WHERE entity_id = $1
               AND entity_type = 'TASK'
-              AND property_definition_id <> $2
+              AND property_definition_id NOT IN ($2, $3)
             "#,
             from_task_id,
-            SystemPropertyKey::PROJECT_UUID
+            SystemPropertyKey::PROJECT_UUID,
+            SystemPropertyKey::TIME_LOGGED_UUID
         )
         .fetch_all(&self.pool)
         .await?

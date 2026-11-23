@@ -65,6 +65,7 @@ mod soup_patches;
 mod stale_client;
 mod task_dependencies;
 mod team_activity;
+mod time_entries;
 mod work_feed;
 
 const VALID_USER_ID: &str = "macro|user@example.com";

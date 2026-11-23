@@ -44,6 +44,7 @@ use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
 use system_properties::SystemPropertyKey;
+use time_tracking::domain::events::{TimeEntryMacroEvent, TimeEntryTopicEvent};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use tracing::Instrument as _;
 
@@ -73,6 +74,7 @@ macro_event_broker::declare_topics!(
         PropertyMacroEvent,
         InitiativeMacroEvent,
         CallMacroEvent,
+        TimeEntryMacroEvent,
 );
 
 fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
@@ -537,11 +539,9 @@ fn soup_entity_type_from_property(entity_type: PropertyEntityType) -> Option<Ent
         PropertyEntityType::Thread => Some(EntityType::EmailThread),
         PropertyEntityType::Initiative => Some(EntityType::Initiative),
         PropertyEntityType::DatabaseRow => Some(EntityType::DatabaseRow),
-        // Soup channels do not expose properties; users and CRM contacts are
-        // not Soup items.
-        PropertyEntityType::Channel | PropertyEntityType::User | PropertyEntityType::Contact => {
-            None
-        }
+        PropertyEntityType::Contact => Some(EntityType::CrmContact),
+        // Soup channels do not expose properties; users are not Soup items.
+        PropertyEntityType::Channel | PropertyEntityType::User => None,
     }
 }
 
@@ -611,6 +611,18 @@ fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePa
     }
 }
 
+/// A logged, changed or deleted entry changes its task's Time logged, so every
+/// time entry event refreshes the task's row.
+fn patches_from_time_entry_event(event: &TimeEntryTopicEvent) -> Vec<SoupRealtimePatch> {
+    match event {
+        TimeEntryTopicEvent::Logged(change)
+        | TimeEntryTopicEvent::Updated(change)
+        | TimeEntryTopicEvent::Deleted(change) => {
+            vec![update(EntityType::Document, &change.task_id)]
+        }
+    }
+}
+
 fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
     match event {
         DeclaredMacroEvent::GithubPullRequestMacroEvent(event) => {
@@ -644,6 +656,9 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
             patches_from_property_event(&event.event().event)
         }
         DeclaredMacroEvent::CallMacroEvent(event) => patches_from_call_event(&event.event().event),
+        DeclaredMacroEvent::TimeEntryMacroEvent(event) => {
+            patches_from_time_entry_event(&event.event().event)
+        }
     }
 }
 

@@ -8,7 +8,7 @@ use pollster::block_on;
 use serde_json::{Map, Value, json};
 
 const DEPENDS: &str = "00000001-0000-0000-0000-000000000007";
-const BLOCKING: &str = "00000001-0000-0000-0000-000000000015";
+const BLOCKING: &str = "00000001-0000-0000-0000-000000000017";
 const STATUS: &str = "00000001-0000-0000-0000-000000000002";
 const COMPLETED: &str = "00000001-0000-0000-0002-000000000004";
 const MUTATION: &str = concat!(

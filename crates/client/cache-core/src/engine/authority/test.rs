@@ -278,7 +278,7 @@ fn retirement_recomposes_shared_projection_shadows_in_both_layer_orders() {
             let mut reopened = Engine::new(engine.into_storage());
             let shadows = reopened
                 .storage()
-                .load_optimistic_projections(&[key.clone()])
+                .load_optimistic_projections(std::slice::from_ref(&key))
                 .await
                 .unwrap();
             let shadow = shadows[0]

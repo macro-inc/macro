@@ -505,3 +505,18 @@ fn property_optimism_only_patches_the_modified_definition() {
         );
     });
 }
+
+/// Storage derives the Inbox view sort fact in place only for the profiles the
+/// rule names, so it must name every profile a Mail document is stored under:
+/// the projection's own and the property-aware one this module relabels it to.
+#[test]
+fn inbox_view_derivation_covers_every_stored_mail_profile() {
+    let mail = item_filter_index::mail::profile();
+    let derivation = item_filter_index::mail::INBOX_VIEW_DERIVATION;
+    for profile in [legacy_profile(&mail), current_profile(&mail)] {
+        assert!(
+            derivation.profiles.contains(&profile.token().as_str()),
+            "{profile:?}"
+        );
+    }
+}

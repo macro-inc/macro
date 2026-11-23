@@ -685,6 +685,21 @@ pub(crate) type ChannelLabelsServiceType = ChannelLabelsServiceImpl<PgChannelLab
 pub(crate) type DssChannelLabelsState =
     ChannelLabelsRouterState<ChannelLabelsServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the time tracking service.
+pub(crate) type TimeTrackingServiceType = time_tracking::domain::service::TimeTrackingServiceImpl<
+    time_tracking::outbound::pg_time_repo::PgTimeTrackingRepository,
+    EntityAccessService,
+    time_tracking::outbound::kafka_events::BrokerTimeEntryEventPublisher<DssEventBroker>,
+    time_tracking::outbound::gateway_updates::GatewayTimeTrackingUpdates,
+>;
+
+/// Type alias for the time tracking router state.
+pub(crate) type DssTimeTrackingState = time_tracking::inbound::axum_router::TimeTrackingRouterState<
+    TimeTrackingServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 /// Type alias for the favorites router state.
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
@@ -1019,6 +1034,7 @@ pub(crate) struct ApiContext {
     pub channel_labels_state: DssChannelLabelsState,
     #[from_ref(skip)]
     pub channel_sections_state: DssChannelLabelsState,
+    pub time_tracking_state: DssTimeTrackingState,
     pub user_api_key_state: DssUserApiKeyState,
     pub account_manager_state: DssAccountManagerState,
     pub reminders_state: DssRemindersState,
@@ -1029,6 +1045,7 @@ pub(crate) struct ApiContext {
     pub initiative_activity_state: DssInitiativeActivityState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_time_tracking_context: graphql_time_tracking::TimeTrackingGraphqlContext,
     pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,

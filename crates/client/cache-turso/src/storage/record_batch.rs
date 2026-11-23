@@ -4,6 +4,19 @@ use super::*;
 
 const BATCH_SIZE: usize = 128;
 
+/// Statement sizes a batch is padded up to, so a few statement texts serve
+/// every batch and stay in the connection's statement cache, and a batch
+/// pads by at most half its size. Padding keys have an empty typename, which
+/// no record has.
+const BATCH_SIZES: [usize; 13] = [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, BATCH_SIZE];
+
+fn padded(count: usize) -> usize {
+    BATCH_SIZES
+        .into_iter()
+        .find(|size| *size >= count)
+        .unwrap_or(BATCH_SIZE)
+}
+
 fn sql(count: usize) -> String {
     let values = (0..count)
         .map(|index| format!("({index}, ?, ?)"))
@@ -17,7 +30,7 @@ fn sql(count: usize) -> String {
 }
 
 pub(super) fn read(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[RecordKey],
 ) -> Result<Vec<Option<Record>>, TursoStorageError> {
     if let [key] = keys {
@@ -40,27 +53,37 @@ pub(super) fn read(
         };
     }
     let mut records = Vec::with_capacity(keys.len());
-    let mut statement = driver::prepare(connection, &sql(keys.len().min(BATCH_SIZE)))?;
+    let mut statement = driver::prepare(connection, &sql(padded(keys.len().min(BATCH_SIZE))))?;
     for batch in keys.chunks(BATCH_SIZE) {
-        if statement.parameters_count() != batch.len() * 2 {
-            statement = driver::prepare(connection, &sql(batch.len()))?;
+        let size = padded(batch.len());
+        if statement.parameters_count() != size * 2 {
+            statement = driver::prepare(connection, &sql(size))?;
         }
-        let parameters = batch
-            .iter()
-            .flat_map(|key| [text(&key.typename), text(&key.id)])
-            .collect();
+        let mut parameters = Vec::with_capacity(size * 2);
+        for key in batch {
+            parameters.push(text(&key.typename));
+            parameters.push(text(&key.id));
+        }
+        parameters.resize_with(size * 2, || text(""));
         let rows = driver::query_prepared(&mut statement, parameters)?;
-        if rows.len() != batch.len() {
+        if rows.len() != size {
             return Err(invariant());
         }
         let offset = records.len();
         records.resize_with(offset + batch.len(), || None);
-        let mut seen = vec![false; batch.len()];
+        let mut seen = vec![false; size];
         for row in rows {
             let position = usize::try_from(required_i64(&row, 0)?).map_err(|_| invariant())?;
             let slot = seen.get_mut(position).ok_or_else(invariant)?;
             if std::mem::replace(slot, true) || row.len() != 2 {
                 return Err(invariant());
+            }
+            if position >= batch.len() {
+                // A padding key: its record is absent.
+                if !matches!(required_value(&row, 1)?, Value::Null) {
+                    return Err(invariant());
+                }
+                continue;
             }
             records[offset + position] = match required_value(&row, 1)? {
                 Value::Null => None,

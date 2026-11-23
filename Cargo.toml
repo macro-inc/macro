@@ -46,7 +46,10 @@ members = [
   "crates/calendar_scheduling",
   "crates/channel_bots",
   "crates/channel_labels",
+  "crates/client/cache-bench",
   "crates/client/cache-core",
+  "crates/client/cache-diff-fuzz",
+  "crates/client/cache-schema",
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
@@ -109,6 +112,7 @@ members = [
   "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/graphql_time_tracking",
   "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
@@ -174,6 +178,7 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/task_templates",
+  "crates/time_tracking",
   "crates/unfurl",
   "crates/single_flight",
   "crates/upstream_error",
@@ -398,6 +403,7 @@ md-5 = "0.10.6"
 merge = "0.2.0"
 mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
+zlib-rs = { version = "0.6.3", default-features = false, features = ["rust-allocator"] }
 mockall = "0.13"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
 nom = "8"

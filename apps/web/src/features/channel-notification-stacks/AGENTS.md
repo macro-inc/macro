@@ -50,6 +50,9 @@ covers all of it.
   after its count while any not-done stack is unseen. The toggle's dot and
   the Not done rows use the not-done read; Unread rows use the channel's
   unread read.
+- A row's label breaks anywhere (`wrap-anywhere`) and clamps to two lines;
+  the row repeats it in a tooltip only when the clamp hid some of it. A long
+  address must never widen the row, or the list's scroller cuts it off.
 - Marking uses the global notification source's bulk done/seen, which applies
   local overrides at once. Apply `withLocalOverrides` to every read here, or
   marked stacks stay on screen until the refetch.
@@ -59,4 +62,5 @@ covers all of it.
 - `bunx vitest run src/features/channel-notification-stacks src/features/channel src/lib/queries/channel`
 - Backend-free desktop regression over the real checks, list and stacking:
   `bunx playwright test --config src/features/channel-notification-stacks/browser-test/playwright.config.ts`
-  (`gutter.html?pane=<px>&theme=light|dark` to look at it).
+  (`gutter.html?pane=<px>&theme=light|dark` to look at it; `&names=long` for
+  long senders).

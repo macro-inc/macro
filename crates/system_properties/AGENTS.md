@@ -31,13 +31,23 @@ for their fixed property catalogs.
   `crates/messages`, `crates/soup`, `crates/soup_realtime`, `crates/ai_tools`,
   `crates/agent_trigger`, `crates/item_filter_index`, `crates/task_dedup`,
   `services/agent_harness_service`, `services/agent_trigger_service`,
-  `services/email_service`, `crates/scheduled_action`.
+  `services/email_service`, `crates/scheduled_action`, `crates/time_tracking`.
 
 ## Recipes
 
-- Add a new system property: define it in `src/domain/model/constants/system_property_key.rs` →
-  `src/domain/port.rs` (repository method, if new storage shape) →
+- Add a new system property: a line in `define_system_properties!`
+  (`src/domain/model/constants/system_property_key.rs`, with its test
+  counts) → a migration seeding its `property_definitions` row at the same
+  UUID → `src/domain/port.rs` (repository method, if new storage shape) →
   `src/domain/service.rs` → `src/outbound/pgpool.rs`.
+
+## Gotchas
+
+- Time logged (`0x16`) is derived: the sum of a task's `time_entry` rows,
+  written only by `crates/time_tracking` through `time_logged::write_task_time_logged`
+  in its own transaction, under the task's advisory lock, with no property
+  event. The properties service refuses every other write of it, and
+  `copy_task_properties` leaves it off the copy, as it does Project.
 
 ## Checks
 

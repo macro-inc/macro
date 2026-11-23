@@ -65,13 +65,14 @@ By default the desktop sidebar continues with `Favorites`, `Drafts`, `Sent`,
 heading before or after the unnamed Inbox/Favorites/Drafts/Sent group to change
 their shared local order. The unnamed group has no grip or keyboard move control.
 Accounts stays pinned at the top and is not a drop target. Section order is per
-account and survives reloads. Sidebar number shortcuts retain their default destination
-order. `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
-`Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
-This holds while the email list itself has focus, as it does after `Escape`
-closes a thread; only on a control inside the list (a row's sender name,
-checkbox or actions, Load more) does `Tab` move browser focus to the next
-control. Leaving the
+account and survives reloads. `Tab`, `Shift+Tab` and `1`–`3` move between the Inbox
+tabs in the header (Focus, Signal, Noise) while the keyboard is on the list or
+nothing has focus, as after `Escape` closes a thread, and right after a click on
+a sidebar folder or account (Inbox, after Favorites) or on Mail in the app rail.
+On any control (a row's
+sender name, checkbox or actions, Load more, a header button), in the search
+field, in an open thread, and in another mailbox, whose header has no tabs,
+`Tab` is browser focus order. Leaving the
 search field (`Escape`, `ArrowDown`, `Enter`, or picking a recent search)
 hands the keyboard to the view, so `Tab` switches tabs there too. Calendar mail
 remains available through
@@ -128,8 +129,8 @@ Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star and `z` undo the last action. `g` then a letter
 keeps its app-wide meaning inside Email too ([navigation](navigation.md)):
 `g e` opens Email on Signal and `g s` on Sent from any view, as long as no
-editor or input (Email search included) has focus; other tabs are on the
-number keys and the sidebar. `Escape` in a
+editor or input (Email search included) has focus; other mailboxes are in the
+sidebar. `Escape` in a
 list steps back one level: it clears a selection, then a search, and with
 neither returns to Signal; in the reading pane it first hands the keyboard back
 to the list. From the search field, `ArrowDown` or `Enter` moves to the first
@@ -138,9 +139,11 @@ result and `Escape` leaves the field with the search kept (see
 view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 `Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`
-opens every message including the collapsed middle run, and `N`/`P` step
-messages like the arrows. `B` in an open thread, or `Create event` in its
-title menu, opens the event composer with the subject as the title and every
+opens every message including the collapsed middle run, `N`/`P` step
+messages like the arrows, and `Space`/`Shift+Space` page the thread down and
+up by about a screen from wherever the keyboard is in it (a focused button
+keeps its own Space, and fields and the reply composer type it). `B` in an
+open thread, or `Create event` in its title menu, opens the event composer with the subject as the title and every
 From, To and Cc address except the viewer's as guests (Bcc and drafts are left
 out); both are hidden while the calendar is off. With `enable-universal-input`
 on, the composer also sends the subject and latest message to
@@ -179,6 +182,11 @@ toast and rolls back instead of waiting for reconnect, so pressing it again work
 
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
+A person already in the field still appears among the suggestions, dimmed with
+a check, and picking that row does nothing; the highlight starts on the first
+row that can be picked, so Enter and Tab never remove anyone. Remove a
+recipient with its chip's X or Backspace. `recipient-already-added.app.e2e.ts`
+in the app browser configuration checks this in To, Cc and Bcc, and To on a phone.
 Enter or a click picks the highlighted suggestion; on a complete typed address,
 Enter or Tab adds that address unless an arrow key picked another row. Type,
 paste, or Tab straight after picking one and check that both recipients stay
@@ -786,7 +794,9 @@ that driver.
 
 **Reading pane.** On desktop the header's columns button (or `Shift+V`) shows
 threads beside the list instead of in its place; the choice is remembered per
-browser. The list keeps its own keys: j/k and arrows move the cursor and the
+browser. A pane too narrow for the header's actions hides the columns button
+and the Focus sort before Search would leave the pane; `Shift+V` still works
+there. The list keeps its own keys: j/k and arrows move the cursor and the
 pane follows it (replacing history rather than adding entries) while the list
 keeps focus, even if the thread is still loading; Mark done on
 the open row follows the next row (an action on another row, such as the one

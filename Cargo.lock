@@ -1347,6 +1347,7 @@ dependencies = [
  "system_properties",
  "teams",
  "thiserror 2.0.18",
+ "time_tracking",
  "tokio",
  "tokio-util",
  "tracing",
@@ -3877,13 +3878,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "cache-core"
+name = "cache-bench"
 version = "0.1.0"
 dependencies = [
  "apollo-compiler",
+ "cache-core",
+ "clap",
+ "predicate-index",
+ "rootcause",
+ "serde_json",
+ "soup-filter-cache-adapter",
+ "soup-filter-projection",
+ "uuid",
+]
+
+[[package]]
+name = "cache-core"
+version = "0.1.0"
+dependencies = [
  "apollo-parser",
+ "cache-schema",
  "chrono",
  "database_sql",
+ "item-filter-index",
  "lru 0.16.4",
  "macro_user_id",
  "maybe_send",
@@ -3899,6 +3916,40 @@ dependencies = [
  "subsequence_match",
  "thiserror 2.0.18",
  "uuid",
+ "zlib-rs",
+]
+
+[[package]]
+name = "cache-diff-fuzz"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "cache-core",
+ "cache-turso",
+ "clap",
+ "pollster",
+ "predicate-index",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "soup-filter-cache-adapter",
+ "soup-filter-projection",
+ "tokio",
+ "tracing",
+ "turso_core",
+ "uuid",
+]
+
+[[package]]
+name = "cache-schema"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -3907,6 +3958,7 @@ version = "0.1.0"
 dependencies = [
  "cache-core",
  "chrono",
+ "item-filter-index",
  "maybe_send",
  "miniz_oxide",
  "pollster",
@@ -3927,8 +3979,10 @@ version = "0.6.55"
 dependencies = [
  "async-lock",
  "cache-core",
+ "cache-schema",
  "cache-turso",
  "js-sys",
+ "postcard",
  "predicate-index",
  "serde",
  "serde-wasm-bindgen",
@@ -5055,6 +5109,7 @@ dependencies = [
  "graphql_registered_work",
  "graphql_scheduled_action",
  "graphql_soup",
+ "graphql_time_tracking",
  "graphql_work_feed",
  "item_filters",
  "macro_authorization",
@@ -5081,6 +5136,7 @@ dependencies = [
  "soup-filter-projection",
  "soup_realtime",
  "sqlx",
+ "time_tracking",
  "tokio",
  "tokio-util",
  "tracing",
@@ -5447,6 +5503,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "model-entity",
+ "models_pagination",
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -6970,6 +7027,7 @@ dependencies = [
  "graphql_initiative",
  "graphql_scheduled_action",
  "graphql_soup",
+ "graphql_time_tracking",
  "harnesses",
  "hex",
  "hosted_runtimes",
@@ -7056,6 +7114,7 @@ dependencies = [
  "task_templates",
  "teams",
  "thiserror 2.0.18",
+ "time_tracking",
  "tokio",
  "tokio-tungstenite 0.27.0",
  "tokio-tungstenite 0.28.0",
@@ -10050,6 +10109,27 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "uuid",
+]
+
+[[package]]
+name = "graphql_time_tracking"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "entity_access",
+ "futures",
+ "graphql_common",
+ "graphql_permission",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "serde_json",
+ "time_tracking",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -13929,6 +14009,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
+ "unicode-segmentation",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -19902,6 +19983,7 @@ dependencies = [
  "serde",
  "serde_json",
  "system_properties",
+ "time_tracking",
  "tokio",
  "tokio-retry",
  "tracing",
@@ -21392,6 +21474,47 @@ checksum = "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215"
 dependencies = [
  "num-conv",
  "time-core",
+]
+
+[[package]]
+name = "time_tracking"
+version = "0.1.0"
+dependencies = [
+ "activity",
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "chrono-tz",
+ "connection_gateway_client",
+ "entity_access",
+ "feature_flags",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "model-entity",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "system_properties",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
 ]
 
 [[package]]

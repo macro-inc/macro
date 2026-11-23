@@ -60,6 +60,7 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         AccessEntityType::EmailThread => Some(EntityType::Thread),
         AccessEntityType::Channel => Some(EntityType::Channel),
         AccessEntityType::CrmCompany => Some(EntityType::Company),
+        AccessEntityType::CrmContact => Some(EntityType::Contact),
         AccessEntityType::DatabaseRow => Some(EntityType::DatabaseRow),
         AccessEntityType::User => Some(EntityType::User),
         AccessEntityType::ChannelMessage
@@ -70,7 +71,6 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         | AccessEntityType::Team
         | AccessEntityType::ForeignEntity
         | AccessEntityType::StaticFile
-        | AccessEntityType::CrmContact
         | AccessEntityType::Reminder
         | AccessEntityType::Skill
         | AccessEntityType::AgentSession

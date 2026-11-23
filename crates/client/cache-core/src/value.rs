@@ -124,7 +124,7 @@ pub enum CacheValue {
     Ref(EntityKey<'static>),
     /// Embedded (non-keyable) object. `__typename` is stored as a regular
     /// field when known, for fragment matching on read.
-    Object(BTreeMap<FieldKey, CacheValue>),
+    Object(#[serde(deserialize_with = "deserialize_fields")] BTreeMap<FieldKey, CacheValue>),
     List(Vec<CacheValue>),
     /// Opaque custom-scalar blob (e.g. `JSON`) as canonical JSON text
     /// (canonical → comparable; text → postcard-serializable).
@@ -141,6 +141,7 @@ impl CacheValue {
 /// A normalized record: field key → value.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Record {
+    #[serde(deserialize_with = "deserialize_fields")]
     pub fields: BTreeMap<FieldKey, CacheValue>,
 }
 
@@ -215,45 +216,49 @@ fn write_canonical(value: &serde_json::Value, out: &mut String) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
+mod test;
 
-    #[test]
-    fn canonical_sorts_keys_recursively() {
-        let v = json!({"b": {"z": 1, "a": [ {"y": 2, "x": 3} ]}, "a": null});
-        assert_eq!(
-            canonical_json(&v),
-            r#"{"a":null,"b":{"a":[{"x":3,"y":2}],"z":1}}"#
-        );
+/// Deserializes a field map by building it from all its entries at once.
+///
+/// Stored maps arrive in key order, so a bulk build skips the per-key search
+/// and node splits that inserting one entry at a time costs. A map whose keys
+/// are out of order or repeated falls back to inserting one by one, so a
+/// repeated key keeps its last value and holds one entry.
+fn deserialize_fields<'de, D>(deserializer: D) -> Result<BTreeMap<FieldKey, CacheValue>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct FieldsVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for FieldsVisitor {
+        type Value = BTreeMap<FieldKey, CacheValue>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a map")
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            let mut entries: Vec<(FieldKey, CacheValue)> =
+                Vec::with_capacity(map.size_hint().unwrap_or(0).min(1024));
+            while let Some((key, value)) = map.next_entry::<FieldKey, CacheValue>()? {
+                if entries.last().is_some_and(|(last, _)| *last >= key) {
+                    // Out of order or repeated: insert the rest one by one, so a
+                    // repeated key replaces its value instead of piling up.
+                    let mut fields: BTreeMap<_, _> = entries.into_iter().collect();
+                    fields.insert(key, value);
+                    while let Some((key, value)) = map.next_entry()? {
+                        fields.insert(key, value);
+                    }
+                    return Ok(fields);
+                }
+                entries.push((key, value));
+            }
+            Ok(entries.into_iter().collect())
+        }
     }
 
-    #[test]
-    fn merge_reports_changes() {
-        let mut r = Record::default();
-        let mut other = Record::default();
-        other
-            .fields
-            .insert("name".into(), CacheValue::String("A".into()));
-        assert!(r.merge(other.clone()));
-        assert!(!r.merge(other)); // idempotent
-        let mut third = Record::default();
-        third
-            .fields
-            .insert("name".into(), CacheValue::String("B".into()));
-        assert!(r.merge(third));
-    }
-
-    #[test]
-    fn entity_key_format() {
-        assert_eq!(
-            EntityKey::entity("GraphqlSoupDocument", &["doc-1"]).0,
-            "GraphqlSoupDocument:doc-1"
-        );
-        assert_eq!(
-            field_key("soup", Some(r#"{"input":{}}"#)),
-            r#"soup({"input":{}})"#
-        );
-        assert_eq!(field_key("id", None), "id");
-    }
+    deserializer.deserialize_map(FieldsVisitor)
 }

@@ -224,7 +224,16 @@ its icon, its caret when it opens a menu, its name and its tooltip, as header
 actions do. `list-split.browser.e2e.ts` resizes a list view (`asideList`) opened
 as a second split across 720px: the list docks beside the empty preview above it
 and fills the split below it, never leaving an empty preview behind Show
-navigation.
+navigation. `view-tabs.browser.e2e.ts` holds the Tab rule over the real hotkey engine,
+header, `Tabs` and list controller, in a wide and a 700px split (stand-in
+panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
+header's tabs from its list, are focus order on a header button, leave an
+open item that replaced the list open, and leave a thread beside the list
+open after a click on its text. Its `?sidebar` page adds a real `ViewSidebar`
+and a stand-in rail: a folder clicked there, a project whose tabs mount only
+once it opens, or the rail after it, leaves Tab to the header's tabs; the keyboard walks the sidebar in focus
+order, and a folder's disclosure caret or a control there that opens a menu
+or a dialog chooses nothing.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -291,6 +300,12 @@ mounting its outlet; the layout's mount metadata can still describe the previous
 view. `split-layout/tests/SplitPanel-collection-navigation.test.tsx` covers CRM
 to Calls, history, and split reuse while that mirror is stale.
 
+A database's table tabs take Tab and the number keys only from the database
+pane: Tab on a selected cell still moves to the next cell and leaves the table
+open, and a dragged range of cells keeps its table (the real table tabs and
+records grid over the real hotkey engine):
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts table-tabs.browser.e2e.ts`.
+
 Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
@@ -340,6 +355,12 @@ Size its glyphs off the row, never off a cell: a cell's width comes from `1fr`
 track sizing, which its own contents can push out, so a glyph sized off the cell
 feeds that loop and can settle with one emoji filling the picker. The same suite
 checks that widening a cell leaves the glyph alone.
+
+Space and Shift+Space page an open thread (the real desktop thread view in a
+frame like Mail's, over the real hotkey root and `registerEmailHotkeys`) from
+the moment it opens, while a focused button, a field and the reply composer
+keep their own Space; backend-free, desktop only:
+`bunx playwright test --config src/features/block-email/browser-test/playwright.config.ts`.
 
 The email reminder menu reads typed times through the real natural-time wasm
 package; its backend-free desktop/phone regression, at a fixed New York clock,
@@ -448,6 +469,18 @@ The same suite covers where a sheet puts focus as it opens: on itself, leaving
 its first row unringed, unless the first tab stop is a text field, the sheet
 focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
+Its `row-press.browser.e2e.ts` presses the real touch rows of Chat (a
+conversation and a pinned favorite), Home, a Soup list, the Notifications
+inbox, Agents (sidebar and phone list), Projects and Search on phone and
+tablet: each shows the same rendered grey at its centre and edge, holds it
+after release and through a quick tap's click, never shows it for a press that
+turns into a scroll, and drops it when a phone long press opens the row's
+action drawer (`ROW_PRESS_SCREENSHOT_DIR` saves the pressed screenshots); no
+element from a long-pressable row's owner down to its surface draws WebKit's
+tap highlight. `long-press-tap.browser.e2e.ts` long-presses a row of Mail's
+phone list (the real context menu and action drawer), dismisses the drawer and
+taps other rows, recording every press marker change: only the tapped row is
+ever pressed.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,
@@ -1114,8 +1147,20 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   lazily in every new worker, which cost more than reopening the database on
   each tab return. The exchange has its own port, so a failure only costs the
   shortcut; never put the module in the activation message.
-  A reused engine records `graphql_cache.wasm_download` with 0 bytes and no
-  `wasm_compile`. The dev server never reuses: its asset URL outlives a rebuild.
+  Before any engine worker exists, the page compiles the engine itself, from
+  before its liveness lock, and offers that compile to the first worker for up
+  to 10 s; it drops the compile when the coordinator acknowledges it while
+  another visible tab owns the cache (`ownerElsewhere`). The page records
+  `graphql_cache.wasm_prefetch_download` and `wasm_prefetch_compile`.
+  A reused engine records `graphql_cache.wasm_download` with 0 bytes, timed as
+  the wait for the offer, and no `wasm_compile`. The dev server never reuses or
+  compiles ahead: its asset URL outlives a rebuild.
+  A fresh engine compiles a response served as exactly `application/wasm` with
+  `WebAssembly.compileStreaming` (`worker/wasm-compile.ts`): only then does
+  Chromium cache the optimized code for the next page load. Streamed,
+  `wasm_download` has no `bytes` and `wasm_compile` includes the body; a
+  streamed compile that fails other than on an invalid binary is reported as a
+  failed download and retried once from bytes.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
@@ -1163,7 +1208,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; with `enable-contact-lists` the backfill and exact lookup select `GraphqlContact.lists` (the `…WithLists` operations, never the fetch-only pages) and scan under checkpoint v3, so only clients the flag turns on rehydrate; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. An invalidation naming `changed` contacts also tops up just those ids through the exact lookup (`contacts/top-up.ts`), taking turns on the contact fence with scan pages (`write-turn.ts`); top-ups never delete. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
 - A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 (5 and 6 refuse them); the first search on a host goes without and is resent once it answers 7. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
-- A tab without a usable local cache lists server contact pages, which the server does not rank. On the first page of a typed search `readServerWindow` (`queries/contacts/directory.ts`) also reads who the text names: the server's exact matches (its scan stops after 2,000 contacts), plus the team roster or a whole typed address looked up by ID, and it classifies them and the page's own rows with the local ranking's exact and word-prefix rules (`namedBy`). One of those extra reads failing never fails the page, and one still unanswered two seconds in never holds it once its own rows have landed (`NAMED_READ_BUDGET_MS`): it lists without the people that read would have added, and still ranks everyone it has. `createContactDirectoryList` orders that page: direct-message partners, then teammates, then everyone else, exact before word-start matches, with the looser matches after them in the same groups; later pages are never reordered. Give every people list `teammates` (`useTeammateIds` in `queries/team/roster`, which observes the roster the app shell keeps loaded and never fetches it), and `directMessages` where the surface has them.
+- A tab without a usable local cache lists server contact pages, which the server does not rank. On the first page of a typed search `readServerWindow` (`queries/contacts/directory.ts`) also reads who the text names: the server's named people (`readServerNames`: with `enable-named-contact-search` the whole directory's exact and word-start matches, ranked by list group then exact names, from `GraphqlUser.contactsNamedBy`; without it the exact matches of a scan that stops after 2,000 contacts, which a server older than the field still answers), plus the team roster or a whole typed address looked up by ID, and it classifies them and the page's own rows with the local ranking's exact and word-prefix rules (`namedBy`). One of those extra reads failing never fails the page, and one still unanswered two seconds in never holds it once its own rows have landed (`NAMED_READ_BUDGET_MS`): it lists without the people that read would have added, and still ranks everyone it has. `createContactDirectoryList` orders that page: direct-message partners, then teammates, then everyone else, exact before word-start matches, with the looser matches after them in the same groups; later pages are never reordered. Give every people list `teammates` (`useTeammateIds` in `queries/team/roster`, which observes the roster the app shell keeps loaded and never fetches it), and `directMessages` where the surface has them.
 - Cmd+K and mobile name search show **Searching…** under the listed rows (`isSearchingEntities`, through `createSteadyFlag`) while the cache has not answered the typed query, since contacts, sessions and commands list first; only a slow search says so. A replay of an answered window is not a pending search, and `isLoadingEntities` still means an empty list is loading. A search refused while the cache changes owner (`owner-handoff-blocked`) stays pending and `createProjectedList` replays it when `onCacheGenerationChanged` reports the replacement engine; nothing else would until the next cache write.
 - Cmd+K and mobile name search take task projects from the Quick Access `initiative` bucket (typed All queries and the Projects category), searched from the GraphQL cache like other entities. Don't give them a per-query server search: its rows drop out while each new query loads, so projects flash as you type.
 - Merge the channel directory's joined channels (`useChannelDirectory`) into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
@@ -1241,6 +1286,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Download selected GIFs without re-encoding through the shared abortable static-file uploader, and insert an `sfs` image only after success; preserve the caret, discard failed or unaccepted uploads, reject stale completions, and keep failure retry in the picker. Give explicit GIF picker opens precedence over formatting and link menus, and anchor to the editor when the browser selection is missing or has no rendered geometry.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
+- Desktop native crashes (Rust panics, Chromium crash dumps on macOS) reach PostHog as `$exception` with `native_crash_*` properties from the next webview start; a dump never leaves the machine, only its signature. Keep panic messages scrubbed and send nothing else from a dump. See `tauri/src-tauri/README.md#native-crash-reports`.
+- Diagnose desktop native updates with `native_update_outcome` and the `native.update.*` spans (`observability/native-update.ts`), which the page sends from the host's reports; keep their schema closed (versions, code-defined kinds), never error text or paths. See [update telemetry](tauri/src-tauri/README.md#update-telemetry).
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
 - Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
@@ -1252,6 +1299,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   scrolling peek window beside it. `activity.browser.e2e.ts` in
   `block-agent/browser-test` replays a long run and checks it shows one live
   line, then one settled row.
+- Never name a generic tool failure in an agent transcript or a channel/DM
+  agent reply: no **Failed**/**Timed out**/**Cancelled**/**Interrupted** text,
+  failure ink, fade, or `· N failed` count on tool rows, groups, or the live
+  line; the agent explains failures in its reply. Keep the status in the data
+  (`data-tool-status`, `data-status`); product cards (user tools, reviews,
+  elicitations, permissions, approvals) and session-event rows keep their
+  outcomes.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
@@ -1923,7 +1977,7 @@ on mobile; retain power controls and polling while waiting.
 - Reuse `CreateMenuItem` for explanatory New menu entries (`CreateMenuRadioItem` when a create dialog picks a type in a `Dropdown.RadioGroup`): original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
-- Keep browser-call join/leave cues on explicit visit announcements, never RTC roster diffs; recovery must stay silent. Their fixed two-note chimes use a default-on Call sounds toggle and share notification volume and quiet hours, not the default-off notification switch. See [call sounds](../../docs/agent-guide/calls.md#join-and-leave-sounds).
+- Keep browser-call join/leave cues on explicit visit announcements, never RTC roster diffs; recovery must stay silent. Deduplicate visits and coalesce cue bursts within 1.5 seconds without queueing suppressed cues. Their fixed two-note chimes use a default-on Call sounds toggle and share notification volume and quiet hours, not the default-off notification switch. Preserve incoming ring deadlines on duplicate starts, latch cross-tab silence on expiry or terminal resolutions, and reject late resolved-call alerts and ended-call cache writes. See [call sounds](../../docs/agent-guide/calls.md#join-and-leave-sounds).
 
 ### Agent result task lists
 

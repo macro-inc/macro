@@ -16,7 +16,7 @@ $$;
 INSERT INTO property_definitions
     (id, team_id, user_id, display_name, data_type, is_multi_select, specific_entity_type, is_system)
 VALUES
-    ('00000001-0000-0000-0000-000000000015', NULL, NULL, 'Blocking', 'ENTITY', true, 'TASK', true)
+    ('00000001-0000-0000-0000-000000000017', NULL, NULL, 'Blocking', 'ENTITY', true, 'TASK', true)
 ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE task_dependency_edges (
@@ -91,7 +91,7 @@ BEGIN
     FROM (SELECT DISTINCT blocker_task_id FROM changed_task_dependency_edges) changed
     CROSS JOIN LATERAL (SELECT id FROM entity_properties target
         WHERE target.entity_id = changed.blocker_task_id::text AND target.entity_type = 'TASK'
-          AND target.property_definition_id = '00000001-0000-0000-0000-000000000015' LIMIT 1) target
+          AND target.property_definition_id = '00000001-0000-0000-0000-000000000017' LIMIT 1) target
     WHERE p.id = target.id;
     RETURN NULL;
 END;
@@ -189,7 +189,7 @@ CREATE TEMP TABLE IF NOT EXISTS task_dependency_references (dependent_task_id uu
 
         INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id)
         SELECT task_dependency_assignment_id(), blocker_task_id::text, 'TASK',
-               '00000001-0000-0000-0000-000000000015'
+               '00000001-0000-0000-0000-000000000017'
         FROM (SELECT DISTINCT blocker_task_id FROM task_dependency_references) blockers
         ON CONFLICT (entity_id, entity_type, property_definition_id) DO NOTHING;
 
@@ -199,7 +199,7 @@ CREATE TEMP TABLE IF NOT EXISTS task_dependency_references (dependent_task_id uu
         FROM task_dependency_references r
         JOIN LATERAL (SELECT id FROM entity_properties p WHERE p.entity_id = r.blocker_task_id::text
             AND p.entity_type = 'TASK'
-            AND p.property_definition_id = '00000001-0000-0000-0000-000000000015' LIMIT 1) p ON TRUE
+            AND p.property_definition_id = '00000001-0000-0000-0000-000000000017' LIMIT 1) p ON TRUE
         ON CONFLICT (dependent_task_id, blocker_task_id) DO NOTHING;
 
         UPDATE entity_properties p SET values = (
@@ -210,7 +210,7 @@ CREATE TEMP TABLE IF NOT EXISTS task_dependency_references (dependent_task_id uu
         FROM (SELECT DISTINCT blocker_task_id AS task_id FROM task_dependency_references) changed
         CROSS JOIN LATERAL (SELECT id FROM entity_properties target
             WHERE target.entity_id = changed.task_id::text AND target.entity_type = 'TASK'
-              AND target.property_definition_id = '00000001-0000-0000-0000-000000000015' LIMIT 1) target
+              AND target.property_definition_id = '00000001-0000-0000-0000-000000000017' LIMIT 1) target
         WHERE p.id = target.id;
 
         cursor_id := next_id;
@@ -259,7 +259,7 @@ BEGIN
         SELECT blocker_task_id FROM task_dependency_edges WHERE dependent_task_id = source_id
           AND NEW.property_definition_id = '00000001-0000-0000-0000-000000000007'
         UNION SELECT dependent_task_id FROM task_dependency_edges WHERE blocker_task_id = source_id
-          AND NEW.property_definition_id = '00000001-0000-0000-0000-000000000015'), TRUE);
+          AND NEW.property_definition_id = '00000001-0000-0000-0000-000000000017'), TRUE);
     IF EXISTS (SELECT 1 FROM unnest(desired) target(task_id)
         LEFT JOIN LATERAL (SELECT true AS found FROM entity_properties status
             WHERE status.entity_id = target.task_id::text AND status.entity_type = 'TASK'
@@ -271,7 +271,7 @@ BEGIN
     END IF;
 
     IF NEW.property_definition_id = '00000001-0000-0000-0000-000000000007' THEN
-        inverse_definition := '00000001-0000-0000-0000-000000000015';
+        inverse_definition := '00000001-0000-0000-0000-000000000017';
         dependent_ids := array_fill(source_id, ARRAY[cardinality(desired)]);
         blocker_ids := desired;
         DELETE FROM task_dependency_edges WHERE dependent_task_id = source_id
@@ -332,5 +332,5 @@ $$;
 CREATE TRIGGER task_dependency_json_changed
 AFTER INSERT OR UPDATE OF values ON entity_properties
 FOR EACH ROW WHEN (NEW.entity_type = 'TASK' AND NEW.property_definition_id IN
-    ('00000001-0000-0000-0000-000000000007', '00000001-0000-0000-0000-000000000015'))
+    ('00000001-0000-0000-0000-000000000007', '00000001-0000-0000-0000-000000000017'))
 EXECUTE FUNCTION sync_legacy_task_dependency_write();

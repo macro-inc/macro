@@ -115,7 +115,7 @@ cargo run -p complete_graph --bin graphql_schema -- static_assets/schema.graphql
 The exported `static_assets/schema.graphql` feeds both the client codegen
 (`apps/web && bun gen-graphql`) and the cache metadata codegen. Additive changes
 keep persisted client caches; a change that makes stored records unsafe needs a
-bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-core/src/codec.rs`.
+bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-schema/src/lib.rs`.
 - `GraphqlTaskDependencyState.id` is the task's canonical ID. Query and task-property mutation responses share this normalized record; dependency assignment values remain ordinary `GraphqlProperty` records.
 
 Email send admission, cancellation and status are exposed by `graphql_email`;
@@ -128,8 +128,8 @@ deprecation (`Remove after YYYY-MM-DD`, at least 30 days out).
 `cargo x graphql-schema-compat` checks the SDL against `origin/main`, and CI runs
 it; see [step 8 of the field guide](../../docs/guides/add-graphql-field.md#8-compatibility-and-rollout).
 
-Personal contact pages/search and exact ID/email lookups flatten `graphql_contacts`
-under authenticated `GraphqlUser`. Search pages can be empty with a continuation;
+Personal contact pages/search, exact ID/email lookups and the ranked named read
+(`contactsNamedBy`) flatten `graphql_contacts` under authenticated `GraphqlUser`. Search pages can be empty with a continuation;
 only null means exhausted. Optional exact/first-name matching is applied in the
 contacts domain before the page limit; it does not change identity or the search
 work budget, and omitted `matching` retains the deployed subsequence behavior.

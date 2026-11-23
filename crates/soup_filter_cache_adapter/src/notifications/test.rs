@@ -3,7 +3,7 @@ use cache_core::{
     engine::{BeginOptimisticWrite, Engine, NetworkWrite},
     predicate::{PredicateIndexStorage, PredicateQueryResult, ProjectionState},
     queue::{MutationClaimRequest, MutationClaimToken},
-    store::InMemoryStorage,
+    store::{InMemoryStorage, Storage},
 };
 use predicate_index::{
     IndexQuery, PartitionPredicate, PredicateExpr, SortDirection, ValidatedIndexQuery,
@@ -40,7 +40,11 @@ fn variables() -> serde_json::Map<String, Value> {
         .unwrap()
         .clone()
 }
-async fn write<S: Storage>(engine: &mut Engine<S>, query: &str, data: &Value) {
+async fn write<S: cache_core::predicate::PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    query: &str,
+    data: &Value,
+) {
     let vars = variables();
     let mut projections = authoritative_projection_mutations(
         cache_core::meta::bundled_schema_ref(),
@@ -117,7 +121,11 @@ async fn matches<S: PredicateIndexStorage>(
         other => panic!("unexpected {other:?}"),
     }
 }
-async fn mark_done<S: Storage>(engine: &mut Engine<S>, id: &str, uuid: &str) -> u64 {
+async fn mark_done<S: cache_core::predicate::PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    id: &str,
+    uuid: &str,
+) -> u64 {
     let data = json!({"updateNotifications":[{"__typename":"GraphqlNotification", "id":id, "state":"DONE"}]});
     let vars = variables();
     let updates = optimistic_notification_updates(
@@ -156,7 +164,10 @@ async fn mark_done<S: Storage>(engine: &mut Engine<S>, id: &str, uuid: &str) -> 
         .unwrap()
         .0
 }
-async fn claim<S: Storage>(engine: &mut Engine<S>, expected: u64) -> MutationClaimToken {
+async fn claim<S: cache_core::predicate::PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    expected: u64,
+) -> MutationClaimToken {
     let claimed = engine
         .claim_next_mutation(MutationClaimRequest {
             owner: "test".into(),
@@ -447,7 +458,9 @@ fn unhydrated_notification_parents_real_turso() {
     });
 }
 
-async fn nonmatching_parent_projections<S: Storage>(mut storage: S) {
+async fn nonmatching_parent_projections<S: cache_core::predicate::PredicateIndexStorage>(
+    mut storage: S,
+) {
     let mutations = authoritative_projection_mutations(
         cache_core::meta::bundled_schema_ref(),
         SNAPSHOT,

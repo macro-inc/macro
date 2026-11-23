@@ -36,8 +36,8 @@ tasks itself.
 - Depends on: `macro_event_broker`, `macro_event_topics`, `model-entity`,
   `model_owner`; feature-gated: `channels`, `chat`, `documents`, `email`,
   `call`, `github_pull_requests`, `initiative`, `properties`, `projects`,
-  `system_properties`, `rdkafka` (`consumer`), `agent_session`/`entity_access`
-  (`outbound`).
+  `system_properties`, `time_tracking`, `rdkafka` (`consumer`),
+  `agent_session`/`entity_access` (`outbound`).
 - Used by: `complete_graph`, `graphql_soup`, `attention_feed`.
 
 ## Recipes
@@ -93,6 +93,9 @@ tasks itself.
 - Agent sessions have no source event here: their patches come from channel
   references, linked pull requests, and the harness publishing through
   `outbound/agent_sessions.rs`' `SoupWorkRegistrationSignal` for registered work.
+- Every `macro.time_entries` event refreshes its task's document row, which
+  carries the new Time logged property; the event itself is not a property
+  event, so this is the only way a total reaches other viewers live.
 - Only `call.record_imported` patches calls; native call lifecycle events on
   `macro.calls` are ignored. The web cache has no local call projection, so a
   call patch makes mounted lists that can contain calls refetch

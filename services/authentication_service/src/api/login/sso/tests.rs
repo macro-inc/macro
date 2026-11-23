@@ -97,6 +97,8 @@ async fn it_works_with_no_params() {
             is_mobile: false,
             referral_code: None,
             is_agent: false,
+            fbp: None,
+            fbc: None,
         })
     );
 }
@@ -122,6 +124,8 @@ async fn it_works_with_mobile() {
             is_mobile: true,
             referral_code: None,
             is_agent: false,
+            fbp: None,
+            fbc: None,
         })
     );
 }
@@ -148,6 +152,8 @@ async fn it_works_with_mobile_false() {
 
             referral_code: None,
             is_agent: false,
+            fbp: None,
+            fbc: None,
         })
     );
 }
@@ -178,7 +184,7 @@ async fn it_works_with_everything() {
        original_url: Some(original_url),
        is_mobile: true,
         referral_code: Some(code),
-       is_agent: false
+       is_agent: false, fbp: None, fbc: None
     }) => {
         assert_eq!(idp_name, "testing");
         assert_eq!(idp_id, "something");
@@ -203,7 +209,7 @@ async fn it_works_with_macro_scheme() {
        original_url: Some(original_url),
        is_mobile: true,
        referral_code: _,
-       is_agent: false
+       is_agent: false, fbp: None, fbc: None
     }) => {
         assert_eq!(idp_name, "google");
         assert_eq!(original_url.0.as_str(), "macro://login");
@@ -225,7 +231,7 @@ async fn it_works_with_double_encoded_scheme() {
        original_url: Some(original_url),
        is_mobile: true,
        referral_code: _,
-       is_agent: false
+       is_agent: false, fbp: None, fbc: None
     }) => {
         assert_eq!(idp_name, "google");
         assert_eq!(original_url.0.as_str(), "https://example.com/");
@@ -280,4 +286,17 @@ fn it_should_read_the_agent_signup_flag() {
     .unwrap();
 
     assert!(query.is_agent);
+}
+
+#[test]
+fn it_reads_meta_click_ids() {
+    let query: Query<LoginQueryParams> = Query::try_from_uri(
+        &"http://test/login/sso?idp_name=Google&fbp=fb.1.2.3&fbc=fb.1.4.Ab"
+            .parse()
+            .unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(query.fbp.as_deref(), Some("fb.1.2.3"));
+    assert_eq!(query.fbc.as_deref(), Some("fb.1.4.Ab"));
 }

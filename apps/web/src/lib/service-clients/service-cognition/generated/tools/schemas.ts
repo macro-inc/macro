@@ -196,6 +196,7 @@ export const BulkSetEntityPropertyOptions = z.object({
         'call',
         'user',
         'company',
+        'contact',
         'chat',
       ]),
       entity_id: z.string(),
@@ -2042,6 +2043,7 @@ export const CreateBookingLink = z
             location: z.string(),
             macroCall: z.boolean().optional(),
             googleMeet: z.boolean(),
+            emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
             enabled: z.boolean(),
             mode: z.any().superRefine((x, ctx) => {
               const schemas = [
@@ -2128,6 +2130,7 @@ export const BookingLinkResult = z.object({
           location: z.string(),
           macroCall: z.boolean().optional(),
           googleMeet: z.boolean(),
+          emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
           enabled: z.boolean(),
           mode: z.any().superRefine((x, ctx) => {
             const schemas = [
@@ -6072,6 +6075,7 @@ export const EditBookingLink = z
             location: z.string(),
             macroCall: z.boolean().optional(),
             googleMeet: z.boolean(),
+            emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
             enabled: z.boolean(),
             mode: z.any().superRefine((x, ctx) => {
               const schemas = [
@@ -11034,6 +11038,7 @@ export const GetEntityProperties = z.object({
     'call',
     'user',
     'company',
+    'contact',
     'chat',
   ]),
 });
@@ -11968,6 +11973,15 @@ export const ListBookingLinksResult = z.object({
       ),
     })
   ),
+  accounts: z.array(
+    z
+      .object({
+        emailLinkId: z.string().uuid(),
+        emailAddress: z.string(),
+        videoMeetings: z.boolean(),
+      })
+      .strict()
+  ),
   links: z.array(
     z.object({
       profileId: z.string().uuid(),
@@ -11984,6 +11998,7 @@ export const ListBookingLinksResult = z.object({
               location: z.string(),
               macroCall: z.boolean().optional(),
               googleMeet: z.boolean(),
+              emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
               enabled: z.boolean(),
               mode: z.any().superRefine((x, ctx) => {
                 const schemas = [
@@ -13226,6 +13241,9 @@ export const ProjectListResult = z.object({
         status: z.union([z.string().uuid(), z.null()]).optional(),
         priority: z.union([z.string().uuid(), z.null()]).optional(),
         assignees: z.array(z.string()),
+        startDate: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
         dueDate: z
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
@@ -13643,6 +13661,43 @@ export const LoadTools = z.object({ names: z.array(z.string()) });
 export const LoadToolsResponse = z.object({
   loaded: z.array(z.object({ name: z.string(), description: z.string() })),
   not_found: z.array(z.string()),
+});
+
+export const LogTime = z.object({
+  task_id: z.string(),
+  minutes: z.number().int().gte(1).lte(1440),
+  date: z.string().date(),
+  note: z.union([z.string(), z.null()]).optional(),
+});
+
+export const LogTimeResponse = z.object({
+  entry: z.object({
+    id: z.string().uuid(),
+    userId: z.string(),
+    date: z.string().date(),
+    minutes: z.number().int().gte(0).lte(65535),
+    note: z.union([z.string(), z.null()]).optional(),
+    source: z.any().superRefine((x, ctx) => {
+      const schemas = [z.literal('manual'), z.literal('timer')];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+  }),
+  totalMinutes: z.number().int().gte(0),
+  summary: z.string(),
 });
 
 export const ManageAgentSession = z
@@ -14527,6 +14582,7 @@ export const BookingSettingsResult = z.object({
         location: z.string(),
         macroCall: z.boolean().optional(),
         googleMeet: z.boolean(),
+        emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
         enabled: z.boolean(),
         scheduleId: z.string().uuid(),
         mode: z.any().superRefine((x, ctx) => {
@@ -17973,6 +18029,9 @@ export const ProjectReadResult = z.object({
     status: z.union([z.string().uuid(), z.null()]).optional(),
     priority: z.union([z.string().uuid(), z.null()]).optional(),
     assignees: z.array(z.string()),
+    startDate: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
     dueDate: z
       .union([z.string().datetime({ offset: true }), z.null()])
       .optional(),
@@ -18387,6 +18446,41 @@ export const ReadSpreadsheet = z.object({
   sheetId: z.union([z.string(), z.null()]).optional(),
   ranges: z.union([z.array(z.string()), z.null()]).optional(),
   includeStyles: z.union([z.boolean(), z.null()]).optional(),
+});
+
+export const ReadTimeEntries = z.object({ task_id: z.string() });
+
+export const ReadTimeEntriesResponse = z.object({
+  totalMinutes: z.number().int().gte(0),
+  entries: z.array(
+    z.object({
+      id: z.string().uuid(),
+      userId: z.string(),
+      date: z.string().date(),
+      minutes: z.number().int().gte(0).lte(65535),
+      note: z.union([z.string(), z.null()]).optional(),
+      source: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('manual'), z.literal('timer')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+    })
+  ),
+  truncated: z.boolean(),
+  summary: z.string(),
 });
 
 export const ReadWordDocument = z.object({
@@ -19263,6 +19357,7 @@ export const SetEntityProperty = z.object({
     'call',
     'user',
     'company',
+    'contact',
     'chat',
   ]),
   property_definition_id: z.string().uuid(),
@@ -19270,6 +19365,7 @@ export const SetEntityProperty = z.object({
   date_value: z
     .union([z.string().datetime({ offset: true }), z.null()])
     .optional(),
+  date_has_time: z.union([z.boolean(), z.null()]).optional(),
   date_range_value: z
     .union([
       z.object({
@@ -19796,6 +19892,7 @@ export const UpdateBookingSettings = z
           location: z.string(),
           macroCall: z.boolean().optional(),
           googleMeet: z.boolean(),
+          emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
           enabled: z.boolean(),
           scheduleId: z.string().uuid(),
           mode: z.any().superRefine((x, ctx) => {

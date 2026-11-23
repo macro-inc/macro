@@ -207,7 +207,10 @@ Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
 Contact properties use Tasks-style pills in the header and **Record details**.
 The email property lists every address the contact holds, the primary first,
-followed by an add control (**Add email** while blank, a plus afterwards). Save
+followed by an add control: **Add email** while blank, then a plus button named
+**Add email** at the end of the addresses' last line, which it never leaves for
+a line of its own, even in the narrow **Record details** column (long addresses
+truncate). Save
 adds the address; Cancel or Escape discards the draft, and invalid input stays
 open. Each address pill opens its own actions: **Make primary** and **Remove**.
 Removing an address deletes nothing; the contact's Emails tab and the email
@@ -245,6 +248,9 @@ matches are left unchanged. CRM settings and domain admission still apply.
 
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
+With the keyboard on the record pane (as a record opens, with nothing focused,
+or after a click on its text), Tab, Shift+Tab and the number keys move along
+them.
 On phones and tablets, the current section appears as a labeled header island
 with a caret. When the host collapses it, the section icon and caret keep its
 accessible label. Embedded phone headers put the switcher below the breadcrumb
@@ -277,8 +283,13 @@ archived individually, while email syncing stays off. Re-enable **Sync Emails** 
 **Email sharing** separately. A person whose company is archived offers **Open company**
 so that restoration happens there first. Unfiled people restore directly. Company row
 **Archive / Restore** actions also confirm the cascade. Record details and References
-appear first in both information panels; company Properties, Lists and Email sharing
-follow. Neither panel has a duplicate visibility control.
+appear first in both information panels, then Properties; company Lists and Email
+sharing follow. Neither panel has a duplicate visibility control. A contact's
+Properties hold the team's custom properties only: Stage, Owner and Revenue are
+company-only, so its **Add property** list leaves them out (a company's leaves
+out task-only properties). **Add property** attaches one, such as a Phone text
+or a LinkedIn link, and it saves, clears and survives a reload like a company
+property. On a phone the panel opens from **Show details** in the record header.
 
 Verify successful changes update open People, Companies, Team and ordinary Cmd-K;
 late responses must not reintroduce archived rows or hide restored rows with an

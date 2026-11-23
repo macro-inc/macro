@@ -5,7 +5,7 @@ use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::RecordSelection;
 use cache_core::store::Storage;
 use cache_core::value::{CacheValue, EntityKey, Record};
-use cache_turso::{TursoMemoryDatabase, TursoStorage, TursoStorageCloseOutcome};
+use cache_turso::{TursoFileDatabase, TursoMemoryDatabase, TursoStorage, TursoStorageCloseOutcome};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -473,5 +473,259 @@ fn optimistic_discard_restores_durable_base_over_turso() {
             panic!("property value object")
         };
         assert_eq!(value.get("value"), Some(&CacheValue::String("todo".into())));
+    });
+}
+
+#[test]
+fn reads_kept_for_a_write_are_dropped_once_another_connection_commits() {
+    use cache_core::store::DurableRead;
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let mut writer = Engine::new(database.open("engine-kept-reads").unwrap());
+        let original = page("Status", "todo", "user-1");
+        writer
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &original, None)
+            .await
+            .unwrap();
+        drop(writer);
+
+        // A fresh engine has nothing hot, so the property comes from storage
+        // and is kept for the next write.
+        let mut engine = Engine::new(database.open("engine-kept-reads").unwrap());
+        let property = EntityKey("GraphqlProperty:property-1".into());
+        let position = engine.storage().write_position();
+        let reads = engine.pass_reads();
+        let read = reads.read_records(&[property]).await.unwrap();
+        assert!(read[0].is_some());
+        let reads = reads.finish();
+        engine.keep_pass_reads(reads, position);
+
+        // Another connection to the file clears it, so the kept property is
+        // stale: it is no longer stored. Kept open, so closing it cannot
+        // checkpoint the log over.
+        let mut other = Engine::new(database.open("engine-kept-reads").unwrap());
+        other.clear().await.unwrap();
+        engine
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &original, None)
+            .await
+            .unwrap();
+        drop(engine);
+        // What the write stored, not what it left hot.
+        let mut reopened = Engine::new(database.open("engine-kept-reads").unwrap());
+        assert_eq!(
+            read_value(&mut reopened).await,
+            ("Status".into(), "todo".into())
+        );
+        drop(other);
+    });
+}
+
+#[test]
+fn write_position_moves_when_another_connection_commits() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let reader = database.open("engine-write-position").unwrap();
+        let mut writer = Engine::new(database.open("engine-write-position").unwrap());
+        let before = reader.write_position();
+        assert!(before.is_some());
+        writer
+            .write_query(
+                Some(1),
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &page("Status", "todo", "user-1"),
+                None,
+            )
+            .await
+            .unwrap();
+        // The reader has not read since; its position must still move.
+        assert_ne!(reader.write_position(), before);
+    });
+}
+
+#[test]
+fn reads_kept_for_a_write_are_dropped_when_another_connection_commits_while_they_are_read() {
+    use cache_core::store::DurableRead;
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let mut engine = Engine::new(database.open("engine-kept-reads-race").unwrap());
+        let mut other = Engine::new(database.open("engine-kept-reads-race").unwrap());
+
+        // The passes find the property absent, and before they finish another
+        // connection stores it.
+        let property = EntityKey("GraphqlProperty:property-1".into());
+        let position = engine.storage().write_position();
+        let reads = engine.pass_reads();
+        let read = reads
+            .read_records(std::slice::from_ref(&property))
+            .await
+            .unwrap();
+        assert!(read[0].is_none());
+        let original = page("Status", "todo", "user-1");
+        other
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &original, None)
+            .await
+            .unwrap();
+        let reads = reads.finish();
+        engine.keep_pass_reads(reads, position);
+
+        // The same response again merges onto the stored property and changes
+        // nothing; merged onto the kept absence it would count as new.
+        let result = engine
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &original, None)
+            .await
+            .unwrap();
+        assert!(!result.changed.contains(&property), "{:?}", result.changed);
+        drop(other);
+    });
+}
+
+#[test]
+fn pass_reads_come_from_storage_not_from_a_stale_hot_tier() {
+    use cache_core::store::DurableRead;
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let mut engine = Engine::new(database.open("engine-pass-reads-hot").unwrap());
+        let mut other = Engine::new(database.open("engine-pass-reads-hot").unwrap());
+        engine
+            .write_query(
+                Some(1),
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &page("Status", "todo", "user-1"),
+                None,
+            )
+            .await
+            .unwrap();
+        // Another connection changes the property this engine holds hot.
+        other
+            .write_query(
+                Some(1),
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &page("Stage", "done", "user-1"),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let property = EntityKey("GraphqlProperty:property-1".into());
+        let reads = engine.pass_reads();
+        let read = reads.read_records(&[property]).await.unwrap();
+        let record = read[0].as_ref().unwrap();
+        assert_eq!(
+            record.fields.get("displayName"),
+            Some(&CacheValue::String("Stage".into()))
+        );
+        drop(other);
+    });
+}
+
+#[path = "support/committing_storage.rs"]
+mod committing_storage;
+
+#[test]
+fn a_write_that_finds_its_kept_reads_stale_rereads_every_stored_record_at_once() {
+    use cache_core::store::DurableRead;
+    use committing_storage::CommittingStorage;
+    use std::sync::{Arc, Mutex};
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let name = "engine-kept-reads-snapshot";
+        let mut writer = Engine::new(database.open(name).unwrap());
+        writer
+            .write_query(
+                Some(1),
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &page("Status", "todo", "user-1"),
+                None,
+            )
+            .await
+            .unwrap();
+        drop(writer);
+
+        // A fresh engine has nothing hot. The passes read the property, and
+        // the write reads the document from storage itself.
+        let mut engine = Engine::new(CommittingStorage::new(database.open(name).unwrap()));
+        let property = EntityKey("GraphqlProperty:property-1".into());
+        let document = EntityKey("GraphqlSoupDocument:doc-1".into());
+        let position = engine.storage().write_position();
+        let reads = engine.pass_reads();
+        reads
+            .read_records(std::slice::from_ref(&property))
+            .await
+            .unwrap();
+        let reads = reads.finish();
+        engine.keep_pass_reads(reads, position);
+
+        // Right after the write reads the document, another connection adds a
+        // field to the property and the document in one commit. It stays
+        // open, so closing it cannot checkpoint the log over.
+        let held = Arc::new(Mutex::new(None));
+        let (keep, mut other) = (held.clone(), database.open(name).unwrap());
+        let keys = [property.clone(), document.clone()];
+        engine.storage().after_next_get_batch(move || {
+            block_on(async {
+                let records = other.get_batch(&keys).await.unwrap();
+                let entries = keys
+                    .iter()
+                    .cloned()
+                    .zip(records)
+                    .map(|(key, record)| {
+                        let mut record = record.unwrap();
+                        record
+                            .fields
+                            .insert("note".into(), CacheValue::String("other".into()));
+                        (key, record)
+                    })
+                    .collect();
+                other.put_batch(entries).await.unwrap();
+            });
+            *keep.lock().unwrap() = Some(other);
+        });
+
+        // A second property changes the document. Merged onto the document as
+        // read before the commit, it would drop the other connection's field.
+        let mut two = page("Status", "todo", "user-1");
+        let second = json!({
+            "id": "property-2",
+            "displayName": "Stage",
+            "value": {"__typename": "GraphqlStringPropertyValue", "stringValue": "done"}
+        });
+        two["user"]["soup"]["items"][0]["properties"]
+            .as_array_mut()
+            .unwrap()
+            .push(second);
+        let result = engine
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &two, None)
+            .await
+            .unwrap();
+        assert!(held.lock().unwrap().is_some(), "the commit landed");
+        assert!(result.changed.contains(&document), "{:?}", result.changed);
+        drop(engine);
+
+        let stored = database
+            .open(name)
+            .unwrap()
+            .get_batch(&[property.clone(), document.clone()])
+            .await
+            .unwrap();
+        for (key, record) in [property, document].iter().zip(stored) {
+            assert_eq!(
+                record.unwrap().fields.get("note"),
+                Some(&CacheValue::String("other".into())),
+                "{key:?}"
+            );
+        }
     });
 }

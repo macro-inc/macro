@@ -120,6 +120,7 @@ import {
   type ChannelListItemFieldsFragment,
   type ChannelListNotificationFieldsFragment,
   type GraphqlEmailView,
+  type GraphqlNotificationChannelType,
   type GroupedSoupInput,
   type GroupSoupQuery,
   GroupSoupDocument as GroupSoupQueryDocument,
@@ -1175,10 +1176,14 @@ function mapGraphqlPropertyValue(
       type: 'String' as const,
       value: stringValue,
     }))
-    .with({ __typename: 'GraphqlDatePropertyValue' }, ({ dateValue }) => ({
-      type: 'Date' as const,
-      value: dateValue,
-    }))
+    .with(
+      { __typename: 'GraphqlDatePropertyValue' },
+      ({ dateValue, dateHasTime }) => ({
+        type: 'Date' as const,
+        value: dateValue,
+        ...(dateHasTime ? { has_time: true } : {}),
+      })
+    )
     .with(
       { __typename: 'GraphqlDateRangePropertyValue' },
       ({ rangeStart, rangeEnd }) => ({
@@ -1294,6 +1299,27 @@ function normalizeChannelType(channelType: string) {
   return channelType.toLowerCase();
 }
 
+/**
+ * A notification's channel type as the notification service spells it.
+ * Lowercasing `DIRECT_MESSAGE` gives `direct_message`, which no notification
+ * check recognizes, so a direct message read as a named channel.
+ */
+function notificationChannelType(
+  channelType: GraphqlNotificationChannelType
+): ChannelType {
+  return (
+    match(channelType)
+      .with('PUBLIC', () => 'public' as const)
+      .with('PRIVATE', () => 'private' as const)
+      .with('DIRECT_MESSAGE', () => 'directMessage' as const)
+      .with('TEAM', () => 'team' as const)
+      // A kind this client doesn't know reads as a named channel, as pushes
+      // name every channel but a direct message: never as a group chat, which
+      // would take a channel message's sender away from its row.
+      .exhaustive(() => 'public' as const)
+  );
+}
+
 function toNotificationDocumentSubType(
   subType: string | null
 ): NotificationDocumentSubType | null {
@@ -1376,8 +1402,9 @@ function mapGraphqlNotificationMetadata(
             hasAttachments: metadata.channelMentionHasAttachments,
             threadId: metadata.channelMentionThreadId,
             senderDisplayName: metadata.channelMentionSenderDisplayName,
-            channelType:
-              metadata.channelMentionChannelType.toLowerCase() as ChannelType,
+            channelType: notificationChannelType(
+              metadata.channelMentionChannelType
+            ),
             channelName: metadata.channelMentionChannelName,
             senderProfilePictureUrl:
               metadata.channelMentionSenderProfilePictureUrl,
@@ -1401,8 +1428,9 @@ function mapGraphqlNotificationMetadata(
             hasAttachments: metadata.documentMentionHasAttachments,
             threadId: metadata.documentMentionThreadId,
             senderDisplayName: metadata.documentMentionSenderDisplayName,
-            channelType:
-              metadata.documentMentionChannelType.toLowerCase() as ChannelType,
+            channelType: notificationChannelType(
+              metadata.documentMentionChannelType
+            ),
             channelName: metadata.documentMentionChannelName,
             senderProfilePictureUrl:
               metadata.documentMentionSenderProfilePictureUrl,
@@ -1590,8 +1618,9 @@ function mapGraphqlNotificationMetadata(
             messageContent: metadata.channelMessageSendMessageContent,
             messageId: metadata.channelMessageSendMessageId,
             hasAttachments: metadata.channelMessageSendHasAttachments,
-            channelType:
-              metadata.channelMessageSendChannelType.toLowerCase() as ChannelType,
+            channelType: notificationChannelType(
+              metadata.channelMessageSendChannelType
+            ),
             channelName: metadata.channelMessageSendChannelName,
             senderProfilePictureUrl:
               metadata.channelMessageSendSenderProfilePictureUrl,
@@ -1608,8 +1637,9 @@ function mapGraphqlNotificationMetadata(
             threadId: metadata.channelMessageReactionThreadId,
             messageContent: metadata.channelMessageReactionMessageContent,
             emoji: metadata.channelMessageReactionEmoji,
-            channelType:
-              metadata.channelMessageReactionChannelType.toLowerCase() as ChannelType,
+            channelType: notificationChannelType(
+              metadata.channelMessageReactionChannelType
+            ),
             channelName: metadata.channelMessageReactionChannelName,
             senderProfilePictureUrl:
               metadata.channelMessageReactionSenderProfilePictureUrl,
@@ -1623,8 +1653,9 @@ function mapGraphqlNotificationMetadata(
           tag: 'channel_access_requested',
           content: {
             requestId: metadata.channelAccessRequestedRequestId,
-            channelType:
-              metadata.channelAccessRequestedChannelType.toLowerCase() as ChannelType,
+            channelType: notificationChannelType(
+              metadata.channelAccessRequestedChannelType
+            ),
             channelName: metadata.channelAccessRequestedChannelName,
             senderProfilePictureUrl:
               metadata.channelAccessRequestedSenderProfilePictureUrl,
@@ -1644,8 +1675,9 @@ function mapGraphqlNotificationMetadata(
             messageContent: metadata.channelReplyMessageContent,
             hasAttachments: metadata.channelReplyHasAttachments,
             threadParentSenderId: metadata.channelReplyThreadParentSenderId,
-            channelType:
-              metadata.channelReplyChannelType.toLowerCase() as ChannelType,
+            channelType: notificationChannelType(
+              metadata.channelReplyChannelType
+            ),
             channelName: metadata.channelReplyChannelName,
             senderProfilePictureUrl:
               metadata.channelReplySenderProfilePictureUrl,
@@ -2518,7 +2550,7 @@ export function mapGraphqlSoupItem(
             createdAt: entity.createdAt,
             updatedAt: entity.updatedAt,
             viewedAt: entity.viewedAt,
-            properties: [],
+            properties: mapGraphqlProperties(entity.properties),
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem

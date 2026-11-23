@@ -71,6 +71,7 @@ use graphql_soup::{
     resolve_soup, resolve_soup_agent_session, resolve_soup_email_thread,
     resolve_soup_email_threads, resolve_soup_entity, resolve_soup_updates,
 };
+use graphql_time_tracking::{GraphqlTimeTracking, TimeTrackingMutationRoot};
 use graphql_work_feed::{
     GraphqlWorkFeedPage, WorkFeedInput, WorkFeedMutationRoot, WorkFeedSubscriptionRoot,
     resolve_work_feed,
@@ -114,6 +115,7 @@ pub struct CompleteMutationRoot<
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
     graphql_email::GraphqlEmailSendMutation<ES, SoupEmailThreadMutationOutput<E>>,
     InitiativeMutationRoot<E>,
+    TimeTrackingMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
     NotificationInboxMutationRoot<E>,
@@ -142,6 +144,7 @@ impl<
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
             graphql_email::GraphqlEmailSendMutation::<ES, SoupEmailThreadMutationOutput<E>>::default(),
             InitiativeMutationRoot::<E>::default(),
+            TimeTrackingMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
             NotificationInboxMutationRoot::<E>::default(),
@@ -900,6 +903,14 @@ where
             input.unwrap_or_default(),
         )
         .await
+    }
+
+    /// The authenticated user's running timer and the server's clock.
+    async fn time_tracking(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<GraphqlTimeTracking<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
+        graphql_time_tracking::resolve_time_tracking(ctx, &self.user_id).await
     }
 
     /// AI routines the authenticated user can access.

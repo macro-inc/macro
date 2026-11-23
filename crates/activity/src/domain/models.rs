@@ -21,7 +21,7 @@ mod test;
 
 use std::sync::LazyLock;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::CreationPrincipal;
 use serde::{Deserialize, Serialize};
@@ -212,6 +212,27 @@ pub struct AccessRequest {
     pub requester_name: Option<String>,
 }
 
+/// Payload of [`Action::TimeLogged`]. The entry's note is never stored.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TimeLog {
+    /// Whole minutes logged.
+    pub minutes: u32,
+    /// The day the time counts for, as the person chose it.
+    pub entry_date: NaiveDate,
+    /// How the time was logged.
+    pub source: TimeLogSource,
+}
+
+/// How time was logged: typed, or saved by stopping a timer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeLogSource {
+    /// Typed as a length.
+    Manual,
+    /// Saved by stopping a timer.
+    Timer,
+}
+
 /// Task referenced by a project membership event. No task name is stored.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InitiativeTaskChange {
@@ -282,6 +303,8 @@ pub enum Action {
     AppearanceChanged(AppearanceChange),
     /// A principal asked to join the entity (channel membership).
     AccessRequested(AccessRequest),
+    /// Time was logged on the entity (a task).
+    TimeLogged(TimeLog),
 }
 
 /// The names captured when an entity is renamed.
@@ -362,6 +385,7 @@ impl Action {
             Action::TaskAdded(change) | Action::TaskRemoved(change) => payload(change),
             Action::AppearanceChanged(change) => payload(change),
             Action::AccessRequested(request) => payload(request),
+            Action::TimeLogged(log) => payload(log),
         };
         (tag, payload)
     }
@@ -407,6 +431,7 @@ impl Action {
             ActionTag::TaskRemoved => Ok(Action::TaskRemoved(parsed(payload)?)),
             ActionTag::AppearanceChanged => Ok(Action::AppearanceChanged(parsed(payload)?)),
             ActionTag::AccessRequested => Ok(Action::AccessRequested(parsed(payload)?)),
+            ActionTag::TimeLogged => Ok(Action::TimeLogged(parsed(payload)?)),
         }
     }
 }

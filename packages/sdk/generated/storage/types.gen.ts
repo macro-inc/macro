@@ -6912,6 +6912,16 @@ export type DirectAccess = {
 };
 
 /**
+ * Discard the caller's timer.
+ */
+export type DiscardTimerRequest = {
+    /**
+     * The timer to discard.
+     */
+    timerId: string;
+};
+
+/**
  * The edit failed after it started, so it may have partly applied. Read the
  * document before retrying.
  */
@@ -14018,6 +14028,10 @@ export type InitiativePropertySnapshot = {
      */
     priority?: string | null;
     /**
+     * Start timestamp, or unset.
+     */
+    startDate?: string | null;
+    /**
      * Status option id, or unset.
      */
     status?: string | null;
@@ -14536,6 +14550,50 @@ export type LocationResponseV3 = {
      */
     metadata: DocumentBasic;
     type: 'syncServiceContent';
+};
+
+/**
+ * Typed time to log on a task.
+ */
+export type LogTimeRequest = {
+    /**
+     * The logger's calendar day for the work, `YYYY-MM-DD`.
+     */
+    date: string;
+    /**
+     * When the work ended, after `startedAt`.
+     */
+    endedAt?: string | null;
+    /**
+     * A UUIDv7 chosen by the client, so a retry logs once; generated when omitted.
+     */
+    id?: string | null;
+    /**
+     * Length in whole minutes, 1 to 1440.
+     */
+    minutes: number;
+    /**
+     * What the time was spent on, up to 2000 characters.
+     */
+    note?: string | null;
+    /**
+     * When the work started; given with `endedAt` or not at all.
+     */
+    startedAt?: string | null;
+};
+
+/**
+ * An entry and its task's Time logged after the write that returned it.
+ */
+export type LoggedTime = {
+    /**
+     * The entry as stored.
+     */
+    entry: TimeEntry;
+    /**
+     * The task's Time logged, in minutes.
+     */
+    totalMinutes: number;
 };
 
 export type MacroUserIdStr = string;
@@ -18253,10 +18311,14 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    /**
+     * True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone.
+     */
+    has_time?: boolean;
     type: 'Date';
     /**
-     * Date/timestamp value
-     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
+     * Date value, with or without a time of day
+     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
      */
     value: string;
 } | {
@@ -18972,6 +19034,24 @@ export type RunPatch = {
     underline?: boolean | null;
 };
 
+/**
+ * A person's running timer.
+ */
+export type RunningTimer = {
+    /**
+     * The timer's id, kept by the entry it becomes.
+     */
+    id: string;
+    /**
+     * When it started, by the server's clock.
+     */
+    startedAt: string;
+    /**
+     * The task being timed.
+     */
+    taskId: string;
+};
+
 export type S3ObjectInfo = {
     bucket: string;
     key: string;
@@ -19488,6 +19568,7 @@ export type SetPropertyValue = {
     type: 'boolean';
     value: boolean;
 } | {
+    has_time?: boolean;
     type: 'date';
     value: string;
 } | {
@@ -22300,6 +22381,39 @@ export type StageRequirement = {
 };
 
 /**
+ * Start timing a task.
+ */
+export type StartTimerRequest = {
+    /**
+     * A UUIDv7 chosen by the client, so a retry starts once; generated when omitted.
+     */
+    id?: string | null;
+    /**
+     * An earlier start within the last 24 hours; only Undo on a switch sends it.
+     */
+    startedAt?: string | null;
+    /**
+     * The task to time.
+     */
+    taskId: string;
+    /**
+     * IANA zone whose day a stopped previous timer's entry takes; UTC when omitted.
+     */
+    timeZone?: string | null;
+};
+
+/**
+ * A started timer, and the entry saved for the timer it replaced.
+ */
+export type StartedTimer = {
+    stopped?: null | LoggedTime;
+    /**
+     * The timer now running.
+     */
+    timer: RunningTimer;
+};
+
+/**
  * Starter result. A missing database means the user already started or removed it.
  */
 export type StarterDatabase = {
@@ -22329,6 +22443,35 @@ export type StarterDocumentsResponse = {
      * Id of the user's "Macro how to guide".
      */
     how_to_guide_id: string;
+};
+
+/**
+ * Stop the caller's timer.
+ */
+export type StopTimerRequest = {
+    /**
+     * When the person stopped working, for a timer past the limit.
+     */
+    endedAt?: string | null;
+    /**
+     * Log all the time until now, for a timer past the limit.
+     */
+    logAll?: boolean;
+    /**
+     * IANA zone whose calendar day the entry takes; UTC when omitted.
+     */
+    timeZone?: string | null;
+    /**
+     * The timer to stop.
+     */
+    timerId: string;
+};
+
+/**
+ * The entry a stop saved, or none when the timer was discarded.
+ */
+export type StoppedTimer = {
+    logged?: null | LoggedTime;
 };
 
 /**
@@ -22933,6 +23076,16 @@ export type TaskTemplateConfiguration = {
 };
 
 /**
+ * A task's Time logged.
+ */
+export type TaskTimeTotal = {
+    /**
+     * The task's Time logged, in minutes.
+     */
+    totalMinutes: number;
+};
+
+/**
  * Availability for exactly the members selected by the domain service.
  */
 export type TeamAvailability = {
@@ -23373,6 +23526,110 @@ export type ThreadState = {
 };
 
 /**
+ * Time a person logged on a task.
+ */
+export type TimeEntry = {
+    /**
+     * When it was logged.
+     */
+    createdAt: string;
+    /**
+     * The logger's own calendar day for the work.
+     */
+    date: string;
+    /**
+     * When the work ended, given exactly when `started_at` is.
+     */
+    endedAt?: string | null;
+    /**
+     * The entry's id; a timer's entry keeps the timer's id.
+     */
+    id: string;
+    /**
+     * Length in whole minutes; the truth even when a start and end are given.
+     */
+    minutes: number;
+    /**
+     * What the time was spent on.
+     */
+    note?: string | null;
+    /**
+     * How the entry was made.
+     */
+    source: TimeEntrySource;
+    /**
+     * When the work started, if known.
+     */
+    startedAt?: string | null;
+    /**
+     * The task document the time was spent on.
+     */
+    taskId: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+    /**
+     * Who logged it.
+     */
+    userId: string;
+};
+
+/**
+ * Where a page of entries continues: after this day and id, newest first.
+ */
+export type TimeEntryCursor = {
+    /**
+     * The day of the last entry returned.
+     */
+    date: string;
+    /**
+     * The id of the last entry returned.
+     */
+    id: string;
+};
+
+/**
+ * A task's entries, newest day first, with its Time logged.
+ */
+export type TimeEntryPage = {
+    /**
+     * Entries of this page.
+     */
+    entries: Array<TimeEntry>;
+    nextCursor?: null | TimeEntryCursor;
+    /**
+     * The task's Time logged, in minutes.
+     */
+    totalMinutes: number;
+};
+
+/**
+ * How a time entry was made.
+ */
+export type TimeEntrySource = 'manual' | 'timer';
+
+/**
+ * Error body of the time tracking endpoints.
+ */
+export type TimeTrackingApiError = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: TimeTrackingErrorCode;
+    /**
+     * Human-readable failure description.
+     */
+    message: string;
+    timer?: null | RunningTimer;
+};
+
+/**
+ * Machine-readable reason a time tracking request failed.
+ */
+export type TimeTrackingErrorCode = 'not_found' | 'forbidden' | 'not_author' | 'invalid_input' | 'timer_over_limit' | 'conflict' | 'unavailable' | 'internal';
+
+/**
  * A displayable fact returned together with a message page.
  */
 export type TimelineActivity = {
@@ -23396,6 +23653,17 @@ export type TimelineActivity = {
      * The action's stored payload.
      */
     payload?: unknown;
+};
+
+/**
+ * The caller's timer, if any, and the server's clock to count it from.
+ */
+export type TimerState = {
+    /**
+     * The server's current time.
+     */
+    serverNow: string;
+    timer?: null | RunningTimer;
 };
 
 /**
@@ -23981,6 +24249,32 @@ export type UpdateTaskTemplateRequest = {
      * Revision observed when editing began.
      */
     revision: number;
+};
+
+/**
+ * Changes to one's own entry. Omitted fields stay; `null` clears a note or span.
+ */
+export type UpdateTimeEntryRequest = {
+    /**
+     * A new day, `YYYY-MM-DD`.
+     */
+    date?: string | null;
+    /**
+     * A new end, or `null` to clear the span; changed with `startedAt`.
+     */
+    endedAt?: string | null;
+    /**
+     * A new length in whole minutes, 1 to 1440.
+     */
+    minutes?: number | null;
+    /**
+     * A new note, or `null` for none.
+     */
+    note?: string | null;
+    /**
+     * A new start, or `null` to clear the span; changed with `endedAt`.
+     */
+    startedAt?: string | null;
 };
 
 /**
@@ -37941,6 +38235,226 @@ export type GetThreadChannelSharesResponses = {
 };
 
 export type GetThreadChannelSharesResponse = GetThreadChannelSharesResponses[keyof GetThreadChannelSharesResponses];
+
+export type DeleteTimeEntryData = {
+    body?: never;
+    path: {
+        /**
+         * The entry's id.
+         */
+        entry_id: string;
+    };
+    query?: never;
+    url: '/time/entries/{entry_id}';
+};
+
+export type DeleteTimeEntryErrors = {
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type DeleteTimeEntryError = DeleteTimeEntryErrors[keyof DeleteTimeEntryErrors];
+
+export type DeleteTimeEntryResponses = {
+    200: TaskTimeTotal;
+};
+
+export type DeleteTimeEntryResponse = DeleteTimeEntryResponses[keyof DeleteTimeEntryResponses];
+
+export type UpdateTimeEntryData = {
+    body: UpdateTimeEntryRequest;
+    path: {
+        /**
+         * The entry's id.
+         */
+        entry_id: string;
+    };
+    query?: never;
+    url: '/time/entries/{entry_id}';
+};
+
+export type UpdateTimeEntryErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type UpdateTimeEntryError = UpdateTimeEntryErrors[keyof UpdateTimeEntryErrors];
+
+export type UpdateTimeEntryResponses = {
+    200: LoggedTime;
+};
+
+export type UpdateTimeEntryResponse = UpdateTimeEntryResponses[keyof UpdateTimeEntryResponses];
+
+export type ListTimeEntriesData = {
+    body?: never;
+    path: {
+        /**
+         * The task document's id.
+         */
+        task_id: string;
+    };
+    query?: {
+        /**
+         * Entries per page, 1 to 200; 50 when omitted.
+         */
+        limit?: number;
+        /**
+         * The `date` of the previous page's `nextCursor`.
+         */
+        cursorDate?: string;
+        /**
+         * The `id` of the previous page's `nextCursor`.
+         */
+        cursorId?: string;
+    };
+    url: '/time/tasks/{task_id}/entries';
+};
+
+export type ListTimeEntriesErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type ListTimeEntriesError = ListTimeEntriesErrors[keyof ListTimeEntriesErrors];
+
+export type ListTimeEntriesResponses = {
+    200: TimeEntryPage;
+};
+
+export type ListTimeEntriesResponse = ListTimeEntriesResponses[keyof ListTimeEntriesResponses];
+
+export type LogTimeData = {
+    body: LogTimeRequest;
+    path: {
+        /**
+         * The task document's id.
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/time/tasks/{task_id}/entries';
+};
+
+export type LogTimeErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    409: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type LogTimeError = LogTimeErrors[keyof LogTimeErrors];
+
+export type LogTimeResponses = {
+    200: LoggedTime;
+};
+
+export type LogTimeResponse = LogTimeResponses[keyof LogTimeResponses];
+
+export type GetTimerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/time/timer';
+};
+
+export type GetTimerErrors = {
+    401: ErrorResponse;
+    500: TimeTrackingApiError;
+};
+
+export type GetTimerError = GetTimerErrors[keyof GetTimerErrors];
+
+export type GetTimerResponses = {
+    200: TimerState;
+};
+
+export type GetTimerResponse = GetTimerResponses[keyof GetTimerResponses];
+
+export type DiscardTimerData = {
+    body: DiscardTimerRequest;
+    path?: never;
+    query?: never;
+    url: '/time/timer/discard';
+};
+
+export type DiscardTimerErrors = {
+    401: ErrorResponse;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type DiscardTimerError = DiscardTimerErrors[keyof DiscardTimerErrors];
+
+export type DiscardTimerResponses = {
+    204: void;
+};
+
+export type DiscardTimerResponse = DiscardTimerResponses[keyof DiscardTimerResponses];
+
+export type StartTimerData = {
+    body: StartTimerRequest;
+    path?: never;
+    query?: never;
+    url: '/time/timer/start';
+};
+
+export type StartTimerErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    409: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type StartTimerError = StartTimerErrors[keyof StartTimerErrors];
+
+export type StartTimerResponses = {
+    200: StartedTimer;
+};
+
+export type StartTimerResponse = StartTimerResponses[keyof StartTimerResponses];
+
+export type StopTimerData = {
+    body: StopTimerRequest;
+    path?: never;
+    query?: never;
+    url: '/time/timer/stop';
+};
+
+export type StopTimerErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    404: TimeTrackingApiError;
+    409: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type StopTimerError = StopTimerErrors[keyof StopTimerErrors];
+
+export type StopTimerResponses = {
+    200: StoppedTimer;
+};
+
+export type StopTimerResponse = StopTimerResponses[keyof StopTimerResponses];
 
 export type ListUserApiKeysData = {
     body?: never;

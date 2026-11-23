@@ -20,7 +20,8 @@ threads, pins, recents, notifications, folders, activity.
 - `src/service/task_templates.rs`: composes task-template policy with primary-backed Teams roles; `src/api/task_templates.rs` exposes versioned REST routes, including replay-safe client creation IDs. See `docs/guides/task-templates.md`.
 - `/channel-labels` retains legacy participant-only label semantics; additive `/channel-sections` mounts `channel_labels` with `for_sections` services for exclusive manual or name-rule membership and visible unjoined team channels.
 - `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `PUT /saved_views/definitions/{id}/appearance` changes shared icon/color metadata without advancing the filter revision or timestamp, and creation accepts optional initial appearance. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it share the CRM configuration-kind permission gate. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
-- Personal contact pages use `graphql_contacts` and the contacts directory service.
+- Personal contact pages use `graphql_contacts` and the contacts directory service;
+  its named read (`contactsNamedBy`) goes through the same `FlaggedContactReads`.
   Compose primary-backed graph and name readers in `server.rs`, and insert the
   context through the shared GraphQL HTTP/websocket request-data function.
 - Insert `task_dependency_loader` alongside the property loader for both HTTP and websocket requests; dependency facts use the shared properties domain and canonical document access receipts.
@@ -134,6 +135,10 @@ threads, pins, recents, notifications, folders, activity.
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.
 
+- `/time` mounts `crates/time_tracking` (entries and the running timer). Its
+  writes need `enable-time-tracking` for the caller from the shared PostHog
+  client, failing closed; a local stack uses `LocalTimeTracking` instead, so
+  time tracking is on there without a PostHog flag, as Passwords is.
 - Provision required `POSTHOG_API_KEY` before startup; the flag client
   evaluates `enable-programmatic-calls` per caller for the explicit call start,
   join, and leave routes; failures disable those routes.

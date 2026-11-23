@@ -1,3 +1,4 @@
+import { TaskDependencyRecipeSchema } from '../authority.generated';
 import {
   isPeopleContextUpdate,
   isPeopleReferenceRequest,
@@ -155,6 +156,9 @@ export type CoordinatorToTabEnvelope =
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'registered';
       tabId: string;
+      /** Another visible tab's engine is starting or running as this tab
+       * joins, so this tab is not about to own the cache. */
+      ownerElsewhere?: true;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -651,11 +655,15 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'identityBindings',
           'uncertainCalendarEventKeys',
           'clientMetadata',
+          'taskDependencyRecipe',
           'createdAtMs',
           'owner',
           'nowMs',
           'leaseExpiresAtMs',
         ]) &&
+        (value.taskDependencyRecipe === undefined ||
+          TaskDependencyRecipeSchema.safeParse(value.taskDependencyRecipe)
+            .success) &&
         (value.uncertainCalendarEventKeys === undefined ||
           (Array.isArray(value.uncertainCalendarEventKeys) &&
             value.uncertainCalendarEventKeys.length <= 256 &&
@@ -1129,8 +1137,14 @@ export function validateCoordinatorToTabEnvelope(
   switch (value.kind) {
     case 'registered':
       if (
-        hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId']) &&
-        isNonEmptyString(value.tabId)
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerElsewhere',
+        ]) &&
+        isNonEmptyString(value.tabId) &&
+        (value.ownerElsewhere === undefined || value.ownerElsewhere === true)
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }

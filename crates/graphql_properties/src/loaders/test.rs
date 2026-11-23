@@ -28,6 +28,7 @@ async fn retains_only_authorized_property_targets() {
         model_entity::EntityType::DatabaseRow.with_entity_string("denied".into()),
         model_entity::EntityType::Team.with_entity_string("unsupported".into()),
         model_entity::EntityType::Document.with_entity_string("document".into()),
+        model_entity::EntityType::CrmContact.with_entity_string("contact".into()),
     ];
     let calls = AtomicUsize::new(0);
     let receipts = load_view_receipts(&keys, |key| {
@@ -41,13 +42,13 @@ async fn retains_only_authorized_property_targets() {
         }
     })
     .await;
-    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
     let mut ids = receipts
         .iter()
         .map(|receipt| receipt.entity().entity_id.as_str())
         .collect::<Vec<_>>();
     ids.sort();
-    assert_eq!(ids, ["allowed", "document"]);
+    assert_eq!(ids, ["allowed", "contact", "document"]);
 }
 
 #[tokio::test]

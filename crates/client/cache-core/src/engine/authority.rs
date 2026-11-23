@@ -358,6 +358,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         }
         self.ensure_revision_can_advance()?;
         self.hot.clear();
+        self.kept_reads = None;
         self.live_queries = live_query::LiveQueries::default();
         self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
