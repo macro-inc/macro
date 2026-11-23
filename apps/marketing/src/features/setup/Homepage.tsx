@@ -52,7 +52,8 @@ export function Homepage(props: { embedded?: boolean } = {}) {
             aria-labelledby="macro-home-title"
           >
             <h1 id="macro-home-title" data-welcome-heading>
-              The unified workspace for your company.
+              The unified workspace <br />
+              for your company.
             </h1>
             <h2 class="macro-home-tagline">
               Macro replaces 27+ apps with one connected system designed for

@@ -1,11 +1,12 @@
-/* The homepage's tabbed product view, on the same measure as the feature pages' tutorial video. */
+/* Match the desktop footprint of the Email hero demo. */
 .homepage-tour {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  width: min(100% - 48px, 1000px);
+  width: min(100% - 48px, 720px);
+  aspect-ratio: 16 / 9;
   margin: 0 auto;
-  padding: 40px 64px 64px;
+  padding: 24px 32px 0;
   border-radius: 32px;
   corner-shape: squircle;
   background: #141414;
@@ -36,8 +37,9 @@
 .homepage-tour-bar {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 /* Frosted pills over the wallpaper, as the app's own segmented controls. */
@@ -73,7 +75,7 @@
   overflow: hidden;
   flex: none;
   min-height: 36px;
-  padding: 0 18px;
+  padding: 0 14px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -148,18 +150,22 @@
 @media (max-width: 699px) {
   .homepage-tour {
     width: calc(100% - 32px);
+    aspect-ratio: auto;
     padding: 14px 0 0 14px;
     border-radius: 20px;
   }
 
   .homepage-tour-bar {
+    justify-content: flex-start;
     margin-bottom: 16px;
     padding-right: 14px;
   }
 
-  /* A phone shows the window's left part at a readable size. */
+  .homepage-tour .homepage-tour-tabs button { padding-inline: 18px; }
+
+  /* Keep the left side readable on phones without enlarging the window on tablets. */
   .homepage-tour-screen {
-    width: 180%;
+    width: min(180%, 650px);
     margin-bottom: -6%;
   }
 }

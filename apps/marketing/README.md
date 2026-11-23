@@ -14,22 +14,28 @@ future re-enablement.
 
 Use a pale blue selection highlight (#b8d5ff) with dark text (#101820) in both website entry styles. Keep public website text selectable with native browser behavior; restrict `user-select: none` to interactive controls that need it, never the page globally.
 
-The homepage follows the Email page. Its introduction is the feature-page hero:
-the H1 “The unified workspace for your company.”, the supporting H2 “Macro
+The homepage uses the feature-page hero with the live site's headline and subhead.
+Break the H1 after “The unified workspace” and keep the supporting H2 “Macro
 replaces 27+ apps with one connected system designed for humans and agents.”
-(narrower than the H1), and Get Macro (signup) beside Book a demo, centered on desktop and left-aligned
-below 700px. `HomepageTour` follows: one tab per module (Home, Mail, Chat, Tasks,
-Calendar, Docs, CRM, Calls) showing that module's captured app window on its
-`TutorialWallpaper`. It advances every five seconds until the visitor picks a
-tab, uses the arrow keys or the Next button, and never advances under reduced
-motion. A phone shows the window's left part at a readable size, and the tab
-strip fades at the edge where more tabs continue. The backing/security badges
-sit below the tour. `HomepageSections` then gives each product one
-`FeaturePageSection`, in the feature pages' 640px reading column with an 800px
-graphic: a left-aligned headline that names the product through `ProductCopy`,
-one selling-point sentence, a “Learn about [feature] →” link, and one captured
-window on that product's wallpaper (`HomepageScreen`). Pricing, open source and
-`HomepageClosing` end the page. The window captures in `src/assets/homepage/`
+balanced below it. Center the hero on desktop and left-align it below 700px,
+with Get Macro (signup) beside Book a demo. `HomepageTour` follows in a 720px
+maximum desktop frame at 16:9, sized like the Email hero demo. Each module
+(Home, Mail, Chat, Tasks, Calendar, Docs, CRM, Calls) has a tab showing its
+captured app window on a `TutorialWallpaper`. The tour advances every five
+seconds until the visitor picks a tab, uses the arrow keys or the Next button,
+and never advances under reduced motion. A phone shows the window's left part
+at a readable size, and the tab strip fades at the edge where more tabs
+continue. The backing and security badges sit below the tour. `HomepageSections`
+then gives each product one
+`FeaturePageSection` in the feature pages' 640px reading column with an 800px
+graphic. Use the product page's hero heading and two or three sentences above
+the capture, with a “Learn about [feature] →” link where the product has a page.
+Let the heading wrap at its normal size. Follow each capture with about five
+sentences in smaller type that draw on the founder's letter, the repository
+README, and the competitor notes to explain why we built the Block and how it
+works with the others. Use `ProductCopy` for linked Block names. Pricing and
+open source use the same copy structure before `HomepageClosing`. The captures
+in `src/assets/homepage/`
 come from the in-app tutorial videos and show demo data. Mount shared UI styles
 scoped to `.macro-homepage` for direct loads and client-side navigation. Keep the
 homepage aura at 25% of the shared gradient and the grain at 1.2% opacity.
@@ -48,7 +54,7 @@ Lazy-load the lower `HomepageSections` chunk inside its own Suspense boundary so
 
 Keep legal pages (`/terms`, `/privacy`, `/dpa`, `/partners/terms`, and `/delete-account`) on the shared `RouteLegal.css` layout: centered slab titles and dates, a 640px reading column, Inter body copy, and spaced section rules. Preserve legal wording, clause numbering, and DPA table navigation when changing presentation.
 
-Use quiet text links labeled “Learn about [feature] →” under each homepage section's sentence, matching the small Inter section descriptions: 370 weight, 14px desktop / 13px phone, 1.65 line height, and placeholder ink. Scale arrows to the text. Use no boxed buttons or separate “Learn more” heading. Preserve 44px touch targets and direct product-page destinations.
+Use quiet text links labeled “Learn about [feature] →” under each homepage section's introduction, matching the small Inter captions: 370 weight, 14px desktop / 13px phone, and 1.65 line height. Scale arrows to the text. Preserve 44px touch targets and direct product-page destinations.
 The hero never intercepts scrolling. The shared website sidebar handles
 navigation; do not add a separate homepage index.
 Hide the homepage Downloads and Links resources rail below 1440px instead of
