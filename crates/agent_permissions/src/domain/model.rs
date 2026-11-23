@@ -277,9 +277,9 @@ impl PolicyChain {
         if levels.len() > MAX_CHAIN {
             return Err(ChainError::TooDeep);
         }
-        let linked = levels.windows(2).all(
-            |pair| matches!(pair, [level, next] if level.follows == Follows::Source(next.id)),
-        );
+        let linked = levels
+            .windows(2)
+            .all(|pair| matches!(pair, [level, next] if level.follows == Follows::Source(next.id)));
         if !linked {
             return Err(ChainError::Broken);
         }

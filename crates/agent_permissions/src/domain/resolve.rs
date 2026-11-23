@@ -248,7 +248,10 @@ pub fn effective(
     overlay: &Layer,
     entry: &CatalogEntry,
 ) -> (PermissionState, Origin) {
-    with_overlay(own_entry(saved, entry).pair(), overlay_entry(overlay, entry))
+    with_overlay(
+        own_entry(saved, entry).pair(),
+        overlay_entry(overlay, entry),
+    )
 }
 
 /// Who may do what with a view, decided by the service.
@@ -570,8 +573,7 @@ pub fn asks_looser(
                             .entries
                             .iter()
                             .filter(|entry| {
-                                entry.action == *action
-                                    && !now.has_exception(&entry.group, *action)
+                                entry.action == *action && !now.has_exception(&entry.group, *action)
                             })
                             .map(|entry| loosened(entry, from, to)),
                     );

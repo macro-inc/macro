@@ -91,9 +91,7 @@ impl IntoResponse for ToolPermissionApiError {
                 None,
             ),
             PermissionError::SourceCycle => (StatusCode::CONFLICT, "source_cycle", None, None),
-            PermissionError::SourceTooDeep => {
-                (StatusCode::CONFLICT, "source_too_deep", None, None)
-            }
+            PermissionError::SourceTooDeep => (StatusCode::CONFLICT, "source_too_deep", None, None),
             PermissionError::SourceNotAllowed => {
                 (StatusCode::FORBIDDEN, "source_not_allowed", None, None)
             }

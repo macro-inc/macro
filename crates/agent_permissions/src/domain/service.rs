@@ -556,7 +556,9 @@ where
                 // resolves to.
                 let saved = chain.rules();
                 let (before_overlay, after_saved, after_overlay) = match to {
-                    WriteTo::Saved => (&[][..], resolve::apply(saved, &changes, set_by), Vec::new()),
+                    WriteTo::Saved => {
+                        (&[][..], resolve::apply(saved, &changes, set_by), Vec::new())
+                    }
                     WriteTo::Session(_) => (
                         overlay,
                         saved.to_vec(),

@@ -19,9 +19,9 @@
 mod test;
 
 use agent_fold::domain::log::AgentSessionId;
+use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use bot_id::BotId;
 use sqlx::{PgConnection, PgPool};
 
 use crate::domain::model::{
@@ -363,11 +363,13 @@ async fn chain_ids(
 }
 
 /// The most policies on any path of followers ending at `policy`, itself
-/// included, counted no further than one past `MAX_CHAIN`; 0 when there is
-/// no such policy.
+/// included, counted no further than `levels`; 0 when there is no such
+/// policy. The walk visits every follower within `levels`, so a caller that
+/// needs only to know whether the height passes a bound walks no further.
 async fn read_followers_height(
     connection: &mut PgConnection,
     policy: PolicyId,
+    levels: i32,
 ) -> Result<usize, sqlx::Error> {
     let height = sqlx::query_scalar!(
         r#"
@@ -379,16 +381,18 @@ async fn read_followers_height(
             SELECT p.id, t.depth + 1
             FROM tree t
             JOIN agent_permission_policy p ON p.source_policy_id = t.id
-            WHERE t.depth <= $2
+            WHERE t.depth < $2
         )
         SELECT max(depth) FROM tree
         "#,
         policy.as_uuid(),
-        WALK_DEPTH,
+        levels,
     )
     .fetch_one(connection)
     .await?;
-    Ok(height.and_then(|height| usize::try_from(height).ok()).unwrap_or(0))
+    Ok(height
+        .and_then(|height| usize::try_from(height).ok())
+        .unwrap_or(0))
 }
 
 /// Why a source can't be set, checked under the sources lock.
@@ -418,7 +422,13 @@ async fn check_source(
     if up.contains(&policy) {
         return Ok(Err(PermissionError::SourceCycle));
     }
-    let down = read_followers_height(connection, policy).await?;
+    // Only whether the follower tree is taller than the room left matters:
+    // walk one level past it, no further.
+    let room = MAX_CHAIN.saturating_sub(up.len());
+    let down = match i32::try_from(room + 1) {
+        Ok(levels) if room > 0 => read_followers_height(connection, policy, levels).await?,
+        Ok(_) | Err(_) => MAX_CHAIN + 1,
+    };
     if down + up.len() > MAX_CHAIN {
         return Ok(Err(PermissionError::SourceTooDeep));
     }
@@ -793,7 +803,7 @@ impl PermissionStore for PgPermissionStore {
     async fn followers_height(&self, policy: PolicyId) -> Result<usize, Self::Err> {
         let mut transaction = self.pool.begin().await?;
         bound_source_walk(&mut transaction).await?;
-        let height = read_followers_height(&mut transaction, policy).await?;
+        let height = read_followers_height(&mut transaction, policy, WALK_DEPTH + 1).await?;
         transaction.commit().await?;
         Ok(height)
     }

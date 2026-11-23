@@ -267,7 +267,11 @@ impl PermissionStore for Arc<FakeStore> {
             *current = Follows::Source(source);
         }
         if follows == Follows::Own
-            && let Some(rules) = self.rules.lock().unwrap().get_mut(&Slot::Policy(write.policy))
+            && let Some(rules) = self
+                .rules
+                .lock()
+                .unwrap()
+                .get_mut(&Slot::Policy(write.policy))
         {
             rules.retain(|rule| rule.restriction_only);
         }
@@ -1391,10 +1395,7 @@ async fn an_agent_tightens_a_follower_but_cannot_loosen_its_source() {
         state: Some(PermissionState::Always),
     }];
     assert!(matches!(
-        fixture
-            .service
-            .tighten(&agent, BotId::TEST_A, loosen)
-            .await,
+        fixture.service.tighten(&agent, BotId::TEST_A, loosen).await,
         Err(PermissionError::WouldLoosen(_))
     ));
     // A stricter local default is saved on the follower, not the source.

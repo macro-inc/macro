@@ -122,7 +122,10 @@ fn a_follower_resolves_through_its_source_live() {
         entry_state(&resolver, "email", "send_email"),
         (Never, Origin::Source)
     );
-    assert_eq!(resolver.pair("email", Action::Send), (Never, Origin::Source));
+    assert_eq!(
+        resolver.pair("email", Action::Send),
+        (Never, Origin::Source)
+    );
     // An Allow exception at the source opens the pair under its Ask
     // default.
     let chain = chain_of(
@@ -298,7 +301,10 @@ fn detach_excludes_session_overlays_and_approvals() {
     // it: the follower's saved rules after a detach resolve as the chain
     // did without its session.
     let chain = chain_of(
-        vec![Vec::new(), vec![row(pair_target("email", Action::Send), Ask, false)]],
+        vec![
+            Vec::new(),
+            vec![row(pair_target("email", Action::Send), Ask, false)],
+        ],
         false,
     );
     let overlay = vec![row(default_target(Action::Read), Never, true)];
@@ -367,7 +373,10 @@ fn an_explicit_choice_at_the_root_stays_a_persons_choice() {
             .find(|rule| rule.target == target)
             .map(|rule| (rule.state, rule.restriction_only))
     };
-    assert_eq!(flags(pair_target("email", Action::Send)), Some((Ask, false)));
+    assert_eq!(
+        flags(pair_target("email", Action::Send)),
+        Some((Ask, false))
+    );
     assert_eq!(
         flags(tool_target("storage", "delete_project")),
         Some((Always, false))
@@ -416,7 +425,10 @@ impl Fixtures {
             let action = Action::ALL[self.next(5)];
             let state = self.state();
             let restriction = mixed && self.coin();
-            push(&mut rules, row(pair_target(group, action), state, restriction));
+            push(
+                &mut rules,
+                row(pair_target(group, action), state, restriction),
+            );
         }
         for _ in 0..self.next(4) {
             let (service, operation) = if self.next(6) == 0 {
@@ -462,7 +474,11 @@ impl Fixtures {
 /// Every group a resolution can be asked about: the catalog's, those the
 /// chain's rows name, and one nobody named.
 fn groups_of(catalog: &Catalog, chain: &PolicyChain) -> Vec<String> {
-    let mut groups: Vec<String> = catalog.groups.iter().map(|group| group.id.clone()).collect();
+    let mut groups: Vec<String> = catalog
+        .groups
+        .iter()
+        .map(|group| group.id.clone())
+        .collect();
     for level in chain.levels() {
         for rule in &level.rules {
             if let Target::GroupAction { group, .. } = &rule.target
@@ -541,7 +557,12 @@ fn the_view_and_the_gate_agree_through_a_chain() {
                 .groups
                 .iter()
                 .find(|group| group.group == entry.group)
-                .and_then(|group| group.actions.iter().find(|pair| pair.action == entry.action))
+                .and_then(|group| {
+                    group
+                        .actions
+                        .iter()
+                        .find(|pair| pair.action == entry.action)
+                })
                 .unwrap();
             let shown = listed
                 .overrides

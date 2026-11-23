@@ -6,8 +6,8 @@ use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 
 use super::*;
 use crate::domain::model::{
-    Change, OperationKey, PolicyChain, PolicyId, PolicyKind, PolicyOwner, ResolvedCall, Rule, SessionPolicy, Tightened,
-    ToolPermissionCatalog,
+    Change, OperationKey, PolicyChain, PolicyId, PolicyKind, PolicyOwner, ResolvedCall, Rule,
+    SessionPolicy, Tightened, ToolPermissionCatalog,
 };
 use crate::domain::resolve::{self, ViewAccess};
 

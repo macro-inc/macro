@@ -186,9 +186,15 @@ fn asking_for_a_tool_state_looser_than_it_has_is_refused() {
 
     // Moving the group's never onto the tool asks for nothing looser.
     let never = [change(tool("email", "send_email"), Some(Never))];
-    assert_eq!(asks_looser(&catalog, &Resolver::own(&saved, &[]), &never), Ok(()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&saved, &[]), &never),
+        Ok(())
+    );
     // Nor does pinning ask under an always group.
-    assert_eq!(asks_looser(&catalog, &Resolver::own(&[], &[]), &ask), Ok(()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&[], &[]), &ask),
+        Ok(())
+    );
 }
 
 #[test]
@@ -209,11 +215,17 @@ fn removing_or_loosening_a_group_setting_is_refused_even_when_no_operation_moves
     // A group and action with no operations yet.
     let saved = [group_rule("calendar", Action::Send, Never)];
     let drop = [change(group_action("calendar", Action::Send), None)];
-    assert_eq!(asks_looser(&catalog, &Resolver::own(&saved, &[]), &drop), Err(Vec::new()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&saved, &[]), &drop),
+        Err(Vec::new())
+    );
 
     // Tightening a group passes.
     let never = [change(group_action("calendar", Action::Send), Some(Never))];
-    assert_eq!(asks_looser(&catalog, &Resolver::own(&saved, &[]), &never), Ok(()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&saved, &[]), &never),
+        Ok(())
+    );
 }
 
 #[test]
@@ -237,7 +249,11 @@ fn a_new_operation_takes_its_groups_action_and_a_new_group_is_always() {
 fn tighten(saved: &[Rule], changes: Vec<Change>) -> Result<(), Vec<LoosenedOperation>> {
     let changes = normalize(changes, false);
     let after = apply(saved, &changes, SetBy::Person);
-    tighten_only(&catalog(), &Resolver::own(saved, &[]), &Resolver::own(&after, &[]))
+    tighten_only(
+        &catalog(),
+        &Resolver::own(saved, &[]),
+        &Resolver::own(&after, &[]),
+    )
 }
 
 fn change(target: Target, state: Option<PermissionState>) -> Change {
@@ -323,7 +339,14 @@ fn an_agents_tool_pin_is_tightening_and_survives_as_the_stricter_setting() {
     let saved = [group_rule("email", Action::Send, Always)];
     let pin = normalize(vec![change(tool("email", "send_email"), Some(Ask))], true);
     let after = apply(&saved, &pin, SetBy::Agent);
-    assert_eq!(tighten_only(&catalog, &Resolver::own(&saved, &[]), &Resolver::own(&after, &[])), Ok(()));
+    assert_eq!(
+        tighten_only(
+            &catalog,
+            &Resolver::own(&saved, &[]),
+            &Resolver::own(&after, &[])
+        ),
+        Ok(())
+    );
     assert!(after.iter().any(|rule| rule.via_agent));
 }
 
@@ -348,7 +371,14 @@ fn a_session_overlay_can_tighten_but_never_loosen() {
 
     let removal = normalize(vec![change(tool("email", "send_email"), None)], true);
     let after = apply(&overlay, &removal, SetBy::Agent);
-    assert!(tighten_only(&catalog, &Resolver::own(&[], &overlay), &Resolver::own(&[], &after)).is_err());
+    assert!(
+        tighten_only(
+            &catalog,
+            &Resolver::own(&[], &overlay),
+            &Resolver::own(&[], &after)
+        )
+        .is_err()
+    );
 
     // An overlay holds no `always`: it becomes a removal.
     let to_always = normalize(
@@ -1015,7 +1045,10 @@ fn removing_an_exception_asks_for_the_default() {
         default_rule(Action::Send, Never),
         group_rule("email", Action::Send, Ask),
     ];
-    assert_eq!(asks_looser(&catalog, &Resolver::own(&saved, &[]), &removal), Ok(()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&saved, &[]), &removal),
+        Ok(())
+    );
 
     // Removing a default asks for always; the operations that follow it are
     // named.

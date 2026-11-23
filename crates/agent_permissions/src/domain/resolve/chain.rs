@@ -14,7 +14,7 @@ mod test;
 use agent_permission_registry::Action;
 use chrono::Utc;
 
-use super::{Found, Layer, Setting, own_default, own_entry, own_pair, overlay_entry, with_overlay};
+use super::{Found, Layer, Setting, overlay_entry, own_default, own_entry, own_pair, with_overlay};
 use crate::domain::model::{
     Catalog, CatalogEntry, Origin, PermissionState, PolicyChain, Rule, Target,
 };
@@ -273,7 +273,11 @@ pub fn materialize(catalog: &Catalog, chain: &PolicyChain) -> Vec<Rule> {
     let resolver = Resolver::new(chain, &[]);
     let mut rules = Vec::new();
 
-    let mut groups: Vec<&str> = catalog.groups.iter().map(|group| group.id.as_str()).collect();
+    let mut groups: Vec<&str> = catalog
+        .groups
+        .iter()
+        .map(|group| group.id.as_str())
+        .collect();
     for level in chain.levels() {
         for rule in &level.rules {
             if let Target::GroupAction { group, .. } = &rule.target

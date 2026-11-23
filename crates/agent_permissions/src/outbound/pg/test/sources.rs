@@ -12,7 +12,9 @@ use crate::outbound::registry::registry_catalog;
 
 /// The fixtures' agents: `AGENT`, then `sources.sql`'s six.
 fn agent(index: u128) -> BotId {
-    BotId::new_from_uuid(Uuid::from_u128(0x91000000_0000_0000_0000_000000000021 + index))
+    BotId::new_from_uuid(Uuid::from_u128(
+        0x91000000_0000_0000_0000_000000000021 + index,
+    ))
 }
 
 async fn policy(store: &PgPermissionStore, index: u128) -> PolicyId {
@@ -202,7 +204,10 @@ async fn a_chain_longer_than_the_limit_is_refused(pool: PgPool) {
         Err(PermissionError::SourceTooDeep)
     ));
     // The refused change left the accepted one.
-    assert_eq!(ids(&chain(&store, all[5]).await), [all[5], all[2], all[3], all[4]]);
+    assert_eq!(
+        ids(&chain(&store, all[5]).await),
+        [all[5], all[2], all[3], all[4]]
+    );
 
     // Only hand-edited data makes a cycle; reading it is an error, and so is
     // a gate's read.
@@ -242,7 +247,11 @@ async fn a_gate_reads_the_chain_rules_and_overlay_as_one_snapshot(pool: PgPool) 
     follow(&store, follower, source).await.unwrap();
     let session = AgentSessionId::new_from_uuid(SESSION);
     store
-        .apply_session(session, &[send_message_rule(Some(PermissionState::Never))], &user(OTHER))
+        .apply_session(
+            session,
+            &[send_message_rule(Some(PermissionState::Never))],
+            &user(OTHER),
+        )
         .await
         .unwrap();
 
@@ -296,11 +305,21 @@ async fn set_source_drops_person_rows_and_keeps_restrictions(pool: PgPool) {
         unreachable!()
     };
     store
-        .apply(follower, &[group_action(Some(PermissionState::Never))], &user(OWNER), SetBy::Person)
+        .apply(
+            follower,
+            &[group_action(Some(PermissionState::Never))],
+            &user(OWNER),
+            SetBy::Person,
+        )
         .await
         .unwrap();
     store
-        .apply(follower, &[tool(Some(PermissionState::Ask))], &user(OWNER), SetBy::Agent)
+        .apply(
+            follower,
+            &[tool(Some(PermissionState::Ask))],
+            &user(OWNER),
+            SetBy::Agent,
+        )
         .await
         .unwrap();
     follow(&store, follower, first).await.unwrap();
@@ -327,7 +346,12 @@ async fn set_source_drops_person_rows_and_keeps_restrictions(pool: PgPool) {
 
     // Changing sources keeps every row: while following, all are local.
     store
-        .apply(follower, &[default(Some(PermissionState::Ask))], &user(OWNER), SetBy::Person)
+        .apply(
+            follower,
+            &[default(Some(PermissionState::Ask))],
+            &user(OWNER),
+            SetBy::Person,
+        )
         .await
         .unwrap();
     follow(&store, follower, second).await.unwrap();
@@ -345,12 +369,22 @@ async fn detach_is_one_transaction(pool: PgPool) {
         unreachable!()
     };
     store
-        .apply(source, &[default(Some(PermissionState::Ask))], &user(OWNER), SetBy::Person)
+        .apply(
+            source,
+            &[default(Some(PermissionState::Ask))],
+            &user(OWNER),
+            SetBy::Person,
+        )
         .await
         .unwrap();
     follow(&store, follower, source).await.unwrap();
     store
-        .apply(follower, &[send_message_rule(Some(PermissionState::Never))], &user(OWNER), SetBy::Agent)
+        .apply(
+            follower,
+            &[send_message_rule(Some(PermissionState::Never))],
+            &user(OWNER),
+            SetBy::Agent,
+        )
         .await
         .unwrap();
 
@@ -358,15 +392,23 @@ async fn detach_is_one_transaction(pool: PgPool) {
     // after the delete: nothing of it stays.
     let owner = user(OWNER);
     let failed = store
-        .detach(SourceWrite { policy: follower, by: &owner }, |_| {
-            Ok(vec![Rule {
-                target: Target::Action { action: Action::Send },
-                state: PermissionState::Always,
-                via_agent: false,
-                restriction_only: false,
-                updated_at: chrono::Utc::now(),
-            }])
-        })
+        .detach(
+            SourceWrite {
+                policy: follower,
+                by: &owner,
+            },
+            |_| {
+                Ok(vec![Rule {
+                    target: Target::Action {
+                        action: Action::Send,
+                    },
+                    state: PermissionState::Always,
+                    via_agent: false,
+                    restriction_only: false,
+                    updated_at: chrono::Utc::now(),
+                }])
+            },
+        )
         .await;
     assert!(failed.is_err());
     let kept = chain(&store, follower).await;
@@ -375,9 +417,13 @@ async fn detach_is_one_transaction(pool: PgPool) {
 
     // A refused plan changes nothing either.
     let refused = store
-        .detach(SourceWrite { policy: follower, by: &owner }, |_| {
-            Err(PermissionError::Forbidden)
-        })
+        .detach(
+            SourceWrite {
+                policy: follower,
+                by: &owner,
+            },
+            |_| Err(PermissionError::Forbidden),
+        )
         .await
         .unwrap();
     assert!(matches!(refused, Err(PermissionError::Forbidden)));
@@ -456,7 +502,12 @@ async fn a_deleted_source_stays_frozen(pool: PgPool) {
         unreachable!()
     };
     store
-        .apply(source, &[send_message_rule(Some(PermissionState::Never))], &user(OWNER), SetBy::Person)
+        .apply(
+            source,
+            &[send_message_rule(Some(PermissionState::Never))],
+            &user(OWNER),
+            SetBy::Person,
+        )
         .await
         .unwrap();
     follow(&store, follower, source).await.unwrap();
@@ -480,9 +531,7 @@ async fn a_deleted_source_stays_frozen(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("permissions", "sources"))
 )]
-async fn the_policy_table_refuses_a_root_that_follows_and_a_source_without_following(
-    pool: PgPool,
-) {
+async fn the_policy_table_refuses_a_root_that_follows_and_a_source_without_following(pool: PgPool) {
     let store = PgPermissionStore::new(pool.clone());
     let [agent_policy] = policies(&store, 1).await[..] else {
         unreachable!()
