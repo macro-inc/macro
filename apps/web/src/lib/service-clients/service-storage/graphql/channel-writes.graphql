@@ -1,0 +1,32 @@
+fragment ChannelMessageWriteFields on GraphqlChannelMessageWrite {
+	message {
+		...ChannelMessageFields
+	}
+	root {
+		...ChannelMessageFields
+	}
+}
+
+mutation SendChannelMessage($input: SendChannelMessageInput!) {
+	sendChannelMessage(input: $input) {
+		...ChannelMessageWriteFields
+	}
+}
+
+mutation EditChannelMessage($input: EditChannelMessageInput!) {
+	editChannelMessage(input: $input) {
+		...ChannelMessageWriteFields
+	}
+}
+
+mutation DeleteChannelMessage($input: DeleteChannelMessageInput!) {
+	deleteChannelMessage(input: $input) {
+		...ChannelMessageWriteFields
+	}
+}
+
+mutation ReactToChannelMessage($input: ReactToChannelMessageInput!) {
+	reactToChannelMessage(input: $input) {
+		...ChannelMessageWriteFields
+	}
+}

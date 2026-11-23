@@ -67,7 +67,10 @@ export const entityResolverSchema = {
     },
     channelMessage: {
       targets: ['GraphqlChannelMessage'],
-      argumentPaths: [['channelId'], ['messageId']],
+      argumentPaths: [
+        ['channelId'],
+        ['messageId'],
+      ],
     },
     emailThread: {
       targets: ['GraphqlSoupEmailThread'],
