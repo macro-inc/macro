@@ -1044,6 +1044,7 @@ pub(crate) struct ApiContext {
     pub initiative_activity_state: DssInitiativeActivityState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_time_tracking_context: graphql_time_tracking::TimeTrackingGraphqlContext,
     pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,
