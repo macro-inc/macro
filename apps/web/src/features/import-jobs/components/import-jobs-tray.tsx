@@ -10,7 +10,7 @@ import type { ImportSource, RunErrorKind } from '@service-cognition/import';
 import { Button, cn, Item, ProgressRing, Surface } from '@ui';
 import { type Component, Index, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import {
   type ImportJob,
   type ImportJobPhase,
@@ -59,8 +59,8 @@ function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
         .with({ kind: 'some', problems: null }, () =>
           t('importJobs.completedPartly')
         )
-        .with({ kind: 'some' }, ({ problems }) =>
-          t('importJobs.completedWithProblems', { count: problems ?? 0 })
+        .with({ kind: 'some', problems: P.number }, ({ problems }) =>
+          t('importJobs.completedWithProblems', { count: problems })
         )
         .exhaustive()
     )

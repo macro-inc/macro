@@ -193,6 +193,20 @@ describe('a finished import', () => {
     ).toEqual({ kind: 'completed', outcome: { kind: 'some', problems: 2 } });
   });
 
+  it('whose failures are only a sample does not count them', () => {
+    // The report lists at most 50 failures, so 50 may mean more.
+    expect(
+      finished({
+        ...WRITING,
+        status: 'completed',
+        imported: 3,
+        failures: Array.from({ length: 50 }, (_, index) =>
+          failure(`Page ${index}`)
+        ),
+      })
+    ).toEqual({ kind: 'completed', outcome: { kind: 'some', problems: null } });
+  });
+
   it('with problems but no report yet does not count them', () => {
     expect(finished(undefined)).toEqual({
       kind: 'completed',

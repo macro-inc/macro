@@ -168,14 +168,21 @@ export function importJobPhase(
     .exhaustive();
 }
 
+/**
+ * The report lists at most this many failures (`REPORT_LIST_LIMIT` in the
+ * import crate), so a full list may stand for more.
+ */
+const LISTED_FAILURES_LIMIT = 50;
+
 function completedOutcome(
   run: ImportRun,
   report: NotionImportReport | undefined
 ): CompletedOutcome {
-  const problems = report?.failures?.length ?? 0;
-  if (!run.error && problems === 0) return { kind: 'all' };
+  const listed = report?.failures?.length ?? 0;
+  if (!run.error && listed === 0) return { kind: 'all' };
   if (report?.imported === 0) return { kind: 'nothing' };
-  return { kind: 'some', problems: problems > 0 ? problems : null };
+  const counted = listed > 0 && listed < LISTED_FAILURES_LIMIT;
+  return { kind: 'some', problems: counted ? listed : null };
 }
 
 /** Completed fraction for a determinate phase, or null when unmeasured. */
