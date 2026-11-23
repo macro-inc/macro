@@ -26,7 +26,7 @@ pub(crate) mod test;
 pub(crate) use compiler::ModelFilterCompiler;
 pub(crate) use dss::DssEvents;
 pub(crate) use protocol::{
-    EXTENSION_ID, METHOD_PREFIX, RequestScope, handle, is_confirm_step, names_chatgpt_profile,
+    EXTENSION_ID, METHOD_PREFIX, RequestScope, handle, is_confirm_step, split_profile,
 };
 
 use catalog::Selection;

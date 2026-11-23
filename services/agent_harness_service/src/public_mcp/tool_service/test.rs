@@ -1287,7 +1287,8 @@ mod code_mode {
     #[tokio::test]
     async fn chatgpt_through_its_worker_is_offered_events_whatever_its_credential() {
         // A token refreshed without a resource reaches here as ChatGPT's own
-        // OAuth client; the Worker's profile header still gets it events.
+        // OAuth client; the Worker's methods under ChatGPT's profile still
+        // get it events.
         let app = events_app();
         for caller in [
             mcp_client("ChatGPT"),
@@ -1298,9 +1299,9 @@ mod code_mode {
                 app.clone(),
                 USER,
                 caller.clone(),
-                "events/list",
+                "com.macro/chatgpt/events/list",
                 serde_json::json!({}),
-                &[("x-macro-events-profile", "chatgpt")],
+                &[],
             )
             .await;
             assert!(

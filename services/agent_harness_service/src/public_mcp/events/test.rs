@@ -5,7 +5,7 @@ use super::dss::{
     source_item,
 };
 use super::protocol::{
-    FILTER_META, INTERPRETATION_META, PROFILE_HEADER, PROFILE_META, RequestScope, handle,
+    CHATGPT_METHOD_PREFIX, FILTER_META, INTERPRETATION_META, PROFILE_META, RequestScope, handle,
 };
 use super::stream::{NotificationSink, SUBSCRIPTION_ID_META, SinkClosed};
 use super::{Compiled, MAX_STREAMS_PER_USER, McpEvents, SecretSealer, Selection};
@@ -1671,24 +1671,22 @@ async fn every_named_type_lists_the_fields_it_can_narrow_by() {
 
 // --- ChatGPT ---------------------------------------------------------------
 
-/// The extensions of a request the ChatGPT MCP Worker forwards.
-fn chatgpt() -> rmcp::model::Extensions {
-    let (parts, ()) = http::Request::builder()
-        .header(PROFILE_HEADER, "chatgpt")
-        .body(())
-        .unwrap()
-        .into_parts();
-    let mut extensions = rmcp::model::Extensions::new();
-    extensions.insert(parts);
-    extensions
+/// `method` as the ChatGPT MCP Worker forwards it.
+fn chatgpt(method: &str) -> String {
+    format!("{CHATGPT_METHOD_PREFIX}{method}")
 }
 
 #[tokio::test]
 async fn chatgpt_lists_every_named_type_for_webhooks_only() {
     let fixture = fixture();
-    let CustomResult(listed) = call(&fixture.events, "events/list", json!({}), &chatgpt())
-        .await
-        .unwrap();
+    let CustomResult(listed) = call(
+        &fixture.events,
+        &chatgpt("events/list"),
+        json!({}),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
     // ChatGPT's documented shape: the entries alone, and the profile it was
     // answered under, which the Worker checks and removes.
     assert_eq!(listed.as_object().unwrap().len(), 2);
@@ -1715,9 +1713,14 @@ async fn chatgpt_subscribes_with_its_profile_and_gets_the_documented_result() {
     let fixture = fixture();
     let mut params = subscribe_params("message.mentioned", json!({"mentioned_id": "me"}));
     params["cursor"] = Value::Null;
-    let CustomResult(result) = call(&fixture.events, "events/subscribe", params, &chatgpt())
-        .await
-        .unwrap();
+    let CustomResult(result) = call(
+        &fixture.events,
+        &chatgpt("events/subscribe"),
+        params,
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         result,
         json!({
@@ -1739,9 +1742,9 @@ async fn a_chatgpt_subscription_stored_without_its_profile_is_refused() {
     *fixture.store.stored_profile.lock().unwrap() = Some(McpDeliveryProfile::Mcp);
     let error = call(
         &fixture.events,
-        "events/subscribe",
+        &chatgpt("events/subscribe"),
         subscribe_params("message.mentioned", json!({"mentioned_id": "me"})),
-        &chatgpt(),
+        &no_extensions(),
     )
     .await
     .unwrap_err();
@@ -1776,9 +1779,9 @@ async fn chatgpt_unsubscribes_idempotently() {
     for _ in 0..2 {
         let CustomResult(result) = call(
             &fixture.events,
-            "events/unsubscribe",
+            &chatgpt("events/unsubscribe"),
             params.clone(),
-            &chatgpt(),
+            &no_extensions(),
         )
         .await
         .unwrap();
@@ -1791,9 +1794,9 @@ async fn chatgpt_gets_the_error_codes_of_the_draft_it_follows() {
     let fixture = fixture();
     let unknown = call(
         &fixture.events,
-        "events/subscribe",
+        &chatgpt("events/subscribe"),
         subscribe_params("message.teleported", json!({})),
-        &chatgpt(),
+        &no_extensions(),
     )
     .await
     .unwrap_err();
@@ -1801,9 +1804,9 @@ async fn chatgpt_gets_the_error_codes_of_the_draft_it_follows() {
     // Words are not offered to ChatGPT.
     let words = call(
         &fixture.events,
-        "events/subscribe",
+        &chatgpt("events/subscribe"),
         subscribe_params(QUERY_EVENT, json!({"query": MENTIONS})),
-        &chatgpt(),
+        &no_extensions(),
     )
     .await
     .unwrap_err();
@@ -1815,9 +1818,9 @@ async fn chatgpt_gets_the_error_codes_of_the_draft_it_follows() {
     });
     let callback = call(
         &fixture.events,
-        "events/subscribe",
+        &chatgpt("events/subscribe"),
         subscribe_params("message.posted", json!({})),
-        &chatgpt(),
+        &no_extensions(),
     )
     .await
     .unwrap_err();
@@ -1826,9 +1829,9 @@ async fn chatgpt_gets_the_error_codes_of_the_draft_it_follows() {
 
     let stream = call(
         &fixture.events,
-        "events/stream",
+        &chatgpt("events/stream"),
         json!({"name": "message.posted"}),
-        &chatgpt(),
+        &no_extensions(),
     )
     .await
     .unwrap_err();
@@ -1836,17 +1839,15 @@ async fn chatgpt_gets_the_error_codes_of_the_draft_it_follows() {
 }
 
 #[tokio::test]
-async fn an_unknown_profile_is_refused() {
+async fn an_unknown_profile_is_an_unknown_method() {
     let fixture = fixture();
-    let (parts, ()) = http::Request::builder()
-        .header(PROFILE_HEADER, "claude")
-        .body(())
-        .unwrap()
-        .into_parts();
-    let mut extensions = rmcp::model::Extensions::new();
-    extensions.insert(parts);
-    let error = call(&fixture.events, "events/list", json!({}), &extensions)
-        .await
-        .unwrap_err();
-    assert_eq!(error.code, rmcp::model::ErrorCode::INVALID_REQUEST);
+    let error = call(
+        &fixture.events,
+        "com.macro/claude/events/list",
+        json!({}),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, rmcp::model::ErrorCode::METHOD_NOT_FOUND);
 }

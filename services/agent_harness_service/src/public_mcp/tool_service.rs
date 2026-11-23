@@ -23,6 +23,7 @@ use rmcp::{
 };
 use std::{borrow::Cow, sync::Arc, time::Instant};
 use tracing::Instrument as _;
+use webhook::domain::mcp::models::McpDeliveryProfile;
 
 /// The newest MCP protocol revision this server answers. Raising it opts the
 /// server into that revision's lifecycle (2026-07-28 replaced `initialize` with
@@ -136,13 +137,25 @@ impl<Context> AuthenticatedToolService<Context> {
     }
 
     /// Events for this request: none for a client that may be ChatGPT
-    /// connecting directly, which cannot follow MCP's; the ChatGPT MCP Worker
-    /// asks for ChatGPT's profile, whatever credential ChatGPT's token became.
+    /// connecting directly, which cannot follow MCP's.
     fn events_for(&self, extensions: &rmcp::model::Extensions) -> Option<&Arc<McpEvents>> {
-        self.events.as_ref().filter(|_| {
-            events::names_chatgpt_profile(extensions)
-                || !caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller))
-        })
+        self.events
+            .as_ref()
+            .filter(|_| !caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller)))
+    }
+
+    /// Events for a request under `profile`: the ChatGPT MCP Worker calls
+    /// under ChatGPT's, and gets them whatever credential ChatGPT's token
+    /// became.
+    fn events_under(
+        &self,
+        profile: McpDeliveryProfile,
+        extensions: &rmcp::model::Extensions,
+    ) -> Option<&Arc<McpEvents>> {
+        match profile {
+            McpDeliveryProfile::Chatgpt => self.events.as_ref(),
+            McpDeliveryProfile::Mcp => self.events_for(extensions),
+        }
     }
 
     fn tool_definitions(&self) -> Vec<Tool> {
@@ -477,9 +490,10 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<CustomResult, rmcp::ErrorData> {
         let CustomRequest { method, params, .. } = request;
-        let Some(events) = method
+        let (profile, events_method) = events::split_profile(&method);
+        let Some(events) = events_method
             .starts_with(events::METHOD_PREFIX)
-            .then(|| self.events_for(&context.extensions))
+            .then(|| self.events_under(profile, &context.extensions))
             .flatten()
         else {
             return Err(rmcp::ErrorData::new(

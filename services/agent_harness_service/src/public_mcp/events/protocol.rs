@@ -37,10 +37,13 @@ const MCP_NAME_HEADER: &str = "mcp-name";
 /// Sent by every request of a client following the HTTP standardization
 /// (SEP-2243), which must then also send `Mcp-Name`.
 const MCP_METHOD_HEADER: &str = "mcp-method";
-/// Names the conventions a request follows when they are not MCP's: sent
-/// by the ChatGPT MCP Worker (`chatgpt`). It changes how subscriptions are
-/// answered and delivered and grants nothing.
-pub(crate) const PROFILE_HEADER: &str = "x-macro-events-profile";
+/// The ChatGPT MCP Worker sends this extension's methods under this prefix
+/// (`com.macro/chatgpt/events/subscribe`), to be answered and delivered in
+/// the conventions ChatGPT follows. It grants nothing. A server from before
+/// ChatGPT's profile has no such methods and answers method-not-found, so it
+/// can never store a ChatGPT subscription as an MCP one, whose deliveries
+/// name people.
+pub(crate) const CHATGPT_METHOD_PREFIX: &str = "com.macro/chatgpt/";
 /// Where a result answered under a profile other than MCP's names it, so a
 /// caller that asked for one can tell it from a server that ignored the
 /// header (`mcp-chatgpt-worker` checks and removes it).
@@ -212,25 +215,13 @@ fn check_name_header(extensions: &rmcp::model::Extensions, name: &str) -> Result
     }
 }
 
-/// Whether a request names ChatGPT's profile in [`PROFILE_HEADER`]: the
-/// ChatGPT MCP Worker, which answers ChatGPT in its draft's terms.
-pub(crate) fn names_chatgpt_profile(extensions: &rmcp::model::Extensions) -> bool {
-    profile(extensions).is_ok_and(|profile| profile == McpDeliveryProfile::Chatgpt)
-}
-
-/// The profile a request names in [`PROFILE_HEADER`]; MCP's when absent.
-fn profile(extensions: &rmcp::model::Extensions) -> Result<McpDeliveryProfile, McpError> {
-    let Some(value) = extensions
-        .get::<http::request::Parts>()
-        .and_then(|parts| parts.headers.get(PROFILE_HEADER))
-    else {
-        return Ok(McpDeliveryProfile::Mcp);
-    };
-    value
-        .to_str()
-        .ok()
-        .and_then(|value| value.parse::<McpDeliveryProfile>().ok())
-        .ok_or_else(|| McpError::invalid_request(format!("unknown {PROFILE_HEADER}"), None))
+/// The profile a method is called under, and the method without its
+/// profile's prefix ([`CHATGPT_METHOD_PREFIX`]); MCP's when it has none.
+pub(crate) fn split_profile(method: &str) -> (McpDeliveryProfile, &str) {
+    match method.strip_prefix(CHATGPT_METHOD_PREFIX) {
+        Some(method) => (McpDeliveryProfile::Chatgpt, method),
+        None => (McpDeliveryProfile::Mcp, method),
+    }
 }
 
 /// The error code ChatGPT knows for `code`: its integration follows a draft
@@ -264,8 +255,8 @@ pub(crate) async fn handle<Sink: NotificationSink>(
     scope: RequestScope<'_, Sink>,
 ) -> Result<CustomResult, McpError> {
     let span = scope.span.clone();
+    let (profile, method) = split_profile(method);
     span.record("mcp.events.method", method);
-    let profile = profile(scope.extensions)?;
     span.record("mcp.events.profile", profile.as_ref());
     let result = async {
         match (profile, method) {
