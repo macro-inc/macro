@@ -51,3 +51,42 @@ fn a_ready_import_plan_is_said_in_one_sentence_and_never_approved_in_its_turn() 
             .contains("import.planned event")
     );
 }
+
+#[test]
+fn a_plan_already_decided_in_the_same_batch_is_not_announced_as_waiting() {
+    use super::{
+        DecisionOutcome, DecisionVia, ImportPlan, ImportWorkspace, Notification, NotificationEvent,
+        ReviewOutcome, notification_context,
+    };
+
+    let event = |subject: &str, event| Notification {
+        id: macro_uuid::Uuid::nil(),
+        subject_id: subject.into(),
+        created_at: "2026-11-23T16:10:57Z".into(),
+        event,
+    };
+    let planned = || {
+        NotificationEvent::ImportPlanned(ImportPlan {
+            source: ImportWorkspace::Notion,
+            copy: 26,
+            task_lists: 0,
+            skipped: 9,
+            by_hand: 0,
+        })
+    };
+    let decided = NotificationEvent::ReviewDecided(ReviewOutcome {
+        outcome: DecisionOutcome::Approved,
+        by: "macro|owner@example.com".into(),
+        via: DecisionVia::Card,
+        items: Vec::new(),
+    });
+
+    // Approved on the card before the turn ran: nothing to approve.
+    let approved =
+        notification_context(&[event("a", planned()), event("a", decided.clone())]).unwrap();
+    assert!(!approved.contains("import.planned event"), "{approved}");
+
+    // Another review's decision leaves this plan waiting.
+    let waiting = notification_context(&[event("a", planned()), event("b", decided)]).unwrap();
+    assert!(waiting.contains("import.planned event"), "{waiting}");
+}

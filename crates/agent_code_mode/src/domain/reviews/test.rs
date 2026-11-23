@@ -1668,7 +1668,8 @@ async fn an_early_yes_to_an_import_starts_nothing_and_a_yes_once_ready_starts_it
     };
     assert_eq!(
         why,
-        "This review is not ready to approve yet, so nothing was approved or queued. Do not promise to start it later: the user approves it on the card once it is ready, or asks you again then."
+        // The card shows this too, so it speaks to the owner.
+        "This plan isn't ready to approve yet, so nothing was started. Approve it once it's ready."
     );
 
     // The plan is ready, announced in a system turn: the early yes did not

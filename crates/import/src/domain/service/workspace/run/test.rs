@@ -1143,7 +1143,8 @@ async fn an_approval_before_the_plan_is_ready_never_reaches_it_or_a_replan(pool:
     }
 
     // The plan is made again, differently, and is ready: the first review
-    // cannot start it.
+    // cannot start it. (That a fresh approval of a ready plan starts it is
+    // `only_the_ready_plan_a_review_holds_can_start_writing`'s job.)
     assert!(
         repo.start_run(&owner, ImportSource::Notion, &[RunStatus::Ready])
             .await

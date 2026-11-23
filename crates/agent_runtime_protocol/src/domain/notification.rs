@@ -327,10 +327,21 @@ pub fn notification_context(notifications: &[Notification]) -> Result<String, se
     xml.push_str("</m-notifications>\nThese are system events, not user requests. Do not repeat completed actions or retry uncertain outcomes. Read final drafts through GetReview. If nothing needs saying and you have not called any tool in this turn, reply exactly <noop/>. After any tool call, summarize the result instead of replying with <noop/>.");
     // Nothing else tells the user a plan they are waiting on is ready, and an
     // earlier yes cannot approve it: say so, and leave approval to the card.
-    if notifications
-        .iter()
-        .any(|notification| matches!(notification.event, NotificationEvent::ImportPlanned(_)))
-    {
+    // A plan the owner already decided on the card in this batch is not
+    // waiting for anyone.
+    let decided = |subject: &str| {
+        notifications.iter().any(|notification| {
+            notification.subject_id == subject
+                && matches!(
+                    notification.event,
+                    NotificationEvent::ReviewDecided(_) | NotificationEvent::ReviewSettled(_)
+                )
+        })
+    };
+    if notifications.iter().any(|notification| {
+        matches!(notification.event, NotificationEvent::ImportPlanned(_))
+            && !decided(&notification.subject_id)
+    }) {
         xml.push_str(IMPORT_PLANNED_GUIDANCE);
     }
     Ok(xml)

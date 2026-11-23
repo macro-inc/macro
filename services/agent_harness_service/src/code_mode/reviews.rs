@@ -18,6 +18,13 @@ use std::sync::Arc;
 #[cfg(test)]
 mod test;
 
+/// An import review can be approved only when its plan is ready and still
+/// held by that review: never while it is being planned, and never a plan
+/// made again under another review.
+fn plan_approvable(report: &NotionImportReport, review: uuid::Uuid) -> bool {
+    report.review_id == Some(review) && report.status == Some(RunStatus::Ready)
+}
+
 /// The source of an import review's one draft, fixed at presentation.
 fn import_source(
     record: &ReviewRecord,
@@ -157,7 +164,7 @@ where
         let report = self
             .import_report(account_holder, import_source(record)?)
             .await?;
-        Ok(report.review_id == Some(record.id.0) && report.status == Some(RunStatus::Ready))
+        Ok(plan_approvable(&report, record.id.0))
     }
     async fn released(
         &self,

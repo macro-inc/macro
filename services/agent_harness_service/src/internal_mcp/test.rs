@@ -238,6 +238,11 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         assert!(instructions.contains(prompt::pull_requests::READY_PULL_REQUEST));
         assert!(instructions.contains("submit it with macro_internal.DecideReview"));
         assert!(instructions.contains("Should I kick it off?"));
+        // A plan still being made gets no offer: a yes then approves nothing.
+        assert!(instructions.contains("After presenting an import plan that is ready, ask"));
+        assert!(instructions.contains(
+            "While it is still being made, do not ask: say they approve it on the card once it is ready."
+        ));
         let (status, listed) = rpc(
             app.clone(),
             Some("secret"),

@@ -177,9 +177,19 @@ impl AsyncTool<ReviewToolContext> for DecideReview {
         })
     }
 }
+/// What the agent should do after an early yes, which the card's owner-facing
+/// refusal leaves out.
+const NOT_APPROVABLE_FOR_AGENT: &str = "Nothing was approved or queued. Do not promise to start it later: the user approves it on the card once it is ready, or asks you again then.";
+
 fn review_error(error: crate::domain::CodeModeError) -> ToolCallError {
+    let description = match &error {
+        crate::domain::CodeModeError::NotApprovable(message) => {
+            format!("{message} {NOT_APPROVABLE_FOR_AGENT}")
+        }
+        _ => error.to_string(),
+    };
     ToolCallError {
-        description: error.to_string(),
+        description,
         internal_error: anyhow::anyhow!(error.to_string()),
     }
 }
