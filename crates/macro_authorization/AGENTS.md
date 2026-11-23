@@ -83,11 +83,16 @@ that signs `agent_scope`, held by a scoped code-mode run or a routine dry run):
 use it on anything that mints credentials, changes who can sign in, deletes
 the account, or changes its managers.
 The route policy (`crates/route_policy`) decides a route before this crate
-looks a user API key up, so it reads every key as an API credential. Once the
+looks a user API key up. A key header alone resolves no caller, so a
+categorized route refuses it 403 `no_caller` before any extractor runs; the key
+reads as an API credential only when it rides beside a verified token. Once the
 lookup finds a manager's, the extractor decides the route again as
-`AccountManager` and answers that refusal with a 403. An extractor inside
-router-level middleware runs before the route is decided and leaves it to
-the handler's.
+`AccountManager` and answers that refusal with a 403. So the re-decision only
+narrows a caller already resolved: a holder's or manager's key sent alone needs
+a layer that verifies it and sets the `ResolvedCaller` before `route_policy`
+runs (see the categorization rule in `crates/route_policy/AGENTS.md`). An
+extractor inside router-level middleware runs before the route is decided and
+leaves it to the handler's.
 
 ## Gotchas
 
