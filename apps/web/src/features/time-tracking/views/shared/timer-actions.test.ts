@@ -183,6 +183,34 @@ it('keeps the saved entry when Undo cannot start the first timer again', async (
   expect(mocks.remove).not.toHaveBeenCalled();
 });
 
+it('says nothing when Undo is pressed while another timer change runs', async () => {
+  const timer = fakeTimer(DESIGN);
+  timer.start.mockResolvedValueOnce(
+    ok({
+      kind: 'committed',
+      data: {
+        timeTracking: {
+          id: 'tracking',
+          serverNow: '',
+          runningTimer: WIREFRAMES,
+        },
+        stoppedEntry: SAVED,
+        stoppedTask: null,
+      },
+    })
+  );
+  actionsFor(timer).start('task-b');
+  await vi.waitFor(() => expect(mocks.success).toHaveBeenCalledOnce());
+  timer.exclusive.mockResolvedValueOnce(
+    err({ kind: 'refused', code: 'BUSY', message: 'busy' })
+  );
+  mocks.success.mock.calls[0]?.[1].actions[0].onClick();
+  await vi.waitFor(() => expect(timer.exclusive).toHaveBeenCalledTimes(1));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(mocks.failure).not.toHaveBeenCalled();
+  expect(timer.discard).not.toHaveBeenCalled();
+});
+
 it('names and undoes only the timer the server says it stopped', async () => {
   const timer = fakeTimer({ ...DESIGN, id: 'timer-seen-here' });
   timer.start.mockResolvedValue(

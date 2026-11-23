@@ -92,7 +92,12 @@ export function createRunningTimer(dependencies: RunningTimerDependencies) {
     const tick = setInterval(() => setDeviceNow(Date.now()), 1000);
     onCleanup(() => clearInterval(tick));
   });
-  const now = () => deviceNow() + offset();
+  // The tick only makes a running count redraw; with no timer running the
+  // device clock is still read fresh, so a stop time chosen then is current.
+  const now = () => {
+    deviceNow();
+    return Date.now() + offset();
+  };
 
   refreshOnTimeTrackingChanges(
     async (change) => {

@@ -138,6 +138,12 @@ it('refuses a second timer change while one is in flight', async () => {
   expect(query.startTimer).toHaveBeenCalledOnce();
 });
 
+it('reads the current time even while no timer runs', () => {
+  const state = mountTimer();
+  vi.setSystemTime(new Date('2026-11-23T11:10:00.000Z'));
+  expect(state.now()).toBe(Date.parse('2026-11-23T11:10:00.000Z'));
+});
+
 it('re-reads the timer when another session changes it', async () => {
   mountTimer();
   await query.onChange?.({ timer: false, taskId: 'task-1' });

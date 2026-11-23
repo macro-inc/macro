@@ -142,7 +142,9 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
   ) {
     const startedAt = stopped.startedAt;
     if (!startedAt) return toast.failure(t('timeTracking.undoFailed'));
+    let began = false;
     const undone = await runningTimer.exclusive(async (timerOps) => {
+      began = true;
       const discarded = await timerOps.discard(newTimerId);
       if (discarded.isErr()) return err(discarded.error);
       const restarted = await timerOps.start({
@@ -152,6 +154,7 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
       if (restarted.isErr()) return err(restarted.error);
       return writes.remove(stopped);
     });
+    if (undone.isErr() && !began) return fail(undone.error);
     if (undone.isErr()) toast.failure(t('timeTracking.undoFailed'));
   }
 
