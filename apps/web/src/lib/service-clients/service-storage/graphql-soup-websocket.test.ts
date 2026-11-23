@@ -298,6 +298,61 @@ describe('GraphQL Soup subscription lifecycle', () => {
     unregister();
   });
 
+  it('re-reads notified lists when a channel the viewer was in is deleted for them', async () => {
+    const receive = new Map<unknown, (result: { data?: unknown }) => void>();
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn((document) => ({
+        subscribe: (next: (result: { data?: unknown }) => void) => {
+          receive.set(document, next);
+          return { unsubscribe: vi.fn() };
+        },
+      })),
+    };
+    const notified = vi.fn(async () => {});
+    const byUpdate = vi.fn(async () => {});
+    const unregister = [
+      registerActiveGraphqlSoupQuery({
+        isEnabled: () => true,
+        refresh: notified,
+        body: () => ({ params: { sort_method: 'notified_at' } }),
+      }),
+      registerActiveGraphqlSoupQuery({
+        isEnabled: () => true,
+        refresh: byUpdate,
+        body: () => ({ params: { sort_method: 'updated_at' } }),
+      }),
+    ];
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(
+      client as never,
+      { disabled: false, onCacheGenerationChanged: () => () => {} } as never
+    );
+    const deliver = (patch: unknown) =>
+      receive.get(SoupUpdatesDocument)?.({ data: { soupUpdates: [patch] } });
+
+    // Another kind's deletion leaves them alone.
+    deliver({
+      __typename: 'GraphqlCacheDeletion',
+      graphqlTypeName: 'GraphqlSoupDocument',
+      entityId: 'deleted-document',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(notified).not.toHaveBeenCalled();
+    // A private channel the viewer was removed from: its threads stay on a
+    // notified list, with the notifications they were read with.
+    deliver({
+      __typename: 'GraphqlCacheDeletion',
+      graphqlTypeName: 'GraphqlSoupChannel',
+      entityId: 'left-channel',
+    });
+    await vi.waitFor(() => expect(notified).toHaveBeenCalledOnce());
+    expect(byUpdate).not.toHaveBeenCalled();
+
+    lifecycle.dispose();
+    for (const off of unregister) off();
+  });
+
   it('pauses subscriptions for navigation and reconnects in place exactly once per restore', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const client = {

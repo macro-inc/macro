@@ -9,6 +9,7 @@ import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../queries/channel/notification-refresh';
+import { revalidateNotifiedListsForSoupUpdates } from '../../queries/notification/notification-soup';
 import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/call-list-revalidation';
 import {
   ActivityUpdatesDocument,
@@ -383,6 +384,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 revalidateCallListsForSoupUpdates(patches),
                 'graphql-soup-subscriptions'
               );
+              revalidateNotifiedListsForSoupUpdates(patches);
               channelHandler.onSoupUpdates(patches);
             }
             if (

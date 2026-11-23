@@ -75,7 +75,9 @@ state. Rollback restores only the failed operation's contribution. `DONE` predic
 other entity partitions, and notified-at sorting still use the network path:
 every notification patch (new, updated or deleted) re-reads mounted notified-at
 lists, whose rows render their own notifications; an entity the notification
-feed's refetch no longer returns is patched by nothing else. A flat one replays its
+feed's refetch no longer returns is patched by nothing else. A Soup deletion of a
+channel (the viewer left or was removed from it) re-reads them too: the rows of
+its threads, and of documents shared only through it, otherwise stay. A flat one replays its
 loaded pages with the notified-at query. Each page replays its own cursor, so once
 a row above it has left or joined, a page can end on another row than the next
 page starts from: the list then reads its chain again in order (at most three
