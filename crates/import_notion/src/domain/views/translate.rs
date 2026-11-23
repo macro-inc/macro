@@ -60,20 +60,44 @@ pub fn bindings(
 
 /// Translate using the imported schema. Unsupported AND clauses and incomplete
 /// OR groups are omitted with losses, preserving a superset of the source rows.
-#[tracing::instrument(name = "notion.translate_view", skip_all, fields(view_id = %view.id, losses = tracing::field::Empty))]
 pub fn translate(view: &NotionView, columns: &[ViewColumnBinding]) -> TranslatedView {
+    translate_view(view, &|property| column(columns, property))
+}
+
+/// Translate against the full source schema, including properties we cannot
+/// import. An unbound exact match must never alias another imported property.
+pub fn translate_with_schema(
+    view: &NotionView,
+    source: &NotionDataSource,
+    columns: &[ViewColumnBinding],
+) -> TranslatedView {
+    translate_view(view, &|reference| {
+        let property = resolve_property(
+            &source.properties,
+            reference,
+            |property| &property.id,
+            |property| &property.name,
+        )?;
+        columns
+            .iter()
+            .find(|column| column.property_id == property.id)
+    })
+}
+
+#[tracing::instrument(name = "notion.translate_view", skip_all, fields(view_id = %view.id, losses = tracing::field::Empty))]
+fn translate_view(view: &NotionView, lookup: &ColumnLookup<'_>) -> TranslatedView {
     let mut losses = Vec::new();
     let filter = view
         .filter
         .as_ref()
-        .and_then(|value| filter::translate(value, columns, &mut losses));
+        .and_then(|value| filter::translate(value, lookup, &mut losses));
     let mut sort = Vec::new();
     for (index, value) in view.sorts.iter().flatten().enumerate() {
         let path = format!("sorts[{index}]");
         let binding = value
             .get("property")
             .and_then(|v| v.as_str())
-            .and_then(|p| column(columns, p));
+            .and_then(lookup);
         let direction = match value.get("direction").and_then(|v| v.as_str()) {
             Some("ascending") => Some(SortDirection::Ascending),
             Some("descending") => Some(SortDirection::Descending),
@@ -81,7 +105,12 @@ pub fn translate(view: &NotionView, columns: &[ViewColumnBinding]) -> Translated
         };
         match (binding, direction) {
             (Some(binding), Some(direction))
-                if !binding.snapshot && value.as_object().is_some_and(|v| v.len() == 2) =>
+                if !binding.snapshot
+                    && value.as_object().is_some_and(|v| {
+                        v.keys().all(|key| {
+                            matches!(key.as_str(), "property" | "direction") || metadata_field(key)
+                        })
+                    }) =>
             {
                 sort.push(SortKey {
                     column: binding.column,
@@ -96,7 +125,7 @@ pub fn translate(view: &NotionView, columns: &[ViewColumnBinding]) -> Translated
             ),
         }
     }
-    let layout = layout::translate(view, columns, &mut losses);
+    let layout = layout::translate(view, lookup, &mut losses);
     for (key, value) in &view.extra {
         if !matches!(
             key.as_str(),
@@ -108,7 +137,8 @@ pub fn translate(view: &NotionView, columns: &[ViewColumnBinding]) -> Translated
                 | "last_edited_by"
                 | "url"
                 | "dashboard_view_id"
-        ) && !value.is_null()
+        ) && !metadata_field(key)
+            && !value.is_null()
         {
             setting_loss(
                 &mut losses,

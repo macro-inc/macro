@@ -105,6 +105,8 @@ pub struct ViewColumnBinding {
 pub enum ViewLossKind {
     /// A predicate or incomplete OR group was omitted, broadening the result.
     Filter,
+    /// A translated status exclusion may also include rows with no status.
+    FilterIncludesBlankStatus,
     /// A sort key was omitted.
     Sort,
     /// Layout falls back to table.
@@ -116,7 +118,7 @@ pub enum ViewLossKind {
 impl std::fmt::Display for ViewLossKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Filter => "filter approximated",
+            Self::Filter | Self::FilterIncludesBlankStatus => "filter approximated",
             Self::Sort => "sort omitted",
             Self::Layout => "layout approximated",
             Self::Setting => "setting approximated",
@@ -128,6 +130,8 @@ impl std::fmt::Display for ViewLossKind {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ViewSetting {
+    /// A Notion column is hidden but the Macro table shows all its columns.
+    HiddenColumn,
     /// Column visibility.
     ColumnVisibility,
     /// Column width.
@@ -187,6 +191,10 @@ pub struct TranslatedView {
     pub losses: Vec<ViewLoss>,
 }
 
+pub(super) fn metadata_field(key: &str) -> bool {
+    matches!(key, "request_id" | "property_name")
+}
+
 pub(super) fn loss(losses: &mut Vec<ViewLoss>, kind: ViewLossKind, path: &str, reason: &str) {
     losses.push(ViewLoss {
         kind,
@@ -210,19 +218,52 @@ pub(super) fn setting_loss(
     });
 }
 
+/// Find a view property by exact ID, by an unambiguous once-decoded ID, or by name.
+pub fn resolve_property<'a, T>(
+    properties: &'a [T],
+    reference: &str,
+    id: impl Fn(&T) -> &str,
+    name: impl Fn(&T) -> &str,
+) -> Option<&'a T> {
+    let mut exact = properties
+        .iter()
+        .filter(|property| id(property) == reference);
+    if let Some(candidate) = exact.next() {
+        return exact.next().is_none().then_some(candidate);
+    }
+
+    let decoded_reference = urlencoding::decode(reference).ok();
+    let mut alternate = properties.iter().filter(|property| {
+        let raw = id(property);
+        let decoded = urlencoding::decode(raw).ok();
+        decoded.as_deref() == Some(reference)
+            || decoded_reference.as_deref() == Some(raw)
+            || decoded.is_some() && decoded == decoded_reference
+    });
+    if let Some(candidate) = alternate.next() {
+        return alternate.next().is_none().then_some(candidate);
+    }
+
+    let mut named = properties
+        .iter()
+        .filter(|property| name(property) == reference);
+    let candidate = named.next()?;
+    named.next().is_none().then_some(candidate)
+}
+
 pub(super) fn column<'a>(
     columns: &'a [ViewColumnBinding],
     property: &str,
 ) -> Option<&'a ViewColumnBinding> {
-    columns
-        .iter()
-        .find(|column| column.property_id == property)
-        .or_else(|| {
-            columns
-                .iter()
-                .find(|column| column.property_name == property)
-        })
+    resolve_property(
+        columns,
+        property,
+        |column| &column.property_id,
+        |column| &column.property_name,
+    )
 }
+
+pub(super) type ColumnLookup<'a> = dyn Fn(&str) -> Option<&'a ViewColumnBinding> + 'a;
 
 // View lists require their result array and pagination flag. The shared
 // search decoder deliberately tolerates omitted fields, which would turn a

@@ -366,11 +366,20 @@ async fn a_write_cut_off_by_shutdown_hands_its_run_over(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool: PgPool) {
+    use crate::domain::models::{WrittenKind, WrittenObject};
+
     let owner = user("adopt");
-    let (review, rows) = approved_plan(&pool, &owner).await;
+    let mut source = planned_page('c', "Tasks", false);
+    source.kind = ImportKind::DataSource;
+    source.metadata["plan"]["rows"] = serde_json::json!(99);
+    let (review, rows) = approved(
+        &pool,
+        &owner,
+        &[page('a', "Roadmap"), page('b', "Spec"), source],
+    )
+    .await;
     let repo = PgImportRepo::new(pool.clone());
-    // The first process wrote Roadmap and died while writing Spec; its
-    // lease has lapsed.
+    // The first process finished Roadmap and Tasks before its lease lapsed.
     repo.start_run(&owner, ImportSource::Notion, &[])
         .await
         .unwrap();
@@ -395,7 +404,23 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
     repo.set_root_folder(&owner, root).await.unwrap();
     repo.mark_importing(&owner, &rows).await.unwrap();
     let roadmap = write::document_id(rows[0]);
+    let database = Uuid::now_v7();
+    let table = Uuid::now_v7();
+    repo.record_written(
+        &owner,
+        &[
+            WrittenObject::for_row(rows[0], WrittenKind::Document, &page_id('a'), roadmap),
+            WrittenObject::own(rows[2], WrittenKind::Database, database),
+            WrittenObject::own(rows[2], WrittenKind::Table, table),
+            WrittenObject::for_row(rows[2], WrittenKind::Row, &page_id('e'), Uuid::now_v7()),
+        ],
+    )
+    .await
+    .unwrap();
     repo.mark_imported(&owner, rows[0], &roadmap.to_string(), "md", None)
+        .await
+        .unwrap();
+    repo.mark_imported(&owner, rows[2], &database.to_string(), "database", None)
         .await
         .unwrap();
 
@@ -430,7 +455,17 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
     );
     let report = service.notion_import_report(&owner).await.unwrap();
     assert_eq!(report.status, Some(RunStatus::Completed));
-    assert_eq!(report.imported, 2);
+    assert_eq!(report.imported, 3);
+    let confirmed = report.confirmed.unwrap();
+    assert_eq!(
+        (
+            confirmed.documents,
+            confirmed.databases,
+            confirmed.database_rows
+        ),
+        (2, 1, 1),
+        "count the writes from before adoption once, ignoring the 99-row estimate"
+    );
     assert_eq!(report.writing, 0);
     let spec_row = repo.get(&owner, rows[1]).await.unwrap().unwrap();
     assert_eq!(spec_row.entity_id, Some(spec.to_string()));

@@ -12,6 +12,13 @@ pub(super) struct FakeStore {
 }
 
 impl WrittenObjects for FakeStore {
+    async fn confirmed_notion_writes(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &[Uuid],
+    ) -> crate::domain::ports::Result<crate::domain::models::ConfirmedNotionWrites> {
+        unreachable!("database write tests do not read workspace reports")
+    }
     async fn replace_database_outage(
         &self,
         _: &MacroUserIdStr<'static>,

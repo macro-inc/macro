@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { NotionImporter } from './notionImporter';
+import type { NotionImportReportConfirmed } from './notionImportReportConfirmed';
+import type { NotionImportReportDetails } from './notionImportReportDetails';
 import type { NotionImportReportError } from './notionImportReportError';
 import type { NotionImportReportReviewId } from './notionImportReportReviewId';
 import type { NotionImportReportScanned } from './notionImportReportScanned';
@@ -23,6 +25,7 @@ they link to that copy and are not counted as copies.
    * @minimum 0
    */
   alreadyInMacro?: number;
+  confirmed?: NotionImportReportConfirmed;
   /**
    * Objects to copy as they are.
    * @minimum 0
@@ -34,7 +37,7 @@ they link to that copy and are not counted as copies.
    */
   dataSources: number;
   /**
-   * Rows those databases hold, every one counted while planning.
+   * Estimated database rows while planning, confirmed rows once completed.
    * @minimum 0
    */
   databaseRows: number;
@@ -49,6 +52,7 @@ planning is still `running`.
    * @minimum 0
    */
   deciding?: number;
+  details?: NotionImportReportDetails;
   /**
    * Pages written as documents.
    * @minimum 0
@@ -66,7 +70,7 @@ planning is still `running`.
   /** Objects that need handling by hand, with reasons. */
   handItems?: NotionReportItem[];
   /**
-   * Plan objects already imported.
+   * Plan objects finished so far, or confirmed new copies once completed.
    * @minimum 0
    */
   imported: number;

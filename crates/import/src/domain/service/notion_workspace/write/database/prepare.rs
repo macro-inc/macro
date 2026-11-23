@@ -104,7 +104,7 @@ pub(in super::super::super) async fn prepare_database<
         }
     }
     tracing::Span::current().record("rows_read_scan", rows_read as i64);
-    let presets = match read_views(api, &ViewScope::DataSource(item.notion_id.clone())).await {
+    let source_tabs = match read_views(api, &ViewScope::DataSource(item.notion_id.clone())).await {
         Ok(presets) => presets,
         Err(error) => match read_failure(&error) {
             Some(reason) => {
@@ -120,8 +120,44 @@ pub(in super::super::super) async fn prepare_database<
             None => return Err(error.into()),
         },
     };
+    cancel.ensure_running()?;
+    let native_tabs = match read_views(api, &ViewScope::Database(source.database_id.clone())).await
+    {
+        Ok(tabs) => tabs,
+        Err(error) => match read_failure(&error) {
+            Some(reason) => {
+                progress
+                    .notice(
+                        &source.database_id,
+                        &item.title,
+                        ImportNoticeKind::ContainerViewsUnavailable { reason },
+                    )
+                    .await?;
+                Vec::new()
+            }
+            None => return Err(error.into()),
+        },
+    };
+    // A container owns the native tab order. The source list also includes
+    // linked views whose tabs live in other containers.
     let mut readable = Vec::new();
-    for (index, tab) in presets.into_iter().enumerate() {
+    let mut included = HashSet::new();
+    for view in native_tabs.into_iter().filter_map(|tab| match tab {
+        ViewTab::Ready(view)
+            if view.parent.database_id == source.database_id
+                && view.data_source_id.as_ref() == Some(&source.id) =>
+        {
+            Some(view)
+        }
+        _ => None,
+    }) {
+        included.insert(view.id.clone());
+        readable.push(*view);
+    }
+    for (index, tab) in source_tabs.into_iter().enumerate() {
+        if !included.insert(tab.id().clone()) {
+            continue;
+        }
         match tab {
             ViewTab::Ready(view) => readable.push(*view),
             ViewTab::Unavailable { reason, .. } => {
@@ -149,8 +185,14 @@ pub(in super::super::super) async fn prepare_database<
                 .as_ref()
                 .and_then(|value| value.get("date_property_id"))
                 .and_then(serde_json::Value::as_str)
+            && let Some(property) = views::resolve_property(
+                &source.properties,
+                property,
+                |property| &property.id,
+                |property| &property.name,
+            )
         {
-            ranges.insert(property.to_string());
+            ranges.insert(property.id.clone());
         }
     }
     if progress.get(WrittenKind::SchemaPlan).is_some() {
@@ -203,7 +245,7 @@ pub(in super::super::super) async fn prepare_database<
                 .await?;
             continue;
         }
-        let mut translated = views::translate(&view, &bindings);
+        let mut translated = views::translate_with_schema(&view, &source, &bindings);
         let warnings = super::super::super::fidelity::view_warnings(
             &source,
             &item.title,
@@ -211,10 +253,12 @@ pub(in super::super::super) async fn prepare_database<
             &translated.losses,
         );
         progress.warn_fidelity(&warnings).await?;
-        let approximated = translated
-            .losses
-            .iter()
-            .any(|loss| loss.kind == ViewLossKind::Filter);
+        let approximated = translated.losses.iter().any(|loss| {
+            matches!(
+                loss.kind,
+                ViewLossKind::Filter | ViewLossKind::FilterIncludesBlankStatus
+            )
+        });
         let marker = if approximated { " ≈" } else { "" };
         let id = ViewId::from_uuid(derived_id(
             created.database_id,

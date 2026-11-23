@@ -8,7 +8,7 @@ use super::model::*;
 
 pub(super) fn translate(
     view: &NotionView,
-    columns: &[ViewColumnBinding],
+    lookup: &ColumnLookup<'_>,
     losses: &mut Vec<ViewLoss>,
 ) -> RequestedLayout {
     let fallback = || RequestedLayout::Table {
@@ -40,7 +40,7 @@ pub(super) fn translate(
         _ => "",
     };
     let matches_type = config.get("type").and_then(Value::as_str) == Some(expected);
-    let properties = properties(config.get("properties"), columns, view.kind, losses);
+    let properties = properties(config.get("properties"), lookup, view.kind, losses);
     let mut consumed = vec!["type", "properties"];
     let result = match view.kind {
         ViewType::Table if matches_type => RequestedLayout::Table {
@@ -52,7 +52,7 @@ pub(super) fn translate(
             let binding = group
                 .and_then(|g| g.get("property_id"))
                 .and_then(Value::as_str)
-                .and_then(|id| column(columns, id));
+                .and_then(lookup);
             let group_kind = group.and_then(|g| g.get("type")).and_then(Value::as_str);
             let compatible = binding.is_some_and(|b| {
                 !b.snapshot
@@ -156,11 +156,15 @@ pub(super) fn translate(
             let range = config
                 .get("date_property_id")
                 .and_then(Value::as_str)
-                .and_then(|id| column(columns, id))
+                .and_then(lookup)
                 .filter(|b| b.kind == ColumnKind::DateRange);
             let separate_end = config
                 .get("end_date_property_id")
-                .is_some_and(|v| !v.is_null() && Some(v) != config.get("date_property_id"));
+                .filter(|value| !value.is_null())
+                .is_some_and(|value| match (range, value.as_str().and_then(lookup)) {
+                    (Some(start), Some(end)) => start.column != end.column,
+                    _ => true,
+                });
             if let Some(range) = range.filter(|_| !separate_end) {
                 consumed.push("end_date_property_id");
                 RequestedLayout::Timeline {
@@ -206,7 +210,7 @@ pub(super) fn translate(
 
 fn properties(
     value: Option<&Value>,
-    columns: &[ViewColumnBinding],
+    lookup: &ColumnLookup<'_>,
     kind: ViewType,
     losses: &mut Vec<ViewLoss>,
 ) -> Vec<ViewColumn> {
@@ -226,19 +230,6 @@ fn properties(
     let mut seen = HashSet::new();
     for (index, property) in properties.iter().enumerate() {
         let path = format!("configuration.properties[{index}]");
-        let Some(binding) = property
-            .get("property_id")
-            .and_then(Value::as_str)
-            .and_then(|id| column(columns, id))
-        else {
-            setting_loss(
-                losses,
-                ViewSetting::Other,
-                &path,
-                "Property has no imported column",
-            );
-            continue;
-        };
         if let Some(property) = property.as_object() {
             remaining(
                 property,
@@ -248,6 +239,30 @@ fn properties(
                 losses,
             );
         }
+        if property.get("visible") == Some(&Value::Bool(false)) {
+            if kind == ViewType::Table {
+                setting_loss(
+                    losses,
+                    ViewSetting::HiddenColumn,
+                    &format!("{path}.visible"),
+                    "Macro table layouts cannot hide columns",
+                );
+            }
+            continue;
+        }
+        let Some(binding) = property
+            .get("property_id")
+            .and_then(Value::as_str)
+            .and_then(lookup)
+        else {
+            setting_loss(
+                losses,
+                ViewSetting::Other,
+                &path,
+                "Property has no imported column",
+            );
+            continue;
+        };
         if property
             .get("visible")
             .is_some_and(|value| !value.is_null() && !value.is_boolean())
@@ -258,17 +273,6 @@ fn properties(
                 &format!("{path}.visible"),
                 "Visibility must be a boolean",
             );
-        }
-        if property.get("visible") == Some(&Value::Bool(false)) {
-            if kind == ViewType::Table {
-                setting_loss(
-                    losses,
-                    ViewSetting::ColumnVisibility,
-                    &format!("{path}.visible"),
-                    "Macro table layouts cannot hide columns",
-                );
-            }
-            continue;
         }
         let width = property.get("width").filter(|v| !v.is_null());
         let width_px = width
@@ -311,7 +315,7 @@ fn remaining(
     losses: &mut Vec<ViewLoss>,
 ) {
     for (key, value) in object {
-        if !consumed.contains(&key.as_str()) && !value.is_null() {
+        if !consumed.contains(&key.as_str()) && !metadata_field(key) && !value.is_null() {
             setting_loss(
                 losses,
                 if context == ViewSetting::Grouping {

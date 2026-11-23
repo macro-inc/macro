@@ -1818,6 +1818,10 @@ keep the same controls; phone rows let titles wrap, put counts and badges on a s
 sharing controls available even when the current sharing choices are uniform. On phones, the counted notices disclosure starts collapsed
 before the tree in both the card and full review; expanding it preserves every
 warning. Desktop keeps its inline title/control layout and labels, and starts the same counted notices disclosure expanded.
+Use the completed Notion report's confirmed counts for its outcome and its typed
+details for the separate disclosures. Group view changes by source and view
+identity, keep all detail accessible, and omit an empty Needs attention section.
+The flat warning disclosure is the fallback for legacy reports and other phases.
 While any rows are undecided, the summary says
 **Deciding what to import…** rather than describing an empty import. Imported
 approximated views use a short **≈** suffix; never parse user-visible view names

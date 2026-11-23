@@ -41,6 +41,13 @@ pub enum ImportNoticeKind {
         /// Safe provider failure.
         reason: ReadFailure,
     },
+    /// A multi-tab reference omitted its selected tab.
+    TabChosen {
+        /// The selected tab's identity for deduplication.
+        view_id: NotionId,
+        /// The selected tab's visible title.
+        view: String,
+    },
     /// A saved view belongs to another source.
     ViewSourceMismatch,
     /// A tab belongs to another container.
@@ -125,6 +132,9 @@ impl ImportNotice {
             ImportNoticeKind::TabUnavailable { tab, reason } => {
                 format!("Database “{source}”, saved tab {tab}: {reason}.")
             }
+            ImportNoticeKind::TabChosen { view, .. } => format!(
+                "Database “{source}”: Notion didn't say which tab was showing; we used “{view}”."
+            ),
             ImportNoticeKind::ViewSourceMismatch => {
                 format!("View “{source}” belongs to a different database and was skipped.")
             }
@@ -171,7 +181,8 @@ impl ImportNotice {
             ImportNoticeKind::RowsOnlyPlacement { sources } => sources.iter_mut().for_each(bound),
             ImportNoticeKind::PropertyChanged { property }
             | ImportNoticeKind::PropertyAdded { property }
-            | ImportNoticeKind::DateEndDrift { property } => bound(property),
+            | ImportNoticeKind::DateEndDrift { property }
+            | ImportNoticeKind::TabChosen { view: property, .. } => bound(property),
             ImportNoticeKind::PageDatabaseOccurrence { database, .. } => bound(database),
             ImportNoticeKind::SchemaMetadataDrift
             | ImportNoticeKind::DateScanIncomplete

@@ -55,7 +55,7 @@ pub(super) mod triage;
 mod values;
 pub(super) mod write;
 
-pub(super) use report::{notice_import_ids, report};
+pub(super) use report::{confirmed_import_ids, notice_import_ids, report};
 /// How often a running write checks whether the user cancelled it.
 pub(super) const CANCEL_CHECK_EVERY: Duration = Duration::from_secs(3);
 /// How often progress is pushed to the client while a job runs.

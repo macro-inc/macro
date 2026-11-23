@@ -1,3 +1,4 @@
+import type { NotionImportReport } from '@queries/import';
 import type { ImportDraft as SavedImportDraft } from '@service-agent-reviews/generated/types';
 import { match } from 'ts-pattern';
 import type { Review, ReviewItem } from './review';
@@ -74,6 +75,8 @@ export type ImportReportItem = { id: string; title: string; reason: string };
 /** Where the import run stands, as the server reports it. */
 export type ImportProgress = {
   warnings?: string[];
+  details?: NotionImportReport['details'];
+  confirmed?: NotionImportReport['confirmed'];
   reviewId: string | null;
   status:
     | 'running'

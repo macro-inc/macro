@@ -27,14 +27,17 @@ function decisionLabel(decision: ImportPlanDecision | null): string {
 }
 
 /** e.g. "2,365 tasks — Fix login redirect, Q3 pricing page, …". */
-function rowsLine(node: ImportPlanNode): string {
+function rowsLine(node: ImportPlanNode, showEstimate: boolean): string {
+  const titles = node.sampleTitles.map((title) => title || 'Untitled');
+  if (!showEstimate) {
+    return titles.length > 0 ? `Plan sample — ${titles.join(', ')}` : '';
+  }
   const count = (node.rows ?? node.sampleTitles.length).toLocaleString('en-US');
   const noun = node.decision === 'tasks' ? 'tasks' : 'rows';
   const more =
     (node.rows ?? 0) > node.sampleTitles.length && node.sampleTitles.length > 0
       ? ', …'
       : '';
-  const titles = node.sampleTitles.map((title) => title || 'Untitled');
   return titles.length > 0
     ? `${count} ${noun} — ${titles.join(', ')}${more}`
     : `${count} ${noun}`;
@@ -180,12 +183,15 @@ export function ImportPlanRow(props: {
   disabled: boolean;
   /** Show how the write went instead of the plan. */
   showStatus: boolean;
+  /** Keep plan samples without their estimate after confirmed counts arrive. */
+  showRowEstimate?: boolean;
   onToggleExpanded: () => void;
   onToggleRows: () => void;
   onIncludedChange: (included: boolean) => void;
   onSharedChange: (shared: boolean) => void;
 }) {
   const written = () => isWritten(props.node.decision);
+  const showRowEstimate = () => props.showRowEstimate !== false;
   const included = () => written() && !props.excluded;
   const hasRows = () =>
     props.node.kind === 'database' &&
@@ -290,7 +296,11 @@ export function ImportPlanRow(props: {
         </span>
         <span class="contents mobile:order-1 mobile:flex mobile:basis-full mobile:flex-wrap mobile:items-center mobile:justify-end mobile:gap-1.5">
           <Show
-            when={props.node.kind === 'database' && props.node.rows !== null}
+            when={
+              showRowEstimate() &&
+              props.node.kind === 'database' &&
+              props.node.rows !== null
+            }
           >
             <span class="shrink-0 text-xs text-ink-muted">
               {props.node.rows} rows
@@ -331,7 +341,9 @@ export function ImportPlanRow(props: {
           class="flex min-w-0 flex-col gap-0.5 pb-1.5 pr-1 text-xs text-ink-muted"
           style={{ 'padding-left': `calc(${indent()} + 1.375rem)` }}
         >
-          <p class="wrap-break-word">{rowsLine(props.node)}</p>
+          <Show when={rowsLine(props.node, showRowEstimate())}>
+            {(line) => <p class="wrap-break-word">{line()}</p>}
+          </Show>
           <Show
             when={
               props.node.decision === 'tasks' ? props.node.taskFields : null

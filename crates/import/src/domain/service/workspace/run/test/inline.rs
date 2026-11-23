@@ -62,9 +62,11 @@ async fn databases_and_views_exist_before_page_and_row_cards_and_sharing_stays_i
     let database = databases[0].0;
     drop(databases);
     let saved = service.creator.saved_views.lock().unwrap();
-    assert_eq!(saved.len(), 2);
+    assert_eq!(saved.len(), 3);
+    assert_eq!(saved[0].2.name, "Work", "native tabs use container order");
     assert_ne!(saved[0].2.name, saved[1].2.name);
     assert!(saved[1].2.name.ends_with(" ≈"));
+    assert_eq!(saved[2].2.name, "Linked work");
     let first = saved[0].1;
     let second = saved[1].1;
     drop(saved);
@@ -108,17 +110,24 @@ async fn databases_and_views_exist_before_page_and_row_cards_and_sharing_stays_i
             .iter()
             .all(|share| matches!(share, SharedEntity::Document(_)))
     );
+    let details = report.details.as_ref().unwrap();
+    assert_eq!(details.tab_choices.len(), 1);
+    assert_eq!(details.tab_choices[0].tab, "Work");
     assert!(
         report
             .warnings
             .iter()
-            .any(|warning| warning.contains("default tab assumed"))
+            .all(|warning| !warning.contains("we used"))
     );
     assert!(
         report
             .warnings
             .iter()
             .any(|warning| warning.contains("filter") && warning.contains("additional rows"))
+    );
+    assert_eq!(
+        report.database_rows, 1,
+        "count written rows, even with no estimate"
     );
 }
 
@@ -472,6 +481,7 @@ async fn a_teammates_source_uses_its_authorized_recorded_table_and_fidelity_repo
         &[
             WrittenObject::own(held[0], WrittenKind::Database, database),
             WrittenObject::own(held[0], WrittenKind::Table, canonical.into_uuid()),
+            WrittenObject::for_row(held[0], WrittenKind::Row, &page_id('f'), Uuid::now_v7()),
         ],
     )
     .await
@@ -529,13 +539,20 @@ async fn a_teammates_source_uses_its_authorized_recorded_table_and_fidelity_repo
     assert_eq!(documents.len(), 1);
     assert!(documents[0].2.databases.iter().all(|occurrence| matches!(occurrence.target, NotionDatabaseTarget::Resolved { database_id, table_id, .. } if database_id == database && table_id == canonical)));
     drop(documents);
+    let report = service.notion_import_report(&owner).await.unwrap();
     assert!(
-        service
-            .notion_import_report(&owner)
-            .await
-            .unwrap()
+        report
             .warnings
             .contains(&"Stored view filter approximated".into())
+    );
+    assert_eq!(
+        report.databases, 0,
+        "linking to a database is not a new write"
+    );
+    assert_eq!(report.imported, 1, "only the copied page was imported");
+    assert_eq!(
+        report.database_rows, 0,
+        "a teammate's rows are not new writes"
     );
 }
 

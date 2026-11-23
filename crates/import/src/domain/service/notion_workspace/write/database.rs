@@ -116,6 +116,16 @@ pub(in super::super) async fn write_database<
     let prepared = prepare_database(api, writer, user, item, Some(folder), progress, cancel).await;
     progress.flush_warnings().await?;
     let prepared = prepared?;
+    let destinations = HashMap::from([(
+        item.notion_id.clone(),
+        super::super::databases::DatabaseDestination::Ready(
+            crate::domain::ports::ImportedDatabase {
+                database_id: prepared.created.database_id,
+                table: prepared.created.table,
+                views: prepared.views.iter().copied().collect(),
+            },
+        ),
+    )]);
     let result = write_prepared_database(
         api,
         writer,
@@ -127,7 +137,7 @@ pub(in super::super) async fn write_database<
         progress,
         cancel,
         &prepared,
-        &HashMap::new(),
+        &destinations,
         personal_folder,
     )
     .await;

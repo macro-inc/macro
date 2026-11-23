@@ -231,6 +231,111 @@ describe('import review', () => {
     }
   );
 
+  it('shows one confirmed outcome and keeps each kind of import detail reachable', () => {
+    vi.stubGlobal('innerWidth', 390);
+    const completed = {
+      status: 'completed' as const,
+      reviewId: 'review',
+      pages: 3,
+      dataSources: 1,
+      copy: 1,
+      tasks: 1,
+      skip: 1,
+      hand: 0,
+      documents: 1,
+      databases: 1,
+      databaseRows: 3,
+      taskRows: 0,
+      imported: 2,
+      waiting: 0,
+      writing: 0,
+      confirmed: {
+        documents: 1,
+        databases: 1,
+        databaseRows: 9,
+        taskLists: 0,
+        tasks: 0,
+      },
+      details: {
+        notImported: [
+          {
+            kind: 'left_out' as const,
+            item: {
+              importId: 'scratch',
+              title: 'Scratch',
+              kind: 'page' as const,
+              reason: 'Empty template',
+            },
+          },
+        ],
+        viewChanges: [
+          {
+            databaseId: 'roadmap',
+            title: 'Roadmap',
+            views: [
+              {
+                viewId: 'board',
+                title: 'Task Board',
+                changes: [
+                  {
+                    kind: 'filter' as const,
+                    count: 1,
+                    message:
+                      'The filter may include rows with an empty status.',
+                  },
+                  {
+                    kind: 'visibility' as const,
+                    count: 1,
+                    message: 'Shown here, hidden in Notion: Meeting.',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        tabChoices: [
+          { containerId: 'inline', database: 'Roadmap', tab: 'Task Board' },
+        ],
+        notes: [],
+      },
+    };
+    imports.report = completed;
+    setup({ item: { status: 'completed' } });
+
+    expect(
+      screen.getByText(
+        'Imported 1 page and 1 database (9 rows). 1 page left out.'
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText(/importing 1 page/i)).toBeNull();
+    expect(screen.queryByText('40 rows')).toBeNull();
+    expect(screen.queryByText('Needs attention')).toBeNull();
+    const expand = (label: string) => {
+      const summary = screen.getByText(label);
+      const disclosure = summary.closest('details')!;
+      expect(disclosure.open).toBe(false);
+      fireEvent.click(summary);
+      expect(disclosure.open).toBe(true);
+      return within(disclosure);
+    };
+    expect(
+      expand('Not imported · 1 item').getByText(/Empty template/)
+    ).toBeTruthy();
+    const views = expand('View changes · 1 view');
+    const filter = views.getByText(/may include rows/);
+    const visibility = views.getByText(/Shown here, hidden in Notion: Meeting/);
+    expect(
+      filter.compareDocumentPosition(visibility) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      expand('Tab choices · 1 placement').getByText(
+        /Notion didn't say which tab was showing; we used Task Board/
+      )
+    ).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Import plan' })).toBeTruthy();
+  });
+
   it.each([390, 1024])(
     'keeps notices available before the tree at %i pixels',
     async (width) => {

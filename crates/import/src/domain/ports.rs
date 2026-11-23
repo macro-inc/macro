@@ -1300,6 +1300,13 @@ pub trait NotionRunRepo: Send + Sync + 'static {
 /// What workspace writes created for each ledger row, recorded as they go so
 /// a resumed write reuses it instead of creating it again.
 pub trait WrittenObjects: Send + Sync + 'static {
+    /// Count durable output markers for completed, caller-owned Notion rows.
+    fn confirmed_notion_writes(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_ids: &[Uuid],
+    ) -> impl Future<Output = Result<crate::domain::models::ConfirmedNotionWrites>> + Send;
+
     /// Clear only this owned source's consecutive reservation failure receipts.
     fn clear_database_reservation_failures(
         &self,

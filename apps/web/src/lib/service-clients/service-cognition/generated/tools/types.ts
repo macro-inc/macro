@@ -3739,15 +3739,9 @@ export type NotionImportAction = 'plan' | 'status' | 'cancel';
  */
 export type NotionSharing = 'team' | 'personal' | 'ai';
 /**
- * Lifecycle of a discovery run (one per user × source).
+ * Why an item was left for the user in the reviewed plan.
  */
-export type RunStatus =
-  | 'running'
-  | 'ready'
-  | 'importing'
-  | 'completed'
-  | 'failed'
-  | 'dismissed';
+export type NotionReviewOmissionKind = 'left_out' | 'excluded' | 'by_hand';
 /**
  * What an imported item is in its source system. Each source has its own
  * kinds; a Notion database and a Notion page, or a Linear project and a
@@ -3765,6 +3759,33 @@ export type ImportKind =
   | 'jira_project'
   | 'jira_epic'
   | 'channel';
+/**
+ * The kind and severity of a user-visible change to a saved view.
+ */
+export type NotionViewChangeKind =
+  | 'filter'
+  | 'layout'
+  | 'sort'
+  | 'visibility'
+  | 'display';
+/**
+ * Content-level notes that do not describe a saved view or a reviewed skip.
+ */
+export type NotionReportNoteKind =
+  | 'omitted'
+  | 'snapshot'
+  | 'reference'
+  | 'other';
+/**
+ * Lifecycle of a discovery run (one per user × source).
+ */
+export type RunStatus =
+  | 'running'
+  | 'ready'
+  | 'importing'
+  | 'completed'
+  | 'failed'
+  | 'dismissed';
 /**
  * A kind of action or inactivity the user should see: `permission` to run a tool, an
  * `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
@@ -11220,6 +11241,14 @@ export interface NotionImportReport {
    */
   warnings?: string[];
   /**
+   * Grouped report details for a Notion workspace review.
+   */
+  details?: NotionReportDetails | null;
+  /**
+   * Actual writes from the completed Notion ledger, excluding reused copies.
+   */
+  confirmed?: ConfirmedNotionWrites | null;
+  /**
    * Tracker issues in the plan.
    */
   issues?: number;
@@ -11284,7 +11313,7 @@ export interface NotionImportReport {
    */
   databases: number;
   /**
-   * Rows those databases hold, every one counted while planning.
+   * Estimated database rows while planning, confirmed rows once completed.
    */
   databaseRows: number;
   /**
@@ -11292,7 +11321,7 @@ export interface NotionImportReport {
    */
   taskRows: number;
   /**
-   * Plan objects already imported.
+   * Plan objects finished so far, or confirmed new copies once completed.
    */
   imported: number;
   /**
@@ -11335,6 +11364,160 @@ export interface NotionImportReport {
   failures?: NotionReportItem[];
 }
 /**
+ * Details alongside the outcome on a Notion import card.
+ */
+export interface NotionReportDetails {
+  /**
+   * Items deliberately left out, with every reviewed reason.
+   */
+  notImported: NotionReviewOmission[];
+  /**
+   * Saved view differences, grouped by source and view identity.
+   */
+  viewChanges: NotionDatabaseViewChanges[];
+  /**
+   * Tab selections caused by an unspecified Notion tab.
+   */
+  tabChoices: NotionTabChoice[];
+  /**
+   * Remaining notices, including legacy entries and non-view fidelity changes.
+   */
+  notes: NotionReportNote[];
+}
+/**
+ * A review choice and the item it left out.
+ */
+export interface NotionReviewOmission {
+  kind: NotionReviewOmissionKind;
+  item: NotionReportItem;
+}
+/**
+ * One object a workspace import report calls out.
+ */
+export interface NotionReportItem {
+  /**
+   * The ledger row.
+   */
+  importId: string;
+  /**
+   * The object's title.
+   */
+  title: string;
+  kind: ImportKind;
+  /**
+   * Its Notion URL.
+   */
+  url?: string | null;
+  /**
+   * Why it is called out: the decision model's reason, or the failure.
+   */
+  reason?: string | null;
+}
+/**
+ * Views that changed on one database.
+ */
+export interface NotionDatabaseViewChanges {
+  /**
+   * Stable Notion data source identity.
+   */
+  databaseId: string;
+  /**
+   * Display title.
+   */
+  title: string;
+  /**
+   * Views ordered by their highest impact.
+   */
+  views: NotionChangedView[];
+}
+/**
+ * Changes to one view of an imported database.
+ */
+export interface NotionChangedView {
+  /**
+   * Stable Notion identity, separate from the title.
+   */
+  viewId: string;
+  /**
+   * Display title.
+   */
+  title: string;
+  /**
+   * Changes ordered by impact.
+   */
+  changes: NotionViewChange[];
+}
+/**
+ * A counted, readable difference in an imported view.
+ */
+export interface NotionViewChange {
+  kind: NotionViewChangeKind;
+  /**
+   * Number of changed settings represented in this line.
+   */
+  count: number;
+  /**
+   * Human-readable description.
+   */
+  message: string;
+}
+/**
+ * A first-tab choice when Notion omitted the view from a reference.
+ */
+export interface NotionTabChoice {
+  /**
+   * Container identity. Different linked placements may choose different tabs.
+   */
+  containerId: string;
+  /**
+   * Database name shown in the reference.
+   */
+  database: string;
+  /**
+   * Name of the returned first tab.
+   */
+  tab: string;
+}
+/**
+ * A counted content or compatibility note.
+ */
+export interface NotionReportNote {
+  kind: NotionReportNoteKind;
+  /**
+   * Number of incidents represented by this notice.
+   */
+  count: number;
+  /**
+   * Human-readable text, with affected source and property titles.
+   */
+  message: string;
+}
+/**
+ * Objects confirmed in the current Notion write's ledger.
+ */
+export interface ConfirmedNotionWrites {
+  /**
+   * Copied pages.
+   */
+  documents: number;
+  /**
+   * Copied databases.
+   */
+  databases: number;
+  /**
+   * Rows inserted into copied databases.
+   */
+  databaseRows: number;
+  /**
+   * Databases copied as task lists.
+   */
+  taskLists: number;
+  /**
+   * Tasks inserted into those lists.
+   */
+  tasks: number;
+}
+/**
  * What a planning run has found in the source so far.
  */
 export interface ScanCounts {
@@ -11359,28 +11542,6 @@ export interface NotionImporter {
    * How many of the plan's objects they imported.
    */
   count: number;
-}
-/**
- * One object a workspace import report calls out.
- */
-export interface NotionReportItem {
-  /**
-   * The ledger row.
-   */
-  importId: string;
-  /**
-   * The object's title.
-   */
-  title: string;
-  kind: ImportKind;
-  /**
-   * Its Notion URL.
-   */
-  url?: string | null;
-  /**
-   * Why it is called out: the decision model's reason, or the failure.
-   */
-  reason?: string | null;
 }
 /**
  * Import a Linear workspace into Macro: issues become tasks, and teams, projects and initiatives become Macro projects. Plan reads only through the user's connected Linear account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: linear}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.

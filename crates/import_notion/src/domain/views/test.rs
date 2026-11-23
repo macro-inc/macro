@@ -537,7 +537,7 @@ fn typed_view_settings_are_explicit_at_the_translation_boundary() {
             .unwrap()
             .get("setting")
             .and_then(serde_json::Value::as_str),
-        Some("column_visibility")
+        Some("hidden_column")
     );
     let other = losses
         .iter()
@@ -551,3 +551,5 @@ fn typed_view_settings_are_explicit_at_the_translation_boundary() {
         Some("other")
     );
 }
+
+mod fidelity_audit;

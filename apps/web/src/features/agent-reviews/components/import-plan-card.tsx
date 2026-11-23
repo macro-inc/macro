@@ -22,6 +22,7 @@ import {
   volumeLabel,
 } from '../core/import-plan';
 import { ImportPlanRow } from './import-plan-row';
+import { ImportReportDetails } from './import-report-details';
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -52,6 +53,27 @@ function PhaseStatus(props: {
   progress: ImportProgress | undefined;
 }) {
   const imported = () => props.progress?.imported ?? 0;
+  const outcome = () => {
+    const confirmed = props.progress?.confirmed;
+    if (!confirmed) return `Imported ${plural(imported(), 'object')}`;
+    const parts = [
+      confirmed.documents > 0 ? plural(confirmed.documents, 'page') : '',
+      confirmed.databases > 0
+        ? `${plural(confirmed.databases, 'database')} (${plural(confirmed.databaseRows, 'row')})`
+        : '',
+      confirmed.taskLists > 0
+        ? `${plural(confirmed.taskLists, 'task list')} (${plural(confirmed.tasks, 'task')})`
+        : '',
+    ].filter(Boolean);
+    const volume = new Intl.ListFormat('en', { type: 'conjunction' }).format(
+      parts
+    );
+    const leftOut = props.progress?.details?.notImported ?? [];
+    const noun = leftOut.every(({ item }) => item.kind === 'page')
+      ? 'page'
+      : 'item';
+    return `Imported ${volume || 'nothing'}.${leftOut.length > 0 ? ` ${plural(leftOut.length, noun)} left out.` : ''}`;
+  };
   const total = () =>
     imported() +
     (props.progress?.waiting ?? 0) +
@@ -91,8 +113,8 @@ function PhaseStatus(props: {
         ))
         .with('completed', () => (
           <p role="status" class="text-sm text-ink">
-            Imported {plural(imported(), 'object')}
-            <Show when={props.progress?.error}>
+            {outcome()}
+            <Show when={!props.progress?.details && props.progress?.error}>
               {(error) => <span class="text-failure"> — {error()}</span>}
             </Show>
           </p>
@@ -265,6 +287,8 @@ function PlanContents(
   const running = () =>
     props.phase.kind === 'starting' || props.phase.kind === 'importing';
   const failures = () => props.progress?.failures ?? [];
+  const details = () =>
+    props.phase.kind === 'completed' ? props.progress?.details : undefined;
   return (
     <>
       <header class="flex min-w-0 flex-col gap-0.5">
@@ -283,15 +307,28 @@ function PlanContents(
         >
           <ActionDialogShell.Title>{props.title}</ActionDialogShell.Title>
         </Show>
-        <Show when={props.summary}>
+        <Show when={props.summary && !details()}>
           <p class="text-xs text-ink-muted">{props.summary}</p>
         </Show>
         <Show when={(choosing() || planning()) && props.sharingSummary}>
           <p class="text-xs text-ink-muted">{props.sharingSummary}</p>
         </Show>
       </header>
-      <PlanTotals totals={props.totals} />
-      <Show when={props.progress?.warnings?.length}>
+      <Show when={!details()}>
+        <PlanTotals totals={props.totals} />
+        <Show
+          when={
+            (choosing() || planning() || running()) &&
+            (props.source ?? 'notion') === 'notion' &&
+            (props.volume.databases > 0 || props.volume.taskLists > 0)
+          }
+        >
+          <p class="text-xs text-ink-muted">
+            Row and task counts are estimates.
+          </p>
+        </Show>
+      </Show>
+      <Show when={!details() && props.progress?.warnings?.length}>
         <details open={!isMobile()} class="min-w-0 text-xs text-ink-muted">
           <summary class="min-h-11 content-center">
             {plural(props.progress?.warnings?.length ?? 0, 'notice')}
@@ -329,6 +366,15 @@ function PlanContents(
         <p role="status" class="text-xs text-ink-muted">
           {props.planningStatus}
         </p>
+      </Show>
+      <Show when={details()}>
+        {(report) => (
+          <ImportReportDetails
+            details={report()}
+            failures={failures()}
+            error={props.progress?.error ?? null}
+          />
+        )}
       </Show>
       <Show when={props.startedByAgent}>
         <p class="text-xs text-ink-muted">
@@ -371,6 +417,7 @@ function PlanContents(
                 showStatus={
                   !choosing() && !planning() && props.phase.kind !== 'preparing'
                 }
+                showRowEstimate={!details() || !props.progress?.confirmed}
                 onToggleExpanded={() => props.onToggleExpanded(node.id)}
                 onToggleRows={() => props.onToggleRows(node.id)}
                 onIncludedChange={(included) =>
@@ -404,7 +451,7 @@ function PlanContents(
           onOpenEntity={props.onOpenEntity}
         />
       </Show>
-      <Show when={failures().length > 0}>
+      <Show when={!details() && failures().length > 0}>
         <section aria-label="Failures" class="flex flex-col gap-1">
           <h4 class="text-xs font-medium text-ink-muted">
             {plural(failures().length, 'object')} couldn't be imported

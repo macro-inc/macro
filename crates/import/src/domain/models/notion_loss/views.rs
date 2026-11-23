@@ -30,6 +30,15 @@ pub struct ViewWarning {
 impl ViewWarning {
     /// Exhaustive readable rendering, independent of source path spellings.
     pub fn render(&self) -> String {
+        format!(
+            "Database “{}”, view “{}”: {}",
+            self.source,
+            self.view,
+            self.detail()
+        )
+    }
+
+    pub(crate) fn detail(&self) -> String {
         let properties = self
             .properties
             .iter()
@@ -45,6 +54,9 @@ impl ViewWarning {
             ViewLossKind::Filter => format!(
                 "the filter{context} could not be preserved exactly; this view may show additional rows"
             ),
+            ViewLossKind::FilterIncludesBlankStatus => {
+                format!("the filter{context} may include additional rows with an empty status")
+            }
             ViewLossKind::Sort => {
                 format!("the sort{context} was omitted; rows may appear in a different order")
             }
@@ -65,7 +77,7 @@ impl ViewWarning {
                 format!("the {layout} layout is shown as a table")
             }
             ViewLossKind::Setting => match self.setting {
-                ViewSetting::ColumnVisibility => {
+                ViewSetting::ColumnVisibility | ViewSetting::HiddenColumn => {
                     if self.layout == ViewType::Table {
                         format!(
                             "column visibility{context} could not be kept; imported table columns stay visible"
@@ -91,13 +103,12 @@ impl ViewWarning {
                 ViewSetting::Other => format!("the display setting{context} could not be kept"),
             },
         };
-        let mut message = format!(
-            "Database “{}”, view “{}”: {detail}.",
-            self.source, self.view
-        );
+        let mut message = format!("{detail}.");
         if self.count > 1 {
             let details = match self.kind {
-                ViewLossKind::Filter => "filter conditions",
+                ViewLossKind::Filter | ViewLossKind::FilterIncludesBlankStatus => {
+                    "filter conditions"
+                }
                 ViewLossKind::Sort => "sort rules",
                 ViewLossKind::Layout => "layout details",
                 ViewLossKind::Setting => "display settings",
@@ -114,6 +125,7 @@ mod test {
     #[test]
     fn every_view_setting_renders_a_readable_exhaustive_sentence() {
         let settings = [
+            ViewSetting::HiddenColumn,
             ViewSetting::ColumnVisibility,
             ViewSetting::ColumnWidth,
             ViewSetting::Grouping,
@@ -125,7 +137,7 @@ mod test {
         ];
         for setting in settings {
             let expected = match setting {
-                ViewSetting::ColumnVisibility => {
+                ViewSetting::ColumnVisibility | ViewSetting::HiddenColumn => {
                     "column visibility for “Owner” could not be kept; imported table columns stay visible"
                 }
                 ViewSetting::ColumnWidth => "the column width for “Owner” could not be kept",

@@ -45,6 +45,8 @@ pub(super) fn view_warnings(
     view: &NotionView,
     losses: &[ViewLoss],
 ) -> Vec<FidelityWarning> {
+    let payload =
+        json!({"filter":view.filter,"sorts":view.sorts,"configuration":view.configuration});
     let mut grouped = BTreeMap::new();
     for loss in losses {
         let warning = ViewWarning {
@@ -55,7 +57,7 @@ pub(super) fn view_warnings(
             kind: loss.kind,
             setting: loss.setting,
             layout: view.kind,
-            properties: property_names(source, view, loss),
+            properties: property_names(source, &payload, &loss.path),
             count: 0,
         };
         let count = grouped.entry(warning).or_insert(0u32);
@@ -72,15 +74,16 @@ pub(super) fn view_warnings(
 
 // Paths are diagnostic locators for property context, never setting classifiers
 // or printable labels. The translator supplies all setting semantics.
-fn property_names(source: &NotionDataSource, view: &NotionView, loss: &ViewLoss) -> Vec<String> {
-    let root = json!({"filter":view.filter,"sorts":view.sorts,"configuration":view.configuration});
-    let mut current = &root;
+fn property_names(source: &NotionDataSource, payload: &Value, path: &str) -> Vec<String> {
+    let mut current = payload;
     let mut property_context = None;
-    for token in loss
-        .path
+    let mut last = "";
+    let mut tokens = path
         .split(['.', '[', ']'])
         .filter(|part| !part.is_empty())
-    {
+        .peekable();
+    let filter = tokens.peek() == Some(&"filter");
+    for token in tokens {
         let next = if let Some(array) = current.as_array() {
             token
                 .parse::<usize>()
@@ -89,37 +92,52 @@ fn property_names(source: &NotionDataSource, view: &NotionView, loss: &ViewLoss)
         } else {
             current.get(token)
         };
-        let Some(next) = next else { break };
+        let Some(next) = next else {
+            return Vec::new();
+        };
         current = next;
-        if property_reference(current).is_some() {
-            property_context = Some(current);
+        last = token;
+        if let Some(reference) = property_reference(current) {
+            property_context = Some(reference);
         }
     }
     let mut names = BTreeSet::new();
-    property_titles(property_context.unwrap_or(current), source, &mut names);
+    let reference = match last {
+        "date_property_id" | "start_date_property_id" | "end_date_property_id" => current.as_str(),
+        _ => property_context,
+    };
+    if let Some(reference) = reference {
+        insert_property_title(reference, source, &mut names);
+    } else if filter {
+        property_titles(current, source, &mut names);
+    }
     names.into_iter().map(str::to_owned).collect()
 }
 
 fn property_reference(value: &Value) -> Option<&str> {
-    [
-        "property",
-        "property_id",
-        "date_property_id",
-        "start_date_property_id",
-        "end_date_property_id",
-    ]
-    .iter()
-    .find_map(|key| value.get(key).and_then(Value::as_str))
+    ["property", "property_id"]
+        .iter()
+        .find_map(|key| value.get(key).and_then(Value::as_str))
+}
+
+fn insert_property_title<'a>(
+    reference: &str,
+    source: &'a NotionDataSource,
+    names: &mut BTreeSet<&'a str>,
+) {
+    if let Some(property) = import_notion::domain::views::resolve_property(
+        &source.properties,
+        reference,
+        |property| &property.id,
+        |property| &property.name,
+    ) {
+        names.insert(property.name.as_str());
+    }
 }
 
 fn property_titles<'a>(value: &Value, source: &'a NotionDataSource, names: &mut BTreeSet<&'a str>) {
-    if let Some(reference) = property_reference(value)
-        && let Some(property) = source
-            .properties
-            .iter()
-            .find(|property| property.id == reference || property.name == reference)
-    {
-        names.insert(property.name.as_str());
+    if let Some(reference) = property_reference(value) {
+        insert_property_title(reference, source, names);
     }
     match value {
         Value::Array(values) => {
@@ -128,8 +146,10 @@ fn property_titles<'a>(value: &Value, source: &'a NotionDataSource, names: &mut 
             }
         }
         Value::Object(values) => {
-            for value in values.values() {
-                property_titles(value, source, names);
+            for group in ["and", "or"] {
+                if let Some(children) = values.get(group).filter(|value| value.is_array()) {
+                    property_titles(children, source, names);
+                }
             }
         }
         _ => {}

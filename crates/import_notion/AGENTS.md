@@ -86,6 +86,10 @@ maps a data source onto Macro database columns and cells
   matches by id when supplied and by name only when no id was supplied; callers
   must report `option_losses` and restore reserved option mappings on resume.
   View bindings use the same stable mapping, including renamed options.
+  Match view property IDs exactly before considering a single percent decode.
+  Reject ambiguous alternatives before trying a unique display name. Reuse the
+  resolver for timeline column planning and warning titles. Treat request IDs
+  and property names carried as metadata as non-semantic.
 - Formula and rollup column names use the short ` (snapshot)` suffix; the
   typed loss report explains which calculation was retained as a fixed value.
   Before planning columns, union `macro_cells::date_range_properties` from
@@ -108,7 +112,8 @@ maps a data source onto Macro database columns and cells
   and report changed literals; omit blank positive literals, text inequality and
   nonempty predicates, changed negative-contains literals, and negative option
   predicates whose source labels collapse onto one Macro option id. These losses
-  broaden results, never hide source rows. The writer owns saved-view ids and
+  broaden results and keep source rows. Mark status exclusions as approximate
+  because Macro also matches empty cells. The writer owns saved-view ids and
   name uniqueness. Set ViewSetting at the translation site; diagnostic paths
   never classify settings or become display labels. Unknown settings use Other
   and a generic readable description, never a raw configuration key.

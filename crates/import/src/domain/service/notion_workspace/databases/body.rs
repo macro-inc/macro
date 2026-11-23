@@ -88,9 +88,6 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
             let selected = selected_tab
                 .and_then(ViewTab::view)
                 .filter(|view| view.parent.database_id == key.container_id);
-            if occurrence.view_id.is_none() && selected.is_some() {
-                reference(occurrence, ReferenceLossReason::DefaultTabAssumed)?;
-            }
             let source = selected
                 .and_then(|view| view.data_source_id.as_ref())
                 .or_else(|| {
@@ -114,6 +111,18 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
                     {
                         reference(occurrence, ReferenceLossReason::DefaultView)?;
                         view_id = None;
+                    } else if occurrence.view_id.is_none()
+                        && tabs.is_some_and(|tabs| tabs.len() > 1)
+                        && let Some(view) = selected
+                    {
+                        warnings.push(ImportNotice::new(
+                            &key.container_id,
+                            &occurrence.title,
+                            ImportNoticeKind::TabChosen {
+                                view_id: view.id.clone(),
+                                view: view.name.clone(),
+                            },
+                        ));
                     }
                     NotionDatabaseTarget::Resolved {
                         database_id: destination.database_id,

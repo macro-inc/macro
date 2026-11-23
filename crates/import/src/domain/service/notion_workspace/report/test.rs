@@ -4,8 +4,114 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::models::{
-    ImportSource, Initiator, NotionAlreadyImported, NotionPlanItem, ScanCounts,
+    FidelityWarning, ImportSource, Initiator, NotionAlreadyImported, NotionPlanItem,
+    NotionReviewOmissionKind, NotionViewChangeKind, ScanCounts, ViewWarning,
 };
+
+#[test]
+fn view_changes_keep_ids_counts_and_impact_and_review_skips_keep_reasons() {
+    use import_notion::domain::{
+        model::NotionId,
+        views::{ViewLossKind, ViewSetting, ViewType},
+    };
+    let id = |ch: char| NotionId::parse(&ch.to_string().repeat(32)).unwrap();
+    let review = Uuid::now_v7();
+    let warning = |view_id, kind, setting, properties, count| {
+        FidelityWarning::ViewLoss(ViewWarning {
+            source_id: id('a'),
+            view_id,
+            source: "Projects".into(),
+            view: "Same title".into(),
+            kind,
+            setting,
+            layout: ViewType::Table,
+            properties,
+            count,
+        })
+    };
+    let mut database = row(
+        "Projects",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        Some(review),
+        None,
+    );
+    database.metadata["warnings"] = serde_json::json!([
+        warning(
+            id('c'),
+            ViewLossKind::Setting,
+            ViewSetting::ColumnWidth,
+            vec![],
+            1
+        ),
+        warning(
+            id('b'),
+            ViewLossKind::Setting,
+            ViewSetting::HiddenColumn,
+            vec!["Meeting".into()],
+            1
+        ),
+        warning(
+            id('b'),
+            ViewLossKind::Setting,
+            ViewSetting::HiddenColumn,
+            vec!["Notes".into()],
+            1
+        ),
+        warning(
+            id('b'),
+            ViewLossKind::FilterIncludesBlankStatus,
+            ViewSetting::Other,
+            vec!["Status".into()],
+            3
+        ),
+    ]);
+    let mut template = row(
+        "Template",
+        ImportKind::Page,
+        ImportStatus::Discarded,
+        NotionDecision::Skip,
+        Some(review),
+        None,
+    );
+    template.metadata["plan"]["reason"] = serde_json::json!("Empty template");
+    let excluded = row(
+        "Unselected",
+        ImportKind::Page,
+        ImportStatus::Discarded,
+        NotionDecision::Copy,
+        Some(review),
+        None,
+    );
+    let details = report(None, &[database, template, excluded])
+        .details
+        .unwrap();
+    assert_eq!(
+        details.not_imported[0].kind,
+        NotionReviewOmissionKind::LeftOut
+    );
+    assert_eq!(
+        details.not_imported[0].item.reason.as_deref(),
+        Some("Empty template")
+    );
+    assert_eq!(
+        details.not_imported[1].kind,
+        NotionReviewOmissionKind::Excluded
+    );
+    assert_eq!(details.view_changes.len(), 1);
+    let views = &details.view_changes[0].views;
+    assert_eq!(views.len(), 2, "equal titles do not merge distinct views");
+    assert_eq!(views[0].view_id, id('b').to_string());
+    assert_eq!(views[0].changes[0].kind, NotionViewChangeKind::Filter);
+    assert_eq!(views[0].changes[0].count, 3);
+    assert_eq!(views[0].changes[1].count, 2);
+    assert_eq!(
+        views[0].changes[1].message,
+        "Shown here, hidden in Notion: Meeting, Notes."
+    );
+    assert_eq!(views[1].changes[0].kind, NotionViewChangeKind::Display);
+}
 
 fn row(
     title: &str,

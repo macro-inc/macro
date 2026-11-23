@@ -7,10 +7,10 @@ use super::model::*;
 
 pub(super) fn translate(
     value: &Value,
-    columns: &[ViewColumnBinding],
+    lookup: &ColumnLookup<'_>,
     losses: &mut Vec<ViewLoss>,
 ) -> Option<FilterGroup> {
-    let node = node(value, columns, losses, "filter", 0)?;
+    let node = node(value, lookup, losses, "filter", 0)?;
     Some(match node {
         FilterNode::Group(group) => group,
         condition => FilterGroup {
@@ -22,7 +22,7 @@ pub(super) fn translate(
 
 fn node(
     value: &Value,
-    columns: &[ViewColumnBinding],
+    lookup: &ColumnLookup<'_>,
     losses: &mut Vec<ViewLoss>,
     path: &str,
     depth: u8,
@@ -51,11 +51,11 @@ fn node(
         } else {
             ("or", Conjunction::Or)
         };
-        let Some(children) = object
-            .get(key)
-            .and_then(Value::as_array)
-            .filter(|_| object.len() == 1)
-        else {
+        let Some(children) = object.get(key).and_then(Value::as_array).filter(|_| {
+            object
+                .keys()
+                .all(|field| field == key || metadata_field(field))
+        }) else {
             loss(
                 losses,
                 ViewLossKind::Filter,
@@ -72,7 +72,7 @@ fn node(
             let before = losses.len();
             match node(
                 child,
-                columns,
+                lookup,
                 losses,
                 &format!("{path}.{key}[{index}]"),
                 depth + 1,
@@ -80,7 +80,10 @@ fn node(
                 Some(condition) => conditions.push(condition),
                 None => valid = false,
             }
-            if losses.len() != before {
+            if losses[before..]
+                .iter()
+                .any(|loss| loss.kind != ViewLossKind::FilterIncludesBlankStatus)
+            {
                 valid = false;
             }
         }
@@ -101,7 +104,7 @@ fn node(
         );
     }
     let before = losses.len();
-    let translated = condition(value, columns, losses, path);
+    let translated = condition(value, lookup, losses, path);
     if translated.is_none() && losses.len() == before {
         loss(
             losses,
@@ -115,19 +118,22 @@ fn node(
 
 fn condition(
     value: &Value,
-    columns: &[ViewColumnBinding],
+    lookup: &ColumnLookup<'_>,
     losses: &mut Vec<ViewLoss>,
     path: &str,
 ) -> Option<FilterNode> {
     let object = value.as_object()?;
-    if object.len() != 2 {
-        return None;
-    }
-    let binding = column(columns, object.get("property")?.as_str()?)?;
+    let binding = lookup(object.get("property")?.as_str()?)?;
     if binding.snapshot {
         return None;
     }
-    let (kind, predicate) = object.iter().find(|(key, _)| key.as_str() != "property")?;
+    let mut predicates = object
+        .iter()
+        .filter(|(key, _)| key.as_str() != "property" && !metadata_field(key));
+    let (kind, predicate) = predicates.next()?;
+    if predicates.next().is_some() {
+        return None;
+    }
     let compatible = match kind.as_str() {
         "title" | "rich_text" | "email" | "phone_number" => binding.kind == ColumnKind::Text,
         "url" => binding.kind == ColumnKind::Link,
@@ -143,11 +149,14 @@ fn condition(
     if !compatible {
         return None;
     }
-    let predicate = predicate.as_object()?;
-    if predicate.len() != 1 {
+    let mut operators = predicate
+        .as_object()?
+        .iter()
+        .filter(|(key, _)| !metadata_field(key));
+    let (operator, value) = operators.next()?;
+    if operators.next().is_some() {
         return None;
     }
-    let (operator, value) = predicate.iter().next()?;
     let text = matches!(
         kind.as_str(),
         "title" | "rich_text" | "email" | "phone_number" | "url"
@@ -264,6 +273,16 @@ fn condition(
             _ => return None,
         },
     };
+    if kind == "status" && operator == "does_not_equal" {
+        // Macro's negative set test includes blank cells. Notion does not
+        // specify the blank case for this operator, so keep the superset.
+        loss(
+            losses,
+            ViewLossKind::FilterIncludesBlankStatus,
+            path,
+            "Status exclusion keeps blank cells because Notion does not specify their behavior",
+        );
+    }
     Some(FilterNode::Condition(FilterCondition {
         column: binding.column,
         test,

@@ -35,12 +35,8 @@ async fn row_body_losses_are_flushed_at_most_once_per_source_phase() {
         "row count must not determine the number of JSON warning rewrites"
     );
     assert!(
-        store
-            .warnings
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|loss| loss.contains("default tab assumed"))
+        store.warnings.lock().unwrap().is_empty(),
+        "a sole readable tab is unambiguous"
     );
 }
 
@@ -131,10 +127,28 @@ async fn saved_view_names_are_readable_and_unique_without_notion_identifiers() {
 async fn resumed_body_markers_restore_counted_losses_without_rereading_bodies() {
     let rows: Vec<_> = (1..=8).map(numbered_row).collect();
     let bodies = rows.iter().map(|row| (row.id.clone(), "<database url=\"https://www.notion.so/ffffffffffffffffffffffffffffffff\">Work</database>".to_owned())).collect();
-    let notion = FakeNotion { views: vec![serde_json::from_value(serde_json::json!({
-        "id": id('b'), "name": "All work", "type": "table", "parent":{"database_id":id('f')}, "data_source_id":id('e')
-    })).unwrap()], source: NotionDataSource { id:id('e'), database_id:id('f'), title:"Work".into(), database_parent:NotionParent::Workspace, in_trash:false, properties:vec![] },
-        rows, bodies, fetched: Mutex::new(0), queries: Mutex::new(0), scan_stop: None, paginated: false };
+    let views = [(id('b'), "All work"), (id('c'), "Finished work")].into_iter()
+        .map(|(view_id, name)| serde_json::from_value(serde_json::json!({
+            "id": view_id, "name": name, "type": "table", "parent":{"database_id":id('f')}, "data_source_id":id('e')
+        })).unwrap())
+        .collect();
+    let notion = FakeNotion {
+        views,
+        source: NotionDataSource {
+            id: id('e'),
+            database_id: id('f'),
+            title: "Work".into(),
+            database_parent: NotionParent::Workspace,
+            in_trash: false,
+            properties: vec![],
+        },
+        rows,
+        bodies,
+        fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
+    };
     let store = FakeStore::default();
     let user = user();
     let item = source_item("Work");
@@ -178,14 +192,9 @@ async fn resumed_body_markers_restore_counted_losses_without_rereading_bodies() 
         reads,
         "completed bodies are not read again"
     );
-    assert!(
-        store
-            .warnings
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|loss| loss.contains("8") && loss.contains("default tab assumed"))
-    );
+    let warnings = store.warnings.lock().unwrap();
+    assert_eq!(warnings.len(), 1, "one tab choice per container");
+    assert!(warnings[0].contains("we used “All work”"));
 }
 
 #[tokio::test]

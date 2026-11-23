@@ -458,6 +458,32 @@ export type CompletionUsage = {
 };
 
 /**
+ * Objects confirmed in the current Notion write's ledger.
+ */
+export type ConfirmedNotionWrites = {
+    /**
+     * Rows inserted into copied databases.
+     */
+    databaseRows: number;
+    /**
+     * Copied databases.
+     */
+    databases: number;
+    /**
+     * Copied pages.
+     */
+    documents: number;
+    /**
+     * Databases copied as task lists.
+     */
+    taskLists: number;
+    /**
+     * Tasks inserted into those lists.
+     */
+    tasks: number;
+};
+
+/**
  * One of the user's MCP server connections, as the setup page sees it.
  */
 export type ConnectedServer = {
@@ -1240,6 +1266,42 @@ export type NotionAlreadyImported = {
 };
 
 /**
+ * Changes to one view of an imported database.
+ */
+export type NotionChangedView = {
+    /**
+     * Changes ordered by impact.
+     */
+    changes: Array<NotionViewChange>;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Stable Notion identity, separate from the title.
+     */
+    viewId: string;
+};
+
+/**
+ * Views that changed on one database.
+ */
+export type NotionDatabaseViewChanges = {
+    /**
+     * Stable Notion data source identity.
+     */
+    databaseId: string;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Views ordered by their highest impact.
+     */
+    views: Array<NotionChangedView>;
+};
+
+/**
  * What a workspace import does with one Notion object.
  */
 export type NotionDecision = 'copy' | 'tasks' | 'skip' | 'hand';
@@ -1277,6 +1339,7 @@ export type NotionImportReport = {
      * they link to that copy and are not counted as copies.
      */
     alreadyInMacro?: number;
+    confirmed?: null | ConfirmedNotionWrites;
     /**
      * Objects to copy as they are.
      */
@@ -1286,7 +1349,7 @@ export type NotionImportReport = {
      */
     dataSources: number;
     /**
-     * Rows those databases hold, every one counted while planning.
+     * Estimated database rows while planning, confirmed rows once completed.
      */
     databaseRows: number;
     /**
@@ -1298,6 +1361,7 @@ export type NotionImportReport = {
      * planning is still `running`.
      */
     deciding?: number;
+    details?: null | NotionReportDetails;
     /**
      * Pages written as documents.
      */
@@ -1319,7 +1383,7 @@ export type NotionImportReport = {
      */
     handItems?: Array<NotionReportItem>;
     /**
-     * Plan objects already imported.
+     * Plan objects finished so far, or confirmed new copies once completed.
      */
     imported: number;
     /**
@@ -1441,6 +1505,28 @@ export type NotionPlanItem = {
 };
 
 /**
+ * Details alongside the outcome on a Notion import card.
+ */
+export type NotionReportDetails = {
+    /**
+     * Items deliberately left out, with every reviewed reason.
+     */
+    notImported: Array<NotionReviewOmission>;
+    /**
+     * Remaining notices, including legacy entries and non-view fidelity changes.
+     */
+    notes: Array<NotionReportNote>;
+    /**
+     * Tab selections caused by an unspecified Notion tab.
+     */
+    tabChoices: Array<NotionTabChoice>;
+    /**
+     * Saved view differences, grouped by source and view identity.
+     */
+    viewChanges: Array<NotionDatabaseViewChanges>;
+};
+
+/**
  * One object a workspace import report calls out.
  */
 export type NotionReportItem = {
@@ -1467,6 +1553,66 @@ export type NotionReportItem = {
 };
 
 /**
+ * A counted content or compatibility note.
+ */
+export type NotionReportNote = {
+    /**
+     * Number of incidents represented by this notice.
+     */
+    count: number;
+    /**
+     * Semantic category.
+     */
+    kind: NotionReportNoteKind;
+    /**
+     * Human-readable text, with affected source and property titles.
+     */
+    message: string;
+};
+
+/**
+ * Content-level notes that do not describe a saved view or a reviewed skip.
+ */
+export type NotionReportNoteKind = 'omitted' | 'snapshot' | 'reference' | 'other';
+
+/**
+ * A review choice and the item it left out.
+ */
+export type NotionReviewOmission = {
+    /**
+     * Source title, link and review reason.
+     */
+    item: NotionReportItem;
+    /**
+     * Which review choice led to the omission.
+     */
+    kind: NotionReviewOmissionKind;
+};
+
+/**
+ * Why an item was left for the user in the reviewed plan.
+ */
+export type NotionReviewOmissionKind = 'left_out' | 'excluded' | 'by_hand';
+
+/**
+ * A first-tab choice when Notion omitted the view from a reference.
+ */
+export type NotionTabChoice = {
+    /**
+     * Container identity. Different linked placements may choose different tabs.
+     */
+    containerId: string;
+    /**
+     * Database name shown in the reference.
+     */
+    database: string;
+    /**
+     * Name of the returned first tab.
+     */
+    tab: string;
+};
+
+/**
  * Which Notion columns hold a task list's task fields, by property name.
  */
 export type NotionTaskFields = {
@@ -1487,6 +1633,29 @@ export type NotionTaskFields = {
      */
     status?: string | null;
 };
+
+/**
+ * A counted, readable difference in an imported view.
+ */
+export type NotionViewChange = {
+    /**
+     * Number of changed settings represented in this line.
+     */
+    count: number;
+    /**
+     * Semantic category used for ordering and grouping.
+     */
+    kind: NotionViewChangeKind;
+    /**
+     * Human-readable description.
+     */
+    message: string;
+};
+
+/**
+ * The kind and severity of a user-visible change to a saved view.
+ */
+export type NotionViewChangeKind = 'filter' | 'layout' | 'sort' | 'visibility' | 'display';
 
 /**
  * One user's onboarding row.

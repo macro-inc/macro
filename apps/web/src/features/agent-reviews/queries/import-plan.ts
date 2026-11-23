@@ -114,6 +114,8 @@ export function decodeImportProgress(
 ): ImportProgress {
   return {
     warnings: report.warnings ?? [],
+    details: report.details,
+    confirmed: report.confirmed,
     reviewId: report.reviewId ?? null,
     status: report.status ?? null,
     error: report.error ?? null,

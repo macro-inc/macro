@@ -521,6 +521,60 @@ impl NotionRunRepo for PgImportRepo {
 }
 
 impl WrittenObjects for PgImportRepo {
+    #[tracing::instrument(skip_all, fields(items = import_ids.len()), err)]
+    async fn confirmed_notion_writes(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_ids: &[Uuid],
+    ) -> Result<crate::domain::models::ConfirmedNotionWrites> {
+        use crate::domain::models::ConfirmedNotionWrites;
+
+        if import_ids.is_empty() {
+            return Ok(ConfirmedNotionWrites::default());
+        }
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        // Keep the owned PK lookup driven by the passed IDs even when the
+        // custom plan knows the complete array is large.
+        let counts = sqlx::query!(
+            r#"
+            SELECT COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'document'), 0)::bigint AS "documents!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'database'), 0)::bigint AS "databases!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'row'), 0)::bigint AS "database_rows!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'tasks_folder'), 0)::bigint AS "task_lists!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'task'), 0)::bigint AS "tasks!"
+            FROM unnest($2::uuid[]) AS wanted(id)
+            CROSS JOIN LATERAL (
+                SELECT entity.id
+                FROM import_entity AS entity
+                WHERE entity.id = wanted.id AND entity.user_id = $1
+                  AND entity.source = 'notion' AND entity.status = 'imported'
+                OFFSET 0
+            ) AS owned
+            CROSS JOIN (VALUES ('document'), ('database'), ('row'), ('tasks_folder'), ('task')) AS kinds(kind)
+            CROSS JOIN LATERAL (
+                SELECT count(*) AS writes
+                FROM import_entity_written AS written
+                WHERE written.import_id = owned.id AND written.kind = kinds.kind
+            ) AS output
+            "#,
+            user.as_ref(),
+            import_ids,
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        let count = |value| u32::try_from(value).map_err(anyhow::Error::from);
+        Ok(ConfirmedNotionWrites {
+            documents: count(counts.documents)?,
+            databases: count(counts.databases)?,
+            database_rows: count(counts.database_rows)?,
+            task_lists: count(counts.task_lists)?,
+            tasks: count(counts.tasks)?,
+        })
+    }
     #[tracing::instrument(skip_all, fields(import_id = %import_id, review_id = %review_id, facts = facts.len()), err)]
     async fn replace_database_outage(
         &self,

@@ -115,11 +115,22 @@ impl NotionApi for Inline {
             });
         }
         Ok(Paged {
-            results: vec![page_id('b'), page_id('c')],
+            // Notion's source-scoped list need not match the container's tab order.
+            results: match scope {
+                ViewScope::Database(_) => vec![page_id('b'), page_id('c')],
+                ViewScope::DataSource(_) => vec![page_id('9'), page_id('c'), page_id('b')],
+            },
             next_cursor: None,
         })
     }
     async fn retrieve_view(&self, id: &NotionId) -> std::result::Result<NotionView, NotionError> {
+        if *id == page_id('9') {
+            return Ok(serde_json::from_value(serde_json::json!({
+                "object":"view", "id":id, "name":"Linked work", "type":"table",
+                "parent":{"database_id":page_id('5')}, "data_source_id":page_id('d'),
+            }))
+            .unwrap());
+        }
         if self.external_rows > 0 && *id == page_id('8') {
             return Ok(serde_json::from_value(serde_json::json!({"object":"view", "id":id, "name":"External plans", "type":"table", "parent":{"database_id":page_id('6')}, "data_source_id":page_id('7')})).unwrap());
         }

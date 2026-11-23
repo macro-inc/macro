@@ -427,6 +427,12 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   Render source/view/property titles at the report
   boundary. Diagnostic paths may locate property context but never classify
   settings or supply user-visible labels; use the translator’s ViewSetting enum. Use a short “ ≈” saved-view suffix for filter approximation.
+  Save native tabs first in canonical container order, then the source's linked
+  views. Record multi-tab first choices once per container and selected tab in
+  report details. A sole tab needs no detail. Group completed report view
+  changes by typed source and view identity, with reviewed omissions and
+  actionable failures separate. Count completed copies and rows from the caller's
+  durable written markers, excluding teammate links and planning estimates.
   Report unsupported property types, including buttons, in the plan and report.
   Persist unmapped people counts with their row markers; keep mapped assignments
   and merge cumulative counts on resume. Keep the text title column first and

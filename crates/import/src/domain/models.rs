@@ -9,12 +9,18 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 mod notion_loss;
+mod notion_report;
 mod notion_run;
 pub use notion_loss::{
     FidelityWarning, ImportNotice, ImportNoticeKind, PropertySnapshotKind, ReferenceLossReason,
     SourceLossDetail, SourceLossFact, SourceStopReason, ViewWarning,
 };
 mod notion_sharing;
+pub use notion_report::{
+    ConfirmedNotionWrites, NotionChangedView, NotionDatabaseViewChanges, NotionReportDetails,
+    NotionReportNote, NotionReportNoteKind, NotionReviewOmission, NotionReviewOmissionKind,
+    NotionTabChoice, NotionViewChange, NotionViewChangeKind,
+};
 pub use notion_run::{
     AdoptedRun, NOTION_OUTAGE_PREFIX, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED,
     TaskImportNotice, TaskImportNoticeCount, TaskImportNoticeReason, TeamClaim, WrittenKind,
@@ -977,6 +983,12 @@ pub struct NotionImportReport {
     /// Provider items skipped because they were unreadable, or optional features unavailable.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+    /// Grouped report details for a Notion workspace review.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<NotionReportDetails>,
+    /// Actual writes from the completed Notion ledger, excluding reused copies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed: Option<ConfirmedNotionWrites>,
     /// Tracker issues in the plan.
     #[serde(default)]
     pub issues: u32,
@@ -1018,11 +1030,11 @@ pub struct NotionImportReport {
     pub documents: u32,
     /// Data sources written as databases.
     pub databases: u32,
-    /// Rows those databases hold, every one counted while planning.
+    /// Estimated database rows while planning, confirmed rows once completed.
     pub database_rows: u32,
     /// Tasks the task lists become, one per row.
     pub task_rows: u32,
-    /// Plan objects already imported.
+    /// Plan objects finished so far, or confirmed new copies once completed.
     pub imported: u32,
     /// Plan objects still waiting to be written.
     pub waiting: u32,

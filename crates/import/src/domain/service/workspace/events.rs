@@ -18,7 +18,7 @@ use mcp_select::ConnectorSelect;
 use uuid::Uuid;
 
 use super::super::ImportServiceImpl;
-use super::super::notion_workspace::{notice_import_ids, report};
+use super::super::notion_workspace::{confirmed_import_ids, notice_import_ids, report};
 use crate::domain::models::{
     ImportSource, NotionImportReport, NotionReportItem, ReviewedRun, RunStatus,
 };
@@ -49,7 +49,7 @@ where
     ) -> Result<bool> {
         // Read before the run moves: once it has, the rows still claimed go
         // back to staged and no longer say they were part of this write.
-        let report = self.current_report(user).await?;
+        let report = self.report_with_write_counts(user, true).await?;
         let root_folder = self.repo.root_folder(user).await?;
         let source = self.workspace_source;
         let moved = self
@@ -113,6 +113,14 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<NotionImportReport> {
+        self.report_with_write_counts(user, false).await
+    }
+
+    async fn report_with_write_counts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        settling_write: bool,
+    ) -> Result<NotionImportReport> {
         let run = self
             .repo
             .list_runs(user)
@@ -126,6 +134,21 @@ where
         let ids = notice_import_ids(run.as_ref(), &rows);
         let notices = self.repo.task_notice_counts(user, &ids).await?;
         let mut report = report(run.as_ref(), &rows, &notices)?;
+        if self.workspace_source == ImportSource::Notion
+            && (settling_write || report.status == Some(RunStatus::Completed))
+        {
+            let ids = confirmed_import_ids(run.as_ref(), &rows);
+            let writes = self.repo.confirmed_notion_writes(user, &ids).await?;
+            report.imported = writes
+                .documents
+                .saturating_add(writes.databases)
+                .saturating_add(writes.task_lists);
+            report.documents = writes.documents;
+            report.databases = writes.databases;
+            report.database_rows = writes.database_rows;
+            report.task_rows = writes.tasks;
+            report.confirmed = Some(writes);
+        }
         report.on_team = self.repo.user_team_id(user).await?.is_some();
         Ok(report)
     }
@@ -185,7 +208,10 @@ fn settlement(
         documents: report.documents,
         databases: report.databases,
         database_rows: report.database_rows,
-        task_lists: report.tasks,
+        task_lists: report
+            .confirmed
+            .as_ref()
+            .map_or(report.tasks, |writes| writes.task_lists),
         task_rows: report.task_rows,
         skipped: report.skip,
         not_written: report.waiting + report.writing,
