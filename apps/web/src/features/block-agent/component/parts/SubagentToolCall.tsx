@@ -101,13 +101,12 @@ export function SubagentToolCall(props: {
   // Delegated work can run for minutes, so the row always says where it is.
   const trailing = () =>
     props.common.trailing ??
-    (props.detail.result?.error != null ? (
-      <span class="text-ink">Failed</span>
-    ) : working() ? (
-      'Running'
-    ) : (
-      (props.detail.result && resultSummary(props.detail.result)) || 'Done'
-    ));
+    (props.detail.result?.error != null
+      ? undefined
+      : working()
+        ? 'Running'
+        : (props.detail.result && resultSummary(props.detail.result)) ||
+          'Done');
   const hasBody = () =>
     props.detail.prompt != null ||
     props.detail.children.length > 0 ||
@@ -118,7 +117,6 @@ export function SubagentToolCall(props: {
       title={props.detail.title}
       subtitle={subtitle()}
       status={props.common.status}
-      muted={props.common.muted || props.detail.result?.error != null}
       trailing={trailing()}
       hasContent={hasBody()}
     >

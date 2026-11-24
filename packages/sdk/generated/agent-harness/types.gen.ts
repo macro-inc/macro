@@ -1321,27 +1321,23 @@ export type ConnectMcpServer = {
  */
 export type ConnectMcpServerResponse = {
     /**
-     * Whether the user already had this server before the call.
-     */
-    alreadyConnected: boolean;
-    /**
-     * Whether the server holds the user's sign-in.
-     */
-    authenticated: boolean;
-    /**
-     * Whether the server's tools are turned on.
+     * Whether its tools are turned on.
      */
     enabled: boolean;
     /**
-     * The server's display name.
+     * The connector's display name.
      */
     serverName: string;
+    /**
+     * Where the user stands with it.
+     */
+    status: ConnectorStatus;
     /**
      * What happened and what the user still has to do.
      */
     summary: string;
     /**
-     * The server's URL.
+     * The server's URL, normalized.
      */
     url: string;
 };
@@ -1439,6 +1435,11 @@ export type ConnectedToolSearch = {
      */
     unsearched: Array<ConnectedApp>;
 };
+
+/**
+ * Where a user stands with an app or server.
+ */
+export type ConnectorStatus = 'connected' | 'disabled' | 'needsReauth' | 'notConnected';
 
 /**
  * An advertised action, not a tool loaded into the current turn.
@@ -1792,9 +1793,7 @@ export type DiscoveryResult = {
      */
     app: DiscoveredApp;
     /**
-     * Whether this caller has an enabled connection. For an app that
-     * connects through its own MCP server, that connection is checked
-     * there, not in Pipedream.
+     * Whether this caller's connection to the app is usable now.
      */
     connected: boolean;
     operation: 'inspect';
@@ -2866,6 +2865,42 @@ export type SandboxSizeBody = {
      * Named compute tier.
      */
     size: SandboxSize;
+};
+
+/**
+ * A single-use screen ticket.
+ */
+export type ScreenTicket = {
+    /**
+     * When it stops working, a minute after it was issued.
+     */
+    expiresAt: string;
+    /**
+     * The ticket, for the socket's `ticket` query parameter. Works once.
+     */
+    ticket: string;
+    /**
+     * The socket's path under the agent harness service.
+     */
+    url: string;
+};
+
+/**
+ * `POST /computers/{harness_id}/screen/tickets` body.
+ */
+export type ScreenTicketRequest = {
+    /**
+     * `view` (watch) or `drive` (watch, and take over when free).
+     */
+    mode: string;
+    /**
+     * What to show: `desktop`.
+     */
+    surface: string;
+    /**
+     * How the screen reaches the browser.
+     */
+    transport: string;
 };
 
 /**
@@ -5033,6 +5068,31 @@ export type ListCodingAgentsResponses = {
 };
 
 export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
+
+export type CreateComputerScreenTicketData = {
+    body: ScreenTicketRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/computers/{harness_id}/screen/tickets';
+};
+
+export type CreateComputerScreenTicketErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    429: unknown;
+};
+
+export type CreateComputerScreenTicketResponses = {
+    200: ScreenTicket;
+};
+
+export type CreateComputerScreenTicketResponse = CreateComputerScreenTicketResponses[keyof CreateComputerScreenTicketResponses];
 
 export type GetClaudeModeData = {
     body?: never;

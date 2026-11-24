@@ -110,3 +110,38 @@ fn corrupt_batch_payload_latches_storage_health() {
         );
     });
 }
+
+#[test]
+fn every_batch_size_reads_through_a_few_cached_statements() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("record-batch-sizes").unwrap();
+        let entries: Vec<_> = (0..BATCH_SIZE + 3)
+            .map(|index| (key(&format!("Thing:{index}")), record(&index.to_string())))
+            .collect();
+        storage.put_batch(entries.clone()).await.unwrap();
+        for _ in 0..2 {
+            for count in 2..=entries.len() {
+                let mut requested = entries[..count]
+                    .iter()
+                    .map(|(key, _)| key.clone())
+                    .collect::<Vec<_>>();
+                requested[count / 2] = key("Thing:absent");
+                let expected = requested
+                    .iter()
+                    .map(|key| {
+                        entries
+                            .iter()
+                            .find(|(stored, _)| stored == key)
+                            .map(|(_, record)| record.clone())
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(storage.get_batch(&requested).await.unwrap(), expected);
+            }
+        }
+        let connection = storage.connection();
+        assert_eq!(
+            connection.cached_texts_containing("WITH requested"),
+            BATCH_SIZES.len()
+        );
+    });
+}

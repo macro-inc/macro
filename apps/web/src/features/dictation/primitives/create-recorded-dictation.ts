@@ -1,6 +1,7 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Span } from '@macro-inc/observability';
-import { createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import type {
   CreateRecorder,
   RecorderHandle,
@@ -9,7 +10,9 @@ import type {
 import {
   ACTIVE_PHASES,
   type DictationController,
+  type DictationMessageTone,
   type DictationPhase,
+  FEEDBACK_MS,
 } from '../core/types';
 import { appendLevel, type VolumeLevel } from '../core/volume';
 
@@ -24,11 +27,23 @@ export function createRecordedDictation(options: {
   transcribe: TranscribeAudio;
   onConfirm: (text: string) => void;
   onCancel?: () => void;
+  /** Monotonic milliseconds, for the elapsed time. */
+  now?: () => number;
 }): DictationController {
+  const now = options.now ?? (() => performance.now());
   const [phase, setPhase] = createSignal<DictationPhase>(
     options.supported ? 'idle' : 'unavailable'
   );
-  const [message, setMessage] = createSignal('');
+  const [message, setMessageText] = createSignal('');
+  const [messageTone, setMessageTone] =
+    createSignal<DictationMessageTone>('info');
+  const setMessage = (text: string, tone: DictationMessageTone = 'info') => {
+    setMessageText(text);
+    setMessageTone(tone);
+  };
+  const [elapsedMs, setElapsedMs] = createSignal(0);
+  const [limitReached, setLimitReached] = createSignal(false);
+  let startedAt = 0;
   const [volumeHistory, setVolumeHistory] = createSignal<
     readonly VolumeLevel[]
   >([]);
@@ -36,7 +51,6 @@ export function createRecordedDictation(options: {
   let audio: Blob | undefined;
   let upload: AbortController | undefined;
   let commitOnStop = false;
-  let limitReached = false;
   let pendingConfirm: (() => void) | undefined;
   let disposed = false;
   let trace: ReturnType<typeof options.startTrace> | undefined;
@@ -62,7 +76,7 @@ export function createRecordedDictation(options: {
     recorder = undefined;
     audio = undefined;
     commitOnStop = false;
-    limitReached = false;
+    setLimitReached(false);
     setVolumeHistory([]);
     setPhase(next);
   };
@@ -84,7 +98,7 @@ export function createRecordedDictation(options: {
       upload = undefined;
       endTrace(text ? 'success' : 'empty_transcript');
       reset('idle');
-      setMessage(text ? '' : 'No speech was detected. Try again.');
+      setMessage(text ? '' : t('dictation.noSpeech'));
       if (text) options.onConfirm(text);
       else options.onCancel?.();
     } catch (error) {
@@ -92,9 +106,10 @@ export function createRecordedDictation(options: {
       upload = undefined;
       trace?.event('dictation.upload_failed', { attempt });
       setMessage(
-        error instanceof Error
+        error instanceof Error && error.message
           ? error.message
-          : 'Transcription failed. Please try again.'
+          : t('dictation.transcriptionFailed'),
+        'error'
       );
       // Keep the recording so the checkmark retries without re-recording.
       setPhase('review');
@@ -106,11 +121,12 @@ export function createRecordedDictation(options: {
   const onRecording = (blob: Blob) => {
     recorder = undefined;
     if (disposed) return;
+    setElapsedMs(now() - startedAt);
     trace?.event('dictation.recording_stopped', { audioBytes: blob.size });
     if (!blob.size) {
       endTrace('empty_audio');
       reset('idle');
-      setMessage('No audio was recorded. Please try again.');
+      setMessage(t('dictation.noAudio'), 'error');
       settleConfirm();
       return;
     }
@@ -121,7 +137,7 @@ export function createRecordedDictation(options: {
       return;
     }
     setPhase('review');
-    setMessage(limitReached ? 'Recording limit reached.' : '');
+    setMessage(limitReached() ? t('dictation.limitNotice') : '');
   };
 
   const start = async () => {
@@ -129,19 +145,21 @@ export function createRecordedDictation(options: {
     trace = options.startTrace();
     attempt = 0;
     setVolumeHistory([]);
+    setElapsedMs(0);
     setPhase('starting');
     setMessage('');
     const current = options.createRecorder({
       onLevel: (level) => {
-        if (recorder === current && phase() === 'listening')
-          setVolumeHistory((history) => appendLevel(history, level));
+        if (recorder !== current || phase() !== 'listening') return;
+        setElapsedMs(now() - startedAt);
+        setVolumeHistory((history) => appendLevel(history, level));
       },
       onRecording: (blob) => {
         if (recorder === current) onRecording(blob);
       },
       onLimit: () => {
         if (recorder === current) {
-          limitReached = true;
+          setLimitReached(true);
           trace?.event('dictation.recording_limit');
         }
       },
@@ -150,14 +168,14 @@ export function createRecordedDictation(options: {
         trace?.error('recording_error');
         endTrace('recording_error');
         reset('idle');
-        setMessage(error.message);
+        setMessage(error.message, 'error');
         settleConfirm();
       },
       onInterrupted: () => {
         if (recorder !== current) return;
         endTrace('interrupted');
         reset('idle');
-        setMessage('Dictation moved to another composer.');
+        setMessage(t('dictation.moved'));
         settleConfirm();
       },
     });
@@ -168,6 +186,7 @@ export function createRecordedDictation(options: {
         current.cancel();
         return;
       }
+      startedAt = now();
       setPhase('listening');
       trace?.event('dictation.recording_started');
     } catch {
@@ -175,9 +194,7 @@ export function createRecordedDictation(options: {
       trace?.error('microphone_error');
       endTrace('microphone_error');
       reset('idle');
-      setMessage(
-        'Could not access your microphone. Check permissions and try again.'
-      );
+      setMessage(t('dictation.microphoneFailed'), 'error');
     }
   };
 
@@ -209,6 +226,13 @@ export function createRecordedDictation(options: {
     settleConfirm();
   };
 
+  // A note under the composer is about the last attempt; it goes stale.
+  createEffect(() => {
+    if (!message() || active()) return;
+    const timer = setTimeout(() => setMessage(''), FEEDBACK_MS);
+    onCleanup(() => clearTimeout(timer));
+  });
+
   onCleanup(() => {
     disposed = true;
     endTrace('disposed');
@@ -220,14 +244,16 @@ export function createRecordedDictation(options: {
     phase,
     active,
     volumeHistory,
+    elapsedMs,
+    limitReached,
     message,
+    messageTone,
+    clearMessage: () => setMessage(''),
     start,
     cancel,
     confirm,
     disabled: () => phase() !== 'idle',
     label: () =>
-      options.supported
-        ? 'Start dictation'
-        : 'Dictation is unavailable in this browser',
+      options.supported ? t('dictation.start') : t('dictation.unavailable'),
   };
 }

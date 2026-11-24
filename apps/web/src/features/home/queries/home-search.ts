@@ -24,17 +24,6 @@ const tabTypes: Record<HomeTab, ReadonlySet<HomeTypeFilter>> = {
     'calendar',
   ]),
   noise: new Set(['email']),
-  recent: new Set([
-    'documents',
-    'tasks',
-    'email',
-    'channels',
-    'agents',
-    'folders',
-    'initiatives',
-    'github',
-    'calendar',
-  ]),
 };
 
 function readFilter(selection: FacetSelection): boolean | undefined {
@@ -132,8 +121,7 @@ export function buildHomeSearchRequest(
   if (types.has('channels')) {
     const channelFilters: NonNullable<EntityFilters['channel_filters']> = {};
 
-    // Noise lists no channels; Signal and Recent list the viewer's own.
-    if (context.tab !== 'noise') {
+    if (context.tab === 'signal') {
       channelFilters.is_participant = true;
     }
 

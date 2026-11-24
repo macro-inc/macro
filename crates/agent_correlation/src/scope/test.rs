@@ -347,3 +347,19 @@ fn a_dry_run_reads_and_writes_nothing() {
     }
     assert!(!scope.allows_sharing());
 }
+
+/// A screen ticket lets a person watch or drive a computer in their
+/// browser; no scoped run gets one.
+#[test]
+fn no_scope_gets_a_screen_ticket() {
+    for scope in [
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+        SessionScope::Generation,
+    ] {
+        assert!(!scope.allows(
+            "POST",
+            "/agent-harness/computers/0193a3c2-0000-7000-8000-000000000001/screen/tickets"
+        ));
+    }
+}

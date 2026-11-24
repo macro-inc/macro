@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isTopLevelChannelNotification,
   isUnreadChannelMessageNotification,
+  isUnseenChannelInvite,
 } from './top-level-channel-notification';
 import type { UnifiedNotification } from './types';
 
@@ -32,4 +33,19 @@ describe('top-level channel notifications', () => {
       ).toBe(expected && tag !== 'channel_message_reaction');
     }
   );
+
+  it.each([
+    ['channel_invite', 'unseen', true],
+    ['channel_invite', 'seen', false],
+    ['channel_invite', 'done', false],
+    ['channel_message_send', 'unseen', false],
+  ] as const)('finds an unseen invite: %s %s is %s', (tag, state, expected) => {
+    const notification_metadata = {
+      tag,
+      content: { messageId: 'message' },
+    } as UnifiedNotification['notification_metadata'];
+    expect(isUnseenChannelInvite({ state, notification_metadata })).toBe(
+      expected
+    );
+  });
 });

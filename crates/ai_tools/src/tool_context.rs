@@ -1,4 +1,3 @@
-use anthropic::toolset::AnthropicToolContext;
 use axum::extract::FromRef;
 use bots::{
     domain::service::BotServiceImpl, inbound::toolset::BotToolContext,
@@ -107,6 +106,9 @@ pub use initiatives::{
     ToolInitiativeService, ToolInitiativeToolContext, build_initiative_tool_context,
 };
 
+mod time_entries;
+pub use time_entries::{ToolTimeTrackingToolContext, build_time_tracking_tool_context};
+
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
 
@@ -175,20 +177,21 @@ pub type ToolBotService = BotServiceImpl<
         harnesses::outbound::pg_harness_repo::PgHarnessRepo,
         hosted_runtimes::outbound::pg::PgComputerAgents,
     >,
-    crate::mcp_app_catalog::PipedreamMcpAppCatalog,
+    crate::mcp_app_catalog::ConnectorsAppCatalog<connectors::Connectors>,
 >;
 
 /// Bot-management AI tool context.
 pub type ToolBotToolContext = BotToolContext<ToolBotService, ToolEntityAccessService>;
 
 /// Build bot-management tools over the canonical Postgres repository and
-/// entity-access service.
+/// entity-access service. `connectors` confirms the apps an agent pins;
+/// without them every pin is refused.
 pub fn build_bot_tool_context(
     pool: sqlx::PgPool,
     event_broker: MaybeToolEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_storage_service_url: String,
-    pipedream: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    connectors: Option<connectors::Connectors>,
 ) -> ToolBotToolContext {
     BotToolContext {
         service: Arc::new(
@@ -200,9 +203,8 @@ pub fn build_bot_tool_context(
                     hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
                 ),
             )
-            .with_mcp_apps(crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(
-                pipedream,
-                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool),
+            .with_mcp_apps(crate::mcp_app_catalog::ConnectorsAppCatalog::new(
+                connectors,
             )),
         ),
         entity_access_service,
@@ -558,10 +560,11 @@ pub fn build_calendar_tool_context(
     .with_shared_event_copies(shared_event_copies)
 }
 
-/// Settings-only scheduling service; no provider/calendar writes are exposed here.
+/// Settings-only scheduling service; no provider/calendar writes are exposed
+/// here, only the connected accounts a personal link can book on.
 pub type ToolBookingLinkService = calendar_scheduling::domain::service::Service<
     calendar_scheduling::outbound::postgres::PostgresRepository,
-    (),
+    calendar_scheduling::outbound::macro_services::MacroBookingAccounts<ToolCalendarReadService>,
     calendar_scheduling::outbound::macro_services::MacroDirectory<ToolTeamService>,
 >;
 /// Booking-link tool dependencies.
@@ -575,7 +578,11 @@ pub fn build_booking_link_tool_context(
     calendar_scheduling::inbound::toolset::BookingLinkToolContext {
         service: Arc::new(calendar_scheduling::domain::service::Service::new(
             calendar_scheduling::outbound::postgres::PostgresRepository::new(pool.clone()),
-            (),
+            calendar_scheduling::outbound::macro_services::MacroBookingAccounts(Arc::new(
+                calendar_events::domain::service::CalendarService::new(
+                    calendar_events::outbound::pg::PgCalendarRepository::new(pool.clone()),
+                ),
+            )),
             calendar_scheduling::outbound::macro_services::MacroDirectory(TeamRepositoryImpl::new(
                 pool,
             )),
@@ -1978,7 +1985,10 @@ impl ToolEntityCreator {
                             &principal,
                             task_id,
                             SystemPropertyKey::DueDate.uuid(),
-                            Some(SetPropertyValue::Date { value }),
+                            Some(SetPropertyValue::Date {
+                                value,
+                                has_time: false,
+                            }),
                         )
                         .await
                     {
@@ -2164,37 +2174,14 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
     }
 }
 
-/// The connector backends (Pipedream, plus Macro Connect when configured):
-/// `None` on deployments where Pipedream isn't configured (its toolsets then
-/// come up empty).
-pub type ToolPipedreamConnection =
-    Option<std::sync::Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>;
-
-/// The MCP stack selector wired to the concrete DCS stores: the native
-/// server store and the Pipedream connection store. Picks which stack
-/// serves a user's tools (Pipedream connectors win; see `mcp_select`).
-pub type ToolMcpSelector = mcp_select::McpToolSelector<
-    mcp_client::outbound::NativeServerStore,
-    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    ToolPipedreamConnection,
->;
-
 /// Type alias for the import service implementation used by AI tools.
 pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::pg_import_repo::PgImportRepo,
-    ToolMcpSelector,
+    connectors::Connectors,
     ToolEntityCreator,
-    import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
-    import_notion::outbound::pipedream::PipedreamNotionConnections<
-        pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-        pipedream_mcp::outbound::dispatch::ConnectorBackends,
-    >,
+    import::outbound::mcp_slack_source::McpSlackSource<connectors::Connectors>,
+    import_notion::outbound::connected::ConnectedNotion<connectors::Connectors>,
 >;
-
-/// The custom MCP server tools, wired by hosts holding the MCP credentials
-/// key.
-pub type ToolMcpServerToolContext =
-    mcp_client::inbound::toolset::McpServerToolContext<mcp_client::outbound::NativeServerStore>;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
@@ -2284,9 +2271,6 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
-    /// Custom MCP server tools. `unwired` in hosts without the MCP
-    /// credentials key — calls there fail with a clear error.
-    pub mcp_server_tool_context: ToolMcpServerToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.
@@ -2307,6 +2291,8 @@ pub struct ToolServiceContext {
     pub message_tool_context: ToolMessageToolContext,
     /// Native task project lifecycle, properties, sharing and history.
     pub initiative_tool_context: ToolInitiativeToolContext,
+    /// Time logged on tasks.
+    pub time_tracking_tool_context: ToolTimeTrackingToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
     /// CRM pipelines: deals by record, fields by name.
@@ -2315,8 +2301,6 @@ pub struct ToolServiceContext {
     pub crm_transfer_tool_context: ToolCrmTransferToolContext,
     pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: RoutineToolContext,
-    #[from_ref(skip)]
-    pub anthropic_tool_context: AnthropicToolContext,
     /// The web search vendor behind `WebSearch` and `WebFetch`.
     #[from_ref(skip)]
     pub web_search_provider: Arc<dyn web_search::domain::ports::SearchProvider>,
@@ -2331,40 +2315,23 @@ pub struct ToolServiceContext {
     pub usage_context: ai_usage::UsageContext,
 }
 
-/// Pipedream discovery dependencies shared by chat tools.
-pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
-    pipedream_mcp::outbound::dispatch::ConnectorBackends,
-    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
+/// The connector tools (`DiscoverConnectors`, `ConnectMcpServer`) over the
+/// host's one connectors composition.
+pub type ToolConnectorToolContext = connectors::inbound::toolset::ConnectorToolContext<
+    connectors::Connectors,
+    connectors::composition::ConnectorCatalog,
 >;
 
-/// Wire connector discovery at the composition boundary.
-///
-/// `native_servers` answers for overlaid apps, which connect through the
-/// native MCP stack; `None` where that stack has no encryption key.
+/// The connector tools over `composed`, or unwired (every call fails with a
+/// clear error) on a host without connectors.
 pub fn build_connector_tool_context(
-    pool: sqlx::PgPool,
-    client: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
-    native_servers: Option<Arc<mcp_client::outbound::NativeServerStore>>,
+    composed: Option<&connectors::composition::Composed>,
 ) -> ToolConnectorToolContext {
-    pipedream_mcp::inbound::toolset::ConnectorToolContext {
-        service: Arc::new(
-            pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
-                client,
-                Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
-                Arc::new(mcp_select::NativeOverlayConnections::new(native_servers)),
-            ),
-        ),
-    }
-}
-
-impl FromRef<ToolServiceContext> for AnthropicToolContext {
-    fn from_ref(context: &ToolServiceContext) -> Self {
-        let mut tools = context.anthropic_tool_context.clone();
-        tools.admission = context.admission.clone();
-        tools.recorder = context.recorder.clone();
-        tools.usage_context = context.usage_context.clone();
-        tools
+    match composed {
+        Some(composed) => {
+            ToolConnectorToolContext::wired(composed.connectors.clone(), composed.catalog.clone())
+        }
+        None => ToolConnectorToolContext::unwired(),
     }
 }
 

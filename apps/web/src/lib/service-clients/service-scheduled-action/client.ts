@@ -49,6 +49,7 @@ import {
   getRecordSuggestionsViewedUrl,
   getRegenerateSuggestionsUrl,
   getRestoreSuggestionUrl,
+  getStopSuggestionRunUrl,
 } from './generated/client';
 import type {
   AcceptSuggestionRequest,
@@ -198,6 +199,12 @@ export const scheduledActionClient = {
       `${scheduledActionHost}/scheduled-actions/${args.scheduleId}/execute`,
       { method: 'POST', errorResponseHandler: aiUsageErrorResponseHandler }
     ),
+
+  /** Stop the run in progress; with none running, nothing changes. */
+  stopRun: async (args: { scheduleId: string }) =>
+    scheduledActionFetch(`/scheduled-actions/${args.scheduleId}/stop`, {
+      method: 'POST',
+    }),
 
   listHistory: async (args: { scheduleId: string }) =>
     scheduledActionFetch<ExecutionRecordResponse[]>(
@@ -390,6 +397,12 @@ export const scheduledActionClient = {
   /** Take back the caller's own dismissal, within a few minutes of it. */
   restoreSuggestion: (args: { suggestionId: string }) =>
     scheduledActionFetch(getRestoreSuggestionUrl(args.suggestionId), {
+      method: 'POST',
+    }),
+
+  /** Stop a suggestion's run and keep the suggestion: it is open again once the run stops. */
+  stopSuggestionRun: (args: { suggestionId: string }) =>
+    scheduledActionFetch(getStopSuggestionRunUrl(args.suggestionId), {
       method: 'POST',
     }),
 

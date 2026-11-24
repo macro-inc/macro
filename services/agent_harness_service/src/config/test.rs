@@ -40,11 +40,7 @@ pub(crate) fn config_values() -> serde_json::Value {
         "HARNESS_BOT_ID": "00000000-0000-0000-0000-000000000001",
         "INTERNAL_API_KEY": "test-key",
         "DOCUMENT_STORAGE_SERVICE_AUTH_KEY": "test-key",
-        "PIPEDREAM_CLIENT_ID": "pipedream-client-id",
-        "PIPEDREAM_CLIENT_SECRET": "pipedream-client-secret",
-        "PIPEDREAM_PROJECT_ID": "pipedream-project-id",
         "MACRO_API_TOKEN_PRIVATE_SECRET_KEY": "signing-secret-name",
-        "MCP_CREDENTIALS_KEY_SECRET_NAME": "mcp-secret-name",
         "MACRO_API_TOKEN_ISSUER": "test-issuer",
         "AGENT_SESSION_CHANGES_BUCKET": "test-bucket",
         "GITHUB_PULL_REQUEST_PATCH_BUCKET": "test-bucket",
@@ -83,7 +79,7 @@ fn authentication_key_is_required_with_billing_disabled_or_enabled() {
 }
 
 #[tokio::test]
-async fn authentication_key_resolves_before_linked_github_client_is_built() {
+async fn authentication_key_resolves_before_the_auth_client_is_built() {
     let config: Config = serde_json::from_value(config_values()).unwrap();
     let config = config
         .resolve_remote_secrets(Environment::Develop, &TestSecretManager)
@@ -93,7 +89,7 @@ async fn authentication_key_resolves_before_linked_github_client_is_built() {
         config.authentication_service_secret_key.as_ref(),
         "resolved-auth-key"
     );
-    config.linked_github_tokens().unwrap();
+    config.auth_service_client().unwrap();
 }
 
 #[test]

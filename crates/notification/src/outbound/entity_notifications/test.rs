@@ -752,3 +752,64 @@ async fn event_type_filter_limits_unseen_mentions_past_newer_sends(pool: PgPool)
         "reading the mentions clears them"
     );
 }
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Invite {
+    invited_by: String,
+    channel_name: String,
+}
+impl Notification for Invite {
+    const TYPE_NAME: &'static str = "channel_invite";
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn top_level_filter_leaves_out_invites(pool: PgPool) {
+    let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
+    let invited = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let messaged = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let invite = || Invite {
+        invited_by: "macro|inviter@example.com".into(),
+        channel_name: "general".into(),
+    };
+    insert(&pool, &viewer, invited.clone(), None, invite()).await;
+    let message = insert(
+        &pool,
+        &viewer,
+        messaged.clone(),
+        None,
+        Message {
+            message_id: "message".into(),
+        },
+    )
+    .await;
+    insert(&pool, &viewer, messaged.clone(), None, invite()).await;
+    let query = EntityNotificationQuery {
+        states: vec![NotificationState::Unseen],
+        top_level_messages_only: true,
+        limit: Some(1),
+        ..Default::default()
+    };
+
+    let result = get_filtered_entity_notifications(
+        &pool,
+        viewer,
+        vec![invited.clone(), messaged.clone()],
+        query,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        result[&invited].is_empty(),
+        "an invite alone leaves the channel read in Chat"
+    );
+    assert_eq!(
+        result[&messaged]
+            .iter()
+            .map(|row| row.notification_id)
+            .collect::<Vec<_>>(),
+        [message],
+        "a newer invite does not take the message's place under the limit"
+    );
+}

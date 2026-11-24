@@ -59,6 +59,15 @@ events to the `macro.properties` Kafka topic.
 
 ## Gotchas
 
+- CRM companies and contacts hold values the same way (`CrmCompany` ↔
+  `COMPANY`, `CrmContact` ↔ `CONTACT`): receipts come from `entity_access`'s
+  CRM rules (current membership, `crm_access`, hidden records for admins and
+  owners only) and skip the owner lookup. Stage, Owner and Revenue are
+  company-only (`is_property_applicable_to`); custom definitions are team-wide
+  and apply to both.
+  `inbound/axum_router/test/crm_contact_access.rs` exercises the HTTP routes
+  against real CRM access.
+
 - A user or team definition cannot take a built-in property's name.
   `create_property_definition` answers `PropertiesErr::ReservedName` (HTTP 409,
   the body names the property) from the `SystemPropertyKey` names, comparing
@@ -66,6 +75,12 @@ events to the `macro.properties` Kafka topic.
   `check_property_name_not_system` trigger does. The trigger stays as the
   backstop and raises a bare exception, which would surface as a 500. Database
   columns live in their database's own namespace and are not checked.
+
+- Time logged (`SystemPropertyKey::TimeLogged`, `0x16`) is the sum of a task's
+  time entries, written only by `crates/time_tracking`. Every value mutator
+  calls `reject_derived_property` first and answers a validation error, for
+  internal callers too; a new value mutator calls it as well. Deleting all of
+  an entity's properties (`delete_entity_properties`) still removes it.
 
 ## Related
 

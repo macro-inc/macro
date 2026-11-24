@@ -10,18 +10,18 @@ import { FreeTierModel } from '@service-cognition/generated/schemas/freeTierMode
  * exposed to the frontend. Reference these constants instead of hardcoding
  * strings.
  *
- * Sonnet 5.5 and Opus 5.5 are the current Anthropic generation. Haiku 4.5
- * stays as the fast model; older Sonnet, Opus, and Fable ids are absent, so a
- * persisted chat on one falls back to the default.
+ * Sonnet 5.5, Opus 5.5 and Haiku 5.5 are the current Anthropic generation, and
+ * GPT-6 Astra, GPT-6.2 Sol and GPT-6 Luna the current OpenAI one. A persisted
+ * chat on a retired model opens on its replacement ({@link RETIRED_MODELS});
+ * other ids that are absent here fall back to the default.
  */
 export const Model = {
   sonnet55: 'anthropic/claude-sonnet-5-5',
   opus55: 'anthropic/claude-opus-5-5',
-  haiku45: 'anthropic/claude-haiku-4-5',
+  haiku55: 'anthropic/claude-haiku-5-5',
   gpt6Astra: 'openai/gpt-6-astra',
-  gpt61Sol: 'openai/gpt-6.1-sol',
-  gpt56: 'openai/gpt-5.6',
-  gpt56Mini: 'openai/gpt-5.6-mini',
+  gpt62Sol: 'openai/gpt-6.2-sol',
+  gpt6Luna: 'openai/gpt-6-luna',
   gemini38Flash: 'google/gemini-3.8-flash',
 } as const;
 
@@ -30,6 +30,21 @@ export type Model = (typeof Model)[keyof typeof Model];
 /** Alias kept for existing call sites. */
 export type TModel = Model;
 
+/**
+ * Retired model ids and the model each one became. Mirrors the backend's
+ * `chat::domain::models::RETIRED_MODELS`, which upgrades the same ids when a
+ * stale client sends one; this copy lets saved chats and drafts open on the
+ * replacement instead of the default.
+ */
+export const RETIRED_MODELS: Readonly<Record<string, TModel>> = {
+  'anthropic/claude-haiku-4-5': Model.haiku55,
+  'openai/gpt-6.1-sol': Model.gpt62Sol,
+  'openai/gpt-5.6': Model.gpt62Sol,
+  'openai/gpt-5.5': Model.gpt62Sol,
+  'openai/gpt-5.6-mini': Model.gpt6Luna,
+  'openai/gpt-5-mini': Model.gpt6Luna,
+};
+
 type ExhaustiveMap = {
   [K in TModel]: any;
 };
@@ -37,22 +52,20 @@ type ExhaustiveMap = {
 export const MODEL_PRETTYNAME: ExhaustiveMap = {
   'anthropic/claude-sonnet-5-5': 'Sonnet 5.5',
   'anthropic/claude-opus-5-5': 'Opus 5.5',
-  'anthropic/claude-haiku-4-5': 'Haiku 4.5',
+  'anthropic/claude-haiku-5-5': 'Haiku 5.5',
   'openai/gpt-6-astra': 'GPT-6 Astra',
-  'openai/gpt-6.1-sol': 'GPT-6.1 Sol',
-  'openai/gpt-5.6': 'GPT-5.6',
-  'openai/gpt-5.6-mini': 'GPT-5.6 mini',
+  'openai/gpt-6.2-sol': 'GPT-6.2 Sol',
+  'openai/gpt-6-luna': 'GPT-6 Luna',
   'google/gemini-3.8-flash': 'Gemini 3.8 Flash',
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'anthropic/claude-sonnet-5-5': ClaudeIcon,
   'anthropic/claude-opus-5-5': ClaudeIcon,
-  'anthropic/claude-haiku-4-5': ClaudeIcon,
+  'anthropic/claude-haiku-5-5': ClaudeIcon,
   'openai/gpt-6-astra': OpenAiIcon,
-  'openai/gpt-6.1-sol': OpenAiIcon,
-  'openai/gpt-5.6': OpenAiIcon,
-  'openai/gpt-5.6-mini': OpenAiIcon,
+  'openai/gpt-6.2-sol': OpenAiIcon,
+  'openai/gpt-6-luna': OpenAiIcon,
   'google/gemini-3.8-flash': GoogleIcon,
 };
 
@@ -103,11 +116,10 @@ export function databaseModelForPlan(hasPaidAccess: boolean): TModel {
 export const MODEL_PROVIDER: ExhaustiveMap = {
   'anthropic/claude-sonnet-5-5': 'anthropic',
   'anthropic/claude-opus-5-5': 'anthropic',
-  'anthropic/claude-haiku-4-5': 'anthropic',
+  'anthropic/claude-haiku-5-5': 'anthropic',
   'openai/gpt-6-astra': 'openai',
-  'openai/gpt-6.1-sol': 'openai',
-  'openai/gpt-5.6': 'openai',
-  'openai/gpt-5.6-mini': 'openai',
+  'openai/gpt-6.2-sol': 'openai',
+  'openai/gpt-6-luna': 'openai',
   'google/gemini-3.8-flash': 'google',
 } as const;
 
@@ -145,4 +157,9 @@ export function alternateProviderModel(
   const candidates = options?.candidates;
   const pool = candidates && candidates.length > 0 ? candidates : PAID_MODELS;
   return pool.find((id) => !excluded.has(MODEL_PROVIDER[id]));
+}
+
+/** The model a saved id now means: a retired id's replacement, else the id. */
+export function currentModelId(id: string): string {
+  return Object.hasOwn(RETIRED_MODELS, id) ? RETIRED_MODELS[id] : id;
 }

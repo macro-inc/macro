@@ -57,6 +57,9 @@ vi.mock('@app/features/calendar/hooks/use-calendar-hotkeys', () => ({
 vi.mock('@solid-primitives/resize-observer', () => ({
   createElementSize: () => ({ width: 1200, height: 60 }),
 }));
+vi.mock('@core/signal/create-label-collapse', () => ({
+  createLabelCollapse: () => () => false,
+}));
 vi.mock('@app/features/calendar/components/MonthDrawer', () => ({
   MonthDrawer: () => <button>Choose month</button>,
 }));

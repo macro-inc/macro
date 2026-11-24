@@ -6,8 +6,10 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use agent_credentials::AgentCreators;
 use ai_billing::{AiAdmissionError, AiAdmissionService};
 use ai_usage::AiFeature;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header::RETRY_AFTER};
+use axum::response::Response;
 use axum_extra::headers::{Authorization, HeaderMapExt, authorization::Bearer};
+use computer_screen::domain::service::Hold;
 use feature_flags::FeatureFlags;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -25,14 +27,83 @@ pub(crate) struct BrainCaller {
     pub(crate) team_id: Uuid,
 }
 
+/// Why a brain could not be let through.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum BrainLookupError {
+    /// The lookup failed.
+    #[error("brain lookup failed: {0:?}")]
+    Failed(rootcause::Report),
+    /// A person still drives the agent's computer after the hold's bound;
+    /// the brain retries after `retry_after`.
+    #[error("a person is driving the agent's computer")]
+    Held { retry_after: std::time::Duration },
+}
+
+impl From<rootcause::Report> for BrainLookupError {
+    fn from(report: rootcause::Report) -> Self {
+        Self::Failed(report)
+    }
+}
+
 /// A boxed lookup, so the gateway can hold any authenticator.
 pub(crate) type BrainLookup<'a> =
-    Pin<Box<dyn Future<Output = Result<Option<BrainCaller>, rootcause::Report>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<Option<BrainCaller>, BrainLookupError>> + Send + 'a>>;
 
 /// Resolves a presented key to an agent teammate.
 pub(crate) trait BrainAuthenticator: Send + Sync + 'static {
     /// The agent teammate a live key belongs to; `None` for any other key.
     fn authenticate<'a>(&'a self, key: &'a str) -> BrainLookup<'a>;
+}
+
+/// How long a brain request waits for a person to hand the agent's computer
+/// back before it is answered 503 with `Retry-After`.
+pub(crate) const HOLD_BOUND: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+/// What a held brain is told to wait before retrying.
+pub(crate) const HELD_RETRY_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Holds every `/brain/*` request of an agent whose computer a person
+/// drives: wraps the one authenticator all brain routes share, so a new
+/// route built on it is held too. Keyed by the agent's user id.
+/// A shutdown answers held requests at once, with the same `Retry-After`:
+/// a deploy stops sooner than the hold's bound.
+pub(crate) struct HeldBrains {
+    inner: Arc<dyn BrainAuthenticator>,
+    screens: Arc<crate::computers::screen::Screens>,
+    shutdown: tokio_util::sync::CancellationToken,
+}
+
+impl HeldBrains {
+    pub(crate) fn new(
+        inner: Arc<dyn BrainAuthenticator>,
+        screens: Arc<crate::computers::screen::Screens>,
+        shutdown: tokio_util::sync::CancellationToken,
+    ) -> Self {
+        Self {
+            inner,
+            screens,
+            shutdown,
+        }
+    }
+}
+
+impl BrainAuthenticator for HeldBrains {
+    fn authenticate<'a>(&'a self, key: &'a str) -> BrainLookup<'a> {
+        Box::pin(async move {
+            let Some(caller) = self.inner.authenticate(key).await? else {
+                return Ok(None);
+            };
+            let held = tokio::select! {
+                held = self.screens.hold_agent(&caller.user_id, HOLD_BOUND) => held,
+                () = self.shutdown.cancelled() => Ok(Hold::TimedOut),
+            };
+            match held.map_err(|error| rootcause::report!("{error:?}"))? {
+                Hold::Free | Hold::Released { .. } => Ok(Some(caller)),
+                Hold::TimedOut => Err(BrainLookupError::Held {
+                    retry_after: HELD_RETRY_AFTER,
+                }),
+            }
+        })
+    }
 }
 
 type Evaluate =
@@ -96,33 +167,69 @@ pub(crate) struct BrainAccess {
     pub(crate) admission: Arc<dyn AiAdmissionService>,
 }
 
+/// Why [`BrainAccess::authorize`] turned an agent away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BrainRefusal {
+    /// No key, or not a live agent's: 401.
+    Unauthenticated,
+    /// Agent teammates are off for it, or admission refused: 403.
+    Forbidden,
+    /// A lookup failed: 503.
+    Unavailable,
+    /// A person drives the agent's computer past the hold's bound: 503, to
+    /// retry after `retry_after`.
+    Held { retry_after: std::time::Duration },
+}
+
+impl BrainRefusal {
+    pub(crate) fn status(self) -> StatusCode {
+        match self {
+            Self::Unauthenticated => StatusCode::UNAUTHORIZED,
+            Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::Unavailable | Self::Held { .. } => StatusCode::SERVICE_UNAVAILABLE,
+        }
+    }
+
+    /// Adds `Retry-After` to the refusal's response when the agent is held.
+    pub(crate) fn with_retry_after(self, mut response: Response) -> Response {
+        if let Self::Held { retry_after } = self {
+            response
+                .headers_mut()
+                .insert(RETRY_AFTER, HeaderValue::from(retry_after.as_secs()));
+        }
+        response
+    }
+}
+
 impl BrainAccess {
-    /// The agent behind the bearer key: 401 for no or an unknown key, 403
-    /// when agent teammates are off or admission refuses, 503 when a lookup
-    /// fails.
-    pub(crate) async fn authorize(&self, headers: &HeaderMap) -> Result<BrainCaller, StatusCode> {
+    /// The agent behind the bearer key. The authenticator is the shared one
+    /// (wrapped by [`HeldBrains`]), so a take-over holds these routes too.
+    pub(crate) async fn authorize(&self, headers: &HeaderMap) -> Result<BrainCaller, BrainRefusal> {
         let bearer = headers
             .typed_get::<Authorization<Bearer>>()
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+            .ok_or(BrainRefusal::Unauthenticated)?;
         let brain = self
             .brains
             .authenticate(bearer.token())
             .await
-            .map_err(|error| {
-                tracing::error!(error = ?error, "could not authenticate a brain");
-                StatusCode::SERVICE_UNAVAILABLE
+            .map_err(|error| match error {
+                BrainLookupError::Held { retry_after } => BrainRefusal::Held { retry_after },
+                BrainLookupError::Failed(report) => {
+                    tracing::error!(error = ?report, "could not authenticate a brain");
+                    BrainRefusal::Unavailable
+                }
             })?
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+            .ok_or(BrainRefusal::Unauthenticated)?;
         if !self.rollout.enabled(&brain.user_id).await {
-            return Err(StatusCode::FORBIDDEN);
+            return Err(BrainRefusal::Forbidden);
         }
 
         self.admission
             .admit(&brain.user_id, AiFeature::AgentSession)
             .await
             .map_err(|error| match error {
-                AiAdmissionError::Denied(_) => StatusCode::FORBIDDEN,
-                AiAdmissionError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+                AiAdmissionError::Denied(_) => BrainRefusal::Forbidden,
+                AiAdmissionError::Unavailable => BrainRefusal::Unavailable,
             })?;
         Ok(brain)
     }
@@ -165,3 +272,6 @@ impl BrainAuthenticator for PgBrainAuthenticator {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

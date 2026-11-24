@@ -1,7 +1,8 @@
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
+import { settledChannelLookup } from '@queries/channel/directory';
 
 import {
   type AccessiblePreviewItem,
@@ -71,9 +72,15 @@ const createChatMentionXML = async (chatId: string) => {
   });
 };
 
-const createChannelMentionXML = (channelId: string) => {
-  const channelsContext = useChannelsContext();
-  const channel = channelsContext.channels().find((c) => c.id === channelId);
+// A cold directory reads the channel by id; a mention waits that long for it.
+const CHANNEL_MENTION_WAIT_MS = 5_000;
+
+const createChannelMentionXML = async (channelId: string) => {
+  // Read the context before the first await, while the caller's owner runs.
+  const directory = useChannelDirectory();
+  const channel = loadedChannel(
+    await settledChannelLookup(directory, channelId, CHANNEL_MENTION_WAIT_MS)
+  );
   if (!channel) {
     if (import.meta.env.DEV) {
       console.error('Could not find channel', channelId);
@@ -278,8 +285,7 @@ export const replaceCitations = async (input: string): Promise<string> => {
       pendingCitations.set(citation, createDocumentMentionXML(itemId));
     } else if (isChannelMention(citation)) {
       const [, channelId] = citation.split(';', 2);
-      const xml = createChannelMentionXML(channelId);
-      citationCache.set(citation, xml);
+      pendingCitations.set(citation, createChannelMentionXML(channelId));
     } else if (isChatMention(citation)) {
       const [, chatId] = citation.split(';', 2);
       pendingCitations.set(citation, createChatMentionXML(chatId));

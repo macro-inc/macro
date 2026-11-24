@@ -243,6 +243,38 @@ it('captures and pins host-controlled fields without adding duplicate property p
   }
 });
 
+it('replaces a date when its time is removed, so the draft and its pill hold no time', async () => {
+  mock.listProperties.mockReturnValue({
+    isSuccess: true,
+    data: [definition('due', { data_type: 'DATE' })],
+    refetch: mock.refetch,
+  });
+  const { composer, dispose } = createRoot((dispose) => ({
+    composer: createTaskComposerProperties({ initialValues: {} }),
+    dispose,
+  }));
+  try {
+    const due = composer.draftProperty('due');
+    if (!due) throw new Error('Missing due property');
+    await composer.saveHandler.saveProperty(due, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 24, 5),
+      hasTime: true,
+    });
+    await composer.saveHandler.saveProperty(due, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 24),
+    });
+    expect(unwrap(composer.propertyValues).due).toEqual({
+      valueType: 'DATE',
+      value: new Date(2026, 10, 24),
+    });
+    expect(composer.draftProperty('due')).not.toHaveProperty('hasTime', true);
+  } finally {
+    dispose();
+  }
+});
+
 it('keeps context order, ignores unavailable ids and deduplicates selected properties', () => {
   const definitions = [definition('a'), definition('b')];
   expect(

@@ -18,7 +18,7 @@ separate equivalent Jira index.
 
 Notion workspace imports go through a reviewed plan: `ImportFromNotion`
 (`plan`) reads the workspace over Notion's REST API (`import_notion`, through
-the user's Pipedream grant), asks the decision model what to do with each page
+the user's Notion connection when it gives API access), asks the decision model what to do with each page
 and data source (copy, tasks, skip, or by hand), and stages the plan as ledger
 rows. The agent presents it with `PresentReview` (kind `import`) and asks
 "Should I kick it off?"; the owner approves on the card or by saying yes, which
@@ -86,7 +86,11 @@ from this import's other databases into it are not linked.
 - `src/domain/service.rs` + `src/domain/service/admission.rs`: Slack
   discovery, staging, and acceptance logic.
 - `src/outbound/mcp_slack_source.rs`: Slack discovery via MCP tool calls, with
-  `fixtures/*.json` backing its tests.
+  `fixtures/*.json` backing its tests. It and the single-page Notion import
+  load one app's tools with `service::source_tools`: the handle the
+  `connectors` `McpConnectionsService` gives for `ImportSource::connector`,
+  never a slug or server URL of its own. Tests use `connectors`'
+  `FakeConnectors`.
 - `src/domain/service/workspace.rs` (+ `run`, `events`, `scan`): shared source-scoped
   leases, adoption, reviews, notifications and the `Importer` plan/write contract.
 - `src/domain/service/tracker_workspace.rs` (+ `plan`, `values`): Linear/Jira
@@ -121,7 +125,7 @@ from this import's other databases into it are not linked.
 
 - Depends on: `agent_session` (system events for the session presenting a
   review), `ai_toolset`, `ai_usage`, `ai_billing`, `connection_gateway_client`,
-  `mcp_select`, `properties`, `import_notion` (Notion REST), `import_tracker` (tracker snapshots), `models_databases`
+  `connectors`, `properties`, `import_notion` (Notion REST), `import_tracker` (tracker snapshots), `models_databases`
   (database ops the workspace import writes).
 - Used by: `ai_tools`, `slack_integration`, `services/agent_harness_service`
   (cognition `/import/*` routes, the Notion sweeper, import reviews).
@@ -172,6 +176,12 @@ from this import's other databases into it are not linked.
   or a row batch and recording it duplicates that one object or batch, and a
   crash between applying a schema op and recording it fails that database on
   resume (Macro refuses the column id).
+- Stage new plan rows with UUIDv7 ids and list tied creation timestamps by id
+  ascending in SQL and after owner/team deduplication. A staging transaction
+  shares one creation timestamp, so monotonic ids preserve sibling input order
+  through writing and completion. Preserve existing ids: legacy random-id ties
+  become stable without reconstructing their original order. Keep the ledger
+  list inside its local 15-second statement timeout.
 - `team_id` on a Notion row means "the team's copy": only shared objects take
   it, at `claim_importing` (staged → importing) before anything is written, so
   `import_entity_team_object_key` makes a second teammate's claim fail. A

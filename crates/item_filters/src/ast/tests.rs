@@ -353,7 +353,58 @@ fn expanding_an_email_view_into_a_list_filter_is_an_error() {
 
         assert!(matches!(
             EntityFilterAst::new_from_filters(f),
-            Err(ExpandErr::SearchOnlyEmailView)
+            Err(ExpandErr::SearchOnlyEmailFilter("view"))
+        ));
+    }
+}
+
+#[test]
+fn expanding_a_typed_search_condition_into_a_list_filter_is_an_error() {
+    let conditions = [
+        (
+            "text_matches",
+            crate::EmailFilters {
+                text_matches: vec![crate::EmailTextMatch {
+                    part: crate::EmailTextPart::Subject,
+                    text: "lunch".to_string(),
+                    exclude: false,
+                }],
+                ..Default::default()
+            },
+        ),
+        (
+            "exclude_views",
+            crate::EmailFilters {
+                exclude_views: vec![crate::EmailSearchView::Sent],
+                ..Default::default()
+            },
+        ),
+        (
+            "favorite",
+            crate::EmailFilters {
+                favorite: Some(false),
+                ..Default::default()
+            },
+        ),
+        (
+            "sent_before",
+            crate::EmailFilters {
+                sent_before: Some(chrono::DateTime::UNIX_EPOCH),
+                ..Default::default()
+            },
+        ),
+    ];
+
+    for (name, email_filters) in conditions {
+        assert!(!email_filters.is_empty());
+        let f = EntityFilters {
+            email_filters,
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            EntityFilterAst::new_from_filters(f),
+            Err(ExpandErr::SearchOnlyEmailFilter(filter)) if filter == name
         ));
     }
 }

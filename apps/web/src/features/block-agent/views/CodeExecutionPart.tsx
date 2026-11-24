@@ -63,13 +63,9 @@ export function CodeExecutionPart(props: {
     return {
       ...props.common,
       status: 'failed',
-      muted: true,
-      trailing:
-        outcome === 'cancelled'
-          ? 'Cancelled'
-          : outcome === 'timed_out'
-            ? 'Timed out'
-            : 'Failed',
+      unsuccessful: true,
+      // Nothing says who cancelled a program, so no outcome is named.
+      trailing: undefined,
     };
   };
 

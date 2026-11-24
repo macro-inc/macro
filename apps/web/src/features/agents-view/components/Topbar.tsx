@@ -1,7 +1,6 @@
 import { ViewShell } from '@app/components/view-shell/ViewShell';
 import { ViewSidebar } from '@app/components/view-shell/ViewSidebar';
-import ArrowLeft from '@icon/system/regular/arrow-left.svg';
-import { Button } from '@ui';
+import { SplitBackButton } from '@components/app/split-layout/components/SplitBackButton';
 import { type JSX, Show } from 'solid-js';
 
 /** Shared workspace chrome for conversation and new-session pages. */
@@ -12,20 +11,16 @@ export function Topbar(props: {
   children?: JSX.Element;
 }) {
   return (
-    <ViewShell.TopBar class="touch:flex">
-      <Show when={props.onBack}>
-        <ViewShell.TopBarIsland>
-          <Button
-            aria-label="Back to conversations"
-            tooltip="Back to conversations"
-            variant="ghost"
-            size="icon-md"
-            onClick={props.onBack}
-          >
-            <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-          </Button>
-        </ViewShell.TopBarIsland>
-      </Show>
+    <ViewShell.TopBar
+      class="touch:flex"
+      navigation={
+        props.onBack ? (
+          <ViewShell.TopBarIsland>
+            <SplitBackButton onBack={props.onBack} />
+          </ViewShell.TopBarIsland>
+        ) : undefined
+      }
+    >
       <ViewShell.TopBarTitle>
         <div class="flex min-w-0 items-center gap-1">
           {props.titleContent ?? (

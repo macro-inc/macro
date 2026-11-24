@@ -19,6 +19,8 @@ export function TasksDetailView(props: {
   task: TaskDetailTarget;
   onClose?: () => void;
   breadcrumbOrder?: number;
+  /** False where no task list sits beside the task, so j/k step nothing. */
+  listNavigation?: boolean;
 }) {
   const { source, openTask, closeTask, selectedTask } = useTasksView();
   const panel = useSplitPanelOrThrow();
@@ -39,7 +41,9 @@ export function TasksDetailView(props: {
   useListNavigationHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: () =>
-      panel.isPanelActive() && selectedTask()?.id === props.task.id,
+      props.listNavigation !== false &&
+      panel.isPanelActive() &&
+      selectedTask()?.id === props.task.id,
     navigation: listNavigation,
   });
   const breadcrumbValue = () => `task:${props.task.id}`;

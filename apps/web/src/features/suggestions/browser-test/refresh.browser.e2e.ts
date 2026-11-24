@@ -37,7 +37,7 @@ test('a generation someone else started shows as running, with no way to ask for
   );
   await expect(control(page).getByRole('button')).toBeDisabled();
   // The cards stay usable while suggestions are looked for.
-  await expect(page.locator('[data-suggestion]')).toHaveCount(10);
+  await expect(page.locator('[data-suggestion]')).toHaveCount(9);
 });
 
 test('the control turns ready by itself when the cooldown ends', async ({
@@ -70,6 +70,6 @@ test('no control where the server can’t say whether a generation runs', async 
 }) => {
   await page.goto('/?generation=none');
 
-  await expect(page.locator('[data-suggestion]')).toHaveCount(10);
+  await expect(page.locator('[data-suggestion]')).toHaveCount(9);
   await expect(control(page)).toHaveCount(0);
 });

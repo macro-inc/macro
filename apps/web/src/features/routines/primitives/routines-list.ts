@@ -10,7 +10,12 @@ import {
   type RoutineTriggerDraft,
   triggerKind,
 } from '../core/routine-triggers';
-import { runOutcome, stepsForRun, summarizeRun } from '../core/step-history';
+import {
+  failedStep,
+  runOutcome,
+  stepsForRun,
+  summarizeRun,
+} from '../core/step-history';
 import type { RoutineRow } from '../core/types';
 
 /** Today's runs show their time; older ones their day. */
@@ -27,10 +32,16 @@ function lastRun(routine: RoutineSnapshot): RoutineRow['lastRun'] {
   const record = routine.lastRun;
   const at = record?.startedAt;
   if (!record || !at) return undefined;
+  const outcome = runOutcome(record);
+  const reason =
+    outcome === 'failed'
+      ? (failedStep(record)?.error ?? record.error)?.trim() || undefined
+      : undefined;
   return {
     at: runTime(at),
-    outcome: runOutcome(record),
+    outcome,
     summary: summarizeRun(record, stepsForRun(record, routine)),
+    ...(reason ? { reason } : {}),
   };
 }
 
@@ -84,6 +95,7 @@ export function createRoutineRows(
     return {
       id: routine.id,
       name: routine.name,
+      appearance: routine.appearance,
       description: draft?.description?.trim() || undefined,
       createdAt: routine.createdAt,
       when: describeWhen(draft?.triggers ?? []),

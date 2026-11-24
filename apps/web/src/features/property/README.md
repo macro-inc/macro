@@ -111,6 +111,39 @@ the property (`entityActions.toastPropertySet`: "Companies set", or "Companies
 set on 3 items" for several). Tag assignment shows no toast, and the composer
 writes to its draft without one.
 
+When every selected item has one entity type, the modal's property list asks
+the properties service for that type (`for_entity_type`), so it offers only
+what those items can take: Stage, Owner and Revenue only on companies, and
+Parent Task, Subtasks and Time logged only on tasks. A mixed selection lists
+every definition. The create dialog uses the same type. The Properties panel
+reads the same list for its entity, so the picker opens with it loaded.
+
+A Link property takes its URL in the editor's search field
+(`editor/link-property-editor.tsx`): Enter sets it, or adds it when the
+property holds several links, and the item's links are listed below to remove
+one at a time, with **Clear all** once there are two. With nothing typed no row
+is highlighted, so Enter removes nothing until the arrow keys or the pointer
+pick a link, and every save closes the editor (Shift does not keep it open, as
+the listed links would be stale until the save lands). It validates and saves
+exactly as the property row's link editor does (`utils/linkValues.ts`). With
+several items selected no links are listed, and a URL replaces each item's
+value.
+
+Opened on a property definition for one saved item (a list row's shortcut or
+menu, the command menu), the editor does not know the value the item already
+holds until its properties are read. A property that holds several values
+(select, entity or Link) lists nothing and changes nothing until then: a save
+sends the whole value, so a pick would drop the values it hasn't read. A
+property that holds one value is replaced either way and stays editable.
+`SavedValueStatus` shows "Loading …" or, when the read fails, "Couldn't load
+this item's …" in place of the rows. Tag assignment waits only while the tags
+load, since unread tags would all look unapplied; a failed read still allows
+tagging, as its saves are additions and removals the server merges. Rows that
+arrive after a wait start with none highlighted (`createUnhighlightedArrival`),
+unless a search typed meanwhile found a match: the first row may be **Clear
+all**, and an Enter pressed meanwhile must not reach it. An item's own copy of a custom property carries no options, so the
+editor takes them from the property's definition.
+
 ## Creating a property
 
 `CreatePropertyModal` names the built-in property when the typed name duplicates

@@ -274,18 +274,23 @@ async fn forward(
         gateway.tasks.spawn(
             pump(
                 Box::pin(upstream.bytes_stream()),
-                move |chunk| match chunk {
-                    Ok(bytes) => {
-                        parser.observe(bytes);
-                        meter.observed = parser.observed().clone();
-                    }
+                move |chunk| {
+                    match chunk {
+                        Ok(bytes) => {
+                            parser.observe(bytes);
+                            meter.observed = parser.observed().clone();
+                        }
                     Err(error) => {
                         tracing::warn!(parent: &meter.span, error = ?error, "fireworks stream broke");
                         meter.broken = true;
                         meter.span.record("brain_fireworks.outcome", "stream_error");
                         meter.span.record("otel.status_code", "ERROR");
                     }
+                    }
+                    // Fireworks answers carry no screen notices to settle.
+                    false
                 },
+                None,
                 caller,
             )
             .instrument(span.clone()),
