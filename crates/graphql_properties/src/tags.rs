@@ -6,6 +6,7 @@ use properties::domain::model::{TagScope, TagSet};
 
 use crate::{
     EntityPropertiesLoader, EntityPropertyReader, GraphqlPropertyDefinition, GraphqlPropertyOption,
+    definitions::catalog_read_error,
 };
 
 /// Which owner a tag set belongs to.
@@ -84,7 +85,7 @@ pub async fn load_tag_sets<R: EntityPropertyReader>(
         .loader()
         .tag_sets()
         .await
-        .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+        .map_err(catalog_read_error)?;
     Ok(sets.into_iter().map(Into::into).collect())
 }
 

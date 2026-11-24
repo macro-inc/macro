@@ -2,7 +2,9 @@
 
 use std::marker::PhantomData;
 
-use async_graphql::{Context, Enum, ID, Object, SimpleObject, Union, dataloader::DataLoader};
+use async_graphql::{
+    Context, Enum, ErrorExtensions, ID, Object, SimpleObject, Union, dataloader::DataLoader,
+};
 use graphql_common::{GraphqlPropertyEntityType, parse_id};
 use models_properties::{
     PropertyOwner,
@@ -250,17 +252,25 @@ pub async fn load_property_definitions<R: EntityPropertyReader>(
         let definitions = loader
             .definitions_with_options(scope, for_entity_type)
             .await
-            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+            .map_err(catalog_read_error)?;
         return Ok(definitions.into_iter().map(Into::into).collect());
     }
     let definitions = loader
         .definitions(scope, for_entity_type)
         .await
-        .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+        .map_err(catalog_read_error)?;
     Ok(definitions
         .into_iter()
         .map(GraphqlPropertyDefinition::new)
         .collect())
+}
+
+/// A failed catalog read, logged here and answered with a generic error coded
+/// `INTERNAL`, so the reader's diagnostics never reach the client.
+pub(crate) fn catalog_read_error(err: rootcause::Report) -> async_graphql::Error {
+    tracing::error!(error = ?err, "property catalog read failed");
+    async_graphql::Error::new("property catalog read failed")
+        .extend_with(|_, extensions| extensions.set("code", "INTERNAL"))
 }
 
 /// Resolve options after the owning domain checks definition visibility.

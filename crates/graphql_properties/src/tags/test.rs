@@ -162,6 +162,44 @@ async fn schema_only_reader_fails_closed_for_tag_sets() {
     assert!(NoOpEntityPropertyReader.get_tag_sets(&user).await.is_err());
 }
 
+/// Exposes the tag sets through a reader whose reads fail.
+struct FailingQuery;
+
+#[Object]
+impl FailingQuery {
+    /// The viewer's tag sets.
+    async fn tag_sets(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlTagSet<NoOpEntityPropertyReader>>> {
+        load_tag_sets::<NoOpEntityPropertyReader>(ctx).await
+    }
+}
+
+#[tokio::test]
+async fn a_failed_tag_set_read_answers_a_coded_generic_error() {
+    let response = Schema::build(FailingQuery, EmptyMutation, EmptySubscription)
+        .data(entity_properties_loader(
+            MacroUserIdStr::parse_from_str(VIEWER).expect("valid user"),
+            NoOpEntityPropertyReader,
+        ))
+        .finish()
+        .execute("{ tagSets { scope } }")
+        .await;
+    let [error] = response.errors.as_slice() else {
+        panic!("one error expected: {:?}", response.errors);
+    };
+    assert_eq!(error.message, "property catalog read failed");
+    assert_eq!(
+        error
+            .extensions
+            .as_ref()
+            .and_then(|extensions| extensions.get("code"))
+            .cloned(),
+        Some(async_graphql::Value::from("INTERNAL"))
+    );
+}
+
 #[tokio::test]
 async fn a_tag_definitions_options_come_from_the_set_without_another_read() {
     // The test reader's options batch finds nothing, so a second read would
