@@ -5,7 +5,7 @@ import {
   getMessageTimelineQueryKey,
   type MessageTimelineData,
 } from '@queries/messages/timeline';
-import { type Accessor, createSignal, untrack } from 'solid-js';
+import { type Accessor, batch, createSignal, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   activeTargetMessageId,
@@ -120,16 +120,20 @@ export function createTargetMessageController(
     pendingTargetReplyId: () => pendingTargetReplyId(state()),
     hasPendingElementScroll: () => hasPendingElementScroll(state(), ready()),
 
-    goToMessage: (messageId: string, replyId?: string) => {
-      const before = untrack(state).loadAround;
-      machine.dispatch({
-        t: 'navigate',
-        target: { messageId, replyId },
-        targetLoaded: untrack(() => options.messageKeys().includes(messageId)),
-        ready: untrack(ready),
-      });
-      if (untrack(state).loadAround !== before) replaceWindow();
-    },
+    // Batched, so no reader sees the new target with the window it replaced.
+    goToMessage: (messageId: string, replyId?: string) =>
+      batch(() => {
+        const before = untrack(state).loadAround;
+        machine.dispatch({
+          t: 'navigate',
+          target: { messageId, replyId },
+          targetLoaded: untrack(() =>
+            options.messageKeys().includes(messageId)
+          ),
+          ready: untrack(ready),
+        });
+        if (untrack(state).loadAround !== before) replaceWindow();
+      }),
     completePendingScroll: (messageId: string) => {
       const before = state();
       machine.dispatch({ t: 'root-scroll-done', messageId });
@@ -154,10 +158,11 @@ export function createTargetMessageController(
     },
     clearActiveTarget: (messageId: string) =>
       machine.dispatch({ t: 'release', messageId }),
-    reset: () => {
-      machine.dispatch({ t: 'reset' });
-      replaceWindow();
-    },
+    reset: () =>
+      batch(() => {
+        machine.dispatch({ t: 'reset' });
+        replaceWindow();
+      }),
   };
 }
 

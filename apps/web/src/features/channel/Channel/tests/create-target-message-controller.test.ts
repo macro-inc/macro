@@ -1,5 +1,5 @@
 import { queryClient } from '@queries/client';
-import { createRoot, createSignal } from 'solid-js';
+import { createComputed, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const notificationVisible = vi.hoisted(() => vi.fn());
@@ -260,6 +260,22 @@ describe('window key', () => {
     expect(controller.windowKey()).toBe(latest);
     controller.goToMessage('old');
     expect(controller.windowKey()).not.toBe(latest);
+    dispose();
+  });
+
+  it('never shows a new target with the window it replaced', () => {
+    const { controller, ready, dispose } = mount();
+    ready(['m1']);
+    const latest = controller.windowKey();
+    const seen: [string | undefined, number][] = [];
+    createRoot(() =>
+      createComputed(() =>
+        seen.push([controller.loadAroundMessageId(), controller.windowKey()])
+      )
+    );
+
+    controller.goToMessage('old');
+    expect(seen).not.toContainEqual(['old', latest]);
     dispose();
   });
 
