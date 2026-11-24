@@ -226,6 +226,12 @@ export type EmailViewContext = {
       replace?: boolean;
     }
   ) => boolean;
+  /**
+   * The thread the list last opened (a row, the cursor beside the reading
+   * pane, or the reader's next and previous), a new value each time; links,
+   * notifications and Back open threads without it.
+   */
+  openedFromList: Accessor<{ id: string } | undefined>;
   closeThread: () => void;
   navigateToList: () => Promise<void>;
   isSidebarSectionOpen: (id: string) => boolean;
@@ -626,10 +632,12 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const closeThread = () =>
     fireAndForget(navigateToList(tabSearch.savedView), 'email-view');
   const notificationSource = useGlobalNotificationSource();
+  const [openedFromList, setOpenedFromList] = createSignal<{ id: string }>();
   const openThread = (
     thread: EmailThreadTarget,
     options?: EntityDetailNavigationOptions & { replace?: boolean }
   ) => {
+    setOpenedFromList({ id: thread.id });
     if (!opensInline(options)) return false;
     const selection = { type: 'email' as const, id: thread.id };
     // The router may refuse a claimed destination. Check compatibility without
@@ -975,6 +983,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     selectedThread,
     composing,
     openThread,
+    openedFromList,
     closeThread,
     navigateToList: () => navigateToList(tabSearch.savedView),
     isSidebarSectionOpen,

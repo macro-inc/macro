@@ -140,7 +140,7 @@ function DesktopEmailPanes(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
-  const { state, setState, list, source, selectedThread } = useEmailView();
+  const { state, setState, list, source, openedFromList } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const recentSearches = createEmailSearchSuggestions({
@@ -148,7 +148,7 @@ function DesktopEmailPanes(props: {
     search: () => state.search,
     setSearch: (query) => setState('search', query),
     hasResults: () => showsTypedSearchResults(source),
-    openThread: () => selectedThread()?.id,
+    openedThread: openedFromList,
     isResult: (threadId) => isTypedSearchResult(source, threadId),
     scopeAvailable: useEmailSearchScopeAvailability(),
     people: () => searchValues.people(),
@@ -339,7 +339,7 @@ function EmailLayout(props: {
 }
 
 export function EmailMobileLayout(props: ParentProps) {
-  const { state, setState, registerSearchField, source, selectedThread } =
+  const { state, setState, registerSearchField, source, openedFromList } =
     useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
@@ -348,7 +348,7 @@ export function EmailMobileLayout(props: ParentProps) {
     search: () => state.search,
     setSearch: (query) => setState('search', query),
     hasResults: () => showsTypedSearchResults(source),
-    openThread: () => selectedThread()?.id,
+    openedThread: openedFromList,
     isResult: (threadId) => isTypedSearchResult(source, threadId),
     scopeAvailable: useEmailSearchScopeAvailability(),
     people: () => searchValues.people(),

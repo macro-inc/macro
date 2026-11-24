@@ -122,8 +122,8 @@ export function createEmailSearchSuggestions(options: {
    * kept on screen from the search before.
    */
   hasResults: Accessor<boolean>;
-  /** The thread open from the list, beside it or in its place. */
-  openThread: Accessor<string | undefined>;
+  /** The thread the list last opened, a new value each time. */
+  openedThread: Accessor<{ id: string } | undefined>;
   /**
    * Whether a thread is one of the typed search's own results, not a row
    * kept on screen from the search before.
@@ -230,9 +230,9 @@ export function createEmailSearchSuggestions(options: {
   // field saw a blur first (iOS keeps focus in it for a tap on a row).
   createEffect(
     on(
-      options.openThread,
+      options.openedThread,
       (thread) => {
-        if (thread !== undefined && options.isResult(thread)) remember();
+        if (thread !== undefined && options.isResult(thread.id)) remember();
       },
       { defer: true }
     )

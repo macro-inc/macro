@@ -46,10 +46,10 @@ const LABELS = [
   { name: 'Arch review', kind: 'tag' as const },
 ];
 
-function setup(initialSearch = '', initialThread?: string) {
+function setup(initialSearch = '') {
   const [search, setSearch] = createSignal(initialSearch);
   const [hasResults, setHasResults] = createSignal(true);
-  const [openThread, setOpenThread] = createSignal(initialThread);
+  const [openedThread, setOpenedThread] = createSignal<{ id: string }>();
   // Threads kept on screen from the search before, not among its results.
   const keptRows = ['kept-thread'];
   const suggestions = createEmailSearchSuggestions({
@@ -57,13 +57,15 @@ function setup(initialSearch = '', initialThread?: string) {
     search,
     setSearch,
     hasResults,
-    openThread,
+    openedThread,
     isResult: (thread) => !keptRows.includes(thread),
     scopeAvailable: (scope) => scope !== 'focus',
     people: () => PEOPLE,
     labels: () => LABELS,
   });
-  return { search, setSearch, setHasResults, setOpenThread, suggestions };
+  /** The list opens a thread. */
+  const openThread = (id: string) => setOpenedThread({ id });
+  return { search, setSearch, setHasResults, openThread, suggestions };
 }
 
 /** The recent searches the empty field lists. */
@@ -157,30 +159,33 @@ it('leaves a word on its way to an operator unremembered, unless Enter runs it',
   });
 });
 
-it('remembers a search when a thread is opened from it, the field still focused', () => {
+it('remembers a search when the list opens a thread from it, the field still focused', () => {
   // Mounted first, as the view is, so its effects run before the person acts.
-  const { dispose, setSearch, setHasResults, setOpenThread, suggestions } =
+  const { dispose, setSearch, setHasResults, openThread, suggestions } =
     createRoot((dispose) => ({ dispose, ...setup() }));
   setHasResults(false);
   suggestions.setFocused(true);
   // A word the field offers to finish as an operator still counts here.
   setSearch('flights la');
-  setOpenThread('thread-1');
+  openThread('thread-1');
   suggestions.setFocused(false);
-
   expect(remembered(setSearch, suggestions)).toEqual(['flights la']);
+
+  // The same thread opened again from another search counts again.
+  setSearch('lisbon');
+  openThread('thread-1');
+  expect(remembered(setSearch, suggestions)).toEqual(['lisbon', 'flights la']);
   dispose();
 });
 
 it('does not remember a search for a thread it did not find', () => {
-  const { dispose, setSearch, setHasResults, setOpenThread, suggestions } =
-    createRoot((dispose) => ({ dispose, ...setup('budget', 'thread-0') }));
+  const { dispose, setSearch, setHasResults, openThread, suggestions } =
+    createRoot((dispose) => ({ dispose, ...setup() }));
   setHasResults(false);
   suggestions.setFocused(true);
-  // The thread open as the view mounts, then a row kept from the search
-  // before while this one loads.
+  // A row kept on screen from the search before, while this one loads.
   setSearch('bef');
-  setOpenThread('kept-thread');
+  openThread('kept-thread');
   suggestions.setFocused(false);
 
   expect(remembered(setSearch, suggestions)).toEqual([]);
@@ -515,7 +520,7 @@ it('keeps the row the keyboard picked out as people arrive around it', () => {
       search,
       setSearch,
       hasResults: () => true,
-      openThread: () => undefined,
+      openedThread: () => undefined,
       isResult: () => true,
       scopeAvailable: () => true,
       people,
