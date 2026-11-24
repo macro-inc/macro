@@ -368,7 +368,7 @@ try {
   // Calendar's header wraps its controls onto a second row in a narrow pane;
   // Search events must stay inside it there too, and off New when it wraps
   // onto a row of its own (360px and narrower), as must the controls that
-  // wrap after it (320px).
+  // wrap after it (320px), with Search closed and open.
   await browser.$('[data-sidebar-next-item="calendar"]').click();
   await browser
     .$('button[aria-label="Search events"]')
@@ -381,6 +381,20 @@ try {
       `narrow-calendar-header-${width}`,
       `${width}px`
     );
+    if (width > 360) continue;
+    // Open on its own row, Search leaves the controls above it in view.
+    await browser.$('button[aria-label="Search events"]').click();
+    await browser.$('input[placeholder="Search events"]').waitForDisplayed();
+    await expectHeaderFits(
+      browser,
+      'Search events',
+      `narrow-calendar-search-open-${width}`,
+      `${width}px with Search open`
+    );
+    await browser.keys('Escape');
+    await browser
+      .$('button[aria-label="Search events"]')
+      .waitForDisplayed({ timeout: 5000 });
   }
   await browser.setWindowSize(windowSize.width, windowSize.height);
   await expectHeaderFits(
