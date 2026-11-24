@@ -2170,6 +2170,45 @@ describe('CoordinatorRouter', () => {
     ]);
   });
 
+  it("keeps the next owner's deadline when telling the last one of its startup fails", async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      activationTimeoutMs: 10,
+      assetLoadTimeoutMs: 10,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    router.connect(tabA as CoordinatorMessagePort);
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    const post = tabA.postMessage.bind(tabA);
+    // As the coordinator's own ports do when a send fails.
+    tabA.postMessage = (message: unknown) => {
+      const { kind } = effectPayload(message) as { kind?: unknown };
+      if (kind === 'engine-startup') tabA.onmessageerror?.();
+      else post(message);
+    };
+    engine.receive({
+      ...version,
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      kind: 'engine-assets-ready',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+    });
+
+    await vi.advanceTimersByTimeAsync(11);
+    expect(messagesOfKind(tabB, 'terminate-engine')).toHaveLength(1);
+  });
+
   it('keeps an owner that becomes ready while its deadline looks for its page', async () => {
     vi.useFakeTimers();
     const page = Promise.withResolvers<boolean>();

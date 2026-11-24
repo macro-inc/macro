@@ -1189,6 +1189,9 @@ export class CoordinatorRouter {
     const progress = this.startupProgress();
     if (!progress) return;
     this.broadcast(progress);
+    // A port that fails here can end this owner and arm the next one's watchdog.
+    const state = this.coreValue?.state;
+    if (state?.kind !== 'activating' || state.ownerEpoch !== ownerEpoch) return;
     // A hidden startup may be suspended by the browser while we wait to park
     // it. Resume the phase budget when there is a visible consumer again.
     if (!this.coreValue?.hasVisibleTab) return;
