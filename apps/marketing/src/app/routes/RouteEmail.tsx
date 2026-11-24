@@ -36,8 +36,8 @@ const faqItems = [
     a: (
       <>
         Yes. Connect multiple accounts, view them together, or filter to one
-        inbox. When composing, choose which connected address to send from.
-        Account limits depend on your <a href="/pricing">plan</a>.
+        inbox. Choose which connected address to send from right in the
+        composer. Account limits depend on your <a href="/pricing">plan</a>.
       </>
     ),
   },
@@ -59,7 +59,7 @@ const faqItems = [
     q: 'Can my team read an email I share?',
     a: (
       <>
-        Yes. Sharing gives recipients access to the full thread, including new
+        Yes. Sharing gives recipients access to the full thread including new
         replies. It does not let them send replies from your mailbox. See{' '}
         <a href="/channels">sharing email in team chat</a>.
       </>
@@ -71,7 +71,7 @@ const faqItems = [
   },
   {
     q: 'Does Macro get my Google password?',
-    a: 'No. You authorize the connection on Google, and Macro receives access tokens rather than your password.',
+    a: 'No. You authorize the connection on Google and Macro receives access tokens rather than your password.',
   },
   {
     q: 'Is my email used to train AI?',
@@ -108,7 +108,7 @@ export function RouteEmail() {
   setPageSeo({
     title: 'Macro Mail — Brilliantly fast email',
     description:
-      'Macro brings all of your email accounts into one inbox, with unified search. Share emails with internal channels and draft and send emails from the agent.',
+      'Macro brings all of your email accounts into one inbox with unified search. Share emails with internal channels and draft and send emails from the agent.',
     path: '/email',
   });
 
@@ -154,25 +154,25 @@ export function RouteEmail() {
       <FeaturePageSection
         id="keyboard-speed"
         title="Navigate with Superhuman speed."
-        description="We bring your emails into our own database so we’re not bottlenecked by Gmail’s API. Use J, K, and E to navigate and mark emails done, or open splits to draft and search side by side."
+        description="We bring your emails into our own database so we’re not bottlenecked by Gmail’s API. Use J, K, and E to navigate and mark emails done or open splits to draft and search side by side."
         screen={featureScreens['keyboard-speed']}
       />
       <FeaturePageSection
         id="email-accounts"
         title="All your accounts in one inbox."
-        description="Triage all your email accounts in a single inbox, or one at a time. We backfill everything, so search is split-second across every account."
+        description="Triage all your email accounts in a single inbox or one at a time. We backfill everything so search is split-second across every account."
         screen={featureScreens['email-accounts']}
       />
       <FeaturePageSection
         id="signal-noise"
         title="Signal vs. Noise."
-        description="Signal is your important email. Noise is the newsletters, receipts, and inbound you don’t need to see first. Macro separates them for you, so you can focus on what matters."
+        description="Signal is your important email. Noise is the newsletters, receipts, and inbound you don’t need to see first. Macro separates them for you so you can focus on what matters."
         screen={featureScreens['signal-noise']}
       />
       <FeaturePageSection
         id="email-sharing"
-        title="Share email in Macro Chat, no screenshots."
-        description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread, including future replies, so they’re not asking what happened after your screenshot."
+        title="Share email in Macro Chat without screenshots."
+        description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread including future replies so they’re not asking what happened after your screenshot."
         screen={featureScreens['email-sharing']}
       />
       <FeaturePageSection
@@ -184,12 +184,12 @@ export function RouteEmail() {
       <FeaturePageSection
         id="email-to-task"
         title="Turn emails into Macro Tasks."
-        description="Create a task from the thread and assign it without leaving your inbox. The email stays linked as the source, so the original conversation is one click away, and you can see when it’s resolved."
+        description="Create a task from the thread and assign it without leaving your inbox. The email stays linked as the source so the original conversation is one click away and you can see when it’s resolved."
         screen={featureScreens['email-to-task']}
       />
       <FeaturePageSection
         id="email-crm"
-        title="Your Macro CRM, one click from any email."
+        title="Your Macro CRM one click from any email."
         description="Open any Macro CRM company or contact record right beside an email to see every thread and call your team has had with them."
         screen={featureScreens['email-crm']}
       />

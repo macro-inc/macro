@@ -52,7 +52,7 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
         id: 'pull-requests',
         title: 'Follow a PR back to the discussion.',
         description:
-          'Mention a Macro GitHub PR in Macro Chat to keep the code tied to the discussion. Jump from the thread to the diff, or back from the PR to see why the change happened.',
+          'Mention a Macro GitHub PR in Macro Chat to keep the code tied to the discussion. Jump from the thread to the diff or back from the PR to see why the change happened.',
         scene: 'pr-channel',
       },
       {
@@ -97,14 +97,14 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
         id: 'tag-tasks',
         title: 'Sort new tasks as they arrive.',
         description:
-          'Let Macro Agents categorize new Macro Tasks by team and set priority from the request itself, so triage happens before anyone opens the board.',
+          'Let Macro Agents categorize new Macro Tasks by team and set priority from the request itself so triage happens before anyone opens the board.',
         scene: 'task-tags',
       },
       {
         id: 'shared-tags',
         title: 'Use one tag across your work.',
         description:
-          'Put the same tag on a customer’s Macro Mail thread, Macro Calls notes, and follow-up Macro Tasks. Because tags are shared across the team, everyone sees the full picture.',
+          'Put the same tag on a customer’s Macro Mail thread, Macro Calls notes, and follow-up Macro Tasks. Tags are shared across the team so everyone sees the full picture.',
         scene: 'shared-tags',
       },
       {
@@ -166,7 +166,7 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
         id: 'engineering-events',
         title: 'Keep the team up to date.',
         description:
-          'Trigger an update when a status changes in Macro Tasks. As soon as an engineering task ships, Macro Agents post what changed right in Macro Chat.',
+          'Trigger an update when a status changes in Macro Tasks. Macro Agents post what changed right in Macro Chat the moment an engineering task ships.',
         scene: 'engineering-event',
       },
       {
@@ -197,14 +197,14 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
         id: 'agent-search',
         title: 'Give agents one place to look.',
         description:
-          'Across disconnected SaaS apps, agents burn tool calls hitting rate-limited connectors just to piece together basic history. In Macro, Macro Agents search one unified index with full permissions intact.',
+          'Across disconnected SaaS apps agents burn tool calls hitting rate-limited connectors just to piece together basic history. Macro Agents search one unified index with full permissions intact.',
         scene: 'agent-search',
       },
       {
         id: 'search-history',
         title: 'Search in parallel across your workspace.',
         description:
-          'Macro Agents fire parallel queries across emails, threads, docs, tasks, and call transcripts, then synthesize one cited answer linked straight to the source records.',
+          'Macro Agents fire parallel queries across emails, threads, docs, tasks, and call transcripts to synthesize one cited answer linked straight to the source records.',
         scene: 'parallel-search',
       },
     ],

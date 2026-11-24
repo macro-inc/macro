@@ -75,19 +75,19 @@ export function RouteGithub() {
         <FeaturePageSection
           id="pr-links"
           title={'Link the task, the chat,\nand the pull request.'}
-          description="Paste a GitHub URL in Macro Chat or Macro Docs for live PR status on hover—when it opens or merges, the linked Macro Tasks item updates itself."
+          description="Paste a GitHub URL in Macro Chat or Macro Docs for live PR status on hover. The linked Macro Tasks item updates itself when the PR opens or merges."
           screen={featureScreens['pr-links']}
         />
         <FeaturePageSection
           id="coding-agents"
           title="@mention Cursor, merge from Macro Chat."
-          description="Tag Cursor or another coding agent right inside Macro Chat to investigate and open a branch, then review the diff and merge the PR without leaving the channel."
+          description="Tag Cursor or another coding agent right inside Macro Chat to investigate and open a branch. Review the diff and merge the PR without leaving the channel."
           screen={featureScreens['coding-agents']}
         />
         <FeaturePageSection
           id="pr-tasks"
           title="Macro Tasks move as the pull request moves."
-          description="As you create, review, and merge a pull request, the linked task moves through In Progress, In Review, and Completed. Click the GitHub pill to go right to the pull request from the task, or vice versa. It opens in a split screen, so you don’t have to leave Macro."
+          description="The linked task moves through In Progress, In Review, and Completed as you create, review, and merge a pull request. Click the GitHub pill to jump between the task and PR—it opens in split screen so you never leave Macro."
           screen={featureScreens['pr-tasks']}
         />
         <FeaturePageSection

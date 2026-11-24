@@ -24,7 +24,7 @@ const callsFaq = [
   },
   {
     q: 'Are calls recorded and transcribed?',
-    a: 'Yes. Participants see a recording and transcription notice. After the call, open its recording, transcript, and summary in Calls.',
+    a: 'Yes. Participants see a recording and transcription notice. Open the recording, transcript, and summary in Calls right after the call.',
   },
   {
     q: 'Can an agent turn a call into next steps?',
@@ -70,7 +70,7 @@ export function RouteCalls() {
           tutorial="calls"
           product="Calls"
           title="Calls that feed into team memory."
-          description="Calls lets you start instant video meetings in any channel or invite external guests with a link, complete with recordings and transcripts."
+          description="Calls lets you start instant video meetings in any channel or invite external guests with a link—with recordings and transcripts included."
         />
         <FeaturePageSection
           id="call-default"
@@ -92,7 +92,7 @@ export function RouteCalls() {
         />
         <FeaturePageSection
           id="call-external"
-          title="External calls, shared by link."
+          title="External calls shared by link."
           description="Need to meet with a customer or candidate? Send a standalone browser link like Google Meet—no Macro account or download required."
           screen={featureScreens['call-external']}
         />

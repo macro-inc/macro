@@ -38,7 +38,7 @@ const tasksFaq = [
     a: (
       <>
         You can import Linear issues or task CSVs. See{' '}
-        <a href="/docs/switch-to-macro">migration options</a>, or{' '}
+        <a href="/docs/switch-to-macro">migration options</a> or{' '}
         <a href={DEMO_BOOKING_URL}>talk to our team</a> about moving your
         company’s work.
       </>
@@ -46,7 +46,7 @@ const tasksFaq = [
   },
   {
     q: 'Where do I see my tasks and the work I’ve assigned?',
-    a: 'My Tasks shows your assignments. Created by me shows tasks you created, and All Tasks shows tasks you can access. Filter by owner, status, or priority.',
+    a: 'My Tasks shows your assignments. Created by me shows tasks you created and All Tasks shows tasks you can access. Filter by owner, status, or priority.',
   },
   {
     q: 'Can an agent work on a task?',
@@ -71,7 +71,7 @@ const tasksFaq = [
   },
   {
     q: 'Who can see a task?',
-    a: 'Tasks follow their sharing settings. In the task composer, choose whether to share with your team or keep access limited to yourself and the people you share it with.',
+    a: 'Tasks follow their sharing settings. Choose in the task composer whether to share with your team or keep access limited to yourself and the people you share it with.',
   },
   {
     q: 'Can I try Macro for free?',
@@ -100,36 +100,36 @@ export function RouteTasks() {
           tutorial="tasks"
           product="Tasks"
           title="Turn conversations into tasks."
-          description="Create tasks from email and team chat. Assign people or agents, and keep task status in sync with linked pull requests."
+          description="Create tasks from email and team chat. Assign people or agents and keep task status in sync with linked pull requests."
         />
         <FeaturePageSection
           id="from-a-message"
           title="Create tasks right from Macro Chat."
-          description="Turn any Macro Chat message into a task with the original thread deep-linked, or mention @Macro to spin up multiple tasks from a discussion. Press C then T from anywhere."
+          description="Turn any Macro Chat message into a task with the original thread deep-linked or mention @Macro to spin up multiple tasks from a discussion. Press C then T from anywhere."
           screen={featureScreens['from-a-message']}
         />
         <FeaturePageSection
           id="from-docs-and-email"
           title="Directly linked to customer Macro Mail."
-          description="Create tasks from Macro Mail or highlight checklists in Macro Docs to generate them in bulk. Every task links back to its source, and pasting one in chat shows live status, assignee, and priority."
+          description="Create tasks from Macro Mail or highlight checklists in Macro Docs to generate them in bulk. Every task links back to its source and pasting one in chat shows live status, assignee, and priority."
           screen={featureScreens['from-docs-and-email']}
         />
         <FeaturePageSection
           id="task-agents"
-          title="Assign tasks to Macro Agents, like teammates."
-          description="Assign a task to Macro Agents just like a teammate and follow its live session. Over MCP, Claude Code, Codex, and Cursor can search, create, and update your tasks straight from your editor."
+          title="Assign tasks to Macro Agents like teammates."
+          description="Assign a task to Macro Agents just like a teammate and follow its live session. Claude Code, Codex, and Cursor can search, create, and update your tasks straight from your editor over MCP."
           screen={featureScreens['task-agents']}
         />
         <FeaturePageSection
           id="github"
-          title="Linked to Macro GitHub, both ways."
+          title="Linked to Macro GitHub both ways."
           description="Opening, reviewing, and merging a Macro GitHub PR moves the linked task through In Progress, In Review, and Completed automatically—no updating two systems."
           screen={featureScreens['github']}
         />
         <FeaturePageSection
           id="task-projects"
           title="Projects and tags."
-          description="Group work with an owner and finish line into Projects, and use Macro Tags for everything that cuts across teams and customers."
+          description="Group work with an owner and finish line into Projects and use Macro Tags for everything that cuts across teams and customers."
           screen={featureScreens['task-projects']}
         />
         <FeaturePageSection

@@ -11,7 +11,7 @@ export function RouteChannels() {
   setPageSeo({
     title: 'Macro Chat — Focused team chat',
     description:
-      'Macro channels are filed into Signal or Noise, with an actual inbox like email. Mention work to share it with the channel, or create tasks from the conversation.',
+      'Macro channels are filed into Signal or Noise with an actual inbox like email. Mention work to share it with the channel or create tasks from the conversation.',
     path: '/channels',
   });
   return (
@@ -26,7 +26,7 @@ export function RouteChannels() {
       <FeaturePageSection
         id="shared-work"
         title="Integrated with everything else."
-        description="Channels are already where work happens. Mention Macro Mail, Macro Docs, or Macro Tasks right in the thread, create tasks from any message, or bring in Macro Agents without leaving the conversation."
+        description="Channels are already where work happens. Mention Macro Mail, Macro Docs, or Macro Tasks right in the thread. Turn any message into a task or bring in Macro Agents without leaving the conversation."
         screen={featureScreens['shared-work']}
       />
       <FeaturePageSection
@@ -37,20 +37,20 @@ export function RouteChannels() {
       />
       <FeaturePageSection
         id="channel-agents"
-        title="Macro Agents are first-class, like humans."
+        title="Macro Agents are first-class like humans."
         description="Tag Macro Agents in a thread and they read the full conversation plus every linked file, email, and task—or let them chime in automatically when they can help."
         screen={featureScreens['channel-agents']}
       />
       <FeaturePageSection
         id="channel-threads"
         title="Built for focused technical conversations."
-        description="The first few replies appear inline and the rest tuck cleanly into a thread—readable like a structured forum, fast like iMessage, without Slack’s buried sidebars."
+        description="The first few replies appear inline and the rest tuck cleanly into a thread—readable like a structured forum and fast like iMessage without Slack’s buried sidebars."
         screen={featureScreens['channel-threads']}
       />
       <FeaturePageSection
         id="chat-inbox"
-        title="A real inbox, like Macro Mail."
-        description="Slack has no real inbox, only read and unread. Macro keeps messages waiting for later, so you don’t have to remember to reply, and you mark them done as you go. Mark a channel as Signal or Noise to decide what reaches your main inbox."
+        title="A real inbox like Macro Mail."
+        description="Slack has no real inbox—only read and unread. Macro keeps messages waiting for later so you don’t have to remember to reply and you mark them done as you go. Mark a channel as Signal or Noise to decide what reaches your main inbox."
         screen={featureScreens['chat-inbox']}
       />
       <FeaturePhoneScreens screens={phoneScreens['channels']} product="Chat" />
@@ -65,7 +65,7 @@ export function RouteChannels() {
         items={[
           {
             q: 'How do I start a channel with my team?',
-            a: 'Create a channel and invite people by name or email. Choose a team channel for conversations teammates can discover, or a private channel for invited people only.',
+            a: 'Create a channel and invite people by name or email. Choose a team channel for conversations teammates can discover or a private channel for invited people only.',
           },
           {
             q: 'Can I bring conversations from another app?',
@@ -83,7 +83,7 @@ export function RouteChannels() {
               <>
                 Yes. Mention workspace items to open them beside the
                 conversation. A shared email includes the thread and later
-                replies, but does not let recipients send from your mailbox. See{' '}
+                replies but does not let recipients send from your mailbox. See{' '}
                 <a href="/email">email sharing</a>.
               </>
             ),

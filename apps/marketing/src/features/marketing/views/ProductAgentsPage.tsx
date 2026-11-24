@@ -48,7 +48,7 @@ const agentsFaq = [
   },
   {
     q: 'Can agents work while I’m away?',
-    a: 'Hosted agents can continue after you close the app, and scheduled routines can run recurring work. Local agents need their computer and runtime to stay online.',
+    a: 'Hosted agents can continue after you close the app and scheduled routines can run recurring work. Local agents need their computer and runtime to stay online.',
   },
   {
     q: 'How much agent usage is included?',
@@ -82,32 +82,32 @@ export function RouteAgents() {
       </div>
       <FeaturePageSection
         id="agent-sources"
-        title="Unified memory, across your whole team."
+        title="Unified memory across your whole team."
         description="ChatGPT and Claude only remember your own prompts. Macro builds shared memory from your team’s Macro Mail, Macro Chat, Macro Docs, Macro Tasks, and Macro Calls—so agents know who owns what."
         screen={featureScreens['agent-sources']}
       />
       <FeaturePageSection
         id="agent-collaboration"
-        title="First-class citizens, just like people."
+        title="First-class citizens just like people."
         description="Tag an agent in Macro Chat or assign it a ticket in Macro Tasks like any teammate. Hosted agents keep running after you close your laptop and sync across devices."
         screen={featureScreens['agent-collaboration']}
       />
       <FeaturePageSection
         id="agent-actions"
         title="One search tool across everything."
-        description="Instead of burning calls across rate-limited SaaS connectors, agents get one fast search tool across every email, thread, doc, file, and call transcript in your workspace."
+        description="Agents get one fast search tool across every email, thread, doc, file, and call transcript instead of burning calls across rate-limited SaaS connectors."
         screen={featureScreens['agent-actions']}
       />
       <FeaturePageSection
         id="existing-agents"
         title="Bring your own agents."
-        description="Point Claude Code, Codex, or any MCP client at your workspace, or run agents on your own machine with macrod. Your team’s memory and Macro’s tools work with all the latest models from every provider, so you’re never locked into one."
+        description="Point Claude Code, Codex, or any MCP client at your workspace—or run agents on your own machine with macrod. Your team’s memory and Macro’s tools work with all the latest models from every provider so you’re never locked into one."
         screen={featureScreens['existing-agents']}
       >
         <div class="agents-connections">
           <div class="agents-connection-paths">
             <div class="agents-connection-path">
-              <h3>Your agent, inside Macro</h3>
+              <h3>Your agent inside Macro</h3>
               <p>
                 Bring Claude Code, OpenCode, OpenClaw, or Hermes into your
                 workspace. Connect through macrod and keep your agent running on
@@ -119,7 +119,7 @@ export function RouteAgents() {
               <TutorialVideoEmbed tutorial="macrod" />
             </div>
             <div class="agents-connection-path">
-              <h3>Macro, inside your agent</h3>
+              <h3>Macro inside your agent</h3>
               <p>
                 Use Macro from Claude, ChatGPT, Cursor, or another MCP client.
                 Search your workspace and work with its documents and tasks from

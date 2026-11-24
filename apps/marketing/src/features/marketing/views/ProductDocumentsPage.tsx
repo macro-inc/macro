@@ -26,7 +26,7 @@ const documentsFaq = [
     q: 'Can my team and agents edit together?',
     a: (
       <>
-        Yes. People and agents can edit the same document in real time, and
+        Yes. People and agents can edit the same document in real time and
         teammates can comment on specific text. Ask an agent to update the
         document while you keep writing. See <a href="/agents">Macro Agents</a>.
       </>
@@ -38,7 +38,7 @@ const documentsFaq = [
   },
   {
     q: 'Can I share a document outside my team?',
-    a: 'Yes. Share by email address, or turn on a public link so anyone with the link can view a preview without an account.',
+    a: 'Yes. Share by email address or turn on a public link so anyone with the link can view a preview without an account.',
   },
   {
     q: 'Does mentioning someone notify them?',
@@ -63,7 +63,7 @@ export function RouteDocuments() {
   setPageSeo({
     title: 'Macro Docs | Write With Your Team and Your Agents',
     description:
-      'The local-first simplicity of Markdown, with mentioning and live collaboration with agents. Edit offline and sync your changes when you reconnect.',
+      'The local-first simplicity of Markdown with mentioning and live collaboration with agents. Edit offline and sync your changes when you reconnect.',
     path: '/documents',
   });
   return (
@@ -97,7 +97,7 @@ export function RouteDocuments() {
         <FeaturePageSection
           id="document-version-control"
           title="Version control for every edit."
-          description="Track changes by people and agents over time, and scrub back through earlier versions. Docs are just plain markdown, so you can export to a markdown file and import one just as easily."
+          description="Track changes by people and agents over time and scrub back through earlier versions. Docs are just plain markdown so you can export to a markdown file and import one just as easily."
           screen={featureScreens['document-version-control']}
         />
         <FeaturePhoneScreens

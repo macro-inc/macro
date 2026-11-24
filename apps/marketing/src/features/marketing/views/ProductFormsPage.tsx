@@ -25,13 +25,13 @@ export default function ProductFormsPage() {
         <FeaturePageSection
           id="forms-databases"
           title="Forms populate Macro Databases."
-          description="Each question is a column, and every response is a row. Responses appear as they come in. Open the database to sort, filter, and work with the answers."
+          description="Each question is a column and every response is a row. Responses appear as they come in. Open the database to sort, filter, and work with the answers."
           screen={featureScreens['forms-databases']}
         />
         <FeaturePageSection
           id="forms-booking"
           title="Integrated with Macro Booking Links."
-          description="Add a gate to qualify requests, then a booking link as the last step. People who pass the gate can choose a time after their response is saved."
+          description="Add a gate to qualify requests and a booking link as the last step. People who pass the gate can choose a time after their response is saved."
           screen={featureScreens['forms-booking']}
         />
         <FeaturePageSection
@@ -43,7 +43,7 @@ export default function ProductFormsPage() {
         <FeaturePageSection
           id="forms-sharing"
           title="Share a form with your own branding."
-          description="Add your logo and accent color. Share with specific people or a channel in Macro Chat, or let anyone with the link respond without signing in."
+          description="Add your logo and accent color. Share with specific people or a channel in Macro Chat or let anyone with the link respond without signing in."
           screen={featureScreens['forms-sharing']}
         />
         <FeaturePhoneScreens screens={phoneScreens['forms']} product="Forms" />
@@ -53,11 +53,11 @@ export default function ProductFormsPage() {
           items={[
             {
               q: 'Where do form responses go?',
-              a: 'Every form is backed by a database. Each submitted response becomes a row. Use the Responses tab to view and sort answers, or open the database for filters and other views.',
+              a: 'Every form is backed by a database. Each submitted response becomes a row. Use the Responses tab to view and sort answers or open the database for filters and other views.',
             },
             {
               q: 'Can I create a form from an existing table?',
-              a: 'Yes. On a database you own, choose New form from the table menu. Macro creates questions from its columns.',
+              a: 'Yes. Choose New form from the table menu on any database you own. Macro creates questions from its columns.',
             },
             {
               q: 'What happens when someone does not pass a gate?',
