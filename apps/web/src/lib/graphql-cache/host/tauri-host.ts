@@ -999,13 +999,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     ): Promise<ChannelTimelineEvictCacheResult> {
       return channelTimelineRequest(
         CHANNEL_TIMELINE_EVICT_COMMAND,
-        {
-          eviction: args,
-          // A removal holds no fetched content: it takes the observed stamp.
-          generation:
-            authorityObserver.snapshot()?.generation ??
-            UNKNOWN_CACHE_GENERATION,
-        },
+        // A removal holds no fetched content, so no session stamp fences it.
+        { eviction: args },
         (result: WriteResult & { channelIds: string[]; hasMore: boolean }) => ({
           kind: 'evicted',
           revision: parseCacheRevision(result.revision),

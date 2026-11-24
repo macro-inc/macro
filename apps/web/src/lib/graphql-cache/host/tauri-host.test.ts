@@ -1760,7 +1760,7 @@ describe('createTauriCacheHost', () => {
         });
         expect(invokeMock).toHaveBeenLastCalledWith(
           'graphql_cache_channel_timeline_evict',
-          { eviction, generation: expect.any(String) }
+          { eviction }
         );
         await expect(host.channelTimelineStats()).resolves.toEqual({
           kind: 'stats',

@@ -61,3 +61,37 @@ fn invalid_channel_commits_are_rejected() {
     .unwrap();
     assert!(block_on(handle.channel_timeline_commit(commit)).is_err());
 }
+
+#[test]
+fn eviction_is_not_fenced_by_the_generation_it_was_asked_under() {
+    block_on(async {
+        let handle = spawn_handle();
+        let first = handle.current_authority("profile").await.unwrap();
+        let held = handle
+            .transition_authority("profile", first.generation, "team:held".into())
+            .await
+            .unwrap()
+            .authority;
+        let commit: ChannelTimelineCommit = serde_json::from_value(serde_json::json!({
+            "channelId": "c1",
+            "touchedAtMs": 10,
+        }))
+        .unwrap();
+        handle.channel_timeline_commit(commit).await.unwrap();
+        handle
+            .transition_authority("profile", held.generation, "team:other".into())
+            .await
+            .unwrap();
+        // It only removes, so what is left after a session change is as stale
+        // as it was before: both hosts remove it.
+        let evicted = handle
+            .with_generation(Some(held.generation))
+            .channel_timeline_evict(ChannelEviction {
+                touched_before_ms: 11,
+                max_channels: 5,
+            })
+            .await
+            .unwrap();
+        assert_eq!(evicted.channel_ids, ["c1"]);
+    });
+}

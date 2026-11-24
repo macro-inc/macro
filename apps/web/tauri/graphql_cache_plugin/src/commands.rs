@@ -598,14 +598,12 @@ pub async fn graphql_cache_channel_timeline_commit<R: Runtime>(
 pub async fn graphql_cache_channel_timeline_evict<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
-    generation: Option<uuid::Uuid>,
     eviction: ChannelEviction,
 ) -> Result<ChannelEvictionResultWire, String> {
     let result = engine_handle(&state)?
-        .with_generation(generation)
         .channel_timeline_evict(eviction)
         .await?;
-    emit_channel_write(&app, &result.write, generation);
+    emit_channel_write(&app, &result.write, None);
     Ok(result)
 }
 

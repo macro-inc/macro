@@ -917,6 +917,8 @@ export class CacheWorkerCore {
         this.executingAuthority = before;
       }
       const storesContent = cacheRequestStamp(request.kind) === 'captured';
+      // A channel eviction removes by age, not by what a response named, so it
+      // runs under any session.
       const removes =
         request.kind === 'invalidate' || request.kind === 'delete-records';
       // A queued command settles under its own stamp even once that is stale.

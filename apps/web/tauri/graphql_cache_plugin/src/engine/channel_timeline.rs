@@ -93,7 +93,7 @@ impl EngineHandle {
         &self,
         eviction: ChannelEviction,
     ) -> Result<ChannelEvictionResultWire, String> {
-        let mut state = self.snapshot_write().await?;
+        let mut state = self.unfenced_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let result = engine
             .channel_timeline_evict(&eviction)
