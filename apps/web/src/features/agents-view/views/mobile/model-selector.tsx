@@ -79,8 +79,8 @@ export function MobileModelSelector() {
             ref={card}
             class="portal-scope menu-surface z-modal w-[358px] max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px)-32px)] rounded-[28px] p-0 outline-none"
             style={{
-              'box-shadow':
-                'inset 0 0 0 1px var(--color-edge), var(--shadow-menu)',
+              // Keep the custom cast shadow without replacing the shared rim.
+              '--glass-shadow': 'var(--shadow-menu)',
             }}
             onCloseAutoFocus={(event) => {
               if (disposed || sheetPresent() || nav.open())

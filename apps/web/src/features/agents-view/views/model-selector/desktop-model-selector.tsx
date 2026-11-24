@@ -78,8 +78,8 @@ export function DesktopModelSelector() {
             'w-[400px]': nav.page() !== 'card',
           }}
           style={{
-            'box-shadow':
-              'inset 0 0 0 1px var(--color-edge-muted), var(--shadow-menu)',
+            // Keep the custom cast shadow; menu-surface owns the beveled edge.
+            '--elevation-ambient-shadow': 'var(--shadow-menu)',
           }}
           onOpenAutoFocus={(event) => {
             event.preventDefault();

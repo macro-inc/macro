@@ -565,6 +565,12 @@ describe('agent-led new conversation', () => {
     ).toBeNull();
     const card = screen.getByRole('dialog');
     expect(card.classList.contains('p-0')).toBe(true);
+    expect(card.classList.contains('rounded-[28px]')).toBe(true);
+    expect(card.classList.contains('w-[358px]')).toBe(true);
+    expect(card.style.boxShadow).toBe('');
+    expect(card.style.getPropertyValue('--glass-shadow')).toBe(
+      'var(--shadow-menu)'
+    );
     const name = within(card).getAllByRole('button')[0];
     const content = name.parentElement?.parentElement;
     expect(content?.parentElement).toBe(card);
@@ -1829,6 +1835,13 @@ describe('agent-led new conversation', () => {
       screen.getByRole('button', { name: 'Choose an agent or model' })
     );
     const card = screen.getByRole('dialog');
+    expect(card.classList.contains('menu-surface')).toBe(true);
+    expect(card.classList.contains('rounded-2xl')).toBe(true);
+    expect(card.classList.contains('w-[360px]')).toBe(true);
+    expect(card.style.boxShadow).toBe('');
+    expect(card.style.getPropertyValue('--elevation-ambient-shadow')).toBe(
+      'var(--shadow-menu)'
+    );
     const stableFocus = vi.spyOn(card, 'focus');
     await user.click(within(card).getByRole('button', { name: 'Cursor' }));
     expect(stableFocus).toHaveBeenCalledWith({ preventScroll: true });
@@ -1841,6 +1854,7 @@ describe('agent-led new conversation', () => {
     await user.clear(search);
     await user.click(screen.getByRole('button', { name: 'More models' }));
     expect(screen.getByRole('dialog')).toBe(card);
+    expect(card.classList.contains('w-[400px]')).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(search));
     for (const avatar of document.querySelectorAll('[data-agent-avatar]')) {
       expect(avatar.className).toContain('bg-surface-1');
