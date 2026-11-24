@@ -118,6 +118,30 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
     );
   });
 
+  it('catches a cache that answers reads and refuses drafts', async () => {
+    const request = CoordinatorCore.prototype.request;
+    usePlant(() => {
+      vi.spyOn(CoordinatorCore.prototype, 'request').mockImplementation(
+        function (this: CoordinatorCore, tabId, sent) {
+          if (sent.kind !== 'enqueue-optimistic-mutation')
+            return request.call(this, tabId, sent);
+          return [
+            {
+              kind: 'reject-request',
+              tabId,
+              requestId: sent.id,
+              error: 'refused',
+              errorCode: 'owner-handoff-blocked',
+            },
+          ];
+        }
+      );
+    });
+    expect(await newViolations(['hide'])).toContain(
+      'L1:cache not back (ready, probe draft CacheResponseError:owner-handoff-blocked) [no fault]'
+    );
+  });
+
   it('catches an engine whose answers are dropped', async () => {
     usePlant(() => {
       vi.spyOn(CoordinatorCore.prototype, 'engineResponse').mockReturnValue([]);

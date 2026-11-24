@@ -199,7 +199,7 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
     DRAIN_UNBOUNDED,
     ['freeze owner', 'hide owner'],
     [
-      'L1:cache not back (ready, probe read CacheResponseError:owner-handoff-blocked)',
+      'L1:cache not back (ready, probe draft pending, probe read CacheResponseError:owner-handoff-blocked)',
       'L2:no active engine (draining)',
       'L3:draft never settled',
     ]
