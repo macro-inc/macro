@@ -164,8 +164,10 @@ Span `calendar.occurrences.read` records which path answered
 `calendar.occurrences.cache_fallback`. A failed GraphQL fetch of an uncovered
 week also reads REST, as `fetch-error`, without that log.
 A week the cache covered is only as current as its last delta, while a REST
-answer shows the server as it is, so once REST has answered a viewport the
-cache answers only after a delta that read the server since: the read waits
+answer shows the server as it is, and a change notice (a `refresh_calendar`
+poke, a write settling) says the server holds something the cache may not. So
+once REST has answered a viewport, or a notice has arrived, the cache answers
+only after a delta that read the server since: the read waits
 for one (`calendar.read.catch_up` `held`, or `retried` when it retries a failed
 one whose backoff has passed; `waiting` when REST answered at the deadline
 first). A failed delta also retries on its own, after 2, 4 and 8 seconds, then
@@ -175,10 +177,21 @@ database. A cache that cannot be brought forward (`behind`) reads REST
 from its older copy of a covered week only if REST fails too
 (`calendar.read.older_cache`). While a failed delta backs off or has used its
 retries, a change in the cache does not refetch the viewports, since they
-would only read REST again. A cache that no REST read has overtaken reads
-no REST and runs no extra delta, even after a failed one. Without this, an
-event REST had shown, such as one just created, would drop off the grid until
-a later delta.
+would only read REST again. A cache that neither a REST read nor a notice has
+overtaken reads no REST and runs no extra delta, even after a failed one.
+Without this, an event REST had shown, such as one just created, would drop
+off the grid until a later delta. A notice refetches the viewports once its
+delta finishes, or after three seconds while it is still running, and those
+reads wait for it or read REST; viewports not on screen refetch when they
+mount. Without this, an event deleted elsewhere (a booking its guest
+cancelled) stayed in the grid and in Upcoming events, which reads the same
+occurrence viewports, until a reload whenever the poke's delta failed or was
+held behind another tab's database handoff. A week a pending write shaped
+(an edit, RSVP or create still in flight or queued) answers from the cache
+without catching up (`calendar.read.pending_write`), since REST cannot show the
+write; the write's settle refreshes it. Span `calendar.occurrences_refresh`
+records how the refresh's delta went (`calendar.delta.outcome`: `synced`,
+`failed`, `deadline`, `cache_starting`).
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without
