@@ -1135,7 +1135,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   uncertain enqueues. Space failed coordinator registrations with bounded,
   cancelable waits; a missing startup frame is not proof of untouched storage.
   A coordinator that ends without a word is noticed through the Web Lock it
-  holds and handled the same way.
+  holds, or an unanswered `ping`, and handled the same way.
+- Nothing but a newer build ends a browser cache for the page: bound retries in
+  rate, never in number, and never quarantine a scope over a handoff, drain,
+  timeout or transport failure. While nothing can open the database the host is
+  `paused` (`disabled` too): `getGraphqlSoupCacheHost()` changes reactively,
+  requests fail at once for the network, and the client, queue and subscribers
+  stay. Check `isCacheHostGone`/`paused` before dropping a disabled host.
   See `docs/graphql-normalized-cache-plan.md`.
 - Reject already-routed optimistic enqueues with missing replies as uncertain on
   every owner departure; never forward them through network fallback, because
@@ -1390,7 +1396,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retain sender ownership, draft signal settings, and primary-inbox selection in the same viewer-scoped inbox snapshot used by the composer; pending catalog refreshes must not block saves or sends, and account changes must clear that snapshot.
-- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched, the coordinator restarted under it (`CoordinatorRestartedError`), startup went unanswered (`CacheRequestTimeoutError`), or a restart only lost its request; retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`), stop after `MAX_RECOVERY_RELAPSES` restarts in a row whose cache failed again before staying up (restarts that fail outright keep retrying), and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`.
+- Retry a failed browser cache on reconnect/foreground or draft Retry (`canRetryCacheFailure`); retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`) or an untyped native failure, and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`. A host that ends its outage is proved at once (`available()`), also offline or hidden.
 - Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve
