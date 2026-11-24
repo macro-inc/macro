@@ -1,4 +1,4 @@
-import { screenLinkChip } from '@app/features/agent-screen/screen-chip';
+import { ScreenLinkChips } from '@app/features/agent-screen/screen-chip';
 import {
   decodePane,
   decodePanes,
@@ -11,7 +11,6 @@ import {
 import { PaneContext } from '@app/lib/split-router/solid/context';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import {
-  AppLinkChipContext,
   type AppLinkDescriber,
   AppLinkDescriberContext,
   type AppLinkOpener,
@@ -114,9 +113,7 @@ export function AgentReplyLinks(
     >
       <AppLinkDescriberContext.Provider value={props.describeOther}>
         {/* A link to an agent's screen reads as its chip. */}
-        <AppLinkChipContext.Provider value={screenLinkChip}>
-          {props.children}
-        </AppLinkChipContext.Provider>
+        <ScreenLinkChips>{props.children}</ScreenLinkChips>
       </AppLinkDescriberContext.Provider>
     </AppLinkOpenerContext.Provider>
   );

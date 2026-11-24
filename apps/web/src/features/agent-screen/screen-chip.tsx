@@ -1,9 +1,10 @@
 import { t } from '@app/lib/i18n';
+import { AppLinkChipContext } from '@core/component/LexicalMarkdown/component/core/app-link-opener';
 import { MentionContainer } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
-import { getDisplayName, tryMacroId } from '@core/user';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
-import type { JSX } from 'solid-js';
+import type { JSX, ParentProps } from 'solid-js';
+import { agentScreenName } from './agent-name';
 import { cachedRecord } from './queries/cached-record';
 import {
   parseScreenReference,
@@ -23,14 +24,7 @@ export function ScreenChip(props: { reference: ScreenReference }) {
   const openScreen = useOpenAgentScreen();
   const harness = () =>
     cachedRecord(harnesses, (each) => each.id === props.reference.harnessId);
-  const agentName = () => {
-    const agentUserId = harness()?.team_agent_user_id;
-    return (
-      (agentUserId ? getDisplayName(tryMacroId(agentUserId)) : '') ||
-      harness()?.name ||
-      ''
-    );
-  };
+  const agentName = () => agentScreenName(harness());
   const label = () => {
     const name = agentName();
     return name
@@ -67,4 +61,13 @@ export function ScreenChip(props: { reference: ScreenReference }) {
 export function screenLinkChip(url: string): JSX.Element | undefined {
   const reference = parseScreenReference(url);
   return reference ? <ScreenChip reference={reference} /> : undefined;
+}
+
+/** Links to agents' screens inside read as screen chips. */
+export function ScreenLinkChips(props: ParentProps) {
+  return (
+    <AppLinkChipContext.Provider value={screenLinkChip}>
+      {props.children}
+    </AppLinkChipContext.Provider>
+  );
 }
