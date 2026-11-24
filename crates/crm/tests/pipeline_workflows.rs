@@ -501,6 +501,121 @@ async fn deals_are_added_found_moved_and_removed_by_name(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_old_id_reaches_the_entries_of_the_company_it_was_merged_into(pool: PgPool) {
+    let Fixture {
+        workflows, acme, ..
+    } = fixture(&pool).await;
+    let owner = viewer(OWNER);
+    let id = sales(&workflows, PipelineSharing::Team)
+        .await
+        .pipeline
+        .pipeline
+        .id;
+    let merged = Uuid::now_v7();
+    let merge = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO crm_company_merges (
+             id, team_id, user_id, request_key, request_fingerprint, survivor_id, source_ids, result
+         )
+         SELECT $1, team_id, $2, $1, '', id, ARRAY[$3]::uuid[], '{}' FROM crm_companies WHERE id = $4",
+        merge,
+        OWNER,
+        merged,
+        acme,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO crm_company_aliases (retired_id, company_id, merge_id) VALUES ($1, $2, $3)",
+        merged,
+        acme,
+        merge,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let added = workflows
+        .add(
+            &owner,
+            id,
+            vec![EntryAddition {
+                record: Some(RecordTarget::Id(merged)),
+                set: vec![set("stage", "prospect")],
+            }],
+            false,
+        )
+        .await
+        .unwrap();
+    let entry = added.added[0].entry_id;
+    let tracked = |entries: &[PipelineEntryView]| {
+        entries
+            .iter()
+            .map(|entry| (entry.entry_id, entry.record.as_ref().unwrap().id))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(tracked(&added.added), [(entry, acme)]);
+
+    // The entry is the company's own, so adding it under either id again
+    // finds it, and so does every lookup by the old one.
+    for record in [merged, acme] {
+        let again = workflows
+            .add(
+                &owner,
+                id,
+                vec![EntryAddition {
+                    record: Some(RecordTarget::Id(record)),
+                    set: Vec::new(),
+                }],
+                false,
+            )
+            .await
+            .unwrap();
+        assert!(again.added.is_empty());
+    }
+    let found = workflows
+        .find(
+            &owner,
+            id,
+            EntryQuery {
+                records: vec![merged],
+                limit: 10,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(tracked(&found.entries), [(entry, acme)]);
+    let everywhere = workflows.record_entries(&owner, &[merged]).await.unwrap();
+    assert_eq!(tracked(&everywhere[0].entries), [(entry, acme)]);
+
+    workflows
+        .update(
+            &owner,
+            id,
+            vec![EntryUpdate {
+                target: EntryTarget::Record(merged),
+                set: vec![set("stage", "demo")],
+            }],
+            None,
+        )
+        .await
+        .unwrap();
+    workflows
+        .remove(&owner, id, vec![EntryTarget::Record(merged)])
+        .await
+        .unwrap();
+    assert!(
+        workflows
+            .record_entries(&owner, &[acme])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn contacts_are_added_by_email_and_a_record_with_two_deals_needs_an_entry_id(pool: PgPool) {
     let Fixture {
         workflows,

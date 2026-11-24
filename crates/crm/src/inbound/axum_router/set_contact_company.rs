@@ -55,9 +55,19 @@ pub async fn handler<
     Path(contact_id): Path<Uuid>,
     Json(req): Json<SetContactCompanyRequest>,
 ) -> Result<Json<CrmContactResponse>, CrmError> {
+    // A merged company's old id names the company it was merged into.
+    let merged = state
+        .entity_access_service
+        .merged_crm_company_ids(&[req.company_id])
+        .await
+        .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+    let company_id = merged
+        .get(&req.company_id)
+        .copied()
+        .unwrap_or(req.company_id);
     let contact = state
         .service
-        .set_contact_company(&access.receipt, req.company_id)
+        .set_contact_company(&access.receipt, company_id)
         .await?;
     Ok(Json(contact.into()))
 }

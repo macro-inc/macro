@@ -6,6 +6,7 @@ mod test;
 use crate::domain::models::{AccessLevel, CrmEntityAccess, TeamRole};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Resolve the access level a user has for a CRM company, together with the
@@ -49,6 +50,25 @@ pub async fn get_crm_company_access(
             team_role: r.role,
         })
     }))
+}
+
+/// The company each merged company's old id names now, for the ids a merge
+/// retired. Grants nothing: the caller still checks access to them.
+#[tracing::instrument(err, skip_all, fields(id_count = company_ids.len()))]
+pub async fn get_merged_crm_company_ids(
+    pool: &PgPool,
+    company_ids: &[Uuid],
+) -> Result<HashMap<Uuid, Uuid>, sqlx::Error> {
+    let rows = sqlx::query!(
+        "SELECT retired_id, company_id FROM crm_company_aliases WHERE retired_id = ANY($1)",
+        company_ids,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.retired_id, row.company_id))
+        .collect())
 }
 
 /// Resolve team-scoped access to a visible CRM company owned by the team.

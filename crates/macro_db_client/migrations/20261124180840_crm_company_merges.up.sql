@@ -1,0 +1,44 @@
+-- One row per merge of CRM companies. The survivor and source ids carry no
+-- foreign key: the log outlives the companies it names.
+CREATE TABLE crm_company_merges
+(
+    id                  UUID        PRIMARY KEY,
+    team_id             UUID        NOT NULL REFERENCES team (id) ON DELETE CASCADE,
+    user_id             TEXT        NOT NULL,
+    request_key         UUID        NOT NULL,
+    request_fingerprint TEXT        NOT NULL,
+    survivor_id         UUID        NOT NULL,
+    source_ids          UUID[]      NOT NULL,
+    result              JSONB       NOT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- A repeated request key returns the saved result instead of merging again.
+    UNIQUE (team_id, user_id, request_key)
+);
+
+-- Every row a merge changed, with the value it had before. `owner` is the
+-- crate whose table it is.
+CREATE TABLE crm_company_merge_changes
+(
+    merge_id   UUID    NOT NULL REFERENCES crm_company_merges (id) ON DELETE CASCADE,
+    seq        INTEGER NOT NULL,
+    owner      TEXT    NOT NULL,
+    table_name TEXT    NOT NULL,
+    row_key    JSONB   NOT NULL,
+    previous   JSONB   NOT NULL,
+    PRIMARY KEY (merge_id, seq)
+);
+
+-- The id of a company merged away, and the company it now names. A later
+-- merge re-points these rows to the newer survivor, so a chain is never
+-- followed. Deleting the survivor deletes its aliases, so the old ids name
+-- nothing again.
+CREATE TABLE crm_company_aliases
+(
+    retired_id UUID PRIMARY KEY,
+    company_id UUID NOT NULL REFERENCES crm_companies (id) ON DELETE CASCADE,
+    merge_id   UUID NOT NULL REFERENCES crm_company_merges (id) ON DELETE CASCADE,
+    CHECK (retired_id <> company_id)
+);
+
+CREATE INDEX crm_company_aliases_company_id_idx ON crm_company_aliases (company_id);
+CREATE INDEX crm_company_aliases_merge_id_idx ON crm_company_aliases (merge_id);

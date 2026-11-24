@@ -229,6 +229,19 @@ where
         .await?)
     }
 
+    /// The records the ids name now, in order: a merged company's old id names
+    /// the company it was merged into. Grants nothing.
+    async fn current_records(&self, records: &[Uuid]) -> Result<Vec<Uuid>, WorkflowError> {
+        if records.is_empty() {
+            return Ok(Vec::new());
+        }
+        let merged = self.access.merged_crm_company_ids(records).await?;
+        Ok(records
+            .iter()
+            .map(|id| merged.get(id).copied().unwrap_or(*id))
+            .collect())
+    }
+
     /// The entries `targets` name: an entry must be this pipeline's, a
     /// record must have one entry when `one_per_record`.
     async fn target_rows(
@@ -239,13 +252,16 @@ where
         one_per_record: bool,
     ) -> Result<Vec<Vec<RowId>>, WorkflowError> {
         let name = &overview.pipeline.pipeline.name;
-        let records: Vec<Uuid> = targets
+        let requested: Vec<Uuid> = targets
             .iter()
             .filter_map(|target| match target {
                 EntryTarget::Record(id) => Some(*id),
                 EntryTarget::Entry(_) => None,
             })
             .collect();
+        let records = self.current_records(&requested).await?;
+        let current: HashMap<Uuid, Uuid> =
+            requested.into_iter().zip(records.iter().copied()).collect();
         let mut by_record: HashMap<Uuid, Vec<RowId>> = HashMap::new();
         for reference in self
             .pipelines
@@ -281,7 +297,7 @@ where
                 EntryTarget::Entry(id) => Err(WorkflowError::Invalid(format!(
                     "Pipeline \"{name}\" has no entry {id}. Find entry ids with FindPipelineEntries."
                 ))),
-                EntryTarget::Record(id) => match by_record.remove(id) {
+                EntryTarget::Record(id) => match by_record.remove(&current[id]) {
                     None => Err(WorkflowError::Invalid(format!(
                         "Record {id} has no entry in pipeline \"{name}\". Add it with AddToPipeline."
                     ))),
@@ -325,6 +341,18 @@ where
                 ))
             })?
             .id;
+        let requested: Vec<Uuid> = additions
+            .iter()
+            .filter_map(|addition| match addition.record {
+                Some(RecordTarget::Id(id)) => Some(id),
+                Some(RecordTarget::Email(_)) | None => None,
+            })
+            .collect();
+        let current: HashMap<Uuid, Uuid> = requested
+            .iter()
+            .copied()
+            .zip(self.current_records(&requested).await?)
+            .collect();
         let mut resolved = Vec::with_capacity(additions.len());
         for addition in additions {
             let id = match &addition.record {
@@ -333,7 +361,7 @@ where
                         "Give each entry exactly one of recordId or email.".into(),
                     ));
                 }
-                Some(RecordTarget::Id(id)) => *id,
+                Some(RecordTarget::Id(id)) => current[id],
                 Some(RecordTarget::Email(email)) => {
                     let team = team.ok_or(WorkflowError::NoTeam)?;
                     let contact = self
@@ -551,7 +579,11 @@ where
 
         let (rows, complete) = self.scan(&receipt).await?;
         let record_field = overview.record_field().map(|field| field.id);
-        let wanted_records: HashSet<Uuid> = query.records.iter().copied().collect();
+        let wanted_records: HashSet<Uuid> = self
+            .current_records(&query.records)
+            .await?
+            .into_iter()
+            .collect();
         let mut matched = Vec::new();
         for row in &rows {
             let tracked = record_field.and_then(|id| record_id(row.cells.get(&id)));
@@ -645,11 +677,12 @@ where
         records: &[Uuid],
     ) -> Result<Vec<RecordEntries>, WorkflowError> {
         let team = self.team(viewer).await?;
+        let records = self.current_records(records).await?;
         let mut found: Vec<RecordEntries> = Vec::new();
         for record_type in [PipelineRecordType::Company, PipelineRecordType::Contact] {
             let entries = self
                 .pipelines
-                .entries(&viewer.user_id, record_type, records)
+                .entries(&viewer.user_id, record_type, &records)
                 .await?;
             let ids: Vec<Uuid> = entries.iter().map(|entry| entry.record_id).collect();
             let named = records::records(

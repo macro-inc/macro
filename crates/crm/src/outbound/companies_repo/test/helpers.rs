@@ -366,3 +366,33 @@ pub(super) async fn insert_contact(
     .await?;
     Ok(contact_id)
 }
+
+/// Records that `retired_id` was merged into `survivor_id`.
+pub(crate) async fn insert_company_alias(pool: &PgPool, retired_id: Uuid, survivor_id: Uuid) {
+    let merge_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO crm_company_merges (
+            id, team_id, user_id, request_key, request_fingerprint, survivor_id, source_ids, result
+        )
+        SELECT $1, team_id, 'macro|admin@example.com', $2, 'fingerprint', $3, ARRAY[$4]::uuid[], '{}'
+        FROM crm_companies WHERE id = $3
+        "#,
+    )
+    .bind(merge_id)
+    .bind(Uuid::now_v7())
+    .bind(survivor_id)
+    .bind(retired_id)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO crm_company_aliases (retired_id, company_id, merge_id) VALUES ($1, $2, $3)",
+    )
+    .bind(retired_id)
+    .bind(survivor_id)
+    .bind(merge_id)
+    .execute(pool)
+    .await
+    .unwrap();
+}

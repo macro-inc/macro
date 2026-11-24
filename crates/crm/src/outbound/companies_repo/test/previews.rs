@@ -36,10 +36,10 @@ use crate::{
     },
 };
 
-const OWNER: &str = "macro|owner@previews.test";
+pub(super) const OWNER: &str = "macro|owner@previews.test";
 const ADMIN: &str = "macro|admin@previews.test";
-const MEMBER: &str = "macro|member@previews.test";
-const OUTSIDER: &str = "macro|outsider@previews.test";
+pub(super) const MEMBER: &str = "macro|member@previews.test";
+pub(super) const OUTSIDER: &str = "macro|outsider@previews.test";
 const INTERNAL_KEY: &str = "fixture-only";
 const HARNESS_TOKEN: &str = "fixture-harness";
 
@@ -127,7 +127,7 @@ impl HarnessAuthorizer for FixtureHarness {
     }
 }
 
-fn app(pool: PgPool) -> Router {
+pub(super) fn app(pool: PgPool) -> Router {
     crm_router(CrmRouterState {
         service: Arc::new(CrmServiceImpl::new(
             CompaniesRepositoryImpl::new(pool.clone()),
@@ -206,7 +206,12 @@ async fn send_as(
     )
 }
 
-async fn send(app: &Router, user: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+pub(super) async fn send(
+    app: &Router,
+    user: &str,
+    uri: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
     send_as(app, Caller::User(user), uri, body).await
 }
 

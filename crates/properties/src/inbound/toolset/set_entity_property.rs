@@ -268,13 +268,22 @@ where
             internal_error: e.into(),
         })?;
 
+        // A merged company's old id names the company it was merged into.
+        let entity_id = service_context
+            .entity_access_service
+            .current_entity_id(&self.entity_id, entity_type)
+            .await
+            .map_err(|e| ToolCallError {
+                description: "You do not have edit access to this entity".to_string(),
+                internal_error: e.into(),
+            })?;
         // Prove the requesting user can edit the entity before writing anything.
         let entity_access_receipt = service_context
             .entity_access_service
             .generate_bot_entity_access_receipt::<EditAccessLevel>(
                 service_context.actor,
                 BotAccessScope::user(request_context.user_id.clone()),
-                &self.entity_id,
+                &entity_id,
                 entity_type,
             )
             .await
