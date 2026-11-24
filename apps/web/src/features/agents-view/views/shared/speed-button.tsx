@@ -50,20 +50,20 @@ export function SpeedButton(props: { mobile?: boolean }) {
       >
         <Dropdown.Trigger
           variant="ghost"
-          size="xs"
+          size="md"
           disabled={state.disabled}
           aria-label={t('agentControls.speed')}
           class={cn(
-            'h-6 min-h-6 gap-1 rounded-full pl-2.5 pr-1.5 text-xs text-ink-muted',
+            'h-7 min-h-7 gap-1 rounded-full pl-1.5 pr-2.5 text-sm text-ink-muted',
             props.mobile &&
-              'h-8 min-h-8 touch:min-h-8 pl-3.5 pr-2 text-sm leading-5'
+              'h-11 min-h-11 touch:min-h-11 pl-2.5 pr-3 text-base leading-[22px]'
           )}
         >
           <Show when={tier() !== 'standard'}>
             <SpeedGlyph
               tier={tier()}
               class={
-                props.mobile ? 'size-4 text-accent' : 'size-3.5 text-accent'
+                props.mobile ? 'size-[18px] text-accent' : 'size-4 text-accent'
               }
             />
           </Show>
@@ -74,8 +74,8 @@ export function SpeedButton(props: { mobile?: boolean }) {
           <CaretDown
             class={
               props.mobile
-                ? 'size-3.5 text-ink-extra-muted'
-                : 'size-3 text-ink-extra-muted'
+                ? 'size-4 text-ink-extra-muted'
+                : 'size-3.5 text-ink-extra-muted'
             }
           />
         </Dropdown.Trigger>

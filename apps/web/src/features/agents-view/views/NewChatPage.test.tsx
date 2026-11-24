@@ -1768,6 +1768,11 @@ describe('agent-led new conversation', () => {
           [...trigger.classList].filter((name) => name.startsWith('pl-'))
         ).toEqual(padding);
         expect(trigger.querySelectorAll('svg')).toHaveLength(2);
+        expect(
+          trigger
+            .querySelector('svg')
+            ?.classList.contains(touch ? 'size-[18px]' : 'size-4')
+        ).toBe(true);
       }
     }
   );
@@ -1934,6 +1939,27 @@ describe('agent-led new conversation', () => {
         .getAllByRole('button')
         .filter((button) => button !== speed);
       expect(names).toHaveLength(target === 'agentModels' ? 2 : 1);
+      const geometry = touch
+        ? [
+            'h-11',
+            'min-h-11',
+            'pl-2.5',
+            'pr-3',
+            'rounded-full',
+            'text-base',
+            'leading-[22px]',
+          ]
+        : ['h-7', 'min-h-7', 'pl-1.5', 'pr-2.5', 'rounded-full', 'text-sm'];
+      for (const trigger of [...names, speed]) {
+        for (const token of geometry)
+          expect(trigger.classList.contains(token)).toBe(true);
+        const icons = trigger.querySelectorAll('svg');
+        expect(
+          icons[icons.length - 1].classList.contains(
+            touch ? 'size-4' : 'size-3.5'
+          )
+        ).toBe(true);
+      }
       for (const token of [
         'not-touch:not-data-disabled:hover:bg-button-tertiary-hover',
         'not-data-disabled:active:bg-button-tertiary-pressed',
@@ -1945,6 +1971,12 @@ describe('agent-led new conversation', () => {
       if (target === 'agentModels') {
         const modelField =
           screen.getByText('Model').parentElement!.parentElement!;
+        expect(modelField.classList.contains(touch ? 'h-8' : 'h-6')).toBe(
+          false
+        );
+        expect(
+          modelField.classList.contains(touch ? 'min-h-8' : 'min-h-6')
+        ).toBe(true);
         const thinkingField =
           screen.getByText('Thinking').parentElement!.parentElement!;
         expect(modelField.parentElement).toBe(thinkingField.parentElement);

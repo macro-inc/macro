@@ -29,8 +29,8 @@ export function ModelSelectorModelRow(props: {
   return (
     <div
       class={cn(
-        'flex h-6 items-center justify-between gap-2 pl-1.5 text-xs',
-        props.mobile && 'h-8 pl-2.5 text-sm leading-5'
+        'flex min-h-6 items-center justify-between gap-2 pl-1.5 text-xs',
+        props.mobile && 'min-h-8 pl-2.5 text-sm leading-5'
       )}
     >
       <div class="flex items-center gap-0.5 text-ink-extra-muted">
@@ -87,8 +87,9 @@ export function ModelSelectorModelRow(props: {
           disabled={state.disabled}
           onClick={props.onModels}
           class={cn(
-            'h-6 min-h-6 min-w-0 gap-1 rounded-full pl-2 pr-1.5 text-sm font-medium text-ink not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:active:bg-button-tertiary-pressed',
-            props.mobile && 'h-8 min-h-8 gap-1 text-base leading-[22px]'
+            'h-7 min-h-7 min-w-0 gap-1 rounded-full pl-1.5 pr-2.5 text-sm font-medium text-ink not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:active:bg-button-tertiary-pressed',
+            props.mobile &&
+              'h-11 min-h-11 gap-1 pl-2.5 pr-3 text-base leading-[22px]'
           )}
         >
           {value()}
@@ -96,7 +97,7 @@ export function ModelSelectorModelRow(props: {
             class={
               props.mobile
                 ? 'size-4 shrink-0 text-ink-extra-muted'
-                : 'size-3 shrink-0 text-ink-extra-muted'
+                : 'size-3.5 shrink-0 text-ink-extra-muted'
             }
           />
         </Button>
