@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use database_row_search::{
     RowSearchText,
-    index::{self, DatabaseTables, TableChanges, TableState},
+    index::{self, DatabaseTables, RowPlace, TableChanges, TableState},
     read_row_search_text,
 };
 use opensearch_client::{
@@ -86,13 +86,13 @@ impl DatabaseRowSource for PgDatabaseRows {
         Ok(index::read_table_changes(&self.db, table_id, after, through).await?)
     }
 
-    async fn table_row_ids(
+    async fn table_rows(
         &self,
         table_id: Uuid,
-        after: Option<Uuid>,
+        after: Option<&RowPlace>,
         page: usize,
-    ) -> Result<Vec<Uuid>, Report> {
-        Ok(index::read_table_row_ids(&self.db, table_id, after, limit(page)).await?)
+    ) -> Result<Vec<RowPlace>, Report> {
+        Ok(index::read_table_rows(&self.db, table_id, after, limit(page)).await?)
     }
 
     async fn row_texts(&self, row_ids: &[Uuid]) -> Result<Vec<RowSearchText>, Report> {

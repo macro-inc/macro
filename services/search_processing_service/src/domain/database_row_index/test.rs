@@ -119,19 +119,23 @@ impl DatabaseRowSource for FakeSource {
         })
     }
 
-    async fn table_row_ids(
+    async fn table_rows(
         &self,
         _table_id: Uuid,
-        after: Option<Uuid>,
+        after: Option<&RowPlace>,
         limit: usize,
-    ) -> Result<Vec<Uuid>, Report> {
+    ) -> Result<Vec<RowPlace>, Report> {
+        // Every row sits at the same position, so ids order them.
         let state = self.state.lock().unwrap();
         Ok(state
             .rows
             .keys()
-            .filter(|row_id| after.is_none_or(|after| **row_id > after))
+            .filter(|row_id| after.is_none_or(|after| **row_id > after.id))
             .take(limit)
-            .copied()
+            .map(|row_id| RowPlace {
+                position: "a".to_owned(),
+                id: *row_id,
+            })
             .collect())
     }
 

@@ -13,7 +13,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use database_row_search::{
     RowSearchText,
-    index::{DatabaseTables, TableChanges, TableState},
+    index::{DatabaseTables, RowPlace, TableChanges, TableState},
 };
 use models_opensearch::database_row::DatabaseRowDocument;
 use rootcause::Report;
@@ -67,13 +67,13 @@ pub trait DatabaseRowSource: Send + Sync + 'static {
         through: i64,
     ) -> impl Future<Output = Result<TableChanges, Report>> + Send;
 
-    /// One page of the table's row ids in id order.
-    fn table_row_ids(
+    /// One page of the table's rows in table order, after `after`.
+    fn table_rows(
         &self,
         table_id: Uuid,
-        after: Option<Uuid>,
+        after: Option<&RowPlace>,
         limit: usize,
-    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<RowPlace>, Report>> + Send;
 
     /// The searchable text of the rows that exist in a searchable database.
     fn row_texts(
@@ -374,11 +374,12 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         let mut counts = RowCounts::default();
         let mut after = None;
         loop {
-            let row_ids = self
+            let rows = self
                 .source
-                .table_row_ids(table_id, after, ROWS_PER_BATCH)
+                .table_rows(table_id, after.as_ref(), ROWS_PER_BATCH)
                 .await?;
-            let Some(last) = row_ids.last().copied() else {
+            let row_ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
+            let Some(last) = rows.into_iter().last() else {
                 break;
             };
             counts += self.rewrite_rows(&row_ids, state.version).await?;

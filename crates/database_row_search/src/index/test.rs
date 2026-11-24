@@ -97,16 +97,29 @@ async fn reads_the_journal_of_one_table_in_a_version_range(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("rows"))
 )]
-async fn pages_a_tables_rows_in_id_order(pool: PgPool) {
+async fn pages_a_tables_rows_in_position_order(pool: PgPool) {
+    let first = read_table_rows(&pool, TABLE, None, 1).await.unwrap();
     assert_eq!(
-        read_table_row_ids(&pool, TABLE, None, 1).await.unwrap(),
-        vec![LAUNCH_ROW]
+        first,
+        vec![RowPlace {
+            position: "a".to_owned(),
+            id: LAUNCH_ROW,
+        }]
     );
     assert_eq!(
-        read_table_row_ids(&pool, TABLE, Some(LAUNCH_ROW), 10)
+        read_table_rows(&pool, TABLE, first.last(), 10)
             .await
             .unwrap(),
-        vec![EMPTY_ROW]
+        vec![RowPlace {
+            position: "b".to_owned(),
+            id: EMPTY_ROW,
+        }]
+    );
+    assert_eq!(
+        read_searchable_database_ids(&pool, Some(DATABASE), 10)
+            .await
+            .unwrap(),
+        Vec::<Uuid>::new()
     );
 }
 

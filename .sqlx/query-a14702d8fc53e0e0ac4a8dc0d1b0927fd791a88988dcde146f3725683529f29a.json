@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT database_id FROM database_entities\n                WHERE trashed_at IS NULL\n                ORDER BY database_id\n                LIMIT $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "database_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a14702d8fc53e0e0ac4a8dc0d1b0927fd791a88988dcde146f3725683529f29a"
+}

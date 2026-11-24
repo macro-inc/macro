@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT position AS \"position!\", id AS \"id!\"\n                FROM database_rows\n                WHERE table_id = $1\n                ORDER BY position, id\n                LIMIT $2\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4a28301ca46540773ef7ec0aa02c71805f2e5e6d003020babca4565dc69783d9"
+}

@@ -158,30 +158,66 @@ where
     })
 }
 
-/// One page of a table's row ids in id order, after `after`.
+/// A row's place in its table, the cursor for paging a table's rows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowPlace {
+    /// The row's fractional position.
+    pub position: String,
+    /// The row.
+    pub id: Uuid,
+}
+
+/// One page of a table's rows in `(position, id)` order, after `after`.
+/// Pages along `idx_database_rows_position_cursor`; there is no
+/// `(table_id, id)` index.
 #[tracing::instrument(skip(executor), err)]
-pub async fn read_table_row_ids<'e, Executor>(
+pub async fn read_table_rows<'e, Executor>(
     executor: Executor,
     table_id: Uuid,
-    after: Option<Uuid>,
+    after: Option<&RowPlace>,
     limit: i64,
-) -> sqlx::Result<Vec<Uuid>>
+) -> sqlx::Result<Vec<RowPlace>>
 where
     Executor: sqlx::PgExecutor<'e>,
 {
-    sqlx::query_scalar!(
-        r#"
-        SELECT id FROM database_rows
-        WHERE table_id = $1 AND ($2::UUID IS NULL OR id > $2)
-        ORDER BY id
-        LIMIT $3
-        "#,
-        table_id,
-        after,
-        limit,
-    )
-    .fetch_all(executor)
-    .await
+    // Two statements, not `$2 IS NULL OR ...`, so the cached generic plan
+    // keeps the cursor as an index condition.
+    match after {
+        None => {
+            sqlx::query_as!(
+                RowPlace,
+                r#"
+                SELECT position AS "position!", id AS "id!"
+                FROM database_rows
+                WHERE table_id = $1
+                ORDER BY position, id
+                LIMIT $2
+                "#,
+                table_id,
+                limit,
+            )
+            .fetch_all(executor)
+            .await
+        }
+        Some(after) => {
+            sqlx::query_as!(
+                RowPlace,
+                r#"
+                SELECT position AS "position!", id AS "id!"
+                FROM database_rows
+                WHERE table_id = $1 AND (position, id) > ($2, $3)
+                ORDER BY position, id
+                LIMIT $4
+                "#,
+                table_id,
+                after.position,
+                after.id,
+                limit,
+            )
+            .fetch_all(executor)
+            .await
+        }
+    }
 }
 
 /// One page of the ids of databases whose rows belong in the index, in id
@@ -195,18 +231,35 @@ pub async fn read_searchable_database_ids<'e, Executor>(
 where
     Executor: sqlx::PgExecutor<'e>,
 {
-    sqlx::query_scalar!(
-        r#"
-        SELECT database_id FROM database_entities
-        WHERE trashed_at IS NULL AND ($1::UUID IS NULL OR database_id > $1)
-        ORDER BY database_id
-        LIMIT $2
-        "#,
-        after,
-        limit,
-    )
-    .fetch_all(executor)
-    .await
+    match after {
+        None => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT database_id FROM database_entities
+                WHERE trashed_at IS NULL
+                ORDER BY database_id
+                LIMIT $1
+                "#,
+                limit,
+            )
+            .fetch_all(executor)
+            .await
+        }
+        Some(after) => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT database_id FROM database_entities
+                WHERE trashed_at IS NULL AND database_id > $1
+                ORDER BY database_id
+                LIMIT $2
+                "#,
+                after,
+                limit,
+            )
+            .fetch_all(executor)
+            .await
+        }
+    }
 }
 
 /// Which of `row_ids` exist in a database whose rows belong in the index.

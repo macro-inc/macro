@@ -69,8 +69,9 @@ where
 
     // One line per (row, column of its table), the columns in table order.
     // A table without columns still gives its rows one line, with no column.
-    // Option cells resolve to their labels here; an option id that names no
-    // option of the column's definition (a deleted option) reads as nothing.
+    // Option cells resolve to their labels here, each by primary key (a
+    // shared tag set can hold thousands of options); an option id that names
+    // no option of the column's definition (a deleted option) reads as nothing.
     let lines = sqlx::query!(
         r#"
         SELECT
@@ -82,19 +83,24 @@ where
             c.id AS "column_id?",
             pd.data_type::TEXT AS "data_type?",
             ep.values AS "values?",
-            ARRAY(
-                SELECT COALESCE(po.string_value, po.number_value::TEXT)
+            array_remove(ARRAY(
+                SELECT (
+                    SELECT COALESCE(po.string_value, po.number_value::TEXT)
+                    FROM property_options po
+                    WHERE po.id = CASE
+                            WHEN picked.option_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                            THEN picked.option_id::UUID
+                        END
+                        AND po.property_definition_id = pd.id
+                )
                 FROM jsonb_array_elements_text(
                     CASE
                         WHEN ep.values ->> 'type' = 'SelectOption' THEN ep.values -> 'value'
                         ELSE '[]'::JSONB
                     END
                 ) WITH ORDINALITY AS picked(option_id, ordinal)
-                JOIN property_options po
-                    ON po.property_definition_id = pd.id
-                    AND po.id::TEXT = picked.option_id
                 ORDER BY picked.ordinal
-            ) AS "option_labels!"
+            ), NULL) AS "option_labels!"
         FROM database_rows r
         JOIN database_tables t ON t.id = r.table_id
         JOIN database_entities de ON de.database_id = t.database_id
