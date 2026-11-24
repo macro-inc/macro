@@ -301,13 +301,85 @@ describe('buildEmailQuery', () => {
     );
   });
 
-  it('leaves attachment facets to the client on built-in tabs', () => {
-    const plain = buildEmailQuery(contextFor()).body;
-    const withAttachments = buildEmailQuery(
-      contextFor({ facets: { attachments: ['attachment-pdf'] } })
-    ).body;
+  describe('attachment facets on built-in tabs', () => {
+    const treeFor = (overrides: Partial<EmailQueryContext>) => {
+      const args = buildEmailQuery(contextFor(overrides));
+      return serialize(
+        makeGraphqlSoupInput(args).initial?.filters?.emailFilter
+      );
+    };
 
-    expect(withAttachments).toEqual(plain);
+    it.each([
+      ['important', 'INBOX'],
+      ['noise', 'INBOX'],
+      ['all', 'ALL'],
+      ['archived', 'ALL'],
+      ['calendar', 'ALL'],
+      ['favorites', 'ALL'],
+      ['shared', 'ALL'],
+    ] as const)('sends the kind to the server on %s', (tab, view) => {
+      const args = buildEmailQuery(
+        contextFor({ tab, facets: { attachments: ['attachment-pdf'] } })
+      );
+      const input = makeGraphqlSoupInput(args);
+
+      expect(input.initial?.emailView).toBe(view);
+      expect(serialize(input.initial?.filters?.emailFilter)).toContain(
+        serialize({ literal: { attachment: 'PDF' } })
+      );
+    });
+
+    it('matches any of several kinds, beside the other filters', () => {
+      const tree = treeFor({
+        tab: 'important',
+        facets: {
+          attachments: ['attachment-image', 'attachment-document'],
+          read: ['unread'],
+        },
+        inboxIds: ['link-a'],
+      });
+
+      expect(tree).toContain(
+        serialize({
+          or: {
+            left: { literal: { attachment: 'IMAGE' } },
+            right: { literal: { attachment: 'DOCUMENT' } },
+          },
+        })
+      );
+      expect(tree).toContain(serialize({ literal: { read: false } }));
+      expect(tree).toContain(serialize({ literal: { owner: 'link-a' } }));
+    });
+
+    it('keeps the kind when an admitted row is looked up by id', () => {
+      const args = buildEmailQuery(
+        contextFor({
+          facets: { attachments: ['attachment-pdf'], read: ['unread'] },
+        }),
+        ['thread-a']
+      );
+
+      const ef = serialize(args.body.ef);
+      expect(ef).toContain(serialize({ l: { Attachment: 'pdf' } }));
+      expect(ef).not.toContain(serialize({ l: { Read: false } }));
+    });
+
+    it.each(['sent', 'drafts', 'spam', 'trash'] as const)(
+      'leaves the kind to the client on %s',
+      (tab) => {
+        const { body } = buildEmailQuery(
+          contextFor({ tab, facets: { attachments: ['attachment-pdf'] } })
+        );
+
+        expect(body).toEqual(buildEmailQuery(contextFor({ tab })).body);
+      }
+    );
+
+    it('adds nothing when no kind is selected', () => {
+      expect(treeFor({ tab: 'important', facets: { attachments: [] } })).toBe(
+        treeFor({ tab: 'important', facets: {} })
+      );
+    });
   });
 
   describe('saved views', () => {

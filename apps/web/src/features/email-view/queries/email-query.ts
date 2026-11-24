@@ -129,11 +129,32 @@ const isAttachmentFilter = (
   id: string
 ): id is keyof typeof EMAIL_ATTACHMENT_KINDS => id in EMAIL_ATTACHMENT_KINDS;
 
-/** Each condition narrows the view; alternatives within one are OR'd. */
-function savedViewClause(
-  scope: EmailSavedViewScope,
+/**
+ * Views whose page order the server's attachment flags are indexed in. The
+ * others (Sent, Drafts, Spam and Trash) would make it check every flagged
+ * thread of the mailbox, so they only refine the rows they loaded.
+ */
+const ATTACHMENT_INDEXED_VIEWS: readonly string[] = ['inbox', 'all'];
+
+/**
+ * Any of the selected attachment kinds, as the server's flags define them.
+ * Without it a page comes back short: the list would only refine rows it
+ * already loaded, and matching mail is rare.
+ */
+function attachmentsClause(
+  view: string,
   facets: EmailQueryContext['facets']
-): TargetExpr {
+): TargetExpr | undefined {
+  if (!ATTACHMENT_INDEXED_VIEWS.includes(view)) return undefined;
+  return balancedOr(
+    (facets.attachments ?? [])
+      .filter(isAttachmentFilter)
+      .map((id) => clause.eq('emailAttachment', EMAIL_ATTACHMENT_KINDS[id]))
+  );
+}
+
+/** Each condition narrows the view; alternatives within one are OR'd. */
+function savedViewClause(scope: EmailSavedViewScope): TargetExpr {
   const { conditions } = scope;
   const expressions: TargetExpr[] = [clause.eq('emailShared', 'exclude')];
   if (conditions.importance)
@@ -148,13 +169,6 @@ function savedViewClause(
   if (subject) expressions.push(subject);
   if (scope.receivedSince)
     expressions.push(clause.eq('emailUpdatedAt', { gte: scope.receivedSince }));
-  // Pages would come back short if attachments only refined them locally.
-  const attachments = balancedOr(
-    (facets.attachments ?? [])
-      .filter(isAttachmentFilter)
-      .map((id) => clause.eq('emailAttachment', EMAIL_ATTACHMENT_KINDS[id]))
-  );
-  if (attachments) expressions.push(attachments);
   return clause.and(...expressions);
 }
 
@@ -225,10 +239,11 @@ export function buildEmailQuery(
   admittedIds?: readonly string[]
 ): SoupAstItemsQueryArgs {
   const expressions = [
-    context.savedView
-      ? savedViewClause(context.savedView, context.facets)
-      : tabClause(context),
+    context.savedView ? savedViewClause(context.savedView) : tabClause(context),
   ];
+  const emailView = context.savedView ? 'all' : emailViewForTab(context.tab);
+  const attachments = attachmentsClause(emailView, context.facets);
+  if (attachments) expressions.push(attachments);
   if (admittedIds) {
     expressions.push(threadIdsClause(admittedIds));
   }
@@ -259,7 +274,7 @@ export function buildEmailQuery(
     : context.tab === 'favorites';
   const body: SoupAstBody = {
     ...mergeAst(base, refinements),
-    emailView: context.savedView ? 'all' : emailViewForTab(context.tab),
+    emailView,
     ...(favoritesOnly ? { favorites_only: true } : {}),
   };
 
