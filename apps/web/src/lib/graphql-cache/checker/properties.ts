@@ -13,7 +13,7 @@
  * S4 no older build opens the database after a newer one.
  * S5 a refused request says why, with an error code.
  * S6 nothing throws out of an event handler or a timer.
- * L1 every live page has its cache back, and its host answers a read.
+ * L1 every live page has its cache back: its host answers a read and takes a draft.
  * L2 an engine of the newest build is active while any page is live.
  * L3 every request a live page made has settled.
  *
@@ -51,13 +51,15 @@ export function errorClass(error: unknown): string {
 }
 
 /** How a page that should have its cache back does not. */
-function cacheState(page: Page, probe: CallOutcome | undefined): string {
+function cacheState(page: Page, probes: CallOutcome[]): string {
   const parts: string[] = [page.recovery.state()];
   if (page.stops.length > 0) parts.push(`stopped ${page.stops.join('+')}`);
-  if (!probe) parts.push('probe read not made');
-  else if (probe.result === undefined) parts.push('probe read pending');
-  else if (probe.result === 'error')
-    parts.push(`probe read ${errorClass(probe.error)}`);
+  if (probes.length === 0) parts.push('probe read not made');
+  for (const { kind, result, error } of probes) {
+    if (result === undefined) parts.push(`probe ${kind} pending`);
+    else if (result === 'error')
+      parts.push(`probe ${kind} ${errorClass(error)}`);
+  }
   return parts.join(', ');
 }
 
@@ -147,7 +149,7 @@ function cachesNotBack(world: World, live: Page[]): Violation[] {
   const violations: Violation[] = [];
   for (const page of live) {
     if (world.reloadRequests.includes(page.id)) continue;
-    const probe = world.calls.findLast(
+    const probes = world.calls.filter(
       (call) => call.page === page.id && call.probe === true
     );
     const back =
@@ -155,10 +157,11 @@ function cachesNotBack(world: World, live: Page[]): Violation[] {
       !page.host.disabled &&
       !page.cacheOff &&
       page.recovery.state() === 'ready' &&
-      probe?.result === 'ok';
+      probes.length > 0 &&
+      probes.every(({ result }) => result === 'ok');
     if (back) continue;
     violations.push({
-      symptom: `L1:cache not back (${cacheState(page, probe)})`,
+      symptom: `L1:cache not back (${cacheState(page, probes)})`,
       detail: page.id,
     });
   }

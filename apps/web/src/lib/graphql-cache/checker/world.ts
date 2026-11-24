@@ -491,6 +491,9 @@ export class Page {
  * database's lock for 5 s, `hold-files` has one keep its files open for 15 s
  * without the lock (as a terminated worker does while the browser closes
  * them), and `fail-open` makes the next open of the database fail.
+ * `require-reset` has a page's engine find its open database broken, and
+ * `fail-assets` and `stall-assets` fail the next engine's load or leave it
+ * hanging.
  */
 export type FaultKind =
   | 'hide'
@@ -510,7 +513,10 @@ export type FaultKind =
   | 'open-newer'
   | 'bfcache'
   | 'restore'
-  | 'fail-open';
+  | 'fail-open'
+  | 'require-reset'
+  | 'fail-assets'
+  | 'stall-assets';
 
 export type Fault = { kind: FaultKind; page?: string };
 
@@ -800,6 +806,10 @@ export class World {
         if (this.storage.failNextOpens === 0) faults.push({ kind });
         continue;
       }
+      if (kind === 'fail-assets' || kind === 'stall-assets') {
+        if (this.storage.nextAssets === 'load') faults.push({ kind });
+        continue;
+      }
       if (kind === 'hold-owner-lock') {
         if (!this.holderRelease) faults.push({ kind });
         continue;
@@ -833,6 +843,7 @@ export class World {
         .with('offline', () => context.onLine)
         .with('online', () => !context.onLine)
         .with('crash-engine', () => this.enginesOf(page).length > 0)
+        .with('require-reset', () => this.servingEnginesOf(page).length > 0)
         .with('close', () => !context.frozen)
         .with('kill', 'crash-process', () => true)
         .with(
@@ -845,6 +856,8 @@ export class World {
           'hold-files',
           'open-newer',
           'fail-open',
+          'fail-assets',
+          'stall-assets',
           () => false
         )
         .exhaustive()
@@ -854,6 +867,13 @@ export class World {
   private enginesOf(page: Page): EngineWorker[] {
     return this.engines.filter(
       (engine) => engine.context.parent === page.context && engine.context.alive
+    );
+  }
+
+  /** Those with a database open, and running. */
+  private servingEnginesOf(page: Page): EngineWorker[] {
+    return this.enginesOf(page).filter(
+      ({ context, core }) => !context.frozen && core?.serving !== undefined
     );
   }
 
@@ -867,7 +887,10 @@ export class World {
     if (!this.quiet)
       this.injected.push(owner ? `${fault.kind} owner` : fault.kind);
     page?.context.note(fault.kind);
-    if (fault.kind === 'crash-engine' && page)
+    if (
+      page &&
+      (fault.kind === 'crash-engine' || fault.kind === 'require-reset')
+    )
       for (const engine of this.enginesOf(page))
         engine.context.note(fault.kind);
     if (page) await this.applyToPage(fault.kind, page);
@@ -887,6 +910,12 @@ export class World {
       .with('open-newer', () => this.openNewer())
       .with('fail-open', () => {
         this.storage.failNextOpens += 1;
+      })
+      .with('fail-assets', () => {
+        this.storage.nextAssets = 'fail';
+      })
+      .with('stall-assets', () => {
+        this.storage.nextAssets = 'stall';
       })
       .otherwise((other) => {
         throw new Error(`${other} needs a page`);
@@ -917,6 +946,10 @@ export class World {
       })
       .with('crash-engine', () => {
         for (const engine of this.enginesOf(page)) engine.terminate();
+      })
+      .with('require-reset', () => {
+        for (const { context, core } of this.servingEnginesOf(page))
+          this.sim.runIn(context, () => core?.requireReset());
       })
       .with('close', async () => {
         inPage(() => page.close());
@@ -1057,7 +1090,8 @@ export class World {
   /**
    * The state a run is in, for skipping schedules that reach it again: what
    * every context has handled, what is on its way, the locks, the databases
-   * and the armed timers in order. Heartbeats and the time are left out.
+   * and how long each armed timer has to go. Heartbeats a context handled are
+   * left out.
    */
   signature(): string {
     const contexts = this.sim.contexts.map(
@@ -1075,6 +1109,7 @@ export class World {
       this.sim.locks.summary(),
       storage.join(),
       this.storage.failNextOpens,
+      this.storage.nextAssets,
       this.sim.timerSummary(),
     ].join('#');
     return createHash('sha1').update(state).digest('base64');

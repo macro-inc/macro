@@ -771,11 +771,9 @@ export class Sim {
   /** The armed timers in the order they are due, for state signatures. */
   timerSummary(): string {
     return [...this.timers.values()]
-      .filter(
-        (timer) => timer.context?.alive !== false && !isHeartbeat(timer.label)
-      )
+      .filter((timer) => timer.context?.alive !== false)
       .sort((a, b) => a.at - b.at || a.seq - b.seq)
-      .map((timer) => timer.label)
+      .map((timer) => `${timer.label}+${timer.at - this.now}`)
       .join(',');
   }
 
