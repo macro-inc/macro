@@ -138,6 +138,14 @@ export type AppEvents = {
   };
   /** A @macro.com account used the staff Bypass button; `step` is where. */
   onboarding_v4_bypassed: { step: string };
+  /**
+   * A phone-browser user reached the last screen, "Macro is better on
+   * desktop", and chose how to go on: `viewed`, then `download_app` (store
+   * link) or `continue_in_browser`.
+   */
+  onboarding_v4_desktop_handoff: {
+    action: 'viewed' | 'download_app' | 'continue_in_browser';
+  };
 
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;
