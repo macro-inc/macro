@@ -1,0 +1,27 @@
+apps/web/tests/native/runner.ts
+  s_d8bff9850808d1::t_3b4b4ceafdd0f9 296-302,305-308
+apps/web/src/features/tasks-view/components/TasksHeader.tsx
+  s_d8bff9850808d1::t_3b4b4ceafdd0f9 116
+apps/web/src/features/tasks-view/components/TasksControls.tsx
+  s_d8bff9850808d1::t_3b4b4ceafdd0f9 82-83
+apps/web/tests/native/README.md
+  s_d8bff9850808d1::t_3b4b4ceafdd0f9 41
+docs/agent-guide/tasks.md
+  s_d8bff9850808d1::t_3b4b4ceafdd0f9 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "aa09c396c76a5c4e1edf186d96e9b764ba939f03",
+  "prompts": {},
+  "sessions": {
+    "s_d8bff9850808d1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24fac3d5-13ce-4b91-9f8c-e91f07d21f6d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
