@@ -59,12 +59,14 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { hasLoginCookie, updateCookie } from '@core/util/cookies';
 import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { isDesktopPlatform, isPlatform } from '@core/util/platform';
+import {
+  hasOverlayTitleBar as detectOverlayTitleBar,
+  isDesktopPlatform,
+} from '@core/util/platform';
 import { useDesktopZoom } from '@macro/tauri/zoom';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { type as osType } from '@tauri-apps/plugin-os';
 import { cn } from '@ui';
 import {
   createEffect,
@@ -141,7 +143,7 @@ function hasOpened(opened: () => boolean) {
  * routes that show it.
  */
 export function RootFrame(props: ParentProps) {
-  const hasOverlayTitleBar = isPlatform('desktop') && osType() === 'macos';
+  const hasOverlayTitleBar = detectOverlayTitleBar();
   const { paywallOpen, showPaywall } = usePaywallState();
   const { usageLimitOpen } = useAiUsageLimitState();
   const location = useLocation();
