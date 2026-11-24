@@ -2,6 +2,7 @@ import type {
   Category,
   EntityAction,
   RunMode,
+  Target,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -11,6 +12,7 @@ import {
   Suggestion,
   type SuggestionItem,
   type SuggestionWriteOutcome,
+  target,
   targets,
 } from './suggestion';
 
@@ -32,10 +34,16 @@ export interface SuggestionTopic {
   /** Names the topic across nights. */
   readonly key: string;
   readonly name: string;
-  /** Why it matters now, in one line; undefined without one, or once one of its suggestions was done since it was written. */
-  readonly reason: string | undefined;
+  /** Why it matters now; undefined without a reason, once one of its suggestions was done since it was written, or while the user can't open its source. */
+  readonly reason: SuggestionTopicReason | undefined;
   /** How many open suggestions belong to it. */
   readonly open: number;
+}
+
+/** Why a topic matters now: one fact, and the item that states it. */
+export interface SuggestionTopicReason {
+  readonly text: string;
+  readonly source: Target;
 }
 
 /** A topic to name, or to name again: its key's name and reason are replaced. */
@@ -44,8 +52,16 @@ export interface SuggestionTopicInput {
   key: string;
   /** What it is, in one to four words. Names no one's email address, phone number or street address. */
   name: string;
-  /** Why it matters now, in one line, likewise; left out when its suggestions' items don't say. */
-  reason?: string;
+  /** Why it matters now; left out when no item says. */
+  reason?: SuggestionTopicReasonInput;
+}
+
+/** Why a topic matters now, as `nameTopic` takes it. */
+export interface SuggestionTopicReasonInput {
+  /** One fact, in one line. Names no one's email address, phone number or street address. */
+  text: string;
+  /** The item that states it; the user sees the reason only while they can open it. */
+  source: SuggestionItem;
 }
 
 /** How much of the user's feed to read, and for which time zone. */
@@ -71,8 +87,8 @@ interface SuggestionBase {
   /** 0 to 100. */
   importance: number;
   categories?: Category[];
-  /** The key of the topic it belongs to, named with `nameTopic` first; none when left out. */
-  topic?: string;
+  /** The key of the topic it belongs to, named with `nameTopic` first, or `null` for none; left out, a suggestion that exists keeps its own. */
+  topic?: string | null;
   /** The items it is about, as handles the SDK returned. */
   about?: SuggestionItem[];
   /** Why, for the change log; required to bring back a suggestion the user dismissed. */
@@ -164,7 +180,8 @@ export class SuggestionNamespace {
       suggestions: review.suggestions.map((suggestion) =>
         Suggestion.from(this.client, suggestion),
       ),
-      topics: review.topics.map((topic) => ({
+      // A server from before topics sends none.
+      topics: (review.topics ?? []).map((topic) => ({
         ...topic,
         reason: topic.reason ?? undefined,
       })),
@@ -213,7 +230,7 @@ export class SuggestionNamespace {
    * const outcome = await macro.suggestions.nameTopic({
    *   key: 'customer:northwind',
    *   name: 'Northwind renewal',
-   *   reason: 'Renewal is November 30',
+   *   reason: { text: 'Renewal is November 30', source: { entity: contract } },
    * });
    * if (!outcome.ok) return outcome.problems;
    */
@@ -223,7 +240,16 @@ export class SuggestionNamespace {
     return outcome(
       this.client,
       unwrap(
-        await this.client.scheduledAction.nameSuggestionTopic({ body: topic }),
+        await this.client.scheduledAction.nameSuggestionTopic({
+          body: {
+            key: topic.key,
+            name: topic.name,
+            reason: topic.reason && {
+              text: topic.reason.text,
+              source: target(topic.reason.source),
+            },
+          },
+        }),
       ),
     );
   }

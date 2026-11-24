@@ -4980,8 +4980,15 @@
             "description": "What it is, in a few words."
           },
           "reason": {
-            "type": ["string", "null"],
-            "description": "Why it matters now, in one line; left out when its items don't say."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TopicReason",
+                "description": "Why it matters now; left out when no item says."
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -5068,7 +5075,7 @@
           },
           "topic": {
             "type": ["string", "null"],
-            "description": "The key of the topic it belongs to, named with\n`macro.suggestions.nameTopic` first; none when left out."
+            "description": "The key of the topic it belongs to, named with\n`macro.suggestions.nameTopic` first, or null for none; left out, a\nsuggestion that exists keeps the one it has."
           }
         },
         "additionalProperties": false
@@ -6949,7 +6956,7 @@
       "SuggestionsReview": {
         "type": "object",
         "description": "What a generation session reads before managing the person's suggestions:\nevery suggestion they have, open or not, and how many more it may add.",
-        "required": ["suggestions", "topics", "open", "openLimit", "newLeft"],
+        "required": ["suggestions", "open", "openLimit", "newLeft"],
         "properties": {
           "newLeft": {
             "type": "integer",
@@ -6981,7 +6988,7 @@
             "items": {
               "$ref": "#/components/schemas/Topic"
             },
-            "description": "The topics those suggestions belong to, in the order they first\nappear, each with how many of its suggestions are open."
+            "description": "The topics those suggestions belong to, in the order they first\nappear, each with how many of its suggestions are open. Absent from a\nserver that has none."
           }
         }
       },
@@ -7106,8 +7113,15 @@
             "minimum": 0
           },
           "reason": {
-            "type": ["string", "null"],
-            "description": "Why it matters now, in one line, when its items say."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TopicReason",
+                "description": "Why it matters now, when an item says."
+              }
+            ]
           }
         }
       },
@@ -7125,6 +7139,22 @@
             "description": "What it is, in a few words."
           }
         }
+      },
+      "TopicReason": {
+        "type": "object",
+        "description": "Why a topic matters now: one fact, and the item it was read in.",
+        "required": ["text", "source"],
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/Target",
+            "description": "The item that states it: whoever can't open it isn't shown the fact."
+          },
+          "text": {
+            "type": "string",
+            "description": "The fact, in one line."
+          }
+        },
+        "additionalProperties": false
       },
       "UnusableKnob": {
         "type": "object",

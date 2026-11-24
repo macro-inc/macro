@@ -362,6 +362,7 @@ export * from './templateVariableOneOfThreeKind';
 export * from './topic';
 export * from './topicName';
 export * from './topicReason';
+export * from './topicReasonProperty';
 export * from './unusableKnob';
 export * from './unusableKnobItem';
 export * from './unusableKnobStep';

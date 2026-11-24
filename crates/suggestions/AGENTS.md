@@ -36,17 +36,19 @@ scheduler's spec.
   hour per time zone (`Recent`).
 - Topics: a suggestion belongs to at most one (`suggestion.topic_key`), which the
   generation session names (`PUT /suggestions/topics`: key, name and an
-  optional reason line; the same key names it again, replacing both, at most 15
-  topics a generation) before a suggestion may carry its key. Which topics
+  optional reason, one line and the item that states it; the same key names it
+  again, replacing both, at most 15 topics a generation) before a suggestion may
+  carry its key. Suggesting a key again keeps its topic unless the new version
+  names one, or null. Which topics
   there are and what belongs to them is the session's call alone. A routine
   suggestion has none. `review` and the feed return the topics of the
   suggestions they list, in the order those first appear, each with how many
   are open; a topic is never deleted but with its person, so the key keeps its
-  name when suggestions come back to it. A reason states facts about its
-  suggestions' items, so it is left out, never reworded, when it may no longer
-  hold or the person may not see what it says: once one of the topic's
-  suggestions became done or resolved after the topic was last named (taking
-  that back brings it back), and in the feed while one of them is hidden.
+  name when suggestions come back to it. A reason is left out, never reworded,
+  when it may no longer hold or the person may not see what it says: once one
+  of the topic's suggestions became done or resolved after the topic was last
+  named (taking that back brings it back), and while the person can't open its
+  source, or it can't be checked.
 - A reply suggestion carries `waitingSince` and `from` (the sender's name,
   never an address): its email thread's newest message, or its channel
   message, unless the person sent it, read when a session writes it

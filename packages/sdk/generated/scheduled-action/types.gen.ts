@@ -977,10 +977,7 @@ export type NameTopic = {
      * What it is, in a few words.
      */
     name: string;
-    /**
-     * Why it matters now, in one line; left out when its items don't say.
-     */
-    reason?: string | null;
+    reason?: null | TopicReason;
 };
 
 /**
@@ -1039,7 +1036,8 @@ export type NewSuggestion = {
     title: string;
     /**
      * The key of the topic it belongs to, named with
-     * `macro.suggestions.nameTopic` first; none when left out.
+     * `macro.suggestions.nameTopic` first, or null for none; left out, a
+     * suggestion that exists keeps the one it has.
      */
     topic?: string | null;
 };
@@ -2193,9 +2191,10 @@ export type SuggestionsReview = {
     suggestions: Array<Suggestion>;
     /**
      * The topics those suggestions belong to, in the order they first
-     * appear, each with how many of its suggestions are open.
+     * appear, each with how many of its suggestions are open. Absent from a
+     * server that has none.
      */
-    topics: Array<Topic>;
+    topics?: Array<Topic>;
 };
 
 /**
@@ -2261,10 +2260,7 @@ export type Topic = {
      * How many of the listed suggestions are open and belong to it.
      */
     open: number;
-    /**
-     * Why it matters now, in one line, when its items say.
-     */
-    reason?: string | null;
+    reason?: null | TopicReason;
 };
 
 /**
@@ -2279,6 +2275,20 @@ export type TopicName = {
      * What it is, in a few words.
      */
     name: string;
+};
+
+/**
+ * Why a topic matters now: one fact, and the item it was read in.
+ */
+export type TopicReason = {
+    /**
+     * The item that states it: whoever can't open it isn't shown the fact.
+     */
+    source: Target;
+    /**
+     * The fact, in one line.
+     */
+    text: string;
 };
 
 /**

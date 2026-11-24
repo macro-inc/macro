@@ -2,16 +2,39 @@
 
 use super::*;
 use crate::domain::service::topics::TOPICS_PER_GENERATION;
-use crate::domain::topic::{Topic, TopicName};
+use crate::domain::topic::{Topic, TopicName, TopicReason};
 
 const VENUE: &str = "event:offsite";
 
-fn named(key: &str, name: &str, reason: Option<&str>) -> NameTopic {
+/// A document.
+fn document(id: &str) -> Target {
+    Target {
+        entity_type: EntityType::Document,
+        entity_id: id.to_owned(),
+        part_id: None,
+    }
+}
+
+fn reason(text: &str) -> TopicReason {
+    TopicReason {
+        text: text.to_owned(),
+        source: document("contract"),
+    }
+}
+
+fn named(key: &str, name: &str, text: Option<&str>) -> NameTopic {
     NameTopic {
         key: key.to_owned(),
         name: name.to_owned(),
-        reason: reason.map(str::to_owned),
+        reason: text.map(reason),
     }
+}
+
+fn texts(topics: &[Topic]) -> Vec<Option<&str>> {
+    topics
+        .iter()
+        .map(|topic| topic.reason.as_ref().map(|reason| reason.text.as_str()))
+        .collect()
 }
 
 fn offsite() -> NameTopic {
@@ -31,16 +54,12 @@ impl Harness {
         let session = self.session(OWNER, "suggestions").await;
         assert!(self.name(session, offsite()).await.ok);
         let reply = NewSuggestion {
-            topic: Some(VENUE.to_owned()),
+            topic: TopicChange::To(VENUE.to_owned()),
             ..entity_suggestion("venue:headcount")
         };
         let review = NewSuggestion {
-            topic: Some(VENUE.to_owned()),
-            about: vec![Target {
-                entity_type: EntityType::Document,
-                entity_id: "contract".to_owned(),
-                part_id: None,
-            }],
+            topic: TopicChange::To(VENUE.to_owned()),
+            about: vec![document("contract")],
             ..review_suggestion("venue:contract")
         };
         let reply = self.suggest(session, reply).await.suggestion.unwrap();
@@ -95,7 +114,7 @@ async fn a_named_topic_groups_its_suggestions_in_the_feed_and_the_review(pool: P
     let expected = [Topic {
         key: VENUE.to_owned(),
         name: "Spring offsite".to_owned(),
-        reason: Some("Deposit due June 2".to_owned()),
+        reason: Some(reason("Deposit due June 2")),
         open: 2,
     }];
     assert_eq!(h.topics().await, expected);
@@ -147,7 +166,7 @@ async fn a_suggestion_takes_only_a_topic_that_was_named(pool: PgPool) {
         .suggest(
             session,
             NewSuggestion {
-                topic: Some("customer:acme".to_owned()),
+                topic: TopicChange::To("customer:acme".to_owned()),
                 ..entity_suggestion("venue:headcount")
             },
         )
@@ -228,41 +247,84 @@ async fn a_rewrite_moves_a_suggestion_between_topics(pool: PgPool) {
     );
 }
 
-/// A reason may be about an item the person can no longer open, or about a
-/// suggestion now done: the topic then goes without it. Undo brings it back.
+/// Suggesting a key again keeps its topic unless the new version names one, or
+/// none.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_topic_loses_its_reason_with_a_suggestion_it_may_be_about(pool: PgPool) {
+async fn suggesting_again_keeps_the_topic_unless_it_says(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let (session, reply, _) = h.offsite().await;
+    let again = |topic| NewSuggestion {
+        topic,
+        ..entity_suggestion("venue:headcount")
+    };
+    let kept = h.suggest(session, again(TopicChange::Keep)).await;
+    assert_eq!(kept.suggestion.unwrap().topic, reply.topic);
+    let cleared = h.suggest(session, again(TopicChange::Clear)).await;
+    assert_eq!(cleared.suggestion.unwrap().topic, None);
+    let kept = h.suggest(session, again(TopicChange::Keep)).await;
+    assert_eq!(kept.suggestion.unwrap().topic, None);
+}
+
+/// A reason is shown only while the person can open the item it was read in,
+/// whatever became of the suggestion that cited it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reason_is_hidden_with_its_source(pool: PgPool) {
     let h = harness(pool, true).await;
     let (session, _, review) = h.offsite().await;
-    let reason = |topics: Vec<Topic>| topics[0].reason.clone();
     h.access
         .denied
         .lock()
         .unwrap()
         .insert("contract".to_owned());
-    assert_eq!(reason(h.topics().await), None);
+    assert_eq!(texts(&h.topics().await), [None]);
+    let seen = h.service.review(&principal(OWNER), Some(session)).await;
+    assert_eq!(texts(&seen.unwrap().topics), [None]);
+    // The suggestion about the contract leaves the topic: what it said of the
+    // contract stays hidden.
+    h.change_topic(session, review.id, TopicChange::Clear).await;
+    assert_eq!(texts(&h.topics().await), [None]);
     h.access.denied.lock().unwrap().clear();
     h.access
         .failing
         .lock()
         .unwrap()
         .insert("contract".to_owned());
-    assert_eq!(reason(h.topics().await), None);
+    assert_eq!(texts(&h.topics().await), [None]);
     h.access.failing.lock().unwrap().clear();
-    assert!(reason(h.topics().await).is_some());
+    assert_eq!(texts(&h.topics().await), [Some("Deposit due June 2")]);
+}
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reason_is_read_in_an_item_the_person_can_open(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    h.access
+        .denied
+        .lock()
+        .unwrap()
+        .insert("contract".to_owned());
+    let refused = h.name(session, offsite()).await;
+    assert!(!refused.ok);
+    assert!(problems(&refused).contains("contract"), "{refused:?}");
+}
+
+/// A reason may be about a suggestion now done: the topic then goes without it
+/// until it is named again. Undo brings it back.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reason_lapses_once_one_of_the_suggestions_is_done(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let (session, _, review) = h.offsite().await;
     h.accept(&user(OWNER), review.id).await.unwrap();
-    assert_eq!(reason(h.topics().await), None);
+    assert_eq!(texts(&h.topics().await), [None]);
     h.service
         .restore(&user(OWNER), SuggestionCaller::User, review.id)
         .await
         .unwrap();
-    assert!(reason(h.topics().await).is_some());
+    assert_eq!(texts(&h.topics().await), [Some("Deposit due June 2")]);
 
-    // Named again after it was done, it says what holds now.
     h.accept(&user(OWNER), review.id).await.unwrap();
     h.name(session, offsite()).await;
-    assert!(reason(h.topics().await).is_some());
+    assert_eq!(texts(&h.topics().await), [Some("Deposit due June 2")]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

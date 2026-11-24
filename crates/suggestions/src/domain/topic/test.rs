@@ -1,5 +1,6 @@
 use chrono::TimeDelta;
 use macro_uuid::Uuid;
+use model_entity::EntityType;
 
 use super::*;
 use crate::domain::model::{
@@ -43,7 +44,14 @@ fn stored(key: &str, reason: Option<&str>) -> StoredTopic {
     StoredTopic {
         key: key.to_owned(),
         name: key.to_uppercase(),
-        reason: reason.map(str::to_owned),
+        reason: reason.map(|text| TopicReason {
+            text: text.to_owned(),
+            source: Target {
+                entity_type: EntityType::Document,
+                entity_id: "contract".to_owned(),
+                part_id: None,
+            },
+        }),
         updated_at: Utc::now(),
         settled_at: None,
     }
@@ -52,7 +60,10 @@ fn stored(key: &str, reason: Option<&str>) -> StoredTopic {
 fn summary(topics: &[Topic]) -> Vec<(&str, Option<&str>, u32)> {
     topics
         .iter()
-        .map(|topic| (topic.key.as_str(), topic.reason.as_deref(), topic.open))
+        .map(|topic| {
+            let reason = topic.reason.as_ref().map(|reason| reason.text.as_str());
+            (topic.key.as_str(), reason, topic.open)
+        })
         .collect()
 }
 
@@ -75,31 +86,12 @@ fn topics_come_in_the_order_of_their_suggestions_and_count_the_open_ones() {
         stored("unused", None),
     ];
     assert_eq!(
-        summary(&topics_of(&suggestions, &kept, &HashSet::new())),
+        summary(&topics_of(&suggestions, &kept)),
         [
             ("offsite", Some("Deposit due June 2"), 2),
             ("acme", None, 1),
             ("hire", None, 0),
         ]
-    );
-}
-
-/// A reason may be about a suggestion that isn't shown: its topic goes
-/// without one.
-#[test]
-fn a_topic_missing_a_suggestion_has_no_reason() {
-    let suggestions = [
-        suggestion(Some("offsite"), SuggestionState::Proposed),
-        suggestion(Some("acme"), SuggestionState::Proposed),
-    ];
-    let kept = [
-        stored("offsite", Some("Deposit due June 2")),
-        stored("acme", Some("Renewal is June 9")),
-    ];
-    let unexplained = HashSet::from(["offsite".to_owned()]);
-    assert_eq!(
-        summary(&topics_of(&suggestions, &kept, &unexplained)),
-        [("offsite", None, 1), ("acme", Some("Renewal is June 9"), 1)]
     );
 }
 
@@ -119,14 +111,34 @@ fn a_rewrite_keeps_clears_or_sets_the_topic() {
     );
 }
 
-/// A reason holds until one of the topic's suggestions is done after it was
-/// written.
+/// A topic renamed after its suggestions were read has one name in both.
 #[test]
-fn a_reason_lapses_once_a_suggestion_settles_after_it() {
+fn a_suggestion_takes_its_topics_name_as_last_read() {
+    let mut suggestions = [
+        suggestion(Some("offsite"), SuggestionState::Proposed),
+        suggestion(Some("acme"), SuggestionState::Proposed),
+        suggestion(None, SuggestionState::Proposed),
+    ];
+    let renamed = StoredTopic {
+        name: "Spring offsite".to_owned(),
+        ..stored("offsite", None)
+    };
+    let topics = topics_of(&suggestions, &[renamed]);
+    let acme = suggestions[1].topic.clone();
+    name_topics_from(&topics, &mut suggestions);
+    let name = |index: usize| suggestions[index].topic.as_ref().map(|topic| &topic.name);
+    assert_eq!(name(0), Some(&"Spring offsite".to_owned()));
+    assert_eq!(suggestions[1].topic, acme);
+    assert_eq!(name(2), None);
+}
+
+/// Only a suggestion done after the topic was named settles what it says.
+#[test]
+fn a_topic_settles_with_a_suggestion_done_after_it_was_named() {
     let mut topic = stored("offsite", Some("Deposit due June 2"));
-    assert_eq!(topic.current_reason(), Some("Deposit due June 2"));
+    assert!(!topic.settled_since_named());
     topic.settled_at = Some(topic.updated_at - TimeDelta::hours(1));
-    assert_eq!(topic.current_reason(), Some("Deposit due June 2"));
+    assert!(!topic.settled_since_named());
     topic.settled_at = Some(topic.updated_at + TimeDelta::hours(1));
-    assert_eq!(topic.current_reason(), None);
+    assert!(topic.settled_since_named());
 }

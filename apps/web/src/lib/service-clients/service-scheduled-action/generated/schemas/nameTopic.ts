@@ -16,6 +16,5 @@ export interface NameTopic {
   key: string;
   /** What it is, in a few words. */
   name: string;
-  /** Why it matters now, in one line; left out when its items don't say. */
   reason?: NameTopicReason;
 }

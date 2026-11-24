@@ -583,7 +583,9 @@ pub struct SuggestionsReview {
     /// dismissed suggestion's `stateChangedAt` is when the person dismissed it.
     pub suggestions: Vec<Suggestion>,
     /// The topics those suggestions belong to, in the order they first
-    /// appear, each with how many of its suggestions are open.
+    /// appear, each with how many of its suggestions are open. Absent from a
+    /// server that has none.
+    #[schema(required = false)]
     pub topics: Vec<Topic>,
     /// Open suggestions the person has, and the most they may have.
     pub open: u32,
@@ -612,9 +614,11 @@ pub struct NewSuggestion {
     #[serde(default)]
     pub categories: Vec<Category>,
     /// The key of the topic it belongs to, named with
-    /// `macro.suggestions.nameTopic` first; none when left out.
+    /// `macro.suggestions.nameTopic` first, or null for none; left out, a
+    /// suggestion that exists keeps the one it has.
     #[serde(default)]
-    pub topic: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub topic: TopicChange,
     /// The items it is about.
     #[serde(default)]
     pub about: Vec<Target>,

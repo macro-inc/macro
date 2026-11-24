@@ -40,9 +40,32 @@ describe('Suggestion topics', () => {
       },
     } as unknown as MacroClient);
 
-    const outcome = await namespace.nameTopic({ ...TOPIC, reason: 'June 2' });
+    const outcome = await namespace.nameTopic({
+      ...TOPIC,
+      reason: {
+        text: 'Deposit due June 2',
+        source: {
+          entity: { id: 'venue', entityType: 'channel' },
+          part: { id: 'message' },
+        },
+      },
+    });
 
-    expect(requests).toEqual([{ body: { ...TOPIC, reason: 'June 2' } }]);
+    expect(requests).toEqual([
+      {
+        body: {
+          ...TOPIC,
+          reason: {
+            text: 'Deposit due June 2',
+            source: {
+              entityType: 'channel',
+              entityId: 'venue',
+              partId: 'message',
+            },
+          },
+        },
+      },
+    ]);
     expect(outcome).toMatchObject({
       ok: false,
       problems: ['Shorten the name'],
@@ -72,6 +95,18 @@ describe('Suggestion topics', () => {
       TOPIC,
       undefined,
     ]);
+  });
+
+  test('review of a server without topics has none', async () => {
+    const review = await new SuggestionNamespace({
+      scheduledAction: {
+        reviewSuggestions: async () => ({
+          data: { suggestions: [], open: 0, openLimit: 30, newLeft: 12 },
+        }),
+      },
+    } as unknown as MacroClient).review();
+
+    expect(review.topics).toEqual([]);
   });
 
   test('a rewrite moves a suggestion to a topic, or out of one with null', async () => {

@@ -1,5 +1,6 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_uuid::Uuid;
+use model_entity::EntityType;
 
 use super::*;
 use crate::domain::model::SessionKind;
@@ -89,6 +90,34 @@ async fn a_topic_settles_when_one_of_its_suggestions_is_done_or_resolved(pool: P
         .map(|topic| (topic.key.as_str(), topic.settled_at))
         .collect();
     assert_eq!(settled, [("quiet", None), ("settled", Some(at(2)))]);
+}
+
+/// A reason comes back with its source; naming the topic without one takes
+/// both away.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reason_is_kept_with_its_source(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let session = session();
+    let reason = TopicReason {
+        text: "Deposit due June 2".to_owned(),
+        source: Target {
+            entity_type: EntityType::Channel,
+            entity_id: "venue".to_owned(),
+            part_id: Some("message".to_owned()),
+        },
+    };
+    let keys = ["offsite".to_owned()];
+    for reason in [Some(reason), None] {
+        let named = NameTopic {
+            reason: reason.clone(),
+            ..topic("offsite")
+        };
+        name_topic(&pool, &session, &named, 15, Utc::now())
+            .await
+            .unwrap();
+        let found = topics(&pool, &session.user, &keys).await.unwrap();
+        assert_eq!(found[0].reason, reason);
+    }
 }
 
 /// Deleting a person deletes their topics with their suggestions, though the

@@ -32,7 +32,7 @@ use super::ports::{
     SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts, SuggestionRepo, Written,
 };
 use super::prompt;
-use super::topic::{NameTopic, TopicChange, topic_keys, topics_of};
+use super::topic::{NameTopic, name_topics_from};
 use recent::Recent;
 
 mod recent;
@@ -405,13 +405,12 @@ where
                 problems.push(match &target.part_id {
                     Some(part) => format!(
                         "the user can't open {item} `{}`, or `{part}` isn't one of its parts \
-                         (a message of a channel or email thread); a suggestion is only about \
-                         items they can open",
+                         (a message of a channel or email thread); cite only items they can \
+                         open",
                         target.entity_id
                     ),
                     None => format!(
-                        "the user can't open {item} `{}`; a suggestion is only about items they \
-                         can open",
+                        "the user can't open {item} `{}`; cite only items they can open",
                         target.entity_id
                     ),
                 });
@@ -456,13 +455,9 @@ where
         while let Some((suggestion, check)) = checked.next().await {
             match check {
                 Ok(true) => viewable.shown.push(suggestion),
-                Ok(false) => {
-                    viewable.hidden += 1;
-                    viewable.missing_from.extend(topic_keys([&suggestion]));
-                }
+                Ok(false) => viewable.hidden += 1,
                 Err(error) => {
                     viewable.unchecked += 1;
-                    viewable.missing_from.extend(topic_keys([&suggestion]));
                     tracing::warn!(
                         ?error,
                         suggestion.id = %suggestion.id,
@@ -514,9 +509,6 @@ struct Viewable {
     hidden: usize,
     /// Those whose items couldn't be checked.
     unchecked: usize,
-    /// The topics of the ones left out: their reason may be about those
-    /// items, so it is left out too.
-    missing_from: HashSet<String>,
 }
 
 /// Why a running suggestion's prompt and `sends` stay as they are.
@@ -646,7 +638,7 @@ where
                 .then(b.updated_at.cmp(&a.updated_at))
         });
         done.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
-        let open = self.viewable_all(user, open).await;
+        let mut open = self.viewable_all(user, open).await;
         let done = self.viewable_all(user, done).await;
         let span = tracing::Span::current();
         let new = open
@@ -663,8 +655,8 @@ where
         let topics = match limit {
             Some(_) => None,
             None => {
-                let stored = self.stored_topics(user, topic_keys(&open.shown)).await?;
-                let topics = topics_of(&open.shown, &stored, &open.missing_from);
+                let topics = self.topics(user, &open.shown, &open.shown).await?;
+                name_topics_from(&topics, &mut open.shown);
                 span.record("suggestions.topics", topics.len());
                 Some(topics)
             }
@@ -1056,8 +1048,8 @@ where
         closed.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
         let open_count = u32::try_from(open.len()).unwrap_or(u32::MAX);
         open.append(&mut closed);
-        let stored = self.stored_topics(&session.user, topic_keys(&open)).await?;
-        let topics = topics_of(&open, &stored, &HashSet::new());
+        let topics = self.topics(&session.user, &open, &[]).await?;
+        name_topics_from(&topics, &mut open);
         tracing::Span::current().record("suggestions.topics", topics.len());
         tracing::Span::current().record("suggestions.count", open.len());
         Ok(SuggestionsReview {
@@ -1134,10 +1126,14 @@ where
             None => None,
         };
         self.inaccessible(&user, &about, &mut problems).await?;
-        let topic = match &request.topic {
-            Some(key) => self.named_topic(&user, key, &mut problems).await?,
-            None => None,
-        };
+        let existing = self
+            .repo
+            .by_dedup_key(&user, &dedup_key)
+            .await
+            .map_err(SuggestionError::internal)?;
+        let topic = self
+            .topic_after(&user, existing.as_ref(), request.topic, &mut problems)
+            .await?;
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
         }
@@ -1154,11 +1150,6 @@ where
             waiting: None,
         };
         let now = Utc::now();
-        let existing = self
-            .repo
-            .by_dedup_key(&user, &content.dedup_key)
-            .await
-            .map_err(SuggestionError::internal)?;
         if matches!(
             kind,
             super::model::NewKind::Entity {
@@ -1354,13 +1345,9 @@ where
         if let Some(categories) = request.categories {
             content.categories = check::categories(categories);
         }
-        match request.topic {
-            TopicChange::Keep => {}
-            TopicChange::Clear => content.topic = None,
-            TopicChange::To(key) => {
-                content.topic = self.named_topic(&user, &key, &mut problems).await?;
-            }
-        }
+        content.topic = self
+            .topic_after(&user, Some(&existing), request.topic, &mut problems)
+            .await?;
         if let Some(about) = request.about {
             if about.is_empty() && existing.kind.name() == KindName::Entity {
                 problems

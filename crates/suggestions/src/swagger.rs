@@ -38,6 +38,7 @@ use utoipa::OpenApi;
         crate::domain::model::SuggestionDraft,
         crate::domain::topic::TopicName,
         crate::domain::topic::Topic,
+        crate::domain::topic::TopicReason,
         crate::domain::topic::NameTopic,
         crate::domain::model::SuggestionsReview,
         crate::domain::model::NewSuggestion,

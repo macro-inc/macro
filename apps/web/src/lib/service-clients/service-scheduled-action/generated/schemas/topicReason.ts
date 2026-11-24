@@ -5,8 +5,14 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { Target } from './target';
 
 /**
- * Why it matters now, in one line, when its items say.
+ * Why a topic matters now: one fact, and the item it was read in.
  */
-export type TopicReason = string | null;
+export interface TopicReason {
+  /** The item that states it: whoever can't open it isn't shown the fact. */
+  source: Target;
+  /** The fact, in one line. */
+  text: string;
+}

@@ -13,6 +13,7 @@ use crate::domain::model::{
     SuggestionStatus, Waiting,
 };
 use crate::domain::ports::{FoundDraft, ReplyWaits};
+use crate::domain::topic::{NameTopic, TopicChange};
 use crate::outbound::pg_suggestion_repo::PgSuggestionRepo;
 
 pub(crate) mod runs;
@@ -289,7 +290,7 @@ fn prompt_suggestion(key: &str, title: &str) -> NewSuggestion {
         summary: "Three supplier quotes arrived this week.".to_owned(),
         importance: 70,
         categories: vec![Category::SaveMoney, Category::SaveMoney],
-        topic: None,
+        topic: TopicChange::Keep,
         about: vec![Target {
             entity_type: EntityType::EmailThread,
             entity_id: "thread-1".to_owned(),
@@ -311,7 +312,7 @@ pub(crate) fn entity_suggestion(key: &str) -> NewSuggestion {
         summary: "They asked for a headcount by Friday.".to_owned(),
         importance: 80,
         categories: vec![Category::Important],
-        topic: None,
+        topic: TopicChange::Keep,
         about: vec![Target {
             entity_type: EntityType::EmailThread,
             entity_id: "thread-2".to_owned(),

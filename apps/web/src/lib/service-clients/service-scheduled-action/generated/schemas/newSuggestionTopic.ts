@@ -8,6 +8,7 @@
 
 /**
  * The key of the topic it belongs to, named with
-`macro.suggestions.nameTopic` first; none when left out.
+`macro.suggestions.nameTopic` first, or null for none; left out, a
+suggestion that exists keeps the one it has.
  */
 export type NewSuggestionTopic = string | null;

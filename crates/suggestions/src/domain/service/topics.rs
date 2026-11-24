@@ -1,7 +1,8 @@
 //! Naming topics and giving suggestions theirs.
 
 use super::*;
-use crate::domain::topic::StoredTopic;
+use crate::domain::model::Target;
+use crate::domain::topic::{StoredTopic, Topic, TopicChange, topic_keys, topics_of};
 
 /// Most topics one generation may name: more than the open suggestions could
 /// share, two or more to each.
@@ -27,6 +28,17 @@ where
         let Some(topic) = check::topic(request, &mut problems) else {
             return Ok(rejected(&span, problems));
         };
+        if let Some(reason) = &topic.reason {
+            self.inaccessible(
+                &session.user,
+                std::slice::from_ref(&reason.source),
+                &mut problems,
+            )
+            .await?;
+        }
+        if !problems.is_empty() {
+            return Ok(rejected(&span, problems));
+        }
         let named = self
             .repo
             .name_topic(&session, &topic, TOPICS_PER_GENERATION, Utc::now())
@@ -49,8 +61,56 @@ where
         })
     }
 
+    /// The topics of `suggestions`, each with its reason while the reason
+    /// holds and the person can open the item it was read in. They can open
+    /// what the suggestions `viewable` are about, so that isn't checked again.
+    pub(super) async fn topics(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        suggestions: &[Suggestion],
+        viewable: &[Suggestion],
+    ) -> Result<Vec<Topic>, SuggestionError> {
+        let mut stored = self.stored_topics(user, topic_keys(suggestions)).await?;
+        let viewable: HashSet<(EntityType, &str)> = viewable
+            .iter()
+            .flat_map(|suggestion| &suggestion.about)
+            .map(|target| (target.entity_type, target.entity_id.as_str()))
+            .collect();
+        let viewable = &viewable;
+        futures::stream::iter(&mut stored)
+            .for_each_concurrent(ACCESS_CHECKS_AT_ONCE, |topic| async move {
+                let Some(reason) = &topic.reason else {
+                    return;
+                };
+                let source = &reason.source;
+                let shown = !topic.settled_since_named()
+                    && (viewable.contains(&(source.entity_type, source.entity_id.as_str()))
+                        || self.can_open(user, source).await);
+                if !shown {
+                    topic.reason = None;
+                }
+            })
+            .await;
+        Ok(topics_of(suggestions, &stored))
+    }
+
+    /// Whether the person can open the item a topic's reason was read in; one
+    /// that can't be checked is logged and counts as closed.
+    async fn can_open(&self, user: &MacroUserIdStr<'_>, source: &Target) -> bool {
+        match self.access.can_view(user, source).await {
+            Ok(viewable) => viewable,
+            Err(error) => {
+                tracing::warn!(
+                    ?error,
+                    "could not check a topic's source; its reason is left out"
+                );
+                false
+            }
+        }
+    }
+
     /// The person's topics `keys`, as stored.
-    pub(super) async fn stored_topics(
+    async fn stored_topics(
         &self,
         user: &MacroUserIdStr<'_>,
         keys: HashSet<String>,
@@ -65,8 +125,25 @@ where
             .map_err(SuggestionError::internal)
     }
 
+    /// The key of the topic `suggestion`, or a new one, has after `change`.
+    pub(super) async fn topic_after(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        suggestion: Option<&Suggestion>,
+        change: TopicChange,
+        problems: &mut Vec<String>,
+    ) -> Result<Option<String>, SuggestionError> {
+        match change {
+            TopicChange::Keep => Ok(suggestion
+                .and_then(|suggestion| suggestion.topic.as_ref())
+                .map(|topic| topic.key.clone())),
+            TopicChange::Clear => Ok(None),
+            TopicChange::To(key) => self.named_topic(user, &key, problems).await,
+        }
+    }
+
     /// The topic `key` a session gives a suggestion, when it has named it.
-    pub(super) async fn named_topic(
+    async fn named_topic(
         &self,
         user: &MacroUserIdStr<'_>,
         key: &str,

@@ -52,13 +52,18 @@ export interface SuggestionChanges {
   reason: string;
 }
 
-/** The wire form of a suggestion's items. */
-export function targets(items: SuggestionItem[]): Target[] {
-  return items.map((item) => ({
+/** The wire form of an item. */
+export function target(item: SuggestionItem): Target {
+  return {
     entityType: item.entity.entityType,
     entityId: item.entity.id,
     partId: item.part?.id,
-  }));
+  };
+}
+
+/** The wire form of a suggestion's items. */
+export function targets(items: SuggestionItem[]): Target[] {
+  return items.map(target);
 }
 
 /** A suggestions write's outcome, with its suggestion as a handle. */

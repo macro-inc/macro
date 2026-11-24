@@ -4,8 +4,9 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
-use crate::domain::model::GenerationSession;
-use crate::domain::topic::{NameTopic, StoredTopic};
+use super::parse;
+use crate::domain::model::{GenerationSession, Target};
+use crate::domain::topic::{NameTopic, StoredTopic, TopicReason};
 
 #[cfg(test)]
 mod test;
@@ -20,29 +21,68 @@ pub(super) async fn topics(
     sqlx::query!("SET LOCAL statement_timeout = '5s'")
         .execute(&mut *tx)
         .await?;
-    let topics = sqlx::query_as!(
-        StoredTopic,
-        r#"SELECT t.key, t.name, t.reason, t.updated_at, s.settled_at AS "settled_at?"
+    let rows = sqlx::query!(
+        r#"SELECT t.key, t.name, t.reason, t.reason_entity_type, t.reason_entity_id,
+                  t.reason_part_id, t.updated_at, s.settled_at AS "settled_at?"
            FROM unnest($2::text[]) AS wanted(key)
            CROSS JOIN LATERAL (
                SELECT * FROM suggestion_topic
                WHERE user_id = $1 AND key = wanted.key
                LIMIT 1
            ) t
-           LEFT JOIN LATERAL (
-               SELECT i.state_changed_at AS settled_at FROM suggestion i
-               WHERE i.user_id = t.user_id AND i.topic_key = t.key
-                 AND i.state IN ('done', 'resolved')
-               ORDER BY i.state_changed_at DESC
-               LIMIT 1
-           ) s ON true"#,
+           CROSS JOIN LATERAL (
+               SELECT max(latest.state_changed_at) AS settled_at
+               FROM unnest(ARRAY['done', 'resolved']) AS settled(state)
+               CROSS JOIN LATERAL (
+                   SELECT i.state_changed_at FROM suggestion i
+                   WHERE i.user_id = t.user_id AND i.topic_key = t.key
+                     AND i.state = settled.state
+                   ORDER BY i.state_changed_at DESC
+                   LIMIT 1
+               ) latest
+           ) s"#,
         user.as_ref(),
         keys,
     )
     .fetch_all(&mut *tx)
     .await?;
     tx.commit().await?;
-    Ok(topics)
+    Ok(rows
+        .into_iter()
+        .map(|row| StoredTopic {
+            reason: reason(
+                row.reason,
+                row.reason_entity_type,
+                row.reason_entity_id,
+                row.reason_part_id,
+            ),
+            key: row.key,
+            name: row.name,
+            updated_at: row.updated_at,
+            settled_at: row.settled_at,
+        })
+        .collect())
+}
+
+/// A reason as stored; none when its source is of a type this build doesn't
+/// know, so it can't be checked.
+fn reason(
+    text: Option<String>,
+    entity_type: Option<String>,
+    entity_id: Option<String>,
+    part_id: Option<String>,
+) -> Option<TopicReason> {
+    let entity_type = parse(&entity_type?)
+        .inspect_err(|error| tracing::warn!(?error, "unreadable topic source"))
+        .ok()?;
+    Some(TopicReason {
+        text: text?,
+        source: Target {
+            entity_type,
+            entity_id: entity_id?,
+            part_id,
+        },
+    })
 }
 
 /// Store a topic a session names; false when its generation named `limit`
@@ -68,18 +108,26 @@ pub(super) async fn name_topic(
     if others >= i64::from(limit) {
         return Ok(false);
     }
+    let source = topic.reason.as_ref().map(|reason| &reason.source);
     sqlx::query!(
         r#"INSERT INTO suggestion_topic
-             (user_id, key, name, reason, session_id, generation_id, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+             (user_id, key, name, reason, reason_entity_type, reason_entity_id, reason_part_id,
+              session_id, generation_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
            ON CONFLICT (user_id, key) DO UPDATE
            SET name = EXCLUDED.name, reason = EXCLUDED.reason,
+               reason_entity_type = EXCLUDED.reason_entity_type,
+               reason_entity_id = EXCLUDED.reason_entity_id,
+               reason_part_id = EXCLUDED.reason_part_id,
                session_id = EXCLUDED.session_id, generation_id = EXCLUDED.generation_id,
                updated_at = EXCLUDED.updated_at"#,
         session.user.as_ref(),
         topic.key,
         topic.name,
-        topic.reason.as_deref(),
+        topic.reason.as_ref().map(|reason| reason.text.as_str()),
+        source.map(|source| source.entity_type.as_ref()),
+        source.map(|source| source.entity_id.as_str()),
+        source.and_then(|source| source.part_id.as_deref()),
         session.session,
         session.generation,
         at,

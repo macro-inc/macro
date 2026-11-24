@@ -5,8 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { TopicReason } from './topicReason';
 
-/**
- * Why it matters now, in one line; left out when its items don't say.
- */
-export type NameTopicReason = string | null;
+export type NameTopicReason = null | TopicReason;

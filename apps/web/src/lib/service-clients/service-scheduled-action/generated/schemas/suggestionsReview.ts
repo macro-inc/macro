@@ -32,6 +32,7 @@ export interface SuggestionsReview {
 dismissed suggestion's `stateChangedAt` is when the person dismissed it. */
   suggestions: Suggestion[];
   /** The topics those suggestions belong to, in the order they first
-appear, each with how many of its suggestions are open. */
-  topics: Topic[];
+appear, each with how many of its suggestions are open. Absent from a
+server that has none. */
+  topics?: Topic[];
 }

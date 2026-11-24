@@ -1,6 +1,7 @@
 use model_entity::EntityType;
 
 use super::*;
+use crate::domain::topic::TopicChange;
 
 #[test]
 fn a_dedup_key_is_a_short_lowercase_slug_naming_no_one() {
@@ -62,7 +63,7 @@ fn a_new_suggestions_kind_has_its_own_fields_only() {
         summary: "s".to_owned(),
         importance: 1,
         categories: Vec::new(),
-        topic: None,
+        topic: TopicChange::Keep,
         about: Vec::new(),
         prompt: None,
         run_mode: None,

@@ -12,7 +12,7 @@ use std::collections::HashSet;
 use shown_text::{is_invisible, line, personal_detail};
 
 use super::model::{Category, KindName, NewKind, NewSuggestion, SuggestionKind, Target};
-use super::topic::NameTopic;
+use super::topic::{NameTopic, TopicReason};
 
 #[cfg(test)]
 mod test;
@@ -113,11 +113,8 @@ pub fn topic_key(key: &str, problems: &mut Vec<String>) -> Option<String> {
 pub fn topic(request: NameTopic, problems: &mut Vec<String>) -> Option<NameTopic> {
     let key = topic_key(&request.key, problems);
     let name = text(&request.name, "`name`", MAX_TOPIC_NAME_CHARS, problems);
-    let reason = request
-        .reason
-        .map(|reason| text(&reason, "`reason`", MAX_TOPIC_REASON_CHARS, problems));
-    let reason = match reason {
-        Some(reason) => Some(reason?),
+    let reason = match request.reason {
+        Some(reason) => Some(topic_reason(reason, problems)?),
         None => None,
     };
 
@@ -125,6 +122,22 @@ pub fn topic(request: NameTopic, problems: &mut Vec<String>) -> Option<NameTopic
         key: key?,
         name: name?,
         reason,
+    })
+}
+
+/// A topic's reason: its line and the item that states it.
+fn topic_reason(reason: TopicReason, problems: &mut Vec<String>) -> Option<TopicReason> {
+    let text = text(
+        &reason.text,
+        "the reason's `text`",
+        MAX_TOPIC_REASON_CHARS,
+        problems,
+    );
+    let source = targets(vec![reason.source], problems)?.pop();
+
+    Some(TopicReason {
+        text: text?,
+        source: source?,
     })
 }
 

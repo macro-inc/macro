@@ -5,7 +5,7 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { TopicReason } from './topicReason';
+import type { TopicReasonProperty } from './topicReasonProperty';
 
 /**
  * One thing in the person's work that several suggestions may belong to,
@@ -21,6 +21,5 @@ export interface Topic {
    * @minimum 0
    */
   open: number;
-  /** Why it matters now, in one line, when its items say. */
-  reason?: TopicReason;
+  reason?: TopicReasonProperty;
 }
