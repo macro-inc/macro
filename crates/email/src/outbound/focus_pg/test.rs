@@ -2300,6 +2300,46 @@ async fn mail_from_a_recent_contact_is_found_and_pinned_outside_the_signal_inbox
 async fn only_mail_the_owner_sent_lately_makes_a_sender_a_recent_contact(
     pool: Pool<Postgres>,
 ) -> Result<(), Report> {
+    only_sent_mail_makes_noise_a_recent_contact(pool).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_sender_named_on_many_messages_is_judged_by_the_same_sent_mail(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    // A list address is a recipient of every message through it, in any
+    // inbox: past the probe limit, the sender is looked up in the owner's
+    // recent recipients instead, with the same answers.
+    sqlx::query!(
+        "INSERT INTO email_messages (id, thread_id, link_id, is_sent, is_draft, from_contact_id,
+                                     internal_date_ts, subject)
+         SELECT ('00000000-0000-0000-0000-' || lpad(to_hex(x'a0000'::int + g), 12, '0'))::uuid,
+                '00000000-0000-0000-0000-00000000f207', '00000000-0000-0000-0000-000000000f02',
+                false, false, '00000000-0000-0000-0000-0000000cf006', NOW() - INTERVAL '2 days', 'Weekly numbers'
+         FROM generate_series(1, $1::bigint) g",
+        ADDRESSED_PROBE_LIMIT + 1,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+         SELECT ('00000000-0000-0000-0000-' || lpad(to_hex(x'a0000'::int + g), 12, '0'))::uuid,
+                '00000000-0000-0000-0000-0000000cf006', 'TO'
+         FROM generate_series(1, $1::bigint) g",
+        ADDRESSED_PROBE_LIMIT + 1,
+    )
+    .execute(&pool)
+    .await?;
+    only_sent_mail_makes_noise_a_recent_contact(pool).await
+}
+
+async fn only_sent_mail_makes_noise_a_recent_contact(pool: Pool<Postgres>) -> Result<(), Report> {
     project_threads(&pool).await?;
     let repo = FocusPgRepository(pool.clone());
     // The newsletter's sender is on mail the owner received, as a list address

@@ -299,12 +299,16 @@ tools — hexagonal, heavily feature-gated.
   backfilled to the backfill, so no thread is classified twice at once. An inbox
   whose threads can't be read counts in `inboxes_failed` and the sweep goes on
   to the next, so one slow inbox can't stop the sweep for all. `stale_threads` reads one
-  inbox through its latest-inbound and latest-outbound indexes; keep its
-  `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
-  thread in the window. It reads the owner's recent contacts once, from their
-  sent mail, and checks each thread's senders against that set: through
-  `email_message_recipients.contact_id` a list address, both the sender and a
-  recipient of all its mail, costs every thread the list's whole history.
+  inbox through its latest-inbound and latest-outbound indexes into a
+  materialized `stale` CTE; keep it materialized, or the per-thread calendar
+  and contact checks run on every thread in the window. Whether a sender is a
+  recent contact is decided once per distinct sender, never per thread: one
+  named on at most `ADDRESSED_PROBE_LIMIT` messages through those messages,
+  stopping at the first the owner sent lately; one named on more, a list
+  address being a recipient of all its mail, against the owner's recent
+  recipients, read only then. Reading the owner's sent mail on every page
+  costs thousands of cold pages in production, and probing a list per thread
+  costs its whole history.
 - A Focus thread's days (`due_on` and the day of the meeting it is about) are read
   in one call when new mail is classified, only for a thread
   with `is_focus` or `awaiting_reply`, never for a thread the backfill's second pass
