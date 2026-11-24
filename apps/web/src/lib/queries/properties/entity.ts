@@ -169,8 +169,8 @@ export function useEntityPropertiesQuery(
   );
   const optionsByDefinition = createMemo(() => {
     const options = new Map<string, PropertyOption[]>();
-    if (!definitionsQuery.isSuccess) return options;
-    for (const item of definitionsQuery.data) {
+    if (definitionsQuery.isPending) return options;
+    for (const item of definitionsQuery.data ?? []) {
       if ('definition' in item) {
         options.set(item.definition.id, item.property_options);
       }

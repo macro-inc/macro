@@ -580,6 +580,24 @@ describe('useEntityPropertiesQuery transport', () => {
       expect(entityQuery.isLoading).toBe(false);
       expect(listPropertiesMock).toHaveBeenCalledOnce();
     });
+
+    it('keeps its option names when the definitions fail to refresh', async () => {
+      listPropertiesMock.mockResolvedValueOnce(ok(definitions));
+      renderEntityQuery(false);
+      deliver([phase]);
+      const named = [{ ...phase, options: PHASE_OPTIONS }];
+      await vi.waitFor(() => expect(entityQuery.data).toEqual(named));
+
+      listPropertiesMock.mockResolvedValue(
+        err([{ code: 'UNKNOWN', message: 'failed' }])
+      );
+      await testQueryClient.refetchQueries({
+        queryKey: ['properties', 'definitions'],
+      });
+
+      expect(listPropertiesMock).toHaveBeenCalledTimes(2);
+      expect(entityQuery.data).toEqual(named);
+    });
   });
 });
 
