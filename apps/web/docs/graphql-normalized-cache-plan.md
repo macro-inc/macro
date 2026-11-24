@@ -263,7 +263,9 @@ SharedWorker still runs. The coordinator probes the physical owner Web Lock
 without waiting or stealing it; a held lock (or a failed probe) retries the
 heartbeat without changing epochs or touching storage. A released lock confirms
 silent worker termination and triggers the usual fenced recovery, unless the
-page's liveness lock is released too, which means the page left. Read deadlines
+page's liveness lock is released too, which means the page left; the coordinator
+looks for it after a heartbeat interval, and also before an opening deadline ends
+an owner. Read deadlines
 still bound callers waiting on an unresponsive engine outside a visibility handoff.
 
 Protocol v10 reports tab visibility and epoch-fenced read states: `ready`,
