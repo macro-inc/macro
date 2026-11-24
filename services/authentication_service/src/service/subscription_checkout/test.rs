@@ -52,6 +52,7 @@ fn request(trial: bool) -> CheckoutRequest<'static> {
     CheckoutRequest {
         user_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         plan: SeatPlan::Premium,
+        interval: teams::domain::model::BillingCadence::Month,
         onboarding_trial: trial,
         success_url: "https://macro.com/app/onboarding?subscriptionSuccess=true".into(),
         cancel_url: "https://macro.com/app/onboarding?subscriptionCancel=true".into(),
@@ -209,6 +210,42 @@ async fn max_trial_never_creates_checkout_or_falls_back_to_paid() {
     assert!(matches!(
         service.create(input).await,
         Err(CheckoutError::TrialUnavailable)
+    ));
+    assert!(service.gateway.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn business_can_be_bought_monthly_or_annually_but_never_trialed() {
+    let service = CheckoutService::new(FakeGateway::default());
+    for interval in [
+        teams::domain::model::BillingCadence::Month,
+        teams::domain::model::BillingCadence::Year,
+    ] {
+        let mut input = request(false);
+        input.plan = SeatPlan::Business;
+        input.interval = interval;
+        assert_eq!(service.create(input).await.unwrap().trial_days, None);
+    }
+    let mut trial = request(true);
+    trial.plan = SeatPlan::Business;
+    assert!(matches!(
+        service.create(trial).await,
+        Err(CheckoutError::TrialUnavailable)
+    ));
+    assert_eq!(
+        *service.gateway.created.lock().unwrap(),
+        vec![(CheckoutTerms::Paid, None), (CheckoutTerms::Paid, None)]
+    );
+}
+
+#[tokio::test]
+async fn premium_is_refused_for_annual_billing_before_any_provider_call() {
+    let service = CheckoutService::new(FakeGateway::default());
+    let mut input = request(false);
+    input.interval = teams::domain::model::BillingCadence::Year;
+    assert!(matches!(
+        service.create(input).await,
+        Err(CheckoutError::PlanUnavailable)
     ));
     assert!(service.gateway.created.lock().unwrap().is_empty());
 }

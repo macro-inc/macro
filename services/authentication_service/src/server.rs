@@ -424,22 +424,34 @@ async fn run_server() -> anyhow::Result<()> {
 
     let stripe_prices = api::StripePrices {
         premium: config.stripe_price_id.to_string(),
-        max: config
-            .stripe_max_price_id
+        max: config.stripe_max_price_id.value().map(str::to_owned),
+        max_monthly: config
+            .stripe_max_monthly_price_id
             .value()
-            .filter(|id| !id.trim().is_empty())
+            .map(str::to_owned),
+        max_yearly: config.stripe_max_yearly_price_id.value().map(str::to_owned),
+        business_monthly: config
+            .stripe_business_monthly_price_id
+            .value()
+            .map(str::to_owned),
+        business_yearly: config
+            .stripe_business_yearly_price_id
+            .value()
             .map(str::to_owned),
     };
-    if stripe_prices.max.is_none() {
-        tracing::warn!("STRIPE_MAX_PRICE_ID is not set; the Max plan cannot be sold");
+    let seat_prices = stripe_prices.seat_prices()?;
+    for plan in [
+        teams::domain::model::SeatPlan::Business,
+        teams::domain::model::SeatPlan::Max,
+    ] {
+        if !seat_prices.is_sold(plan) {
+            tracing::warn!(%plan, "no Stripe price is set for this plan; it cannot be sold");
+        }
     }
 
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl = CustomerRepositoryImpl::new(
-        stripe_client.clone(),
-        stripe_prices.seat_prices()?,
-        db.clone(),
-    );
+    let customer_repo_impl =
+        CustomerRepositoryImpl::new(stripe_client.clone(), seat_prices.clone(), db.clone());
     let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
         favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(db.clone()),
     );
@@ -607,21 +619,18 @@ async fn run_server() -> anyhow::Result<()> {
     };
 
     let computer_policy = config.computer_billing_policy()?;
-    let plan_customer = CustomerRepositoryImpl::new(
-        stripe_client.clone(),
-        stripe_prices.seat_prices()?,
-        db.clone(),
-    );
+    let plan_customer =
+        CustomerRepositoryImpl::new(stripe_client.clone(), seat_prices.clone(), db.clone());
     let stripe_client = Arc::new(stripe_client);
     let plan_gateway = crate::outbound::subscription_plan::StripePlanGateway::new(
         db.clone(),
         stripe_client.clone(),
-        stripe_prices.seat_prices()?,
+        seat_prices.clone(),
         plan_customer,
         crate::outbound::subscription_billing::StripeBillingReader::new(
             teams_repo_impl.clone(),
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
-            stripe_prices.seat_prices()?,
+            seat_prices.clone(),
         ),
     );
     let subscription_plan = Arc::new(crate::service::subscription_plan::PlanService::new(
@@ -648,7 +657,7 @@ async fn run_server() -> anyhow::Result<()> {
                 db.clone(),
                 stripe_client.clone(),
                 gtm_invite_service.clone(),
-                stripe_prices.seat_prices()?,
+                seat_prices.clone(),
             ),
         ));
     let ai_payment_gateway = ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone());
@@ -866,7 +875,7 @@ async fn run_server() -> anyhow::Result<()> {
         STRIPE_INBOX_READS_PER_SECOND,
     ));
     let stripe_consumers = Arc::new(crate::outbound::stripe_consumers::StripeConsumers {
-        prices: stripe_prices.seat_prices()?,
+        prices: seat_prices.clone(),
         identity: crate::outbound::stripe_identity::PgStripeIdentity::new(db.clone()),
         customers: stripe_inbox::domain::customers::StripeCustomers::new(
             stripe_inbox_repo.clone(),

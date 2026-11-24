@@ -117,8 +117,7 @@ impl<E: EntitlementSource, G: SubscriptionStatusGateway> SubscriptionStatusServi
         // An applied phase or already-Pro seat is not a future downgrade, even
         // while entitlement webhooks or schedule acknowledgements are catching up.
         let scheduled_change = facts.scheduled_change.filter(|change| {
-            entitlement.tier == PlanTier::Max
-                && change.plan == teams::domain::model::SeatPlan::Premium
+            PlanTier::from(change.plan) < entitlement.tier
                 && change.effective_at >= facts.period_end
         });
         Ok(SubscriptionStatus {

@@ -18,6 +18,8 @@ env_var!(
         pub AiUsageFreeIncludedAllowanceCents,
         /// In-plan AI allowance per Premium seat per period, cents at provider cost.
         pub AiUsageIncludedAllowanceCents,
+        /// In-plan AI allowance per Business seat per period, cents at provider cost.
+        pub AiUsageBusinessIncludedAllowanceCents,
         /// In-plan AI allowance per Max seat per period, cents at provider cost.
         pub AiUsageMaxIncludedAllowanceCents,
         /// Markup on paid AI usage past the allowance, a whole percent of provider cost.
@@ -37,6 +39,7 @@ impl Config {
             user_id,
             ai_usage_free_included_allowance_cents,
             ai_usage_included_allowance_cents,
+            ai_usage_business_included_allowance_cents,
             ai_usage_max_included_allowance_cents,
             ai_usage_overage_markup_percent,
         } = env_vars;
@@ -44,6 +47,7 @@ impl Config {
             ai_billing::config::RawPlanAllowances {
                 free: &ai_usage_free_included_allowance_cents,
                 premium: &ai_usage_included_allowance_cents,
+                business: &ai_usage_business_included_allowance_cents,
                 max: &ai_usage_max_included_allowance_cents,
             },
             &ai_usage_overage_markup_percent,

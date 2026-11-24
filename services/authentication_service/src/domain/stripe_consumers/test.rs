@@ -3,6 +3,7 @@ use stripe_inbox::domain::model::EventType;
 use stripe_inbox::domain::translate::{self, Translated};
 
 use super::*;
+use teams::domain::model::PlanPrices;
 
 const TEAM: &str = "0195d6b1-7a8f-7c3e-9a51-2a2b3c4d5e6f";
 
@@ -14,8 +15,19 @@ const UNLISTED_PRICE: &str = "price_1ZzUnlistedJaD7zvQeOBzzzz";
 
 fn prices() -> SeatPrices {
     SeatPrices {
-        premium: "price_premium".parse().unwrap(),
-        max: Some("price_max".parse().unwrap()),
+        premium: PlanPrices {
+            monthly: Some("price_premium".parse().unwrap()),
+            ..Default::default()
+        },
+        business: PlanPrices {
+            monthly: Some("price_business".parse().unwrap()),
+            yearly: Some("price_business_year".parse().unwrap()),
+            legacy: Vec::new(),
+        },
+        max: PlanPrices {
+            monthly: Some("price_max".parse().unwrap()),
+            ..Default::default()
+        },
     }
 }
 
@@ -859,4 +871,26 @@ fn a_duplicate_seen_in_held_snapshots_is_cancelled_only_if_stripe_still_shows_it
         decide_personal_subscription(&event_id(), event_at(), &newer, &live, &prices()).unwrap(),
         PersonalDecision::Apply(_)
     ));
+}
+
+#[test]
+fn business_prices_grant_business_at_either_interval() {
+    for price in ["price_business", "price_business_year"] {
+        let created = change(
+            EventType::CustomerSubscriptionCreated,
+            subscription("sub_Person", "active", 1_800_000_000, price),
+            Value::Null,
+        );
+        let PersonalDecision::Apply(update) = decide_personal_subscription(
+            &event_id(),
+            event_at(),
+            &created,
+            std::slice::from_ref(&created.subscription),
+            &prices(),
+        )
+        .unwrap() else {
+            panic!("expected a grant for {price}");
+        };
+        assert_eq!(update.access, PersonalAccess::Grant(ProductTier::Business));
+    }
 }

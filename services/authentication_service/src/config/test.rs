@@ -33,6 +33,7 @@ fn config_values() -> serde_json::Value {
     }
     values["AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(500);
     values["AI_USAGE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(2_000);
+    values["AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(6_000);
     values["AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(10_000);
     values["AI_USAGE_OVERAGE_MARKUP_PERCENT"] = serde_json::json!(5);
     values
@@ -85,6 +86,7 @@ fn ai_pricing_is_mandatory_and_validated() {
     for key in [
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_OVERAGE_MARKUP_PERCENT",
     ] {
@@ -106,6 +108,7 @@ fn ai_pricing_is_mandatory_and_validated() {
     for key in [
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS",
     ] {
         let mut values = config_values();

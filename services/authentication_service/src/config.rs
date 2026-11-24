@@ -78,10 +78,24 @@ maybe_env_vars! {
     /// back the agent teammates of computers released after a failed first
     /// start. Absent means off: no worker runs.
     pub struct ComputersAgentEffects;
-    /// Stripe price id for the Max plan seat. Optional so the service can
-    /// deploy before the price exists in Stripe; until it is set, Max checkout
-    /// and plan changes answer 400 and every subscription maps to Premium.
+    /// Stripe price id of the original $200/month Max seat. Optional so the
+    /// service can deploy before a Max price exists in Stripe; with no Max
+    /// price, Max checkout and plan changes answer 400. Once
+    /// `STRIPE_MAX_MONTHLY_PRICE_ID` is set it is no longer sold, and its
+    /// subscribers keep it as a legacy Max price.
     pub struct StripeMaxPriceId;
+    /// Stripe price id of the month-to-month Max seat ($220). Replaces
+    /// `STRIPE_MAX_PRICE_ID` for new monthly Max seats when set.
+    pub struct StripeMaxMonthlyPriceId;
+    /// Stripe price id of the annual Max seat ($200/month billed yearly).
+    /// Until it is set, annual Max checkout answers 400.
+    pub struct StripeMaxYearlyPriceId;
+    /// Stripe price id of the month-to-month Business seat ($90). Until it
+    /// is set, monthly Business checkout answers 400.
+    pub struct StripeBusinessMonthlyPriceId;
+    /// Stripe price id of the annual Business seat ($80/month billed
+    /// yearly). Until it is set, annual Business checkout answers 400.
+    pub struct StripeBusinessYearlyPriceId;
     /// Stripe price ids for Macro computers, one per size and billing
     /// interval. Absent as a group means computers are not sold here.
     pub struct StripeComputerStandardMonthlyPriceId;
@@ -120,6 +134,9 @@ pub struct Config {
     /// In-plan AI allowance per Premium seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Business seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_business_included_allowance_cents: ai_billing::IncludedAllowanceCents,
     /// In-plan AI allowance per Max seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_max_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -218,9 +235,19 @@ pub struct Config {
     pub computers_agent_effects: ComputersAgentEffects,
     /// The stripe price id for the Premium plan seat
     pub stripe_price_id: StripePriceId,
-    /// The stripe price id for the Max plan seat (optional, see
+    /// The stripe price id for the original Max plan seat (optional, see
     /// [`StripeMaxPriceId`])
     pub stripe_max_price_id: StripeMaxPriceId,
+    /// Month-to-month Max seat price (optional, see [`StripeMaxMonthlyPriceId`]).
+    pub stripe_max_monthly_price_id: StripeMaxMonthlyPriceId,
+    /// Annual Max seat price (optional, see [`StripeMaxYearlyPriceId`]).
+    pub stripe_max_yearly_price_id: StripeMaxYearlyPriceId,
+    /// Month-to-month Business seat price (optional, see
+    /// [`StripeBusinessMonthlyPriceId`]).
+    pub stripe_business_monthly_price_id: StripeBusinessMonthlyPriceId,
+    /// Annual Business seat price (optional, see
+    /// [`StripeBusinessYearlyPriceId`]).
+    pub stripe_business_yearly_price_id: StripeBusinessYearlyPriceId,
     /// Macro computer prices: all six or none, independent of fleet attachment.
     pub stripe_computer_standard_monthly_price_id: StripeComputerStandardMonthlyPriceId,
     pub stripe_computer_large_monthly_price_id: StripeComputerLargeMonthlyPriceId,
@@ -274,6 +301,7 @@ impl Config {
             ai_billing::PlanAllowances {
                 free: self.ai_usage_free_included_allowance_cents,
                 premium: self.ai_usage_included_allowance_cents,
+                business: self.ai_usage_business_included_allowance_cents,
                 max: self.ai_usage_max_included_allowance_cents,
             },
             self.ai_usage_overage_markup_percent,

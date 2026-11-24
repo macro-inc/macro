@@ -60,6 +60,10 @@ pub(crate) fn document_storage_env(service: &DocumentStorage<'_>) -> BTreeMap<St
         ),
         ("AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS", "500".to_owned()),
         ("AI_USAGE_INCLUDED_ALLOWANCE_CENTS", "1500".to_owned()),
+        (
+            "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS",
+            "4500".to_owned(),
+        ),
         ("AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS", "15000".to_owned()),
         ("AI_USAGE_OVERAGE_MARKUP_PERCENT", "25".to_owned()),
         ("GITHUB_SYNC_APP_URL", "http://127.0.0.1:1".to_owned()),

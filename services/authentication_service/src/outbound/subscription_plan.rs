@@ -9,7 +9,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use teams::domain::{
     customer_repo::CustomerRepository,
-    model::{SeatPlan, SeatPrices},
+    model::{SeatDowngrade, SeatPlan, SeatPrices},
 };
 /// Composed with the owning billing adapter through its domain port.
 #[derive(Clone)]
@@ -129,14 +129,18 @@ impl<
         target: SeatPlan,
         action: PlanAction,
     ) -> Result<(), PlanChangeError> {
-        self.prices
-            .price_id(target)
-            .map_err(|_| PlanChangeError::PlanUnavailable)?;
+        if !self.prices.is_sold(target) {
+            return Err(PlanChangeError::PlanUnavailable);
+        }
         let id = subscription.id.parse().map_err(anyhow::Error::from)?;
         match action {
             PlanAction::ScheduleDowngrade => {
+                let downgrade = SeatDowngrade {
+                    from: subscription.plan,
+                    to: target,
+                };
                 self.customer
-                    .schedule_seat_plan(&id, user, Some(target))
+                    .schedule_seat_plan(&id, user, Some(downgrade))
                     .await
             }
             PlanAction::KeepCurrent => self.customer.schedule_seat_plan(&id, user, None).await,
@@ -146,7 +150,14 @@ impl<
                     .await
             }
         }
-        .map_err(anyhow::Error::from)?;
+        .map_err(|error| match error {
+            // Not sold at the subscription's interval: Premium on an annual
+            // subscription.
+            teams::domain::model::CustomerError::PlanUnavailable(_) => {
+                PlanChangeError::PlanUnavailable
+            }
+            error => anyhow::Error::from(error).into(),
+        })?;
         Ok(())
     }
 }

@@ -11,7 +11,7 @@ use model::response::ErrorResponse;
 use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
 use serde::Serialize;
 use stripe::{ParseIdError, StripeError};
-use teams::domain::model::{CustomerError, SeatPrices, SetTeamMemberPlanError};
+use teams::domain::model::{CustomerError, PlanPrices, SeatPrices, SetTeamMemberPlanError};
 use thiserror::Error;
 use utoipa::ToSchema;
 
@@ -19,25 +19,58 @@ use utoipa::ToSchema;
 /// mix them.
 pub use teams::domain::model::SeatPlan as PaidPlan;
 
-/// The Stripe price ids behind each paid plan's per-seat subscription item.
-#[derive(Debug, Clone)]
+/// The configured Stripe price ids behind each paid plan's per-seat
+/// subscription item. Blank values count as unset.
+#[derive(Debug, Clone, Default)]
 pub struct StripePrices {
-    /// Premium seat price.
+    /// Premium seat price, monthly (`STRIPE_PRICE_ID`).
     pub premium: String,
-    /// Max seat price, when configured.
+    /// The original $200/month Max price (`STRIPE_MAX_PRICE_ID`): sold until
+    /// `max_monthly` is set, then kept only for its subscribers.
     pub max: Option<String>,
+    /// Month-to-month Max price (`STRIPE_MAX_MONTHLY_PRICE_ID`).
+    pub max_monthly: Option<String>,
+    /// Annual Max price (`STRIPE_MAX_YEARLY_PRICE_ID`).
+    pub max_yearly: Option<String>,
+    /// Month-to-month Business price (`STRIPE_BUSINESS_MONTHLY_PRICE_ID`).
+    pub business_monthly: Option<String>,
+    /// Annual Business price (`STRIPE_BUSINESS_YEARLY_PRICE_ID`).
+    pub business_yearly: Option<String>,
 }
 
 impl StripePrices {
     /// The same prices, for the teams crate's per-plan seat items.
     pub fn seat_prices(&self) -> anyhow::Result<SeatPrices> {
-        Ok(SeatPrices {
-            premium: crate::config::configured_price_id(&self.premium)?,
-            max: self
-                .max
-                .as_deref()
+        let price = |id: &Option<String>| {
+            id.as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
                 .map(crate::config::configured_price_id)
-                .transpose()?,
+                .transpose()
+        };
+        let original_max = price(&self.max)?;
+        let max_monthly = price(&self.max_monthly)?;
+        // A new monthly Max price retires the original one from sale; its
+        // subscribers keep being billed at it.
+        let (max_monthly, max_legacy) = match max_monthly {
+            Some(monthly) => (Some(monthly), original_max.into_iter().collect()),
+            None => (original_max, Vec::new()),
+        };
+        Ok(SeatPrices {
+            premium: PlanPrices {
+                monthly: Some(crate::config::configured_price_id(&self.premium)?),
+                ..Default::default()
+            },
+            business: PlanPrices {
+                monthly: price(&self.business_monthly)?,
+                yearly: price(&self.business_yearly)?,
+                legacy: Vec::new(),
+            },
+            max: PlanPrices {
+                monthly: max_monthly,
+                yearly: price(&self.max_yearly)?,
+                legacy: max_legacy,
+            },
         })
     }
 }

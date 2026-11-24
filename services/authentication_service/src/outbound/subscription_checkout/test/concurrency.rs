@@ -151,8 +151,15 @@ async fn setup(
         Arc::new(stripe::Client::from_url(url.as_str(), "sk_test_fixture")),
         Arc::new(()),
         SeatPrices {
-            premium: stripe::PriceId::from_str("price_pro").unwrap(),
-            max: Some(stripe::PriceId::from_str("price_max").unwrap()),
+            premium: teams::domain::model::PlanPrices {
+                monthly: Some(stripe::PriceId::from_str("price_pro").unwrap()),
+                ..Default::default()
+            },
+            business: Default::default(),
+            max: teams::domain::model::PlanPrices {
+                monthly: Some(stripe::PriceId::from_str("price_max").unwrap()),
+                ..Default::default()
+            },
         },
     );
     (gateway, provider_state, task)
