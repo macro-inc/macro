@@ -1,0 +1,84 @@
+{
+  "jsonapi": {
+    "version": "1.0"
+  },
+  "links": {
+    "self": {
+      "href": "/project/v1/hubs"
+    }
+  },
+  "data": [
+    {
+      "type": "hubs",
+      "id": "a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE",
+      "attributes": {
+        "name": "my team hub",
+        "extension": {
+          "type": "hubs:autodesk.core:Hub",
+          "version": "1.0",
+          "schema": {
+            "href": "/schema/v1/versions/hubs%3Aautodesk.core%3AHub-1.0"
+          },
+          "data": {}
+        },
+        "region": "US"
+      },
+      "links": {
+        "self": {
+          "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE"
+        }
+      },
+      "relationships": {
+        "projects": {
+          "links": {
+            "related": {
+              "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE/projects"
+            }
+          }
+        },
+        "pimCollection": {
+          "data": {
+            "type": "collection",
+            "id": "co.d41d8cd00998ecf8427e"
+          }
+        }
+      }
+    },
+    {
+      "type": "hubs",
+      "id": "a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjI=",
+      "attributes": {
+        "name": "my personal hub",
+        "extension": {
+          "type": "hubs:autodesk.a360:PersonalHub",
+          "version": "1.0",
+          "schema": {
+            "href": "/schema/v1/versions/hubs%3Aautodesk.a360%3APersonalHub-1.0"
+          },
+          "data": {}
+        },
+        "region": "US"
+      },
+      "links": {
+        "self": {
+          "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjI="
+        }
+      },
+      "relationships": {
+        "projects": {
+          "links": {
+            "related": {
+              "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjI=/projects"
+            }
+          }
+        },
+        "pimCollection": {
+          "data": {
+            "type": "collection",
+            "id": "co.368e3dc4144c0ff253d6"
+          }
+        }
+      }
+    }
+  ]
+}

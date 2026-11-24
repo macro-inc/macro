@@ -1,0 +1,9 @@
+{
+  "status": "fallback",
+  "url": "http://developer.api.autodesk.com/oss/v2/signedresources/6969f2ed-2931-498f-bad8-b9d300ad1c7e?region=US",
+  "params" : {
+    "content-type": "application/json",
+    "content-disposition": "attachment; filename=\"unmerged.json\""
+  },
+  "size" : 19715187
+}
