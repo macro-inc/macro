@@ -62,6 +62,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                 COALESCE(floor(EXTRACT(EPOCH FROM now() - q.oldest_due)), 0)::bigint AS "oldest_waiting_seconds!",
                 COALESCE(ceil(EXTRACT(EPOCH FROM q.parked_until - now())), 0)::bigint AS "parked_until_max_seconds!",
                 s.incomplete AS "streams_incomplete!",
+                COALESCE(floor(EXTRACT(EPOCH FROM now() - s.round_due)), 0)::bigint AS "import_round_wait_seconds!",
                 COALESCE(recent.imported_5m, 0)::bigint AS "imported_5m!",
                 floor(EXTRACT(EPOCH FROM now() - latest.last_imported_at))::bigint AS seconds_since_last_import,
                 COALESCE(w.failures, 0) AS "watch_failures!"
@@ -81,7 +82,13 @@ impl MailboxProgressRepository for PgMailboxSync {
                 WHERE link_id = l.id AND generation = l.sync_generation
             ) q
             CROSS JOIN LATERAL (
-                SELECT count(*) AS incomplete
+                SELECT count(*) AS incomplete,
+                    -- An import round due and unclaimed is waiting its turn
+                    -- in the claim line; a paced one is not due yet.
+                    min(next_run_at) FILTER (
+                        WHERE kind = 'mail_folder' AND next_run_at <= now()
+                            AND (lease_until IS NULL OR lease_until <= now())
+                    ) AS round_due
                 FROM email_sync_streams
                 WHERE link_id = l.id AND generation = l.sync_generation
                     AND kind IN ('folder_catalog', 'mail_folder') AND NOT initial_complete
@@ -118,6 +125,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                 oldest_waiting_seconds: row.oldest_waiting_seconds,
                 parked_until_max_seconds: row.parked_until_max_seconds,
                 streams_incomplete: row.streams_incomplete,
+                import_round_wait_seconds: row.import_round_wait_seconds,
                 imported_5m: row.imported_5m,
                 seconds_since_last_import: row.seconds_since_last_import,
                 sync_active: row.sync_active,
