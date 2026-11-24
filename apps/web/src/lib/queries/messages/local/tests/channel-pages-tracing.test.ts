@@ -136,6 +136,32 @@ it('keeps every page of a thread fill in the thread load trace', async () => {
   ]);
 });
 
+it('says when the device could not be read for a thread', async () => {
+  exporter.reset();
+  const root = graphqlMessage(1);
+  const host = fakeHost(() => {
+    throw Object.assign(new Error('engine was replaced'), {
+      errorCode: 'owner-epoch-lost',
+    });
+  });
+  await loadChannelThread(host, CHANNEL_ID, root.id, {
+    fetchPage: async () => ({
+      page: {
+        root,
+        replies: [],
+        olderCursor: null,
+        newerCursor: null,
+        seq: '9',
+      },
+      cached: Promise.resolve(),
+    }),
+  });
+  const load = exporter
+    .getFinishedSpans()
+    .find((span) => span.name === 'channel.thread_load');
+  expect(load?.attributes['thread.device_error']).toBe('owner-epoch-lost');
+});
+
 it('keeps a reply send in the trace of the composer that sent it', async () => {
   const root = graphqlMessage(1);
   const reply = graphqlMessage(8, { threadId: root.id });

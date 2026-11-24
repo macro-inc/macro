@@ -156,17 +156,31 @@ export async function readDeviceThread(
   return { kind: 'miss' };
 }
 
-/** A host that cannot read, as while its database is away, sends the thread to the server. */
+/**
+ * A host that cannot read, as while its database is away, sends the thread to
+ * the server; `span` says so, since the device may well hold it.
+ */
 async function readDeviceThreadOrMiss(
   host: ChannelThreadHost,
   channelId: string,
-  rootId: string
+  rootId: string,
+  span: Span
 ): Promise<DeviceThread> {
   try {
     return await readDeviceThread(host, channelId, rootId);
-  } catch {
+  } catch (error) {
+    span.setAttr('thread.device_error', deviceErrorCode(error));
     return { kind: 'miss' };
   }
+}
+
+/** The cache's code for a failed read, or `read-failed` when it has none. */
+function deviceErrorCode(error: unknown): string {
+  return error instanceof Error &&
+    'errorCode' in error &&
+    typeof error.errorCode === 'string'
+    ? error.errorCode
+    : 'read-failed';
 }
 
 /**
@@ -326,7 +340,7 @@ export async function loadChannelThread(
   return Telemetry.span('channel.thread_load', async (span) => {
     span.setAttr('channel.id', channelId);
     span.setAttr('thread.root_id', rootId);
-    const device = await readDeviceThreadOrMiss(host, channelId, rootId);
+    const device = await readDeviceThreadOrMiss(host, channelId, rootId, span);
     if (device.kind === 'unsupported') {
       span.setAttr('thread.source', 'unsupported');
       return 'unsupported';
