@@ -5,7 +5,7 @@ const nil = '00000000-0000-0000-0000-000000000000';
 
 /** How each kind is left out of a search: a nil id in its primary filter. */
 export const exclusions: Record<
-  Exclude<SearchType, 'company'>,
+  Exclude<SearchType, 'company' | 'database_row'>,
   (filters: EntityFilters) => EntityFilters
 > = {
   agent_session: (f) => ({
@@ -29,7 +29,7 @@ export const exclusions: Record<
 
 /** Filters that leave every kind but `type` out of a unified search. */
 export function onlyType(
-  type: Exclude<SearchType, 'company'>,
+  type: Exclude<SearchType, 'company' | 'database_row'>,
   filters: EntityFilters = {},
 ): EntityFilters {
   let scoped = filters;

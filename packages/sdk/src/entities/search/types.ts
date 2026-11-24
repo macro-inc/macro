@@ -9,6 +9,7 @@ import type { Channel } from '../channels/channel';
 import type { Message } from '../channels/message';
 import type { Chat } from '../chats/chat';
 import type { Company } from '../crm/company';
+import type { DatabaseRow } from '../databases/row';
 import type { Document } from '../documents/document';
 import type { EmailThread } from '../email/thread';
 import type { Project } from '../projects/project';
@@ -18,8 +19,10 @@ import type { SearchOn } from './options';
 
 /**
  * The kinds of item one search can reach. `document` includes tasks;
- * `channel` covers channel names and the messages posted in them; `company`
- * is CRM, searched only when named.
+ * `channel` covers channel names and the messages posted in them;
+ * `database_row` is a row of a database, found by its title and its text,
+ * link, select and tag cells while database row search is on for the user;
+ * `company` is CRM, searched only when named.
  */
 export type SearchType =
   | 'document'
@@ -30,6 +33,7 @@ export type SearchType =
   | 'calendar_event'
   | 'agent_session'
   | 'chat'
+  | 'database_row'
   | 'company';
 
 /** Options shared by {@link SearchNamespace.page} and {@link SearchNamespace.all}. */
@@ -110,7 +114,8 @@ export type SearchResult =
   | Entry<'calendarEvent', 'calendar_event', CalendarEvent>
   | Entry<'agentSession', 'agent_session', AgentSession>
   | Entry<'chat', 'chat', Chat>
-  | Entry<'company', 'company', Company>;
+  | Entry<'company', 'company', Company>
+  | Entry<'databaseRow', 'database_row', DatabaseRow>;
 
 /** A bounded page. A cursor means more results exist, not an exact total count. */
 export type SearchPage = {
