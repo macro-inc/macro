@@ -1,9 +1,10 @@
 import { t } from '@app/lib/i18n';
 import { SidePanel } from '@components/app/side-panel';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import type { CrmCompany } from '../core/company';
 import type { CrmContact } from '../core/contact';
 import { RECORD_PANEL_ORDER } from '../core/record';
+import { CompanyDomainField } from './company-domain-field';
 import { ContactCompanyField, ContactEmailField } from './contact-properties';
 
 /** Factual details, laid out like the Properties rows below them. */
@@ -28,13 +29,9 @@ export function RecordDetailsSection(props: {
         <Show when={props.company}>
           {(company) => (
             <SidePanel.Row label="Website">
-              <div class="flex min-w-0 flex-col">
-                <For each={company().domains}>
-                  {(domain) => (
-                    <span class="wrap-break-word">{domain.domain}</span>
-                  )}
-                </For>
-              </div>
+              <Show when={company().id} keyed>
+                {(_id) => <CompanyDomainField company={company()} />}
+              </Show>
             </SidePanel.Row>
           )}
         </Show>

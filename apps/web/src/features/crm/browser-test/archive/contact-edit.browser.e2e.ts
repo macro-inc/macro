@@ -734,14 +734,6 @@ test('removing the address the editor opened from keeps the editor in place and 
   ).toBeFocused();
 });
 
-test('a company header shows its domains as one pill', async ({ page }) => {
-  await page.goto('/?kind=company&twoDomains');
-  const details = page.getByLabel('Company details');
-  await expect(details).toContainText('example.com');
-  await expect(details).toContainText('+1');
-  await expect(details).not.toContainText('example.org');
-});
-
 test('keyboard: Record details row actions, then the editor, return focus where the page left it', async ({
   page,
   isMobile,

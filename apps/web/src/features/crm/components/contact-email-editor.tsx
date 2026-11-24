@@ -3,9 +3,10 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSearchInputFocus } from '@property/utils';
 import { Button, Input } from '@ui';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import type { ContactEmailChange } from '../core/contact';
 import { ContactEmailRow } from './contact-email-row';
+import type { ValueChange } from './value-change';
 
 export type ChangeContactEmail = (
   email: string,
@@ -15,42 +16,6 @@ export type ChangeContactEmail = (
 const keepTouchFocus = (event: Event) => {
   if (isTouchDevice()) event.preventDefault();
 };
-
-export type ContactEmailRequest = ReturnType<typeof createContactEmailChange>;
-
-/** One pending address change at a time, with the rejection kept beside it. */
-export function createContactEmailChange(
-  change: ChangeContactEmail,
-  message: (error: unknown, change: ContactEmailChange) => string
-) {
-  const [saving, setSaving] = createSignal(false);
-  const [error, setError] = createSignal<string>();
-  let active = true;
-  onCleanup(() => {
-    active = false;
-  });
-
-  return {
-    saving,
-    error,
-    clearError: () => setError(undefined),
-    /** Resolves to whether the server committed the change. */
-    async run(email: string, kind: ContactEmailChange) {
-      if (saving()) return false;
-      setSaving(true);
-      setError(undefined);
-      try {
-        await change(email, kind);
-        return true;
-      } catch (cause) {
-        if (active) setError(message(cause, kind));
-        return false;
-      } finally {
-        if (active) setSaving(false);
-      }
-    },
-  };
-}
 
 /**
  * Every address with its actions, under a field that adds another. The field
@@ -63,7 +28,7 @@ export function ContactEmailEditor(props: {
   manageable: boolean;
   companyEmail: string | undefined;
   /** Owned by the editor's host, which keeps it open while a change saves. */
-  request: ContactEmailRequest;
+  request: ValueChange<ContactEmailChange>;
   onClose(): void;
 }) {
   const [draft, setDraft] = createSignal('');

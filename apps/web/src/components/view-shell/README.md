@@ -158,7 +158,10 @@ legacy Block. Details not yet split contribute through `SplitHeaderLeft`,
 `SplitHeaderRight`, and the title file menu (`FileSplitHeader` for Drive files,
 `PrSplitHeader` for pull requests). `entityDetailHostsSplitHeader`
 lists the detail types that do; add a type there once its detail renders its
-standalone header without a Block. A `SplitHeaderScope.Root` that is off hides
+standalone header without a Block. It does not say which viewer a document
+opens in: `entityDetailOpensMarkdown` does (notes, tasks, snippets and skills
+in `MarkdownDetail`, files in their own detail), for `EntityDetail` and the
+hosts that wrap a detail themselves (Drive's detail stack, the CRM item view). A `SplitHeaderScope.Root` that is off hides
 any enclosing scope from its content, so `useSplitHeaderScope` answers for the
 nearest host only. Inline block previews (`PreviewFrame`) use the same scope.
 

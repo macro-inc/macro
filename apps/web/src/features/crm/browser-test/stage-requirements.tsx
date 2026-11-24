@@ -80,6 +80,7 @@ const context: CrmContext = {
   renameContact: unused,
   editContactEmail: unused,
   editContactCompany: unused,
+  editCompanyDomain: unused,
   hideCompany: unused,
   hideContact: unused,
   setEmailSync: unused,

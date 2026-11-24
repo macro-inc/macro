@@ -267,6 +267,8 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "GetCompany",
         "CreateCompany",
         "CreateContact",
+        "AddCompanyDomain",
+        "RemoveCompanyDomain",
         "ImportCompaniesCsv",
         "ListPipelines",
         "CreatePipeline",
@@ -413,6 +415,8 @@ fn app_item_actions_are_available_in_every_host() {
         "DeleteRoutine",
         "CreateCompany",
         "CreateContact",
+        "AddCompanyDomain",
+        "RemoveCompanyDomain",
         "UpdateCallRecord",
         "DeleteCallRecord",
     ];

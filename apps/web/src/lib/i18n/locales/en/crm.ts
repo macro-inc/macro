@@ -191,12 +191,12 @@ export default {
     other: 'Email: {{email}} and {{count}} more',
   },
   primaryEmail: 'Primary',
-  companyWebsite: 'Website',
   makePrimaryContactEmail: 'Make primary',
   makeContactEmailPrimaryNamed: 'Make {{email}} primary',
   removeContactEmail: 'Remove',
   removeContactEmailNamed: 'Remove {{email}}',
   addEmailPlaceholder: 'Add an email address',
+  saveContact: 'Save',
   savingContact: 'Saving…',
   cancel: 'Cancel',
   company: 'Company',
@@ -221,6 +221,29 @@ export default {
     'This contact or company is no longer available to edit.',
   contactEditInvalid:
     'This change is unavailable. Check the value and try again.',
+  domain: 'Domain',
+  domains: 'Domains',
+  addDomain: 'Add domain',
+  manageCompanyDomain: 'Domain options for {{domain}}',
+  primaryDomain: 'Primary',
+  primaryCompanyDomain: '{{domain}} (primary)',
+  removeCompanyDomain: 'Remove',
+  companyDomainPlaceholder: 'example.com',
+  companyDomainAddHelp:
+    'Mail and new contacts from this domain go to this company.',
+  companyDomainRemoveHelp:
+    'Contacts and email history stay. New mail from this domain is no longer filed under this company.',
+  companyDomainTaken:
+    '{{company}} already has this domain. Remove it there first.',
+  companyDomainTakenArchived:
+    'An archived company already has this domain. A team admin can restore it or remove the domain from it.',
+  companyDomainInvalid:
+    'This domain can’t be added. Enter a company domain such as example.com; personal email providers can’t be added.',
+  companyDomainNamesCompany:
+    'The company is named after this domain. Rename the company first.',
+  companyDomainAdminRequired:
+    'Email sync is off for this company, so only a team admin can remove its domains.',
+  companyDomainUnavailable: 'This company is no longer available to edit.',
 
   navigation: 'CRM navigation',
   records: 'Records',

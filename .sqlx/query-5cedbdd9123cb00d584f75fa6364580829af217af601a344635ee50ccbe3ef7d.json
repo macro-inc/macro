@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_domains (id, company_id, team_id, domain, created_at)\n                       SELECT $1, $2, $3, $4,\n                              GREATEST(clock_timestamp(), MAX(created_at) + INTERVAL '1 microsecond')\n                       FROM crm_domains WHERE company_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5cedbdd9123cb00d584f75fa6364580829af217af601a344635ee50ccbe3ef7d"
+}

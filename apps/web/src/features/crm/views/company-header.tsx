@@ -11,7 +11,7 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Badge, Tooltip } from '@ui';
 import { createEffect, createSignal, onMount, Show } from 'solid-js';
 import { AddToPipeline } from '../add-to-pipeline';
-import { CompanyDomainsPill } from '../components/company-domains-pill';
+import { CompanyDomainField } from './company-domain-field';
 import { CompanyVisibilityButton } from './company-visibility-button';
 import { useSetCompanyNameMutation } from './use-crm';
 
@@ -116,9 +116,9 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
             class="mb-6 mt-3 flex flex-wrap items-center gap-2"
             aria-label="Company details"
           >
-            <CompanyDomainsPill
-              domains={company().domains.map((domain) => domain.domain)}
-            />
+            <Show when={company().id} keyed>
+              {(_id) => <CompanyDomainField company={company()} />}
+            </Show>
             {/* `updatedAt` carries `crm_companies.last_interaction`, which
                 the backend keeps fresh from synced workspace emails. */}
             <Show when={company().updatedAt}>

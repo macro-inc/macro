@@ -233,8 +233,7 @@ with that action alone. It asks for confirmation first. A rejected removal
 stays in the confirmation with its message. A contact with an address on its
 company's domain has no caret, with the reason in its tooltip, and the one
 address that links it to the company shows no **Remove**. Extra addresses can
-still be added to it. A company's header shows its domains as one pill, the
-first and `+N`, with every domain on hover.
+still be added to it.
 
 Pending controls prevent duplicate saves; rejected edits retain their draft for
 retry. The server enforces the same eligibility (see
@@ -249,6 +248,21 @@ archive state. Restore a visible child through its archived company before
 moving it. Personal-email sync reuses a unique existing contact, preserving its
 chosen company through sent/received refreshes and source cleanup. Ambiguous
 matches are left unchanged. CRM settings and domain admission still apply.
+
+A company's **Record details** lists its domains under **Website**, the primary
+first, followed by **Add domain** (a plus button once it has one). Adding a
+domain the organization also uses files its mail and new contacts under this
+company instead of a company of their own; the company keeps its name and
+primary domain, and contacts already filed elsewhere stay where they are.
+Personal email providers are refused, and so is a domain another company of the
+team has: the message names that company, or says an archived company has it.
+Each domain pill opens **Remove**. Removing deletes no contact or mail; new mail
+from the domain is then filed as before it was added. The domain the company is
+named after can't be removed until the company is renamed, and only a team
+admin can remove a domain from a company whose email sync is off. The SDK
+(`company.addDomain`, `company.removeDomain`), `PUT`/`DELETE
+/crm/companies/{id}/domains` and the `AddCompanyDomain` and
+`RemoveCompanyDomain` agent tools do the same.
 
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
@@ -434,7 +448,7 @@ contact also reference its company. The side panel contains References, with no
 empty Sharing section.
 
 In workspace activity and a company or contact's embedded sections, clicking a
-Task, Email, Note, or Call opens its authorized detail inside Customers.
+Task, Email, Note, Call, or file opens its authorized detail inside Customers.
 The CRM sidebar stays in place and the breadcrumb shows the source view, record
 trail (when present), and selected item, without section labels such as Tasks or
 Files or an extra separator before preview titles. The current record breadcrumb
@@ -451,6 +465,10 @@ Reload keeps the selected item's URL. Shift-click uses the existing separate
 split behavior; modified row clicks keep the existing split behavior. On touch,
 the existing header and breadcrumb conventions apply without a new navigation UI.
 Verify that tasks display their status and properties, not the Drive editor.
+A file in Files (an upload or an imported email attachment) opens in its own
+viewer, as in Drive; notes, tasks, snippets and skills open in the Markdown
+editor. Verify a PDF, a Word file and an image render, never "This document
+couldn't be displayed."
 
 Links to the retired Databases views still resolve: a record's `/databases`
 section opens the record, `/databases/<id>` and `/app/companies/database/<id>`

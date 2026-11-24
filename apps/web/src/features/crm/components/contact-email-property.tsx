@@ -13,11 +13,10 @@ import type { ContactEmailChange } from '../core/contact';
 import {
   type ChangeContactEmail,
   ContactEmailEditor,
-  type ContactEmailRequest,
-  createContactEmailChange,
 } from './contact-email-editor';
 import { ContactEmailRow } from './contact-email-row';
 import { contactPropertyTouchTarget } from './contact-property-styles';
+import { createValueChange, type ValueChange } from './value-change';
 
 type ContactEmailProps = {
   emails: string[];
@@ -30,10 +29,16 @@ type ContactEmailProps = {
   errorMessage(error: unknown, change: ContactEmailChange): string;
 };
 
-/** The property popover on desktop and the shared dialog (a drawer on phones). */
-function ContactEmailEditorSurface(props: {
+/**
+ * The property popover on desktop and the shared dialog (a drawer on phones),
+ * shared by the contact email and company domain fields.
+ */
+export function ValueEditor(props: {
   open: boolean;
   onOpenChange(open: boolean): void;
+  title: string;
+  /** The desktop popover's width, when its content needs a fixed one. */
+  popoverClass?: string;
   anchor(): DOMRect | undefined;
   trigger: JSX.Element;
   children: JSX.Element;
@@ -52,7 +57,7 @@ function ContactEmailEditorSurface(props: {
           {props.trigger}
           <Show when={props.open}>
             <EditorPopover
-              class="w-80 max-w-80"
+              class={props.popoverClass}
               onClose={() => props.onOpenChange(false)}
             >
               {props.children}
@@ -72,7 +77,7 @@ function ContactEmailEditorSurface(props: {
           }}
         >
           <Dialog.Title class="px-3 pt-3 text-base font-semibold">
-            {t('crm.email')}
+            {props.title}
           </Dialog.Title>
           {props.children}
         </Dialog>
@@ -82,6 +87,18 @@ function ContactEmailEditorSurface(props: {
 }
 
 /** Every address, the primary marked, for the header pill's hover card. */
+export function ValueError(props: { message: string | undefined }) {
+  return (
+    <Show when={props.message}>
+      {(message) => (
+        <p role="alert" class="text-sm text-failure">
+          {message()}
+        </p>
+      )}
+    </Show>
+  );
+}
+
 function ContactEmailHoverList(props: { emails: string[]; primary: string }) {
   return (
     <div class="flex min-w-0 max-w-80 flex-col gap-1 text-sm">
@@ -105,7 +122,7 @@ function ContactEmailHoverList(props: { emails: string[]; primary: string }) {
 /** The email editor for a host that owns its request and its open state. */
 function editor(
   props: ContactEmailProps,
-  request: ContactEmailRequest,
+  request: ValueChange<ContactEmailChange>,
   onClose: () => void
 ) {
   return (
@@ -129,7 +146,7 @@ function editor(
  */
 export function ContactEmailPill(props: ContactEmailProps) {
   const [open, setOpen] = createSignal(false);
-  const editing = createContactEmailChange(props.change, props.errorMessage);
+  const editing = createValueChange(props.change, props.errorMessage);
   let trigger: HTMLButtonElement | undefined;
   const primary = () => props.primary ?? props.emails[0] ?? '';
   const others = () => Math.max(props.emails.length - 1, 0);
@@ -207,9 +224,11 @@ export function ContactEmailPill(props: ContactEmailProps) {
         </HoverCard>
       }
     >
-      <ContactEmailEditorSurface
+      <ValueEditor
         open={open()}
         onOpenChange={changeOpen}
+        title={t('crm.email')}
+        popoverClass="w-80 max-w-80"
         anchor={() => trigger?.getBoundingClientRect()}
         trigger={
           // A blank contact has nothing to list; a disabled hover card would
@@ -229,7 +248,7 @@ export function ContactEmailPill(props: ContactEmailProps) {
         }
       >
         {editor(props, editing, () => changeOpen(false))}
-      </ContactEmailEditorSurface>
+      </ValueEditor>
     </Show>
   );
 }
@@ -243,8 +262,8 @@ export function ContactEmailPill(props: ContactEmailProps) {
 export function ContactEmailList(props: ContactEmailProps) {
   const [open, setOpen] = createSignal(false);
   const [anchor, setAnchor] = createSignal<HTMLElement>();
-  const request = createContactEmailChange(props.change, props.errorMessage);
-  const editing = createContactEmailChange(props.change, props.errorMessage);
+  const request = createValueChange(props.change, props.errorMessage);
+  const editing = createValueChange(props.change, props.errorMessage);
   let addControl: HTMLButtonElement | undefined;
   const addresses = new Map<string, HTMLButtonElement>();
   const canAdd = () => props.manageable || props.emails.length === 0;
@@ -303,9 +322,11 @@ export function ContactEmailList(props: ContactEmailProps) {
       aria-label={t('crm.email')}
       class="flex min-w-0 flex-col gap-1"
     >
-      <ContactEmailEditorSurface
+      <ValueEditor
         open={open()}
         onOpenChange={changeOpen}
+        title={t('crm.email')}
+        popoverClass="w-80 max-w-80"
         anchor={() => target()?.getBoundingClientRect()}
         trigger={
           <>
@@ -332,7 +353,7 @@ export function ContactEmailList(props: ContactEmailProps) {
         }
       >
         {editor(props, editing, () => changeOpen(false))}
-      </ContactEmailEditorSurface>
+      </ValueEditor>
       <Show when={request.error()}>
         {(message) => (
           <p role="alert" class="px-2 text-xs text-failure">

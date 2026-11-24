@@ -155,9 +155,7 @@ address is on the company's domain (`companyDomain === false`), behind the
 shared confirmation dialog. A company-domain contact shows no caret, with its
 reason in a tooltip. These fields come only from the REST contact detail; a
 response without `emails` or `companyDomain` stays read-only, apart from a blank
-contact adding its first address. A company header shows its domains the same
-way, as one read-only pill: the first domain and `+N`, every domain in a hover
-card.
+contact adding its first address.
 Header faces stay at 24px with 12px type/icons and reserve separate 44px touch
 targets with transparent expansion and margins, except the company's split
 pill: a button group clips its segments, so on touch it takes the group's 36px
@@ -178,6 +176,16 @@ The Emails tab sends every address in `eca`, and Files adds one
 email-attachment participant leaf per address; the server rejects the whole
 Emails request when an address is no longer the contact's, so both read the
 committed list.
+
+A company's header and Record details list its domains with
+`CompanyDomainField`, on the email field's editor shell (`ValueEditor` in
+`contact-email-property.tsx`) and pending-change helper (`value-change.ts`):
+one pill per domain, primary first, each opening Remove, and a trailing Add
+domain control.
+Only the committed response updates the cached company's domain list; the
+company's contact details and Team list refresh with it, since which contacts
+sit on the company's domains changes, and so does Soup. A refused add keeps its
+draft and names the company that already has the domain when the server does.
 
 People, Companies and company Team use an exclusive Visible/Archived filter.
 `people-visibility` keeps the workspace choice local to the account/team/role/view,
@@ -318,6 +326,10 @@ Tasks and Files. The current record breadcrumb returns to the captured section
 and entry state. Preview headers append their own live title and menu after the
 source trail without an extra separator; do not duplicate the selected title in
 the prefix. Modified clicks keep their existing split behavior.
+It opens notes, tasks, snippets and skills in `MarkdownDetail` and every other
+file (PDF, Word, image, video, canvas, code, CSV) through `EntityDetail`, by
+the shared `entityDetailOpensMarkdown`; `entityDetailHostsSplitHeader` is
+whether a detail hosts its touch header, not which viewer it uses.
 Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
 Sales Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt

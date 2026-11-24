@@ -14,6 +14,11 @@ import {
   hasValue,
   isLinkProperty,
 } from '../../utils';
+import {
+  addLinkValue,
+  linkValueErrorMessage,
+  removeLinkValue,
+} from '../../utils/linkValues';
 
 const ADD_BUTTON_CLASS =
   'text-ink-muted hover:text-ink hover:bg-hover px-2 py-0.5 inline-block shrink-0 rounded-sm cursor-default';
@@ -50,21 +55,6 @@ export function InlineLinkEditor(props: { emptyValue?: JSX.Element }) {
     setError(null);
   };
 
-  const normalize = (v: string) => {
-    const t = v.trim();
-    if (!t) return '';
-    return /^https?:\/\//i.test(t) ? t : `https://${t}`;
-  };
-
-  const isValidUrl = (v: string) => {
-    try {
-      new URL(v);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
   const handleAddLink = async () => {
     if (isSaving()) return;
     const raw = inputValue().trim();
@@ -72,23 +62,19 @@ export function InlineLinkEditor(props: { emptyValue?: JSX.Element }) {
       cancelAdding();
       return;
     }
-    const normalized = normalize(raw);
-    if (!isValidUrl(normalized)) {
-      setError('Please enter a valid URL');
-      return;
-    }
-    if (links().includes(normalized)) {
-      setError('This URL has already been added');
+    const next = addLinkValue(links(), raw, property().isMultiSelect);
+    if (next.isErr()) {
+      setError(linkValueErrorMessage(next.error));
       return;
     }
 
     setIsSaving(true);
     setError(null);
     try {
-      const next = property().isMultiSelect
-        ? [...links(), normalized]
-        : [normalized];
-      await ctx.onSave?.(property(), { valueType: 'LINK', values: next });
+      await ctx.onSave?.(property(), {
+        valueType: 'LINK',
+        values: next.value,
+      });
       cancelAdding();
     } catch {
       // mutation onError owns toast
@@ -101,10 +87,9 @@ export function InlineLinkEditor(props: { emptyValue?: JSX.Element }) {
     if (isReadOnly() || isSaving()) return;
     setIsSaving(true);
     try {
-      const next = links().filter((l) => l !== url);
       await ctx.onSave?.(property(), {
         valueType: 'LINK',
-        values: next.length > 0 ? next : null,
+        values: removeLinkValue(links(), url),
       });
     } catch {
       // mutation onError owns toast
