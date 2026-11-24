@@ -1,0 +1,25 @@
+apps/web/src/features/email-view/components/EmailSidebar.tsx
+  s_9d3802eede733c::t_2082a52eaa0de1 15,49
+  s_9d3802eede733c::t_fd055fdc5901ac 10
+apps/web/src/features/email-view/components/EmailHeader.tsx
+  s_9d3802eede733c::t_fd055fdc5901ac 31,43-47,148-149,154-160,242
+apps/web/src/features/email-view/tab-icons.ts
+  s_9d3802eede733c::t_2082a52eaa0de1 1-18
+  s_9d3802eede733c::t_cd3e8d744369f7 19-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fe6ecb06db1477910e557cc5232f030dfdb00031",
+  "prompts": {},
+  "sessions": {
+    "s_9d3802eede733c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d99d634e-e651-4b79-9c72-0c70c17501c1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
