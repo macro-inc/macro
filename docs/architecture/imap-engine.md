@@ -37,6 +37,39 @@ The first keyed rollout and any auth-key rotation reset owner and login buckets
 once, while host buckets remain unchanged. Earlier rows are left to the
 existing bounded age-based cleanup.
 
+## Move identity
+
+Location rows store a checked 32-byte SHA-256 fingerprint in PostgreSQL, with a
+partial `(link_id, fingerprint)` index for `kind = 'location'`. The document has
+no duplicate fingerprint. One domain function hashes the existing concatenation
+of header bytes, UTC INTERNALDATE truncated to microseconds (PostgreSQL precision),
+and decimal RFC822.SIZE. Synchronization computes it only for new UIDs and resolves
+old locations through batches of at most 500 distinct digests. Each batch unnests
+its keys and performs equality probes through the partial index behind a LATERAL
+fence. This keeps both index keys in generic plans; a direct `ANY(bytea[])` lookup
+could instead scan every location of a hot link and filter fingerprints afterward.
+The sync span records requested digests, batches and the returned match count.
+Lookup failures abort synchronization before saving; they never mean no match.
+Recent-message hydration likewise uses distinct message-key equality probes on
+`(link_id, kind, message_id)` after its at-most-100-message page, so a generic
+plan cannot turn that bounded lookup into a full location walk.
+
+Full synchronization still hydrates mailbox metadata for its other work. Its
+BTreeMap normalizes rows by `(kind, key)`, independently of database input order;
+the full-account query does not sort the mailbox. Move matching sorts only the
+bounded lookup's returned matches by the storage key, matching its explicit
+`ORDER BY key COLLATE "C"`, and pops the greatest key first. This makes the order
+consistent across indexed lookup results and pure inputs. One candidate pool
+spans the whole sync, so an old message is claimed at most once; a still-live old
+location is never merged into an incoming copy.
+
+Known `(folder, UIDVALIDITY, UID)` locations retain their stored fingerprint to
+avoid rehashing every message each round. A server that reuses a UID without
+changing UIDVALIDITY violates the protocol and can leave the retained digest
+stale; a subsequent move of that changed content may create another identity.
+A UIDVALIDITY change computes the incoming digest and resolves the prior identity
+through the indexed lookup.
+
 ## Mail transport and state
 
 Transport resolves and validates every remote address through the shared

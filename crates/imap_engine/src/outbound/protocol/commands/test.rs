@@ -298,9 +298,15 @@ fn indexed_engine(transport: Arc<ProtocolTransport>) -> Arc<crate::domain::servi
         uid_validity: 1,
         uid: 1,
         message_id: "m:one".into(),
-        fingerprint: "synthetic".into(),
+        fingerprint: MessageFingerprint::new(
+            b"synthetic",
+            chrono::DateTime::from_timestamp(0, 0).unwrap(),
+            0,
+        ),
     });
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(state),

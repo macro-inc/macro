@@ -473,6 +473,12 @@ impl Engine {
         sync.state_changed = tracing::field::Empty,
         sync.mailbox_changed = tracing::field::Empty,
         sync.health_changed = tracing::field::Empty,
+        sync.fingerprint_count = tracing::field::Empty,
+        sync.fingerprint_lookups = tracing::field::Empty,
+        sync.fingerprint_max_batch_size = tracing::field::Empty,
+        sync.fingerprint_lookup_error = tracing::field::Empty,
+        sync.fingerprint_match_count = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
     ))]
     async fn refresh_at(&self, a: &mut Account, now: DateTime<Utc>) -> Result<(), Error> {
         if a.state.sync_retry_at.is_some_and(|retry_at| retry_at > now) {
@@ -506,7 +512,75 @@ impl Engine {
         a.state.mailbox_issue = None;
         a.state.sync_retry_at = None;
         a.state.sync_size_failures = 0;
-        let changes = merge_snapshot(&mut a.state, remote)?;
+        let fingerprints = sync::new_fingerprints(&a.state, &remote);
+        let requested = fingerprints
+            .values()
+            .copied()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let span = tracing::Span::current();
+        span.record(
+            "sync.fingerprint_count",
+            i64::try_from(requested.len()).unwrap_or(i64::MAX),
+        );
+        span.record("sync.fingerprint_lookups", 0i64);
+        span.record(
+            "sync.fingerprint_max_batch_size",
+            i64::try_from(
+                requested
+                    .len()
+                    .min(super::fingerprint::FINGERPRINT_LOOKUP_BATCH),
+            )
+            .unwrap_or(i64::MAX),
+        );
+        span.record("sync.fingerprint_match_count", 0i64);
+        let mut matches = Vec::new();
+        for (index, batch) in requested
+            .chunks(super::fingerprint::FINGERPRINT_LOOKUP_BATCH)
+            .enumerate()
+        {
+            span.record(
+                "sync.fingerprint_lookups",
+                i64::try_from(index + 1).unwrap_or(i64::MAX),
+            );
+            let lookup = tracing::info_span!(
+                "imap.sync.fingerprint_lookup",
+                batch_size = batch.len(),
+                match_count = tracing::field::Empty,
+                error = tracing::field::Empty,
+                otel.status_code = tracing::field::Empty,
+            );
+            let result = self
+                .repository
+                .lookup_locations(a, batch)
+                .instrument(lookup.clone())
+                .await;
+            match result {
+                Ok(locations) => {
+                    lookup.record(
+                        "match_count",
+                        i64::try_from(locations.len()).unwrap_or(i64::MAX),
+                    );
+                    matches.extend(locations);
+                    span.record(
+                        "sync.fingerprint_match_count",
+                        i64::try_from(matches.len()).unwrap_or(i64::MAX),
+                    );
+                }
+                Err(error) => {
+                    lookup.record("error", tracing::field::debug(&error));
+                    lookup.record("otel.status_code", "ERROR");
+                    span.record(
+                        "sync.fingerprint_lookup_error",
+                        tracing::field::debug(&error),
+                    );
+                    span.record("otel.status_code", "ERROR");
+                    return Err(error);
+                }
+            }
+        }
+        let changes = merge_snapshot(&mut a.state, remote, &fingerprints, &matches)?;
         let span = tracing::Span::current();
         span.record("sync.state_changed", changes.state_changed);
         span.record("sync.mailbox_changed", changes.mailbox_changed);

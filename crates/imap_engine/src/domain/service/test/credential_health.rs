@@ -41,6 +41,8 @@ struct Fixture {
 }
 fn fixture(failure: Error) -> Fixture {
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),

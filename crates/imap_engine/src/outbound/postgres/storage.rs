@@ -5,6 +5,39 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
+/// The location document has no duplicate of the required indexed digest.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct LocationDocument {
+    folder_id: String,
+    uid_validity: u32,
+    uid: u32,
+    message_id: String,
+}
+impl From<&Location> for LocationDocument {
+    fn from(location: &Location) -> Self {
+        Self {
+            folder_id: location.folder_id.clone(),
+            uid_validity: location.uid_validity,
+            uid: location.uid,
+            message_id: location.message_id.clone(),
+        }
+    }
+}
+pub(super) fn decode_location(
+    document: Value,
+    fingerprint: MessageFingerprint,
+) -> Result<Location, Error> {
+    let document: LocationDocument =
+        serde_json::from_value(document).map_err(|_| Error::ConnectionUnavailable)?;
+    Ok(Location {
+        folder_id: document.folder_id,
+        uid_validity: document.uid_validity,
+        uid: document.uid,
+        message_id: document.message_id,
+        fingerprint,
+    })
+}
+
 #[derive(Clone, serde::Serialize)]
 struct Entry {
     kind: String,
@@ -13,8 +46,19 @@ struct Entry {
     message_id: Option<String>,
     sequence: Option<i64>,
     received_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(serialize_with = "serialize_fingerprint")]
+    fingerprint: Option<MessageFingerprint>,
     document: Value,
     body: Option<String>,
+}
+fn serialize_fingerprint<S: serde::Serializer>(
+    fingerprint: &Option<MessageFingerprint>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match fingerprint {
+        Some(value) => serializer.serialize_some(&STANDARD.encode(value.as_bytes())),
+        None => serializer.serialize_none(),
+    }
 }
 impl Entry {
     fn new(kind: &str, key: String, value: &impl serde::Serialize) -> Result<Self, Error> {
@@ -25,6 +69,7 @@ impl Entry {
             message_id: None,
             sequence: None,
             received_at: None,
+            fingerprint: None,
             document: serde_json::to_value(value).map_err(|_| Error::Invalid)?,
             body: None,
         })
@@ -60,13 +105,10 @@ fn entries(state: &AccountState) -> Result<Vec<Entry>, Error> {
         rows.push(e);
     }
     for l in &state.locations {
-        let mut e = Entry::new(
-            "location",
-            format!("{}:{}:{}", l.folder_id, l.uid_validity, l.uid),
-            l,
-        )?;
+        let mut e = Entry::new("location", l.storage_key(), &LocationDocument::from(l))?;
         e.folder_id = Some(l.folder_id.clone());
         e.message_id = Some(l.message_id.clone());
+        e.fingerprint = Some(l.fingerprint);
         rows.push(e);
     }
     for (id, t) in &state.thread_refs {
@@ -109,10 +151,16 @@ fn hydrate(state: &mut AccountState, rows: &[Entry]) -> Result<(), Error> {
                         .map_err(|_| Error::ConnectionUnavailable)?,
                 );
             }
-            "location" => state.locations.push(
-                serde_json::from_value(e.document.clone())
-                    .map_err(|_| Error::ConnectionUnavailable)?,
-            ),
+            "location" => {
+                let location = decode_location(
+                    e.document.clone(),
+                    e.fingerprint.ok_or(Error::ConnectionUnavailable)?,
+                )?;
+                if location.storage_key() != e.key {
+                    return Err(Error::ConnectionUnavailable);
+                }
+                state.locations.push(location);
+            }
             "thread" => {
                 state.thread_refs.insert(
                     e.key.clone(),
@@ -181,6 +229,11 @@ macro_rules! load {
                 message_id: r.message_id,
                 sequence: r.sequence,
                 received_at: r.received_at,
+                fingerprint: r
+                    .fingerprint
+                    .as_deref()
+                    .map(MessageFingerprint::from_bytes)
+                    .transpose()?,
                 document: r.document,
                 body: r.body.map(|b| STANDARD.encode(b)),
             });
@@ -210,6 +263,7 @@ impl PgRepository {
                             message_id,
                             sequence,
                             received_at,
+                            fingerprint,
                             document,
                             body
                         FROM
@@ -237,6 +291,7 @@ impl PgRepository {
                             message_id,
                             sequence,
                             received_at,
+                            fingerprint,
                             document,
                             body
                         FROM
@@ -277,6 +332,7 @@ impl PgRepository {
                                     message_id,
                                     sequence,
                                     received_at,
+                                    fingerprint,
                                     document,
                                     body
                                 FROM
@@ -295,6 +351,7 @@ impl PgRepository {
                                 i64::from(limit.min(100)),
                             )
                         );
+                        // The preceding recent-message query caps these keys at 100.
                         let ids = rows
                             .iter()
                             .filter(|e| e.kind == "message")
@@ -305,21 +362,38 @@ impl PgRepository {
                             rows,
                             sqlx::query!(
                                 r#"
+                                WITH requested AS MATERIALIZED (
+                                    SELECT DISTINCT message_id
+                                    FROM unnest($2::text[]) AS ids(message_id)
+                                )
                                 SELECT
-                                    kind,
-                                    key,
-                                    folder_id,
-                                    message_id,
-                                    sequence,
-                                    received_at,
-                                    document,
-                                    body
-                                FROM
-                                    imap_state_entries
-                                WHERE
-                                    link_id = $1
-                                    AND kind = 'location'
-                                    AND message_id = ANY ($2)
+                                    locations.kind,
+                                    locations.key,
+                                    locations.folder_id,
+                                    locations.message_id,
+                                    locations.sequence,
+                                    locations.received_at,
+                                    locations.fingerprint,
+                                    locations.document,
+                                    locations.body
+                                FROM requested
+                                CROSS JOIN LATERAL (
+                                    SELECT
+                                        kind,
+                                        key,
+                                        folder_id,
+                                        message_id,
+                                        sequence,
+                                        received_at,
+                                        fingerprint,
+                                        document,
+                                        body
+                                    FROM imap_state_entries
+                                    WHERE link_id = $1
+                                        AND kind = 'location'
+                                        AND message_id = requested.message_id
+                                    OFFSET 0
+                                ) locations
                                 "#,
                                 link,
                                 &ids,
@@ -346,6 +420,7 @@ impl PgRepository {
                                     message_id,
                                     sequence,
                                     received_at,
+                                    fingerprint,
                                     document,
                                     body
                                 FROM
@@ -385,6 +460,7 @@ impl PgRepository {
                                         message_id,
                                         sequence,
                                         received_at,
+                                        fingerprint,
                                         document,
                                         body
                                     FROM
@@ -420,6 +496,7 @@ impl PgRepository {
                                         message_id,
                                         sequence,
                                         received_at,
+                                        fingerprint,
                                         document,
                                         body
                                     FROM
@@ -455,12 +532,7 @@ impl PgRepository {
                 }
             }
         }
-        // A selected upload is also returned by its owning draft query.
-        let mut unique = BTreeMap::new();
-        for e in rows {
-            unique.insert((e.kind.clone(), e.key.clone()), e);
-        }
-        let rows = unique.into_values().collect::<Vec<_>>();
+        let rows = normalize_entries(rows);
         let mut encoded_bytes = 0usize;
         account.checkpoint = rows
             .iter()
@@ -500,6 +572,7 @@ impl PgRepository {
                     message_id,
                     sequence,
                     received_at,
+                    fingerprint,
                     document,
                     body
                 FROM
@@ -536,6 +609,7 @@ impl PgRepository {
                     message_id,
                     sequence,
                     received_at,
+                    fingerprint,
                     document,
                     body
                 FROM
@@ -636,6 +710,7 @@ impl PgRepository {
                 r#"
                 INSERT INTO imap_state_entries (link_id, kind, key, folder_id, message_id, sequence,
                     received_at,
+                    fingerprint,
                     document,
                     body
                 )
@@ -647,6 +722,7 @@ impl PgRepository {
                     d.message_id,
                     d.sequence,
                     d.received_at,
+                    decode(d.fingerprint, 'base64'),
                     d.document,
                     decode(d.body, 'base64')
                 FROM
@@ -657,6 +733,7 @@ impl PgRepository {
                         sequence bigint
                 ,
                             received_at timestamptz,
+                            fingerprint text,
                             document jsonb,
                             body text)
                     ON CONFLICT (link_id,
@@ -668,6 +745,7 @@ impl PgRepository {
                             sequence =
                                 EXCLUDED.sequence,
                                 received_at = EXCLUDED.received_at,
+                                fingerprint = EXCLUDED.fingerprint,
                                 document = EXCLUDED.document,
                                 body = EXCLUDED.body
                 "#,
@@ -748,5 +826,45 @@ impl PgRepository {
             .map_err(|_| Error::ConnectionUnavailable)?;
         a.revision = revision;
         Ok(())
+    }
+}
+
+// The BTreeMap supplies byte-key order independently of query row order, and
+// deduplicates uploads returned by both their own and their draft's selection.
+fn normalize_entries(rows: Vec<Entry>) -> Vec<Entry> {
+    let mut unique = BTreeMap::new();
+    for entry in rows {
+        unique.insert((entry.kind.clone(), entry.key.clone()), entry);
+    }
+    unique.into_values().collect()
+}
+
+#[cfg(test)]
+mod fingerprint_order_test {
+    use super::*;
+    #[test]
+    fn fingerprint_hydration_normalizes_input_with_the_btree_map() {
+        let rows = ["中", "a:b", "é", "Z", "a", "A"]
+            .into_iter()
+            .map(|key| Entry::new("location", key.into(), &serde_json::json!({})).unwrap())
+            .collect::<Vec<_>>();
+        let mut reversed = rows.clone();
+        reversed.reverse();
+        let keys = |rows| {
+            normalize_entries(rows)
+                .into_iter()
+                .map(|row| row.key)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(keys(rows), keys(reversed));
+        assert_eq!(
+            keys(
+                ["A", "Z", "a", "a:b", "é", "中"]
+                    .into_iter()
+                    .map(|key| Entry::new("location", key.into(), &serde_json::json!({})).unwrap())
+                    .collect()
+            ),
+            vec!["A", "Z", "a", "a:b", "é", "中"]
+        );
     }
 }

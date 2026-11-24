@@ -1,5 +1,6 @@
 //! Compile-time checked, fenced persistence for the IMAP engine's own tables.
 mod acquisition;
+mod fingerprints;
 mod reads;
 mod settings;
 use crate::domain::{models::*, ports::*};
@@ -29,6 +30,13 @@ impl PgRepository {
 }
 #[async_trait::async_trait]
 impl Repository for PgRepository {
+    async fn lookup_locations(
+        &self,
+        account: &Account,
+        fingerprints: &[MessageFingerprint],
+    ) -> Result<Vec<Location>, Error> {
+        self.lookup_fingerprints(account, fingerprints).await
+    }
     async fn idle_state(
         &self,
         host_hash: &str,

@@ -14,6 +14,8 @@ pub(crate) struct PendingSubmission {
 impl PendingSubmission {
     pub(crate) async fn new() -> Self {
         let repository = Arc::new(MemoryRepository {
+            fingerprint_calls: Default::default(),
+            fingerprint_failure: Default::default(),
             revision: Default::default(),
             scoped_acquire_errors: Default::default(),
             state: Default::default(),

@@ -129,7 +129,11 @@ async fn scoped_reads_share_a_snapshot_and_cannot_mutate_or_outlive_access(pool:
         uid_validity: 1,
         uid: 1,
         message_id: "m:one".into(),
-        fingerprint: "synthetic".into(),
+        fingerprint: MessageFingerprint::new(
+            b"synthetic",
+            chrono::DateTime::from_timestamp(0, 0).unwrap(),
+            0,
+        ),
     });
     repo.save(&mut writer).await.unwrap();
     let one = sqlx::postgres::PgPoolOptions::new()
@@ -145,6 +149,8 @@ async fn scoped_reads_share_a_snapshot_and_cannot_mutate_or_outlive_access(pool:
         atomic::{AtomicBool, AtomicU32},
     };
     let fake = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),

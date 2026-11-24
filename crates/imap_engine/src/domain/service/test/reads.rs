@@ -53,6 +53,8 @@ fn read_fixture(
     .unwrap();
     let message_id = state.messages.keys().next().unwrap().clone();
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(state),

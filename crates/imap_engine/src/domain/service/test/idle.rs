@@ -39,6 +39,8 @@ async fn a_planned_idle_restart_stays_stable_and_rearms_without_rescanning() {
     let _interest_guard = tracing::Dispatch::new(tracing_subscriber::registry());
     let subscriber = tracing_subscriber::registry().with(RetryCounts(retry_counts.clone()));
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         owner_claims: Default::default(),
@@ -147,6 +149,8 @@ async fn a_planned_idle_restart_stays_stable_and_rearms_without_rescanning() {
 #[tokio::test(start_paused = true)]
 async fn an_unavailable_baseline_backs_off_full_scans_to_the_periodic_walk() {
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         owner_claims: Default::default(),

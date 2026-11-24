@@ -180,9 +180,39 @@ impl SnapshotChanges {
     }
 }
 
+pub(super) type Locator = (String, u32, u32);
+
+/// Compute move identities only for UIDs absent from the committed snapshot.
+pub(super) fn new_fingerprints(
+    state: &AccountState,
+    remote: &[RemoteFolder],
+) -> BTreeMap<Locator, MessageFingerprint> {
+    let known = state
+        .locations
+        .iter()
+        .map(|l| (l.folder_id.clone(), l.uid_validity, l.uid))
+        .collect::<BTreeSet<_>>();
+    remote
+        .iter()
+        .filter(|folder| folder.monitored)
+        .flat_map(|folder| folder.messages.iter().map(move |message| (folder, message)))
+        .filter_map(|(folder, message)| {
+            let locator = (folder.folder.id.clone(), folder.uid_validity, message.uid);
+            (!known.contains(&locator)).then(|| {
+                (
+                    locator,
+                    MessageFingerprint::new(&message.mime, message.received_at, message.size),
+                )
+            })
+        })
+        .collect()
+}
+
 pub(super) fn merge_snapshot(
     state: &mut AccountState,
     remote: Vec<RemoteFolder>,
+    fingerprints: &BTreeMap<Locator, MessageFingerprint>,
+    matches: &[Location],
 ) -> Result<SnapshotChanges, Error> {
     let mut changed = SnapshotChanges::default();
     let old_folder_count = state.folders.len();
@@ -220,12 +250,23 @@ pub(super) fn merge_snapshot(
         .iter()
         .map(|l| ((l.folder_id.clone(), l.uid_validity, l.uid), l))
         .collect::<BTreeMap<_, _>>();
-    let mut by_fingerprint: BTreeMap<&str, Vec<&Location>> = BTreeMap::new();
+    let mut matches_by_fingerprint: BTreeMap<MessageFingerprint, Vec<&Location>> = BTreeMap::new();
+    let mut ordered_matches = matches.iter().collect::<Vec<_>>();
+    ordered_matches.sort_by_cached_key(|location| location.storage_key());
+    for location in ordered_matches {
+        if !live.contains(&(
+            location.folder_id.clone(),
+            location.uid_validity,
+            location.uid,
+        )) {
+            matches_by_fingerprint
+                .entry(location.fingerprint)
+                .or_default()
+                .push(location);
+        }
+    }
     let mut by_folder: BTreeMap<&str, Vec<&Location>> = BTreeMap::new();
     for l in &old_locations {
-        if !live.contains(&(l.folder_id.clone(), l.uid_validity, l.uid)) {
-            by_fingerprint.entry(&l.fingerprint).or_default().push(l);
-        }
         by_folder.entry(&l.folder_id).or_default().push(l);
     }
     let sent_by_message_id = state
@@ -313,29 +354,22 @@ pub(super) fn merge_snapshot(
                 }
             };
             let global = headers.get_first_value("Message-ID");
-            let fingerprint = format!(
-                "{:x}",
-                Sha256::digest(
-                    [
-                        item.mime.as_ref(),
-                        item.received_at.to_rfc3339().as_bytes(),
-                        item.size.to_string().as_bytes()
-                    ]
-                    .concat()
-                )
-            );
-            let old = by_locator
-                .get(&(folder_id.clone(), remote.uid_validity, item.uid))
-                .copied()
-                .or_else(|| {
-                    let locations = by_fingerprint.get_mut(fingerprint.as_str())?;
-                    while let Some(l) = locations.pop() {
-                        if !next_messages.contains_key(&l.message_id) {
-                            return Some(l);
-                        }
+            let locator = (folder_id.clone(), remote.uid_validity, item.uid);
+            // Every monitored locator is either retained or hashed by new_fingerprints.
+            let fingerprint = by_locator
+                .get(&locator)
+                .map(|location| location.fingerprint)
+                .or_else(|| fingerprints.get(&locator).copied())
+                .ok_or(Error::Invalid)?;
+            let old = by_locator.get(&locator).copied().or_else(|| {
+                let locations = matches_by_fingerprint.get_mut(&fingerprint)?;
+                while let Some(l) = locations.pop() {
+                    if !next_messages.contains_key(&l.message_id) {
+                        return Some(l);
                     }
-                    None
-                });
+                }
+                None
+            });
             let sent = if folder.folder.role == FolderRole::Sent
                 || gmail_labels
                     .as_ref()

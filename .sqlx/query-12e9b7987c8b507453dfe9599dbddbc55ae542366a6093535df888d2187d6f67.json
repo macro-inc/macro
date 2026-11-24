@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                        SELECT\n                            kind,\n                            key,\n                            folder_id,\n                            message_id,\n                            sequence,\n                            received_at,\n                            document,\n                            body\n                        FROM\n                            imap_state_entries\n                        WHERE\n                            link_id = $1\n                            AND kind = 'folder'\n                        ORDER BY\n                            key\n                        LIMIT 2000\n                        ",
+  "query": "\n                        SELECT\n                            kind,\n                            key,\n                            folder_id,\n                            message_id,\n                            sequence,\n                            received_at,\n                            fingerprint,\n                            document,\n                            body\n                        FROM\n                            imap_state_entries\n                        WHERE\n                            link_id = $1\n                            AND kind = 'folder'\n                        ORDER BY\n                            key\n                        LIMIT 2000\n                        ",
   "describe": {
     "columns": [
       {
@@ -35,11 +35,16 @@
       },
       {
         "ordinal": 6,
+        "name": "fingerprint",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 7,
         "name": "document",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "body",
         "type_info": "Bytea"
       }
@@ -56,9 +61,10 @@
       true,
       true,
       true,
+      true,
       false,
       true
     ]
   },
-  "hash": "7e3c04ab7789d82e4575e7f4c5ab4f17749548f89f83386c30d8b24328c06c60"
+  "hash": "12e9b7987c8b507453dfe9599dbddbc55ae542366a6093535df888d2187d6f67"
 }

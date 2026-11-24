@@ -9,6 +9,8 @@ pub(crate) struct RenewalControl {
 }
 
 pub(crate) struct MemoryRepository {
+    pub(crate) fingerprint_calls: std::sync::Mutex<Vec<usize>>,
+    pub(crate) fingerprint_failure: std::sync::atomic::AtomicBool,
     pub(crate) renewal: RenewalControl,
     pub(crate) revision: std::sync::atomic::AtomicI64,
     pub(crate) scoped_acquire_errors: std::sync::atomic::AtomicU32,
@@ -129,6 +131,30 @@ impl Repository for MemoryRepository {
             return Err(error);
         }
         Ok(())
+    }
+    async fn lookup_locations(
+        &self,
+        account: &Account,
+        fingerprints: &[MessageFingerprint],
+    ) -> Result<Vec<Location>, Error> {
+        account.lease_id.ok_or(Error::Conflict)?;
+        self.fingerprint_calls
+            .lock()
+            .unwrap()
+            .push(fingerprints.len());
+        if self.fingerprint_failure.load(Ordering::Acquire) {
+            return Err(Error::ConnectionUnavailable);
+        }
+        let requested = fingerprints.iter().copied().collect::<BTreeSet<_>>();
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .locations
+            .iter()
+            .filter(|l| requested.contains(&l.fingerprint))
+            .cloned()
+            .collect())
     }
     async fn save(&self, account: &mut Account) -> Result<(), Error> {
         account.lease_id.ok_or(Error::Conflict)?;

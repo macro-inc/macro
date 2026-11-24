@@ -91,14 +91,33 @@ pub(crate) fn inbox(count: u32, uid_next: u32) -> Vec<RemoteFolder> {
     }]
 }
 
-struct Fixture {
-    engine: Engine,
-    repository: Arc<MemoryRepository>,
-    notifier: Arc<RecordingNotifier>,
-    binding: Binding,
+/// The same UTF-8 storage-key corpus exercises SQL C collation and pure matching.
+pub(crate) fn fingerprint_copies_in_mixed_folders() -> Vec<RemoteFolder> {
+    ["A", "a", "Z", "é", "中", "a:b"]
+        .into_iter()
+        .map(|key| {
+            let mut folder = inbox(1, 11).pop().unwrap();
+            folder.folder.id = key.into();
+            folder.folder.name = key.into();
+            folder.path = key.into();
+            folder.messages[0].uid = 10;
+            folder.messages[0].native_message_id = None;
+            folder.messages[0].native_thread_id = None;
+            folder
+        })
+        .collect()
 }
-fn fixture(snapshots: Vec<Vec<RemoteFolder>>) -> Fixture {
+
+pub(super) struct Fixture {
+    pub(super) engine: Engine,
+    pub(super) repository: Arc<MemoryRepository>,
+    notifier: Arc<RecordingNotifier>,
+    pub(super) binding: Binding,
+}
+pub(super) fn fixture(snapshots: Vec<Vec<RemoteFolder>>) -> Fixture {
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         renewal: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),

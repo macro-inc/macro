@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 mod admission;
 mod credential_health;
 mod fakes;
+mod fingerprint;
 mod idle;
 mod ownership;
 mod reads;
@@ -250,7 +251,11 @@ fn initial_pages_use_keyset_and_later_changes_remain_visible() {
             uid_validity: 10,
             uid: n + 1,
             message_id: id.clone(),
-            fingerprint: id.clone(),
+            fingerprint: MessageFingerprint::new(
+                id.as_bytes(),
+                chrono::DateTime::from_timestamp(0, 0).unwrap(),
+                0,
+            ),
         });
         folder.journal.push(Change {
             sequence: u64::from(n) + 1,
@@ -268,7 +273,11 @@ fn initial_pages_use_keyset_and_later_changes_remain_visible() {
         uid_validity: 10,
         uid: 999,
         message_id: "m:0000a".into(),
-        fingerprint: "new".into(),
+        fingerprint: MessageFingerprint::new(
+            b"new",
+            chrono::DateTime::from_timestamp(0, 0).unwrap(),
+            0,
+        ),
     });
     let folder = state.folders.get_mut("inbox").unwrap();
     folder.sequence = 502;
@@ -287,6 +296,8 @@ fn initial_pages_use_keyset_and_later_changes_remain_visible() {
 #[tokio::test]
 async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_restart() {
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
@@ -441,6 +452,8 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
 #[tokio::test]
 async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one() {
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
@@ -658,6 +671,8 @@ mod gmail;
 async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_and_many_later_messages()
  {
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
@@ -800,6 +815,8 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
 #[tokio::test]
 async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capacity() {
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
@@ -849,6 +866,8 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
 #[tokio::test]
 async fn a_definite_refusal_clears_the_unknown_fence_without_persisting_new_outcome_vocabulary() {
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         state: std::sync::Mutex::new(AccountState::default()),
@@ -956,4 +975,13 @@ async fn a_definite_refusal_clears_the_unknown_fence_without_persisting_new_outc
     // the persisted current state above proves it was subsequently cleared.
     assert!(repository.saved_unknown.load(Ordering::Acquire));
     assert_eq!(transport.submissions.load(Ordering::Acquire), 1);
+}
+
+fn merge_snapshot(
+    state: &mut AccountState,
+    remote: Vec<RemoteFolder>,
+) -> Result<super::sync::SnapshotChanges, Error> {
+    let fingerprints = super::sync::new_fingerprints(state, &remote);
+    let matches = state.locations.clone();
+    super::sync::merge_snapshot(state, remote, &fingerprints, &matches)
 }

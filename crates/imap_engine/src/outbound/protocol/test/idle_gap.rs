@@ -397,6 +397,8 @@ async fn real_tls_mail_after_snapshot_commit_is_indexed_without_an_idle_timeout(
         smtp: login,
     };
     let repository = Arc::new(MemoryRepository {
+        fingerprint_calls: Default::default(),
+        fingerprint_failure: Default::default(),
         revision: Default::default(),
         scoped_acquire_errors: Default::default(),
         owner_claims: AtomicU32::new(0),

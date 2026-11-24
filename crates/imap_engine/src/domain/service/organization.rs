@@ -155,7 +155,7 @@ impl Engine {
                         uid_validity: epoch,
                         uid,
                         message_id: id.clone(),
-                        fingerprint: location.fingerprint.clone(),
+                        fingerprint: location.fingerprint,
                     });
                     if facts.gmail_labels.is_some() {
                         a.state.messages.insert(id.clone(), message);
@@ -164,7 +164,7 @@ impl Engine {
                             uid_validity: epoch,
                             uid,
                             message_id: id.clone(),
-                            fingerprint: location.fingerprint.clone(),
+                            fingerprint: location.fingerprint,
                         };
                         sync::gmail_projection(&mut a.state, &id, &facts, &physical)?;
                         let version = a.state.messages.get(&id).map(|m| m.version.clone());
@@ -188,7 +188,7 @@ impl Engine {
                             uid_validity: destination.uid_validity,
                             uid: 0,
                             message_id: id.clone(),
-                            fingerprint: location.fingerprint.clone(),
+                            fingerprint: location.fingerprint,
                         });
                     }
                     if current.gmail_labels.is_some() && destination.folder.id != source.folder.id {

@@ -71,6 +71,11 @@ rolling binaries. Migrations 181267–181268 add nullable command action IDs and
 a concurrent partial group lookup index. Legacy writers leave the action ID
 NULL; grouped receipt readers must precede the default-off chunking flag flip.
 
+`imap_state_entries` location rows require a 32-byte `fingerprint` bytea value,
+indexed by `(link_id, fingerprint)` for the literal location kind. The engine
+owns canonical hashing and candidate selection; location writes must supply the
+indexed digest without retaining a document copy.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,

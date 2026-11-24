@@ -53,6 +53,19 @@ accepts bearer access to a remote mail server.
   the loaded-row checkpoint when saving so unrelated mailbox rows are retained.
   Use `save_health` when only account scalars changed; notification delivery must
   not hash the full mailbox index again.
+- Persist each location's canonical SHA-256 in the checked `fingerprint` bytea column,
+  not its JSON document. Hash only new UIDs from header bytes, µs-truncated UTC
+  INTERNALDATE and decimal size; resolve moves with link-scoped batches of at most
+  500 digests through unnested-key equality probes on the fingerprint partial index;
+  keep both index keys in generic plans and record returned matches on the sync span.
+  Fail the sync on lookup failure.
+  Normalize full Sync hydration through its `(kind, key)` BTreeMap without a
+  full-mailbox SQL sort. Order the bounded lookup by `key COLLATE "C"` and sort
+  the shared per-sync pool by the same key before popping; never reuse a live
+  or already-claimed old message.
+- Fetch recent-message locations through distinct-key equality probes on
+  `(link_id, kind, message_id)`; the preceding message page caps input at 100.
+  Keep the generic plan from scanning every location of a hot link.
 - Treat destination UID zero as pending MOVE reconciliation. Never issue a remote
   command or MIME fetch for that placeholder; IDLE sync resolves it when COPYUID
   was unavailable.

@@ -1,4 +1,5 @@
 mod credential_health;
+mod fingerprint;
 mod reads;
 mod restart;
 mod send_lifetime;
@@ -573,19 +574,19 @@ async fn large_mailbox_point_reads_and_writes_preserve_unloaded_rows(pool: PgPoo
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO imap_state_entries (link_id, kind, key, folder_id, message_id, document)
+        INSERT INTO imap_state_entries (link_id, kind, key, folder_id, message_id, fingerprint, document)
         SELECT
             $1,
             'location',
             'inbox:1:' || n,
             'inbox',
             'm:' || lpad(n::text, 6, '0'),
+            decode(md5(n::text)||md5(n::text),'hex'),
             jsonb_build_object(
                 'folder_id', 'inbox',
                 'uid_validity', 1,
                 'uid', n,
-                'message_id', 'm:' || lpad(n::text, 6, '0'),
-                'fingerprint', 'fp:' || n
+                'message_id', 'm:' || lpad(n::text, 6, '0')
             )
         FROM
             generate_series(1, 100000) n

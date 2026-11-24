@@ -1,5 +1,6 @@
 //! Shared typed API and durable account state.
 
+pub use super::fingerprint::MessageFingerprint;
 use chrono::{DateTime, Utc};
 use macro_user_id::email::EmailStr;
 use serde::{Deserialize, Serialize};
@@ -444,7 +445,14 @@ pub struct Location {
     /// Move-stable message identity.
     pub message_id: String,
     /// Cross-folder matching digest, including message bytes and date.
-    pub fingerprint: String,
+    pub fingerprint: MessageFingerprint,
+}
+
+impl Location {
+    /// Stable byte-ordered key used by persistence and duplicate match selection.
+    pub fn storage_key(&self) -> String {
+        format!("{}:{}:{}", self.folder_id, self.uid_validity, self.uid)
+    }
 }
 
 /// Indexed remote folder state.

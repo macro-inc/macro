@@ -12,6 +12,8 @@ use std::sync::{
 async fn actual_router_rejects_missing_wrong_and_empty_keys() {
     for configured in ["correct-internal-key", ""] {
         let repository = Arc::new(MemoryRepository {
+            fingerprint_calls: Default::default(),
+            fingerprint_failure: Default::default(),
             revision: Default::default(),
             scoped_acquire_errors: Default::default(),
             state: Mutex::new(AccountState::default()),

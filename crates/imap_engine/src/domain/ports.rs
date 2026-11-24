@@ -138,6 +138,13 @@ pub trait Repository: Send + Sync {
     ) -> Result<Account, Error>;
     /// Recheck the original owner, active state and generations after remote IO.
     async fn validate_read(&self, account: &Account) -> Result<(), Error>;
+    /// Resolve at most FINGERPRINT_LOOKUP_BATCH digests within this leased account.
+    /// Failures must abort synchronization, never become an empty match set.
+    async fn lookup_locations(
+        &self,
+        account: &Account,
+        fingerprints: &[MessageFingerprint],
+    ) -> Result<Vec<Location>, Error>;
     /// Persist under the lease and increment the expected revision.
     async fn save(&self, account: &mut Account) -> Result<(), Error>;
     /// Persist only health and admission scalars, without revisiting the loaded index.
