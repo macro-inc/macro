@@ -1,19 +1,21 @@
 //! The last job of the three email end-to-end workflows (`email_e2e.rs`,
-//! `email_e2e_browser.rs`, `email_e2e_full_stack.rs`) and of the channels
-//! end-to-end workflow (`channels_e2e.rs`): after every other
-//! job of a push to `main` or of the daily sweep, it tells the Macro Alerts
-//! channel when the workflow turns red, and when it turns green again. Not on
-//! a run by hand. `scripts/email_e2e_alert.ts` decides whether a run posts,
+//! `email_e2e_browser.rs`, `email_e2e_full_stack.rs`), of the channels
+//! end-to-end workflow (`channels_e2e.rs`) and of the connectors end-to-end
+//! workflow (`connectors_e2e.rs`): after every other job of a push to `main`
+//! or of the daily sweep, it tells a Macro channel (Macro Alerts, or the
+//! [`Channel`] the workflow names) when the workflow turns red, and when it
+//! turns green again. Not on a run by hand. `scripts/email_e2e_alert.ts` decides whether a run posts,
 //! and what it says; the job's last step records what the channel then shows,
 //! which the next run's job reads.
 
 use gh_workflow::expr::typed::{
-    Bool, Expr, Flag, JobHandle, StepHandle, StepOutput, Str, cancelled, github, runner,
+    Bool, Expr, Flag, JobHandle, Secret, StepHandle, StepOutput, Str, Var, cancelled, github,
+    runner,
 };
 use gh_workflow::{Concurrency, Job, Level, Permissions, Run, Step, Use};
 
 use crate::workflows::actions::ActionsDownloadArtifact;
-use crate::workflows::{runners, steps};
+use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
 mod test;
@@ -21,8 +23,28 @@ mod test;
 /// The job, in each workflow.
 pub(crate) const JOB: JobHandle<()> = JobHandle::new("email-e2e-alert", ());
 
-/// The job's name, by which the script finds it in a run's jobs.
-const NAME: &str = "Tell Macro Alerts";
+/// The Macro channel a workflow's alert job tells, and how.
+pub(crate) struct Channel {
+    /// The job's name, by which the script finds it in a run's jobs.
+    pub job: &'static str,
+    /// The step that posts, by its name.
+    pub post: &'static str,
+    /// The channel's name, for messages.
+    pub label: &'static str,
+    /// The channel's webhook, a repo variable.
+    pub webhook: Var,
+    /// The bot token the webhook takes.
+    pub token: Secret,
+}
+
+/// The Macro Alerts channel, which the email and channels suites tell.
+pub(crate) const MACRO_ALERTS: Channel = Channel {
+    job: "Tell Macro Alerts",
+    post: "post to Macro Alerts",
+    label: "Macro Alerts",
+    webhook: vars::MACRO_BUILD_ALERT_WEBHOOK_URL,
+    token: vars::MACRO_BUILD_ALERT_BOT_TOKEN,
+};
 
 /// The runs that can post: a push to `main` and the sweep, unless cancelled.
 fn posts() -> Expr<Bool> {
@@ -74,18 +96,21 @@ const DECIDE: StepHandle<DecideOutputs> = StepHandle::new(
     },
 );
 
-/// The step that posts, by its name.
-const POST: &str = "post to Macro Alerts";
-
 /// The steps that record what the channel shows once the job is done, by name.
 const SHOWS_FAILING: &str = "the channel shows it failing";
 const SHOWS_PASSING: &str = "the channel shows it passing";
 
-/// The job, after `needs`: every other job of the workflow. `report` is the
-/// artifact the workflow's coverage job uploads its report as.
+/// The job telling [`MACRO_ALERTS`], after `needs`: every other job of the
+/// workflow. `report` is the artifact the workflow's coverage job uploads its
+/// report as.
 pub(crate) fn job(needs: &[&JobHandle<()>], report: &str) -> Job {
+    job_to(&MACRO_ALERTS, needs, report)
+}
+
+/// [`job`], telling `channel`.
+pub(crate) fn job_to(channel: &Channel, needs: &[&JobHandle<()>], report: &str) -> Job {
     Job::default()
-        .name(NAME)
+        .name(channel.job)
         .needs(
             needs
                 .iter()
@@ -102,10 +127,10 @@ pub(crate) fn job(needs: &[&JobHandle<()>], report: &str) -> Job {
             ..Default::default()
         })
         .add_step(download(report))
-        .add_step(decide())
-        .add_step(post())
-        .add_step(record(SHOWS_FAILING, "failing"))
-        .add_step(record(SHOWS_PASSING, "passing"))
+        .add_step(decide(channel))
+        .add_step(post(channel))
+        .add_step(record(channel, SHOWS_FAILING, "failing"))
+        .add_step(record(channel, SHOWS_PASSING, "passing"))
 }
 
 /// The run's coverage report, which names what failed. A run that failed
@@ -118,7 +143,7 @@ fn download(report: &str) -> Step<Use> {
         .continue_on_error(true)
 }
 
-fn decide() -> Step<Run> {
+fn decide(channel: &Channel) -> Step<Run> {
     Step::new("decide what to post")
         .run(steps::node_script(include_str!(
             "scripts/email_e2e_alert.ts"
@@ -128,8 +153,8 @@ fn decide() -> Step<Run> {
         .add_env(("GH_TOKEN", github().token()))
         .add_env(("EMAIL_E2E_REPORTS", reports()))
         .add_env(("EMAIL_E2E_ALERT_MESSAGE", message()))
-        .add_env(("EMAIL_E2E_ALERT_JOB", NAME))
-        .add_env(("EMAIL_E2E_ALERT_POST_STEP", POST))
+        .add_env(("EMAIL_E2E_ALERT_JOB", channel.job))
+        .add_env(("EMAIL_E2E_ALERT_POST_STEP", channel.post))
         .add_env(("EMAIL_E2E_ALERT_FAILING_STEP", SHOWS_FAILING))
         .add_env(("EMAIL_E2E_ALERT_PASSING_STEP", SHOWS_PASSING))
 }
@@ -139,10 +164,16 @@ fn posts_when_decided() -> Expr<Bool> {
     DECIDE.outputs.post.read().is_set()
 }
 
-fn post() -> Step<Run> {
-    steps::post_to_macro_alerts(POST, r#"message=$(cat "$EMAIL_E2E_ALERT_MESSAGE")"#)
-        .add_env(("EMAIL_E2E_ALERT_MESSAGE", message()))
-        .if_condition(posts_when_decided())
+fn post(channel: &Channel) -> Step<Run> {
+    steps::post_to_macro_channel(
+        channel.post,
+        r#"message=$(cat "$EMAIL_E2E_ALERT_MESSAGE")"#,
+        channel.label,
+        channel.webhook,
+        channel.token,
+    )
+    .add_env(("EMAIL_E2E_ALERT_MESSAGE", message()))
+    .if_condition(posts_when_decided())
 }
 
 /// When the step recording that the channel shows the stream `shows` runs.
@@ -152,10 +183,11 @@ fn records_when(shows: &str) -> Expr<Bool> {
 
 /// A step the next run's job reads through the jobs API: it runs only once
 /// the post succeeded or none was needed, so a failed post records nothing.
-fn record(name: &str, shows: &str) -> Step<Run> {
+fn record(channel: &Channel, name: &str, shows: &str) -> Step<Run> {
     Step::new(name)
         .run(format!(
-            "echo 'Macro Alerts now shows this workflow {shows} on this branch.'"
+            "echo '{} now shows this workflow {shows} on this branch.'",
+            channel.label
         ))
         .if_condition(records_when(shows))
 }

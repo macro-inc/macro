@@ -64,6 +64,8 @@ pub enum MessageReferenceKind {
     StaticImage,
     /// Static video attachment.
     StaticVideo,
+    /// Static audio attachment: a recorded voice memo.
+    StaticAudio,
     /// Authored channel group; recipients are resolved separately.
     Group,
     /// A CRM company.
@@ -92,6 +94,7 @@ impl MessageReferenceKind {
             "project" => Self::Project,
             "static/image" => Self::StaticImage,
             "static/video" => Self::StaticVideo,
+            "static/audio" => Self::StaticAudio,
             "group" => Self::Group,
             "crm_company" => Self::CrmCompany,
             "crm_contact" => Self::CrmContact,

@@ -247,6 +247,94 @@ fn turso_matches_reference_and_lifecycle_is_exact() {
 }
 
 #[test]
+fn an_incomplete_document_in_any_queried_partition_makes_the_query_incomplete() {
+    pollster::block_on(async {
+        let mut storage = TursoStorage::open_in_memory("predicate-incomplete-partition").unwrap();
+        let owner = || PredicateExpr::Exact {
+            attribute: token("owner"),
+            value: ExactValue::utf8("owner-1").unwrap(),
+        };
+        let query = ValidatedIndexQuery::new(IndexQuery {
+            profile: profile(),
+            partitions: vec![
+                PartitionPredicate {
+                    partition: token("document"),
+                    predicate: owner(),
+                },
+                PartitionPredicate {
+                    partition: token("chat"),
+                    predicate: owner(),
+                },
+            ],
+            sort_attribute: token("updated-at"),
+            sort_direction: SortDirection::Desc,
+            tie_break_direction: SortDirection::Desc,
+            limit: 20,
+        })
+        .unwrap();
+        let chat = IndexDocument {
+            partition: token("chat"),
+            ..document("GraphqlSoupChat:1", "owner-1", 20, None)
+        };
+        storage
+            .put_batch_with_projections(
+                vec![],
+                vec![
+                    ProjectionMutation::Replace(document(
+                        "GraphqlSoupDocument:1",
+                        "owner-1",
+                        10,
+                        None,
+                    )),
+                    ProjectionMutation::Replace(chat.clone()),
+                ],
+            )
+            .await
+            .unwrap();
+        let complete = PredicateQueryResult::Complete(vec![
+            RecordKey::new("GraphqlSoupChat:1").unwrap(),
+            RecordKey::new("GraphqlSoupDocument:1").unwrap(),
+        ]);
+        assert_eq!(
+            storage.query_predicate_index(&query).await.unwrap(),
+            complete
+        );
+
+        for kind in [
+            ProjectionIncompleteKind::Dirty,
+            ProjectionIncompleteKind::Missing,
+            ProjectionIncompleteKind::IncompatibleVersion,
+        ] {
+            storage
+                .put_batch_with_projections(
+                    vec![],
+                    vec![ProjectionMutation::MarkIncomplete {
+                        record_key: RecordKey::new("GraphqlSoupChat:1").unwrap(),
+                        profile: profile(),
+                        partition: token("chat"),
+                        kind,
+                    }],
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                storage.query_predicate_index(&query).await.unwrap(),
+                PredicateQueryResult::Incomplete,
+                "{kind:?}"
+            );
+            storage
+                .put_batch_with_projections(vec![], vec![ProjectionMutation::Replace(chat.clone())])
+                .await
+                .unwrap();
+            assert_eq!(
+                storage.query_predicate_index(&query).await.unwrap(),
+                complete
+            );
+        }
+    });
+}
+
+#[test]
 fn effective_sql_matches_reference_for_create_patch_delete_and_boolean_sorting() {
     pollster::block_on(async {
         let storage = TursoStorage::open_in_memory("predicate-effective-sql").unwrap();

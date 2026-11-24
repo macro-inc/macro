@@ -78,7 +78,11 @@ pub fn prepare_desktop_release(ref_expr: Expr<Str>) -> Step<Run> {
 }
 
 /// Publish desktop artifacts from the workflow run to the release tag.
-pub fn publish_job(ref_expr: Expr<Str>, artifacts_path: xtask_paths::RuntimePath<'_>) -> Job {
+pub fn publish_job(
+    ref_expr: Expr<Str>,
+    artifacts_path: xtask_paths::RuntimePath<'_>,
+    artifact_pattern: Option<&str>,
+) -> Job {
     Job::default()
         .name("Upload Release Artifacts")
         .runs_on("ubuntu-latest")
@@ -87,9 +91,10 @@ pub fn publish_job(ref_expr: Expr<Str>, artifacts_path: xtask_paths::RuntimePath
             ..Default::default()
         })
         .add_step(steps::derive_artifact_metadata(ref_expr))
-        .add_step(steps::download_artifacts(xtask_paths::runtime_path!(
-            "release-artifacts"
-        )))
+        .add_step(steps::download_artifacts(
+            xtask_paths::runtime_path!("release-artifacts"),
+            artifact_pattern,
+        ))
         .add_step(steps::upload_release_artifacts(artifacts_path))
 }
 

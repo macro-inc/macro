@@ -7,8 +7,9 @@ Backfill, audit and tests for the `source_items` listing projection: one row per
 `entity_access`, `"Document"`, `"Chat"`, `"Project"` and `document_sub_type`
 keep the table current for every writer, including foreign-key cascades and
 replica-mode loads; `entity_access` and the item tables stay authoritative.
-The migrations leave the triggers off: `source_items_install_triggers()` and
-`source_items_remove_triggers()` turn maintenance on and off.
+The enabling migration installs the triggers; `source_items_remove_triggers()`
+(which disables them) and `source_items_install_triggers()` turn maintenance
+off and on (`docs/runbooks/source-items.md`).
 
 ## Start here
 

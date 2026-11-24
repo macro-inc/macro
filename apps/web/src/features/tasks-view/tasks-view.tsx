@@ -5,6 +5,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
+import type { ProjectSection } from '@app/features/projects/core/project';
 import { openProject } from '@app/features/projects/open-project';
 import { ProjectSavedViewsProvider } from '@app/features/projects/project-saved-views';
 import { ProjectsTab } from '@app/features/projects/projects';
@@ -60,7 +61,7 @@ function TasksViewBreadcrumbs(props: ParentProps) {
   const { closeTask, selectedTask } = useTasksView();
   const params = useParams<{
     projectId?: string;
-    section?: 'overview' | 'tasks';
+    section?: ProjectSection;
   }>();
   const navigate = useNavigate();
   const value = () => {

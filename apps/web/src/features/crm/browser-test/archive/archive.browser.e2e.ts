@@ -1,10 +1,43 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 async function archive(page: Page) {
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).not.toHaveAttribute('data-transitioning');
   return dialog;
+}
+
+/** Waits for finite motion; a looping skeleton pulse never finishes. */
+function settle(page: Page) {
+  return page.evaluate(() =>
+    Promise.allSettled(
+      document
+        .getAnimations()
+        .filter(
+          (motion) => motion.effect?.getComputedTiming().endTime !== Infinity
+        )
+        .map((motion) => motion.finished)
+    )
+  );
+}
+
+/** Opens the information panel and waits for it to stop moving. */
+async function openDetails(page: Page, kind: string, query = '') {
+  await page.goto(`/?kind=${kind}${query}`);
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: 'Record details' })
+  ).toBeVisible();
+  await settle(page);
+}
+
+/** Where a block's text starts, inside any padding of its own. */
+function textStart(locator: Locator) {
+  return locator.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getBoundingClientRect().x;
+  });
 }
 test.beforeEach(async ({ page }) => {
   await page.route('https://**', (route) => route.abort());
@@ -159,25 +192,26 @@ test('compact record controls keep separate full-height touch targets', async ({
       });
       await expect(restore).toBeVisible();
       const controls = [chip, restore];
+      // The company pill's name opens the company.
       const companyNavigation = page.getByRole('button', {
-        name: 'Go to company',
+        name: `Open ${companyName}`,
         exact: true,
       });
       if (kind === 'contact') controls.push(companyNavigation);
 
       for (const control of controls) {
         const bounds = (await control.boundingBox())!;
-        expect(bounds.height).toBe(24);
         await expect(control).toHaveCSS('font-size', '12px');
-        if (!isMobile) continue;
-        if (control !== companyNavigation)
+        // The company pill is a button group, whose segments take its own
+        // 36px touch height; the other controls keep a 24px face.
+        if (isMobile && control === companyNavigation) {
+          expect(bounds.height).toBeGreaterThanOrEqual(36);
           expect(bounds.width).toBeGreaterThanOrEqual(44);
-        else
-          expect(
-            await control.evaluate(
-              (element) => getComputedStyle(element, '::before').width
-            )
-          ).toBe('44px');
+          continue;
+        }
+        expect(bounds.height).toBe(24);
+        if (!isMobile) continue;
+        expect(bounds.width).toBeGreaterThanOrEqual(44);
         // The visible face is compact; the reserved margin and transparent
         // extension must still deliver taps across a separate 44px target.
         for (const y of [bounds.y - 9.5, bounds.y + bounds.height + 9.5]) {
@@ -234,8 +268,13 @@ test('compact record controls keep separate full-height touch targets', async ({
         ).toBeVisible();
         const company = companyNavigation;
         const bounds = (await company.boundingBox())!;
+        // The company pill's segments take its full 36px touch height, with
+        // no extension beyond it.
         if (isMobile)
-          await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y - 9);
+          await page.touchscreen.tap(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height / 2
+          );
         else await company.click();
         await expect(
           page.getByRole('textbox', { name: 'Company name' })
@@ -313,24 +352,111 @@ test('Team Visible and Archived are exclusive and preserve scoped search', async
   ).toBeVisible();
 });
 
-test('Details uses the same record details then references order', async ({
+test('Details lists record details, properties, company sections, then references', async ({
   page,
 }) => {
   for (const kind of ['contact', 'company']) {
-    await page.goto(`/?kind=${kind}`);
-    await page
-      .getByRole('button', { name: 'Show details', exact: true })
-      .click();
-    const details = page.getByText('Record details', { exact: true });
-    const references = page.getByText('References', { exact: true });
-    await expect(details).toBeVisible();
-    await expect(references).toBeVisible();
-    expect((await details.boundingBox())!.y).toBeLessThan(
-      (await references.boundingBox())!.y
+    await openDetails(page, kind);
+    const titles = [
+      'Record details',
+      'Properties',
+      ...(kind === 'company' ? ['Email sharing'] : []),
+      'References',
+    ];
+    const tops: number[] = [];
+    for (const title of titles) {
+      const heading = page.getByRole('button', { name: title, exact: true });
+      await expect(heading).toBeVisible();
+      tops.push((await heading.boundingBox())!.y);
+    }
+    expect(tops).toEqual([...tops].sort((a, b) => a - b));
+  }
+});
+
+test('Details rows and the references empty state use the panel type scale', async ({
+  page,
+}) => {
+  const style = (locator: Locator) =>
+    locator.evaluate((element) => {
+      const computed = getComputedStyle(element);
+      return { fontSize: computed.fontSize, color: computed.color };
+    });
+  for (const kind of ['contact', 'company']) {
+    await openDetails(page, kind);
+    const details = page.getByRole('region', { name: 'Record details' });
+    const properties = page.getByRole('region', { name: 'Properties' });
+    const propertyLabel = properties.getByText('Phone', { exact: true });
+    const propertyValue = properties.getByText('+1 555 0100', { exact: true });
+    await expect(propertyLabel).toBeVisible();
+    const labelStyle = await style(propertyLabel);
+    const labelX = (await propertyLabel.boundingBox())!.x;
+    expect(labelStyle.fontSize).toBe(
+      (
+        await style(
+          page.getByRole('button', { name: 'Record details', exact: true })
+        )
+      ).fontSize
     );
-    if (kind === 'company')
-      await expect(
-        page.getByText('Email sharing', { exact: true })
-      ).toBeVisible();
+    const labels =
+      kind === 'company' ? ['Name', 'Website'] : ['Name', 'Email', 'Company'];
+    for (const label of labels) {
+      const cell = details.getByText(label, { exact: true });
+      expect(await style(cell)).toEqual(labelStyle);
+      expect(Math.abs((await cell.boundingBox())!.x - labelX)).toBeLessThan(2);
+    }
+    const name = details.getByText(
+      kind === 'company' ? 'Example company' : 'Example person',
+      { exact: true }
+    );
+    expect(await style(name)).toEqual(await style(propertyValue));
+    const empty = page.getByText(`Nothing references this ${kind} yet.`, {
+      exact: true,
+    });
+    const references = page.getByRole('button', {
+      name: 'References',
+      exact: true,
+    });
+    if ((await references.getAttribute('aria-expanded')) !== 'true')
+      await references.click();
+    await expect(empty).toBeVisible();
+    await settle(page);
+    expect(await style(empty)).toEqual(labelStyle);
+    expect(
+      Math.abs((await textStart(empty)) - (await textStart(propertyLabel)))
+    ).toBeLessThan(2);
+  }
+});
+
+test('References rows use the panel type scale, text edge and row height', async ({
+  page,
+}) => {
+  const style = (locator: Locator) =>
+    locator.evaluate((element) => {
+      const computed = getComputedStyle(element);
+      return { fontSize: computed.fontSize, fontWeight: computed.fontWeight };
+    });
+  for (const kind of ['contact', 'company']) {
+    await openDetails(page, kind, '&refs');
+    const references = page.getByRole('button', {
+      name: 'References',
+      exact: true,
+    });
+    if ((await references.getAttribute('aria-expanded')) !== 'true')
+      await references.click();
+    const region = page.getByRole('region', { name: 'References' });
+    const row = region.getByRole('button', { name: 'Kickoff notes' });
+    await expect(row).toBeVisible();
+    await settle(page);
+    const propertyLabel = page
+      .getByRole('region', { name: 'Properties' })
+      .getByText('Phone', { exact: true });
+    const title = row.getByText('Kickoff notes', { exact: true });
+    expect(await style(title)).toEqual(await style(propertyLabel));
+    expect(
+      Math.abs((await textStart(row)) - (await textStart(propertyLabel)))
+    ).toBeLessThan(2);
+    const height = (await row.boundingBox())!.height;
+    expect(height).toBeGreaterThanOrEqual(28);
+    expect(height).toBeLessThanOrEqual(32);
   }
 });

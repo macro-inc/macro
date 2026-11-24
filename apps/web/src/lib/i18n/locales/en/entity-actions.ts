@@ -53,6 +53,7 @@ export default {
   unlinkValue: 'Unlink',
   unlinking: 'Unlinking…',
   unpinProperty: 'Unpin property',
+  removeLink: 'Remove link',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',

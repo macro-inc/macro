@@ -90,6 +90,9 @@ pub fn validate_profile(profile: &Profile, team: bool) -> Result<(), Error> {
         if event.macro_call && event.google_meet {
             return invalid("Choose either a Macro call or Google Meet");
         }
+        if team && event.email_link_id.is_some() {
+            return invalid("Team booking links book on each host's primary account");
+        }
         if event.questions.len() > 20
             || event
                 .questions

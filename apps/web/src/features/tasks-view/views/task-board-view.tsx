@@ -1,10 +1,14 @@
+import { TaskTimerCount } from '@app/features/time-tracking/task-timer-count';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import { hasValue } from '@property/utils/typeGuards';
+import type { Property } from '@property/types';
+import { formatStartDueCompact, startDueOf } from '@property/utils/start-due';
+import { hasValue, isDateProperty } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
 import {
   type Accessor,
@@ -95,6 +99,7 @@ export function TaskBoardView(props: {
       )?.label ?? 'Updated';
     return `Board sorted by ${sort}`;
   };
+  const startDateEnabled = () => props.data.startDatesEnabled();
   const cardPropertyIds = () =>
     CARD_PROPERTY_IDS.filter((id) => {
       if (
@@ -127,56 +132,92 @@ export function TaskBoardView(props: {
     }
   };
 
+  const startDate = (taskId: string) => {
+    const property = props.data.property(
+      taskId,
+      SYSTEM_PROPERTY_IDS.START_DATE
+    );
+    return property && isDateProperty(property) ? property : undefined;
+  };
+
   const renderProperty = (
     task: Accessor<TaskBoardTask>,
     readOnly: Accessor<boolean>,
     id: string,
     iconOnly: boolean,
     includeEmpty = true
-  ) => (
-    <Show when={props.data.property(task().id, id)}>
-      {(property) => (
-        <Show when={includeEmpty || hasValue(property())}>
-          <Suspense fallback={<span class="size-6" />}>
-            <TaskBoardProperty
-              property={property()}
-              taskId={task().id}
-              canEdit={!readOnly() && props.data.canEditProperty(task().id, id)}
-              iconOnly={iconOnly}
-              onFilterByUser={
-                id === SYSTEM_PROPERTY_IDS.ASSIGNEES
-                  ? filterByAssignee
-                  : undefined
-              }
-              dueDateUrgency={
-                id === SYSTEM_PROPERTY_IDS.DUE_DATE
-                  ? taskDueDateUrgency(
-                      task().dueDate,
-                      task().closed ?? true,
-                      calendar()
-                    )
-                  : undefined
-              }
-              onSave={async (value, apiValues) => {
-                try {
-                  if (readOnly()) {
-                    throw new Error('Task is no longer editable');
-                  }
+  ) => {
+    // With start dates a card's due date reads as the range and edits both
+    // ends; it shows once either end is set.
+    const isDue = id === SYSTEM_PROPERTY_IDS.DUE_DATE;
+    const timedDue = (due: Property) =>
+      startDateEnabled() && isDateProperty(due) && due.hasTime === true;
+    const datesText = (due: Property) => {
+      if (!isDue || !startDateEnabled()) return undefined;
+      return formatStartDueCompact(startDueOf(startDate(task().id), due));
+    };
+    const editor = isDue
+      ? startDueEditorFor({
+          field: 'due',
+          enabled: startDateEnabled,
+          other: () => startDate(task().id),
+          saveOther: (property, value) =>
+            props.data.saveProperty(task().id, property, value),
+        })
+      : undefined;
 
-                  await props.data.saveProperty(task().id, value, apiValues);
-                } catch (error) {
-                  toast.failure(
-                    `Could not update ${value.displayName.toLowerCase()}`
-                  );
-                  throw error;
+    return (
+      <Show when={props.data.property(task().id, id)}>
+        {(property) => (
+          <Show
+            when={includeEmpty || hasValue(property()) || datesText(property())}
+          >
+            <Suspense fallback={<span class="size-6" />}>
+              <TaskBoardProperty
+                property={property()}
+                taskId={task().id}
+                canEdit={
+                  !readOnly() && props.data.canEditProperty(task().id, id)
                 }
-              }}
-            />
-          </Suspense>
-        </Show>
-      )}
-    </Show>
-  );
+                iconOnly={iconOnly}
+                onFilterByUser={
+                  id === SYSTEM_PROPERTY_IDS.ASSIGNEES
+                    ? filterByAssignee
+                    : undefined
+                }
+                dueDateUrgency={
+                  id === SYSTEM_PROPERTY_IDS.DUE_DATE
+                    ? taskDueDateUrgency(
+                        task().dueDate,
+                        task().closed ?? true,
+                        calendar(),
+                        timedDue(property()) ? { now: Date.now() } : undefined
+                      )
+                    : undefined
+                }
+                valueText={datesText(property())}
+                editor={editor}
+                onSave={async (value, apiValues) => {
+                  try {
+                    if (readOnly()) {
+                      throw new Error('Task is no longer editable');
+                    }
+
+                    await props.data.saveProperty(task().id, value, apiValues);
+                  } catch (error) {
+                    toast.failure(
+                      `Could not update ${value.displayName.toLowerCase()}`
+                    );
+                    throw error;
+                  }
+                }}
+              />
+            </Suspense>
+          </Show>
+        )}
+      </Show>
+    );
+  };
 
   const renderCardContent = (
     task: Accessor<TaskBoardTask>,
@@ -200,6 +241,7 @@ export function TaskBoardView(props: {
         >
           {task().name || 'Untitled task'}
         </button>
+        <TaskTimerCount taskId={task().id} />
         <div data-kanban-no-drag class="flex shrink-0 items-center">
           {renderProperty(task, readOnly, SYSTEM_PROPERTY_IDS.ASSIGNEES, true)}
         </div>

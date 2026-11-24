@@ -27,6 +27,7 @@ const taskGroupBySchema = z.enum([
   'project',
   'date',
   'due_date',
+  'start_date',
 ]);
 
 const taskSortSchema = z.array(
@@ -40,12 +41,26 @@ const taskSortSchema = z.array(
       'priority',
       'due_date_earliest',
       'due_date_latest',
+      'start_date_earliest',
+      'start_date_latest',
     ]),
     reversed: z.boolean().optional(),
   })
 );
 
 const taskFacetsSchema = z.record(z.string(), z.array(z.string()));
+
+const taskDateRangeSchema = z
+  .object({
+    type: z.literal('range'),
+    start: z.iso.date().optional(),
+    end: z.iso.date().optional(),
+  })
+  .refine(
+    (range) =>
+      Boolean(range.start || range.end) &&
+      (!range.start || !range.end || range.start <= range.end)
+  );
 
 const taskDueDateFilterSchema = z.union([
   z.object({
@@ -59,17 +74,22 @@ const taskDueDateFilterSchema = z.union([
       'no_due_date',
     ]),
   }),
-  z
-    .object({
-      type: z.literal('range'),
-      start: z.iso.date().optional(),
-      end: z.iso.date().optional(),
-    })
-    .refine(
-      (range) =>
-        Boolean(range.start || range.end) &&
-        (!range.start || !range.end || range.start <= range.end)
-    ),
+  taskDateRangeSchema,
+]);
+
+const taskStartDateFilterSchema = z.union([
+  z.object({
+    type: z.enum([
+      'started',
+      'today',
+      'tomorrow',
+      'next_7_days',
+      'later',
+      'has_start_date',
+      'no_start_date',
+    ]),
+  }),
+  taskDateRangeSchema,
 ]);
 
 const tasksEntryStateSchemaWithDefaults = z.object({
@@ -83,6 +103,7 @@ const tasksEntryStateSchemaWithDefaults = z.object({
     normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION)
   ),
   dueDate: taskDueDateFilterSchema.optional().catch(undefined),
+  startDate: taskStartDateFilterSchema.optional().catch(undefined),
   collapsedGroupIds: z.array(z.string()).default([]),
 });
 
@@ -98,6 +119,7 @@ const DEFAULT_TASKS_ENTRY_STATE = {
   facets: normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION),
   collapsedGroupIds: [],
   dueDate: undefined,
+  startDate: undefined,
 } satisfies TasksEntryState;
 
 const tasksListStateSchemaWithDefaults = z.object({
@@ -134,6 +156,10 @@ function selectEntryState(state: TasksViewState): TasksEntryState {
       !state.savedViewActive && state.dueDate
         ? { ...state.dueDate }
         : undefined,
+    startDate:
+      !state.savedViewActive && state.startDate
+        ? { ...state.startDate }
+        : undefined,
   };
 }
 
@@ -161,6 +187,7 @@ function createTasksEntryStorage(options: {
         sort: restored.sort.map((item) => ({ ...item })),
         facets: normalizeFacetSelection(restored.facets),
         dueDate: restored.dueDate,
+        startDate: restored.startDate,
         collapsedGroupIds: [...restored.collapsedGroupIds],
       };
     },

@@ -301,7 +301,7 @@ export function AgentComposer(props: {
         <ComposerNotice
           text={
             interactions.canAnswer()
-              ? 'The agent is waiting for your answer above. Messages sent now are queued.'
+              ? 'The agent is waiting for your answer above; Skip lets it continue without one. Messages sent now are queued.'
               : 'The agent is waiting for an editor to answer above. Messages sent now are queued.'
           }
         />

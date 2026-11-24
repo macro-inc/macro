@@ -122,7 +122,9 @@ fn soup_row(row: &Row) -> SoupItem<SoupPropertiesField> {
                         Cell::Text(text) => PropertyValue::Str(text.clone()),
                         Cell::Number(number) => PropertyValue::Num(*number),
                         Cell::Bool(checked) => PropertyValue::Bool(*checked),
-                        Cell::Date(date) => PropertyValue::Date(*date),
+                        Cell::Date(date) => {
+                            PropertyValue::Date(models_properties::shared::DateValue::new(*date))
+                        }
                         Cell::DateRange(range) => PropertyValue::DateRange(
                             models_properties::shared::DateRange::new(range.start, range.end)
                                 .unwrap(),

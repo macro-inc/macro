@@ -23,7 +23,7 @@ export const TASK_BOARD_GROUP_OPTIONS: {
 /** List-only groupings display Status columns in the board layout. */
 export function toTaskBoardGrouping(groupBy: TaskGroupBy): TaskBoardGrouping {
   return match(groupBy)
-    .with('none', 'date', () => 'status' as const)
+    .with('none', 'date', 'start_date', () => 'status' as const)
     .with(
       'status',
       'priority',
