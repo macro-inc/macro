@@ -708,7 +708,13 @@ file is verified with Tauri's updater signature (the updater's own
 eligible for installation, and read and verified again just before installing;
 bytes that fail are deleted, so the next check downloads afresh. A successful
 install deletes them too. Without an app data directory native updates stay
-disabled. The download uses the updater's timeout and proxy settings. A ready update installs on normal app quit;
+disabled. The download uses the updater's timeout and proxy settings. A ready
+update keeps being checked against the feed while the app stays open, and stays
+installable while it is: offered again, or superseded by a release this Mac
+can't run, it stays ready; a newer release replaces it (downloaded as above,
+then offered as a new update); a feed that no longer offers it drops it.
+Otherwise an app left open for days installs the first update it downloaded
+and finds the next one on relaunch. A ready update installs on normal app quit;
 closing/hiding a window only installs if it actually exits the app. No network
 work is started during quit. Errors retry with backoff.
 

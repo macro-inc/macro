@@ -227,14 +227,7 @@ pub fn setup<R: Runtime>(
                     tracing::warn!(error=?error, "native update check failed");
                     failures = failures.saturating_add(1);
                     report(&handle, &coordinator, &timing, error.outcome(failures));
-                    publish(
-                        &handle,
-                        &coordinator,
-                        Status::Error {
-                            message: "Could not download the app update. Will retry automatically."
-                                .into(),
-                        },
-                    );
+                    fail(&handle, &coordinator);
                     let delay = retry;
                     retry = (retry * 2).min(MAX_RETRY_INTERVAL);
                     delay
@@ -281,7 +274,40 @@ fn publish<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, status: St
         .lock()
         .expect("native update state poisoned")
         .status = status.clone();
-    app.emit(EVENT, &status)
+    emit(app, &status);
+}
+
+/// Shows a failed check, unless a ready update or an install owns the status.
+fn fail<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator) {
+    let status = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        if !state.fail("Could not download the app update. Will retry automatically.".into()) {
+            return;
+        }
+        state.status.clone()
+    };
+    emit(app, &status);
+}
+
+/// Drops the ready update for `next` and shows it. False when an install has
+/// already taken the update, which the check then leaves alone.
+fn supersede<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, next: Status) -> bool {
+    let superseded = coordinator
+        .state
+        .lock()
+        .expect("native update state poisoned")
+        .supersede(next.clone());
+    if superseded {
+        emit(app, &next);
+    }
+    superseded
+}
+
+fn emit<R: Runtime>(app: &AppHandle<R>, status: &Status) {
+    app.emit(EVENT, status)
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update status"))
         .ok();
 }
@@ -320,21 +346,29 @@ fn report_outcome<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, rep
 /// Checks the feed and downloads a newer version, resuming a download an
 /// earlier launch or attempt saved. `Ok(false)` when the state refused to
 /// start a check, so no request was made.
+///
+/// A ready update stays installable while the feed is checked again: it is
+/// kept when the feed offers it again or offers a release this Mac can't run,
+/// and dropped only when the feed offers a newer release or withdraws it.
 async fn check<R: Runtime>(
     app: &AppHandle<R>,
     coordinator: &Coordinator,
     store: &Store,
     timing: &Timing,
 ) -> Result<bool, CheckError> {
-    if !coordinator
-        .state
-        .lock()
-        .expect("native update state poisoned")
-        .begin_check()
-    {
-        return Ok(false);
+    let ready = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        if !state.begin_check() {
+            return Ok(false);
+        }
+        state.ready_version().map(str::to_owned)
+    };
+    if ready.is_none() {
+        publish(app, coordinator, Status::Checking);
     }
-    publish(app, coordinator, Status::Checking);
     let Some(mut update) = app
         .updater_builder()
         .timeout(REQUEST_TIMEOUT)
@@ -346,19 +380,19 @@ async fn check<R: Runtime>(
     else {
         // A saved download is for a version this app already runs, or one
         // the feed withdrew.
+        if ready.is_none() {
+            publish(app, coordinator, Status::Idle);
+        } else if !supersede(app, coordinator, Status::Idle) {
+            return Ok(true);
+        }
         remove_saved(store);
         report(app, coordinator, timing, Outcome::UpToDate);
-        publish(app, coordinator, Status::Idle);
         return Ok(true);
     };
     // Installing a release built for a newer macOS would leave an app that
     // macOS refuses to open, so stay on this one.
     if let Some(minimum) = unsupported_minimum(&update.raw_json, os_version()) {
         tracing::info!(version = %update.version, minimum, "native update needs a newer OS");
-        // A saved download is for this release or an older one, which this
-        // release supersedes; it would otherwise stay on disk until the OS is
-        // upgraded.
-        remove_saved(store);
         report(
             app,
             coordinator,
@@ -368,10 +402,21 @@ async fn check<R: Runtime>(
                 minimum_system_version: minimum,
             },
         );
+        // A ready update was checked against this Mac when it downloaded.
+        if ready.is_some() {
+            return Ok(true);
+        }
+        // A saved download is for this release or an older one, which this
+        // release supersedes; it would otherwise stay on disk until the OS is
+        // upgraded.
+        remove_saved(store);
         publish(app, coordinator, Status::Idle);
         return Ok(true);
     }
     let version = update.version.clone();
+    if ready.as_deref() == Some(version.as_str()) {
+        return Ok(true);
+    }
     report(
         app,
         coordinator,
@@ -380,13 +425,15 @@ async fn check<R: Runtime>(
             target_version: version.clone(),
         },
     );
-    publish(
-        app,
-        coordinator,
-        Status::Downloading {
-            version: version.clone(),
-        },
-    );
+    let downloading = Status::Downloading {
+        version: version.clone(),
+    };
+    if ready.is_none() {
+        publish(app, coordinator, downloading);
+    } else if !supersede(app, coordinator, downloading) {
+        // The ready update is installing; the newer one is for the next launch.
+        return Ok(true);
+    }
     update.timeout = Some(DOWNLOAD_TIMEOUT);
     let download_started = Instant::now();
     // The store verifies the whole file before returning; partial or

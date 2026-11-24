@@ -32,6 +32,23 @@ struct Run {
 /// Exercises the actual pinned updater's HTTP and version handling, and the
 /// store's download, resume and signature check, against a local server.
 async fn check_fixture(directory: &Path, version: &str, serve: Serve) -> Run {
+    check_again(
+        &Coordinator::new(true, "1.0.0".into()),
+        directory,
+        version,
+        serve,
+    )
+    .await
+}
+
+/// `check_fixture` on a coordinator an earlier check left in its state, as
+/// the update loop's next check finds it.
+async fn check_again(
+    coordinator: &Coordinator,
+    directory: &Path,
+    version: &str,
+    serve: Serve,
+) -> Run {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let signature = include_str!("test/fixtures/update.txt.sig")
@@ -104,9 +121,8 @@ async fn check_fixture(directory: &Path, version: &str, serve: Serve) -> Run {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .build(context)
         .unwrap();
-    let coordinator = Coordinator::new(true, "1.0.0".into());
     let store = Store::new(directory.to_path_buf(), pubkey.into());
-    let result = check(app.handle(), &coordinator, &store, &Timing::start()).await;
+    let result = check(app.handle(), coordinator, &store, &Timing::start()).await;
     let status = coordinator.state.lock().unwrap().status.clone();
     let reports = coordinator.reports.lock().unwrap().take();
     assert!(
@@ -269,6 +285,61 @@ async fn a_newer_update_replaces_the_saved_download() {
             .unwrap()
             .contains("99.0.0")
     );
+}
+
+#[tokio::test]
+async fn a_ready_update_is_replaced_when_a_newer_release_ships() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    check_again(&coordinator, directory.path(), "98.0.0", Serve::Signed).await;
+
+    let run = check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
+    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+    assert_eq!(run.artifact_requests, [0]);
+    assert_eq!(downloaded(&run), (ARTIFACT.len() as u64, 0));
+    let mut state = coordinator.state.lock().unwrap();
+    assert_eq!(
+        state
+            .begin_install()
+            .map(|download| download.update.version),
+        Some("99.0.0".into())
+    );
+}
+
+#[tokio::test]
+async fn a_ready_update_offered_again_stays_ready() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
+
+    let run = check_again(&coordinator, directory.path(), "99.0.0", Serve::Tampered).await;
+    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+    assert_eq!(
+        run.status,
+        Status::Ready {
+            version: "99.0.0".into()
+        }
+    );
+    assert!(run.outcomes.is_empty());
+    assert!(run.artifact_requests.is_empty());
+    assert!(run.store.read_verified(&run.signature).is_ok());
+    assert!(coordinator.state.lock().unwrap().begin_install().is_some());
+}
+
+#[tokio::test]
+async fn a_ready_update_the_feed_withdrew_is_dropped() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
+
+    let run = check_again(&coordinator, directory.path(), "0.0.0", Serve::Signed).await;
+    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+    assert_eq!(run.status, Status::Idle);
+    assert_eq!(run.outcomes, [Outcome::UpToDate]);
+    for name in [COMPLETE, PARTIAL, RECORD] {
+        assert!(!directory.path().join(name).exists(), "{name} kept");
+    }
+    assert!(coordinator.state.lock().unwrap().begin_install().is_none());
 }
 
 #[tokio::test]
