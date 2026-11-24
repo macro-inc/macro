@@ -1,0 +1,12 @@
+query SoupSyncSharedEmailIds($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+      }
+      nextCursor
+    }
+  }
+}

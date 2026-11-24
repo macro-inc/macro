@@ -278,10 +278,14 @@ local filtering; `soup_filter_cache_adapter/src/test/sync_minimal_fields.rs`
 pins the selection, and `soup_sync_stream`'s catalog test checks the lanes
 select it. The selections live in the server's lane queries
 (`crates/soup_sync_stream/src/catalog/minimal_*.graphql`, `channels.graphql`).
-The app reads synced records with its own queries, so a field it starts
-reading reaches synced records only once the lane's query selects it too. A
+Every lane query is generated from its operation and the app's own fragments
+(`apps/web/scripts/generate-sync-lane-queries.ts`), so a field the app adds
+to a fragment a lane spreads reaches synced records once the queries are
+regenerated, which a web test enforces. The minimal lanes select their fields
+inline, so a field the app starts filtering on needs adding to their
+operations in `crates/soup_sync_stream/src/catalog/operations/`. A
 channel row carries what the channel list renders plus what the filter index
-needs; a contact row is `__typename id`. Property definitions are not sent with
+needs. Property definitions are not sent with
 every item.
 
 ## Load order

@@ -1,0 +1,44 @@
+query SoupBackfillSyncDocuments($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        cacheProjection
+        ... on GraphqlSoupDocument {
+          name
+          ownerId
+          fileType
+          projectId
+          createdAt
+          updatedAt
+          viewedAt
+          deletedAt
+          isFavorited
+          subType {
+            __typename
+            ... on GraphqlTaskSubType {
+              isCompleted
+            }
+          }
+          properties {
+            id
+            propertyDefinitionId
+            value {
+              ...SoupPropertyValueFields
+            }
+          }
+          notifications {
+            __typename
+            id
+            entityId
+            entityType
+            state
+          }
+        }
+      }
+      nextCursor
+    }
+  }
+}

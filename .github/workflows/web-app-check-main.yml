@@ -61,6 +61,7 @@ jobs:
               - 'packages/starter-agent/**'
               - 'tooling/scripts/starter-agent-lock.sh'
               - 'crates/agent_code_mode/SKILL.md'
+              - 'crates/soup_sync_stream/src/catalog/**'
               - '.github/actions/setup-reqs-web/**'
             web_artifact_changed:
               - 'package.json'

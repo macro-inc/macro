@@ -49,17 +49,28 @@ whose pages took the least time first.
 
 ## Recipes
 
-- Change a lane: `src/catalog.rs` (and its `.graphql` file), then
+- Change a lane's query: edit its operation, in the app's GraphQL documents
+  (`apps/web/src/lib/service-clients/service-storage/graphql/`) or, for an
+  operation only the sync runs, `src/catalog/operations/`, then run
+  `bun run gen-sync-lane-queries` in `apps/web`. It writes
+  `src/catalog/*.graphql` from the operation and the app's fragments, without
+  the client-only directives; never edit those files by hand. A field the app
+  adds to a fragment a lane spreads reaches the lane the same way, and the web
+  test `scripts/generate-sync-lane-queries.test.ts` fails until it is
+  regenerated. A new lane query also needs an entry in that script's
+  `SYNC_LANE_QUERIES`.
+- Change a lane: `src/catalog.rs`, then
   `src/catalog/test/expected_lanes.json`. The catalog test validates every
   lane's query and variables against `static_assets/schema.graphql`. Keep a
   lane's id (the cache's saved state and members key on it) and a minimal
   lane's `SoupBackfillSync…` operation name (the cache refuses incomplete rows
-  for it). The app reads what the lanes wrote with its own queries, so a field
-  it starts reading needs adding to the lane's query too.
+  for it).
 
 ## Checks
 
 - `cargo test -p soup_sync_stream`
+- `bun run check-sync-lane-queries` in `apps/web`: the lane queries match the app's
+  documents.
 
 ## Gotchas
 
