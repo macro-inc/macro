@@ -26,9 +26,8 @@ ignores:
   - apps/web/src/features/agents-view/model-selector.tsx
   - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/calendar/CalendarComposerEditor.tsx
-  - apps/web/src/features/calendar-view/calendar-month.tsx
-  - apps/web/src/features/calendar-view/calendar-settings-route.tsx
-  - apps/web/src/features/calendar-view/calendar-search-route.tsx
+  - apps/web/src/features/calendar-view/components/Page.tsx
+  - apps/web/src/features/calendar-view/views/calendar-utility-view.tsx
   - apps/web/src/features/calendar-view/calendar-view-skeleton.tsx
   - apps/web/src/features/block-ai/ai-block.tsx
   - apps/web/src/features/block-call/component/CallBlockAdapter.tsx

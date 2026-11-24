@@ -99,9 +99,10 @@ read their code, and follow that pattern rather than inventing a new one.
   and cancel `pointerdown` and `mousedown` on the rows so the search field
   keeps the keyboard. It hands focus back to the field that had it when it
   opened, so its opener cancels `pointerdown` and `mousedown` too.
-  `Property.SheetEditor` (entity and date properties), `InlineTagsSheetPill`,
-  and the event composer's guest pill use it. Short lists (status, priority)
-  stay dropdowns: on touch, property menus leave focus where it was.
+  `Property.SheetEditor` (entity and date properties) and `InlineTagsSheetPill`
+  use it. Calendar's People picker instead opens a page inside its existing
+  composer sheet. Short lists (status, priority) stay dropdowns: on touch,
+  property menus leave focus where it was.
 - A backdrop tap only dismisses: `MobileDrawer` swallows the rest of that tap,
   so it never presses what the scrim covered, even when the sheet unmounts as
   it closes (a `<Show>` around it, or `openDialog`). It swallows only a tap
