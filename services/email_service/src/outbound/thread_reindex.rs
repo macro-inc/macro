@@ -19,7 +19,11 @@ const CONCURRENT_SENDS: usize = 8;
 
 /// Queue `threads` for search-processing's bulk workers, which the search
 /// event queue keeps off the Kafka lane live mail uses.
-#[tracing::instrument(skip_all, fields(email.thread_count = threads.len()), err)]
+#[tracing::instrument(
+    skip_all,
+    fields(email.thread_count = i64::try_from(threads.len()).unwrap_or(i64::MAX)),
+    err
+)]
 pub(crate) async fn enqueue(
     sqs: &SQS,
     owner: &MacroUserIdStr<'static>,

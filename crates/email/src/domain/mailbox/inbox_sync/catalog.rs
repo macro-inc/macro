@@ -1,3 +1,4 @@
+use super::super::telemetry::span_int;
 use super::{ConnectionSourceError, InboxSyncCatalog};
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -145,14 +146,14 @@ async fn queue_renamed_label_reindex<R: LabelCatalogRepository, Q: ThreadReindex
     renamed_labels: &[String],
 ) -> anyhow::Result<()> {
     let span = tracing::Span::current();
-    span.record("labels.renamed", renamed_labels.len());
+    span.record("labels.renamed", span_int(renamed_labels.len()));
 
     let threads = db
         .labelled_threads(link_id, renamed_labels)
         .await
         .map_err(ConnectionSourceError::into_original)
         .context("Failed to fetch the threads carrying renamed labels")?;
-    span.record("labels.reindexed_threads", threads.len());
+    span.record("labels.reindexed_threads", span_int(threads.len()));
 
     if threads.is_empty() {
         return Ok(());
