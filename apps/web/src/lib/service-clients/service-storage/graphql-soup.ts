@@ -819,14 +819,16 @@ const unavailableReasonOf = (error: unknown): string | undefined =>
 /**
  * Logs once per page and reason that the cache failed closed. The page then
  * runs on the network, which is quiet by design, so without this a tab that
- * stays uncached leaves no trace of why. Only the reason's fixed code leaves.
+ * stays uncached leaves no trace of why. Only the reason's fixed code leaves,
+ * and, as for every cache metric, no user id: the log is written inside an
+ * anonymous span.
  */
 function logCacheUnavailable(error: Error, backend: string): void {
   const reason = unavailableReasonOf(error) ?? 'unknown';
   if (loggedUnavailableReasons.has(reason)) return;
   loggedUnavailableReasons.add(reason);
   try {
-    Telemetry.warn('graphql cache failed closed', {
+    const attributes = {
       'error.source': 'graphql-cache',
       'cache.backend': backend,
       'cache.phase':
@@ -834,7 +836,15 @@ function logCacheUnavailable(error: Error, backend: string): void {
       'cache.error_code':
         cacheResponseErrorCode(error) ?? classifyCacheError(error),
       'cache.unavailable_reason': reason,
-    });
+    };
+    const span = Telemetry.anonymousSpan('graphql.cache_failed_closed');
+    try {
+      for (const [key, value] of Object.entries(attributes))
+        span.setAttr(key, value);
+      span.run(() => Telemetry.warn('graphql cache failed closed', attributes));
+    } finally {
+      span.end();
+    }
   } catch {
     // Observability must not prevent the network fallback.
   }

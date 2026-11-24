@@ -445,6 +445,8 @@ const mocks = vi.hoisted(() => {
     toastFailure,
     telemetryError: vi.fn(),
     telemetryWarn: vi.fn(),
+    // Depth of anonymous spans running now: logs inside get no user id.
+    anonymousDepth: 0,
     spans: [] as Array<{
       name: string;
       attrs: Record<string, unknown>;
@@ -556,6 +558,25 @@ vi.mock('@macro-inc/observability', async (importOriginal) => {
       error: mocks.telemetryError,
       warn: mocks.telemetryWarn,
       captureContext: () => ({ run: <T>(work: () => T) => work() }),
+      anonymousSpan: (name: string) => {
+        const attrs: Record<string, unknown> = {};
+        const end = vi.fn();
+        mocks.spans.push({ name, attrs, end });
+        return Object.assign(Object.create(actual.NOOP_SPAN), {
+          setAttr: (key: string, value: unknown) => {
+            attrs[key] = value;
+          },
+          end,
+          run: <T>(work: () => T): T => {
+            mocks.anonymousDepth += 1;
+            try {
+              return work();
+            } finally {
+              mocks.anonymousDepth -= 1;
+            }
+          },
+        });
+      },
       span: (
         name: string,
         optionsOrWork?: unknown,
@@ -955,6 +976,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.resetQueue();
     mocks.platformFetch.mockReset();
     mocks.telemetryError.mockReset();
+    mocks.telemetryWarn.mockReset();
     mocks.initializeCrmCacheOwner.mockReset().mockResolvedValue(undefined);
   });
 
@@ -1923,8 +1945,21 @@ describe('GraphQL Soup browser cache session gate', () => {
           'initialization'
         );
       soup.getGraphqlSoupClient();
+      const anonymous: boolean[] = [];
+      mocks.telemetryWarn.mockImplementation(() => {
+        anonymous.push(mocks.anonymousDepth > 0);
+      });
 
       mocks.failInitialization(kept());
+      // Like every cache metric, the log carries no user id.
+      expect(anonymous).toEqual([true]);
+      const failedClosed = mocks.spans.findLast(
+        ({ name }) => name === 'graphql.cache_failed_closed'
+      );
+      expect(failedClosed?.attrs).toMatchObject({
+        'cache.unavailable_reason': 'holder-kept',
+      });
+      expect(failedClosed?.end).toHaveBeenCalledOnce();
       expect(mocks.telemetryWarn).toHaveBeenCalledExactlyOnceWith(
         'graphql cache failed closed',
         {

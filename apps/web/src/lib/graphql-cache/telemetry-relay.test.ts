@@ -27,6 +27,7 @@ describe('cache telemetry worker relay', () => {
     const channel = new FakeChannel();
     const events: CacheTelemetryEnvelope[] = [];
     let lockName = '';
+    let channelName = '';
     let lockCallback: ((lock: Lock | null) => Promise<void> | void) | undefined;
     const lockManager = {
       request: vi.fn(
@@ -44,14 +45,20 @@ describe('cache telemetry worker relay', () => {
       rolloutCohort: 'treatment',
       sink: { emit: (event) => events.push(event) },
       relay: {
-        createChannel: () => channel as unknown as BroadcastChannel,
+        createChannel: (name) => {
+          channelName = name;
+          return channel as unknown as BroadcastChannel;
+        },
         lockManager,
       },
     });
 
     relay.start();
     await Promise.resolve();
-    expect(lockName).toBe('macro:graphql-cache-telemetry-reporter:v1');
+    // An older build's reporter, on v1, would drop events carrying
+    // `unavailableReason` whole, so this build reports on its own version.
+    expect(channelName).toBe('macro:graphql-cache-telemetry:v2');
+    expect(lockName).toBe('macro:graphql-cache-telemetry-reporter:v2');
     const leadership = lockCallback?.({
       name: lockName,
       mode: 'exclusive',
@@ -68,8 +75,17 @@ describe('cache telemetry worker relay', () => {
       operationCategory: 'lifecycle',
       ownerEvent: 'elected',
     });
+    channel.receive({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'error',
+      ownerEvent: 'owner-lock-unavailable',
+      errorCode: 'lock',
+      unavailableReason: 'holder-kept',
+    });
 
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
+    expect(events[1]).toMatchObject({ unavailableReason: 'holder-kept' });
     expect(events[0]).toMatchObject({
       rolloutCohort: 'unknown',
       appVersion: 'unknown',
