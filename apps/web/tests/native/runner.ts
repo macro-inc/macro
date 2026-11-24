@@ -324,6 +324,47 @@ try {
     'PASS: Email header fits a third of a 900px window and restores its labels'
   );
 
+  // Tasks' header gives up its layout and view options, never New or Search,
+  // as the window narrows, and shows them again once there is room.
+  await browser.$('button[aria-label="Tasks"]').click();
+  await browser
+    .$('[aria-label="Search tasks"]')
+    .waitForDisplayed({ timeout: 30_000 });
+  for (const width of [520, 480, 440, 400]) {
+    await browser.setWindowSize(width, 900);
+    await expectHeaderFits(
+      browser,
+      'Search tasks',
+      `narrow-tasks-header-${width}`,
+      `${width}px`
+    );
+    // A control that renders nothing has no box to be cut off; New and
+    // Search must be there.
+    for (const kept of ['^="New task"', '="Search tasks"'])
+      assert(
+        await browser.$(`button[aria-label${kept}]`).isDisplayed(),
+        `Tasks header at ${width}px shows no button[aria-label${kept}]`
+      );
+  }
+  await browser.setWindowSize(windowSize.width, windowSize.height);
+  for (const restored of ['Board', 'Group by'])
+    await browser
+      .$(`button[aria-label="${restored}"]`)
+      .waitForDisplayed({ timeout: 5000 });
+  await expectHeaderFits(
+    browser,
+    'Search tasks',
+    'restored-tasks-header',
+    'the restored window'
+  );
+  console.log(
+    'PASS: Tasks header fits 520px to 400px windows and restores its controls'
+  );
+  await browser.$('button[aria-label="Email"]').click();
+  await browser
+    .$('[aria-label="Search email"]')
+    .waitForDisplayed({ timeout: 30_000 });
+
   // Calendar's header wraps its controls onto a second row in a narrow pane;
   // Search events must stay inside it there too.
   await browser.$('[data-sidebar-next-item="calendar"]').click();
