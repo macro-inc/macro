@@ -460,14 +460,19 @@ export function createLocalChannelTimeline(
   const fetchMore = async (
     direction: 'older' | 'newer',
     cursor: string,
-    token: number
+    token: number,
+    signal: AbortSignal
   ) => {
     const epoch = deps.runtime.epoch();
-    const loaded = await loadChannelPage(deps, {
-      channelId,
-      limit: CHANNEL_PAGE_LIMIT,
-      ...(direction === 'older' ? { before: cursor } : { after: cursor }),
-    });
+    const loaded = await loadChannelPage(
+      deps,
+      {
+        channelId,
+        limit: CHANNEL_PAGE_LIMIT,
+        ...(direction === 'older' ? { before: cursor } : { after: cursor }),
+      },
+      signal
+    );
     if (token !== loadToken) return 'stale';
     if (loaded === 'unsupported') {
       onUnsupported();
@@ -505,7 +510,7 @@ export function createLocalChannelTimeline(
     for (let reloads = 0; reloads < SESSION_CHANGE_RELOADS; reloads += 1) {
       if (settled === 'yielded' && !(await afterDeletes(signal))) return;
       if (token !== loadToken) return;
-      settled = await fetchMore(direction, cursor, token);
+      settled = await fetchMore(direction, cursor, token, signal);
       if (settled === 'held') {
         held = true;
         scheduleReread();
@@ -525,7 +530,7 @@ export function createLocalChannelTimeline(
     const signal = abort.signal;
     setState(flag, true);
     try {
-      const settled = await fetchMore(direction, cursor, token);
+      const settled = await fetchMore(direction, cursor, token, signal);
       if (settled === 'stale' || settled === 'held') return;
       const wasHeld = held;
       held = false;
@@ -535,6 +540,8 @@ export function createLocalChannelTimeline(
         await fetchMoreAgain(direction, cursor, token, signal, settled);
       }
     } catch (error) {
+      // Aborted by a switch or unmount: nothing failed.
+      if (token !== loadToken) return;
       // The window keeps what it shows; the next scroll asks again.
       Telemetry.error(error, { surface: 'channel-local-sync' });
     } finally {

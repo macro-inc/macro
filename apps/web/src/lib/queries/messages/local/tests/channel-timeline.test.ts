@@ -313,6 +313,29 @@ describe('createLocalChannelTimeline', () => {
     dispose();
   });
 
+  it('stops an older page’s server request when the view closes', async () => {
+    const rows = messages(70);
+    let sent: AbortSignal | undefined;
+    const fetchPage = vi.fn<FetchChannelServerPage>(
+      (_input, signal) =>
+        new Promise((_resolve, reject) => {
+          sent = signal;
+          signal?.addEventListener('abort', () => reject(signal.reason));
+        })
+    );
+    const mounted = mount({ rows, fetchPage });
+    await waitFor(() => !mounted.timeline.isLoading());
+    // The device no longer holds the older entries.
+    mounted.setHeld(false);
+    const loading = mounted.timeline.loadOlder();
+    await waitFor(() => fetchPage.mock.calls.length === 1);
+
+    mounted.dispose();
+
+    expect(sent?.aborted).toBe(true);
+    await loading;
+  });
+
   it('keeps every paged entry through a reread', async () => {
     const { timeline, runtime, addRow, dispose } = mount({
       rows: messages(70),
