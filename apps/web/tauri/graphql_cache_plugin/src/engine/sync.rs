@@ -8,7 +8,8 @@ use super::{AffectedOperationsResultWire, EngineState, WriteResultWire, wire_wri
 use cache_core::engine::Engine;
 use cache_core::predicate::ProjectionMutation;
 use cache_core::sync::{
-    SyncApplied, SyncHooks, SyncLaneState, SyncPageWrite, SyncRun, SyncStartArgs, SyncWriteError,
+    SyncApplied, SyncHooks, SyncLaneState, SyncPageWrite, SyncRun, SyncStartArgs, SyncStreamError,
+    SyncWriteError,
 };
 use cache_core::value::EntityKey;
 use cache_turso::{TursoStorage, TursoStorageError};
@@ -196,8 +197,8 @@ impl WeakEngineHandle {
             })
     }
 
-    /// Applies the oldest decoded frame of `run`: at most one engine write.
-    /// `None` when no frame is pending.
+    /// Applies the oldest decoded frame of `run`: a few bounded engine
+    /// writes at most. `None` when no frame is pending.
     pub(crate) async fn sync_apply_next(
         &self,
         run: &mut SyncRun,
@@ -223,6 +224,11 @@ impl WeakEngineHandle {
         }
         let applied = match applied {
             Ok(applied) => applied,
+            // The cache was cleared or reset under the run (logout, another
+            // account): the run stops without writing, as on a stop.
+            Err(SyncWriteError::Stream(SyncStreamError::Superseded)) => {
+                return Err(SyncFailure::Aborted.into());
+            }
             Err(SyncWriteError::Stream(error)) => {
                 return Err(SyncFailure::Stream {
                     message: error.to_string(),
