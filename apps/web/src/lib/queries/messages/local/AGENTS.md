@@ -37,8 +37,8 @@ TanStack path in `../` runs untouched.
   failed reply back through the thread's stored draft, which every open reply
   input holds (`features/channel/Thread/reply-drafts.ts`): a view opened later
   shows it, a newer draft in any view is kept (a quote builds on it too), and
-  nothing is written back by a composer that was open when sign-out cleared
-  composer storage. A queue that
+  nothing is written back by a composer that was open before or during a
+  sign-out (`composerStorageWritable`). A queue that
   cannot be read is asked again with backoff, except after a reset, which
   fails the write with `CACHE_RESET`. A write is its transaction id and its
   mutation id: transaction ids restart when the queue is rebuilt. The queue
@@ -92,7 +92,9 @@ TanStack path in `../` runs untouched.
 - A read touches a channel at most every 6 hours (`CHANNEL_TOUCH_INTERVAL_MS`),
   and a prewarm counts as a touch: `touched_at_ms` defaults to 0, which the
   30-day eviction would take at once. A touch counts only once the device
-  stored it (`settled`); a refused one is sent again with the next read.
+  stored it (`settled`), and only in the cache session it was sent in: a
+  refused one, or one from an earlier session, is sent again with the next
+  read.
 - `effect` is allowed only in `channel-sync-runtime.ts`, `channel-writes.ts`,
   `channel-prewarm.ts` and the tests that run their effects (FE-46).
 - Channel queries abort through `firstOrAborted`: urql replaces

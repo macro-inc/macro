@@ -33,7 +33,10 @@ import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { confirmDialog } from '@ui';
 import { getOwner } from 'solid-js';
-import { clearComposerStorage } from './clear-composer-storage';
+import {
+  clearComposerStorage,
+  endComposerStorageClear,
+} from './clear-composer-storage';
 import { unregisterPushRegistrationsForLogout } from './push-registration-lifecycle';
 
 const unauthenticatedUserInfo: UserInfoData = {
@@ -95,6 +98,7 @@ export function clearLocalAuthSession(
       authKeys.userInfo.queryKey,
       unauthenticatedUserInfo
     );
+    endComposerStorageClear();
   });
 }
 

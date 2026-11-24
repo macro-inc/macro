@@ -2,7 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import { clearComposerStorage } from '@core/auth/clear-composer-storage';
+import {
+  clearComposerStorage,
+  endComposerStorageClear,
+} from '@core/auth/clear-composer-storage';
 import type { MentionsOptions } from '@core/component/LexicalMarkdown/builder/types';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
@@ -262,6 +265,7 @@ vi.mock(
         getElementByKey: vi.fn(),
         getRootElement: vi.fn(),
         update: vi.fn((callback: () => void) => callback()),
+        read: <T,>(callback: () => T) => callback(),
       };
       const handle = {
         controls,
@@ -320,6 +324,7 @@ vi.mock('@core/component/LexicalMarkdown/plugins', () => ({
   DefaultShortcuts: {},
   INSERT_DOCUMENT_MENTION_COMMAND: 'INSERT_DOCUMENT_MENTION_COMMAND',
   NODE_TRANSFORM: 'NODE_TRANSFORM',
+  $readItemMentions: () => [],
   keyboardShortcutsPlugin: () => () => () => {},
 }));
 
@@ -968,6 +973,8 @@ describe('Thread reply sends', () => {
   beforeEach(() => {
     localStorage.clear();
     sendMocks.send.mockClear();
+    // A test that signs out leaves the sign-out it started finished.
+    endComposerStorageClear();
   });
 
   /** One reply input on a thread, opened and closed like a thread's reply. */

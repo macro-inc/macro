@@ -296,8 +296,19 @@ vi.mock('@queries/messages/typing', () => ({
   usePostTypingUpdateMutation: () => ({ mutate: vi.fn() }),
 }));
 
+import {
+  clearComposerStorage,
+  endComposerStorageClear,
+} from '@core/auth/clear-composer-storage';
+import { uploadFile } from '@core/util/upload';
 import type { MessageParent } from '@service-storage/messages';
+import {
+  applyQuoteText,
+  currentReplyDraft,
+  replyDraftKeys,
+} from '../../Thread/reply-drafts';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
+import { buildReplyTargetValue } from '../../Thread/utils/message-actions';
 import type { InputHandle, InputSnapshot } from '../types';
 
 // Provide query context for the composed input and its decorators.
@@ -344,6 +355,8 @@ describe('Thread reply sends through the real editor', () => {
       handle: undefined as InputHandle | undefined,
       open,
       setOpen,
+      state,
+      setState,
     };
     const view = () => (
       <Show when={open()}>
@@ -488,5 +501,160 @@ describe('Thread reply sends through the real editor', () => {
     expect(first.reply.handle?.snapshot().value).toBe(
       'Persist the failed reply'
     );
+  });
+
+  /** The quote a reply action builds on `existing`, the thread's draft. */
+  const quoteOf = (
+    parent: MessageParent,
+    threadId: string,
+    existing?: string
+  ) =>
+    buildReplyTargetValue({
+      channelId: parent.id,
+      message: {
+        id: 'quoted-reply',
+        thread_id: threadId,
+        sender_id: 'macro|b@macro.test',
+        content: 'Quoted text',
+      },
+      existingValue: existing,
+    });
+
+  it('sends the mentions of a draft read back from storage into a quote', async () => {
+    const parent = { type: 'channel', id: 'quote-mentions' } as const;
+    const threadId = 'quote-thread';
+    const first = mountReply(parent, threadId);
+    const other = mountReply(parent, threadId);
+    other.reply.setOpen(false);
+    render(() => (
+      <>
+        {first.view()}
+        {other.view()}
+      </>
+    ));
+    await nextFrame();
+    const firstEditor = editor();
+    firstEditor.update(
+      () => {
+        $getRoot().clear().append($createParagraphNode());
+        $getRoot().selectEnd();
+      },
+      { discrete: true }
+    );
+    firstEditor.dispatchCommand(INSERT_USER_MENTION_COMMAND, {
+      userId: 'macro|a@macro.test',
+      email: 'a@macro.test',
+    });
+    firstEditor.read(() => {});
+    first.reply.setOpen(false);
+
+    // A draft read back from storage carries no mentions.
+    const stored = currentReplyDraft(
+      replyDraftKeys(parent, threadId),
+      other.reply.state()
+    );
+    expect(stored?.mentions).toEqual([]);
+    const quote = {
+      value: quoteOf(parent, threadId, stored?.value),
+      attachments: stored?.attachments ?? [],
+      mentions: stored?.mentions ?? [],
+    };
+    other.reply.setState(quote);
+    other.reply.setOpen(true);
+    await nextFrame();
+    other.reply.handle?.restoreSnapshot(quote, { focus: false });
+    expect(await other.reply.handle?.send()).toBe(true);
+
+    expect(sendMocks.send.mock.calls[0]?.[0]).toMatchObject({
+      message: {
+        mentions: [{ entity_id: 'macro|a@macro.test', entity_type: 'user' }],
+      },
+    });
+  });
+
+  it('keeps an upload that finished after a quote read the draft', async () => {
+    const parent = { type: 'channel', id: 'attachment-quote' } as const;
+    const threadId = 'attachment-quote-thread';
+    const { reply, view } = mountReply(parent, threadId);
+    render(view);
+    await nextFrame();
+    const upload =
+      Promise.withResolvers<Awaited<ReturnType<typeof uploadFile>>>();
+    vi.mocked(uploadFile).mockImplementationOnce(() => upload.promise);
+    const attaching = reply.handle!.attachFiles([
+      new File(['notes'], 'notes.txt', { type: 'text/plain' }),
+    ]);
+    const before = currentReplyDraft(
+      replyDraftKeys(parent, threadId),
+      reply.state()
+    );
+    expect(before?.attachments).toMatchObject([{ pending: true }]);
+    const quote = quoteOf(parent, threadId, before?.value);
+
+    upload.resolve({
+      failed: false,
+      pending: false,
+      destination: 'static',
+      id: 'uploaded',
+      name: 'notes.txt',
+    });
+    await attaching;
+    applyQuoteText(reply.handle, quote);
+
+    const applied = reply.handle?.snapshot();
+    expect(applied?.value).toContain('quoted-reply');
+    expect(applied?.attachments).toMatchObject([{ id: 'uploaded' }]);
+  });
+
+  it('writes nothing back from a reply opened while sign-out clears drafts', async () => {
+    const parent = { type: 'channel', id: 'logout' } as const;
+    const threadId = 'logout-thread';
+    const keys = replyDraftKeys(parent, threadId);
+    localStorage.setItem(
+      keys.attachments,
+      JSON.stringify([
+        { id: 'attachment-a', kind: 'document', name: 'notes.md' },
+      ])
+    );
+    const first = mountReply(parent, threadId);
+    const other = mountReply(parent, threadId);
+    other.reply.setOpen(false);
+    render(() => (
+      <>
+        {first.view()}
+        {other.view()}
+      </>
+    ));
+    await nextFrame();
+    editor().update(
+      () => {
+        $getRoot()
+          .clear()
+          .append($createParagraphNode().append($createTextNode('unsent')));
+      },
+      { discrete: true }
+    );
+
+    try {
+      // Sign-out clears drafts before it publishes the signed-out user; the
+      // open view keeps its text in between.
+      clearComposerStorage();
+      other.reply.setOpen(true);
+      await nextFrame();
+      const failDuring = holdNextSend();
+      expect(await other.reply.handle?.send()).toBe(true);
+      failDuring(unknown);
+      await nextFrame();
+      expect(localStorage.getItem(keys.text)).toBeNull();
+      expect(localStorage.getItem(keys.attachments) ?? '[]').toBe('[]');
+    } finally {
+      endComposerStorageClear();
+    }
+
+    other.reply.setOpen(false);
+    other.reply.setOpen(true);
+    await nextFrame();
+    expect(localStorage.getItem(keys.text)).toBeNull();
+    expect(localStorage.getItem(keys.attachments) ?? '[]').toBe('[]');
   });
 });

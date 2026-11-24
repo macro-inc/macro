@@ -2,9 +2,16 @@ import { beforeEach, expect, it } from 'vitest';
 import {
   COMPOSER_STORAGE_CLEARED,
   clearComposerStorage,
+  composerStorageGeneration,
+  composerStorageWritable,
+  endComposerStorageClear,
 } from './clear-composer-storage';
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  // Each test signs out on its own.
+  endComposerStorageClear();
+});
 
 it('clears scoped and legacy drafts and attachments while retaining preferences', () => {
   const keys = [
@@ -41,4 +48,16 @@ it('retires mounted autosavers before wiping their saved data', () => {
   expect(valueAtRetire).toBe('draft');
   if (active) localStorage.setItem(key, 'late cleanup');
   expect(localStorage.getItem(key)).toBeNull();
+});
+
+it('refuses drafts read before a sign-out or during it', () => {
+  const before = composerStorageGeneration();
+  expect(composerStorageWritable(before)).toBe(true);
+  clearComposerStorage();
+  const during = composerStorageGeneration();
+  expect(composerStorageWritable(before)).toBe(false);
+  expect(composerStorageWritable(during)).toBe(false);
+  endComposerStorageClear();
+  expect(composerStorageWritable(during)).toBe(false);
+  expect(composerStorageWritable(composerStorageGeneration())).toBe(true);
 });

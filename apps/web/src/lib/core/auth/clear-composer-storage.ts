@@ -1,18 +1,39 @@
 export const COMPOSER_STORAGE_CLEARED = 'macro:composer-storage-cleared';
 
 let generation = 0;
+let clearing = false;
 
 /**
  * Changes each time composer storage is cleared: work that will write a
- * draft later reads it first, and writes only while it is unchanged.
+ * draft later reads it first, and writes only while
+ * `composerStorageWritable` says so.
  */
 export function composerStorageGeneration(): number {
   return generation;
 }
 
+/**
+ * Whether a draft read under `captured` may still be written back: composer
+ * storage was not cleared since, and no sign-out is clearing it now.
+ */
+export function composerStorageWritable(captured: number): boolean {
+  return !clearing && captured === generation;
+}
+
+/**
+ * Ends a sign-out's clear, once the signed-out user is published. An input
+ * that mounted in between read the generation the clear set while the old
+ * account was still shown, so the generation moves on again.
+ */
+export function endComposerStorageClear(): void {
+  clearing = false;
+  generation += 1;
+}
+
 /** Remove saved composer text and attachment references on explicit logout. */
 export function clearComposerStorage(): void {
   generation += 1;
+  clearing = true;
   // Retire mounted autosavers before removing data; auth teardown can await I/O.
   window.dispatchEvent(new Event(COMPOSER_STORAGE_CLEARED));
   for (let index = localStorage.length - 1; index >= 0; index--) {
