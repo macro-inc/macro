@@ -59,6 +59,8 @@ export type ProbeSnapshot = {
   groups: unknown[] | null;
   itemsById: Record<string, unknown> | null;
   ms: number;
+  /** Storage resets (R1) during this read, and since the probe loaded. */
+  resets?: { during: number; sinceLoad: number };
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -171,6 +173,10 @@ async function read(
   args: SoupAstItemsQueryArgs,
   options: ReadOptions = {}
 ): Promise<ProbeSnapshot> {
+  // A storage reset mid-read leaves a reader outside the app's tree empty
+  // (R1); the read says so, and the harness reads again.
+  watchResets();
+  const resetsBefore = resetReopens.length;
   if (options.clean) queryClient.removeQueries({ type: "inactive" });
   const started = Date.now();
   const deadline = started + (options.timeoutMs ?? 60_000);
@@ -190,7 +196,7 @@ async function read(
         pages += 1;
       }
     }
-    return snapshot(query, pages, started);
+    return { ...snapshot(query, pages, started), resets: { during: resetReopens.length - resetsBefore, sinceLoad: resetReopens.length } };
   } finally {
     dispose();
   }

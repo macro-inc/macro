@@ -37,12 +37,17 @@ export const MUTANTS: Mutant[] = [
     find: '({ record, fetched, notifiedAt, updatedAt }) => {',
     replace: '({ record, fetched, notifiedAt: listed, updatedAt }) => { const notifiedAt = listed && new Date(Date.parse(listed) - 60_000).toISOString();',
   },
+  // The first stale-cache mutant (an item two loaded pages list keeps the
+  // older notification time, create-soup-live-query.ts pageNotifiedAt) was
+  // missed on seed 3734: since the notified chain rebuild a row two pages
+  // list shows once and only until the chain is read again, so no settled
+  // read can see it. This one goes stale where every list reads.
   {
     name: 'stale-cache',
-    what: 'An item two loaded pages list keeps the older notification time.',
-    file: 'apps/web/src/lib/queries/soup/graphql/create-soup-live-query.ts',
-    find: 'Date.parse(notifiedAt) > Date.parse(known)',
-    replace: 'Date.parse(notifiedAt) < Date.parse(known)',
+    what: 'A list keeps each row as it first projected it; later pages and edits never replace it.',
+    file: 'apps/web/src/lib/queries/soup/graphql/items.ts',
+    find: '      return row?.record === record &&',
+    replace: '      return row !== undefined || row?.record === record &&',
   },
   {
     name: 'skip-live',

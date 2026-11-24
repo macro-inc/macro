@@ -262,7 +262,7 @@ export type ReadSpec = {
   clean?: boolean;
 };
 
-export type ProbeResult = Snapshot & { ms: number; args: unknown };
+export type ProbeResult = Snapshot & { ms: number; args: unknown; resets?: { during: number; sinceLoad: number } };
 
 /** Reads through the side's own facade; the args are built in the page. */
 export async function probeRead(lane: Lane, userId: string, spec: ReadSpec): Promise<ProbeResult> {

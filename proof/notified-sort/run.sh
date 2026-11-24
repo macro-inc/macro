@@ -4,6 +4,8 @@
 #   proof/notified-sort/run.sh all       # quiet run, loaded run, every mutant
 #   proof/notified-sort/run.sh quiet     # seed base+1, no load
 #   proof/notified-sort/run.sh load      # seed base+2, under concurrent load
+#   proof/notified-sort/run.sh load-reads # seed base+3, reads and Home cases under load, with write windows
+#   proof/notified-sort/run.sh load-seq  # seed base+4, one more sequence per lane under load
 #   proof/notified-sort/run.sh mutants   # seeds base+10.., one reduced run per planted mutant
 #   proof/notified-sort/run.sh test      # the harness unit tests, no stack
 #   proof/notified-sort/run.sh smoke     # a few cases, to check the setup
@@ -49,15 +51,25 @@ case "$mode" in
     run PROOF_SEED=$((seed_base + 1)) PROOF_RUN=quiet PROOF_LANES=24 PROOF_SEQUENCES=5 PROOF_STEPS=20 PROOF_READS=3000 PROOF_WORKERS=8 PROOF_SEQ_CONCURRENCY=${PROOF_SEQ_CONCURRENCY:-8} ;;
   load)
     run PROOF_SEED=$((seed_base + 2)) PROOF_RUN=load PROOF_LOAD=1 PROOF_LANES=24 PROOF_SEQUENCES=4 PROOF_STEPS=20 PROOF_READS=2000 PROOF_WORKERS=8 PROOF_SEQ_CONCURRENCY=${PROOF_SEQ_CONCURRENCY:-8} ;;
+  load-reads)
+    # The loaded reads and Home cases again, each recording its write window
+    # (lib/race.ts): the load run on seed base+2 kept none.
+    run PROOF_SEED=$((seed_base + 3)) PROOF_RUN=load-reads PROOF_LOAD=1 PROOF_PHASES=reads,dom PROOF_LANES=24 PROOF_READS=2000 PROOF_WORKERS=8 ;;
+  load-seq)
+    # Sequences under the same load again, one per lane, with storage resets
+    # recorded per read (the reload check of the load run once read empty).
+    run PROOF_SEED=$((seed_base + 4)) PROOF_RUN=load-seq PROOF_LOAD=1 PROOF_PHASES=sequences PROOF_LANES=24 PROOF_SEQUENCES=1 PROOF_STEPS=20 PROOF_WORKERS=8 PROOF_SEQ_CONCURRENCY=${PROOF_SEQ_CONCURRENCY:-8} ;;
   mutants)
     i=10
+    # PROOF_MUTANTS runs some of them again, each on its own seed.
     for m in baseline drop-row swap-order alter-field stale-cache skip-live; do
       mutant=$m; [ "$m" = baseline ] && mutant=
+      case " ${PROOF_MUTANTS:-$m} " in *" $m "*) ;; *) i=$((i + 1)); continue ;; esac
       run PROOF_SEED=$((seed_base + i)) PROOF_RUN="mutant-$m" PROOF_MUTANT="$mutant" PROOF_LANES=3 PROOF_SIZES=0,101 PROOF_READS=250 PROOF_SEQUENCES=1 PROOF_STEPS=20 PROOF_DOM=1 || true
       i=$((i + 1))
     done ;;
   all)
-    "$0" quiet && "$0" load && "$0" mutants ;;
+    "$0" quiet && "$0" load && "$0" load-reads && "$0" load-seq && "$0" mutants ;;
   env)
     run ;;
   *) echo "unknown mode $mode" >&2; exit 2 ;;
