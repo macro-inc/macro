@@ -79,10 +79,10 @@ vi.mock('../use-suggestions-flag', () => ({
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
-function mount() {
+function mount(staleTime = 0) {
   const client = new QueryClient({
     defaultOptions: {
-      queries: { refetchOnWindowFocus: false, retry: false },
+      queries: { refetchOnWindowFocus: false, retry: false, staleTime },
     },
   });
   const wrapper = (props: ParentProps) => (
@@ -425,4 +425,30 @@ it('drops a read of the routine ideas that was out before the dismissal', async 
   expect(client.getQueryData(routineSuggestionKeys.all.queryKey)).not.toEqual([
     'dismissed idea',
   ]);
+});
+
+it('is current only while it holds the server’s latest answer', async () => {
+  const { client, source } = mount(60_000);
+  expect(source.current()).toBe(false);
+  await waitFor(() => expect(source.current()).toBe(true));
+
+  // Asked again: what it holds may be out of date until the answer.
+  let answer: () => void = () => {};
+  server.gates.push(
+    new Promise<void>((resolve) => {
+      answer = resolve;
+    })
+  );
+  const { queryKey } = suggestionsKeys.feed('user-1');
+  fireAndForget(client.invalidateQueries({ queryKey }), 'test');
+  await waitFor(() => expect(source.current()).toBe(false));
+  expect(source.feed()).toBeDefined();
+  answer();
+  await waitFor(() => expect(source.current()).toBe(true));
+
+  // A read that failed leaves the feed shown, and not known to be current.
+  server.feedFails = true;
+  await client.invalidateQueries({ queryKey });
+  expect(source.current()).toBe(false);
+  expect(source.feed()).toBeDefined();
 });

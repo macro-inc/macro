@@ -202,6 +202,41 @@ test('a link to a topic that groups nothing shows Today', async ({ page }) => {
   await expect(page).toHaveURL(/\?scenario=topics$/);
 });
 
+test('a topic missing from a cached feed is still asked for once it is read again', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=cached&topic=customer:acme');
+  await expect(title(page)).toHaveText('Today');
+  await expect(page).toHaveURL(/topic=customer/);
+
+  await page.getByRole('button', { name: 'Read feed' }).click();
+  await expect(title(page)).toHaveText('Acme renewal');
+  await expect(rows(page)).toHaveCount(3);
+  await expect(page).toHaveURL(/topic=customer/);
+});
+
+test('reading the feed again leaves a topic where it was scrolled to', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 260 });
+  await page.goto('/?scenario=topics&topic=customer:acme');
+  await expect(rows(page)).toHaveCount(3);
+  const scroller = page.locator('section[aria-label="Acme renewal"]');
+  await scroller.evaluate((element) => element.scrollTo({ top: 60 }));
+  await page.getByRole('button', { name: 'Read feed' }).click();
+  await expect(rows(page)).toHaveCount(3);
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(60);
+
+  // Choosing another topic still starts it at its top.
+  await page.locator('[data-for-you-topic="event:offsite"]').click();
+  await expect(title(page)).toHaveText('Spring offsite');
+  expect(
+    await page
+      .locator('section[aria-label="Spring offsite"]')
+      .evaluate((element) => element.scrollTop)
+  ).toBe(0);
+});
+
 test('the Routines section links to ideas and saved routines', async ({
   page,
 }) => {

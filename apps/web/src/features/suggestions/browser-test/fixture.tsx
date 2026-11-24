@@ -142,6 +142,8 @@ function Fixture() {
       .otherwise(() => ALL)
   );
   const [failed, setFailed] = createSignal(scenario === 'error');
+  // `cached`: a feed from before the topics, until it is read again.
+  const [current, setCurrent] = createSignal(scenario !== 'cached');
   const [log, setLog] = createSignal<string[]>([]);
   const record = (line: string) => setLog((lines) => [...lines, line]);
   const change = (id: string, next: (suggestion: Suggestion) => Suggestion) =>
@@ -160,9 +162,11 @@ function Fixture() {
       const list = suggestions();
       return list ? served(list) : undefined;
     },
+    current: () => current() && suggestions() !== undefined,
     failed,
     retry: () => {
       setFailed(false);
+      setCurrent(true);
       setSuggestions(ALL);
     },
     refresh: async () => {},
@@ -378,6 +382,11 @@ function Fixture() {
     splitHotkeyScope: hotkeyScope,
   } as unknown as SplitPanelContextType;
 
+  /** Answer with the feed as it is now, topics included. */
+  const readFeed = () => {
+    setSuggestions(IN_TOPICS.map((suggestion) => ({ ...suggestion })));
+    setCurrent(true);
+  };
   /** Reply on the opened reply suggestions' threads, as the server's next answer would show. */
   const sendReplies = () =>
     setSuggestions((list) =>
@@ -416,6 +425,9 @@ function Fixture() {
         <footer class="flex shrink-0 items-center gap-3 border-t border-edge-muted px-4 py-2 text-xs text-ink-muted">
           <button type="button" onClick={finishRuns}>
             Finish runs
+          </button>
+          <button type="button" onClick={readFeed}>
+            Read feed
           </button>
           <button type="button" onClick={sendReplies}>
             Send replies

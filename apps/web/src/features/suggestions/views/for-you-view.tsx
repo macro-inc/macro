@@ -11,6 +11,7 @@ import { Button, cn } from '@ui';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createUniqueId,
   For,
   Match,
@@ -141,11 +142,12 @@ export function ForYouView(props: {
   const view = () => props.feed.view(props.list);
   const topic = () =>
     props.feed.topics().find((other) => other.key === props.topicKey);
+  const shownTopicKey = createMemo(() => topic()?.key);
   // One that groups nothing leaves the list shown, and isn't asked for any
   // more: rows that bring it back later don't take the page over.
   createEffect(() => {
-    const known = view().kind === 'rows' || view().kind === 'empty';
-    if (props.topicKey && known && !topic()) untrack(() => props.onTopicGone());
+    const gone = props.feed.topicsKnown() && !shownTopicKey();
+    if (props.topicKey && gone) untrack(() => props.onTopicGone());
   });
   const groups = () => props.feed.groups(props.list, topic());
   const name = () => {
@@ -343,11 +345,12 @@ export function ForYouView(props: {
 
   let scroller: HTMLElement | undefined;
   // Each list and topic starts at its top: they share one scroller, and what
-  // is shown can change from the sidebar or from history (Back). A link to one
-  // suggestion scrolls to it instead.
+  // is shown can change from the sidebar or from history (Back). A feed read
+  // that leaves the same one shown moves nothing, and a link to one suggestion
+  // scrolls to it instead.
   createEffect(
     on(
-      [() => props.list, () => topic()?.key],
+      [() => props.list, shownTopicKey],
       () => {
         if (!props.focusedId) scroller?.scrollTo({ top: 0 });
       },

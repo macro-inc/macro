@@ -202,6 +202,8 @@ export function useSuggestionsSource(): SuggestionsSource {
 
   return {
     feed: shown,
+    current: () =>
+      feed.isSuccess && feed.fetchStatus === 'idle' && !feed.isStale,
     failed: () => feed.isError && shown() === undefined,
     retry: () => fireAndForget(refresh(), 'suggestions'),
     refresh,

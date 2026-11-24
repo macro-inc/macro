@@ -10,6 +10,11 @@ import type {
 export type SuggestionsSource = {
   /** The feed in the server's order, with its counts; undefined until loaded. */
   feed: Accessor<SuggestionFeed | undefined>;
+  /**
+   * Whether the feed is the server's latest answer: false for a cached one
+   * being read again, or one the last read failed to replace.
+   */
+  current: Accessor<boolean>;
   /** Nothing to show because loading failed. */
   failed: Accessor<boolean>;
   retry(): void;
