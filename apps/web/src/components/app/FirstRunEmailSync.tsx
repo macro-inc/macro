@@ -1,6 +1,7 @@
 import { initAndStartEmailSync } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useUserInfoQuery } from '@queries/auth/user-info';
+import { queryReadyGate } from '@queries/gate';
 import { createEffect } from 'solid-js';
 
 /**
@@ -15,7 +16,8 @@ export function FirstRunEmailSync() {
   const userInfoQuery = useUserInfoQuery();
   let emailInitForUserId: string | undefined;
   createEffect(() => {
-    const data = userInfoQuery.data;
+    // A pending read would suspend the chrome; wait for the user instead.
+    const data = queryReadyGate(userInfoQuery) ? userInfoQuery.data : undefined;
     if (data?.authenticated !== true || data.tutorialComplete !== false) return;
     if (data.isAgent) return;
     if (emailInitForUserId === data.id) return;
