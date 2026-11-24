@@ -367,7 +367,8 @@ try {
 
   // Calendar's header wraps its controls onto a second row in a narrow pane;
   // Search events must stay inside it there too, and off New when it wraps
-  // onto a row of its own (360px and narrower).
+  // onto a row of its own (360px and narrower), as must the controls that
+  // wrap after it (320px).
   await browser.$('[data-sidebar-next-item="calendar"]').click();
   await browser
     .$('button[aria-label="Search events"]')

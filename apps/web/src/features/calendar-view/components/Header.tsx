@@ -108,8 +108,8 @@ export function Header(props: {
     })
   );
   // A narrow pane (the desktop window has no minimum width) shows Today as
-  // its icon, then wraps Search below the other controls, rather than push
-  // Search past the pane's edge.
+  // its icon, then wraps Search below the other controls, then wraps those
+  // too, rather than push any control past the pane's edge.
   const [controls, setControls] = createSignal<HTMLElement>();
   const collapsed = createLabelCollapse(
     controls,
@@ -350,7 +350,7 @@ export function Header(props: {
             onClick={() => setSearchExpanded(false)}
           >
             <div
-              class="flex items-center gap-2"
+              class="flex flex-wrap items-center justify-end gap-2"
               classList={{
                 invisible: searchOverlaysControls() && searchExpanded(),
                 'pointer-events-none':
