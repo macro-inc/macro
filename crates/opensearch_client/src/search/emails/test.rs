@@ -4,13 +4,13 @@ use serde_json::json;
 
 #[test]
 fn test_build_keyword_query_string_single_term() {
-    let result = build_keyword_query_string(&["hello".to_string()]);
+    let result = build_keyword_query_string(&["hello".to_string()], "partial");
     assert_eq!(result, "(hello | hello@*)");
 }
 
 #[test]
 fn test_build_keyword_query_string_multiple_terms() {
-    let result = build_keyword_query_string(&["hello".to_string(), "test".to_string()]);
+    let result = build_keyword_query_string(&["hello".to_string(), "test".to_string()], "partial");
     assert_eq!(result, "(hello | hello@*) + (test | test@*)");
 }
 
@@ -19,38 +19,41 @@ fn test_build_keyword_query_string_multi_word_term_uses_phrase() {
     // Multi-word terms come from quoted phrases via `split_search_terms`
     // and must render as a phrase so simple_query_string's AND default
     // operator doesn't decompose them into independent tokens.
-    let result = build_keyword_query_string(&["hi there".to_string()]);
+    let result = build_keyword_query_string(&["hi there".to_string()], "partial");
     assert_eq!(result, "\"hi there\"");
 }
 
 #[test]
 fn test_build_keyword_query_string_uppercase_lowercased_for_email() {
-    let result = build_keyword_query_string(&["Teo".to_string()]);
+    let result = build_keyword_query_string(&["Teo".to_string()], "partial");
     assert_eq!(result, "(Teo | teo@*)");
 }
 
 #[test]
 fn test_build_keyword_query_string_mixed_single_and_multi_word() {
-    let result = build_keyword_query_string(&["Teo".to_string(), "hello world".to_string()]);
+    let result =
+        build_keyword_query_string(&["Teo".to_string(), "hello world".to_string()], "partial");
     assert_eq!(result, "(Teo | teo@*) + \"hello world\"");
 }
 
 #[test]
 fn test_build_keyword_query_string_dotted_term_uses_phrase() {
-    let result = build_keyword_query_string(&["example.com".to_string()]);
+    let result = build_keyword_query_string(&["example.com".to_string()], "partial");
     assert_eq!(result, "\"example.com\"");
 }
 
 #[test]
 fn test_build_keyword_query_string_email_term_uses_phrase() {
-    let result = build_keyword_query_string(&["alice@example.com".to_string()]);
+    let result = build_keyword_query_string(&["alice@example.com".to_string()], "partial");
     assert_eq!(result, "\"alice@example.com\"");
 }
 
 #[test]
 fn test_build_keyword_query_string_email_term_mixed_with_word() {
-    let result =
-        build_keyword_query_string(&["alice@example.com".to_string(), "review".to_string()]);
+    let result = build_keyword_query_string(
+        &["alice@example.com".to_string(), "review".to_string()],
+        "partial",
+    );
     assert_eq!(result, "\"alice@example.com\" + (review | review@*)");
 }
 
@@ -904,10 +907,10 @@ fn a_hyphenated_word_alone_needs_no_query_string() {
 #[test]
 fn a_term_of_one_word_or_an_exact_short_or_quoted_one_stays_in_the_query_string() {
     for (terms, match_type, query) in [
-        (vec!["follow-up"], "exact", "(follow-up)"),
+        (vec!["follow-up"], "exact", "(follow\\-up)"),
         (vec!["follow-up"], "regexp", "follow-up*"),
         (vec!["東京"], "partial", "(東京)"),
-        (vec!["the follow-up"], "partial", "\"the follow-up\""),
+        (vec!["the follow-up"], "partial", "\"the follow\\-up\""),
         (vec!["node.js"], "partial", "node.js*"),
         (vec!["follow-"], "partial", "follow*"),
         (vec!["Re:"], "partial", "(Re)"),
@@ -938,4 +941,67 @@ fn a_run_unicode_splits_into_words_matches_as_a_phrase_prefix() {
             "{term}"
         );
     }
+}
+
+#[test]
+fn a_terms_punctuation_is_never_read_as_query_syntax() {
+    for (term, addresses, text) in [
+        ("-lunch", "(lunch | lunch@*)", "lunch*"),
+        ("--force", "(force | force@*)", "force*"),
+        ("(Lunch", "(Lunch | lunch@*)", "Lunch*"),
+        ("-नमस्ते", "(नमस्ते | नमस्ते@*)", "नमस्ते*"),
+        ("-", r"(\- | \-@*)", r"(\-)"),
+        ("a+", "(a | a@*)", "(a)"),
+        ("lunch*", "(lunch | lunch@*)", "lunch*"),
+        ("C♯", "(C♯ | c♯@*)", "(C♯)"),
+        ("-lunch🎉", r"(\-lunch🎉 | \-lunch🎉@*)", r"\-lunch🎉*"),
+        (r"team lunch\", r#""team lunch\\""#, r#""team lunch\\""#),
+        (
+            r#"-team "lunch"#,
+            r#""\-team \"lunch""#,
+            r#""\-team \"lunch""#,
+        ),
+        (
+            "ana+news@probe.example",
+            r#""ana\+news@probe.example""#,
+            r#""ana\+news@probe.example""#,
+        ),
+    ] {
+        let terms = [term.to_string()];
+
+        assert_eq!(build_keyword_query_string(&terms, "partial"), addresses);
+        assert_eq!(build_text_query_string(&terms, "partial"), text);
+    }
+    for (term, literal) in [
+        ("lunch~2", r"lunch\~2"),
+        ("lunch|menu", r"lunch\|menu"),
+        (r"lunch\|menu", r"lunch\\\|menu"),
+        ("lunch(menu)", r"lunch\(menu\)"),
+        ("lunch*menu", r"lunch\*menu"),
+    ] {
+        let terms = [term.to_string()];
+
+        assert_eq!(
+            build_keyword_query_string(&terms, "partial"),
+            format!("({literal} | {literal}@*)")
+        );
+        assert_eq!(
+            build_text_query_string(&terms, "exact"),
+            format!("({literal})")
+        );
+    }
+}
+
+#[test]
+fn regexp_input_keeps_its_punctuation() {
+    let terms = ["lunch|menu".to_string(), "-lunch".to_string()];
+
+    assert_eq!(
+        build_keyword_query_string(&terms, "regexp"),
+        "(lunch|menu | lunch|menu@*) + (-lunch | -lunch@*)"
+    );
+    assert_eq!(
+        build_text_query_string(&terms, "regexp"),
+        "lunch|menu* + -lunch*"
+    );
 }

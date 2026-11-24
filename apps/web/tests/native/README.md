@@ -36,6 +36,8 @@ account, Docker, sudo, or local backend stack is required.
 Both suites must pass. Both resize the window to 400px wide while online and
 expect every Email list header control, Search included, inside the header,
 then restore the size and expect the view options (the reading pane toggle) back.
+They then open two more splits beside Email, resize the window to 1000px and
+900px wide (a third each), expect the same, and close the splits again.
 The full suite checks native Soup predicate evaluation via
 `graphql_cache_entity_filter`, including filter combinations never fetched online,
 then reloads the webview with the API still down and expects All mail to render
