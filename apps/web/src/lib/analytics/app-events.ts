@@ -149,7 +149,7 @@ export type AppEvents = {
    * the same event with `source: 'marketing'`.
    */
   desktop_download_clicked: {
-    platform: 'macos' | 'linux';
+    platform: 'macos' | 'macos-intel' | 'linux';
     source: 'app_settings';
   };
   notifications_toggled: Record<string, unknown>;
