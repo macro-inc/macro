@@ -18,7 +18,7 @@ export default function ProductFormsPage() {
         <ProductHero
           product="Forms"
           title="Forms connected to your work."
-          description="Every response lands in a database. Collect answers, qualify requests, and let people book a call."
+          description="Collect answers directly into a database, qualify leads with rules, and route qualified guests straight to a booking link."
           tutorial="forms"
           cta="forms_hero_get_started"
         />

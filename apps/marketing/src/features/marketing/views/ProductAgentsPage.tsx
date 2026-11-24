@@ -75,7 +75,7 @@ export function RouteAgents() {
         <ProductHero
           product="Agents"
           title="Agents with omniscient context."
-          description="Macro consolidates email, chats, docs, and CRM into one memory system, aggregated across your whole team."
+          description="Agents work inside your workspace with shared team memory, live editing tools, and your choice of built-in models or external coding agents."
           cta="agents_hero_get_started"
           tutorial="agents"
         />
@@ -83,19 +83,19 @@ export function RouteAgents() {
       <FeaturePageSection
         id="agent-sources"
         title="Unified memory, across your whole team."
-        description="ChatGPT and Claude build up memory from your chats. Macro builds memory from your files, your email, your tasks, everything your team is talking about in channels, and all of your calls. It works across your team too, so agents know what everyone is working on and who is responsible for what."
+        description="ChatGPT and Claude only remember your own prompts. Macro builds shared memory from your team’s Macro Mail, Macro Chat, Macro Docs, Macro Tasks, and Macro Calls—so agents know who owns what."
         screen={featureScreens['agent-sources']}
       />
       <FeaturePageSection
         id="agent-collaboration"
         title="First-class citizens, just like people."
-        description="Agents work right inside your channels. @mention one to get it working on something with the whole conversation as context, or assign it a task in Macro Tasks, just like a teammate. Hosted agents keep working after you close the app; pick up the same conversation on another device."
+        description="Tag an agent in Macro Chat or assign it a ticket in Macro Tasks like any teammate. Hosted agents keep running after you close your laptop and sync across devices."
         screen={featureScreens['agent-collaboration']}
       />
       <FeaturePageSection
         id="agent-actions"
         title="One search tool across everything."
-        description="We put the same effort into our tools and MCP as the app itself. Connected to separate apps, an agent has to search each one, then deduplicate and work out what happened. In Macro it uses one search tool across your files, email, tasks, messages, and calls."
+        description="Instead of burning calls across rate-limited SaaS connectors, agents get one fast search tool across every email, thread, doc, file, and call transcript in your workspace."
         screen={featureScreens['agent-actions']}
       />
       <FeaturePageSection

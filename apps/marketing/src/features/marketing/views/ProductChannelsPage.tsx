@@ -19,14 +19,14 @@ export function RouteChannels() {
       <ProductHero
         product="Chat"
         title="Chat for people and agents."
-        description="Macro Chat brings your people and agents together in channels. Share context and work on the same tasks."
+        description="Chat puts your teammates and AI agents in the same channels and DMs with inline threads, Signal and Noise filtering, and workspace mentions."
         cta="channels_hero_get_started"
         tutorial="chat"
       />
       <FeaturePageSection
         id="shared-work"
         title="Integrated with everything else."
-        description="Channels are already the lifeblood of your company. Macro makes that a feature rather than an anti-pattern: @mention an email, doc, or task, create a task right from any message, or ask Macro, without leaving the conversation."
+        description="Channels are already where work happens. Mention Macro Mail, Macro Docs, or Macro Tasks right in the thread, create tasks from any message, or bring in Macro Agents without leaving the conversation."
         screen={featureScreens['shared-work']}
       />
       <FeaturePageSection
@@ -38,13 +38,13 @@ export function RouteChannels() {
       <FeaturePageSection
         id="channel-agents"
         title="Macro Agents are first-class, like humans."
-        description="@mention an agent to get it working on something, with the whole conversation as context. Or let it listen in and reply when it’s needed, like a teammate would, without @mentioning."
+        description="Tag Macro Agents in a thread and they read the full conversation plus every linked file, email, and task—or let them chime in automatically when they can help."
         screen={featureScreens['channel-agents']}
       />
       <FeaturePageSection
         id="channel-threads"
         title="Built for focused technical conversations."
-        description="The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Slack’s side panel is nice for organization but can make it hard to find things; iMessage and Discord are good for casual conversations, but not deep technical ones."
+        description="The first few replies appear inline and the rest tuck cleanly into a thread—readable like a structured forum, fast like iMessage, without Slack’s buried sidebars."
         screen={featureScreens['channel-threads']}
       />
       <FeaturePageSection

@@ -67,21 +67,21 @@ export function RouteGithub() {
       <div class="github-page">
         <ProductHero
           product="GitHub"
-          title={'From bug report\nto merged pull request.'}
-          description="Track a fix as a task, review and merge the linked pull request from chat, and get GitHub comments and @mentions in your inbox."
+          title={'From bug report\nto merged PR.'}
+          description="Review diffs, read review comments, and merge PRs right inside Macro so engineering work stays beside the thread that started it."
           cta="github_hero_get_started"
           tutorial="github"
         />
         <FeaturePageSection
           id="pr-links"
           title={'Link the task, the chat,\nand the pull request.'}
-          description="Paste a GitHub link in chat or a document and hover to see its live status. When a linked pull request opens or merges, the task in Macro updates automatically."
+          description="Paste a GitHub URL in Macro Chat or Macro Docs for live PR status on hover—when it opens or merges, the linked Macro Tasks item updates itself."
           screen={featureScreens['pr-links']}
         />
         <FeaturePageSection
           id="coding-agents"
           title="@mention Cursor, merge from Macro Chat."
-          description="Coding agents like Cursor live right in your channels. @mention one and ask it to fix something, and when the pull request is ready, merge it right from the channel. The task and the pull request link back to each other."
+          description="Tag Cursor or another coding agent right inside Macro Chat to investigate and open a branch, then review the diff and merge the PR without leaving the channel."
           screen={featureScreens['coding-agents']}
         />
         <FeaturePageSection
@@ -93,7 +93,7 @@ export function RouteGithub() {
         <FeaturePageSection
           id="review-inbox"
           title="Pull requests in your inbox."
-          description="GitHub’s own notifications are not very good. When you get a comment on a pull request you authored, or you’re mentioned in one, it appears in your unified inbox alongside your messages, tasks, and important emails, so you never miss a pull request."
+          description="GitHub’s notification inbox is easy to miss. PR comments and @mentions land straight in Macro Home beside your team chat, Macro Tasks, and priority Macro Mail."
           screen={featureScreens['review-inbox']}
         />
         <FeaturePhoneScreens

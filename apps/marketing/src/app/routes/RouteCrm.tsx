@@ -86,7 +86,7 @@ export function RouteCrm() {
       <ProductHero
         product="CRM"
         title="CRM that keeps itself up to date."
-        description="Macro CRM stays up to date from your email and team chat. No separate tool to maintain."
+        description="CRM automatically tracks your companies, contacts, owners, and deal stages so you never have to manually log updates in a separate tool."
         cta="crm_hero_get_started"
         tutorial="crm"
       />
@@ -111,7 +111,7 @@ export function RouteCrm() {
       <FeaturePageSection
         id="crm-from-email"
         title="Macro Mail and Macro Calls on every record."
-        description="Open a customer email right from their record, in the same email client you already use. @mention a company or contact from a channel, a document, or a task in Macro Tasks, and the record links back to it. No separate tool your team won’t check, and no deciding who gets CRM seats."
+        description="Open a customer email right from their record, in the same email client you already use. @mention a company or contact from Macro Chat, Macro Docs, or Macro Tasks, and the record links back to it. No separate tool your team won’t check, and no deciding who gets CRM seats."
         screen={featureScreens['crm-from-email']}
       />
       <FeaturePageSection
@@ -123,7 +123,7 @@ export function RouteCrm() {
       <FeaturePageSection
         id="crm-agents"
         title="Macro Agents can do everything you can."
-        description="Our MCP support is just as important to us as the user interface. Ask your agent to update a deal, draft a follow-up from the customer’s emails, calls, and notes, or set up a routine that moves the deal to the right stage every time a call ends."
+        description="Our MCP support is just as important to us as the user interface. Ask your agent to update a deal, draft a follow-up from the customer’s Macro Mail and Macro Calls, or set up Macro Routines that move deals to the right stage after every call."
         screen={featureScreens['crm-agents']}
       />
       <FeaturePhoneScreens screens={phoneScreens['crm']} product="CRM" />

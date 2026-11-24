@@ -72,26 +72,26 @@ export function RouteDocuments() {
         <ProductHero
           product="Docs"
           title="High speed agentic documents."
-          description="Version-controlled markdown, @linked to your work. Edit alongside agents with live cursors."
+          description="Docs gives you collaborative plain markdown with full version history, real-time multiplayer cursors, and live editing alongside AI agents."
           cta="documents_hero_get_started"
           tutorial="docs"
         />
         <FeaturePageSection
           id="document-agents"
           title="Macro Agents get a live cursor in the doc."
-          description="Agents edit the document live, at the same time as you and your team, as opposed to editing the markdown file and giving you a diff. If you go offline and come back on, your changes sync to your peers and conflict resolution happens automatically."
+          description="Macro Agents edit beside you with a live cursor—no waiting for markdown diffs. Go offline and CRDT sync merges everyone’s edits automatically when you reconnect."
           screen={featureScreens['document-agents']}
         />
         <FeaturePageSection
           id="document-links"
           title="@mention anything in your workspace."
-          description="@mention a customer email from Macro Mail, a task from Macro Tasks, a call, or another doc. Click any of them and it opens right next to the doc, in a split screen."
+          description="Type @ to mention Macro Mail, Macro Tasks, Macro Calls, or another doc. Click any pill and it opens side by side in split screen."
           screen={featureScreens['document-links']}
         />
         <FeaturePageSection
           id="document-organization"
           title="Linked both ways."
-          description="@mention a doc in a message and both know about each other. The email, the tasks, and the call you mentioned all know about this doc too, so your workspace becomes a web of context you can navigate in either direction."
+          description="Every @mention works both ways: the emails, tasks, and calls you reference automatically link back to the doc so nothing gets orphaned."
           screen={featureScreens['document-organization']}
         />
         <FeaturePageSection

@@ -31,7 +31,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Spreadsheets',
     title: 'Sheets @linked to your work.',
     description:
-      'A high performance, agent-native spreadsheet that works with Excel, Google Sheets and CSV.',
+      'Fast, collaborative spreadsheets with live agent editing, workspace @mentions, and clean Excel, Google Sheets, and CSV import/export.',
     heading: '@mention anything in a cell.',
     detail:
       'It’s a normal spreadsheet: formulas, number formats, fill down, everything you’d expect from Excel or Google Sheets. The difference is it’s linked to everything else. Type @ in a cell to mention a person, a document from Macro Docs, an email from Macro Mail, or a task from Macro Tasks.',
@@ -75,10 +75,10 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Databases',
     title: 'Dear Notion, meet big data.',
     description:
-      'Edit records together with your team and agents. Switch between tables, boards, and timelines.',
+      'Typed tables, boards, and timelines built for teams and agents—linked straight to your emails, docs, tasks, and forms.',
     heading: '@mention anything in a column.',
     detail:
-      'Each row is a record, and each column is a field, like text, numbers, dates, a dropdown, or a checkbox. Because it’s Macro, a column can also hold an @mention of people, tasks, documents, emails, or companies. Add another table and link the two together. Responses from Macro Forms land here as rows.',
+      'Every row is a record and every column is typed—text, numbers, formulas, dropdowns, or live @mentions of people, Macro Tasks, Macro Docs, Macro Mail, and Macro CRM companies. Link tables together, and pipe Macro Forms responses straight in as rows.',
     sceneTitle: 'Launch projects',
     rows: [],
     message: 'I added the launch tasks to the table.',
@@ -91,12 +91,12 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Ask Macro Agents to edit your records.',
         description:
-          'Attach the database to an agent conversation to ask questions or edit records, columns, and tables. Use a routine for updates you want to happen again.',
+          'Attach a database to Macro Agents to query data or bulk-edit rows and columns, or wire up Macro Routines to keep records updated automatically.',
       },
       {
         title: 'Import your Notion databases.',
         description:
-          'Connect Notion from Drive’s Import files dialog, then select Import. Review the pages and databases the agent found and choose who can see them before you approve. Your originals stay in Notion.',
+          'Import from Notion inside Macro Drive—review what the agent finds, set permissions, and approve while leaving your originals untouched.',
       },
     ],
     faq: [
@@ -119,7 +119,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Canvas',
     title: 'An infinite connected canvas.',
     description:
-      'Draw diagrams and plan with your team. Add shapes, notes, and images alongside live mentions of docs and tasks.',
+      'An infinite whiteboard for diagrams and planning—with live @mentions of your real tasks, docs, emails, and calls.',
     heading: '@mention Macro Tasks, Macro Docs, and Macro Mail.',
     detail:
       'Mention a task, a document from Macro Docs, an email, or a call directly on the canvas. Task mentions show current status and priority, and open the original when you need the details.',
@@ -157,7 +157,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Snippets',
     title: 'Reusable snippets.',
     description:
-      'Save replies and templates for reuse. Type a semicolon to insert them.',
+      'Reusable markdown replies, checklists, and agent prompts shared across your team—type ; anywhere to drop one in.',
     heading: 'Save replies as reusable snippets.',
     detail:
       'Save a common reply or meeting template, including its headings, checklists, and tables. Keep it personal or let your team use and edit it too.',
@@ -196,7 +196,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Calendar',
     title: 'A really fast calendar, with agents that do the scheduling.',
     description:
-      'All your Google and Microsoft calendars in one view. Find time with your team and ask agents to handle the invites.',
+      'Calendar unifies your Google and Microsoft schedules in one fast week view with instant keyboard navigation and built-in scheduling links.',
     heading: 'All your accounts in one view.',
     detail:
       'Connect multiple Google and Microsoft accounts. See your work, personal, and shared calendars together, and choose which calendars to show.',
@@ -208,19 +208,19 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
         id: 'calendar-team-availability',
         title: 'Find a time with your team.',
         description:
-          'Ask an agent in Macro Chat to find a time for the team to meet. It checks everyone’s availability and finds a time that works. Teammates who share busy blocks show when they’re busy, not what.',
+          'Ask Macro Agents in Macro Chat to find a time everyone can make. Teammates who share busy blocks show when they’re free without exposing private details.',
       },
       {
         id: 'calendar-agent-invites',
         title: 'Let Macro Agents send and edit invites.',
         description:
-          'Ask an agent to invite your team, move a meeting, or update the guest list, and review the details before it changes your calendar. The invite shows up right in the channel as a calendar pill, and you can @mention events anywhere in Macro.',
+          'Have Macro Agents send invites, move meetings, or update guests with your approval. Events appear as live pills you can @mention anywhere in Macro.',
       },
       {
         id: 'calendar-booking-links',
         title: 'Let guests book with Macro Booking Links.',
         description:
-          'Send a booking link and guests pick from your open times in their own time zone, without a Macro account. Busy times on your connected calendars are left out, and the meeting lands on your calendar with an invitation for everyone.',
+          'Share Macro Booking Links so guests pick open times in their own time zone—no Macro account needed, with answers linked to Macro CRM and Macro Mail.',
       },
     ],
     faq: [
@@ -250,7 +250,8 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tutorial: 'scheduling',
     product: 'Booking links',
     title: 'Team booking links.',
-    description: 'Let guests book an open time. No Macro account needed.',
+    description:
+      'Team scheduling and round-robin booking links built right into your workspace—no Calendly subscription or guest account needed.',
     heading: 'Book one teammate or the whole team.',
     detail:
       'Find a time when everyone is free, or use round robin to book one available teammate. Set working hours, time between meetings, minimum notice, and a daily booking limit.',
@@ -325,7 +326,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Folders and Macro Databases, side by side.',
         description:
-          'Folders are good for compatibility and sharing, and databases are good when you want to track and sort things by their properties. Drag files onto a folder to upload them, and narrow any list by type, tag, or creator.',
+          'Folders for quick sharing, Macro Databases for structured tracking—drag files in and filter by type, tag, or creator.',
       },
       {
         title: 'Auto-organized with Macro Tags.',
@@ -359,7 +360,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Routines',
     title: 'Agents on a schedule.',
     description:
-      'Schedule agent prompts to run, or trigger them when your workspace changes.',
+      'Run agents on a schedule or whenever an email arrives, a task changes, or a call wraps up—no Zapier wiring required.',
     heading: 'A saved prompt, run on a schedule.',
     detail:
       'Ask for a daily project update, a draft when an email arrives, or a sheet update when a task changes. Open any run’s conversation to see what the agent did.',
@@ -408,7 +409,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Skills',
     title: 'Skills for your agents.',
     description:
-      'Save instructions your agents can reuse, from code reviews to release notes.',
+      'Write your team’s checklists, formatting rules, and review playbooks once so every agent follows them automatically.',
     heading: 'Write the instructions once.',
     detail:
       'Save the release notes format, review checklist, or other instructions you keep giving agents. Edit the skill when the process changes; agents use the current version.',

@@ -24,10 +24,9 @@ const faqItems = [
     q: 'Which email accounts can I connect?',
     a: (
       <>
-        Macro supports Gmail and Google Workspace. Connect an account in
-        Settings and keep using Gmail or Superhuman alongside Macro. Macro
-        connects directly to your Gmail account, so you don’t need to stop using
-        another email client. See the{' '}
+        Macro supports Google (Gmail and Google Workspace) and Microsoft
+        (Outlook and Microsoft 365). Connect an account in Settings and keep
+        using Gmail, Outlook, or Superhuman alongside Macro. See the{' '}
         <a href="/email#guide">email setup guide</a>.
       </>
     ),
@@ -119,8 +118,9 @@ export function RouteEmail() {
         <ProductBrand product="Email" />
         <h1>Organized and prioritized email.</h1>
         <p class="email-page-hero-description">
-          Macro Mail tags and prioritizes email from all your accounts, with
-          Superhuman shortcuts and frontier intelligence.
+          Mail brings your Google and Microsoft accounts into one inbox with
+          Superhuman shortcuts, AI prioritization, autotagging, and team
+          collaboration.
         </p>
         <div class="email-page-provider-actions">
           <a
@@ -178,7 +178,7 @@ export function RouteEmail() {
       <FeaturePageSection
         id="agentic-editing"
         title="Draft and send with Macro Agents."
-        description="The agent can search prior interactions with people and build up context before drafting the email. You can iterate with it and then hit send without leaving the agent."
+        description="Macro Agents search past threads, Macro Docs, and Macro Calls before drafting a reply. Iterate in the same window and hit send without switching tabs."
         screen={featureScreens['agentic-editing']}
       />
       <FeaturePageSection
@@ -190,19 +190,19 @@ export function RouteEmail() {
       <FeaturePageSection
         id="email-crm"
         title="Your Macro CRM, one click from any email."
-        description="Open a company or contact record from any email to see every email between your team and that company, without opening a heavyweight CRM. Catch up on the relationship without leaving your inbox."
+        description="Open any Macro CRM company or contact record right beside an email to see every thread and call your team has had with them."
         screen={featureScreens['email-crm']}
       />
       <FeaturePageSection
         id="auto-tags"
         title="Unified Macro Tags across your workspace."
-        description="Tag incoming email by customer, project, or topic. Use Jev, an extraction model, to set up any tags you want, or frontier AI if you’d like. The same tags work across emails, docs, and tasks."
+        description="Tag incoming mail by customer, project, or urgency with Jev or frontier models. The same Macro Tags organize emails, Macro Docs, and Macro Tasks."
         screen={featureScreens['auto-tags']}
       />
       <FeaturePageSection
         id="email-routines"
         title="Kick off Macro Routines from any email."
-        description="Set up a routine that runs when an email arrives and kicks off work across your workspace. When an important customer email comes in, it can message an internal channel and send you a push notification."
+        description="Trigger Macro Routines whenever an email arrives—notify a Macro Chat channel, create Macro Tasks, or send yourself a push alert for VIP customers."
         screen={featureScreens['email-routines']}
       />
       <FeaturePhoneScreens screens={phoneScreens['email']} product="Mail" />

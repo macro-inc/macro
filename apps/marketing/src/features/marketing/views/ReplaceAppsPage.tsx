@@ -45,7 +45,7 @@ export default function ReplaceAppsPage() {
         <ProductHero
           product="Workspace"
           title="Replace 27+ apps."
-          description="Email, chat, docs, and tasks. All included with Macro."
+          description="Replace your stack of point tools with one connected workspace for humans and agents."
           cta="replace_apps_hero"
         />
         <section class="replacement-calculator" aria-label="Compare app costs">
