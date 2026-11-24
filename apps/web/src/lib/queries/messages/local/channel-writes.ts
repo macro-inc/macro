@@ -440,16 +440,25 @@ export function predictedMessage(
   };
 }
 
+/** The server previews a thread with its oldest live replies, this many. */
+const THREAD_PREVIEW_LIMIT = 3;
+
 /** The root as it will read once the reply is on it. */
 export function predictedRoot(
   root: ChannelMessageFieldsFragment,
   reply: ChannelMessageFieldsFragment
 ): ChannelMessageFieldsFragment {
   if (!root.thread) return root;
+  // The preview is the oldest replies: the new one joins it only while the
+  // preview still holds every reply.
+  const { preview, replyCount } = root.thread;
+  const joinsPreview =
+    preview.length === replyCount && replyCount < THREAD_PREVIEW_LIMIT;
   return {
     ...root,
     thread: {
       ...root.thread,
+      preview: joinsPreview ? [...preview, reply] : preview,
       replyCount: root.thread.replyCount + 1,
       latestReplyAt: reply.createdAt,
       updatedAt: reply.createdAt,

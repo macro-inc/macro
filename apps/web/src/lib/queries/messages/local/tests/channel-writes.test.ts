@@ -123,6 +123,45 @@ describe('createChannelWrites', () => {
     });
   });
 
+  it("predicts a reply into its root's preview while the preview holds every reply", async () => {
+    const root = graphqlMessage(1);
+    const reply = graphqlMessage(8, { threadId: root.id });
+    const full = graphqlMessage(2, {
+      thread: {
+        ...graphqlMessage(2).thread!,
+        replyCount: 3,
+        preview: [3, 4, 5].map((n) =>
+          graphqlMessage(n, { threadId: graphqlMessage(2).id })
+        ),
+      },
+    });
+    const { writes, calls } = setup(
+      () => ({
+        data: written('sendChannelMessage', reply, root),
+        disposition: { kind: 'committed' },
+      }),
+      [root, full]
+    );
+
+    // The preview is the root's oldest three replies: a collapsed thread
+    // shows it, and with no connection the thread itself may not load.
+    await writes.send(send(reply.id, { content: 'reply', thread_id: root.id }));
+    await writes.send(send(reply.id, { content: 'reply', thread_id: full.id }));
+
+    const previewOf = (call: (typeof calls)[number]) =>
+      (
+        call.context.optimisticResponse as {
+          sendChannelMessage: {
+            root: { thread: { preview: { id: string }[] } };
+          };
+        }
+      ).sendChannelMessage.root.thread.preview.map((message) => message.id);
+    expect(previewOf(calls[0])).toEqual([reply.id]);
+    expect(previewOf(calls[1])).toEqual(
+      full.thread!.preview.map((message) => message.id)
+    );
+  });
+
   it('shows a waiting reply in its thread, not at the live end', async () => {
     const root = graphqlMessage(1);
     const reply = graphqlMessage(8, { threadId: root.id });
