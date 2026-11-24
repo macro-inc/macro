@@ -86,9 +86,37 @@ export type GanttTimedEnd = keyof GanttTimes;
  * A timed range after dragging `edge` from position `from` to `to`. Day
  * steps keep each end's time of day; minute steps snap the dragged edge and
  * a move keeps the duration. An edge stops a step short of the other, or
- * where it was when the range is already shorter.
+ * where it was when the range is already shorter. A `wholeDay` end, saved
+ * without a time, moves by whole days only: the days its instant moved,
+ * rounded, so a nudge of less than half a day leaves its day as it was.
  */
 export function rescheduledGanttTimes(
+  times: GanttTimes,
+  edge: GanttRescheduleEdge,
+  from: number,
+  to: number,
+  snap: GanttTimeSnap,
+  wholeDay?: GanttTimedEnd
+): GanttTimes {
+  const next = exactlyRescheduled(times, edge, from, to, snap);
+  if (!wholeDay || snap === 'day') return next;
+  const before = times[wholeDay];
+  // A move is measured at the start, whose position a clock change does not shift.
+  const moved =
+    edge === 'move'
+      ? ganttPosition(next.start) - ganttPosition(times.start)
+      : ganttPosition(next[wholeDay]) - ganttPosition(before);
+  const movedBy = (days: number) => ({
+    ...next,
+    [wholeDay]: addDays(before, days),
+  });
+  const rounded = movedBy(Math.round(moved));
+  if (rounded.start <= rounded.end) return rounded;
+  // Rounding toward the other end would turn the range around.
+  return movedBy(wholeDay === 'start' ? Math.floor(moved) : Math.ceil(moved));
+}
+
+function exactlyRescheduled(
   times: GanttTimes,
   edge: GanttRescheduleEdge,
   from: number,

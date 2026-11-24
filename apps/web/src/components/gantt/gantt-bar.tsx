@@ -110,6 +110,7 @@ export function GanttBar(
   };
   const reschedule = createGanttReschedule({
     gantt,
+    wholeDay: () => local.wholeDay,
     range: () => {
       if (local.timed) {
         const exact = times(local.start, local.end);

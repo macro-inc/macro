@@ -594,7 +594,7 @@ describe('rescheduledStartDue', () => {
     ]);
   });
 
-  it('compares an end saved as a whole day by its day on a timed bar, and saves it at the start of the day', () => {
+  it('compares an end saved as a whole day by its day on a timed bar, and saves it at the time of day it was held at', () => {
     expect(
       rescheduledStartDue(
         { start: at(23, 0), due: at(27, 15), wholeDay: 'start' },
@@ -607,6 +607,23 @@ describe('rescheduledStartDue', () => {
         { start: at(24, 1), end: at(27, 15), allDay: false }
       )
     ).toEqual([{ field: 'start', value: at(24, 0), hasTime: false }]);
+  });
+
+  it('keeps a whole-day due held at the end of its day there, so it stays after the start', () => {
+    const endOfDay = (day: number) => new Date(2026, 9, day, 23, 59, 59, 999);
+    expect(
+      rescheduledStartDue(
+        {
+          start: new Date(2026, 9, 9, 9),
+          due: endOfDay(9),
+          wholeDay: 'due',
+        },
+        { start: new Date(2026, 9, 10, 9), end: endOfDay(10), allDay: false }
+      )
+    ).toEqual([
+      { field: 'due', value: endOfDay(10), hasTime: false },
+      { field: 'start', value: new Date(2026, 9, 10, 9), hasTime: true },
+    ]);
   });
 
   it('gives a task drawn from its created date a start only when the start moved', () => {

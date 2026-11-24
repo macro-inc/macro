@@ -269,7 +269,9 @@ export type RescheduledEnd = {
  * due date first when the new start passes the saved due date, as the
  * server keeps a start on or before it. A bar drawn from the created date,
  * for a task with no start, gains a start only when its start moved. A timed
- * bar's `wholeDay` end, saved without a time, stays a whole day.
+ * bar's `wholeDay` end, saved without a time, stays a whole day, held at the
+ * same time of its new day (midnight, or the end of a day a suggestion picked)
+ * so it never lands before a start on that day.
  */
 export function rescheduledStartDue(
   previous: { start: Date; due: Date | null; wholeDay?: DateField },
@@ -282,17 +284,25 @@ export function rescheduledStartDue(
     (wholeDay(field)
       ? !isSameDay(before, after)
       : before.getTime() !== after.getTime());
-  const end = (field: DateField, value: Date): RescheduledEnd => ({
+  const onDayOf = (before: Date | null, after: Date) =>
+    before
+      ? addDays(before, differenceInCalendarDays(after, before))
+      : startOfDay(after);
+  const end = (
+    field: DateField,
+    before: Date | null,
+    value: Date
+  ): RescheduledEnd => ({
     field,
-    value: wholeDay(field) && !range.allDay ? startOfDay(value) : value,
+    value: wholeDay(field) && !range.allDay ? onDayOf(before, value) : value,
     hasTime: !wholeDay(field),
   });
   const ends: RescheduledEnd[] = [];
   if (moved('start', previous.start, range.start)) {
-    ends.push(end('start', range.start));
+    ends.push(end('start', previous.start, range.start));
   }
   if (moved('due', previous.due, range.end)) {
-    ends.push(end('due', range.end));
+    ends.push(end('due', previous.due, range.end));
   }
   if (ends.length === 2 && previous.due && range.start > previous.due) {
     ends.reverse();
