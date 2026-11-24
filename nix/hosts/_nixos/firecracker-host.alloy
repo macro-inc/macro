@@ -12,8 +12,20 @@ prometheus.exporter.unix "host" {
 	disable_collectors = ["textfile"]
 }
 
+// An exporter labels its targets job="integrations/<name>", which overrides
+// a scrape's `job_name`: set the job the fleet dashboard selects on the
+// targets themselves.
+discovery.relabel "host" {
+	targets = prometheus.exporter.unix.host.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "firecracker-host/host"
+	}
+}
+
 prometheus.scrape "host" {
-	targets         = prometheus.exporter.unix.host.targets
+	targets         = discovery.relabel.host.output
 	job_name        = "firecracker-host/host"
 	scrape_interval = "30s"
 	forward_to      = [prometheus.remote_write.macro.receiver]
@@ -30,8 +42,17 @@ prometheus.exporter.cadvisor "computers" {
 	enabled_metrics             = ["cpu", "memory", "diskIO", "process"]
 }
 
+discovery.relabel "computers" {
+	targets = prometheus.exporter.cadvisor.computers.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "firecracker-host/computers"
+	}
+}
+
 prometheus.scrape "computers" {
-	targets         = prometheus.exporter.cadvisor.computers.targets
+	targets         = discovery.relabel.computers.output
 	job_name        = "firecracker-host/computers"
 	scrape_interval = "30s"
 	forward_to      = [prometheus.relabel.computers.receiver]

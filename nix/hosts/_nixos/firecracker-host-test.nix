@@ -280,6 +280,10 @@ pkgs.testers.runNixOSTest {
         host.wait_for_unit("alloy.service")
         host.wait_until_succeeds("curl -sf http://127.0.0.1:12345/api/v0/component/prometheus.exporter.unix.host/metrics | grep -q '^node_pressure_memory_waiting_seconds_total'")
         host.wait_until_succeeds("curl -sf http://127.0.0.1:12345/api/v0/component/prometheus.exporter.cadvisor.computers/metrics | grep -q 'container_memory_usage_bytes{id=\"/system.slice/firecracker-host.service/vms\"'")
+        # The exporters label their targets job="integrations/<name>"; the
+        # fleet dashboard selects the firecracker-host/* jobs.
+        for job in ["host", "computers"]:
+            host.succeed(f"curl -sf http://127.0.0.1:12345/api/v0/web/components/discovery.relabel.{job} | grep -qF '\"key\":\"job\",\"value\":{{\"type\":\"string\",\"value\":\"firecracker-host/{job}\"}}'")
 
     with subtest("every slot and the golden slot have a netns, a user-owned tap and the guest firewall"):
         slots = host.succeed("ip netns list | grep -c '^fch-'").strip()
