@@ -51,6 +51,33 @@ describe('parseScreenReference', () => {
     }
   });
 
+  it('leaves lookalike hosts and non-web schemes alone', () => {
+    for (const url of [
+      `https://macro.com.evil.com/app/screen/${harnessId}`,
+      `https://evilmacro.com/app/screen/${harnessId}`,
+      `data:text/html,<a href="/app/screen/${harnessId}">x</a>`,
+    ]) {
+      expect(parseScreenReference(url), url).toBeUndefined();
+    }
+  });
+
+  it('leaves an escaped slash or a path that climbs out of the screen route alone', () => {
+    expect(
+      parseScreenReference(
+        `${here}/app/screen/${harnessId.slice(0, 8)}%2F${harnessId.slice(9)}`
+      )
+    ).toBeUndefined();
+    expect(
+      parseScreenReference(`${here}/app/screen/../md/${harnessId}`)
+    ).toBeUndefined();
+  });
+
+  it('reads an uppercase id as the harness it names', () => {
+    expect(
+      parseScreenReference(`${here}/app/screen/${harnessId.toUpperCase()}`)
+    ).toEqual({ harnessId });
+  });
+
   it('leaves other app links alone', () => {
     expect(parseScreenReference(`${here}/app/md/${harnessId}`)).toBeUndefined();
   });
