@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-watch-audio-output"
+description = "Enables the watch_audio_output command without any pre-configured scope."
+commands.allow = ["watch_audio_output"]
+
+[[permission]]
+identifier = "deny-watch-audio-output"
+description = "Denies the watch_audio_output command without any pre-configured scope."
+commands.deny = ["watch_audio_output"]
