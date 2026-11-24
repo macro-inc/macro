@@ -1,0 +1,21 @@
+apps/web/tests/native/driver.ts
+  s_d8bff9850808d1::t_c99ba707e36bab 192-195,197-204,206,227
+apps/web/tests/native/runner.ts
+  s_d8bff9850808d1::t_5471865642e16f 9,128-132,134,142,150,267,272,274,282-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9cacbf518b0b19f3aab24af48c72b6c2a1516ef8",
+  "prompts": {},
+  "sessions": {
+    "s_d8bff9850808d1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24fac3d5-13ce-4b91-9f8c-e91f07d21f6d",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
