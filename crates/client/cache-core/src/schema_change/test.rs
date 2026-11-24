@@ -209,6 +209,37 @@ fn a_removed_field_naming_a_dropped_type_cannot_be_kept() {
 }
 
 #[test]
+fn a_removed_type_whose_name_comes_back_as_an_enum_is_not_kept() {
+    // `Status` was an entity nothing reads; it comes back as an enum that
+    // `Thread.status` holds. Keeping the old object beside the enum would not
+    // validate, so the old type goes with its records instead of every record.
+    let change = classify(
+        "type Query { thread: Thread status: Status } type Thread { id: ID! status: Status } type Status { id: ID! label: String }",
+        "type Query { thread: Thread } type Thread { id: ID! status: Status } enum Status { OPEN CLOSED }",
+    );
+    assert_eq!(
+        change.tier,
+        types(&["ROOT_QUERY", "Status", "Thread"], false)
+    );
+    assert!(change.stored.type_meta("Status").is_none());
+    assert!(change.stored.field_meta("Query", "status").is_none());
+}
+
+#[test]
+fn a_removed_enum_field_whose_type_name_comes_back_as_an_object_is_not_kept() {
+    // `Thread.state` held an enum and is removed; `State` comes back as an
+    // object. The kept field would name an object as a leaf, so `Thread`
+    // changes instead of every record going.
+    let change = classify(
+        "type Query { thread: Thread } type Thread { id: ID! state: State } enum State { OPEN CLOSED }",
+        "type Query { thread: Thread state: State } type Thread { id: ID! } type State { id: ID! label: String }",
+    );
+    assert_eq!(change.tier, types(&["Thread"], false));
+    assert!(change.stored.field_meta("Thread", "state").is_none());
+    assert!(change.stored.type_meta("State").is_some());
+}
+
+#[test]
 fn renamed_roots_or_an_unreadable_schema_reset() {
     let renamed = classify(
         "schema { query: Q } type Q { a: Int }",
