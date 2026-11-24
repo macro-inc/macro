@@ -83,8 +83,6 @@ they need.
 ## Checks
 
 - `cargo test -p messages --all-features` (`SQLX_OFFLINE` unset).
-- `proofs/README.md`: reproducible local query plans for the channel change log,
-  hydration, retention, and writes on production-size synthetic fixtures.
 
 A finalized bot reply (`NotifyAsPostedMessage` edit by the bot itself) carries
 `completed_reply` on its patch event so agent triggers evaluate it like a new
