@@ -45,7 +45,8 @@ export function formatCompactCalendarTime(
 export function formatCompactCalendarTimeRange(
   start: Date,
   end: Date,
-  timeFormat: CalendarTimeFormat
+  timeFormat: CalendarTimeFormat,
+  separator = ' – '
 ) {
-  return formatClockRange(start, end, timeFormat);
+  return formatClockRange(start, end, timeFormat, separator);
 }

@@ -46,10 +46,15 @@ export function formatClockTime(
 }
 
 /** Keeps a shared meridiem only at the end of a compact clock range. */
-export function formatClockRange(start: Date, end: Date, format: ClockFormat) {
+export function formatClockRange(
+  start: Date,
+  end: Date,
+  format: ClockFormat,
+  separator = ' – '
+) {
   const startIsMorning = start.getHours() < 12;
   const endIsMorning = end.getHours() < 12;
   const sameDayPeriod = startIsMorning === endIsMorning;
   const showStartDayPeriod = format !== '12-hour' || !sameDayPeriod;
-  return `${formatClockTime(start, format, true, showStartDayPeriod)} – ${formatClockTime(end, format, true)}`;
+  return `${formatClockTime(start, format, true, showStartDayPeriod)}${separator}${formatClockTime(end, format, true)}`;
 }

@@ -32,6 +32,18 @@ describe('DAY_TIME_OPTIONS', () => {
 });
 
 describe('explicit clock preference', () => {
+  it('preserves locale-style labels for native hour12 callers', () => {
+    expect(
+      dayTimeOptions(true).find((option) => option.value === '14:00')?.label
+    ).toBe('2:00 PM');
+    expect(
+      dayTimeOptions(false).find((option) => option.value === '14:00')?.label
+    ).toBe('14:00');
+    expect(endTimeOptions('', false)).toBe(dayTimeOptions(false));
+    expect(
+      typedTimeOption(endTimeOptions('09:00', false), '3:10', false)?.label
+    ).toBe('15:10');
+  });
   it('uses the requested display without changing option values or rollover', () => {
     const options = endTimeOptions('22:00', '24-hour');
     expect(dayTimeOptions('24-hour')[0]).toMatchObject({

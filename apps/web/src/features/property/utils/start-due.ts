@@ -154,7 +154,7 @@ export function formatStartDueCompact(
   if (!due) return `${at('start', start)} →`;
   if (wholeDay === 'start') return at('due', due);
   if (wholeDay === 'due') return `${at('start', start)} → ${day(due)}`;
-  return `${day(start)}, ${formatCompactCalendarTimeRange(start, due, clock)}`;
+  return `${day(start)}, ${formatCompactCalendarTimeRange(start, due, clock, '–')}`;
 }
 
 /**

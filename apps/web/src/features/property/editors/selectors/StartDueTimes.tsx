@@ -71,12 +71,9 @@ export function StartDueTimes(props: StartDueTimesProps) {
   const options = createMemo<TimeOption[]>(() => {
     const { start, due } = props.dates;
     if (props.field === 'due' && start && (!due || isSameDay(start, due))) {
-      return endTimeOptions(
-        format(start, 'HH:mm'),
-        props.hour12 ? '12-hour' : '24-hour'
-      );
+      return endTimeOptions(format(start, 'HH:mm'), props.hour12);
     }
-    return dayTimeOptions(props.hour12 ? '12-hour' : '24-hour');
+    return dayTimeOptions(props.hour12);
   });
 
   const optionAt = (option: TimeOption) =>
@@ -154,11 +151,7 @@ export function StartDueTimes(props: StartDueTimesProps) {
       const option =
         chosen ??
         (typed
-          ? typedTimeOption(
-              options(),
-              typed,
-              props.hour12 ? '12-hour' : '24-hour'
-            )
+          ? typedTimeOption(options(), typed, props.hour12)
           : options().find((candidate) => candidate.id === highlighted()));
       if (option) pick(option);
     }
