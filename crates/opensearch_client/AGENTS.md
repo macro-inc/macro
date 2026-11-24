@@ -65,8 +65,19 @@ projects.
   `SEARCH_TEST_OPENSEARCH_URL=http://127.0.0.1:<port> cargo test -p
   opensearch_client --test content_search`. A search the test keeps for a
   known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
+  `tests/content_search/email_operators.rs` runs the same way and checks the
+  conditions typed Mail search operators become (`EmailTextCondition`,
+  `EmailLabelCondition`, excluded threads, sent bounds) inside the unified
+  request; it needs the emails index empty too.
 
 ## Gotchas
+
+- A top-level `range` on a date field fails the whole unified search
+  (`unsupported_operation_exception` in the fetch phase) whenever the plain
+  highlighter has a populated field to highlight, on OpenSearch 3.5 and
+  whether the field is indexed or doc values only. A range inside a `nested`
+  query (document date properties) is safe. Email sent bounds are therefore a
+  script over the doc values (`emails::sent_between_query`).
 
 - Map a failed `.send()` with `OpensearchClientError::request_failed` and a
   failed body read with `deserialization_failed`. Both take an
