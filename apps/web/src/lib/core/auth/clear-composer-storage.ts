@@ -21,11 +21,13 @@ export function composerStorageWritable(captured: number): boolean {
 }
 
 /**
- * Ends a sign-out's clear, once the signed-out user is published. An input
+ * Ends a sign-out's clear, once the signed-out user is published or the
+ * sign-out failed; does nothing when no clear is under way. An input
  * that mounted in between read the generation the clear set while the old
  * account was still shown, so the generation moves on again.
  */
 export function endComposerStorageClear(): void {
+  if (!clearing) return;
   clearing = false;
   generation += 1;
 }
