@@ -341,8 +341,6 @@ export function createLocalChannelTimeline(
     } catch {
       return;
     }
-    // A later failure armed its own wait.
-    if (retry.wait !== wait) return;
     retry.wait = undefined;
     setState('pageFailed', direction, false);
   };
@@ -828,7 +826,9 @@ export function createLocalChannelTimeline(
     outcome: PageOutcome,
     watch: ReturnType<typeof watchReconnect>
   ) => {
-    if (outcome === 'failed') pageRetries[direction].failures += 1;
+    // Failures in a row: one that ended otherwise starts the count again.
+    const retry = pageRetries[direction];
+    retry.failures = outcome === 'failed' ? retry.failures + 1 : 0;
     // A view that asked for this page again owns the watches and the wait.
     if (state[direction === 'older' ? 'loadingOlder' : 'loadingNewer']) return;
     if (outcome === 'done') {

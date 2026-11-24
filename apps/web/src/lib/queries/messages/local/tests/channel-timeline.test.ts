@@ -2116,4 +2116,67 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       vi.useRealTimers();
     }
   });
+
+  it('starts a fresh retry delay when the next page fails after a successful retry', async () => {
+    const rows = messages(150);
+    const laterFailure =
+      Promise.withResolvers<Awaited<ReturnType<FetchChannelServerPage>>>();
+    const nextRequest = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockRejectedValueOnce(new TypeError('Page request failed'))
+      .mockResolvedValueOnce(serverPage(rows, 50, 100))
+      .mockImplementationOnce(() => {
+        nextRequest.resolve();
+        return laterFailure.promise;
+      });
+    const mounted = mount({ rows, fetchPage });
+    let stop = () => {};
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      await mounted.timeline.loadOlder();
+      expect(mounted.timeline.olderFailed()).toBe(true);
+
+      // The call panel pages while its root is missing and the direction is idle.
+      stop = createRoot((dispose) => {
+        createEffect(
+          on(
+            () =>
+              mounted.timeline.hasOlder() &&
+              !mounted.timeline.isLoadingOlder() &&
+              !mounted.timeline.olderFailed(),
+            (shouldLoad) => {
+              if (shouldLoad) {
+                fireAndForget(mounted.timeline.loadOlder(), 'channel-call');
+              }
+            }
+          )
+        );
+        return dispose;
+      });
+
+      await vi.advanceTimersByTimeAsync(PAGE_RETRY_MS);
+      await nextRequest.promise;
+      expect(ids(mounted.timeline)).toHaveLength(100);
+      expect(fetchPage.mock.calls.map(([request]) => request.before)).toEqual([
+        rows[100]!.sortKey,
+        rows[100]!.sortKey,
+        rows[50]!.sortKey,
+      ]);
+      stop();
+      laterFailure.reject(new TypeError('Next page request failed'));
+      await until(mounted.timeline.olderFailed);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(PAGE_RETRY_MS - 1);
+      expect(mounted.timeline.olderFailed()).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(mounted.timeline.olderFailed()).toBe(false);
+    } finally {
+      stop();
+      mounted.dispose();
+      vi.useRealTimers();
+    }
+  });
 });
