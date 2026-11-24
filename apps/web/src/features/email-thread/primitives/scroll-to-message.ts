@@ -226,6 +226,30 @@ export function pageThenAdvanceDelta(
     .exhaustive();
 }
 
+/** Chromium's paging rule: keep up to 40px of the last page, never more than an eighth. */
+const PAGE_MAX_OVERLAP_PX = 40;
+const PAGE_MIN_FRACTION = 0.875;
+
+/**
+ * One Space (next) or Shift+Space (prev) page: the part of the list the
+ * floating chrome leaves visible, less a little overlap so the reader keeps
+ * their place. Clamped to the list's ends; 0 means there is nowhere to go.
+ */
+export function pageDelta(container: HTMLElement, dir: NavDirection): number {
+  const visible =
+    container.clientHeight -
+    scrollPaddingInset(container, 'top') -
+    scrollPaddingInset(container, 'bottom');
+  const page = Math.max(
+    visible * PAGE_MIN_FRACTION,
+    visible - PAGE_MAX_OVERLAP_PX
+  );
+  return match(dir)
+    .with('next', () => Math.min(page, scrollToListEndDelta(container)))
+    .with('prev', () => Math.max(-page, scrollToListStartDelta(container)))
+    .exhaustive();
+}
+
 /** Remaining scroll to the thread title. 0 means the list is already at the top. */
 export function scrollToListStartDelta(container: HTMLElement): number {
   return container.scrollTop > 1 ? -container.scrollTop : 0;

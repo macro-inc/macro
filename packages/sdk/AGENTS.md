@@ -97,13 +97,22 @@ enforced by the ordinary backend APIs.
   no access request lets someone change another person's entry; a 409
   `timer_over_limit` is `TimerOverLimitError` carrying the timer to resolve
   when the refusal names one; check `timer` before using it.
+  Reports are `macro.time.summary` / `exportCsv` (`scope: 'mine' | 'team'`)
+  and `initiative.timeSummary` / `exportTimeCsv` for a project, over DSS
+  `/time/summary` and `/time/export` (`entities/time/report.ts`); totals come
+  back keyed by `User` and `Task` handles, never ids.
 - `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
   ranks the caller's contacts and current team (teammates first, then, for a
   caller on the list-aware directory, `interacted`/`invited` and then email
   contacts; at most 20; each person carries `lists`)
   and the SDK seeds User handles with each name and agent flag, keeping that
   order. It is not a global directory, and the full `GET /contacts` list stays
-  out of the SDK.
+  out of the SDK. `users.inList(list, { maxItems, pageSize })` pages one
+  contacts list (`ContactListKey`) over `GET /contacts/lists/{list}/members`,
+  naming each page with one auth `getUserNamesWithEmail` batch
+  (`User.named`); `users.teammates()` collects the `teammates` list. The route
+  reads the list tables for every caller, whatever their `contacts-list-reads`
+  flag, so stored lists can be incomplete until the list backfill has run.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `Contact.addEmail` / `removeEmail` / `setEmail` (choose the primary) edit a

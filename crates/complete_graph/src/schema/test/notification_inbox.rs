@@ -14,7 +14,7 @@ use ::notification_inbox::domain::models::{
     ClearAction, ClearRun, ClearStatus, InboxActor, InboxChange, InboxClearRequest,
     InboxDoneOutcome, InboxEntry, InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRow,
     InboxRowAction, InboxRowActionKind, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
-    StartedClear, UnreadRows,
+    StartedClear, UnreadRow, UnreadRows,
 };
 use async_graphql::futures_util::{StreamExt as _, future::BoxFuture, pin_mut};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -871,9 +871,23 @@ async fn notification_inbox_updates_batch_recomputed_patches() {
     assert!(!response.errors.is_empty());
 }
 
+/// Unread rows of these kinds that only the inbox shows.
+fn unread_in_inbox(row_types: &[InboxRowType]) -> Vec<UnreadRow> {
+    row_types
+        .iter()
+        .map(|row_type| UnreadRow {
+            row_type: *row_type,
+            in_chat: false,
+        })
+        .collect()
+}
+
 /// The unread rows of the document group, of these kinds.
 fn unread_doc(row_types: Vec<InboxRowType>) -> UnreadRows {
-    UnreadRows::of(std::collections::HashMap::from([(doc_group(), row_types)]))
+    UnreadRows::of(std::collections::HashMap::from([(
+        doc_group(),
+        unread_in_inbox(&row_types),
+    )]))
 }
 
 #[tokio::test(start_paused = true)]
@@ -887,12 +901,12 @@ async fn notification_inbox_unread_updates_send_counts_first_and_then_only_chang
     *service.unread.lock().unwrap() = UnreadRows::of(std::collections::HashMap::from([
         (
             doc_group(),
-            vec![
+            unread_in_inbox(&[
                 InboxRowType::DiscussionThread,
                 InboxRowType::DiscussionThread,
-            ],
+            ]),
         ),
-        (mail, vec![InboxRowType::Email]),
+        (mail, unread_in_inbox(&[InboxRowType::Email])),
     ]));
 
     let request = async_graphql::Request::new(
@@ -961,6 +975,55 @@ async fn notification_inbox_unread_updates_send_counts_first_and_then_only_chang
     *triggers.sender.lock().unwrap() = None;
     let response = responses.next().await.expect("closing error");
     assert!(!response.errors.is_empty());
+}
+
+/// A channel thread stays unread in the inbox after its message is read in
+/// Chat: only the part of the count Chat shows changes, and that is sent too.
+#[tokio::test(start_paused = true)]
+async fn notification_inbox_unread_updates_say_how_many_rows_chat_shows() {
+    let harness = harness();
+    let service = Arc::new(RecordingInboxService::default());
+    let triggers = ManualTriggers::default();
+    let channel =
+        FeedKey::new(ModelEntityType::Channel.with_entity_string(Uuid::from_u128(8).to_string()));
+    let threads = |in_chat: bool| {
+        let row = |in_chat| UnreadRow {
+            row_type: InboxRowType::ChannelThread,
+            in_chat,
+        };
+        UnreadRows::of(std::collections::HashMap::from([(
+            channel.clone(),
+            vec![row(in_chat), row(false)],
+        )]))
+    };
+    *service.unread.lock().unwrap() = threads(true);
+
+    let request = async_graphql::Request::new(
+        "subscription { notificationInboxUnreadUpdates { rowType count chatCount } }",
+    )
+    .data(viewer_id())
+    .data(context(&service, &triggers));
+    let responses = harness.schema.execute_stream(request);
+    pin_mut!(responses);
+
+    let response = responses.next().await.expect("the current counts");
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["notificationInboxUnreadUpdates"],
+        serde_json::json!([{ "rowType": "CHANNEL_THREAD", "count": 2, "chatCount": 1 }])
+    );
+
+    let sender = triggers.sender.lock().unwrap().clone().expect("subscribed");
+    *service.unread.lock().unwrap() = threads(false);
+    sender
+        .send(FeedTrigger::Changed(vec![channel.into_entity()]))
+        .await
+        .unwrap();
+    let response = responses.next().await.expect("the changed counts");
+    assert_eq!(
+        response.data.into_json().unwrap()["notificationInboxUnreadUpdates"],
+        serde_json::json!([{ "rowType": "CHANNEL_THREAD", "count": 2, "chatCount": 0 }])
+    );
 }
 
 /// The counts already sent are wrong once a recount fails, and no further

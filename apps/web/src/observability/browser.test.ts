@@ -40,6 +40,7 @@ vi.mock('./runtime-resources', () => ({
   startRuntimeResourceSampling: vi.fn(() => vi.fn()),
 }));
 vi.mock('./boot', () => ({ startBootTrace: vi.fn() }));
+vi.mock('./native-crashes', () => ({ reportNativeCrashes: vi.fn() }));
 vi.mock('./os-type', () => ({ osType: () => 'linux' }));
 vi.mock('./ui-operation', () => ({
   initializeUiOperationTelemetry: vi.fn(() => vi.fn()),

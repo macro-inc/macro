@@ -98,6 +98,15 @@ fn every_action_maps_to_stable_columns() {
                 "requester_name": "Sarah Lee",
             })),
         ),
+        (
+            Action::TimeLogged(TimeLog {
+                minutes: 90,
+                entry_date: NaiveDate::from_ymd_opt(2026, 11, 20).expect("valid date"),
+                source: TimeLogSource::Timer,
+            }),
+            "time_logged",
+            Some(json!({ "minutes": 90, "entry_date": "2026-11-20", "source": "timer" })),
+        ),
     ];
 
     for (action, expected_tag, expected_payload) in cases {

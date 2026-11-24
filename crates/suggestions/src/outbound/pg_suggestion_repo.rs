@@ -202,7 +202,7 @@ impl PgSuggestionRepo {
         // Each suggestion's latest run, by its index.
         let runs = sqlx::query!(
             r#"SELECT DISTINCT ON (suggestion_id) suggestion_id, session_id, started_at, state,
-                      state_changed_at
+                      state_changed_at, report
                FROM suggestion_run
                WHERE suggestion_id = ANY($1)
                ORDER BY suggestion_id, started_at DESC"#,
@@ -237,6 +237,7 @@ impl PgSuggestionRepo {
                     started_at: row.started_at,
                     state,
                     state_changed_at: row.state_changed_at,
+                    report: row.report,
                 });
                 (row.suggestion_id, run)
             })
@@ -1116,11 +1117,11 @@ impl SuggestionRepo for PgSuggestionRepo {
         Ok(moved)
     }
 
-    async fn undismiss(
+    async fn undo(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-        dismissed_since: DateTime<Utc>,
+        closed_since: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> Result<bool, Self::Err> {
         let moved = sqlx::query!(
@@ -1129,16 +1130,62 @@ impl SuggestionRepo for PgSuggestionRepo {
                WHERE user_id = $1 AND id = $2 AND state = ANY($3) AND state_changed_at >= $6"#,
             user.as_ref(),
             id,
-            &state_names(&lifecycle::sources(LifecycleEvent::Undismiss)),
+            &state_names(&lifecycle::sources(LifecycleEvent::Undo)),
             SuggestionState::Proposed.as_ref(),
             now,
-            dismissed_since,
+            closed_since,
         )
         .execute(&self.pool)
         .await?
         .rows_affected()
             == 1;
         Ok(moved)
+    }
+
+    async fn report_run(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        session: Uuid,
+        report: &str,
+    ) -> Result<bool, Self::Err> {
+        let stored = sqlx::query!(
+            r#"UPDATE suggestion_run SET report = $3
+               WHERE session_id = $1 AND user_id = $2 AND settled_at IS NULL"#,
+            session,
+            user.as_ref(),
+            report,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(stored.rows_affected() == 1)
+    }
+
+    async fn cancel_run(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        // The suggestion's row before its run's, as a finish takes them, so
+        // the two never deadlock; holding it keeps it open while the run is
+        // cancelled.
+        let mut tx = self.pool.begin().await?;
+        let open = sqlx::query_scalar!(
+            r#"SELECT id FROM suggestion
+               WHERE user_id = $1 AND id = $2 AND state = ANY($3)
+               FOR UPDATE"#,
+            user.as_ref(),
+            id,
+            &open_states(),
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .is_some();
+        if open {
+            cancel_run(&mut tx, id, now).await?;
+        }
+        tx.commit().await?;
+        Ok(open)
     }
 
     async fn open_about(

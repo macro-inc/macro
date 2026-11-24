@@ -1,5 +1,8 @@
 import { queryClient } from '@queries/client';
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import type {
+  ScheduledAction,
+  ScheduledActionResponse,
+} from '@service-scheduled-action/generated/schemas';
 import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
@@ -15,6 +18,7 @@ const client = vi.hoisted(() => ({
   runNow: vi.fn(),
   createSchedule: vi.fn(),
   detach: vi.fn(),
+  stopRun: vi.fn(),
 }));
 vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: client,
@@ -61,6 +65,33 @@ function mount(): RoutineRowOperations {
     </QueryClientProvider>
   ));
   return operations;
+}
+
+/** A claim stamped `offset` ms from now: recent enough to read as running. */
+const claimAt = (offset: number) => new Date(Date.now() + offset).toISOString();
+
+/** Mount with `routine` beside the digest, from the cache and its refetches. */
+function mountWithList(routine: ScheduledActionResponse): RoutineRowOperations {
+  queryClient.setQueryData(scheduledActionKeys.list.queryKey, [
+    routine,
+    digest,
+  ]);
+  client.listSchedules.mockResolvedValue(ok([routine, digest]));
+  return mount();
+}
+
+/** Write the list as a sync or refetch would, and wait until the rows show it. */
+async function showList(
+  operations: RoutineRowOperations,
+  label: string,
+  routine: ScheduledActionResponse
+) {
+  const marked = { ...routine, name: `${routine.name} (${label})` };
+  queryClient.setQueryData(scheduledActionKeys.list.queryKey, [marked, digest]);
+  client.listSchedules.mockResolvedValue(ok([marked, digest]));
+  await vi.waitFor(() =>
+    expect(operations.entity(marked.id ?? '')?.name).toBe(marked.name)
+  );
 }
 
 /** The next call of `fn` answers when the test says so. */
@@ -116,6 +147,158 @@ describe('routine row operations', () => {
     expect(callbacks.onRunStarted).toHaveBeenCalledOnce();
     expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(
       'run',
+      expect.anything()
+    );
+  });
+
+  it('keeps a stopped run stopping until that run ends, not the next one', async () => {
+    const operations = mountWithList({ ...briefing, claimed: claimAt(0) });
+    client.stopRun.mockResolvedValueOnce(ok(undefined));
+
+    operations.stop('briefing');
+    expect(operations.stopPending('briefing')).toBe(true);
+    await vi.waitFor(() => expect(queryClient.isMutating()).toBe(0));
+    expect(client.stopRun).toHaveBeenCalledOnce();
+    // The request returned, but the run hasn't ended yet.
+    expect(operations.stopPending('briefing')).toBe(true);
+    expect(operations.stopPending('digest')).toBe(false);
+
+    // A refetch stamps the same run with the server's clock, which can be
+    // behind or ahead of the browser's.
+    await showList(operations, 'refetched', {
+      ...briefing,
+      claimed: claimAt(5_000),
+    });
+    expect(operations.stopPending('briefing')).toBe(true);
+
+    // Its end arrives: the claim is released.
+    await showList(operations, 'ended', { ...briefing, claimed: null });
+    expect(operations.stopPending('briefing')).toBe(false);
+
+    // A later run, whatever its stamp, is one nobody stopped.
+    await showList(operations, 'next run', {
+      ...briefing,
+      claimed: claimAt(-5_000),
+    });
+    expect(operations.stopPending('briefing')).toBe(false);
+  });
+
+  it('holds no stop for a run that ended while the stop was on its way', async () => {
+    const operations = mountWithList({ ...briefing, claimed: claimAt(0) });
+    const answer = answerLater(client.stopRun);
+
+    operations.stop('briefing');
+    await vi.waitFor(() => expect(client.stopRun).toHaveBeenCalledOnce());
+    await showList(operations, 'ended', { ...briefing, claimed: null });
+    answer(ok(undefined));
+    await vi.waitFor(() => expect(queryClient.isMutating()).toBe(0));
+
+    await showList(operations, 'next run', {
+      ...briefing,
+      claimed: claimAt(1_000),
+    });
+    expect(operations.stopPending('briefing')).toBe(false);
+  });
+
+  it('releases a stop when the run’s end and the next run arrive together', async () => {
+    const operations = mountWithList({ ...briefing, claimed: claimAt(0) });
+    client.stopRun.mockResolvedValueOnce(ok(undefined));
+
+    operations.stop('briefing');
+    await vi.waitFor(() => expect(queryClient.isMutating()).toBe(0));
+    expect(operations.stopPending('briefing')).toBe(true);
+
+    // A refetch after a missed sync: the stopped run is the last run now,
+    // and the next one already holds the claim.
+    await showList(operations, 'next run', {
+      ...briefing,
+      claimed: claimAt(1_000),
+      last_run: {
+        id: 'stopped-run',
+        action_id: 'briefing',
+        created_at: claimAt(0),
+        start_time: claimAt(0),
+        end_time: claimAt(500),
+        is_success: false,
+        result: { status: 'stopped' },
+      },
+    });
+    expect(operations.stopPending('briefing')).toBe(false);
+  });
+
+  it('keeps a stop while its routine is briefly out of the list', async () => {
+    const operations = mountWithList({ ...briefing, claimed: claimAt(0) });
+    client.stopRun.mockResolvedValueOnce(ok(undefined));
+
+    operations.stop('briefing');
+    await vi.waitFor(() => expect(queryClient.isMutating()).toBe(0));
+    queryClient.setQueryData(scheduledActionKeys.list.queryKey, [digest]);
+    await vi.waitFor(() =>
+      expect(operations.entity('briefing')).toBeUndefined()
+    );
+
+    await showList(operations, 'back', { ...briefing, claimed: claimAt(0) });
+    expect(operations.stopPending('briefing')).toBe(true);
+  });
+
+  it('rereads the list after a stop, in case no end is sent', async () => {
+    const operations = mountWithList({ ...briefing, claimed: claimAt(0) });
+    client.stopRun.mockResolvedValueOnce(ok(undefined));
+    const reads = client.listSchedules.mock.calls.length;
+
+    operations.stop('briefing');
+    await vi.waitFor(() =>
+      expect(client.listSchedules.mock.calls.length).toBeGreaterThan(reads)
+    );
+  });
+
+  it('offers Stop again when the run’s end never arrives', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      const operations = mountWithList({ ...briefing, claimed: claimAt(0) });
+      client.stopRun.mockResolvedValueOnce(ok(undefined));
+
+      operations.stop('briefing');
+      await vi.waitFor(() => expect(client.stopRun).toHaveBeenCalledOnce());
+      await vi.advanceTimersByTimeAsync(14_000);
+      expect(operations.stopPending('briefing')).toBe(true);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(operations.stopPending('briefing')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets a stop go once the run’s claim is stale', async () => {
+    const operations = mountWithList({ ...briefing, claimed: claimAt(0) });
+    client.stopRun.mockResolvedValueOnce(ok(undefined));
+
+    operations.stop('briefing');
+    await vi.waitFor(() => expect(queryClient.isMutating()).toBe(0));
+    expect(operations.stopPending('briefing')).toBe(true);
+
+    // The executor died: the claim stays, older than any run may last.
+    await showList(operations, 'stale', {
+      ...briefing,
+      claimed: claimAt(-21 * 60_000),
+    });
+    expect(operations.stopPending('briefing')).toBe(false);
+  });
+
+  it('releases a stop the server refused', async () => {
+    queryClient.setQueryData(scheduledActionKeys.list.queryKey, [
+      { ...briefing, claimed: '2026-09-29T09:00:00Z' },
+      digest,
+    ]);
+    client.stopRun.mockResolvedValueOnce(err([{ message: 'Down' }]));
+    const operations = mount();
+
+    operations.stop('briefing');
+    await vi.waitFor(() =>
+      expect(operations.stopPending('briefing')).toBe(false)
+    );
+    expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+      'stop',
       expect.anything()
     );
   });

@@ -419,20 +419,21 @@ fn list_groups_order_people_within_each_tier_before_recency() {
         ]
     );
 
-    // A group never lifts anyone past a better name stage: the exact name in
-    // the email group precedes teammates whose name only starts with the
-    // query. A list order supersedes the messaged split, so within a stage
-    // the group decides before recency.
+    // Among names starting with the query the group decides first: the exact
+    // name in the email group follows teammates whose name only starts with
+    // the query, and leads the word-prefix match of its own group. A list
+    // order supersedes the messaged split, so the group decides before
+    // recency.
     request.only_listed = false;
     request.query = "rhea".into();
     assert_eq!(
         listed_ids(&request, &rows),
         [
-            ("macro|gmail@example.com".to_owned(), 3),
             ("macro|both@example.com".to_owned(), 2),
             ("macro|teammate@example.com".to_owned(), 2),
             ("macro|chat@example.com".to_owned(), 2),
             ("macro|invited@example.com".to_owned(), 2),
+            ("macro|gmail@example.com".to_owned(), 3),
             ("macro|recent.gmail@example.com".to_owned(), 2),
             ("macro|stranger@example.com".to_owned(), 2),
             ("macro|custom@example.com".to_owned(), 2),
@@ -463,6 +464,116 @@ fn list_groups_order_people_within_each_tier_before_recency() {
             "macro|gmail@example.com",
             "macro|invited@example.com",
             "macro|teammate@example.com",
+        ]
+    );
+}
+#[test]
+fn list_group_leads_exact_over_word_prefix_but_not_contains_or_address() {
+    let mut request = request("sam", PeopleMode::Mention, 1);
+    request.list_priority = mention_priority();
+    let rows = [
+        listed(
+            &request,
+            "macro|samantha@example.com",
+            "Samantha Mate",
+            0,
+            &["teammates"],
+        ),
+        listed(&request, "macro|sam@example.com", "Sam", 900, &["gmail"]),
+        listed(&request, "macro|sam.old@example.com", "Sam", 0, &["gmail"]),
+        listed(
+            &request,
+            "macro|sammy@example.com",
+            "Sammy Mail",
+            800,
+            &["gmail"],
+        ),
+        listed(
+            &request,
+            "macro|chat@example.com",
+            "Samuel Chat",
+            0,
+            &["interacted"],
+        ),
+        listed(&request, "macro|nobody@example.com", "Sam", 700, &[]),
+        listed(
+            &request,
+            "macro|isam@example.com",
+            "Isam Mate",
+            950,
+            &["teammates"],
+        ),
+        listed(
+            &request,
+            "macro|jo.sam@example.com",
+            "Jo",
+            990,
+            &["teammates"],
+        ),
+    ];
+    // Limit 1 makes every person a page boundary, including the boundaries
+    // between groups of the word-start tier and between exact and prefix
+    // inside one group: nobody repeats or goes missing.
+    let order = listed_ids(&request, &rows);
+    assert_eq!(
+        order,
+        [
+            ("macro|samantha@example.com".to_owned(), 2),
+            ("macro|chat@example.com".to_owned(), 2),
+            ("macro|sam@example.com".to_owned(), 3),
+            ("macro|sam.old@example.com".to_owned(), 3),
+            ("macro|sammy@example.com".to_owned(), 2),
+            ("macro|nobody@example.com".to_owned(), 3),
+            // A contains-only teammate never precedes a word-start match, nor
+            // an address-only teammate a contains-only one.
+            ("macro|isam@example.com".to_owned(), 1),
+            ("macro|jo.sam@example.com".to_owned(), 0),
+        ]
+    );
+    let mut whole = request.clone();
+    whole.limit = 20;
+    assert_eq!(listed_ids(&whole, &rows), order);
+
+    // After a word-prefix continuation in the first group, exact names in
+    // later groups are still ahead, so the exact stage stays reachable.
+    let mut read = NameSearchRead::new(&request, Uuid::from_u128(2), VERSION).unwrap();
+    read.push(&rows[0].0, &rows[0].1, None);
+    read.push(&rows[4].0, &rows[4].1, None);
+    let PeopleSearchResult::Page { next_cursor, .. } = read.finish().unwrap() else {
+        panic!("page");
+    };
+    let mut next = request.clone();
+    next.cursor = next_cursor;
+    let read = NameSearchRead::new(&next, Uuid::from_u128(2), VERSION).unwrap();
+    assert_eq!(
+        read.stages(),
+        [
+            NameStage::ExactName,
+            NameStage::WordPrefix,
+            NameStage::Contains,
+            NameStage::Address,
+        ]
+    );
+    assert_eq!(read.scan_start(NameStage::ExactName, 0), ScanStart::Skip);
+    assert_eq!(read.scan_start(NameStage::ExactName, 1), ScanStart::First);
+    assert!(matches!(
+        read.scan_start(NameStage::WordPrefix, 0),
+        ScanStart::After(_)
+    ));
+
+    // Without a list order the same people keep the name stage first.
+    request.list_priority = vec![];
+    assert_eq!(
+        listed_ids(&request, &rows),
+        [
+            ("macro|sam@example.com".to_owned(), 5),
+            ("macro|nobody@example.com".to_owned(), 5),
+            ("macro|sammy@example.com".to_owned(), 4),
+            ("macro|sam.old@example.com".to_owned(), 3),
+            ("macro|chat@example.com".to_owned(), 2),
+            ("macro|samantha@example.com".to_owned(), 2),
+            ("macro|isam@example.com".to_owned(), 1),
+            ("macro|jo.sam@example.com".to_owned(), 0),
         ]
     );
 }

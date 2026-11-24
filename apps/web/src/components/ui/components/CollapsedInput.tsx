@@ -34,6 +34,8 @@ export type CollapsedInputProps = {
   class?: string;
   /** Replaces the attach button at the start of the input. */
   leadingAction?: JSX.Element;
+  /** An action before the send button, such as a microphone. */
+  trailingAction?: JSX.Element;
   /**
    * Target of the real input this trigger stands in for. Focused via the
    * `focusInput` directive when the trigger is clicked, so the iOS virtual
@@ -134,6 +136,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
             <span>{attachmentCount()}</span>
           </Button>
         </Show>
+        {props.trailingAction}
         <SendButton
           appearance="composer"
           pending={props.pending}

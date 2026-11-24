@@ -6,7 +6,7 @@ use super::{
 };
 use crate::domain::backfill_jobs::BackfillJobRepository;
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use crate::domain::mailbox::inbox_sync::CrmContactRecipient;
+use crate::domain::mailbox::inbox_sync::{CrmContactRecipient, ThreadReindexQueue};
 use crm::domain::{
     email_privacy::EmailContributionMailbox,
     model::{CrmError, DepopulateContactOutcome},
@@ -148,7 +148,7 @@ pub trait BackfillGmail: Send + Sync + 'static {
 }
 
 /// Backfill publication without queue transport types.
-pub trait BackfillQueue: Send + Sync + 'static {
+pub trait BackfillQueue: ThreadReindexQueue {
     /// Original queue failure.
     type Err: ConnectionSourceError;
     /// Send an ordinary operation.

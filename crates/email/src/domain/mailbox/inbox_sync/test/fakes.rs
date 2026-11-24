@@ -366,6 +366,23 @@ impl InboxSyncGmail for Fake {
     }
 }
 
+impl ThreadReindexQueue for Fake {
+    type ReindexError = Failure;
+    async fn enqueue_thread_reindex(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        threads: Vec<Uuid>,
+    ) -> Result<(), Failure> {
+        self.step(
+            "reindex_queue",
+            Call::Import(
+                "reindex_queue",
+                serde_json::to_value((owner.as_ref(), threads)).unwrap(),
+            ),
+        )
+    }
+}
+
 impl InboxSyncQueue for Fake {
     type Err = Failure;
     async fn enqueue(&self, message: InboxSyncPubsubMessage) -> Result<(), Failure> {

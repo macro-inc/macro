@@ -17,11 +17,12 @@
 //! | `resolve` | proposed, accepted | resolved |
 //! | `rewrite`, `attach_draft` | proposed, accepted | the same |
 //! | `restore` | done, dismissed, resolved, retired | proposed |
-//! | `undismiss` | dismissed | proposed |
+//! | `undo` | dismissed, done | proposed |
 //!
 //! Rules beyond the states sit with the service: a dismissed suggestion comes
-//! back only with a reason, or undismissed by the person within five minutes;
-//! a background prompt suggestion starts a run only while none is unsettled;
+//! back only with a reason, or undone by the person within five minutes; the
+//! person undoes being done only on a suggestion they completed themself (not
+//! a finished run or an answered reply), within five minutes too; a background prompt suggestion starts a run only while none is unsettled;
 //! opening a reply suggestion only takes it on, and the person's own reply on
 //! its item answers it (through resolution); and taking on an accepted
 //! suggestion or completing a done one changes nothing.
@@ -31,7 +32,7 @@
 //! `crates/scheduled_action` says, through
 //! `suggestions_db_utils::move_routine_card`. That also moves a retired one
 //! to dismissed, and a dismissed or retired one to done when the person saves
-//! its routine. Here it is never accepted, restored or undismissed.
+//! its routine. Here it is never accepted, restored or undone.
 
 use strum::IntoEnumIterator;
 
@@ -70,8 +71,9 @@ pub enum LifecycleEvent {
     AttachDraft,
     /// A generation session suggests a closed suggestion again.
     Restore,
-    /// The person takes back their dismissal, within minutes of it.
-    Undismiss,
+    /// The person takes back their dismissal, or their marking it done,
+    /// within minutes of it.
+    Undo,
 }
 
 /// The state `event` moves a suggestion in state `from` to, or `None` when
@@ -89,7 +91,7 @@ pub fn transition(from: SuggestionState, event: LifecycleEvent) -> Option<Sugges
         (E::Resolve, S::Proposed | S::Accepted) => Some(S::Resolved),
         (E::Rewrite | E::AttachDraft, S::Proposed | S::Accepted) => Some(from),
         (E::Restore, S::Done | S::Dismissed | S::Resolved | S::Retired) => Some(S::Proposed),
-        (E::Undismiss, S::Dismissed) => Some(S::Proposed),
+        (E::Undo, S::Dismissed | S::Done) => Some(S::Proposed),
         (
             E::TakeOn
             | E::StartRun
@@ -102,7 +104,7 @@ pub fn transition(from: SuggestionState, event: LifecycleEvent) -> Option<Sugges
             | E::Rewrite
             | E::AttachDraft
             | E::Restore
-            | E::Undismiss,
+            | E::Undo,
             _,
         ) => None,
     }

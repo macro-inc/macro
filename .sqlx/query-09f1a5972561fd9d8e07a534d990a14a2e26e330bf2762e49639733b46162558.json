@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO computer_screen_driver_leases AS lease\n                    (computer_id, harness_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at)\n                VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp(), clock_timestamp() + make_interval(secs => $7))\n                ON CONFLICT (computer_id) DO UPDATE SET\n                    harness_id = EXCLUDED.harness_id,\n                    session_id = EXCLUDED.session_id,\n                    user_id = EXCLUDED.user_id,\n                    driver_name = EXCLUDED.driver_name,\n                    agent_user_id = EXCLUDED.agent_user_id,\n                    started_at = CASE\n                        WHEN lease.user_id = EXCLUDED.user_id AND lease.expires_at > clock_timestamp() THEN lease.started_at\n                        ELSE clock_timestamp()\n                    END,\n                    expires_at = clock_timestamp() + make_interval(secs => $7)\n                WHERE lease.user_id = EXCLUDED.user_id OR lease.expires_at <= clock_timestamp()\n                RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "driver_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "09f1a5972561fd9d8e07a534d990a14a2e26e330bf2762e49639733b46162558"
+}

@@ -169,15 +169,33 @@ vi.mock('../context/markdown-document-context', () => ({
   }),
 }));
 vi.mock('./InlinePropertyValue', () => ({
-  InlinePropertyValue: (props: { property: Property; valueText?: string }) => {
+  InlinePropertyValue: (props: {
+    property: Property;
+    valueText?: string;
+    unlink?: { available: () => boolean; clear: () => Promise<unknown> };
+  }) => {
     const context = usePropertiesContext();
     return (
-      <button
-        onClick={() => context.onPropertyUnpinned?.(props.property.propertyId)}
-      >
-        Unpin {props.property.displayName}
-        {props.valueText ? ` (${props.valueText})` : ''}
-      </button>
+      <>
+        <button
+          onClick={() =>
+            context.onPropertyUnpinned?.(props.property.propertyId)
+          }
+        >
+          Unpin {props.property.displayName}
+          {props.valueText ? ` (${props.valueText})` : ''}
+        </button>
+        {props.unlink?.available() ? (
+          <button
+            onClick={() => {
+              // The real pill reports a failed save and keeps the values.
+              props.unlink?.clear().catch(() => undefined);
+            }}
+          >
+            Unlink {props.property.displayName}
+          </button>
+        ) : null}
+      </>
     );
   },
 }));
@@ -321,6 +339,78 @@ it("keeps a task's due date pill as it was without start dates", async () => {
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Unpin Due Date' })).toBeTruthy()
   );
+});
+
+const clearedDefinitions = () =>
+  entityWrite.mock.calls.flatMap(([variables]) =>
+    variables.properties
+      .filter(
+        (item: { apiValues: { value: unknown } }) =>
+          item.apiValues.value === null
+      )
+      .map((item: { property: Property }) => item.property.propertyDefinitionId)
+  );
+
+it('unlinks both dates from a range pill in one save, as Clear both does', async () => {
+  mocks.kind = 'task';
+  mocks.startDates = true;
+  setup([dueDate, startDate]);
+
+  await fireEvent.click(
+    await screen.findByRole('button', { name: 'Unlink Due Date' })
+  );
+
+  await waitFor(() =>
+    expect(clearedDefinitions()).toEqual([
+      SYSTEM_PROPERTY_IDS.START_DATE,
+      SYSTEM_PROPERTY_IDS.DUE_DATE,
+    ])
+  );
+  expect(entityWrite).toHaveBeenCalledTimes(1);
+});
+
+it('shows both dates cleared from the click, and both back when the save fails', async () => {
+  mocks.kind = 'task';
+  mocks.startDates = true;
+  const save = Promise.withResolvers<void>();
+  entityWrite.mockReturnValueOnce(save.promise);
+  setup([dueDate, startDate]);
+  const range = await screen.findByRole('button', {
+    name: /^Unpin Due Date \(Nov 23 → Nov 27/,
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Unlink Due Date' }));
+
+  // One step: the pill is empty before the save answers, never the due alone.
+  expect(range.textContent).toBe('Unpin Due Date');
+  expect(entityWrite).toHaveBeenCalledTimes(1);
+
+  save.reject(new Error('offline'));
+  await waitFor(() =>
+    expect(range.textContent).toMatch(/^Unpin Due Date \(Nov 23 → Nov 27/)
+  );
+});
+
+it('offers Unlink on a pill that shows only a start date, and clears it', async () => {
+  mocks.kind = 'task';
+  mocks.startDates = true;
+  setup([{ ...dueDate, value: null } as Property, startDate]);
+
+  await fireEvent.click(
+    await screen.findByRole('button', { name: 'Unlink Due Date' })
+  );
+
+  await waitFor(() =>
+    expect(clearedDefinitions()).toEqual([SYSTEM_PROPERTY_IDS.START_DATE])
+  );
+});
+
+it('keeps the due date pill on its own Unlink without start dates', async () => {
+  mocks.kind = 'task';
+  setup([dueDate, startDate]);
+
+  await screen.findByRole('button', { name: 'Unpin Due Date' });
+  expect(screen.queryByRole('button', { name: 'Unlink Due Date' })).toBeNull();
 });
 
 const taskDefinitions = [

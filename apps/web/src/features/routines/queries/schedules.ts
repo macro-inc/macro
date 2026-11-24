@@ -1,5 +1,6 @@
 import { removeAcceptedSuggestion } from '@app/features/routine-suggestions/queries/routine-suggestions';
 import { analytics } from '@app/lib/analytics';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -79,7 +80,11 @@ function fetchSchedules() {
   return throwOnErr(async () => await scheduledActionClient.listSchedules());
 }
 
-export function useSchedulesQuery(enabled: Accessor<boolean>) {
+/** Passive navigation observers reuse cached data without refreshing on every drawer open. */
+export function useSchedulesQuery(
+  enabled: Accessor<boolean>,
+  refreshOnMount = true
+) {
   return useQuery(() => ({
     queryKey: scheduledActionKeys.list.queryKey,
     enabled: enabled(),
@@ -87,6 +92,7 @@ export function useSchedulesQuery(enabled: Accessor<boolean>) {
     placeholderData: keepPreviousData,
     reconcile: 'id',
     ...QUERY_REFETCH_BEHAVIOR,
+    refetchOnMount: refreshOnMount ? 'always' : false,
   }));
 }
 
@@ -474,6 +480,33 @@ export function useRunScheduleNowMutation(
             trigger: 'manual',
             targetKind: schedule && routineTargetKind(schedule),
           });
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+/**
+ * Stop a routine's run in progress. The run ends on the server shortly
+ * after; its end and the released claim arrive through the scheduled-action
+ * websocket sync, like a run's start, so success refetches nothing.
+ */
+export function useStopRoutineRunMutation(
+  callbacks?: MutationCallbacks<void, Error, { scheduleId: string }>
+) {
+  return useMutation(() => ({
+    mutationFn: async ({ scheduleId }: { scheduleId: string }) =>
+      throwOnErr(
+        async () => await scheduledActionClient.stopRun({ scheduleId })
+      ),
+    ...withCallbacks(
+      {
+        // A run stopped before it was announced sends no end over the
+        // websocket; reread the lists so its released claim shows. Not
+        // awaited: the stop is done once the server took it.
+        onSuccess: () => {
+          fireAndForget(invalidateSchedules(), 'routines');
         },
       },
       callbacks

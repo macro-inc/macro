@@ -1,11 +1,12 @@
 //! Shared search-term parsing.
 //!
 //! [`split_search_terms`] tokenizes user input by whitespace while preserving
-//! double-quoted phrases so callers can build AND-of-terms queries where each
-//! quoted span counts as a single phrase term. Used by both the unified
-//! dispatch and the channel-only endpoint. [`drop_wordless_terms`] then removes
-//! the terms no indexed text can match, and [`resolve_document_term_matching`]
-//! decides how the remaining terms combine on document content.
+//! double-quoted phrases, in straight or curly quotes, so callers can build
+//! AND-of-terms queries where each quoted span counts as a single phrase term.
+//! Used by both the unified dispatch and the channel-only endpoint.
+//! [`drop_wordless_terms`] then removes the terms no indexed text can match,
+//! and [`resolve_document_term_matching`] decides how the remaining terms
+//! combine on document content.
 
 use macro_user_id::user_id::MacroUserIdStr;
 use models_search::{MatchType, TermMatching};
@@ -15,6 +16,13 @@ use opensearch_client::search::documents::{DocumentTermMatching, MIN_TERMS_FOR_D
 use crate::TermMatchingRollout;
 use crate::api::search::simple::SearchError;
 
+/// Whether `c` opens or closes a phrase: a straight double quote or a curly
+/// one, which phones and Macs type in its place (`“team lunch”`, `„team
+/// lunch“`).
+fn is_phrase_quote(c: char) -> bool {
+    matches!(c, '"' | '“' | '”' | '„')
+}
+
 /// Trims a query and rejects one that holds no search term: only whitespace
 /// and the double quotes [`split_search_terms`] strips. One character is
 /// enough: the query builders match a term under three characters as a whole
@@ -23,7 +31,10 @@ use crate::api::search::simple::SearchError;
 /// query costs no more than a common longer word.
 pub(in crate::api::search) fn trimmed_query(query: &str) -> Result<&str, SearchError> {
     let query = query.trim();
-    if query.chars().all(|c| c.is_whitespace() || c == '"') {
+    if query
+        .chars()
+        .all(|c| c.is_whitespace() || is_phrase_quote(c))
+    {
         return Err(SearchError::EmptyQuery);
     }
     Ok(query)
@@ -32,6 +43,7 @@ pub(in crate::api::search) fn trimmed_query(query: &str) -> Result<&str, SearchE
 /// Splits search terms by whitespace, preserving double-quoted phrases.
 /// e.g. `["hello world"]` → `["hello", "world"]`
 /// e.g. `[r#""hello world" test"#]` → `["hello world", "test"]`
+/// e.g. `["“hello world” test"]` → `["hello world", "test"]`
 pub(in crate::api::search) fn split_search_terms(terms: &[String]) -> Vec<String> {
     let joined = terms.join(" ");
     let mut result = Vec::new();
@@ -40,7 +52,7 @@ pub(in crate::api::search) fn split_search_terms(terms: &[String]) -> Vec<String
     let mut in_quotes = false;
     for c in joined.chars() {
         match c {
-            '"' => in_quotes = !in_quotes,
+            c if is_phrase_quote(c) => in_quotes = !in_quotes,
             c if c.is_whitespace() && !in_quotes => {
                 let trimmed = current.trim().to_string();
                 if !trimmed.is_empty() {

@@ -803,6 +803,37 @@ async fn inaccessible_references_are_rejected_before_persistence() {
 }
 
 #[tokio::test]
+async fn voice_memo_attachments_must_name_a_static_file() {
+    let service = MessageService::new(fixture(), Events::default());
+    let input = PostMessage {
+        id: None,
+        attribution: Default::default(),
+        notification_policy: Default::default(),
+        content: String::new(),
+        thread_id: None,
+        anchor: None,
+        mentions: vec![],
+        attachments: vec![NewAttachment {
+            entity_type: "static/audio".into(),
+            entity_id: "not-a-static-file".into(),
+            width: None,
+            height: None,
+        }],
+        nonce: None,
+    };
+    // Repo::create is deliberately unimplemented: a rejected request must never reach it.
+    assert!(matches!(
+        service
+            .post(
+                access("macro|author@example.com", "doc", AccessLevel::Comment),
+                input
+            )
+            .await,
+        Err(MessageError::Invalid("invalid media identifier"))
+    ));
+}
+
+#[tokio::test]
 async fn user_mentions_do_not_require_or_grant_parent_sharing() {
     let service = MessageService::new(fixture(), Events::default());
     let mentions = vec![SimpleMention {

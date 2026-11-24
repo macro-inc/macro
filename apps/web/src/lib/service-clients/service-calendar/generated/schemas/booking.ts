@@ -29,7 +29,8 @@ retried, and cancelling it is the way to release its time. */
   endsAt: string;
   /** Booking link identity. */
   eventTypeId: string;
-  /** Assigned hosts. */
+  /** Assigned hosts. Empty in responses to the booker, since a Macro user
+identity carries the host's sign-in address. */
   hosts: string[];
   /** Booking identity. */
   id: string;

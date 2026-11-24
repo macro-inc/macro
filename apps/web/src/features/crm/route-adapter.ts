@@ -92,8 +92,11 @@ function itemDestination(source: CrmBranchParams, item: CrmItemParams) {
   };
 }
 
+/** The split showing the Customers route, which an opened item navigates. */
+type CrmRoutePane = { captureEntryState(): void; activate(): void };
+
 /** The Customers location held by the pane's route. */
-export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
+export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
   const [search] = createSearchParams(crmSearch);
   const [recordSearch] = createSearchParams(crmRecordSearch);
   const params = useParams<CrmBranchParams>();
@@ -124,10 +127,12 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
     return [record];
   };
 
-  // Records open where the user asks, even when another split shows them too.
+  // Records open where the user asks, even when another split shows them too;
+  // a link from one record to another goes to the split already showing it.
   const showRecord = (
     trail: readonly CrmRecordRef[],
-    section: CrmRecordSection | undefined
+    section: CrmRecordSection | undefined,
+    followLink = false
   ) => {
     const record = trail.at(-1);
     if (!record) return;
@@ -138,7 +143,7 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
     };
     // A message target belongs to the record it was asked for.
     const options = {
-      allowDuplicate: true,
+      allowDuplicate: !followLink,
       state: [...trail],
       search: { [crmRecordSearch.namespace]: undefined },
     };
@@ -215,12 +220,16 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
       itemId: entity.id,
       ...(entity.type === 'document'
         ? {
-            itemFileType: fileTypeToResolvedBlockName(entity.fileType ?? 'md'),
+            itemFileType: fileTypeToResolvedBlockName(entity.fileType),
             itemSubType: entity.subType?.type,
           }
         : {}),
     };
-    captureEntryState?.();
+    pane?.captureEntryState();
+    // Activate before navigating: when another split already shows the item,
+    // the router brings that split up, and activating afterwards (the focus
+    // the click moved here) would take it back.
+    pane?.activate();
     const trail = records();
     const destination = itemDestination(params, itemParams);
     fireAndForget(
@@ -301,7 +310,7 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
       shown() && recordSearch.commentId
         ? { commentId: recordSearch.commentId, seek: recordSearch.seek }
         : undefined,
-    open: (trail) => showRecord(trail, undefined),
+    open: (trail, options) => showRecord(trail, undefined, options?.followLink),
     setSection: (section) => showRecord(records(), section),
     item,
     openItem,

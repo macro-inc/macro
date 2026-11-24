@@ -13,6 +13,7 @@ import {
   participantRemovedEvent,
   propertyChangedEvent,
   sentEvent,
+  timeLoggedEvent,
   unknownActionEvent,
   unsupportedEntityEvent,
 } from './fixtures';
@@ -48,6 +49,15 @@ describe('decodeActivityEvent', () => {
       {
         kind: 'participant-removed' as const,
         participant: 'macro|sarah@example.com',
+      },
+    ],
+    [
+      timeLoggedEvent,
+      {
+        kind: 'time-logged' as const,
+        minutes: 90,
+        entryDate: '2026-11-20',
+        source: 'timer' as const,
       },
     ],
   ] as const)('decodes $0.id', (fragment, action) => {

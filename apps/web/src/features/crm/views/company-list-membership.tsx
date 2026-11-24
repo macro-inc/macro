@@ -3,6 +3,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import ListIcon from '@icon/system/regular/list-bullets.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
+import { RECORD_PANEL_ORDER } from '../core/record';
 import { useCrmLists, useCurrentTeamQuery } from './use-crm';
 
 export function CompanyListsSection(props: { companyId: string }) {
@@ -36,7 +37,12 @@ export function CompanyListsSection(props: { companyId: string }) {
     }
   }
   return (
-    <SidePanel.Section id="company-lists" title="Lists" order={40} defaultOpen>
+    <SidePanel.Section
+      id="company-lists"
+      title="Lists"
+      order={RECORD_PANEL_ORDER.lists}
+      defaultOpen
+    >
       <div class="flex flex-col gap-3">
         <Show when={team.isError || lists.query.isError}>
           <div
