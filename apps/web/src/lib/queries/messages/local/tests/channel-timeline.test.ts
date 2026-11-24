@@ -1105,4 +1105,138 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       onlineManager.setOnline(true);
     }
   });
+
+  it('loads no missing target again whose connection came back before the server said so', async () => {
+    const rows = messages(2);
+    const asked = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<ServerPage>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockImplementationOnce(() => {
+        asked.resolve();
+        return pending.promise;
+      })
+      .mockResolvedValue(serverPage(rows, 0, 2));
+    onlineManager.setOnline(false);
+    const mounted = mount({ rows, held: false, around: 'gone', fetchPage });
+    // As the channel view does: a missing target shows the live end.
+    const disposeView = createRoot((dispose) => {
+      createEffect(() => {
+        if (!mounted.timeline.isMissingTarget()) return;
+        mounted.setHeld(true);
+        mounted.setAround(undefined);
+      });
+      return dispose;
+    });
+    try {
+      await asked.promise;
+      onlineManager.setOnline(true);
+      pending.reject(
+        new CombinedError({
+          graphQLErrors: [
+            { message: 'gone', extensions: { code: 'NOT_FOUND' } },
+          ],
+        })
+      );
+
+      await until(() => mounted.timeline.entries().length === 2);
+      expect(mounted.host.reads.map(({ around }) => around)).toEqual([
+        channelMessageKey('gone'),
+        undefined,
+      ]);
+      expect(fetchPage).toHaveBeenCalledTimes(1);
+    } finally {
+      disposeView();
+      mounted.dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('reads a window again once the connection is back after its reload failed with none', async () => {
+    const rows = messages(2);
+    const cached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 2, cached.promise))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    onlineManager.setOnline(false);
+    const mounted = mount({ rows, held: false, fetchPage });
+    try {
+      await until(() => mounted.timeline.entries().length === 2);
+      // The session changed before the window was stored; the reload fails.
+      cached.reject(new StaleCacheAuthorityError());
+      await until(mounted.timeline.isLoadingOlder);
+      await mounted.timeline.toLatest();
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+      expect(mounted.timeline.entries()).toHaveLength(2);
+      expect(mounted.timeline.loadError()).toBeUndefined();
+
+      mounted.setHeld(true);
+      mounted.addRow(graphqlMessage(3));
+      onlineManager.setOnline(true);
+      await mounted.timeline.toLatest();
+      expect(mounted.timeline.entries()).toHaveLength(3);
+    } finally {
+      mounted.dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('reads a page the device refused at every read again once the connection is back', async () => {
+    const rows = messages(70);
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockImplementation(async () =>
+        serverPage(rows, 0, 20, Promise.reject(new StaleCacheAuthorityError()))
+      );
+    const mounted = mount({ rows, fetchPage });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      onlineManager.setOnline(false);
+      await mounted.timeline.loadOlder();
+      expect(fetchPage).toHaveBeenCalledTimes(3);
+      expect(mounted.timeline.entries()).toHaveLength(70);
+      expect(mounted.timeline.isLoadingOlder()).toBe(false);
+
+      mounted.setHeld(true);
+      const reads = mounted.host.reads.length;
+      onlineManager.setOnline(true);
+      expect(
+        mounted.host.reads.slice(reads).map(({ before }) => before)
+      ).toEqual([rows[20]!.sortKey]);
+    } finally {
+      mounted.dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('reads a page the device did not take again on the next scroll, not past it', async () => {
+    const rows = messages(120);
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(
+        serverPage(rows, 20, 70, Promise.reject(new StaleCacheAuthorityError()))
+      )
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(serverPage(rows, 20, 70));
+    const mounted = mount({ rows, fetchPage });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      onlineManager.setOnline(false);
+      await mounted.timeline.loadOlder();
+      expect(mounted.timeline.entries()).toHaveLength(100);
+
+      await mounted.timeline.loadOlder();
+      expect(fetchPage.mock.calls.map(([input]) => input.before)).toEqual([
+        rows[70]!.sortKey,
+        rows[70]!.sortKey,
+        rows[70]!.sortKey,
+      ]);
+    } finally {
+      mounted.dispose();
+      onlineManager.setOnline(true);
+    }
+  });
 });

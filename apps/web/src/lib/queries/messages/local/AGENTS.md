@@ -23,13 +23,14 @@ TanStack path in `../` runs untouched.
   failed to load, and an older or newer page that failed, load again when the
   connection comes back (`watchReconnect`, started before each request, so a
   request that fails after the connection is already back loads again at
-  once): nothing on screen retries them. A page the device failed to store is
-  read again from its own cursor. Tabs share the device but hear only their
-  own writes and the server's frames, so a write announces its channel to the
-  other tabs once the queue stores it and once it settles
-  (`channel-tab-writes.ts`, the `macro.channel-timeline.writes`
-  BroadcastChannel; a tab ignores its own), and their runtimes tell the
-  channel's views to reread.
+  once): nothing on screen retries them, nor a window read again after a
+  session change. A page the device failed to store is read again from its
+  own cursor, by the next page in that direction or the connection's return.
+  Tabs share the device but hear only their own writes and the server's
+  frames, so a write announces its channel to the other tabs once the queue
+  stores it and once it settles (`channel-tab-writes.ts`, the
+  `macro.channel-timeline.writes` BroadcastChannel; a tab ignores its own),
+  and their runtimes tell the channel's views to reread.
 - Write: `channel-writes.ts` enqueues the `*ChannelMessage` mutations on the
   durable cache mutation queue and waits for their settlement; a retired host
   (`graphql-soup.ts` cleanup) fails the writes still waiting. When the cache

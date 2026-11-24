@@ -295,6 +295,12 @@ export function createLocalChannelTimeline(
   // Pages again in a direction whose page failed, when the connection returns.
   const pageReconnects: Record<'older' | 'newer', ReconnectWatch | undefined> =
     { older: undefined, newer: undefined };
+  // The cursor of a page merged into the window that the device did not
+  // store: the next page in that direction reads it again, not past it.
+  const unstoredPages: Record<'older' | 'newer', string | undefined> = {
+    older: undefined,
+    newer: undefined,
+  };
   const stopReconnects = () => {
     reconnect?.stop();
     pageReconnects.older?.stop();
@@ -362,6 +368,8 @@ export function createLocalChannelTimeline(
     held = false;
     anchorId = around;
     stopReconnects();
+    unstoredPages.older = undefined;
+    unstoredPages.newer = undefined;
     const watch = watchReconnect();
     reconnect = watch;
     if (reloads === 0)
@@ -394,9 +402,14 @@ export function createLocalChannelTimeline(
     } catch (error) {
       if (token !== loadToken) return;
       // A reload keeps the window it already shows, and pages from it again.
+      // The device may not hold that window, so it follows nothing until it
+      // is read again: the connection's return reads it again.
       if (reloads > 0) {
-        watch.stop();
         setState({ loadingOlder: false, loadingNewer: false });
+        watch.failed(() => {
+          currentLoad = loadWindow(around, 1);
+          fireAndForget(currentLoad, 'channel-local-sync');
+        });
         return;
       }
       setState({ phase: 'failed', error });
@@ -531,7 +544,8 @@ export function createLocalChannelTimeline(
    * Reads a page of a held window again that the device did not take, as a
    * window load does: the new session can store what the old one could not,
    * and a read after the delete can hold what it reads. Held again, the
-   * window follows the device and rereads what changed meanwhile.
+   * window follows the device and rereads what changed meanwhile;
+   * `unstored` when every read again was refused too.
    */
   const fetchMoreAgain = async (
     direction: 'older' | 'newer',
@@ -539,31 +553,32 @@ export function createLocalChannelTimeline(
     token: number,
     signal: AbortSignal,
     first: 'session-changed' | 'yielded'
-  ) => {
+  ): Promise<'held' | 'unstored' | 'ended'> => {
     let settled: Awaited<ReturnType<typeof fetchMore>> = first;
     for (let reloads = 0; reloads < SESSION_CHANGE_RELOADS; reloads += 1) {
-      if (settled === 'yielded' && !(await afterDeletes(signal))) return;
-      if (token !== loadToken) return;
+      if (settled === 'yielded' && !(await afterDeletes(signal)))
+        return 'ended';
+      if (token !== loadToken) return 'ended';
       settled = await fetchMore(direction, cursor, token, signal);
       if (settled === 'held') {
         held = true;
         scheduleReread();
-        return;
+        return 'held';
       }
-      if (settled !== 'yielded' && settled !== 'session-changed') return;
+      if (settled !== 'yielded' && settled !== 'session-changed')
+        return 'ended';
     }
+    return 'unstored';
   };
 
   /**
-   * Pages past the window's end in `direction`. With `again`, reads that
-   * page again instead: it was merged in, but the device did not take it.
+   * Pages past the window's end in `direction`, or reads again the page there
+   * that was merged in but that the device did not take.
    */
-  const loadMore = async (
-    direction: 'older' | 'newer',
-    again?: { cursor: string }
-  ) => {
+  const loadMore = async (direction: 'older' | 'newer') => {
+    const unstored = unstoredPages[direction];
     const cursor =
-      again?.cursor ??
+      unstored ??
       (direction === 'older' ? state.olderCursor : state.newerCursor);
     const flag = direction === 'older' ? 'loadingOlder' : 'loadingNewer';
     if (cursor === null || state[flag] || state.phase !== 'ready') return;
@@ -574,12 +589,13 @@ export function createLocalChannelTimeline(
     const watch = watchReconnect();
     pageReconnects[direction] = watch;
     // The page past `cursor` is in the window, but not yet on the device.
-    let merged = again !== undefined;
+    let merged = unstored !== undefined;
+    let again: Awaited<ReturnType<typeof fetchMoreAgain>> | undefined;
     let failed = false;
     setState(flag, true);
     try {
-      if (again) {
-        await fetchMoreAgain(
+      if (unstored !== undefined) {
+        again = await fetchMoreAgain(
           direction,
           cursor,
           token,
@@ -595,7 +611,13 @@ export function createLocalChannelTimeline(
         // would page past it from a window the device does not hold.
         if (wasHeld && settled !== 'unheld') {
           merged = true;
-          await fetchMoreAgain(direction, cursor, token, signal, settled);
+          again = await fetchMoreAgain(
+            direction,
+            cursor,
+            token,
+            signal,
+            settled
+          );
         }
       }
     } catch (error) {
@@ -605,16 +627,20 @@ export function createLocalChannelTimeline(
       failed = true;
     } finally {
       if (token === loadToken) setState(flag, false);
-      if (!failed) watch.stop();
+      if (token !== loadToken || (!failed && again !== 'unstored'))
+        watch.stop();
     }
-    if (!failed) return;
+    if (token !== loadToken) return;
+    // A page shown but not stored is read again from its own cursor, not
+    // from the one it moved the window's end to.
+    unstoredPages[direction] =
+      again === 'unstored' || (failed && merged) ? cursor : undefined;
+    if (!failed && again !== 'unstored') return;
     // The window keeps what it shows. The next scroll asks again, and so does
     // the connection coming back: scrolled to the end there is no next
-    // scroll. A page shown but not stored is read again from its own cursor,
-    // not from the one it moved the window's end to.
-    const retry = merged ? { cursor } : undefined;
+    // scroll.
     watch.failed(() =>
-      fireAndForget(loadMore(direction, retry), 'channel-local-sync')
+      fireAndForget(loadMore(direction), 'channel-local-sync')
     );
   };
 
