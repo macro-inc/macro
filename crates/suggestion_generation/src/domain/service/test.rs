@@ -13,6 +13,7 @@ use model_owner::CreationPrincipal;
 use scheduled_action::domain::suggestions::model::{
     RetireSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest, SuggestionReview,
 };
+use scheduled_action::domain::suggestions::work::{Does, WorkStream};
 use suggestions::domain::model::{
     AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionCaller,
     SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
@@ -100,6 +101,8 @@ struct FakeSessions {
     script: Script,
     prepared: Mutex<Vec<PrepareRoutineSession>>,
     prompts: Mutex<Vec<String>>,
+    /// The prompts sent withholding their turn's content from traces.
+    withheld: Mutex<Vec<String>>,
     turns: Mutex<HashMap<Uuid, (Turn, u32)>>,
     cancelled: Mutex<Vec<Uuid>>,
     /// Each delete, with its generation's status when it ran.
@@ -139,6 +142,9 @@ impl RoutineSessions for FakeSessions {
         &self,
         command: PromptRoutineSession,
     ) -> Result<RoutinePromptAccepted, RoutineSessionError> {
+        if command.withhold_content {
+            self.withheld.lock().unwrap().push(command.prompt.clone());
+        }
         let attempt = {
             let mut prompts = self.prompts.lock().unwrap();
             prompts.push(command.prompt.clone());
@@ -210,12 +216,43 @@ impl RoutineSessions for FakeSessions {
     }
 }
 
-/// Routine suggestions: a brief naming its trigger and surfaces, and what
-/// each session suggested.
+/// How finding the work in a person's mail goes.
+#[derive(Debug, Clone, Copy)]
+enum Finding {
+    /// It lists this many streams.
+    Found(usize),
+    Fails,
+    /// It never answers.
+    Hangs,
+}
+
+fn stream(n: usize) -> WorkStream {
+    WorkStream {
+        name: format!("Stream {n}"),
+        senders: Vec::new(),
+        count: 4,
+        cadence: "weekly".to_owned(),
+        what: String::new(),
+        action: String::new(),
+        does: Does::Unknown,
+        to: Vec::new(),
+        sent: 0,
+        handled_by: String::new(),
+        labels: Vec::new(),
+        keeps: String::new(),
+        examples: Vec::new(),
+    }
+}
+
+/// Routine suggestions: a brief naming its trigger, part and surfaces, what
+/// each session suggested, and the work found for each drafting session.
 struct FakeRoutines {
     repo: Arc<FakeRepo>,
     counts: Arc<Counts>,
     reports: Arc<Mutex<Vec<RoutineGenerationReport>>>,
+    finding: Finding,
+    /// The sessions work was found for.
+    found_for: Mutex<Vec<Uuid>>,
 }
 
 impl RoutineSuggestionApi for FakeRoutines {
@@ -233,8 +270,38 @@ impl RoutineSuggestionApi for FakeRoutines {
         surfaces: &[Surface],
         trigger: GenerationTrigger,
         _: Tz,
+        part: BriefPart<'_>,
     ) -> anyhow::Result<String> {
-        Ok(format!("routines {} {surfaces:?}", trigger.as_ref()))
+        let part = match part {
+            BriefPart::Whole => String::new(),
+            BriefPart::Picks => "picks ".to_owned(),
+            BriefPart::Drafts(Some(work)) => {
+                let numbers: Vec<&str> = work
+                    .streams
+                    .iter()
+                    .map(|stream| stream.name.trim_start_matches("Stream "))
+                    .collect();
+                format!("drafts {} ", numbers.join(","))
+            }
+            BriefPart::Drafts(None) => "drafts none ".to_owned(),
+        };
+        Ok(format!("routines {} {part}{surfaces:?}", trigger.as_ref()))
+    }
+
+    async fn find_work(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        session: Uuid,
+    ) -> anyhow::Result<WorkList> {
+        self.found_for.lock().unwrap().push(session);
+        match self.finding {
+            Finding::Found(streams) => Ok(WorkList {
+                person: "Runs a bakery".to_owned(),
+                streams: (0..streams).map(stream).collect(),
+            }),
+            Finding::Fails => anyhow::bail!("the model failed"),
+            Finding::Hangs => std::future::pending().await,
+        }
     }
 
     async fn texts(
@@ -979,6 +1046,7 @@ struct Harness {
     plans: Arc<FakePlans>,
     counts: Arc<Counts>,
     reports: Arc<Mutex<Vec<RoutineGenerationReport>>>,
+    routines: Arc<FakeRoutines>,
     shutdown: CancellationToken,
 }
 
@@ -986,6 +1054,18 @@ struct Harness {
 /// everyone, sessions going as `script` says, and `stored` answering
 /// whether a session is stored, when given.
 fn build(suggestions: bool, routines: bool, script: Script, stored: Option<bool>) -> Harness {
+    build_finding(suggestions, routines, script, stored, None)
+}
+
+/// Likewise, with onboarding finding the work first, going as `finding`
+/// says, when given.
+fn build_finding(
+    suggestions: bool,
+    routines: bool,
+    script: Script,
+    stored: Option<bool>,
+    finding: Option<Finding>,
+) -> Harness {
     let mut flags = FakeFeatureFlags::default();
     for n in 0..PEOPLE {
         flags.set(
@@ -996,18 +1076,30 @@ fn build(suggestions: bool, routines: bool, script: Script, stored: Option<bool>
                     ROUTINE_SUGGESTIONS_FLAG.to_owned(),
                     FlagValue::Boolean(routines),
                 ),
+                (
+                    ROUTINE_FIND_WORK_FLAG.to_owned(),
+                    FlagValue::Boolean(finding.is_some()),
+                ),
             ])),
         );
     }
     let counts = Arc::new(Counts::default());
     let reports = Arc::new(Mutex::new(Vec::new()));
     let repo = Arc::new(FakeRepo::default());
+    let routines = Arc::new(FakeRoutines {
+        repo: Arc::clone(&repo),
+        counts: Arc::clone(&counts),
+        reports: Arc::clone(&reports),
+        finding: finding.unwrap_or(Finding::Fails),
+        found_for: Mutex::new(Vec::new()),
+    });
     let sessions = Arc::new(FakeSessions {
         repo: Arc::clone(&repo),
         counts: Arc::clone(&counts),
         script,
         prepared: Mutex::new(Vec::new()),
         prompts: Mutex::new(Vec::new()),
+        withheld: Mutex::new(Vec::new()),
         turns: Mutex::new(HashMap::new()),
         cancelled: Mutex::new(Vec::new()),
         deleted: Mutex::new(Vec::new()),
@@ -1018,11 +1110,7 @@ fn build(suggestions: bool, routines: bool, script: Script, stored: Option<bool>
     let service = GenerationService::new(
         Arc::clone(&repo),
         Arc::clone(&sessions),
-        Arc::new(FakeRoutines {
-            repo: Arc::clone(&repo),
-            counts: Arc::clone(&counts),
-            reports: Arc::clone(&reports),
-        }),
+        Arc::clone(&routines),
         Arc::new(FakeSuggestions {
             repo: Arc::clone(&repo),
             counts: Arc::clone(&counts),
@@ -1047,6 +1135,7 @@ fn build(suggestions: bool, routines: bool, script: Script, stored: Option<bool>
         plans,
         counts,
         reports,
+        routines,
         shutdown,
     }
 }
@@ -1206,6 +1295,286 @@ async fn onboarding_runs_one_suggestions_session_and_a_routines_session_per_grou
         StartOutcome::Refused(Admission::Done)
     );
     assert_eq!(h.prepared(), groups + 1);
+}
+
+/// An onboarding that finds the work first runs a session that picks from
+/// the catalog at once, and sessions that draft from the work found, each
+/// from its share of the streams, the first as the session the work was
+/// found for.
+#[tokio::test(start_paused = true)]
+async fn an_onboarding_that_finds_the_work_picks_and_drafts_in_sessions_of_their_own() {
+    let h = build_finding(true, true, finishes, Some(true), Some(Finding::Found(6)));
+    h.onboard().await.unwrap();
+    let mut prompts = h.prompts();
+    prompts.sort();
+    let all = format!("{ALL_SURFACES:?}");
+    assert_eq!(
+        prompts,
+        [
+            format!("routines onboarding drafts 0,3 {all}"),
+            format!("routines onboarding drafts 1,4 {all}"),
+            format!("routines onboarding drafts 2,5 {all}"),
+            format!("routines onboarding picks {all}"),
+            "suggestions onboarding".to_owned(),
+        ]
+    );
+    let found_for = h.routines.found_for.lock().unwrap().clone();
+    assert_eq!(found_for.len(), 1);
+    let routines = h
+        .repo
+        .sessions()
+        .into_iter()
+        .filter(|session| session.kind == SessionKind::Routines)
+        .map(|session| session.id)
+        .collect::<Vec<_>>();
+    assert_eq!(routines.len(), 1 + MAX_DRAFT_SESSIONS);
+    assert!(routines.contains(&found_for[0]));
+    assert_eq!(h.reports()[0].sessions, 1 + MAX_DRAFT_SESSIONS);
+    assert_eq!(h.repo.only().status, GenerationStatus::Ready);
+}
+
+/// A long list is drafted for only as far as its first streams.
+#[tokio::test(start_paused = true)]
+async fn only_the_first_streams_found_are_drafted_for() {
+    let h = build_finding(true, true, finishes, Some(true), Some(Finding::Found(20)));
+    h.onboard().await.unwrap();
+    let mut drafts: Vec<String> = h
+        .prompts()
+        .into_iter()
+        .filter_map(|prompt| {
+            prompt
+                .strip_prefix("routines onboarding drafts ")
+                .and_then(|rest| rest.split(' ').next())
+                .map(str::to_owned)
+        })
+        .collect();
+    drafts.sort();
+    assert_eq!(drafts, ["0,3,6,9", "1,4,7,10", "2,5,8,11"]);
+    assert_eq!(MAX_DRAFTED_STREAMS, 12);
+}
+
+/// Work that can't be found, or isn't found in time, leaves drafting to the
+/// person's newest mail; nightly and manual runs never look for it.
+#[tokio::test(start_paused = true)]
+async fn without_the_work_found_the_drafting_session_reads_the_newest_mail() {
+    for finding in [Finding::Fails, Finding::Hangs, Finding::Found(0)] {
+        let h = build_finding(true, true, finishes, Some(true), Some(finding));
+        h.onboard().await.unwrap();
+        let prompts = h.prompts();
+        assert!(
+            prompts
+                .iter()
+                .any(|prompt| prompt.starts_with("routines onboarding drafts none ")),
+            "{finding:?}: {prompts:?}"
+        );
+        assert!(
+            prompts
+                .iter()
+                .any(|prompt| prompt.starts_with("routines onboarding picks ")),
+            "{finding:?}"
+        );
+    }
+    let h = build_finding(true, true, finishes, Some(true), Some(Finding::Found(6)));
+    h.repo
+        .due
+        .lock()
+        .unwrap()
+        .push(member(user(), zone_in_its_night()));
+    assert_eq!(h.service.nightly().await.unwrap(), 1);
+    h.service.wait().await;
+    assert!(h.routines.found_for.lock().unwrap().is_empty());
+    assert!(
+        h.prompts()
+            .iter()
+            .any(|prompt| prompt.starts_with("routines nightly ["))
+    );
+}
+
+/// A drafting session that suggested nothing is retried once, from the same
+/// share of the work, which is found only once.
+#[tokio::test(start_paused = true)]
+async fn a_drafting_session_retried_drafts_from_the_same_work() {
+    let second_try: Script = |brief, attempt| {
+        let changes = u32::from(!brief.contains(" drafts 1 ") || attempt == 2);
+        ends(RoutineActionStatus::Succeeded, changes)
+    };
+    let h = build_finding(true, true, second_try, Some(true), Some(Finding::Found(3)));
+    h.onboard().await.unwrap();
+    let mut drafts: Vec<String> = h
+        .prompts()
+        .into_iter()
+        .filter(|prompt| prompt.starts_with("routines onboarding drafts "))
+        .collect();
+    drafts.sort();
+    drafts.dedup();
+    assert_eq!(drafts.len(), 3);
+    let retried = h
+        .prompts()
+        .into_iter()
+        .filter(|prompt| prompt.starts_with("routines onboarding drafts 1 "))
+        .count();
+    assert_eq!(retried, 2);
+    assert_eq!(h.routines.found_for.lock().unwrap().len(), 1);
+    assert_eq!(h.reports()[0].retries, 1);
+}
+
+/// Picks and the suggestions session finish; drafting never does.
+fn drafts_hang(prompt: &str, _: usize) -> Turn {
+    if prompt.contains(" drafts ") {
+        Turn::Hangs
+    } else {
+        ends(RoutineActionStatus::Succeeded, 1)
+    }
+}
+
+/// An onboarding that finds the work and is stopped while it drafts is
+/// cancelled, so it runs again, not kept as the picks alone.
+#[tokio::test(start_paused = true)]
+async fn an_onboarding_stopped_while_drafting_is_cancelled_not_partial() {
+    let h = build_finding(true, true, drafts_hang, Some(true), Some(Finding::Found(6)));
+    assert_eq!(
+        h.service
+            .start(&user(), GenerationTrigger::Onboarding, chrono_tz::UTC)
+            .await
+            .unwrap(),
+        StartOutcome::Started
+    );
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    let finished = h
+        .repo
+        .sessions()
+        .into_iter()
+        .filter(|session| session.ending == Some(SessionEnding::Finished))
+        .count();
+    assert_eq!(finished, 2, "the picks and suggestions sessions finished");
+    h.shutdown.cancel();
+    h.service.wait().await;
+    assert_eq!(h.repo.only().status, GenerationStatus::Cancelled);
+    assert_eq!(h.reports()[0].outcome, "cancelled");
+}
+
+fn drafts_fail(prompt: &str, _: usize) -> Turn {
+    if prompt.contains(" drafts ") {
+        ends(
+            RoutineActionStatus::Failed(RoutineFailureReason::RuntimeError),
+            0,
+        )
+    } else {
+        ends(RoutineActionStatus::Succeeded, 1)
+    }
+}
+
+fn all_fail(_: &str, _: usize) -> Turn {
+    ends(
+        RoutineActionStatus::Failed(RoutineFailureReason::MaxTokens),
+        0,
+    )
+}
+
+/// The work found and the month's mail are held only by the generation's
+/// sessions: however the generation ends, every session it opened is
+/// deleted by the time it has, and only the drafting sessions given the
+/// list withhold their turns' content from traces.
+#[tokio::test(start_paused = true)]
+async fn every_session_is_deleted_however_a_generation_that_found_the_work_ends() {
+    enum Ending {
+        Runs,
+        Stopped,
+        LosesHeartbeat,
+    }
+    for (script, ending, status) in [
+        (finishes as Script, Ending::Runs, GenerationStatus::Ready),
+        (drafts_fail, Ending::Runs, GenerationStatus::Partial),
+        (all_fail, Ending::Runs, GenerationStatus::Failed),
+        (drafts_hang, Ending::Stopped, GenerationStatus::Cancelled),
+        (
+            drafts_hang,
+            Ending::LosesHeartbeat,
+            GenerationStatus::Interrupted,
+        ),
+    ] {
+        let h = build_finding(true, true, script, Some(true), Some(Finding::Found(6)));
+        match ending {
+            Ending::Runs => {
+                h.onboard().await.unwrap();
+            }
+            Ending::Stopped => {
+                h.service
+                    .start(&user(), GenerationTrigger::Onboarding, chrono_tz::UTC)
+                    .await
+                    .unwrap();
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                h.shutdown.cancel();
+                h.service.wait().await;
+            }
+            Ending::LosesHeartbeat => {
+                h.repo.lose_heartbeat.store(true, Ordering::SeqCst);
+                h.onboard().await.unwrap();
+            }
+        }
+        assert_eq!(h.repo.only().status, status);
+        let mut opened: Vec<Uuid> = h
+            .sessions
+            .prepared
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|prepared| prepared.session_id.as_uuid())
+            .collect();
+        let mut deleted = h.sessions.deleted();
+        opened.sort();
+        deleted.sort();
+        assert!(opened.len() > 1 + MAX_DRAFT_SESSIONS, "{status:?}");
+        assert_eq!(deleted, opened, "{status:?}: every session is deleted");
+        let mut listed: Vec<String> = h
+            .prompts()
+            .into_iter()
+            .filter(|prompt| prompt.contains(" drafts ") && !prompt.contains(" drafts none "))
+            .collect();
+        let mut withheld = h.sessions.withheld.lock().unwrap().clone();
+        listed.sort();
+        withheld.sort();
+        assert!(!listed.is_empty(), "{status:?}");
+        assert_eq!(
+            withheld, listed,
+            "{status:?}: only the list's sessions withhold"
+        );
+    }
+}
+
+/// Without the finding step, a stop after a session finished keeps what
+/// the others did, as before.
+#[tokio::test(start_paused = true)]
+async fn without_the_finding_step_a_stop_after_one_finished_is_partial() {
+    let h = harness(true, true, |prompt, _| {
+        if prompt.starts_with("routines") {
+            Turn::Hangs
+        } else {
+            ends(RoutineActionStatus::Succeeded, 1)
+        }
+    });
+    assert_eq!(
+        h.service
+            .start(&user(), GenerationTrigger::Onboarding, chrono_tz::UTC)
+            .await
+            .unwrap(),
+        StartOutcome::Started
+    );
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    h.shutdown.cancel();
+    h.service.wait().await;
+    assert_eq!(h.repo.only().status, GenerationStatus::Partial);
+}
+
+/// An onboarding whose heartbeat is lost while it drafts stays interrupted,
+/// and its report says so rather than partial.
+#[tokio::test(start_paused = true)]
+async fn an_onboarding_that_loses_its_heartbeat_while_drafting_reports_interrupted() {
+    let h = build_finding(true, true, drafts_hang, Some(true), Some(Finding::Found(6)));
+    h.repo.lose_heartbeat.store(true, Ordering::SeqCst);
+    h.onboard().await.unwrap();
+    assert_eq!(h.repo.only().status, GenerationStatus::Interrupted);
+    assert_eq!(h.reports()[0].outcome, "interrupted");
 }
 
 /// Onboarding cut short (its process stopped, or its heartbeat did) starts
@@ -1984,4 +2353,168 @@ async fn loading_the_app_counts_paid_people_with_suggestions_on() {
         .await
         .unwrap();
     assert!(off.repo.seen.lock().unwrap().is_empty());
+}
+
+/// Records the `otel.status_code` each span is given, by span name. A span
+/// that doesn't declare the field never hands its value to a subscriber.
+#[derive(Clone, Default)]
+struct StatusCodes(std::sync::Arc<Mutex<StatusCodesSeen>>);
+
+#[derive(Default)]
+struct StatusCodesSeen {
+    names: HashMap<u64, &'static str>,
+    codes: Vec<(&'static str, String)>,
+}
+
+impl StatusCodes {
+    fn saw(&self, span: &str) -> bool {
+        self.0
+            .lock()
+            .unwrap()
+            .names
+            .values()
+            .any(|name| *name == span)
+    }
+
+    fn of(&self, span: &str) -> Vec<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .codes
+            .iter()
+            .filter(|(name, _)| *name == span)
+            .map(|(_, code)| code.clone())
+            .collect()
+    }
+}
+
+struct StatusCode(Option<String>);
+
+impl tracing::field::Visit for StatusCode {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == "otel.status_code" {
+            self.0 = Some(value.to_owned());
+        }
+    }
+
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "otel.status_code" {
+            self.0 = Some(format!("{value:?}"));
+        }
+    }
+}
+
+impl tracing::Subscriber for StatusCodes {
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+
+    fn new_span(&self, span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        let mut seen = self.0.lock().unwrap();
+        let id = u64::try_from(seen.names.len()).unwrap() + 1;
+        seen.names.insert(id, span.metadata().name());
+        let mut code = StatusCode(None);
+        span.record(&mut code);
+        if let Some(code) = code.0 {
+            seen.codes.push((span.metadata().name(), code));
+        }
+        tracing::span::Id::from_u64(id)
+    }
+
+    fn record(&self, span: &tracing::span::Id, values: &tracing::span::Record<'_>) {
+        let mut code = StatusCode(None);
+        values.record(&mut code);
+        if let Some(code) = code.0 {
+            let mut seen = self.0.lock().unwrap();
+            let name = seen.names[&span.into_u64()];
+            seen.codes.push((name, code));
+        }
+    }
+
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+
+    fn event(&self, _: &tracing::Event<'_>) {}
+
+    fn enter(&self, _: &tracing::span::Id) {}
+
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+/// A subscriber that never decides at registration and wants nothing. While
+/// it is registered beside a capture, every thread that registers a callsite
+/// asks both, and none can mark a span unwanted for the capture's thread:
+/// with one subscriber registered, tracing asks only the registering thread's
+/// own default, which beside this test is often none. Its level hint is off,
+/// so it lets no callsite register before a capture does.
+struct Undecided;
+
+impl tracing::Subscriber for Undecided {
+    fn register_callsite(
+        &self,
+        _: &'static tracing::Metadata<'static>,
+    ) -> tracing::subscriber::Interest {
+        tracing::subscriber::Interest::sometimes()
+    }
+
+    fn max_level_hint(&self) -> Option<tracing::level_filters::LevelFilter> {
+        Some(tracing::level_filters::LevelFilter::OFF)
+    }
+
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        false
+    }
+
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+
+    fn event(&self, _: &tracing::Event<'_>) {}
+
+    fn enter(&self, _: &tracing::span::Id) {}
+
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+/// Finding the work ends its span in error when the step fails or runs out
+/// of time, and not when the process shuts down under it.
+#[tokio::test(start_paused = true)]
+async fn the_finding_span_is_an_error_when_the_step_fails_or_times_out_but_not_on_shutdown() {
+    // Registered for the whole test, so each case's capture is never the
+    // only subscriber (see `Undecided`).
+    let _undecided = tracing::Dispatch::new(Undecided);
+    for (finding, shut_down, codes) in [
+        (Finding::Fails, false, vec!["ERROR"]),
+        (Finding::Hangs, false, vec!["ERROR"]),
+        (Finding::Hangs, true, vec![]),
+        (Finding::Found(6), false, vec![]),
+    ] {
+        let seen = StatusCodes::default();
+        let _guard = tracing::subscriber::set_default(seen.clone());
+        tracing::callsite::rebuild_interest_cache();
+        let h = build_finding(true, true, finishes, Some(true), Some(finding));
+        if shut_down {
+            h.service
+                .start(&user(), GenerationTrigger::Onboarding, chrono_tz::UTC)
+                .await
+                .unwrap();
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            h.shutdown.cancel();
+            h.service.wait().await;
+        } else {
+            h.onboard().await.unwrap();
+        }
+        assert!(
+            seen.saw("routine.find_work"),
+            "{finding:?}, shut down: {shut_down}: no finding span captured"
+        );
+        assert_eq!(
+            seen.of("routine.find_work"),
+            codes,
+            "{finding:?}, shut down: {shut_down}"
+        );
+    }
 }

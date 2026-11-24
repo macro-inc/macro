@@ -52,7 +52,12 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   action outside an island (`HeaderActionButton`, `ChatWithAgentButton`) is
   32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`.
   Keep 8px between islands. Filter, sort, group, and download live in the header, never
-  in a second toolbar row; only active filter chips sit below it.
+  in a second toolbar row; only active filter chips sit below it. A pane's
+  top-bar `Tabs` take Tab, Shift+Tab and 1–9 through `useViewTabHotkeys`,
+  registered beside them on the split's own scope (`splitRootScope`, which an
+  inline preview keeps); a sidebar's navigation and the rest of a view never
+  bind Tab. Tabs atop a list that is the sidebar (Chat) are that
+  pane's top bar.
 - **FE-63** Style controls only through their props (`variant`, `size`, `finish`,
   `fullWidth`); `class` on a control is for placement (margin,
   width, order, shrink). Never resize or recolor a control from a wrapper

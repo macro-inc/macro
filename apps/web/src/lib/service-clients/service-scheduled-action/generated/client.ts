@@ -1704,6 +1704,70 @@ export const listScheduledActionHistory = async (
   } as listScheduledActionHistoryResponse;
 };
 
+/**
+ * Stop the routine's run in progress. It ends as stopped shortly after; with no run in progress, nothing changes.
+ */
+export type stopScheduledActionRunResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type stopScheduledActionRunResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type stopScheduledActionRunResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type stopScheduledActionRunResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type stopScheduledActionRunResponseSuccess =
+  stopScheduledActionRunResponse204 & {
+    headers: Headers;
+  };
+export type stopScheduledActionRunResponseError = (
+  | stopScheduledActionRunResponse401
+  | stopScheduledActionRunResponse404
+  | stopScheduledActionRunResponse500
+) & {
+  headers: Headers;
+};
+
+export type stopScheduledActionRunResponse =
+  | stopScheduledActionRunResponseSuccess
+  | stopScheduledActionRunResponseError;
+
+export const getStopScheduledActionRunUrl = (id: string) => {
+  return `/scheduled-actions/${id}/stop`;
+};
+
+export const stopScheduledActionRun = async (
+  id: string,
+  options?: RequestInit
+): Promise<stopScheduledActionRunResponse> => {
+  const res = await fetch(getStopScheduledActionRunUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: stopScheduledActionRunResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as stopScheduledActionRunResponse;
+};
+
 export type getScheduledActionTemplateResponse200 = {
   data: RoutineTemplate;
   status: 200;

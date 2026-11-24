@@ -2,7 +2,10 @@ import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import { TASK_DEFAULT_GROUP_BY } from '../constants';
-import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
+import {
+  TASK_DUE_DATE_BUCKETS,
+  TASK_START_DATE_BUCKETS,
+} from '../core/task-due-date';
 import { isProjectTab } from '../core/task-navigation';
 import type { TasksViewState, TaskTab } from '../types';
 import {
@@ -50,6 +53,17 @@ const filtersSchema = z
       .max(100),
   })
   .strict();
+const dateRangeSchema = z
+  .object({
+    type: z.literal('range'),
+    start: z.iso.date().optional(),
+    end: z.iso.date().optional(),
+  })
+  .strict()
+  .refine(
+    ({ start, end }) =>
+      Boolean(start || end) && (!start || !end || start <= end)
+  );
 const dueDateSchema = z.union([
   z
     .object({
@@ -59,17 +73,18 @@ const dueDateSchema = z.union([
       ]),
     })
     .strict(),
+  dateRangeSchema,
+]);
+const startDateSchema = z.union([
   z
     .object({
-      type: z.literal('range'),
-      start: z.iso.date().optional(),
-      end: z.iso.date().optional(),
+      type: z.enum([
+        ...TASK_START_DATE_BUCKETS.map((bucket) => bucket.id),
+        'has_start_date',
+      ]),
     })
-    .strict()
-    .refine(
-      ({ start, end }) =>
-        Boolean(start || end) && (!start || !end || start <= end)
-    ),
+    .strict(),
+  dateRangeSchema,
 ]);
 const layoutSchema = z.enum(['list', 'board', 'gantt']);
 const groupBySchema = z.enum([
@@ -80,6 +95,7 @@ const groupBySchema = z.enum([
   'project',
   'date',
   'due_date',
+  'start_date',
 ]);
 const sortItemSchema = z
   .object({
@@ -92,6 +108,8 @@ const sortItemSchema = z
       'priority',
       'due_date_earliest',
       'due_date_latest',
+      'start_date_earliest',
+      'start_date_latest',
     ]),
     reversed: z.boolean().default(false),
   })
@@ -103,6 +121,7 @@ const taskSavedViewSchema = z
     version: z.literal(1),
     filters: filtersSchema,
     dueDate: dueDateSchema.optional(),
+    startDate: startDateSchema.optional(),
     layout: layoutSchema.default('list'),
     groupBy: groupBySchema.default(TASK_DEFAULT_GROUP_BY['team-tasks']),
     sort: sortSchema.default([{ id: 'updated_at', reversed: false }]),
@@ -138,6 +157,7 @@ function canonical(config: TaskSavedViewConfig): TaskSavedViewConfig {
     kind: 'tasks',
     version: 1,
     ...(config.dueDate && { dueDate: { ...config.dueDate } }),
+    ...(config.startDate && { startDate: { ...config.startDate } }),
     layout: config.layout,
     groupBy: config.groupBy,
     sort: config.sort.map((item) => ({ ...item, reversed: !!item.reversed })),
@@ -223,6 +243,7 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
       : readSort(readable.data.sort);
   const filters = readable.data.filters;
   const dueDate = dueDateSchema.safeParse(readable.data.dueDate);
+  const startDate = startDateSchema.safeParse(readable.data.startDate);
 
   function readSort(value: unknown) {
     if (!Array.isArray(value))
@@ -286,6 +307,7 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
         : TASK_DEFAULT_GROUP_BY['team-tasks'],
       sort,
       ...(dueDate.success && dueDate.data && { dueDate: dueDate.data }),
+      ...(startDate.success && startDate.data && { startDate: startDate.data }),
       filters: {
         statusOptionIds: readEntries(
           filters.statusOptionIds,
@@ -339,6 +361,7 @@ export function captureTaskSavedView(input: {
   groupBy?: TasksViewState['groupBy'];
   sort?: TasksViewState['sort'];
   dueDate?: TasksViewState['dueDate'];
+  startDate?: TasksViewState['startDate'];
   context: TaskFacetContext;
 }): Result<TaskSavedViewConfig, string> {
   if (isProjectTab(input.tab))
@@ -368,6 +391,7 @@ export function captureTaskSavedView(input: {
     groupBy: input.groupBy,
     sort: input.sort,
     ...(input.dueDate && { dueDate: input.dueDate }),
+    ...(input.startDate && { startDate: input.startDate }),
     filters: {
       statusOptionIds: (input.facets.status ?? []).map((id) =>
         optionId(id, TASK_STATUS_OPTIONS)
@@ -391,6 +415,7 @@ export function materializeTaskSavedView(config: TaskSavedViewConfig): {
   groupBy: TasksViewState['groupBy'];
   sort: TasksViewState['sort'];
   dueDate?: TasksViewState['dueDate'];
+  startDate?: TasksViewState['startDate'];
 } {
   const filters = config.filters;
   const selectionId = (id: string, options: typeof TASK_STATUS_OPTIONS) =>
@@ -403,6 +428,7 @@ export function materializeTaskSavedView(config: TaskSavedViewConfig): {
     groupBy: config.groupBy,
     sort: config.sort.map((item) => ({ ...item })),
     dueDate: config.dueDate ? { ...config.dueDate } : undefined,
+    startDate: config.startDate ? { ...config.startDate } : undefined,
     facets: {
       status: filters.statusOptionIds.map((id) =>
         selectionId(id, TASK_STATUS_OPTIONS)

@@ -315,6 +315,26 @@ impl CrmService for FakeCrm {
         Err(CrmError::ContactNotFoundForTeam)
     }
 
+    async fn add_company_domain(
+        &self,
+        _access: &crm::domain::auth::CrmCompanyReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _domain: &str,
+    ) -> Result<crm::domain::model::CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CompanyNotFoundForTeam)
+    }
+
+    async fn remove_company_domain(
+        &self,
+        _access: &crm::domain::auth::CrmCompanyReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _domain: &str,
+    ) -> Result<crm::domain::model::CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CompanyNotFoundForTeam)
+    }
+
     async fn unlink_contact_company(
         &self,
         _access: &crm::domain::auth::CrmContactReceipt<

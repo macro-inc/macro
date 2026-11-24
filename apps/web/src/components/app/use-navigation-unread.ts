@@ -49,7 +49,6 @@ const COUNTED_SECTIONS: Record<string, { rowTypes?: readonly InboxRowType[] }> =
   {
     home: {},
     notifications: {},
-    'new-home': {},
     channels: { rowTypes: CHANNEL_ROW_TYPES },
     mail: { rowTypes: MAIL_ROW_TYPES },
   };

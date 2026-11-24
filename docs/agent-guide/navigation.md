@@ -267,6 +267,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/tasks` | Tasks table |
 | `/app/tasks/<uuid>` | Tasks with a task document opened inline |
 | `/app/agents` | AI chats / agents list |
+| `/app/agents/archive` | Archived conversations; direct links and reloads preserve the archive route, and Back/Forward return between it and the Agents list |
 | `/app/tasks/projects` | Projects collection inside Tasks |
 | `/app/tasks/projects/<uuid>/overview` | Project detail in Tasks, with breadcrumbs, properties, description, and discussions; replace `overview` with `tasks` for the task list |
 | `/app/component/project-compose` | Native project composer, sharing the task composer layout and property controls |
@@ -602,7 +603,11 @@ Shift-click on content links requests a new split wherever splits are supported,
 including mentions, references, folder links, and list rows with a linked preview.
 Unmodified clicks keep each surface’s default (same split, preview, or new split).
 Existing-content deduplication and split-capacity limits still apply; touch devices
-continue to navigate in place.
+continue to navigate in place. When another split already shows the target, even
+as a detail inside another view (a Customers record, a project under Tasks),
+Shift-click brings that split forward instead of opening a second one
+(`createNewSplit` activates the pane the router hands the open to;
+`tests/claimed-replace.test.ts`).
 
 A block mounted in an inline detail is reused when opened elsewhere. Mentions
 and notifications activate its host without a toast; explicit list or Cmd+K
@@ -772,6 +777,12 @@ chat agents, and the composer stays on one line. In Code it lists coding agents
 only, the composer opens expanded with the repository drawer below it, and the
 greeting reads "What should we build?". New sessions use the selected agent's
 default model and the URL for its kind. Home keeps its usual agent composer.
+On the Agents page, Home, and the phone composer, picking an agent from the
+composer's `@` menu selects it, switching to its mode (Chat or Code, also from
+Auto); the mention stays in the prompt and the last agent picked wins. Mentioning
+the agent already selected keeps its model pick, and a mention made while the
+agent list loads applies once it arrives. An unavailable agent blocks Send with
+its reason.
 Opening an existing row restores its own kind and URL.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
@@ -1314,16 +1325,13 @@ block name also open routines; newly copied links use `/app/routines/<uuid>`.
 On the legacy Agents screen, use the **Routines** button above the list. On touch devices,
 `/app/routines` opens the routines list directly, and the Agents sidebar entry is also available in **Settings → Routines** (on phones **More views → Settings →
 Routines**): tapping a routine closes the settings sheet and opens it, and
-**Create Routine** opens the composer.
+**Create routine** opens the composer.
 
 A routine one of another routine's runs created (from a code step or the
 Ask AI step's session, while that run was in progress) is its **sub-routine**
-and is not a row of its own. On desktop the creating routine's row shows a
-caret and **N sub-routines**; the caret expands the active ones under it,
-indented, each with its own switch (a paused-with-parent one's tooltip reads
-**Paused with the routine that created it**). A search that matches only a
-sub-routine shows its parent, expanded. Touch devices list top-level routines
-only. The creating routine's page has a **Created by this routine** section
+and is not a row of its own. On desktop the creating routine's card ends its last line with **· N
+sub-routines**; they are listed on its page. Touch devices list top-level
+routines only. The creating routine's page has a **Created by this routine** section
 after its settings: the active sub-routines (name, trigger, **Active** /
 **Paused** / **Running**), then **Finished: N** with **Show finished** for the
 one-time ones that have run (the newest 200), each row opening that routine,
@@ -1336,42 +1344,72 @@ and the delete dialog says **The N routines it created will be deleted too.**
 In a run's details, **Created** lists the sub-routines that run created.
 
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
-count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
-search, which matches name, Trigger and Steps. When
-`enable-routine-starter-templates` is on (on in development; PostHog decides in
-deployed environments), **Templates** above the rows shows
-the catalog's first four available template cards (icon, name, one line and its trigger → first step, such as
-**New email → Label with AI**) with **All templates** at the right, which opens
-New routine's start screen. A card opens New routine already filled in from that
-template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. With `enable-routine-suggestions` on (not on touch devices), suggestions take the
-strip's place: **Suggested for you** above the rows on **All** shows one row
-of Discover's cards, as many as fit, and after them a narrow **N more · In
-Discover** column, which opens a third tab, **Discover**. Discover
+count) on the left and **Create routine** and search on the right;
+**Cmd/Ctrl+F** focuses search, which matches name, Trigger and Steps.
+
+With a pointer (not touch), routines are cards under **When something
+happens** and **On a schedule**, each heading with its count. The page body
+has Discover's padding, so switching tabs moves nothing. Cards have the
+surface and the width of Discover's cards (25rem, as many to a row as fit,
+narrower only in a pane too small for one) and are compact: every card is
+64px tall in every state. A card shows a tile with the routine's icon tinted
+by its colour (or its trigger's area; grey while off), its name with one line
+under it, its **…** menu and an on/off switch. The line says:
+
+- what starts it and its last run, such as **Weekdays at 9:00 AM · Ran 9:00
+  AM** after a green dot (grey for a skipped or stopped run), or **Not run
+  yet**, then **· N sub-routines** when its runs created any;
+- **Running now** with a spinning mark and, for its owner, **Stop** (named
+  **Stop the run of <name>**), which ends the run in progress; it reads **Stopping…** until the
+  run ends (**Stop** comes back after 15 seconds if that end never arrives),
+  and the run's details then say it was stopped;
+- **Failed <when> · <why>** in failure colour, the whole reason in a tooltip;
+- **<trigger> · Off** while it is off.
+
+Clicking a card opens the routine in the same pane. Switching one off shows
+**<name> is off**, **Its settings and past runs are kept**, with **Undo**,
+which switches it back on (no Undo while a run is in progress or once a
+one-time routine has run, which its switch can't turn back on). With no routines, the page shows **Nothing is
+running yet** with **New routine** and, where suggestions are on, **Browse
+Discover**, which opens the Discover tab.
+
+When `enable-routine-starter-templates` is on (on in development; PostHog
+decides in deployed environments), **Templates** above the routines shows the
+catalog's first four available template cards (icon, name, one line and its
+trigger → first step, such as **New email → Label with AI**) with **All
+templates** at the right, which opens New routine's start screen. A card opens
+New routine already filled in from that template. The strip hides while
+searching and on **On**; on phones the cards scroll sideways. With
+`enable-routine-suggestions` on (not on touch devices), suggestions take the
+strip's place: **Suggested for you** (**Start with one of these** for someone
+with no routines) above the routines on **All** shows one row of Discover's
+cards, as many as fit, and after them a narrow **N more · In Discover**
+column, which opens a third tab, **Discover**. Discover
 replaces the list with every suggestion (AI's first, then Macro's) followed by
 the templates no suggestion already offers, as many cards to a row as fit, with
 **All** and one tab per area that has any (`Suggestion area`) and the hint
-**picked for you, then Macro's templates**. Every suggestion card, in the row,
-on Discover and in the sidebar dialog, is the dialog's card: 25rem wide
-(narrower only in a pane too small for one) and as tall as the tallest card in
-its row. The list's search narrows Discover
+**picked for you, then Macro's templates**. Discover's and the sidebar
+dialog's cards are 25rem wide (narrower only in a pane too small for one) and
+as tall as the tallest card in their row. The list's search narrows Discover
 too. Discover's tab carries a violet dot while it has AI picks this browser
 hasn't shown there; opening or leaving it marks them seen. The cards behave as
-in [setup cards](setup-cards.md#suggested-routines). Columns are **Name**, **Trigger**, **Steps** and **Last run**.
-Rows are grouped under **When something happens** and **On a schedule**, each a
-band like the tasks list's group headers, with a count. Each row has an icon for
-its trigger's kind, the name with its description below it when it has one,
-**Trigger** (its triggers in a line, such as **New email received** or
-**Weekdays at 9:00 AM**, with an AI check after " · "), **Steps** (an **AI
-picks** chip and the options for a choice, an **Ask AI** chip and the gist of the
-instructions for an agent, otherwise the actions, such as **Create task · Set
-priority**), **Last run**, and at the end an on/off switch (pause or resume
-without opening it; turned-off rows are dimmed). Last run is a dot (green
-for a run that acted, red for a failure, grey for a skipped run or one that
-changed nothing), the time (today) or day, and what it did or why it failed or
-was skipped (**Skipped: condition not met**), or **Not run yet**. Last run comes
-with the list. Click a row to open it in the same
-pane. Below 760px wide (a phone, or the Settings sheet) rows drop Trigger and Steps,
+in [setup cards](setup-cards.md#suggested-routines).
+
+Touch devices keep the table. Its columns are **Name**, **Trigger**,
+**Steps** and **Last run**. Rows are grouped under **When something happens**
+and **On a schedule**, each a band like the tasks list's group headers, with a
+count. Each row has an icon for its trigger's kind, the name with its
+description below it when it has one, **Trigger** (its triggers in a line,
+such as **New email received** or **Weekdays at 9:00 AM**, with an AI check
+after " · "), **Steps** (an **AI picks** chip and the options for a choice, an
+**Ask AI** chip and the gist of the instructions for an agent, otherwise the
+actions, such as **Create task · Set priority**), **Last run**, and at the end
+an on/off switch (pause or resume without opening it; turned-off rows are
+dimmed). Last run is a dot (green for a run that acted, red for a failure,
+grey for a skipped run or one that changed nothing), the time (today) or day,
+and what it did or why it failed or was skipped (**Skipped: condition not
+met**), or **Not run yet**. Last run comes with the list. Tap a row to open it.
+Below 760px wide (a phone, or the Settings sheet) rows drop Trigger and Steps,
 and Last run shows only the dot and time.
 
 Right-clicking a row (a long press on a tablet) opens its menu, and the row
@@ -1402,7 +1440,7 @@ approval, and people the routine's prompt mentions still notify.
 The prompt's `@` menu also lists agents. Mentioning one only names it for the
 routine: it doesn't start the agent or notify anyone.
 
-**Create → Routine** (U), **New** in the list and **Create Routine** open **New
+**Create → Routine** (U), **New** in the list and **Create routine** open **New
 routine** in the same popover host as task and project creation. It never edits
 a routine itself: a **Describe your routine** box with **Draft it** (AI fills in
 the name, triggers and steps from a sentence such as "When an invoice arrives,
@@ -1804,9 +1842,10 @@ Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. Quick Access merges the complete channel list with
-cached channels, so known channels remain searchable before cache hydration and
-outside its recent page. Cached metadata wins for duplicate channels while newer
+another pagination attempt. Quick Access merges the joined channels of the
+channel directory with cached channels, so known channels remain searchable
+outside its recent page; on a cold cache the directory fills as the channel
+backfill runs. Cached metadata wins for duplicate channels while newer
 viewed timestamps from either source are retained. Other uncached items should
 appear after hydration without retyping. Cmd+K's
 local search explicitly excludes email hits before limiting entity results;
@@ -2150,8 +2189,8 @@ Phone-width rows have no select control, so to see the drawer, select and open
 the share at tablet width and then narrow the window. In the drawer, the title
 row ends in Share, the selected items sit under it, and the To box wraps its
 chips, followed by `Send As Group Message`, an `Access:` row, and the message.
-Focus starts in `To: Email or group`, which lists people and channels with more
-than two members. With two or more people and no channel,
+Focus starts in `To: Email or group`, which lists people and every channel and
+group chat except DMs, whatever its size. With two or more people and no channel,
 `Send As Group Message` is on and sends one group message; turned off, each
 person gets their own message. The access selector at the end of the To row
 (the `Access:` row on phones) sets the access level for items you own. It

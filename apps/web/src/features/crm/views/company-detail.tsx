@@ -11,6 +11,7 @@ import type { CrmContact as CompanyContact } from '../core/contact';
 import {
   type CompanySection,
   type CrmRecordScope,
+  RECORD_PANEL_ORDER,
   sameRecordScope,
 } from '../core/record';
 import { CompanyContactsSection } from './company-contacts-section';
@@ -147,7 +148,7 @@ function CompanyContent(props: CompanyProps) {
       <SidePanel.Section
         id="company-properties"
         title="Properties"
-        order={30}
+        order={RECORD_PANEL_ORDER.properties}
         defaultOpen
         render={(renderSection) => (
           <CompanyPropertiesSection
@@ -161,10 +162,18 @@ function CompanyContent(props: CompanyProps) {
           <CompanyListsSection companyId={props.companyId} />
         </Suspense>
       </Show>
-      <SidePanel.Section id="company-sharing" title="Email sharing" order={50}>
+      <SidePanel.Section
+        id="company-sharing"
+        title="Email sharing"
+        order={RECORD_PANEL_ORDER.sharing}
+      >
         <CompanySharingSection company={company()} />
       </SidePanel.Section>
-      <SidePanel.Section id="company-references" title="References" order={20}>
+      <SidePanel.Section
+        id="company-references"
+        title="References"
+        order={RECORD_PANEL_ORDER.references}
+      >
         <RecordReferencesSection scope={scope()} />
       </SidePanel.Section>
     </SidePanel.Layout>

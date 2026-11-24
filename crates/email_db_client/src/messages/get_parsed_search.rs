@@ -7,6 +7,7 @@ use models_email::service::message;
 use models_email::service::message::{MessageWithBodyReplyless, ParsedSearchMessage};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
+use std::collections::HashSet;
 
 /// retreive a parsed search message by its id.
 /// returns None if no message was found.
@@ -52,6 +53,7 @@ pub async fn get_parsed_search_message_by_id(
         contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids).await?;
 
     let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids).await?;
+    let excluded = fetch_excluded_from_search(&mut *conn, &message_ids).await?;
 
     let sender = db_message
         .from_contact_id
@@ -66,8 +68,9 @@ pub async fn get_parsed_search_message_by_id(
         db_message, sender, recipients, None, labels,
     );
 
-    Ok(Some(ParsedSearchMessage::from(
-        MessageWithBodyReplyless::from(service_message),
+    Ok(Some(with_search_exclusion(
+        ParsedSearchMessage::from(MessageWithBodyReplyless::from(service_message)),
+        &excluded,
     )))
 }
 
@@ -128,6 +131,7 @@ pub async fn get_parsed_search_messages_by_thread_ids(
     let recipients_map =
         contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids).await?;
     let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids).await?;
+    let excluded = fetch_excluded_from_search(&mut *conn, &message_ids).await?;
 
     let tasks: Vec<_> = db_messages
         .into_iter()
@@ -135,6 +139,7 @@ pub async fn get_parsed_search_messages_by_thread_ids(
             let senders_map = &senders_map;
             let recipients_map = &recipients_map;
             let labels_map = &labels_map;
+            let excluded = &excluded;
 
             async move {
                 let sender = message
@@ -147,7 +152,10 @@ pub async fn get_parsed_search_messages_by_thread_ids(
                     message, sender, recipients, None, labels,
                 );
 
-                ParsedSearchMessage::from(MessageWithBodyReplyless::from(service_message))
+                with_search_exclusion(
+                    ParsedSearchMessage::from(MessageWithBodyReplyless::from(service_message)),
+                    excluded,
+                )
             }
         })
         .collect();
@@ -224,6 +232,7 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
         contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids).await?;
 
     let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids).await?;
+    let excluded = fetch_excluded_from_search(&mut *conn, &message_ids).await?;
 
     let tasks: Vec<_> = db_messages
         .into_iter()
@@ -231,6 +240,7 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
             let senders_map = &senders_map;
             let recipients_map = &recipients_map;
             let labels_map = &labels_map;
+            let excluded = &excluded;
 
             async move {
                 let sender = message
@@ -243,7 +253,10 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
                     message, sender, recipients, None, labels,
                 );
 
-                ParsedSearchMessage::from(MessageWithBodyReplyless::from(service_message))
+                with_search_exclusion(
+                    ParsedSearchMessage::from(MessageWithBodyReplyless::from(service_message)),
+                    excluded,
+                )
             }
         })
         .collect();
@@ -251,4 +264,46 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
     let result = join_all(tasks).await;
 
     Ok(result)
+}
+
+/// Message ids search leaves out, by their mailbox facts: in Trash or Junk, or
+/// gone at the provider. The facts read Gmail labels, Outlook folder state and
+/// pending organization commands alike, so an Outlook move made in Macro
+/// counts as soon as it is accepted. Every stored message has a facts row, so
+/// an id without one was deleted after the loader read it and is left out too.
+pub(super) async fn fetch_excluded_from_search<'e, E>(
+    executor: E,
+    message_ids: &[Uuid],
+) -> anyhow::Result<HashSet<Uuid>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    if message_ids.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let searchable: HashSet<Uuid> = sqlx::query_scalar!(
+        r#"
+        SELECT f.id AS "id!"
+        FROM email_message_mailbox_facts f
+        WHERE f.id = ANY($1) AND NOT (f.in_trash OR f.in_junk OR NOT f.is_present)
+        "#,
+        message_ids
+    )
+    .fetch_all(executor)
+    .await?
+    .into_iter()
+    .collect();
+    Ok(message_ids
+        .iter()
+        .copied()
+        .filter(|id| !searchable.contains(id))
+        .collect())
+}
+
+fn with_search_exclusion(
+    mut message: ParsedSearchMessage,
+    excluded: &HashSet<Uuid>,
+) -> ParsedSearchMessage {
+    message.excluded_from_search = excluded.contains(&message.db_id);
+    message
 }

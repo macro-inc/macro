@@ -19,6 +19,8 @@ const CHANNEL_IMAGE_TIMEOUT: Duration = Duration::from_secs(5);
 enum MediaKind {
     Image,
     Video,
+    /// A recorded voice memo.
+    Audio,
 }
 
 struct ChannelMedia {
@@ -80,6 +82,17 @@ pub(crate) async fn tool_result_with_media<R: MarkdownImageResolver>(
                     )
                     .with_description(
                         "Download this channel video attachment to inspect it with a video-capable tool.",
+                    ),
+                ));
+            }
+            MediaKind::Audio => {
+                result.content.push(ContentBlock::resource_link(
+                    Resource::new(
+                        attachment.url,
+                        format!("Channel voice memo {}", attachment.entity_id),
+                    )
+                    .with_description(
+                        "Download this channel voice memo to listen to it with an audio-capable tool.",
                     ),
                 ));
             }
@@ -158,6 +171,7 @@ fn add_media_urls(
                     let kind = match attachment.get("entityType").and_then(Value::as_str) {
                         Some("static/image") => MediaKind::Image,
                         Some("static/video") => MediaKind::Video,
+                        Some("static/audio") => MediaKind::Audio,
                         _ => continue,
                     };
                     let Some(entity_id) = attachment.get("entityId").and_then(Value::as_str) else {
