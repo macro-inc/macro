@@ -18,7 +18,8 @@ pub use changes::{ChangeBatch, ChangePage, InboxChanges, SyncCursor};
 pub use draft::*;
 pub use error::{EmailApiError, GateLimit, RateLimitOrigin, RateLimitRefusal};
 pub use mailbox::{
-    CalendarPart, ContactPage, MessageWithCalendarParts, ProviderSubscription, ThreadListPage,
+    CalendarPart, ContactPage, MessageIdPage, MessageWithCalendarParts, ProviderSubscription,
+    ThreadListPage,
 };
 pub use mailbox_settings::*;
 pub use operation::ApiOperationKind;

@@ -730,6 +730,7 @@ describe('useUpdateCalendarEventMutation', () => {
     const deltas: Array<() => void> = [];
     setActiveCalendarSyncController({
       answering: () => true,
+      noticeChange: () => {},
       runDelta: () =>
         new Promise<void>((resolve) => {
           deltas.push(resolve);

@@ -27,7 +27,8 @@ struct OutboxRow {
 /// Continuously schedule due syncs, reap wedged jobs, publish calendar outbox
 /// rows to calendar's own backfill queue, and hourly prune the calendar
 /// and channel change logs and turn off Google calendars whose grant lacks
-/// the calendar capability.
+/// the calendar capability. A channel prune round is bounded; while old rows
+/// remain it runs again on the next round instead of an hour later.
 ///
 /// A row lock is held through each SQS publish. A crash after publish but
 /// before commit can duplicate a message, so every consumer remains
@@ -46,6 +47,7 @@ pub async fn run<R, P, C>(
     C: ChannelChangeLogPruner,
 {
     let mut next_retention = tokio::time::Instant::now();
+    let mut next_channel_retention = next_retention;
     loop {
         if cancellation_token.is_cancelled() {
             return;
@@ -58,20 +60,34 @@ pub async fn run<R, P, C>(
             run_round(&db, &queue, &scheduler, &retention, prune).await;
         }
         if prune {
-            // Channels do not depend on the calendar switch.
-            channel_retention
+            next_retention = tokio::time::Instant::now() + CHANGE_LOG_RETENTION_INTERVAL;
+        }
+        // Channels do not depend on the calendar switch.
+        if tokio::time::Instant::now() >= next_channel_retention {
+            let round = channel_retention
                 .run_once(Utc::now())
                 .await
                 .inspect_err(|error| {
                     tracing::error!(error = ?error, "failed to prune the channel change log");
                 })
                 .ok();
-            next_retention = tokio::time::Instant::now() + CHANGE_LOG_RETENTION_INTERVAL;
+            next_channel_retention =
+                next_channel_prune(tokio::time::Instant::now(), round.is_some_and(|r| r.more));
         }
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
             _ = cancellation_token.cancelled() => return,
         }
+    }
+}
+
+/// When the channel change log is pruned next: on the next round while a
+/// bounded round left old rows behind, otherwise after the usual interval.
+fn next_channel_prune(now: tokio::time::Instant, more: bool) -> tokio::time::Instant {
+    if more {
+        now
+    } else {
+        now + CHANGE_LOG_RETENTION_INTERVAL
     }
 }
 

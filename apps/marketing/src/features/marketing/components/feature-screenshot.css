@@ -3,7 +3,7 @@
   margin: 0;
   padding: 16px;
   border-radius: 14px;
-  background: #101010;
+  background: rgb(16 16 16 / 50%);
 }
 
 .feature-screenshot-frame {
@@ -34,7 +34,7 @@
   pointer-events: none;
 }
 
-/* Centered when the phones fit their container, scrolled from the start when they don't. */
+/* Fit the cards to the reading column; phones use a swipeable row below. */
 .feature-phone-screens {
   display: flex;
   gap: 28px;
@@ -45,7 +45,7 @@
   scrollbar-width: none;
 }
 .feature-phone-screens::-webkit-scrollbar { display: none; }
-.feature-phone-screens li { width: 220px; flex: none; }
+.feature-phone-screens li { flex: 0 1 220px; min-width: 0; }
 .feature-phone-screens li:first-child { margin-inline-start: auto; }
 .feature-phone-screens li:last-child { margin-inline-end: auto; }
 /* The phone's screen: the capture inset from the rounded corners on the app's own background. */
@@ -90,5 +90,5 @@
     scroll-snap-type: x proximity;
     scroll-padding-inline: 16px;
   }
-  .feature-phone-screens li { width: 230px; scroll-snap-align: start; }
+  .feature-phone-screens li { flex: 0 0 230px; scroll-snap-align: start; }
 }

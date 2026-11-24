@@ -1,6 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { AccountDeletionReason } from '@app/lib/analytics/app-events';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { usePending } from '@app/observability/flow';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
@@ -10,16 +9,11 @@ import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
-import {
-  disableAutoUpdateUi,
-  ENABLE_PROFILE_PICTURES,
-  enableAutoUpdateUiOverride,
-} from '@core/constant/featureFlags';
+import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
@@ -35,23 +29,15 @@ import TrashIcon from '@icon/system/regular/trash.svg';
 import IconUpload from '@icon/system/regular/upload-simple.svg?component-solid';
 import WarningIcon from '@icon/system/regular/warning.svg';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
-import {
-  type BundleUpdateStatus,
-  nativeUpdateDescription,
-  useTauri,
-} from '@macro/tauri';
 import { useAiBillingSummaryQuery } from '@queries/auth';
 import {
   invalidateOwnUserName,
   useOwnUserName,
 } from '@queries/auth/user-name-self';
 import { authServiceClient } from '@service-auth/client';
-import { invoke } from '@tauri-apps/api/core';
 import { Button, Dialog, Dropdown, HoldButton, Panel, Tooltip } from '@ui';
 import {
   createEffect,
-  createMemo,
-  createResource,
   createSignal,
   For,
   type JSX,
@@ -67,7 +53,6 @@ import {
   buildAccountDeletionFeedbackPayload,
   performAccountDeletion,
 } from './account-deletion-feedback';
-import { getBundleDebugInfo } from './app-build';
 import { CurrentPlanCard } from './components/current-plan-card';
 import { resolvePlanTier } from './core/billing-state';
 import {
@@ -116,33 +101,6 @@ async function removeProfilePicture(): Promise<boolean> {
   } catch (_error) {
     toast.failure('Failed to remove profile picture');
     return false;
-  }
-}
-
-function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
-  switch (status.status) {
-    case 'Idle':
-      return 'Idle';
-    case 'CheckingForUpdate':
-      return 'Checking for update...';
-    case 'UpdateFound':
-      return `Update available: v${status.data.version}`;
-    case 'NoUpdateNeeded':
-      return 'Up to date';
-    case 'WaitingForWifi':
-      return 'Waiting for Wi-Fi to download';
-    case 'Downloading':
-      return `Downloading: ${Math.round(status.data.progress)}%`;
-    case 'Unzipping':
-      return `Installing: ${Math.round(status.data.progress)}%`;
-    case 'ClearRequired':
-      return 'Cached update revoked';
-    case 'NativeUpdateRequired':
-      return 'App update required';
-    case 'Completed':
-      return 'Update ready';
-    case 'Error':
-      return 'An error occurred when checking for updates';
   }
 }
 
@@ -347,10 +305,6 @@ export function Account() {
   const userId = useUserId();
   const logout = useLogout();
   const isSettingsTabAvailable = useSettingsTabAvailable();
-  const disableAutoUpdateUIFlag = useFeatureFlag(disableAutoUpdateUi);
-  const autoUpdateUIEnabled = createMemo(
-    () => enableAutoUpdateUiOverride ?? !disableAutoUpdateUIFlag().enabled
-  );
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
     createSignal<boolean>(false);
@@ -488,12 +442,6 @@ export function Account() {
               placeholder="Enter Last Name"
             />
           </Row>
-
-          <NativeUpdateRow />
-          <Show when={autoUpdateUIEnabled()}>
-            <BundleVersionRow />
-            <BundleUpdateRow />
-          </Show>
         </SettingsCard>
       </SettingsSection>
 
@@ -815,99 +763,5 @@ function NameInput(props: {
         </Transition>
       </div>
     </div>
-  );
-}
-
-function bundleUpdateAction(
-  status: BundleUpdateStatus
-): { label: string; action: () => void } | null {
-  const grantBundleUpdate = () =>
-    invoke('grant_bundle_update', { approved: true }).catch(console.error);
-  const checkForUpdate = () => invoke('check_for_update').catch(console.error);
-  const performUpdate = () => invoke('perform_update').catch(console.error);
-
-  switch (status.status) {
-    case 'Idle':
-      return { label: 'Check for Update', action: checkForUpdate };
-    case 'Error':
-      return { label: 'Retry', action: checkForUpdate };
-    case 'UpdateFound':
-      return { label: 'Download', action: grantBundleUpdate };
-    case 'WaitingForWifi':
-      return { label: 'Download anyway', action: grantBundleUpdate };
-    case 'ClearRequired':
-      return { label: 'Reload', action: performUpdate };
-    case 'Completed':
-      return { label: 'Update', action: performUpdate };
-    default:
-      return null;
-  }
-}
-
-function BundleVersionRow() {
-  if (!isNativeMobilePlatform()) return null;
-  const [bundleDebugInfo] = createResource(getBundleDebugInfo);
-
-  return (
-    <Show when={bundleDebugInfo()}>
-      {(info) => (
-        <>
-          <Row label="Version">
-            {info().bundleBuild} ({info().source === 'embedded' ? 'app' : 'ota'}
-            ) - {info().nativeBuild}
-          </Row>
-        </>
-      )}
-    </Show>
-  );
-}
-
-function BundleUpdateRow() {
-  if (!isNativeMobilePlatform()) return null;
-  const tauri = useTauri();
-  const status = (): BundleUpdateStatus =>
-    tauri?.bundleUpdateStatus() ?? { status: 'Idle' };
-  const action = () => bundleUpdateAction(status());
-  return (
-    <Row label="App Update">
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span class="text-sm text-ink-muted">
-          {formatBundleUpdateStatus(status())}
-        </span>
-        <Show when={action()}>
-          {(a) => (
-            <Button variant="primary" size="sm" onClick={a().action}>
-              {a().label}
-            </Button>
-          )}
-        </Show>
-      </div>
-    </Row>
-  );
-}
-
-function NativeUpdateRow() {
-  const tauri = useTauri();
-  return (
-    <Show when={tauri && tauri.nativeUpdateStatus().status !== 'Disabled'}>
-      <Row label="Desktop app update">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span class="text-sm text-ink-muted">
-            {tauri && nativeUpdateDescription(tauri.nativeUpdateStatus())}
-          </span>
-          <Show when={tauri?.nativeUpdateStatus().status === 'Ready'}>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() =>
-                fireAndForget(tauri?.restartNativeUpdate(), 'native-updates')
-              }
-            >
-              Restart to update
-            </Button>
-          </Show>
-        </div>
-      </Row>
-    </Show>
   );
 }

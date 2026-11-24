@@ -1,30 +1,28 @@
 import { createListController } from '@app/components/list';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { ChannelPinGrid } from '@app/features/channels-view/components/ChannelPins';
 import { toEntityActionListState } from '@app/features/next-soup/actions';
-import { soupNavigationTouchHighlight } from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
+import EmptyStateAi from '@app/lib/design/empty-state-ai.svg';
 import { t } from '@app/lib/i18n';
-import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
-import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { unreadFilterFn } from '@entity/utils/filter';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
-import { Button } from '@ui';
+import { Button, EmptyStatePanel } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { AgentBubble } from './components/agent-bubble/agent-bubble';
 import { ConversationSkeleton } from './components/conversation-skeleton/conversation-skeleton';
+import { PhoneListHeading } from './components/phone-list-heading';
 import { SessionStatusGlyph } from './components/session-status-glyph/session-status-glyph';
 import type { ConversationActions } from './context/conversation-actions';
 import {
-  activeFilterCount,
   type ConversationFilters,
   conversationFacts,
-  EMPTY_CONVERSATION_FILTERS,
 } from './core/conversation-filters';
 import { sortConversations } from './core/conversation-list';
 import type { AgentsMode } from './core/mode';
-import type { AgentsPage } from './core/pages';
 import {
   partitionPhoneConversations,
   startableCustomAgents,
@@ -41,6 +39,7 @@ export function PhoneAgentsList(props: {
   conversations: AgentConversationEntity[];
   archivedRows: AgentConversationEntity[];
   archivedTotalCount: number;
+  conversationTotalCount: number;
   roster: RosterAgent[];
   rosterLoading: boolean;
   search: string;
@@ -72,12 +71,11 @@ export function PhoneAgentsList(props: {
   loadingNextPage: boolean;
   onLoadMore: () => void;
   onRetry: () => void;
-  onOpenPage: (page: AgentsPage) => void;
-  onBack: () => void;
   onOpenConversation: (row: AgentConversationEntity, event: MouseEvent) => void;
   onSelectAgent: (agent: RosterAgent) => void;
   onCreateAgent: () => void;
   actions: ConversationActions;
+  onFocusComposer: () => void;
 }) {
   const favorites = useFavoritesData({ entityType: ['chat', 'agent_session'] });
   const identities = createMemo(
@@ -93,8 +91,7 @@ export function PhoneAgentsList(props: {
   const listState = createConversationList({
     conversations: () => props.conversations,
     archived: () => props.archivedRows,
-    filters: () =>
-      props.archived ? EMPTY_CONVERSATION_FILTERS : props.filters,
+    filters: () => props.filters,
     sort: () => 'updated',
     factsOf: facts,
     hasNextPage: () => props.hasNextPage,
@@ -111,6 +108,13 @@ export function PhoneAgentsList(props: {
       facts
     )
   );
+  const exhausted = () => !props.hasNextPage && !props.loading && !props.error;
+  const empty = () =>
+    exhausted() &&
+    !props.search &&
+    (props.archived
+      ? props.archivedTotalCount
+      : props.conversationTotalCount) === 0;
   const visible = () =>
     props.archived
       ? listState.archived()
@@ -125,15 +129,10 @@ export function PhoneAgentsList(props: {
     isSelectable: () => false,
   });
   const list = toEntityActionListState({ controller, getEntity: (row) => row });
-  let clearPress: (() => void) | undefined;
   const renderRows = (rows: AgentConversationEntity[], waiting = false) => (
     <For each={rows}>
       {(row) => (
-        <ConversationContextMenu
-          conversation={row}
-          list={list}
-          onOpenChange={() => clearPress?.()}
-        >
+        <ConversationContextMenu conversation={row} list={list}>
           <PhoneConversationRow
             archived={
               Boolean(props.search) &&
@@ -152,181 +151,173 @@ export function PhoneAgentsList(props: {
     </For>
   );
   return (
-    <SplitHeaderScope.Root>
-      <MaybeSoupEntityActionDrawerManager>
-        <SplitHeaderScope.TopBar />
-        <Show when={props.archived}>
-          <FloatRegion region="accessory" priority={10} active={() => true}>
-            <span />
-          </FloatRegion>
-        </Show>
-        <PhoneListHeader
-          archived={props.archived}
-          search={props.search}
-          onSearchChange={props.onSearchChange}
-          onBack={props.onBack}
-          onOpenPage={props.onOpenPage}
-          archivedCount={
-            !props.hasNextPage && !props.loading && !props.error
-              ? props.archivedTotalCount
-              : undefined
-          }
-          filters={props.filters}
-          onFilterChange={props.onFilterChange}
-          onClearFilters={props.onClearFilters}
-          showUnlistedRuns={props.showUnlistedRuns}
-          onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
-        />
-        <div
-          ref={(element) => {
-            clearPress = soupNavigationTouchHighlight(element);
-          }}
-          class="size-full min-h-0 overflow-auto"
-          classList={{
-            'pt-2': props.archived || !!props.search || props.rosterLoading,
-          }}
-          onScroll={(event) => listState.loadMoreNearEnd(event.currentTarget)}
-        >
-          <Show when={!props.archived && !props.rosterLoading && !props.search}>
-            <ChannelPinGrid horizontal>
-              <For each={startableCustomAgents(props.roster)}>
-                {(agent) => (
-                  <AgentBubble
-                    agent={agent}
-                    onSelect={() => props.onSelectAgent(agent)}
-                  />
-                )}
-              </For>
-              <AgentBubble onSelect={props.onCreateAgent} />
-            </ChannelPinGrid>
-          </Show>
-          <Show
-            when={
-              !props.archived &&
-              !props.search &&
-              sections().favorites.length > 0
-            }
+    <div class="flex size-full min-h-0 flex-col">
+      <MobileListLayout
+        header={
+          <PhoneListHeader
+            archived={props.archived}
+            empty={empty()}
+            search={props.search}
+            onSearchChange={props.onSearchChange}
+            filters={props.filters}
+            onFilterChange={props.onFilterChange}
+            onClearFilters={props.onClearFilters}
+            showUnlistedRuns={props.showUnlistedRuns}
+            onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
+          />
+        }
+      >
+        <MaybeSoupEntityActionDrawerManager>
+          <div
+            class="flex min-h-0 flex-1 flex-col overflow-auto"
+            onScroll={(event) => listState.loadMoreNearEnd(event.currentTarget)}
           >
-            <section
-              aria-label={t('agentWork.favorites')}
-              class="mx-3 mb-3 rounded-[20px] bg-surface-3 py-1"
+            {/* Keep the scrollport unpadded: sticky top is measured from its
+                padding edge. Reserve the islands in content, not a second offset. */}
+            <div
+              aria-hidden="true"
+              class="h-(--mobile-content-inset-top) shrink-0"
+            />
+            <Show
+              when={!props.archived && !props.rosterLoading && !props.search}
             >
-              <h2 class="flex h-9 items-center gap-1.5 px-3 text-sm font-semibold text-ink-muted">
-                <span class="flex w-5 justify-center">
-                  <StarIcon class="size-3.5" />
-                </span>
-                {t('agentWork.favorites')}
-                <span class="font-normal text-ink-extra-muted/70">
-                  {sections().favorites.length}
-                </span>
-              </h2>
-              {renderRows(sections().favorites)}
-            </section>
-          </Show>
-          <Show
-            when={
-              !props.archived && !props.search && sections().waiting.length > 0
-            }
-          >
-            <section
-              aria-label={t('agentWork.waitingOnYou')}
-              class="mx-3 mb-3 rounded-[20px] bg-surface-3 py-1"
-            >
-              <h2 class="flex h-9 items-center gap-1.5 px-3 text-sm font-semibold text-ink-muted">
-                <span class="flex w-5 justify-center">
-                  <SessionStatusGlyph state="waiting" />
-                </span>
-                {t('agentWork.waitingOnYou')}
-                <span class="font-normal text-ink-extra-muted/70">
-                  {sections().waiting.length}
-                </span>
-              </h2>
-              {renderRows(sections().waiting, true)}
-            </section>
-          </Show>
-          {renderRows(
-            props.archived
-              ? listState.archived()
-              : props.search
-                ? sortConversations(visible(), 'updated')
-                : sections().conversations
-          )}
-          <Show
-            when={
-              !props.archived &&
-              !props.loading &&
-              visible().length === 0 &&
-              !props.search &&
-              !activeFilterCount(props.filters)
-            }
-          >
-            <section class="px-3">
-              <h2 class="px-3 py-2 text-sm font-semibold text-ink-muted">
-                {t('agentWork.yourAgents')}
-              </h2>
-              <Show
-                when={startableCustomAgents(props.roster).length > 0}
-                fallback={
-                  <Button
-                    variant="ghost"
-                    class="h-[46px] w-full justify-start font-normal"
-                    onClick={props.onCreateAgent}
-                  >
-                    {t('agentWork.newAgent')}
-                  </Button>
-                }
-              >
+              <ChannelPinGrid horizontal>
                 <For each={startableCustomAgents(props.roster)}>
                   {(agent) => (
-                    <Button
-                      variant="ghost"
-                      class="flex h-[46px] w-full items-center gap-2 text-left font-normal"
-                      onClick={() => props.onSelectAgent(agent)}
-                    >
-                      <span class="size-5 rounded-full bg-surface-2" />
-                      <span class="min-w-0 flex-1 truncate">{agent.name}</span>
-                      <span class="text-ink-subtle">{agent.runtime.label}</span>
-                    </Button>
+                    <AgentBubble
+                      agent={agent}
+                      onSelect={() => props.onSelectAgent(agent)}
+                    />
                   )}
                 </For>
-              </Show>
-            </section>
-          </Show>
-          <Show
-            when={
-              !props.loading &&
-              !props.error &&
-              visible().length === 0 &&
-              (props.archived ||
-                props.search ||
-                activeFilterCount(props.filters) > 0)
-            }
-          >
-            <p class="py-8 text-center text-sm text-ink-muted">
-              {props.search
-                ? t('agentWork.noSearchMatches', { query: props.search })
-                : props.archived
-                  ? t('agentWork.noArchivedConversations')
-                  : t('agentWork.noFilterMatches')}
-            </p>
-          </Show>
-          <Show when={props.loading || props.loadingNextPage}>
-            <ConversationSkeleton rows={3} />
-          </Show>
-          <Show when={props.error}>
-            <Button variant="ghost" onClick={props.onRetry}>
-              {t('agentWork.retryLoading')}
-            </Button>
-          </Show>
-          <Show
-            when={props.hasNextPage && !props.loadingNextPage && !props.error}
-          >
-            <Button variant="ghost" onClick={props.onLoadMore}>
-              {t('agentWork.loadMoreActivity')}
-            </Button>
-          </Show>
-        </div>
-      </MaybeSoupEntityActionDrawerManager>
-    </SplitHeaderScope.Root>
+                <AgentBubble onSelect={props.onCreateAgent} />
+              </ChannelPinGrid>
+            </Show>
+            <PhoneListHeading
+              title={
+                props.archived
+                  ? t('viewMenus.archived')
+                  : t('agentWork.conversations')
+              }
+              count={
+                exhausted()
+                  ? props.archived
+                    ? props.archivedTotalCount
+                    : props.conversationTotalCount
+                  : undefined
+              }
+            />
+            <Show
+              when={empty()}
+              fallback={
+                <>
+                  <Show
+                    when={
+                      !props.archived &&
+                      !props.search &&
+                      sections().waiting.length > 0
+                    }
+                  >
+                    <section
+                      aria-label={t('agentWork.waitingOnYou')}
+                      class="mx-3 mb-3 shrink-0 rounded-[20px] bg-surface-3 py-1"
+                    >
+                      <h2 class="flex h-9 items-center gap-1.5 px-3 text-sm font-semibold text-ink-muted">
+                        <span class="flex w-5 justify-center">
+                          <SessionStatusGlyph state="waiting" />
+                        </span>
+                        {t('agentWork.waitingOnYou')}
+                        <span class="font-normal text-ink-extra-muted/70">
+                          {sections().waiting.length}
+                        </span>
+                      </h2>
+                      {renderRows(sections().waiting, true)}
+                    </section>
+                  </Show>
+                  <Show
+                    when={
+                      !props.archived &&
+                      !props.search &&
+                      sections().favorites.length > 0
+                    }
+                  >
+                    <section
+                      aria-label={t('agentWork.favorites')}
+                      class="mx-3 mb-3 shrink-0 rounded-[20px] bg-surface-3 py-1"
+                    >
+                      <h2 class="flex h-9 items-center gap-1.5 px-3 text-sm font-semibold text-ink-muted">
+                        <span class="flex w-5 justify-center">
+                          <StarIcon class="size-3.5" />
+                        </span>
+                        {t('agentWork.favorites')}
+                        <span class="font-normal text-ink-extra-muted/70">
+                          {sections().favorites.length}
+                        </span>
+                      </h2>
+                      {renderRows(sections().favorites)}
+                    </section>
+                  </Show>
+                  {renderRows(
+                    props.archived
+                      ? listState.archived()
+                      : props.search
+                        ? sortConversations(visible(), 'updated')
+                        : sections().conversations
+                  )}
+                  <Show when={exhausted() && visible().length === 0}>
+                    <p class="py-8 text-center text-sm text-ink-muted">
+                      {props.search
+                        ? t('agentWork.noSearchMatches', {
+                            query: props.search,
+                          })
+                        : t('agentWork.noFilterMatches')}
+                    </p>
+                  </Show>
+                  <Show when={props.loading || props.loadingNextPage}>
+                    <ConversationSkeleton rows={3} />
+                  </Show>
+                  <Show when={props.error}>
+                    <Button variant="ghost" onClick={props.onRetry}>
+                      {t('agentWork.retryLoading')}
+                    </Button>
+                  </Show>
+                  <Show
+                    when={
+                      props.hasNextPage &&
+                      !props.loadingNextPage &&
+                      !props.error
+                    }
+                  >
+                    <Button variant="ghost" onClick={props.onLoadMore}>
+                      {t('agentWork.loadMoreActivity')}
+                    </Button>
+                  </Show>
+                </>
+              }
+            >
+              <EmptyStatePanel
+                centered
+                graphic={EmptyStateAi}
+                title={
+                  props.archived
+                    ? t('agentWork.noArchivedConversationsTitle')
+                    : t('agentWork.noConversationsYet')
+                }
+                primaryAction={
+                  props.archived
+                    ? undefined
+                    : {
+                        label: t('agentWork.startConversation'),
+                        icon: PlusIcon,
+                        onClick: props.onFocusComposer,
+                      }
+                }
+                class="min-h-80 flex-1 [--mobile-content-inset-top:0px]"
+              />
+            </Show>
+          </div>
+        </MaybeSoupEntityActionDrawerManager>
+      </MobileListLayout>
+    </div>
   );
 }

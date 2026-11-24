@@ -72,9 +72,13 @@ impl ChannelGraphqlContext {
     }
 
     /// Read the committed sequence BEFORE loading an authorized channel page.
-    pub(crate) async fn channel_seq(&self, channel_id: Uuid) -> async_graphql::Result<String> {
+    pub(crate) async fn channel_seq(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
+    ) -> async_graphql::Result<String> {
         self.messages
-            .channel_seq(channel_id)
+            .channel_seq(access, channel_id)
             .await
             .map(|seq| seq.to_string())
             .map_err(crate::message_error)

@@ -208,12 +208,17 @@ vi.mock('@queries/agents/models', () => ({
   }),
 }));
 
+vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
+  FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,
+}));
+
 // Keep the real picker and send wiring; substitute only the Lexical editor.
 type ComposerProps = {
   corner: JSX.Element;
   selector: JSX.Element;
   drawer: JSX.Element;
   drawerOpen: boolean;
+  settingsPlacement?: 'inside' | 'below';
   draft: string;
   attachments: InputAttachmentData[];
   onRemoveAttachment: (attachment: InputAttachmentData) => void;
@@ -236,7 +241,11 @@ vi.mock('../components/ChatComposer', () => ({
           </button>
         )}
       </For>
-      <div data-testid="drawer" hidden={!props.drawerOpen}>
+      <div
+        data-testid="drawer"
+        data-placement={props.settingsPlacement}
+        hidden={!props.drawerOpen}
+      >
         {props.drawer}
       </div>
       <input
@@ -391,6 +400,33 @@ describe('agent-led new conversation', () => {
     motionStyles.remove();
     vi.unstubAllGlobals();
   });
+  it.each([false, true])(
+    'uses Home settings placement for a full new session (touch: %s)',
+    (touch) => {
+      mocks.touch = touch;
+      render(() => (
+        <NewChatPage
+          roster={buildAgentRoster({
+            agents: [],
+            runtimes: [],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+            cursorDefaultModel: 'cursor-default',
+          })}
+          rosterLoading={false}
+          onStart={vi.fn()}
+          onOpenRoster={vi.fn()}
+        />
+      ));
+      expect(screen.getByTestId('drawer').getAttribute('data-placement')).toBe(
+        'below'
+      );
+      expect(
+        screen.getByRole('radiogroup', { name: 'Conversation mode' })
+      ).toBeTruthy();
+    }
+  );
   it('selects a coding model from the phone sheet without hover and preserves the draft', async () => {
     mocks.touch = true;
     const send = page(true, [], false, [], 'code');

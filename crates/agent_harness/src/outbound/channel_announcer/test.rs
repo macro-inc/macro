@@ -618,3 +618,28 @@ fn a_stored_step_keeps_the_view_it_presented() {
     assert_eq!(rows[0].card, Some(ActivityCard::View { view }));
     assert_eq!(rows[0].detail, None);
 }
+
+#[tokio::test(start_paused = true)]
+async fn reply_work_leaves_the_channels_write_slots_free() {
+    let channel = Uuid::now_v7();
+    let parent = MessageParent::Channel(channel);
+    let mut replies = Vec::new();
+    for _ in 0..4 {
+        replies.push(admit_reply(&parent).await.unwrap());
+    }
+
+    // People writing in the channel are admitted while four replies are held.
+    let mut writers = Vec::new();
+    for _ in 0..4 {
+        writers.push(
+            message_write_gate::acquire(parent.entity_type(), &parent.entity_id())
+                .await
+                .unwrap(),
+        );
+    }
+    drop(writers);
+
+    // Reply work itself stays bounded, so its leases cannot drain the pool.
+    let fifth = admit_reply(&parent).await.unwrap_err();
+    assert!(matches!(fifth, HarnessError::ReplyBusy(_)));
+}

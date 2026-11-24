@@ -1,5 +1,5 @@
-use activity::{Action, ActivityRecord, RecordedAction};
-use async_graphql::{ID, Json, SimpleObject, Union};
+use activity::{Action, ActivityRecord, RecordedAction, TimeLog, TimeLogSource};
+use async_graphql::{Enum, ID, Json, SimpleObject, Union};
 use graphql_common::GraphqlEntityType;
 use serde_json::Value;
 
@@ -89,6 +89,8 @@ pub enum GraphqlActivityAction {
     TaskAdded(GraphqlActivityTaskAdded),
     /// A task was removed; references are resolved through authorized project history.
     TaskRemoved(GraphqlActivityTaskRemoved),
+    /// Time was logged on the entity (a task).
+    TimeLogged(GraphqlActivityTimeLogged),
     /// An action outside this deployment's vocabulary, carried through raw.
     Unknown(GraphqlActivityUnknownAction),
 }
@@ -160,6 +162,40 @@ pub struct GraphqlActivityCallStarted {
     pub call_id: ID,
 }
 
+/// Time was logged on the entity (a task). The entry's note is never part of
+/// activity.
+#[derive(SimpleObject)]
+pub struct GraphqlActivityTimeLogged {
+    /// Whole minutes logged.
+    pub minutes: i32,
+    /// The day the time counts for, in `YYYY-MM-DD` form, as the person chose it.
+    pub entry_date: String,
+    /// How the time was logged.
+    pub source: GraphqlActivityTimeLogSource,
+}
+
+/// How time was logged.
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphqlActivityTimeLogSource {
+    /// Typed as a length.
+    Manual,
+    /// Saved by stopping a timer.
+    Timer,
+}
+
+impl From<TimeLog> for GraphqlActivityTimeLogged {
+    fn from(log: TimeLog) -> Self {
+        Self {
+            minutes: i32::try_from(log.minutes).unwrap_or(i32::MAX),
+            entry_date: log.entry_date.to_string(),
+            source: match log.source {
+                TimeLogSource::Manual => GraphqlActivityTimeLogSource::Manual,
+                TimeLogSource::Timer => GraphqlActivityTimeLogSource::Timer,
+            },
+        }
+    }
+}
+
 /// An action this deployment's vocabulary doesn't know.
 #[derive(SimpleObject)]
 pub struct GraphqlActivityUnknownAction {
@@ -203,6 +239,7 @@ impl From<RecordedAction> for GraphqlActivityAction {
             }
             RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded(Default::default()),
             RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved(Default::default()),
+            RecordedAction::Known(Action::TimeLogged(log)) => Self::TimeLogged(log.into()),
             RecordedAction::Known(
                 action @ (Action::Renamed(_)
                 | Action::AppearanceChanged(_)

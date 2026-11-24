@@ -15,6 +15,8 @@ import {
   taskDetailRoute,
   tasksProjectsRoute,
   tasksSplitRoute,
+  tasksTimeRoute,
+  tasksTimeTaskRoute,
 } from '@app/routes/routes';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -39,6 +41,7 @@ const manifest = createRoutesManifest({
       children: [
         { ...projectDetailRoute, children: [projectTaskRoute] },
         tasksProjectsRoute,
+        { ...tasksTimeRoute, children: [tasksTimeTaskRoute] },
         taskDetailRoute,
       ],
     },
@@ -147,6 +150,25 @@ describe('project routes in Tasks', () => {
       taskId: 'task-1',
     });
     expect(claimOf(manifest, route)).toBe('block:md:task-1');
+  });
+
+  it('keeps My week beside a task opened from it and claims the task document', () => {
+    const segments = ['tasks', 'time', 'week', 'task', 'task-1'];
+    const route = decodePane(manifest, segments)!;
+    expect(formatPanePath(manifest, route)).toBe(`/${segments.join('/')}`);
+    expect(route.matches.map((match) => match.id)).toEqual([
+      'view-tasks',
+      'tasks-time',
+      'tasks-time-task',
+    ]);
+    expect(routeParams(route)).toEqual({ timeView: 'week', taskId: 'task-1' });
+    expect(claimOf(manifest, route)).toBe('block:md:task-1');
+  });
+
+  it('resolves Time as its view instead of a task named time', () => {
+    const route = decodePane(manifest, ['tasks', 'time', 'team'])!;
+    expect(route.matches.at(-1)?.id).toBe('tasks-time');
+    expect(routeParams(route)).toEqual({ timeView: 'team' });
   });
 
   it('resolves Projects as a collection instead of a task named projects', () => {

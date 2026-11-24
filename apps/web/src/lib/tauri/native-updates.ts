@@ -1,7 +1,10 @@
+import type { Report as NativeUpdateReport } from '@app/observability/generated/native-update';
+import { reportNativeUpdate } from '@app/observability/native-update';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { hasAutomaticReloadHolds } from '@core/util/reloadForNewerBuild';
+import { Telemetry } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { createSignal, onCleanup, onMount } from 'solid-js';
@@ -34,6 +37,8 @@ export function nativeUpdateDescription(status: NativeUpdateStatus): string {
     .exhaustive();
 }
 
+const TAKE_REPORTS = 'take_native_update_reports';
+
 /** Desktop lifecycle integration, scoped to the Tauri provider. */
 export function createNativeUpdates(flush: () => Promise<void>) {
   const preparation = createNativeUpdatePreparation({
@@ -46,6 +51,7 @@ export function createNativeUpdates(flush: () => Promise<void>) {
   });
   let disposed = false;
   let unsubscribe = () => {};
+  let unsubscribeReports = () => {};
 
   async function restart() {
     if (status().status !== 'Ready' || preparing()) return;
@@ -110,12 +116,54 @@ export function createNativeUpdates(flush: () => Promise<void>) {
     }
   }
 
+  /** Sends the check and install outcomes the host has collected. */
+  async function drainReports() {
+    let reports: NativeUpdateReport[];
+    try {
+      reports = await invoke<NativeUpdateReport[]>(TAKE_REPORTS);
+    } catch (error) {
+      // Older binaries do not report update outcomes.
+      if (error !== `Command ${TAKE_REPORTS} not found`)
+        Telemetry.error(error, { surface: 'native-updates' });
+      return;
+    }
+    // The host has already let go of these; one bad report must not drop the rest.
+    for (const report of reports) {
+      try {
+        reportNativeUpdate(report);
+      } catch (error) {
+        Telemetry.error(error, { surface: 'native-updates' });
+      }
+    }
+  }
+
+  async function initializeReports() {
+    try {
+      const stop = await listen('native-update-report', () =>
+        fireAndForget(drainReports(), 'native-updates')
+      );
+      if (disposed) {
+        fireAndForget(stop(), 'native-updates');
+        return;
+      }
+      unsubscribeReports = () => fireAndForget(stop(), 'native-updates');
+    } catch (error) {
+      Telemetry.error(error, { surface: 'native-updates' });
+      return;
+    }
+    // Reports from before this document listened, such as the last install.
+    await drainReports();
+  }
+
   onMount(() => {
-    if (isPlatform('desktop')) fireAndForget(initialize(), 'native-updates');
+    if (!isPlatform('desktop')) return;
+    fireAndForget(initialize(), 'native-updates');
+    fireAndForget(initializeReports(), 'native-updates');
   });
   onCleanup(() => {
     disposed = true;
     unsubscribe();
+    unsubscribeReports();
   });
   return {
     status,

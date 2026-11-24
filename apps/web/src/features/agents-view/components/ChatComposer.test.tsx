@@ -598,6 +598,38 @@ describe('Chat session input', () => {
     expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
   it.each([false, true])(
+    'places new-session modes outside and below the composer, like Home (touch: %s)',
+    (touch) => {
+      vi.mocked(isTouchDevice).mockReturnValue(touch);
+      const { container } = render(() => (
+        <ChatComposer
+          draft=""
+          onDraftChange={vi.fn()}
+          onSend={vi.fn()}
+          selector={<button>Model</button>}
+          settingsPlacement="below"
+          drawerOpen
+          drawer={<button>Auto / Chat / Code</button>}
+        />
+      ));
+      const surface = container.querySelector('[data-agent-composer]');
+      const modes = screen.getByRole('button', { name: 'Auto / Chat / Code' });
+      expect(surface?.contains(modes)).toBe(false);
+      expect(
+        (surface?.compareDocumentPosition(modes) ?? 0) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        modes.closest('.composer-drawer')?.getAttribute('data-placement')
+      ).toBe('bottom');
+      expect(
+        screen
+          .getByRole('button', { name: 'Model' })
+          .closest('[data-agent-composer]')
+      ).toBe(surface);
+    }
+  );
+  it.each([false, true])(
     'keeps settings and editor mounted in desktop controls or the touch drawer (touch: %s)',
     (touch) => {
       vi.mocked(isTouchDevice).mockReturnValue(touch);

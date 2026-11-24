@@ -36,6 +36,16 @@ These helpers let each domain append a change inside its own write transaction.
   admission before taking their transaction's database connection.
 - Log rows are immutable. Pruning removes a prefix within each channel and keeps
   its counter, so the first retained sequence minus one is the resume floor.
+  Never prune with `SKIP LOCKED`: it can remove newer rows while older ones
+  stay, and readers past the hole would miss changes without a reset. One pruner
+  runs at a time under `try_lock_prune_in`.
+- Database triggers also write here, for removals no service code sees: a
+  removed channel deletes its log, and channel-thread calls removed with their
+  owner append message changes, counters locked in channel order. A removed
+  channel's counter is swept by retention (`prune_orphaned_counters_in`), not
+  by the trigger: deleting counters in cascade order could deadlock with an
+  activity batch
+  (`20261124030000_channel_change_log_cleanup.sql`).
 - Read limits and retention cutoffs come from callers; do not add client policy here.
 
 ## Related

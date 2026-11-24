@@ -343,6 +343,7 @@ export function createTaskComposer(
   const {
     propertyValues,
     setPropertyValues,
+    setPropertyValue,
     properties,
     draftProperty,
     draftProperties,
@@ -1059,6 +1060,7 @@ export function createTaskComposer(
     draftProperties,
     propertyValues,
     setPropertyValues,
+    setPropertyValue,
     templateSelection,
     selectNoTemplate,
     detachTemplate,

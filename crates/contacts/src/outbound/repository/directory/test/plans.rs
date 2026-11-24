@@ -291,6 +291,21 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
         include_str!("../inbox_contacts.sql"),
     )
     .await;
+    for (list, sql) in [
+        ("interacted", include_str!("../list_members/interacted.sql")),
+        ("invited", include_str!("../list_members/invited.sql")),
+        ("gmail", include_str!("../list_members/gmail.sql")),
+        ("outlook", include_str!("../list_members/outlook.sql")),
+        ("teammates", include_str!("../list_members/teammates.sql")),
+    ] {
+        prepare(
+            &mut connection,
+            &format!("members_{list}"),
+            "text, text, bigint",
+            sql,
+        )
+        .await;
+    }
     let requested = requested();
 
     for generic in [false, true] {
@@ -354,6 +369,37 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
             generic,
         )
         .await;
+        // A stored or inbox list's page seeks its partial index from the
+        // cursor; a list the viewer has no rows in reads nothing.
+        for (list, viewer, after, rows) in [
+            ("interacted", SUBJECT, "NULL", 501),
+            ("interacted", SUBJECT, "'macro|c040000@example.com'", 501),
+            // The last 10 invited, then nothing: no walk into interacted.
+            ("invited", SUBJECT, "'macro|c009990@example.com'", 10),
+            ("invited", "macro|stranger@example.com", "NULL", 0),
+            ("gmail", SUBJECT, "NULL", 501),
+            ("outlook", SUBJECT, "NULL", 0),
+        ] {
+            check(
+                &mut connection,
+                &format!("EXECUTE members_{list}('{viewer}', {after}, 501)"),
+                rows,
+                30,
+                generic,
+            )
+            .await;
+        }
+        // The roster is read whole; the subject is not their own teammate.
+        for (after, rows) in [("NULL", 501), ("'macro|c049000@example.com'", 19)] {
+            check(
+                &mut connection,
+                &format!("EXECUTE members_teammates('{SUBJECT}', {after}, 501)"),
+                rows,
+                300,
+                generic,
+            )
+            .await;
+        }
         // One range read of the subject's inbox rows.
         check(
             &mut connection,

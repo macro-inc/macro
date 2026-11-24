@@ -50,10 +50,12 @@ function TextInput(props: {
   max?: number;
   onInput: (text: string) => void;
 }) {
+  // The card's filled surface swallows edge-muted, so the field takes the
+  // same ink border as the radios, over a faint fill.
   return (
     <input
       type={props.type}
-      class="h-8 w-full rounded-md border border-edge-muted bg-transparent px-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-placeholder hover:border-edge focus:border-accent disabled:opacity-50"
+      class="h-8 w-full rounded-md border border-ink-extra-muted bg-ink/3 px-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-placeholder hover:border-ink-muted focus:border-accent disabled:opacity-50"
       disabled={props.disabled}
       step={props.step}
       min={props.min}
@@ -78,7 +80,7 @@ function ChoiceBox(props: { checked: boolean; multiple: boolean }) {
         props.multiple ? 'rounded-sm' : 'rounded-full',
         props.checked
           ? 'border-accent bg-accent'
-          : 'border-edge-muted bg-transparent group-hover:border-edge'
+          : 'border-ink-extra-muted bg-transparent group-hover:border-ink-muted'
       )}
     >
       <CheckIcon class={cn('size-2.5', !props.checked && 'hidden')} />
@@ -139,7 +141,7 @@ function OtherRow(props: {
 }) {
   return (
     <div
-      class="group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink outline-none"
+      class="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink outline-none"
       classList={{
         'hover:bg-ink/5': !props.disabled,
         'opacity-50': props.disabled,
@@ -151,7 +153,7 @@ function OtherRow(props: {
         aria-checked={props.checked}
         aria-label="Other"
         tabIndex={props.tabIndex}
-        class="flex items-center outline-none"
+        class="flex outline-none"
         disabled={props.disabled}
         onClick={props.onSelect}
       >
@@ -162,7 +164,7 @@ function OtherRow(props: {
       </button>
       <input
         type="text"
-        class="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
+        class="h-5 min-w-0 flex-1 bg-transparent text-sm leading-5 text-ink outline-none placeholder:text-ink-placeholder"
         placeholder="Type your own answer"
         disabled={props.disabled}
         value={props.text}

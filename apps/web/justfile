@@ -355,6 +355,7 @@ test-email-fixtures-browser *ARGS:
     done <<'SUITES'
     src/features/email-compose/browser-test/playwright.config.ts -g alias.does.not.make|already-sent.background.save|sends.its.newest.text.once|sends.the.newest.text.once
     src/features/email-compose/browser-test/playwright.app.config.ts recipient-commit.app
+    src/features/block-email/browser-test/playwright.config.ts
     src/features/calendar/browser-test/playwright.config.ts
     src/features/calendar-view/browser-test/playwright.config.ts
     src/features/settings/browser-test/signatures/playwright.config.ts

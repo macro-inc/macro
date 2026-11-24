@@ -1,38 +1,42 @@
 .homepage-open-source-badges { display: flex; align-items: center; justify-content: center; gap: calc(clamp(24px, 4vw, 56px) + 10px); margin: 44px auto 0; color: var(--color-ink-extra-muted); }
 .homepage-open-source-badges > div { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .homepage-open-source-badges span { font-size: 11px; line-height: 1.5; }
-.homepage-open-source-backing > svg { width: 120px; height: 36px; color: var(--color-ink-muted); }
+.homepage-open-source-backing > svg { width: 120px; height: 36px; }
+.homepage-open-source-backing > svg, .homepage-open-source-security > div, .homepage-github-badge strong { color: var(--color-ink-muted); }
 .homepage-open-source-security > div { display: flex; gap: 14px; }
 .homepage-open-source-security svg { width: 36px; height: 36px; }
+
+.macro-homepage .homepage-open-source-badges {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(660px, calc(100% - 24px));
+  padding-block: 10px 30px;
+  gap: 0;
+  align-items: stretch;
+  text-align: center;
+}
+.macro-homepage .homepage-open-source-badges > * { position: relative; padding-inline: 6px; }
+.macro-homepage .homepage-open-source-badges > * + *::before {
+  content: '';
+  position: absolute;
+  inset: 2px auto 2px 0;
+  width: 1px;
+  background: linear-gradient(transparent, color-mix(in srgb, currentColor 38%, transparent), transparent);
+}
+.macro-homepage .homepage-open-source-badges + .feature-page-section::before { display: none; }
+.homepage-github-badge { display: flex; flex-direction: column; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
+.homepage-github-badge strong { display: flex; align-items: center; gap: 5px; height: 36px; font-size: 20px; font-variant-numeric: tabular-nums; }
+.homepage-github-badge strong svg { width: 25px; height: 25px; margin-inline-end: 5px; }
+.homepage-github-badge strong span { font-size: 14px; }
+.homepage-github-badge:hover strong { color: var(--color-ink); }
 @media (max-width: 767px) {
   .homepage-open-source-badges { gap: 34px; margin-top: 36px; flex-wrap: wrap; }
   .homepage-open-source-badges span { font-size: 10px; }
   .homepage-open-source-backing > svg { width: 100px; }
   .homepage-open-source-security svg { width: 30px; height: 36px; }
-}
-
-/* Center the badges within the homepage CTA-to-sidebar gap. */
-.macro-home-hero .homepage-open-source-badges { margin: 0 auto; min-height: calc((254.5px + clamp(140px, 26svh, 260px)) * .65 - 100px); }
-@media (max-width: 767px) {
-  .macro-home-hero .homepage-open-source-badges { min-height: 176.25px; }
-}
-
-.macro-home-hero .homepage-open-source-badges > div { opacity: .85; transition: opacity 600ms ease, transform 600ms ease; }
-.macro-home-hero .homepage-open-source-badges[data-revealed=false] > div { opacity: .4; transform: translateY(0); }
-@media (prefers-reduced-motion: reduce) {
-  .macro-home-hero .homepage-open-source-badges > div { opacity: .85; transition: none; transform: none; }
-}
-
-@media (max-width: 699px) {
-  .macro-home-hero .homepage-open-source-badges { min-height: 206.25px; }
-  .macro-home-hero .homepage-open-source-badges span { font-size: 8px; }
-}
-
-/* Keep equal visual clearance from the centered mobile connector. */
-@media (max-width: 699px) {
-  .macro-home-hero .homepage-open-source-badges { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; }
-  .macro-home-hero .homepage-open-source-backing { justify-self: end; }
-  .macro-home-hero .homepage-open-source-security { justify-self: start; }
-  .macro-home-hero .homepage-open-source-backing > svg { align-self: flex-end; }
-  .macro-home-hero .homepage-open-source-security > div { align-self: flex-start; }
+  .macro-homepage .homepage-open-source-backing > svg { max-width: 100%; }
+  .macro-homepage .homepage-open-source-security > div { gap: 4px; }
+  .macro-homepage .homepage-open-source-security svg { width: clamp(20px, 6vw, 30px); }
+  .homepage-github-badge strong { font-size: 16px; gap: 3px; }
+  .homepage-github-badge strong svg { width: 20px; height: 20px; }
 }

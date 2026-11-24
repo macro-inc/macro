@@ -230,3 +230,55 @@ async fn activity_outside_the_channel_timeline_does_not_take_a_sequence(pool: Pg
         .unwrap();
     assert_eq!(count, 0);
 }
+
+async fn fill_channel(channel: Uuid) -> Vec<message_write_gate::WritePermit> {
+    let mut held = Vec::new();
+    for _ in 0..4 {
+        held.push(
+            message_write_gate::acquire("channel", &channel.to_string())
+                .await
+                .unwrap(),
+        );
+    }
+    held
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_batch_waits_out_a_channel_that_is_busy_longer_than_one_admission() {
+    let channel = Uuid::now_v7();
+    let held = fill_channel(channel).await;
+    let release = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(7)).await;
+        drop(held);
+    });
+
+    let permits = admit_channels(&[channel]).await.unwrap();
+
+    assert_eq!(permits.len(), 1);
+    release.await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_waiting_batch_holds_no_other_channels_slot() {
+    let (free, busy) = (Uuid::from_u128(1), Uuid::from_u128(2));
+    let held = fill_channel(busy).await;
+    let batch = tokio::spawn(async move { admit_channels(&[free, busy]).await });
+    // Past the first refusal, inside the pause before the second attempt.
+    tokio::time::sleep(Duration::from_millis(2_100)).await;
+
+    let others = fill_channel(free).await;
+
+    assert_eq!(others.len(), 4);
+    drop((others, held));
+    assert_eq!(batch.await.unwrap().unwrap().len(), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_channel_that_stays_busy_ends_the_batch_with_a_timeout() {
+    let channel = Uuid::now_v7();
+    let _held = fill_channel(channel).await;
+
+    let refused = admit_channels(&[channel]).await;
+
+    assert_eq!(refused.unwrap_err(), message_write_gate::AdmissionTimeout);
+}

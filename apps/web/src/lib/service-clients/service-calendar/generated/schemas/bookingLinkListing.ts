@@ -4,6 +4,7 @@
  * calendar_service
  * OpenAPI spec version: 0.1.0
  */
+import type { BookingAccount } from './bookingAccount';
 import type { BookingLink } from './bookingLink';
 import type { BookingSchedule } from './bookingSchedule';
 
@@ -11,6 +12,9 @@ import type { BookingSchedule } from './bookingSchedule';
  * Authorized discovery results including reusable availability.
  */
 export interface BookingLinkListing {
+  /** Connected accounts a personal link can book on, as its `emailLinkId`;
+empty for a team. */
+  accounts: BookingAccount[];
   /** Links whose title, slug or description matches the search, including paused links. */
   links: BookingLink[];
   /** Owning profile identity, including unsaved new profiles. */

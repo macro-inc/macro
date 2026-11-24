@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 use super::*;
 use crate::domain::models::InboxScope;
 
+mod chat;
+
 const CHANNEL: u128 = 0xC0;
 const ROOT: u128 = 0x7A;
 const DOC: u128 = 0xD0;

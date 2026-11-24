@@ -145,6 +145,9 @@ pub enum EmailLiteral {
 impl ExpandFrame<EmailLiteral> for EmailFilters {
     type Err = ExpandErr;
     fn expand_ast(input: Self) -> Result<Option<filter_ast::Expr<EmailLiteral>>, Self::Err> {
+        if let Some(filter) = input.search_only_filter() {
+            return Err(ExpandErr::SearchOnlyEmailFilter(filter));
+        }
         let EmailFilters {
             senders,
             cc,
@@ -164,12 +167,15 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             crm_addresses,
             calendar_only,
             attachments,
-            view,
+            view: _,
+            exclude_views: _,
+            text_matches: _,
+            label_names: _,
+            favorite: _,
+            has_attachment: _,
+            sent_after: _,
+            sent_before: _,
         } = input;
-
-        if view.is_some() {
-            return Err(ExpandErr::SearchOnlyEmailView);
-        }
 
         // Expand crm_domains / crm_addresses via the shared helper so the
         // raw AST endpoint and the typed POST stay byte-identical. We

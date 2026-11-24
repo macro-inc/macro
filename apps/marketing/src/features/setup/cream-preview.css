@@ -68,7 +68,7 @@ html[data-palette='cream'] .site-header {
   --nav-edge: rgb(29 28 26 / 10%);
 }
 html[data-palette='cream'] .site-nav-demo { color: #1d1c1a; background: linear-gradient(165deg, #f3f0e9 35%, #ebe7df 100%); }
-html[data-palette='cream'] .site-nav-demo::after { background: linear-gradient(135deg, #ffffff60 0%, #ffffff1c 24%, #00000005 60%, #0000001c 100%); }
+html[data-palette='cream'] :is(.site-nav-demo, .macro-home-demo)::after { background: linear-gradient(135deg, #ffffff60 0%, #ffffff1c 24%, #00000005 60%, #0000001c 100%); }
 html[data-palette='cream'] .site-menu-panel a:hover { background: #1d1c1a0a; }
 html[data-palette='cream'] .site-header :focus-visible { outline-color: #1d1c1a; }
 html[data-palette='cream'] .site-header[data-menu-open=true]::before { background: #f5f1e8; }
@@ -320,7 +320,7 @@ html[data-palette='cream'] :is(.homepage-demo-titlebar h2, .homepage-demo-titleb
   color: var(--color-ink-muted);
 }
 html[data-palette='cream'] .downloads-header p { color: var(--color-ink-muted); }
-html[data-palette='cream'] :is(.downloads-release a, .downloads-page .downloads-version) {
+html[data-palette='cream'] .downloads-release a {
   color: var(--color-ink-subtle);
 }
 html[data-palette='cream'] .downloads-release a:hover { color: var(--color-ink); }
@@ -551,7 +551,7 @@ html[data-palette='cream'] .feature-flow-texture {
   opacity: .12;
 }
 
-html[data-palette='cream'] :is(.homepage-sidebar-connection-line, .homepage-demo-connection) path {
+html[data-palette='cream'] .homepage-demo-connection path {
   stroke: #72706c80;
 }
 

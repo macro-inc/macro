@@ -57,11 +57,12 @@ Tasks always have these system properties (use these property_definition_id valu
 - Assignees (00000001-0000-0000-0000-000000000001): entity type, multi-select. Use entity_refs with entity_type='user' and entity_id='macro|email@domain.com' for people or 'bot|<agent UUID>' for agents. Adding an agent starts its session and replies in the task discussion.
 - Status (00000001-0000-0000-0000-000000000002): select_string, single. Options: Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), In Review (...0003), Completed (...0004), Canceled (...0005).
 - Priority (00000001-0000-0000-0000-000000000003): select_string, single. Options: Low (...0001), Medium (...0002), High (...0003), Urgent (...0004). Option IDs: 00000001-0000-0000-0003-0000000000XX.
-- Due Date (00000001-0000-0000-0000-000000000004): date, single. Use date_value with ISO 8601, and date_has_time true when the user gave a time of day.
-- Start Date (00000001-0000-0000-0000-000000000015): date, single, optional (absent until set). When work on the task begins; Due Date ends the range. Use date_value with ISO 8601, and date_has_time true when the user gave a time of day. The start never lands after the due date: a start set after it is saved as the due date, and a Due Date set before the start moves the start to it. When changing both dates, set the Due Date first.
+- Due Date (00000001-0000-0000-0000-000000000004): date, single. Use date_value with ISO 8601, and date_has_time true when the user gave a time of day (see date_has_time for the time zone).
+- Start Date (00000001-0000-0000-0000-000000000015): date, single, optional (absent until set). When work on the task begins; Due Date ends the range. Use date_value with ISO 8601, and date_has_time true when the user gave a time of day (see date_has_time for the time zone). The start never lands after the due date: a start set after it is saved as the due date, and a Due Date set before the start moves the start to it. When changing both dates, set the Due Date first.
 - Parent Task (00000001-0000-0000-0000-000000000005): entity, single. Use entity_ref with entity_type='task'.
 - Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'.
 - Story Points (00000001-0000-0000-0000-000000000009): number, single. Use number_value.
+- Time logged (00000001-0000-0000-0000-000000000016) is the sum of the task's time entries in minutes, absent until time is logged, and cannot be set here: log time with LogTime.
 
 A task can belong to one project:
 - Project (00000001-0000-0000-0000-000000000014): entity, single. Use entity_ref with entity_type='initiative' and the project UUID; send no value field to remove the task from its project. Setting it requires edit access to the task and the project, and the project's agents are assigned to the task.
@@ -71,6 +72,7 @@ CRM companies (entity_type='company', entity_id=the company UUID) always have th
 - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
 - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
 Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
+CRM contacts (entity_type='contact', entity_id=the contact UUID) have no system properties of their own; they take the team's custom properties (a phone number, a LinkedIn link, ...) under the same access rules as companies.
 
 Any entity (task, document, call, ...) can be associated with CRM records through these system properties:
 - Companies (00000001-0000-0000-0000-00000000000c): entity, multi. Use entity_refs with entity_type='company' and the company UUID.
@@ -100,7 +102,7 @@ pub struct SetEntityProperty {
     pub date_value: Option<DateTime<Utc>>,
 
     #[schemars(
-        description = "For date properties: true when date_value is a time of day the user asked for (an exact moment, such as 3 PM). Leave it out for a whole day."
+        description = "For date properties: true when date_value is a time of day the user asked for (an exact moment, such as 3 PM). Leave it out for a whole day. A time of day is in the user's time zone, the zone current_time names, unless the user names another: write date_value with that zone's UTC offset on that date, which daylight saving time can make different from today's (\"3 PM\" on a winter day in New York is 15:00:00-05:00). When current_time says the user's time zone is unknown, it is in UTC: say in your reply which time zone you used."
     )]
     #[serde(default)]
     pub date_has_time: Option<bool>,

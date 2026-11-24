@@ -4,6 +4,7 @@ import { URL } from 'node:url';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { compactEdgeRedirects } from '../../../infra/stacks/website/edge-redirects';
+import downloadRedirects from '../seo/download-redirects.json';
 import redirects from '../seo/page-redirects.json';
 
 const source = fs
@@ -14,6 +15,7 @@ const source = fs
     ),
     'utf8'
   )
+  .replace('__DOWNLOAD_REDIRECTS__', JSON.stringify(downloadRedirects))
   .replace(
     '__PAGE_REDIRECTS__',
     JSON.stringify(compactEdgeRedirects(redirects))
@@ -58,5 +60,43 @@ describe('consolidated website redirects', () => {
       },
     });
     expect(response.uri).toBe('/tasks/index.html');
+  });
+  it('sends installer links to the fixed-name assets on desktop-stable', () => {
+    expect(Object.keys(downloadRedirects).sort()).toEqual([
+      '/download/linux',
+      '/download/mac',
+    ]);
+    for (const [from, to] of Object.entries(downloadRedirects)) {
+      expect(to).toMatch(
+        /^https:\/\/github\.com\/macro-inc\/macro\/releases\/download\/desktop-stable\/Macro-[\w.-]+$/
+      );
+      for (const host of ['macro.com', 'www.macro.com']) {
+        for (const uri of [from, `${from}/`]) {
+          const response = handler({
+            request: {
+              uri,
+              headers: { host: { value: host } },
+              cookies: {},
+              querystring: { ref: { value: 'home' } },
+            },
+          });
+          // Temporary, so browsers and caches never pin a moved target.
+          expect(response.statusCode).toBe(302);
+          expect(response.headers.location.value).toBe(to);
+          expect(response.headers['cache-control'].value).toBe('no-store');
+        }
+      }
+    }
+  });
+  it('keeps the download page itself on its index rewrite path', () => {
+    const response = handler({
+      request: {
+        uri: '/download',
+        headers: { host: { value: 'macro.com' } },
+        cookies: {},
+        querystring: {},
+      },
+    });
+    expect(response.uri).toBe('/download/index.html');
   });
 });

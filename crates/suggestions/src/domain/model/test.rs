@@ -8,6 +8,7 @@ fn run(state: RunStateName) -> SuggestionRun {
         started_at: Utc::now(),
         state,
         state_changed_at: Utc::now(),
+        report: None,
     }
 }
 

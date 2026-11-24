@@ -1,22 +1,25 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
+import {
+  STATIC_AUDIO,
+  STATIC_IMAGE,
+  STATIC_VIDEO,
+} from '@core/store/cacheChannelInput';
 import { messageReference } from '@macro-inc/lexical-core/utils/message-references';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import type { PostMessage } from '@service-storage/messages';
+import { match } from 'ts-pattern';
 import type { InputAttachmentData, InputSnapshot } from './types';
 
 export function attachmentEntityType(
   kind: InputAttachmentData['kind']
 ): string {
-  switch (kind) {
-    case 'image':
-      return STATIC_IMAGE;
-    case 'video':
-      return STATIC_VIDEO;
-    case 'document':
-      return 'document';
-  }
+  return match(kind)
+    .with('image', () => STATIC_IMAGE)
+    .with('video', () => STATIC_VIDEO)
+    .with('audio', () => STATIC_AUDIO)
+    .with('document', () => 'document')
+    .exhaustive();
 }
 
 /** Serialize authored references; the server resolves group recipients using current membership. */

@@ -137,6 +137,8 @@ a local stack, without Google accounts.
 - The aliases a mailbox can send from: `GmailEmulator::set_send_as(email,
   aliases)` replaces them, and `settings.sendAs.list` answers them after the
   primary address. A Rust method only; there is no `/_emulator/` route.
+- A label renamed in Gmail's own client: `GmailEmulator::rename_label(email,
+  label_id, name)`. A Rust method only; it records no history, as at Google.
 - Add a Gmail endpoint: a `Route` variant with its quota units in
   `src/fault.rs` → a handler through `gate::mailbox_request` in
   `src/gmail_routes.rs` → a test in `src/test/` that calls it with the real
@@ -177,8 +179,10 @@ a local stack, without Google accounts.
   code exchange can be retried. A fault that names a mailbox answers after
   the request took effect.
 - Waiting is event driven (`wait_for_push_deliveries`); don't add sleep loops.
-- `q` understands only the operators listed in `src/query.rs`; `OR` and
-  parentheses match as plain words.
+- `q` understands only the operators listed in `src/query.rs`; `OR`,
+  parentheses and `after:` with anything but Unix seconds match as plain
+  words. `after:` compares the internal date, so a seed's `date` sets it;
+  in a filter it compares the emulator's clock, when the mail arrives.
 - An event is stored as Google's own JSON object and patched as Google
   patches: `null` removes a field, an object merges, an array replaces. An
   event id is base32hex (`0-9`, `a-v`, five characters or more); a seed that
