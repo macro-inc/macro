@@ -100,8 +100,10 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
         'terminateEngine'
       ).mockReturnValue(true);
     });
-    expect(await newViolations(['expire-session'])).toContain(
-      'S2:host retired on CacheUnavailableError:owner-lock-unavailable:owner-lock-timeout [expire-session owner]'
+    expect(await newViolations(['expire-session'])).toContainEqual(
+      expect.stringMatching(
+        /^L2:no active engine \(.*\) \[expire-session owner\]$/
+      )
     );
   });
 

@@ -79,5 +79,8 @@ longer matches the code it stands for.
 The account and generation fences around a session, Safari's and Firefox's own timing, the WASM engine and real OPFS, the native
 host, requests the handover does not depend on, and more tabs, faults or
 delays than the bound. An end of a whole browser process takes the page and its
-build's coordinator (`crash-process`), not other pages of that process. A freed lock has its next holder at once, and only the
+build's coordinator (`crash-process`), not other pages of that process. A frozen
+page that keeps the owner lock is let off: L1 and L2 excuse the other pages until
+it thaws or ends, since nothing may take its files from it. Two scripts prove that
+they recover then. A freed lock has its next holder at once, and only the
 news of it can be late; one message at a time is held back.

@@ -158,6 +158,30 @@ export const SCRIPTS: ScriptedScenario[] = [
     ],
   },
   {
+    name: 'a hidden owner, frozen before its drain ends, thaws again',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { kind: 'hide', page: 'tab1' },
+      { kind: 'freeze', page: 'tab1' },
+      { waitMs: 120_000 },
+      { kind: 'thaw', page: 'tab1' },
+      { waitMs: 500 },
+    ],
+  },
+  {
+    name: 'a hidden owner, frozen before its drain ends, is discarded',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { kind: 'hide', page: 'tab1' },
+      { kind: 'freeze', page: 'tab1' },
+      { waitMs: 120_000 },
+      { kind: 'kill', page: 'tab1' },
+      { waitMs: 500 },
+    ],
+  },
+  {
     name: 'the owner is hidden and shown again and again',
     pages: [1],
     script: [

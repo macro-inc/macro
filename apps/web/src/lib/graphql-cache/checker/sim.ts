@@ -360,6 +360,12 @@ export class SimLockManager {
     return `${list(this.held)};${list(this.queue)}`;
   }
 
+  holders(name: string): SimContext[] {
+    return this.held
+      .filter((lock) => lock.name === name)
+      .map(({ context }) => context);
+  }
+
   private snapshot(): LockManagerSnapshot {
     return {
       held: this.held.map((lock) => ({

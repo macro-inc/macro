@@ -16,12 +16,14 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
 import { vi } from 'vitest';
 import {
+  CacheNotRestartedError,
   CacheRecoverySupersededError,
   createCacheRecovery,
 } from '../../service-clients/service-storage/cache-recovery';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import type { CacheHost } from '../host/types';
 import { createWorkerCacheHost } from '../host/worker-host';
+import { isCacheOutageError } from '../protocol';
 import { getOrCreateCacheScope } from '../scope';
 import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runtime';
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
@@ -299,6 +301,15 @@ export class Page {
         onSuperseded: () => {
           this.world.reloadRequests.push(this.id);
         },
+        onUnavailable: (error) => {
+          if (this.host !== host) return;
+          this.cacheOff = true;
+          this.recovery.failed(error);
+        },
+        onAvailable: () => {
+          if (this.host !== host) return;
+          fireAndForget(this.recovery.available(), 'handover-checker');
+        },
       })
     );
     return host;
@@ -319,7 +330,8 @@ export class Page {
     try {
       await host?.authority?.current();
     } catch (error) {
-      if (host && this.host === host) this.fallback(error);
+      if (host && this.host === host && !isCacheOutageError(error))
+        this.fallback(error);
     }
   }
 
@@ -359,10 +371,10 @@ export class Page {
 
   /** `restartCache`. */
   private async restartCache(): Promise<void> {
-    if (!this.host || this.host.disabled) this.client();
+    if (!this.host || (this.host.disabled && !this.host.paused)) this.client();
     const host = this.host;
-    if (!host || host.disabled)
-      throw new Error('Local cache could not restart.');
+    if (!host || (host.disabled && !host.paused))
+      throw new CacheNotRestartedError();
     await host.currentRevision();
     await host.inspectMutations?.();
     if (host !== this.host || host.disabled)

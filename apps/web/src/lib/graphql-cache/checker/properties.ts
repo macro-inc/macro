@@ -8,7 +8,8 @@
  * reads as one.
  *
  * S1 one engine has a database open at a time.
- * S2 a live page never drops its host, short of a newer build taking over.
+ * S2 a live page never drops its host, short of a newer build taking over, and
+ *    never asks to reload without one.
  * S3 a write that reached the durable queue stays in it.
  * S4 no older build opens the database after a newer one.
  * S5 a refused request says why, with an error code.
@@ -17,10 +18,13 @@
  * L2 an engine of the newest build is active while any page is live.
  * L3 every request a live page made has settled.
  *
- * A frozen page is exempt from the L properties until it thaws; a page that asked to
- * reload for a newer build is exempt from L1.
+ * A frozen page is exempt from the L properties until it thaws; a page that asked
+ * to reload for a newer build is exempt from L1, and does not count as live in L2.
+ * While a frozen page's engine keeps the database's lock nobody else can open it:
+ * L1 and L2 then only need the pages told (paused) and the coordinator trying.
  */
 import { getOrCreateCacheScope } from '../scope';
+import { databaseOwnerLockName } from '../worker/coordinator-protocol';
 import type { CallOutcome, Page, World } from './world';
 
 export type Violation = {
@@ -49,6 +53,12 @@ export function errorClass(error: unknown): string {
     .filter((part) => part !== undefined)
     .join(':');
 }
+
+/** Whether a frozen engine, which nobody can end, has the database. */
+const heldByFrozen = (world: World): boolean =>
+  world.sim.locks
+    .holders(databaseOwnerLockName(getOrCreateCacheScope()))
+    .some(({ frozen }) => frozen);
 
 /** How a page that should have its cache back does not. */
 function cacheState(page: Page, probe: CallOutcome | undefined): string {
@@ -87,6 +97,18 @@ function retirements(world: World): Violation[] {
     .map(({ page, error, at }) => ({
       symptom: `S2:host retired on ${errorClass(error)}`,
       detail: `${page} at ${at}`,
+    }));
+}
+
+function needlessReloads(world: World): Violation[] {
+  return world.reloadRequests
+    .filter((id) => {
+      const build = pageOf(world, id)?.context.buildTime ?? 0;
+      return !world.pages.some(({ context }) => context.buildTime > build);
+    })
+    .map((id) => ({
+      symptom: 'S2:asked to reload without a newer build',
+      detail: id,
     }));
 }
 
@@ -156,7 +178,7 @@ function cachesNotBack(world: World, live: Page[]): Violation[] {
       !page.cacheOff &&
       page.recovery.state() === 'ready' &&
       probe?.result === 'ok';
-    if (back) continue;
+    if (back || (page.host?.paused && heldByFrozen(world))) continue;
     violations.push({
       symptom: `L1:cache not back (${cacheState(page, probe)})`,
       detail: page.id,
@@ -165,7 +187,8 @@ function cachesNotBack(world: World, live: Page[]): Violation[] {
   return violations;
 }
 
-function missingEngine(world: World, live: Page[]): Violation[] {
+function missingEngine(world: World, pages: Page[]): Violation[] {
+  const live = pages.filter(({ id }) => !world.reloadRequests.includes(id));
   if (live.length === 0) return [];
   const newest = Math.max(...live.map((page) => page.context.buildTime));
   const scope = getOrCreateCacheScope();
@@ -174,6 +197,8 @@ function missingEngine(world: World, live: Page[]): Violation[] {
     .findLast((coordinator) => coordinator.scope() === scope)
     ?.coreState();
   if (state?.startsWith('active')) return [];
+  if (state?.startsWith('resetting-after-loss') && heldByFrozen(world))
+    return [];
   return [
     {
       symptom: `L2:no active engine (${state?.replace(/[@:/].*/, '') ?? 'no coordinator'})`,
@@ -201,6 +226,7 @@ export function check(world: World): Violation[] {
       detail,
     })),
     ...retirements(world),
+    ...needlessReloads(world),
     ...lostWrites(world),
     ...olderOpens(world),
     ...uncodedRefusals(world),
