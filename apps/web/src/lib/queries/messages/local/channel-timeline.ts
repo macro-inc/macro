@@ -356,6 +356,9 @@ export function createLocalChannelTimeline(
         loadingOlder: false,
         loadingNewer: false,
       });
+    // A page loading meanwhile was aborted above and, its token stale, can no
+    // longer clear its flag.
+    else setState({ loadingOlder: false, loadingNewer: false });
     const epoch = deps.runtime.epoch();
     let loaded: LoadedChannelPage | 'unsupported';
     try {

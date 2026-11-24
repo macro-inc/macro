@@ -336,6 +336,52 @@ describe('createLocalChannelTimeline', () => {
     await loading;
   });
 
+  it('lets older pages load again after the window is read again under a new session', async () => {
+    const rows = messages(70);
+    let failStore!: (error: unknown) => void;
+    let olderSignal: AbortSignal | undefined;
+    const firstStored = new Promise<void>((_resolve, reject) => {
+      failStore = reject;
+    });
+    let windowReads = 0;
+    const fetchPage = vi.fn<FetchChannelServerPage>((input, signal) => {
+      if (input.before) {
+        olderSignal = signal;
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
+        });
+      }
+      windowReads += 1;
+      return Promise.resolve({
+        page: {
+          __typename: 'GraphqlChannelTimelinePage',
+          entries: rows.slice(-50).reverse(),
+          olderCursor: rows[20]!.sortKey,
+          newerCursor: null,
+          seq: '9',
+        } as never,
+        cached: windowReads === 1 ? firstStored : Promise.resolve(),
+      });
+    });
+    const { timeline, dispose } = mount({ rows, held: false, fetchPage });
+    await waitFor(() => !timeline.isLoading() && timeline.hasOlder());
+    // Scrolled back while the first window is still being stored.
+    const older = timeline.loadOlder();
+    await waitFor(() => olderSignal !== undefined);
+    expect(timeline.isLoadingOlder()).toBe(true);
+
+    failStore(new StaleCacheAuthorityError());
+    await waitFor(() => olderSignal?.aborted === true && windowReads === 2);
+    await older;
+    await settle();
+
+    expect(timeline.hasOlder()).toBe(true);
+    expect(timeline.isLoadingOlder()).toBe(false);
+    dispose();
+  });
+
   it('keeps every paged entry through a reread', async () => {
     const { timeline, runtime, addRow, dispose } = mount({
       rows: messages(70),
