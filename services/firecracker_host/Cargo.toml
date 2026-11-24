@@ -50,6 +50,8 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+opentelemetry_sdk = { workspace = true, features = ["trace"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }
 firecracker_host_api = { path = "../../crates/firecracker_host_api", features = ["client", "schema", "test-support"] }
 tempfile = { workspace = true }

@@ -52,7 +52,7 @@ mesh: pre-copy while it runs, then a final round after `release`), then
   monitors in `infra/stacks/monitoring`.
 - `src/domain/service.rs`: operations, locking, idempotency; `service/host.rs`
   goldens, host limits and info; `service/enrollment.rs` enrollment.
-- `src/outbound/jails.rs`: jailer, chroot, Firecracker calls; `jails/machines.rs`: the `Machines` port; `jails/golden_build.rs`: golden builds.
+- `src/outbound/jails.rs`: jailer, chroot, Firecracker calls; `jails/machines.rs`: the `Machines` port; `jails/golden_build.rs`: golden builds; `jails/vsock.rs`: the guest agent's vsock handshake (per-attempt timeout, retry until a deadline) and exec.
 - `src/outbound/network.rs`: netns slots and nftables.
 - `src/outbound/layout.rs`: what lives where on the durable disk.
 - `src/domain/ports.rs` `Disks`: the storage seam; `outbound/disks.rs`

@@ -16,9 +16,9 @@ use firecracker_host_api::exec::GUEST_AGENT_PORT;
 
 use firecracker_host_api::GuestImage;
 use firecracker_host_api::mmds::Document;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tracing::Instrument;
+use tracing::field::Empty;
 
 use crate::domain::model::{ComputerRecord, Slot};
 use crate::domain::ports::{ComputerDisks, DriveBacking, LaunchPhases};
@@ -34,6 +34,7 @@ use std::time::Instant;
 
 mod golden_build;
 mod machines;
+mod vsock;
 
 /// `PATH` of commands the agent runs as root in a guest.
 const GUEST_ROOT_PATH: &str = "/run/wrappers/bin:/run/current-system/sw/bin";
@@ -131,6 +132,9 @@ pub enum GuestLinkError {
     /// The `CONNECT` handshake broke off.
     #[error("vsock handshake: {0}")]
     Handshake(std::io::Error),
+    /// The `CONNECT` handshake got no answer in time.
+    #[error("vsock handshake unanswered after {0:?}")]
+    HandshakeTimedOut(Duration),
     /// Nothing listens on the guest agent's port yet.
     #[error("vsock answered {0:?}")]
     Refused(String),
@@ -598,105 +602,58 @@ impl Jails {
         }
     }
 
-    async fn connect(&self, jail: &JailId) -> Result<UnixStream, GuestLinkError> {
-        let socket = self.layout().in_chroot(jail, VSOCK);
-        let mut stream = match UnixStream::connect(&socket).await {
-            Ok(stream) => stream,
-            Err(source) => return Err(GuestLinkError::Connect { socket, source }),
-        };
-        stream
-            .write_all(format!("CONNECT {GUEST_AGENT_PORT}\n").as_bytes())
-            .await
-            .map_err(GuestLinkError::Handshake)?;
-        // Read the `OK <port>\n` answer byte by byte, so nothing after it is
-        // buffered away from the exec frames.
-        let mut answer = Vec::new();
-        let mut reader = BufReader::with_capacity(1, &mut stream);
-        reader
-            .read_until(b'\n', &mut answer)
-            .await
-            .map_err(GuestLinkError::Handshake)?;
-        if !answer.starts_with(b"OK ") {
-            return Err(GuestLinkError::Refused(
-                String::from_utf8_lossy(&answer).into_owned(),
-            ));
-        }
-        Ok(stream)
-    }
-
     /// Run `argv` as root in the guest; its exit code and stdout. Waits for
     /// the guest agent to listen, and for the program, until `deadline`.
+    #[tracing::instrument(
+        name = "firecracker_host.guest_exec",
+        skip_all,
+        fields(
+            jail = %jail,
+            program = argv.first().copied().unwrap_or_default(),
+            connect_ms = Empty,
+            exit_code = Empty,
+        ),
+        // Its callers report the error (a shutdown expects it sometimes).
+        err(level = "warn")
+    )]
     async fn run_in_guest(
         &self,
         jail: &JailId,
         argv: &[&str],
         deadline: tokio::time::Instant,
     ) -> Result<(i32, Vec<u8>), JailError> {
-        use firecracker_host_api::exec::{ExecRequest, Frame, read_frame, write_frame};
-
-        let guest = |source: GuestLinkError| JailError::Guest {
-            jail: jail.to_owned(),
-            source,
-        };
-        let mut stream = self.connect_until(jail, deadline).await?;
-        let request = ExecRequest {
-            argv: argv.iter().map(|arg| (*arg).to_owned()).collect(),
-            uid: 0,
-            gid: 0,
-            env: [("PATH".to_owned(), GUEST_ROOT_PATH.to_owned())].into(),
-            cwd: "/".to_owned(),
-            trace_id: macro_tower_layers::current_trace_id(),
-        };
-        write_frame(&mut stream, &Frame::Start(request))
+        let started = Instant::now();
+        let stream = self.connect_until(jail, deadline).await?;
+        tracing::Span::current().record("connect_ms", elapsed_ms(started));
+        let request = vsock::root_request(argv, GUEST_ROOT_PATH);
+        let (code, stdout) = vsock::exec(stream, request, deadline)
             .await
-            .map_err(|error| guest(error.into()))?;
-        write_frame(&mut stream, &Frame::CloseStdin)
-            .await
-            .map_err(|error| guest(error.into()))?;
-        let mut stdout = Vec::new();
-        let outcome = tokio::time::timeout_at(deadline, async {
-            loop {
-                match read_frame(&mut stream).await {
-                    Ok(Some(Frame::Stdout(bytes))) => stdout.extend(bytes),
-                    Ok(Some(Frame::Exited(code))) => return Ok(code),
-                    Ok(Some(Frame::Failed(message))) => {
-                        return Err(GuestLinkError::Failed(message));
-                    }
-                    Ok(Some(_)) => {}
-                    Ok(None) => return Err(GuestLinkError::Closed),
-                    Err(error) => return Err(error.into()),
-                }
-            }
-        })
-        .await
-        .map_err(|_| {
-            guest(GuestLinkError::TimedOut(
-                argv.iter().map(|arg| (*arg).to_owned()).collect(),
-            ))
-        })?;
-        let code = outcome.map_err(guest)?;
+            .map_err(|source| JailError::Guest {
+                jail: jail.to_owned(),
+                source,
+            })?;
+        tracing::Span::current().record("exit_code", code);
         Ok((code, stdout))
     }
 
-    /// Connect to the guest agent, retrying until `deadline`: it starts
-    /// listening some time into a boot, and the vsock gives no signal.
+    /// Connect to the guest agent, retrying until `deadline`.
     async fn connect_until(
         &self,
         jail: &JailId,
         deadline: tokio::time::Instant,
     ) -> Result<UnixStream, JailError> {
-        loop {
-            match self.connect(jail).await {
-                Ok(stream) => return Ok(stream),
-                Err(source) if tokio::time::Instant::now() >= deadline => {
-                    return Err(JailError::Guest {
-                        jail: jail.to_owned(),
-                        source,
-                    });
-                }
-                Err(_) => tokio::time::sleep(Duration::from_millis(10)).await,
-            }
-        }
+        let socket = self.layout().in_chroot(jail, VSOCK);
+        vsock::connect_until(
+            &socket,
+            GUEST_AGENT_PORT,
+            deadline,
+            vsock::HANDSHAKE_TIMEOUT,
+        )
+        .await
+        .map_err(|source| JailError::Guest {
+            jail: jail.to_owned(),
+            source,
+        })
     }
 }
 

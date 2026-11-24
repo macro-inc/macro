@@ -15,6 +15,9 @@ programs for the host agent (`services/firecracker_host`) over vsock port
 - Only the host can open a guest's vsock, so there is no authentication: the
   host agent is the only peer. Never expose it on a network socket.
 - The program's environment is exactly the request's; nothing is inherited.
+- It exports no traces: each exec's span carries the host agent's
+  `trace_id`, so its "exec started" and "exec ended" journal lines are found
+  from the host's trace.
 
 ## Checks
 

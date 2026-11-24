@@ -248,6 +248,7 @@ deny = [
     "email_suppression_handler", # Notification TRACE field test only (dev-dependency)
     "entity_access",             # Access-check span field and user-id leak tests only (dev-dependency)
     "firecracker_guest_agent",   # Guest-image daemon logging to journald; the guest reaches no collector, only the host over vsock
+    "firecracker_host",          # Exec request trace id tests only (dev-dependency)
     "forms",                     # Anonymous-response span and log leak tests only (dev-dependency)
     "fusionauth",                # Credential log leak tests only (dev-dependency)
     "genai_telemetry",           # GenAI span tests
