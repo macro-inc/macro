@@ -1,5 +1,5 @@
 import type { Client } from '@urql/core';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { TimeTrackingChange } from '../queries/time-tracking-changes';
@@ -142,6 +142,39 @@ it('reads the current time even while no timer runs', () => {
   const state = mountTimer();
   vi.setSystemTime(new Date('2026-11-23T11:10:00.000Z'));
   expect(state.now()).toBe(Date.parse('2026-11-23T11:10:00.000Z'));
+});
+
+it('shows the timer the server holds after a start whose reply is lost', async () => {
+  query.startTimer.mockResolvedValue(
+    err({ kind: 'failed', error: new Error('network') })
+  );
+  let reread: () => void = () => undefined;
+  query.refetch.mockReturnValue(
+    new Promise<void>((resolve) => {
+      reread = () => {
+        setTimer(TIMER);
+        resolve();
+      };
+    })
+  );
+  const state = mountTimer();
+  const pressed = state.start({ taskId: 'task-1' });
+  await vi.waitFor(() => expect(query.refetch).toHaveBeenCalledOnce());
+  const again = await state.start({ taskId: 'task-1' });
+  expect(again.isErr() && again.error).toMatchObject({ code: 'BUSY' });
+  reread();
+  await pressed;
+  expect(state.timer()).toEqual(TIMER);
+  expect(state.busy()).toBe(false);
+  expect(query.startTimer).toHaveBeenCalledOnce();
+});
+
+it('does not re-read after a refusal the server answered', async () => {
+  query.startTimer.mockResolvedValue(
+    err({ kind: 'refused', code: 'FORBIDDEN', message: 'no' })
+  );
+  await mountTimer().start({ taskId: 'task-1' });
+  expect(query.refetch).not.toHaveBeenCalled();
 });
 
 it('re-reads the timer when another session changes it', async () => {
