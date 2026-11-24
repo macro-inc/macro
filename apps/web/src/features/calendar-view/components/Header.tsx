@@ -118,6 +118,15 @@ export function Header(props: {
   );
   const isCompactHeader = () => !breakpoints.fullHeader();
   const searchOverlaysControls = () => !breakpoints.inlineSearch();
+  // Search has wrapped onto a row of its own when the controls box is taller
+  // than the controls beside it; open, it then covers none of them.
+  const [periodControls, setPeriodControls] = createSignal<HTMLElement>();
+  const controlsSize = createElementSize(controls);
+  const periodControlsSize = createElementSize(periodControls);
+  const searchOnOwnRow = () =>
+    (controlsSize.height ?? 0) > (periodControlsSize.height ?? 0);
+  const searchCoversControls = () =>
+    searchOverlaysControls() && searchExpanded() && !searchOnOwnRow();
   const today = createLocalToday();
   const [searchExpanded, setSearchExpandedInternal] = createSignal(false);
   const [searchPopupReady, setSearchPopupReady] = createSignal(false);
@@ -350,11 +359,11 @@ export function Header(props: {
             onClick={() => setSearchExpanded(false)}
           >
             <div
+              ref={setPeriodControls}
               class="flex flex-wrap items-center justify-end gap-2"
               classList={{
-                invisible: searchOverlaysControls() && searchExpanded(),
-                'pointer-events-none':
-                  searchOverlaysControls() && searchExpanded(),
+                invisible: searchCoversControls(),
+                'pointer-events-none': searchCoversControls(),
               }}
             >
               <Show when={showBookingLinks()}>

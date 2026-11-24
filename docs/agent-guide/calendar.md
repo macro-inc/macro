@@ -452,9 +452,10 @@ view group, and Booking links and New have separate outlined buttons. Adjacent
 controls and groups have a uniform 8px gap, with matching text-button padding.
 In a header 600px or narrower New shows only its icon, as in other headers; when
 the controls still don't fit their row, Today shows its icon, and then Search
-wraps onto its own row below the other controls, and opens on that row; in a
-still narrower pane the other controls wrap too, so no control leaves the pane
-and Search never covers New.
+wraps onto its own row below the other controls; in a still narrower pane the
+other controls wrap too, so no control leaves the pane. Collapsed Search never
+sits on another control; opened on its own row, it leaves the controls above it
+in view.
 Click Search or press Cmd/Ctrl+F to expand and focus the wider inline search field.
 The field slides out with a short width transition and focuses immediately.
 The results popup stays hidden until the field contains non-whitespace text,
