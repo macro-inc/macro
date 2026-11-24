@@ -1,3 +1,6 @@
+-- Foreign keys lock team and crm_companies against writes while they are added.
+SET LOCAL lock_timeout = '5s';
+
 -- One row per merge of CRM companies. The survivor and source ids carry no
 -- foreign key: the log outlives the companies it names.
 CREATE TABLE crm_company_merges
