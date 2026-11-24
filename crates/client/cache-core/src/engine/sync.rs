@@ -448,8 +448,22 @@ where
                 stored.state.items = progress.items;
                 let listed = std::mem::take(&mut progress.listed);
                 if reason == SyncLaneDoneReason::Complete {
-                    self.delete_unlisted(hooks, &lane.id, scopes, &listed)
-                        .await?
+                    let members = self
+                        .storage
+                        .load_sync_members(scopes)
+                        .await
+                        .map_err(storage_error)?;
+                    let unfetched = {
+                        let members = members.iter().collect::<BTreeSet<_>>();
+                        listed.iter().any(|key| !members.contains(key))
+                    };
+                    let applied = self
+                        .delete_unlisted(hooks, &lane.id, scopes, members, &listed)
+                        .await?;
+                    if unfetched {
+                        self.refetch_scopes::<H::Error>(scopes).await?;
+                    }
+                    applied
                 } else {
                     SyncApplied::Recorded
                 }
@@ -495,20 +509,17 @@ where
         Ok(applied)
     }
 
-    /// Deletes members of `scopes` the listing did not include, as server
-    /// cache deletions, then drops them from those lanes' members.
+    /// Deletes the `members` of `scopes` the listing did not include, as
+    /// server cache deletions, then drops them from those lanes' members.
     async fn delete_unlisted<H: SyncHooks<S>>(
         &mut self,
         hooks: &H,
         lane_id: &str,
         scopes: &[String],
+        members: Vec<EntityKey<'static>>,
         listed: &BTreeSet<EntityKey<'static>>,
     ) -> Result<SyncApplied, SyncWriteError<S::Error, H::Error>> {
-        let stale = self
-            .storage
-            .load_sync_members(scopes)
-            .await
-            .map_err(storage_error)?
+        let stale = members
             .into_iter()
             .filter(|key| !listed.contains(key))
             .collect::<Vec<_>>();
@@ -542,6 +553,45 @@ where
             keys: stale,
             affected,
         })
+    }
+
+    /// A complete listing named records no lane of `scopes` delivered: one
+    /// newly shared with the viewer, say, which a catch-up pass ("changed
+    /// since the watermark") never returns while the record itself is
+    /// unchanged. Once every scope lane has completed a pass, their
+    /// `watermark` and `completedAt` are cleared so the next run fetches them
+    /// whole. While one has not (`documents-recent` holds only the newest
+    /// documents until `documents-rest` completes), its pass still delivers
+    /// them, so nothing changes.
+    async fn refetch_scopes<H: std::error::Error + 'static>(
+        &mut self,
+        scopes: &[String],
+    ) -> Result<(), SyncWriteError<S::Error, H>> {
+        let rows = self
+            .storage
+            .load_sync_lanes()
+            .await
+            .map_err(storage_error)?;
+        let mut completed = Vec::with_capacity(scopes.len());
+        for scope in scopes {
+            let Some(row) = rows.iter().find(|row| &row.id == scope) else {
+                return Ok(());
+            };
+            let stored = StoredSyncLane::decode(row)?;
+            if stored.state.completed_at.is_none() {
+                return Ok(());
+            }
+            completed.push(stored);
+        }
+        for mut stored in completed {
+            stored.state.watermark = None;
+            stored.state.completed_at = None;
+            self.storage
+                .save_sync_lane(stored.encode(), Vec::new())
+                .await
+                .map_err(storage_error)?;
+        }
+        Ok(())
     }
 
     /// Writes one hydrate or calendar page and its lane state (`advance`
