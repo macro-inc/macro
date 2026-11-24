@@ -98,9 +98,10 @@ the Soup-backed thread list, and saved email views.
   while the search field holds a query, an `in:` of the Inbox included, on
   desktop or phone.
 - Text with no words (`in:`, `in:se`, `in:sent `) runs no search of its own:
-  `parsedSearch` stays on the last search that had words, and the list, the
-  header, the sidebar and the empty state all read it, so they describe the
-  results on screen. Only what rewrites the field's text parses it directly.
+  `parsedSearch` stays on the last search that had words, or empty (the open
+  tab's list) when there was none. The list, the header, the sidebar and the
+  empty state all read it, so they describe the rows on screen. What works on
+  the typed text (narrowing a search, suggestions) parses that instead.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the

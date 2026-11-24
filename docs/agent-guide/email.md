@@ -74,7 +74,8 @@ sender name, checkbox or actions, Load more, a header button), in the search
 field, in an open thread, and in another mailbox, whose header has no tabs,
 `Tab` is browser focus order. Leaving the
 search field (`Escape`, `ArrowDown`, `Enter`, or picking a recent search)
-hands the keyboard to the view, so `Tab` switches tabs there too. Calendar mail
+hands the keyboard to the view; a search shows no tabs, so `Tab` and `1`–`3`
+switch them again once it is cleared. Calendar mail
 remains available through
 the calendar filter and existing Calendar route. Touch shows the same Inbox
 pills as desktop: Signal and Noise, with Focus first when enabled. Other
@@ -115,8 +116,9 @@ filter names (the header says Focus, and the sidebar selects Inbox, for
 Search. The Focus, Signal and Noise tabs never show while the field holds a
 query, whatever it says, on desktop or phone; clearing it brings them back on
 the tab that was open. Text with no words yet (`in:`, `in:se`, or a view alone
-such as `in:focus`) runs no search of its own: the results, header and sidebar
-stay on the last search that had words. Check from Inbox with a
+such as `in:focus`) runs no search of its own: the list, header and sidebar
+stay on the last search that had words, or on the open view when there was
+none (the text was pasted). Check from Inbox with a
 term that only Noise or archived mail holds, then the same term with each
 `in:`, then pick Sent and All mail in the sidebar while it runs; then type
 `in`, `in:`, pick Focus and type a word, and clear the field.
@@ -457,8 +459,8 @@ or a scoped `Loading email` spinner until they arrive—not the previous tab's r
 under the new heading. Active searches also hide retained results and show loading
 while selected tag sets are pending. Background refreshes retain the current list.
 
-While the search field has text the list shows only search states: no Watch
-tutorial row, a spinner while the search runs (from the first character), and
+While the search field has words the list shows only search states: no Watch
+tutorial row (nor with an `in:` alone), a spinner while the search runs (from the first character), and
 `No results` when nothing matches, naming the view an `in:` filter narrowed it
 to. `Load More` appears under result
 rows. A page that adds no row (an alias, saved view or client-side filter drops

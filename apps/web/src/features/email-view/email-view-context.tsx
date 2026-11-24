@@ -164,9 +164,8 @@ export type EmailViewContext = {
   selectInbox: () => void;
   /**
    * The view the navigation and the header show as selected: the open tab,
-   * or while a search is open the view the search on screen runs in (`inbox`
-   * for the whole Inbox); `search` for a search of all mail, which selects
-   * none.
+   * or the view the search on screen runs in (`inbox` for the whole Inbox);
+   * `search` for a search of all mail, which selects none.
    */
   shownTab: Accessor<EmailShownView>;
   /** The search field holds a query, whatever it says. */
@@ -475,9 +474,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     { query: '' }
   );
   const shownTab = (): EmailShownView => {
-    if (!searchOpen()) return state.tab;
+    const { query, scope } = parsedSearch();
+    // With no search to stay on, the list is still the open tab's.
+    if (!searchOpen() || query === '') return state.tab;
 
-    const scope = parsedSearch().scope;
     if (!scope) return 'search';
     return emailSearchScopeTab(scope) ?? 'inbox';
   };

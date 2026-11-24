@@ -313,7 +313,7 @@ describe('phone tab strip', () => {
   it.each([
     ...INBOX_SEARCHES,
     { search: 'invoice', title: 'Search' },
-    { search: 'in:', title: 'Search' },
+    { search: 'in:', title: 'Noise' },
   ])(
     'shows the search’s view in place of the pills for $search',
     ({ search, title }) => {

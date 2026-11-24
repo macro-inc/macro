@@ -252,8 +252,6 @@ it.each([
   ['in:noise invoice', 'noise'],
   ['in:sent invoice', 'sent'],
   ['invoice', 'search'],
-  ['in:', 'search'],
-  ['in:foc', 'search'],
 ])('shows no Inbox tabs while the field holds %s', (search, shown) => {
   const { view } = mount();
   view.setTab('noise');
@@ -290,6 +288,19 @@ it('keeps the search on screen while an in: filter has no words after it', () =>
   view.setState('search', '');
   expect(mocks.list?.input.search).toBe('');
 });
+
+it.each(['in:', 'in:se', 'in:sent '])(
+  'stays on the open tab’s list when %s follows no search',
+  (search) => {
+    const { view } = mount();
+    view.setTab('noise');
+    view.setState('search', search);
+    expect(view.showsInboxTabs()).toBe(false);
+    expect(view.shownTab()).toBe('noise');
+    expect(mocks.list?.input.search).toBe('');
+    expect(mocks.list?.input.tab).toBe('noise');
+  }
+);
 
 it('opens a tab picked while the field holds no words, ending the search', () => {
   const { view } = mount();
