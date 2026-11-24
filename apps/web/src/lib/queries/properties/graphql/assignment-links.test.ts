@@ -11,6 +11,7 @@ describe('new property assignment links', () => {
     ['CHANNEL', 'GraphqlSoupChannel'],
     ['CALL_RECORD', 'GraphqlSoupCall'],
     ['COMPANY', 'GraphqlSoupCrmCompany'],
+    ['CONTACT', 'GraphqlSoupCrmContact'],
     ['DATABASE_ROW', 'GraphqlSoupDatabaseRow'],
   ] as const)(
     'targets a %s parent without any cache inspection',

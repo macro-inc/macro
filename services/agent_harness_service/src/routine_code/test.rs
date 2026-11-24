@@ -1191,6 +1191,7 @@ fn an_area_reads_its_index_guidance_and_declarations_without_imports() {
             "src/entities/task-templates/task-template.d.ts",
             "src/entities/tasks/task.d.ts",
             "src/entities/time/errors.d.ts",
+            "src/entities/time/report.d.ts",
             "src/entities/time/task-time.d.ts",
             "src/entities/time/time-entry.d.ts",
             "src/entities/time/timer.d.ts"

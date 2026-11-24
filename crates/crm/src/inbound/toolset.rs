@@ -1,12 +1,14 @@
 //! Toolset inbound adapter for the CRM domain.
 //!
 //! Exposes team-scoped CRM company tools (`ListCompanies`, `GetCompany`,
-//! `CreateCompany`, `CreateContact`) to AI agents. The company's own
+//! `CreateCompany`, `CreateContact`, `AddCompanyDomain`,
+//! `RemoveCompanyDomain`) to AI agents. The company's own
 //! properties (its Stage, Owner, Revenue and custom properties) are written
 //! through the properties toolset's `SetEntityProperty` with
 //! `entity_type = company`. Pipelines, whose entries carry their own stage
 //! and fields, have their own tools in [`pipelines`].
 
+mod company_domains;
 mod create_company;
 mod create_contact;
 mod get_company;
@@ -24,7 +26,7 @@ use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use entity_access::domain::{
     models::{
         AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole,
-        TeamRole, ViewAccessLevel,
+        RequiredPermission, TeamRole, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -45,6 +47,7 @@ use crate::domain::{
     stages::CRM_TEAM_STAGE_DEFINITION_NAME,
 };
 
+pub use company_domains::{AddCompanyDomain, CompanyDomainsResponse, RemoveCompanyDomain};
 pub use create_company::{CreateCompany, CreateCompanyResponse};
 pub use create_contact::{CreateContact, CreateContactResponse};
 pub use get_company::{GetCompany, GetCompanyResponse};
@@ -111,6 +114,8 @@ where
         .add_tool::<GetCompany, CrmToolContext<CSvc, ESvc, PSvc>>()
         .add_tool::<CreateCompany, CrmToolContext<CSvc, ESvc, PSvc>>()
         .add_tool::<CreateContact, CrmToolContext<CSvc, ESvc, PSvc>>()
+        .add_tool::<AddCompanyDomain, CrmToolContext<CSvc, ESvc, PSvc>>()
+        .add_tool::<RemoveCompanyDomain, CrmToolContext<CSvc, ESvc, PSvc>>()
 }
 
 /// A company's own Stage property: the select option id currently set plus its
@@ -376,15 +381,16 @@ where
 }
 
 /// Resolve the caller's permission on a CRM company (derived from their
-/// role on the owning team) and mint a view receipt for it, returning the
-/// owning team id. Access failures collapse to "not found" so company ids
+/// role on the owning team) and mint a receipt for it at level `T`, returning
+/// the owning team id. Access failures collapse to "not found" so company ids
 /// can't be probed across teams.
-pub(crate) async fn company_view_receipt<ESvc>(
+pub(crate) async fn company_receipt<T, ESvc>(
     entity_access_service: &ESvc,
     request_context: &RequestContext,
     company_id: Uuid,
-) -> Result<(CrmCompanyReceipt<ViewAccessLevel>, Uuid), ToolCallError>
+) -> Result<(CrmCompanyReceipt<T>, Uuid), ToolCallError>
 where
+    T: RequiredPermission,
     ESvc: EntityAccessService,
 {
     let company_id = company_id.to_string();
@@ -410,7 +416,7 @@ where
         }
     };
 
-    if !permission.satisfies::<ViewAccessLevel>() {
+    if !permission.satisfies::<T>() {
         return Err(company_not_found());
     }
 
@@ -477,6 +483,18 @@ pub(crate) fn crm_error_description(err: &CrmError) -> String {
         CrmError::CrmDisabledForTeam => "CRM is turned off for the caller's team".to_string(),
         CrmError::CompanyAlreadyExistsForTeam => {
             "the team already tracks a company with that domain; find it with ListCompanies (search by the domain) and use its id. If it is not listed, it is archived and only a team admin can restore it".to_string()
+        }
+        CrmError::CompanyDomainTaken(Some(holder)) => format!(
+            "the domain already belongs to another company of the team, {} (company id {}){}; remove it from that company first",
+            holder.name.as_deref().unwrap_or("unnamed"),
+            holder.company_id,
+            if holder.hidden { ", which is archived" } else { "" },
+        ),
+        CrmError::CompanyDomainTaken(None) => {
+            "the domain already belongs to an archived company of the team; only a team admin can restore it or remove the domain from it".to_string()
+        }
+        CrmError::CompanyDomainAdminRequired => {
+            "the company's email sync is off, so only a team admin or owner can remove its domains".to_string()
         }
         CrmError::ContactAlreadyExistsForCompany => {
             "the company already has a contact with that email".to_string()

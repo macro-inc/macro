@@ -104,11 +104,14 @@ export function FeaturePageCta(props: { name: string; label?: string }) {
 
 export function FeaturePageSection(props: {
   id: string;
+  aura?: TutorialVideoId;
   title: string | readonly string[];
   description: string;
   /** A real app screen; product pages use these instead of drawn demos. Children follow it. */
   screen?: FeatureScreen;
   demo?: FeatureDemoComposition;
+  /** Shown under the description, before the demo. */
+  more?: JSX.Element;
   children?: JSX.Element;
 }) {
   let heading: HTMLHeadingElement | undefined;
@@ -139,6 +142,11 @@ export function FeaturePageSection(props: {
     <section
       class="feature-page-section"
       id={props.id}
+      style={
+        props.aura && {
+          '--page-aura-primary': wallpapers[props.aura].colors[1],
+        }
+      }
       aria-labelledby={`${props.id}-title`}
     >
       <header class="product-feature-intro">
@@ -150,6 +158,7 @@ export function FeaturePageSection(props: {
         <p>
           <ProductCopy text={props.description} />
         </p>
+        {props.more}
       </header>
       <Show
         when={props.screen}

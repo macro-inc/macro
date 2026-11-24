@@ -1,4 +1,5 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
+import { useWorkspaceDrawerEntry } from '@app/features/agents-view/primitives/drawer-navigation';
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -36,6 +37,7 @@ function RoutinesContent() {
   const userId = useUserId();
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
+  const fromWorkspaceDrawer = useWorkspaceDrawerEntry();
   const selectedId = () => routineIdFromContent(panel.handle.content());
   const open = (id?: string) =>
     layout.openWithSplit(routineContent(id), {
@@ -98,6 +100,7 @@ function RoutinesContent() {
         <RoutinesListView
           mobileHeader={(focusSearch) => (
             <MobileRoutinesListHeader
+              fromDrawer={fromWorkspaceDrawer()}
               onBack={() =>
                 panel.handle.canGoBack()
                   ? panel.handle.goBack()
@@ -161,7 +164,8 @@ function RoutinesTopBar() {
   const scope = useSplitHeaderScope();
   return (
     <Show when={scope}>
-      <SplitHeaderScope.TopBar />
+      {/* Each mobile routine header owns the navigation island. */}
+      <SplitHeaderScope.TopBar leading={<span class="hidden" />} />
     </Show>
   );
 }

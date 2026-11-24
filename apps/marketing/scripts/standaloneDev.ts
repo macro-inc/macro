@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import type { Plugin } from 'vite';
+import downloadRedirects from '../seo/download-redirects.json';
 import redirects from '../seo/page-redirects.json';
 import { resolveAppBaseUrl } from '../src/app/utils/appBaseUrl';
 
@@ -13,6 +14,17 @@ function redirectAppRequest(
   appBaseUrl: string
 ) {
   const url = new URL(request.url ?? '/', 'http://localhost');
+  const download = (downloadRedirects as Record<string, string>)[
+    url.pathname.replace(/\/$/, '')
+  ];
+  if (download && ['GET', 'HEAD'].includes(request.method ?? '')) {
+    response.writeHead(302, {
+      Location: download,
+      'Cache-Control': 'no-store',
+    });
+    response.end();
+    return;
+  }
   const destination = (redirects as Record<string, string>)[
     url.pathname.replace(/\/$/, '')
   ];

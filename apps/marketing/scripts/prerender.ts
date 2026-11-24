@@ -1,3 +1,4 @@
+import downloadRedirects from '../seo/download-redirects.json';
 import redirects from '../seo/page-redirects.json';
 /**
  * Build-time Solid SSR for the homepage and public feature pages.
@@ -583,6 +584,15 @@ async function main(): Promise<void> {
     fs.writeFileSync(
       out,
       `<!doctype html><html><head><meta name="robots" content="noindex"><link rel="canonical" href="${BASE_URL}${destination}"><title>Page moved</title><script>location.replace(${JSON.stringify(destination)}+location.search+location.hash)</script></head><body><a href="${destination}">Continue to the page</a></body></html>`
+    );
+  }
+  // Static-host fallback for installer links; the CDN issues a 302.
+  for (const [source, destination] of Object.entries(downloadRedirects)) {
+    const out = outputPathFor(source);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(
+      out,
+      `<!doctype html><html><head><meta name="robots" content="noindex"><title>Downloading Macro</title><script>location.replace(${JSON.stringify(destination)})</script></head><body><a href="${destination}">Download Macro</a></body></html>`
     );
   }
   const homepage = await renderHomepage();

@@ -172,6 +172,17 @@ export type DirectoryDifference = {
 // REST lists a bot among the participants under this prefix.
 export const BOT_PRINCIPAL_PREFIX = 'bot|';
 
+/**
+ * A channel a new message or a share can be posted into: every channel and
+ * group chat, whatever its size. A DM is left out; it is reached by picking
+ * the person.
+ */
+export function isMessageDestinationChannel(
+  channel: Pick<DirectoryChannel, 'channelType'>
+): boolean {
+  return channel.channelType !== 'direct_message';
+}
+
 const RFC3339_INSTANT =
   /^(.+T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/i;
 

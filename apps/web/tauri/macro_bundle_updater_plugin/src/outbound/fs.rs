@@ -1,5 +1,6 @@
 use crate::domain::{
     asset_service::{BundleAssetPath, BundleAssetReadError},
+    completion::BundleFile,
     models::{UnzipError, UnzipRequest},
     ports::{BundleAssetRepo, FsRepo},
 };
@@ -159,5 +160,55 @@ impl FsRepo for FileSystem {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(e),
         }
+    }
+
+    async fn list_files(&self, dir: &std::path::Path) -> Result<Vec<BundleFile>, std::io::Error> {
+        let dir = dir.to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            let mut files = Vec::new();
+            let mut pending = vec![dir.clone()];
+            while let Some(current) = pending.pop() {
+                for entry in std::fs::read_dir(&current)? {
+                    let entry = entry?;
+                    let file_type = entry.file_type()?;
+                    if file_type.is_dir() {
+                        pending.push(entry.path());
+                    } else if file_type.is_file() {
+                        let path = entry.path();
+                        let relative = path.strip_prefix(&dir).map_err(std::io::Error::other)?;
+                        files.push(BundleFile {
+                            path: relative.to_path_buf(),
+                            size: entry.metadata()?.len(),
+                        });
+                    }
+                }
+            }
+            Ok(files)
+        })
+        .await
+        .map_err(std::io::Error::other)?
+    }
+
+    async fn file_sizes(
+        &self,
+        root: &std::path::Path,
+        paths: Vec<PathBuf>,
+    ) -> Vec<Result<u64, std::io::ErrorKind>> {
+        let root = root.to_path_buf();
+        // One blocking task for the whole list: a bundle holds about a
+        // thousand files, and a task per file would multiply the overhead.
+        let count = paths.len();
+        tokio::task::spawn_blocking(move || {
+            paths
+                .iter()
+                .map(|path| {
+                    std::fs::metadata(root.join(path))
+                        .map(|metadata| metadata.len())
+                        .map_err(|error| error.kind())
+                })
+                .collect()
+        })
+        .await
+        .unwrap_or_else(|_| vec![Err(std::io::ErrorKind::Other); count])
     }
 }

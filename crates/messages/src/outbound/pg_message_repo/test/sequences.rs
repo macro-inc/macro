@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::changes::{ChannelChangeKind, ChannelChangeLogPruner};
 use std::sync::Arc;
 use tokio::{
     sync::{Barrier, Semaphore},
@@ -16,6 +17,45 @@ pub(super) async fn channel_fixture(pool: &PgPool) -> Uuid {
     .await
     .unwrap();
     channel_id
+}
+
+/// Write as a caller does: a writer the gate turns away asks again.
+///
+/// The gate admits four writers per channel and refuses one that waited two
+/// seconds, before it has written anything. Under a slow database the writers
+/// queued here can wait that long.
+async fn admitted<T, Write, Attempt>(mut write: Write) -> T
+where
+    Write: FnMut() -> Attempt,
+    Attempt: Future<Output = Result<T, MessageError>>,
+{
+    loop {
+        match write().await {
+            Err(MessageError::Contended(_)) => {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+            result => return result.unwrap(),
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_refused_writer_is_asked_again() {
+    let mut attempts = 0;
+    let written = admitted(|| {
+        attempts += 1;
+        let refused = attempts < 3;
+        async move {
+            if refused {
+                Err(MessageError::Contended(rootcause::report!("busy").into()))
+            } else {
+                Ok(7)
+            }
+        }
+    })
+    .await;
+
+    assert_eq!((written, attempts), (7, 3));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -61,25 +101,30 @@ async fn concurrent_writers_publish_gap_free_committed_prefix(pool: PgPool) {
                     let mut input = command("message-doc-a", None, "created");
                     input.parent = parent;
                     input.input.id = Some(id);
-                    repo.create(input).await.unwrap().1
+                    admitted(|| repo.create(input.clone())).await.1
                 }
                 1 => {
-                    repo.edit(
-                        &parent,
-                        id,
-                        EditMessage {
-                            notification_policy: Default::default(),
-                            content: "edited".into(),
-                            mentions: vec![],
-                            attachments: None,
-                            nonce: None,
-                        },
-                    )
+                    admitted(|| {
+                        repo.edit(
+                            &parent,
+                            id,
+                            EditMessage {
+                                notification_policy: Default::default(),
+                                content: "edited".into(),
+                                mentions: vec![],
+                                attachments: None,
+                                nonce: None,
+                            },
+                        )
+                    })
                     .await
-                    .unwrap()
                     .1
                 }
-                _ => repo.react(&parent, id, USER, "👍", true).await.unwrap().seq,
+                _ => {
+                    admitted(|| repo.react(&parent, id, USER, "👍", true))
+                        .await
+                        .seq
+                }
             };
             seq.expect("each changed channel message has a sequence")
         });
@@ -581,4 +626,116 @@ async fn channel_stalled_holder_guard_applies_with_database_timeouts_disabled(po
     holder.rollback().await.unwrap();
     assert_eq!(waiting_repo.create(input).await.unwrap().1, Some(2));
     waiting_pool.close().await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_removed_channel_takes_its_change_history_and_then_its_counter(pool: PgPool) {
+    setup(&pool).await;
+    let (removed, kept) = (channel_fixture(&pool).await, channel_fixture(&pool).await);
+    let repo = PgMessageRepository::new(pool.clone());
+    for channel_id in [removed, kept] {
+        let mut input = command("message-doc-a", None, "root");
+        input.parent = MessageParent::Channel(channel_id);
+        repo.create(input).await.unwrap();
+    }
+
+    sqlx::query!("DELETE FROM comms_channels WHERE id = $1", removed)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let logged = sqlx::query_scalar!("SELECT channel_id FROM channel_change_log")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(logged, vec![kept]);
+
+    // Retention sweeps the counter once it has been idle past the cutoff.
+    let later = Utc::now() + chrono::Duration::seconds(1);
+    assert_eq!(repo.prune_channel_change_log(later, 10).await.unwrap(), 1);
+    let counters = sqlx::query_scalar!("SELECT channel_id FROM channel_change_counters")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(counters, vec![kept]);
+}
+
+async fn channel_thread_call(pool: &PgPool, owner: &str, channel_id: Uuid) -> Uuid {
+    let call_id = macro_uuid::generate_uuid_v7();
+    let permission_id = macro_uuid::generate_uuid_v7().to_string();
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id) VALUES ($1)"#,
+        permission_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO call_entities (id, user_id, created_via, share_permission_id, channel_id, discussion)
+         VALUES ($1, $2, 'native', $3, $4, 'channel_thread')",
+        call_id,
+        owner,
+        permission_id,
+        channel_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    call_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn removing_a_person_logs_the_channel_thread_calls_removed_with_them(pool: PgPool) {
+    setup(&pool).await;
+    let channel_id = channel_fixture(&pool).await;
+    let owner = "macro|call-owner@example.com";
+    let macro_user = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ($1, 'call-owner', 'call-owner@example.com', 'call-owner')"#,
+        macro_user
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, 'call-owner@example.com', $2)"#,
+        owner,
+        macro_user
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut calls = vec![
+        channel_thread_call(&pool, owner, channel_id).await,
+        channel_thread_call(&pool, owner, channel_id).await,
+    ];
+    calls.sort();
+    // Another person's call in the channel stays, and is not logged.
+    channel_thread_call(&pool, USER, channel_id).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    assert_eq!(repo.read_channel_seq(channel_id).await.unwrap(), 0);
+
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, owner)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let log = repo.read_channel_change_log(channel_id, 0).await.unwrap();
+    assert_eq!(log.seq, 2);
+    assert_eq!(
+        log.changes
+            .iter()
+            .map(|change| (change.seq, change.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (1, ChannelChangeKind::Message(calls[0])),
+            (2, ChannelChangeKind::Message(calls[1])),
+        ]
+    );
+    let left = sqlx::query_scalar!("SELECT count(*) FROM call_entities")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(left, Some(1));
 }

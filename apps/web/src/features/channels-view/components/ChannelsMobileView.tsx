@@ -1,31 +1,21 @@
 import { createListController } from '@app/components/list';
 import { toEntityActionListState } from '@app/features/next-soup/actions';
-import {
-  persistSoupNavigationTouchHighlight,
-  soupNavigationTouchHighlight,
-} from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
-import {
-  ChannelCardLayout,
-  toInboxCardDisplayItem,
-} from '@app/features/next-soup/soup-view/views/inbox/inbox-card-layouts';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
-import { t } from '@app/lib/i18n';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
+import { holdRowPress } from '@components/app/mobile/rowPress';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
-import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
-import { InboxDivider } from '@entity/composed/list-entity/shared';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn, EmptyStatePanel } from '@ui';
+import { Button, EmptyStatePanel } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -42,14 +32,13 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { sortChannels } from '../core/channel-sort';
 import type { ChannelsDataSource } from '../queries';
 import type { ChannelSectionPreferences } from '../types';
+import { ChannelFeedRow } from './ChannelFeedRow';
 import { ChannelPin, ChannelPinGrid } from './ChannelPins';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
-import { ChannelMentionCount } from './rail/ChannelCountPill';
 import { ChannelLiveCallBadge } from './rail/ChannelLiveCallBadge';
 import { IncomingCallActions } from './rail/ChannelRailItems';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
 import { useChannelRailActivity } from './rail/hooks/useChannelRailActivity';
-import { JoinChannelButton } from './rail/next/JoinChannelButton';
 
 const MOBILE_CHANNEL_ROW_HEIGHT = 72;
 const MOBILE_CHANNEL_BUFFER_SIZE = MOBILE_CHANNEL_ROW_HEIGHT * 6;
@@ -103,7 +92,7 @@ export function ChannelsMobileView(props: {
             !pinnedIds().has(channel.id) ||
             channelActivity.incomingCallIds().has(channel.id)) &&
           (!props.preferences?.unreadOnly ||
-            channelActivity.unreadChannelIds().has(channel.id))
+            channelActivity.unreadOrMentionedChannelIds().has(channel.id))
       );
     const sort = props.preferences?.sort;
     if (!sort || sort === 'manual') return channels;
@@ -163,7 +152,7 @@ export function ChannelsMobileView(props: {
   });
   const openChannel = async (channel: ChannelEntity, event: MouseEvent) => {
     const request = ++opening;
-    const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
+    const releaseRowPress = holdRowPress(event);
     try {
       if (!event.shiftKey && props.openPreview?.(channel)) return;
       await openEntityInSplitFromUnifiedList(channel, {
@@ -181,7 +170,7 @@ export function ChannelsMobileView(props: {
       console.error('Failed to open conversation', error);
       toast.failure('Unable to open conversation. Please try again.');
     } finally {
-      finishTouchHighlight?.();
+      releaseRowPress?.();
     }
   };
 
@@ -291,53 +280,17 @@ export function ChannelsMobileView(props: {
                 });
               }}
             >
-              {/* Home's touch row (InboxListEntity): avatar column,
-                      unread rail, and a divider inset to the content. */}
-              <div
-                data-soup-entity
-                class={cn(
-                  'soup-list-entity relative mx-(--soup-row-gutter)',
-                  SOUP_ROW_CLASS.card
-                )}
-              >
-                <div
-                  class={cn(
-                    channel.isParticipant === false && 'opacity-50 pr-20'
-                  )}
-                >
-                  <ChannelCardLayout
-                    preview={
-                      channelActivity.incomingCallIds().has(channel.id)
-                        ? t('calls.callingYou')
-                        : undefined
-                    }
-                    trailing={callActions(channel.id)}
-                    badge={
-                      <ChannelMentionCount
-                        count={channelActivity.mentionCount(channel.id)}
-                      />
-                    }
-                    item={{
-                      ...toInboxCardDisplayItem(channel),
-                      unread: isUnread(channel),
-                    }}
-                    onClick={(event) =>
-                      fireAndForget(
-                        openChannel(channel, event),
-                        'channels-view'
-                      )
-                    }
-                  />
-                </div>
-                <Show when={channel.isParticipant === false}>
-                  <div class="absolute top-5 right-(--mobile-chrome-gutter)">
-                    <JoinChannelButton channelId={channel.id} />
-                  </div>
-                </Show>
-                <Show when={index() < visibleChannels().length - 1}>
-                  <InboxDivider />
-                </Show>
-              </div>
+              <ChannelFeedRow
+                channel={channel}
+                unread={isUnread(channel)}
+                mentions={channelActivity.mentionCount(channel.id)}
+                ringing={channelActivity.incomingCallIds().has(channel.id)}
+                trailing={callActions(channel.id)}
+                divider={index() < visibleChannels().length - 1}
+                onOpen={(event) =>
+                  fireAndForget(openChannel(channel, event), 'channels-view')
+                }
+              />
             </SoupEntityContextMenu>
           )}
         </Virtualizer>
@@ -386,10 +339,7 @@ export function ChannelsMobileView(props: {
         onRefresh={props.source.refresh}
       />
       <div
-        ref={(element) => {
-          setViewport(element);
-          soupNavigationTouchHighlight(element);
-        }}
+        ref={setViewport}
         class="scrollbar-hidden size-full min-h-0 overflow-y-auto overscroll-none"
       >
         <div ref={setListHeader}>
@@ -416,19 +366,17 @@ export function ChannelsMobileView(props: {
                       });
                     }}
                   >
-                    <div data-soup-entity class="rounded-xl py-1">
-                      <ChannelPin
-                        channel={channel}
-                        unread={isUnread(channel)}
-                        mentions={channelActivity.mentionCount(channel.id)}
-                        onActivate={(event) =>
-                          fireAndForget(
-                            openChannel(channel, event),
-                            'channels-view'
-                          )
-                        }
-                      />
-                    </div>
+                    <ChannelPin
+                      channel={channel}
+                      unread={isUnread(channel)}
+                      mentions={channelActivity.mentionCount(channel.id)}
+                      onActivate={(event) =>
+                        fireAndForget(
+                          openChannel(channel, event),
+                          'channels-view'
+                        )
+                      }
+                    />
                   </SoupEntityContextMenu>
                 )}
               </For>

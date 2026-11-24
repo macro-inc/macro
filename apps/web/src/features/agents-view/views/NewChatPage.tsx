@@ -623,6 +623,9 @@ export function NewChatPage(props: {
   };
 
   const phoneComposer = () => !!props.compact && isTouchDevice();
+  // Full new-session views share Home's below-composer mode/repository row.
+  // Only the collapsed phone accessory keeps its compact upper drawer.
+  const homeLayout = () => Boolean(props.homeLayout || !props.compact);
   const modeSwitch = () => (
     <div ref={tourTarget(AGENTS_TOUR.modeSwitch)} class="shrink-0">
       <Tabs
@@ -640,7 +643,7 @@ export function NewChatPage(props: {
           { value: 'chat', label: agentsModeLabel('chat'), icon: ChatIcon },
           { value: 'code', label: agentsModeLabel('code'), icon: CodeIcon },
         ]}
-        {...(props.homeLayout
+        {...(homeLayout()
           ? {
               variant: 'track' as const,
               fullWidth: true,
@@ -688,7 +691,7 @@ export function NewChatPage(props: {
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
       phoneLayout={phoneComposer()}
-      settingsPlacement={props.homeLayout ? 'below' : 'inside'}
+      settingsPlacement={homeLayout() ? 'below' : 'inside'}
       controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
       registerFocus={(focus) => {
         focusInput = focus;
@@ -707,8 +710,8 @@ export function NewChatPage(props: {
         <div
           class="flex min-w-0 items-center gap-2"
           classList={{
-            'w-full': isTouchDevice() || props.homeLayout,
-            'flex-wrap not-touch:justify-end': !props.homeLayout,
+            'w-full': isTouchDevice() || homeLayout(),
+            'flex-wrap not-touch:justify-end': !homeLayout(),
           }}
         >
           {modeSwitch()}
@@ -716,8 +719,8 @@ export function NewChatPage(props: {
             <div
               class="min-w-0"
               classList={{
-                'w-60 max-w-full': !phoneComposer() && !props.homeLayout,
-                'flex-1 touch:[&>div]:justify-end': props.homeLayout,
+                'w-60 max-w-full': !phoneComposer() && !homeLayout(),
+                'flex-1 touch:[&>div]:justify-end': homeLayout(),
                 'w-fit max-w-[calc(100%_-_96px)]': phoneComposer(),
               }}
             >

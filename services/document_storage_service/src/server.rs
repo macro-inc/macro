@@ -822,13 +822,20 @@ async fn run_server() -> anyhow::Result<()> {
         .get_maybe_secret_value(env, CalEventTypeContentNamesKey::new()?)
         .await?;
 
-    let analytics_client = Arc::new(AnalyticsClient::new(AnalyticsClientConfig {
-        google_analytics: None,
-        meta: Some(MetaConfig {
+    let meta = match env {
+        Environment::Production => Some(MetaConfig {
             pixel_id: MetaPixelId::new()?.as_ref().to_string(),
             access_token: MetaAccessToken::new()?.as_ref().to_string(),
             test_event_code: MetaTestEventCode::new().map(|v| v.as_ref().to_string()),
         }),
+        Environment::Develop | Environment::Local => {
+            tracing::info!("skipping Meta Conversions API outside production");
+            None
+        }
+    };
+    let analytics_client = Arc::new(AnalyticsClient::new(AnalyticsClientConfig {
+        google_analytics: None,
+        meta,
         posthog: None,
     }));
 
@@ -1014,17 +1021,41 @@ async fn run_server() -> anyhow::Result<()> {
                 flags.clone(),
             )),
         };
-    let time_tracking_state = time_tracking::inbound::axum_router::TimeTrackingRouterState::new(
-        Arc::new(
-            time_tracking::domain::service::TimeTrackingServiceImpl::new(
-                time_tracking::outbound::pg_time_repo::PgTimeTrackingRepository::new(db.clone()),
-                entity_access_service.clone(),
-                time_tracking_rollout,
-                time_tracking::outbound::kafka_events::BrokerTimeEntryEventPublisher::new(
-                    macro_event_broker.clone(),
-                ),
+    let time_tracking_service = Arc::new(
+        time_tracking::domain::service::TimeTrackingServiceImpl::new(
+            time_tracking::outbound::pg_time_repo::PgTimeTrackingRepository::new(db.clone()),
+            entity_access_service.clone(),
+            time_tracking_rollout,
+            time_tracking::outbound::kafka_events::BrokerTimeEntryEventPublisher::new(
+                macro_event_broker.clone(),
+            ),
+            time_tracking::outbound::gateway_updates::GatewayTimeTrackingUpdates::new(
+                conn_gateway_client.clone(),
+                event_broker_tracker.clone(),
             ),
         ),
+    );
+    let time_tracking_state = time_tracking::inbound::axum_router::TimeTrackingRouterState::new(
+        time_tracking_service.clone(),
+        entity_access_service.clone(),
+        authorization_state.clone(),
+    );
+    // Summaries read the primary: the screens read them again after each
+    // change, and the replica can lag by seconds. Exports read the replica.
+    let time_report_service = Arc::new(
+        time_tracking::domain::report_service::TimeReportServiceImpl::new(
+            time_tracking::outbound::pg_report_repo::PgTimeReportRepository::new(
+                db.clone(),
+                readonly_db.clone(),
+            ),
+            entity_access_service.clone(),
+            time_tracking::outbound::project_tasks::SystemPropertyProjectTasks::new(
+                system_properties_service.clone(),
+            ),
+        ),
+    );
+    let time_report_state = time_tracking::inbound::report_router::TimeReportRouterState::new(
+        time_report_service.clone(),
         entity_access_service.clone(),
         authorization_state.clone(),
     );
@@ -2737,6 +2768,7 @@ async fn run_server() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         time_tracking_state,
+        time_report_state,
         account_manager_state: AccountManagerRouterState::new(
             account_manager_service,
             authorization_state.clone(),
@@ -2800,6 +2832,16 @@ async fn run_server() -> anyhow::Result<()> {
         graphql_crm_context: graphql_crm::CrmGraphqlContext::new(pipeline_service.clone()),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),
+            entity_access_service.clone(),
+        ),
+        // Time tracking reads the primary: an entry list is read right after
+        // the write that changed it.
+        graphql_time_tracking_context: graphql_time_tracking::TimeTrackingGraphqlContext::new(
+            time_tracking_service,
+            entity_access_service.clone(),
+        ),
+        graphql_time_report_context: graphql_time_tracking::TimeReportGraphqlContext::new(
+            time_report_service,
             entity_access_service.clone(),
         ),
         graphql_scheduled_action_context: ScheduledActionGraphqlContext::new(

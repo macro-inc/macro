@@ -21,3 +21,4 @@ xtask_paths = { path = "../xtask_paths" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+toml = { workspace = true }

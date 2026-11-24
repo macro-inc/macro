@@ -114,6 +114,9 @@ export type ThreadQueryData = {
 export type ThreadQueryResult<TData> = {
   /** Canonical identity for this route, including a resolved offline handle. */
   readonly resolvedThreadId: string;
+  /** Waiting for the cache to say whether the route is a local draft; the
+   * thread is not requested meanwhile. */
+  readonly isResolvingIdentity: boolean;
   readonly data: TData | undefined;
   readonly error: Error | null;
   readonly isLoading: boolean;
@@ -162,17 +165,18 @@ export function useThreadQuery<TData = ThreadQueryData>(
   const select = () =>
     options?.().select ?? (selectThreadQueryData as ThreadQuerySelector<TData>);
 
-  const { query, resolvedThreadId } = createGraphqlEmailThreadQuery<TData>(
-    threadId,
-    () => ({
+  const { query, resolvedThreadId, identityPending } =
+    createGraphqlEmailThreadQuery<TData>(threadId, () => ({
       enabled: options?.().enabled !== false,
       select: select(),
-    })
-  );
+    }));
 
   return {
     get resolvedThreadId() {
       return resolvedThreadId();
+    },
+    get isResolvingIdentity() {
+      return identityPending();
     },
     get data() {
       return query.data;

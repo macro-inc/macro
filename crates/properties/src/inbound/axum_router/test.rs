@@ -1,3 +1,6 @@
+#[cfg(feature = "outbound")]
+mod crm_contact_access;
+
 use entity_access::domain::models::TeamRole;
 use std::sync::{Arc, Mutex};
 

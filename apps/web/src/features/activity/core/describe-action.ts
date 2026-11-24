@@ -1,3 +1,4 @@
+import { formatLength } from '@app/features/time-tracking/core/format-length';
 import { match } from 'ts-pattern';
 import { entryAction, entrySize, type FeedEntry } from './collapse-runs';
 import type { ActivityAction } from './event';
@@ -16,8 +17,10 @@ export function describeRun(entry: FeedEntry): {
   if (size < 2) return { action, countLabel: undefined };
   return {
     action,
-    countLabel:
-      action.kind === 'property-changed' ? `${size} changes` : `${size} times`,
+    countLabel: match(action.kind)
+      .with('property-changed', () => `${size} changes`)
+      .with('time-logged', () => `${size} entries`)
+      .otherwise(() => `${size} times`),
   };
 }
 
@@ -45,6 +48,10 @@ export function describeAction(action: ActivityAction, count = 1): string {
       .with({ kind: 'participant-removed' }, () => 'removed a participant')
       .with({ kind: 'call-started' }, () => 'started a call')
       .with({ kind: 'responded' }, () => 'responded')
+      .with(
+        { kind: 'time-logged' },
+        (logged) => `logged ${formatLength(logged.minutes)}`
+      )
       .with({ kind: 'unknown' }, (unknown) => unknown.tag.replaceAll('_', ' '))
       .exhaustive();
   }
@@ -65,6 +72,10 @@ export function describeAction(action: ActivityAction, count = 1): string {
     )
     .with({ kind: 'call-started' }, () => `started ${count} calls`)
     .with({ kind: 'responded' }, () => `responded ${count} times`)
+    .with(
+      { kind: 'time-logged' },
+      (logged) => `logged ${formatLength(logged.minutes)} in ${count} entries`
+    )
     .with(
       { kind: 'unknown' },
       (unknown) => `${unknown.tag.replaceAll('_', ' ')} ${count} times`
@@ -124,6 +135,10 @@ export function describeActionForEntity(action: ActivityAction): {
       connector: 'in',
     }))
     .with({ kind: 'responded' }, () => ({ verb: 'responded', connector: 'to' }))
+    .with({ kind: 'time-logged' }, (logged) => ({
+      verb: `logged ${formatLength(logged.minutes)}`,
+      connector: 'on',
+    }))
     .with({ kind: 'unknown' }, (unknown) => ({
       verb: unknown.tag.replaceAll('_', ' '),
       connector: 'on',

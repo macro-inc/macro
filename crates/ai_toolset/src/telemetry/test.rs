@@ -283,6 +283,33 @@ async fn user_tool_calls_are_traced_too() {
     );
 }
 
+/// A dispatch inside `withhold_content` records the call, not what went in or
+/// came out.
+#[tokio::test]
+async fn a_tool_call_inside_withhold_content_records_no_content() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let toolset = toolset();
+
+    genai_telemetry::withhold_content(toolset.try_tool_call(
+        (),
+        request_context(),
+        "echo_tool",
+        &json!({ "value": "private" }),
+    ))
+    .await
+    .expect("dispatch")
+    .expect("tool success");
+
+    let spans = finished(&exporter, &provider);
+    let span = tool_spans(&spans)[0];
+    assert_eq!(
+        string_attribute(span, attr::TOOL_NAME).as_deref(),
+        Some("echo_tool")
+    );
+    assert_eq!(string_attribute(span, attr::TOOL_CALL_ARGUMENTS), None);
+    assert_eq!(string_attribute(span, attr::TOOL_CALL_RESULT), None);
+}
+
 #[tokio::test]
 async fn content_capture_off_records_structure_only() {
     let (exporter, provider, _guard) = otel_test_pipeline();
@@ -316,6 +343,112 @@ async fn content_capture_off_records_structure_only() {
     }
 }
 
+/// Every event's fields, as text.
+#[derive(Clone, Default)]
+struct Events(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Events {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Text<'a>(&'a mut String);
+        impl tracing::field::Visit for Text<'_> {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                use std::fmt::Write as _;
+                let _ = write!(self.0, "{}={value:?} ", field.name());
+            }
+        }
+        let mut text = String::new();
+        event.record(&mut Text(&mut text));
+        self.0.lock().expect("events lock").push(text);
+    }
+}
+
+/// A tool whose input is a count, and whose call fails quoting what it read.
+#[derive(Deserialize, JsonSchema)]
+#[schemars(title = "tally_tool", description = "Fails quoting its input.")]
+struct TallyTool {
+    count: u64,
+}
+
+impl ToolAnnotated for TallyTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Tally");
+}
+
+#[async_trait]
+impl AsyncTool<()> for TallyTool {
+    type Output = serde_json::Value;
+
+    async fn call(
+        &self,
+        _service_context: ServiceContext<()>,
+        _request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        Err(ToolCallError {
+            description: format!("the private supplier list has no row {}", self.count),
+            internal_error: anyhow::anyhow!("the private supplier list is locked"),
+        })
+    }
+}
+
+/// The events of a call whose arguments don't fit and of a call that fails
+/// quote what the call held, so inside `withhold_content` they say only
+/// what kind of failure it was.
+#[tokio::test]
+async fn a_withheld_calls_failures_are_logged_without_their_text() {
+    let events = Events::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(events.clone()));
+    let tools = AsyncToolCollection::<()>::new().add_tool::<TallyTool, ()>();
+    let calls = || async {
+        for arguments in [
+            json!({ "count": "the private supplier list" }),
+            json!({ "count": 1 }),
+        ] {
+            let _ = tools
+                .try_tool_call((), request_context(), "tally_tool", &arguments)
+                .await;
+        }
+    };
+    // Register the callsites, then recompute their interest on this thread:
+    // another test's thread can cache them as never wanted.
+    calls().await;
+    genai_telemetry::withhold_content(calls()).await;
+    tracing::callsite::rebuild_interest_cache();
+    let take = || std::mem::take(&mut *events.0.lock().expect("events lock"));
+    take();
+
+    calls().await;
+    let shown = take();
+    genai_telemetry::withhold_content(calls()).await;
+    let withheld = take();
+    // Outside the scope each failure is logged with its text, as before:
+    // serde's refusal, the dispatch warning, and the tool's error.
+    assert!(
+        shown
+            .iter()
+            .filter(|event| event.contains("private supplier"))
+            .count()
+            >= 3,
+        "{shown:#?}"
+    );
+    assert!(
+        withheld.iter().all(|event| !event.contains("private")),
+        "{withheld:#?}"
+    );
+    assert_eq!(
+        withheld.len(),
+        shown.len(),
+        "the same events: {withheld:#?}"
+    );
+    for kind in [
+        "the arguments did not match the tool's schema",
+        "the tool reported an error",
+    ] {
+        assert!(
+            withheld.iter().any(|event| event.contains(kind)),
+            "{withheld:#?}"
+        );
+    }
+}
 #[tokio::test]
 async fn oversized_content_is_bounded_and_flagged() {
     let (exporter, provider, _guard) = otel_test_pipeline();

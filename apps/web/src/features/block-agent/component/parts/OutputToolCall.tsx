@@ -16,7 +16,6 @@ export function OutputToolCall(props: {
     <ToolCard
       title={props.common.label}
       status={props.common.status}
-      muted={props.common.muted}
       trailing={props.common.trailing}
       hasContent={Boolean(props.detail.output)}
     >

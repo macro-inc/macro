@@ -280,3 +280,24 @@ async fn channel_changes_resolve_current_call_status_and_missing_records() {
         assert_eq!(*call, Some(expected));
     }
 }
+
+#[tokio::test]
+async fn the_channel_sequence_is_read_only_under_that_channels_view_access() {
+    let mut repo = fixture();
+    repo.change_log.seq = 7;
+    let service = MessageService::new(repo, Events::default());
+    let own = service
+        .channel_seq(
+            channel_access().try_into_requirement().unwrap(),
+            Uuid::from_u128(20),
+        )
+        .await;
+    assert_eq!(own.unwrap(), 7);
+    let other = service
+        .channel_seq(
+            channel_access().try_into_requirement().unwrap(),
+            Uuid::from_u128(21),
+        )
+        .await;
+    assert!(matches!(other, Err(MessageError::Forbidden)));
+}

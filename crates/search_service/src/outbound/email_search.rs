@@ -9,16 +9,26 @@ use email_db_client::threads::search_filters::{
 use entity_access::outbound::{
     get_user_source_ids, project_email_threads, project_shared_email_threads, shared_email_threads,
 };
+use favorites::domain::models::FavoriteFilter;
+use favorites::domain::ports::FavoritesRepo;
+use favorites::outbound::pg_favorites_repo::PgFavoritesRepo;
 use item_filters::ast::email::AttachmentKind;
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use model_entity::EntityType;
+use models_properties::service::tag_sets::CallerTagSets;
+use properties::outbound::property_definition_queries::get_caller_tag_definitions_with_options;
 use readonly_pool::ReadOnlyPool;
 use rootcause::Report;
 use uuid::Uuid;
 
-use crate::domain::email_search::{EmailSearchSource, SharedThread, ThreadSet, ThreadStates};
+use crate::domain::email_search::{
+    EmailSearchSource, SharedThread, TagOption, ThreadSet, ThreadStates,
+};
 
 pub(crate) struct EmailSearchPgSource {
     pub db: ReadOnlyPool,
+    pub favorites: PgFavoritesRepo,
 }
 
 fn limit(limit: usize) -> i64 {
@@ -128,16 +138,71 @@ impl EmailSearchSource for EmailSearchPgSource {
                 .collect(),
             sent: states.sent,
             has_draft: states.has_draft,
-            attachment_kinds: states
-                .attachments
-                .iter()
-                .copied()
-                .map(attachment_kind)
-                .collect(),
+            attachment_kinds: if states.has_attachment {
+                vec![ThreadAttachmentKind::Any]
+            } else {
+                states
+                    .attachments
+                    .iter()
+                    .copied()
+                    .map(attachment_kind)
+                    .collect()
+            },
         };
         let ids = thread_ids_matching_states(&self.db, thread_ids, user.as_ref(), &filter)
             .await
             .map_err(|error| rootcause::report!("{error:#}"))?;
         Ok(ids.into_iter().collect())
+    }
+
+    async fn favorite_threads(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        max: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        let user = MacroUserIdStr::parse_from_str(user.as_ref())
+            .map_err(|error| rootcause::report!("{error:#}"))?;
+        let filter = FavoriteFilter {
+            entity_types: vec![EntityType::EmailThread],
+            ..FavoriteFilter::default()
+        };
+        let favorites = self
+            .favorites
+            .list_favorites(&user, &filter)
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))?;
+        Ok(favorites
+            .iter()
+            .filter_map(|favorite| Uuid::parse_str(&favorite.entity_id).ok())
+            .take(max)
+            .collect())
+    }
+
+    async fn tag_options(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<TagOption>, Report> {
+        let definitions = get_caller_tag_definitions_with_options(&self.db, user.as_ref())
+            .await
+            .map_err(|error| rootcause::report!("{error:#}"))?;
+        Ok(CallerTagSets::new(definitions)
+            .options()
+            .iter()
+            .map(|option| TagOption {
+                label: option.label.clone(),
+                option_id: option.option_id,
+            })
+            .collect())
+    }
+
+    async fn inbox_labels(&self, link_ids: &[Uuid]) -> Result<Vec<String>, Report> {
+        let mut names = Vec::new();
+        for link_id in link_ids {
+            let labels = email_db_client::labels::get::fetch_labels_by_link_id(&self.db, *link_id)
+                .await
+                .map_err(|error| rootcause::report!("{error:#}"))?;
+            names.extend(labels.into_iter().filter_map(|label| label.name));
+        }
+        Ok(names)
     }
 }

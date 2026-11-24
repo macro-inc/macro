@@ -11,39 +11,50 @@ import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { Suggestion } from '../core/suggestion';
 
-type Look = { icon: Component<{ class?: string }>; tint: string };
+type Look = {
+  icon: Component<{ class?: string }>;
+  /** The glyph's colour. */
+  tint: string;
+  /** The same colour at 15%, for a tile behind the glyph. */
+  fill: string;
+};
 
 /**
  * Each kind's glyph in its own colour, from the tints the routine cards give
  * the parts of the app, so the kinds can be told apart at a glance.
  */
-function suggestionLook(suggestion: Suggestion): Look {
+export function suggestionLook(suggestion: Suggestion): Look {
   return match(suggestion)
     .returnType<Look>()
     .with({ kind: 'prompt', runMode: 'composer' }, () => ({
       icon: SparkleIcon,
       tint: 'text-purple',
+      fill: 'bg-purple/15',
     }))
     .with({ kind: 'prompt', runMode: 'background' }, (prompt) =>
       prompt.sends
-        ? { icon: PaperPlaneIcon, tint: 'text-yellow' }
-        : { icon: SparkleIcon, tint: 'text-accent' }
+        ? { icon: PaperPlaneIcon, tint: 'text-yellow', fill: 'bg-yellow/15' }
+        : { icon: SparkleIcon, tint: 'text-accent', fill: 'bg-accent/15' }
     )
     .with({ kind: 'entity', action: 'reply' }, () => ({
       icon: EnvelopeIcon,
       tint: 'text-blue',
+      fill: 'bg-blue/15',
     }))
     .with({ kind: 'entity', action: 'review' }, () => ({
       icon: FileTextIcon,
       tint: 'text-cyan',
+      fill: 'bg-cyan/15',
     }))
     .with({ kind: 'entity', action: 'follow_up' }, () => ({
       icon: ArrowBendUpLeftIcon,
       tint: 'text-green',
+      fill: 'bg-green/15',
     }))
     .with({ kind: 'routine' }, () => ({
       icon: ClockIcon,
       tint: 'text-orange',
+      fill: 'bg-orange/15',
     }))
     .exhaustive();
 }

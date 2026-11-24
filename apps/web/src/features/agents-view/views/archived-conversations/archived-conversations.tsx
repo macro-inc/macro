@@ -84,10 +84,10 @@ export function ArchivedConversations(props: {
         aria-label={t('viewMenus.archived')}
         onScroll={onScroll}
       >
-        <div class="mb-2 flex shrink-0 items-center gap-1.5 pb-2">
-          <h2 class="text-sm font-semibold text-ink">
+        <header class="mb-2 flex shrink-0 items-center gap-1.5 pb-2">
+          <h1 class="text-sm font-semibold text-ink">
             {t('viewMenus.archived')}
-          </h2>
+          </h1>
           <span class="text-xs text-ink-extra-muted/70 tabular-nums">
             {rows().length}
           </span>
@@ -98,7 +98,7 @@ export function ArchivedConversations(props: {
             value={search()}
             onValueChange={setSearch}
           />
-        </div>
+        </header>
         <div
           class="flex shrink-0 items-center gap-4 px-3 pb-1 text-xs font-medium text-ink-extra-muted"
           aria-hidden="true"

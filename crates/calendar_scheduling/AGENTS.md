@@ -68,6 +68,11 @@ MacroDB migrations.
   or a day after it for a calendar synced daily: Google's system calendars and
   an Outlook mailbox's own read-only ones), and the creation calendar refuses
   only a permanent or reauthorization failure. Change them together.
+- A personal link's `emailLinkId` pins the inbox its bookings land on: the
+  creation calendar, availability and form attachment all require that
+  inbox's primary calendar and never fall back to another, so the booker
+  never sees the primary address the owner chose to hide. Booker-facing
+  responses drop `hosts` for the same reason.
 
 ## Related
 

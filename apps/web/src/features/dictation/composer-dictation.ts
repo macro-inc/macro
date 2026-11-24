@@ -4,12 +4,13 @@ import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
 import { isDictationAvailable } from './availability';
 import { AudioRecorder, audioRecorder } from './browser/audio-recorder';
+import { clearNotesOnDraftChange } from './primitives/clear-on-draft-change';
 import { createRecordedDictation } from './primitives/create-recorded-dictation';
 
 /** Append plain speech without reparsing or replacing the existing rich draft. */
 export function createComposerDictation(editor: () => LexicalEditor) {
   const language = navigator.language || 'en-US';
-  return createRecordedDictation({
+  const dictation = createRecordedDictation({
     // Off means the recorder is never created: no microphone prompt, no audio
     // in memory, and no transcription request.
     supported: isDictationAvailable() && AudioRecorder.isSupported(),
@@ -34,4 +35,5 @@ export function createComposerDictation(editor: () => LexicalEditor) {
     },
     onCancel: () => editor().focus(),
   });
+  return clearNotesOnDraftChange(dictation, editor);
 }
