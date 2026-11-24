@@ -77,7 +77,6 @@ export function NewTableDialog(props: {
               <ActionDialogShell.Title>New table</ActionDialogShell.Title>
             </ActionDialogShell.Header>
             <TextField
-              validationState={error() ? 'invalid' : 'valid'}
               value={value()}
               onChange={(next) => {
                 setValue(next);
@@ -91,8 +90,12 @@ export function NewTableDialog(props: {
                 maxLength={200}
                 readOnly={pending() || !!createdTableId()}
               />
-              <TextField.ErrorMessage>{error()}</TextField.ErrorMessage>
             </TextField>
+            <Show when={error()}>
+              <p role="alert" class="text-sm text-failure">
+                {error()}
+              </p>
+            </Show>
           </ActionDialogShell.Body>
           <ActionDialogShell.Footer>
             <Button

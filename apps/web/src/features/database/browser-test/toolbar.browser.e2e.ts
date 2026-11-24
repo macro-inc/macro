@@ -105,9 +105,9 @@ for (const width of [320, 390, 430]) {
 
       await name.fill('Invoices');
       await page.getByRole('button', { name: 'Create table' }).tap();
-      await expect(
-        page.getByText('A table with this name already exists.')
-      ).toBeVisible();
+      await expect(page.getByRole('alert')).toHaveText(
+        'A table with this name already exists. Try another name.'
+      );
 
       // When this fails, closing the dialog dropped focus or left the page
       // ignoring taps.
@@ -135,15 +135,15 @@ for (const width of [320, 390, 430]) {
       await page.getByRole('menuitem', { name: 'New table' }).tap();
       await page.getByRole('textbox', { name: 'Name' }).fill('Risks');
       await page.getByRole('button', { name: 'Create table' }).tap();
-      await expect(
-        page.getByText('Your table is ready, but could not be loaded.')
-      ).toBeVisible();
+      await expect(page.getByRole('alert')).toHaveText(
+        'Your table is ready, but could not be loaded.'
+      );
       await page.getByRole('button', { name: 'Open table' }).tap();
 
       await expect(
         page.getByRole('button', { name: 'Table: Risks' })
       ).toBeVisible();
-      await expect(page.getByLabel('Table creations')).toHaveText('4');
+      await expect(page.getByLabel('Tables', { exact: true })).toHaveText('4');
     });
 
     test('creates the first table of a database without tables', async ({

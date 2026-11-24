@@ -320,13 +320,18 @@ const Block: Component = () => {
   const createTableNamed: CreateTable = (name, existingTableId) =>
     createTableWithName({ databaseId, name, existingTableId });
   const createTable = () => (canEdit() ? createTableNamed : undefined);
-  const [focusTableMenu, setFocusTableMenu] = createSignal(false);
-  /** The toolbar is drawn again for the new table; its table menu takes focus back. */
+  /**
+   * The table whose toolbar should give its table menu focus as it appears:
+   * the one just chosen from that menu, whose own button went with the table
+   * it named.
+   */
+  const [tableMenuFocus, setTableMenuFocus] = createSignal<string>();
   function selectTableFromMenu(tableId: string) {
-    setFocusTableMenu(true);
-    selectTable(tableId);
+    setTableMenuFocus(tableId);
+    setSelection((current) => ({ ...current, tableId }));
   }
   function selectTable(tableId: string) {
+    setTableMenuFocus(undefined);
     setSelection((current) => ({ ...current, tableId }));
   }
   function selectView(id?: string) {
@@ -552,9 +557,11 @@ const Block: Component = () => {
                                 activeTableId={activeTableId()}
                                 onSelectTable={selectTableFromMenu}
                                 onCreateTable={createTable()}
-                                focusTableMenu={focusTableMenu()}
+                                focusTableMenu={
+                                  tableMenuFocus() === activeTableId()
+                                }
                                 onTableMenuFocused={() =>
-                                  setFocusTableMenu(false)
+                                  setTableMenuFocus(undefined)
                                 }
                                 tableMenuItems={tableMenuItems()}
                                 search={

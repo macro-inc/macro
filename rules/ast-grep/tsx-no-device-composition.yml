@@ -31,6 +31,7 @@ ignores:
   - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-chat/component/Chat.tsx
   - apps/web/src/features/block-code/component/Block.tsx
+  # Two regions of the database page: its view toolbar and its no-tables state.
   - apps/web/src/features/block-database/database-page-controls.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-fig/fig-block.tsx

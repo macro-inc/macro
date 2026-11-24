@@ -69,11 +69,15 @@ function ToolbarFixture() {
   const [table, setTable] = createSignal(
     params.has('empty') ? undefined : 'table-2'
   );
-  const [focusTableMenu, setFocusTableMenu] = createSignal(false);
+  const [tableMenuFocus, setTableMenuFocus] = createSignal<string>();
   let createCalls = 0;
   const createTable: CreateTable = (name, existingTableId) => {
     createCalls += 1;
-    const id = existingTableId ?? `table-${tables().length + 1}`;
+    if (existingTableId)
+      return okAsync({ tableId: existingTableId, ready: true });
+
+    const id = `table-${tables().length + 1}`;
+    setTables((current) => [...current, { id, name }]);
     if (params.has('unready') && createCalls === 1)
       return okAsync({
         tableId: id,
@@ -81,7 +85,6 @@ function ToolbarFixture() {
         message: 'Your table is ready, but could not be loaded.',
       });
 
-    setTables((current) => [...current, { id, name }]);
     return okAsync({ tableId: id, ready: true });
   };
   const [term, setTerm] = createSignal('');
@@ -165,18 +168,18 @@ function ToolbarFixture() {
               tables={tables()}
               activeTableId={activeTableId}
               onSelectTable={(tableId) => {
-                setFocusTableMenu(true);
+                setTableMenuFocus(tableId);
                 setTable(tableId);
               }}
               onCreateTable={createTable}
               tableMenuItems={undefined}
-              focusTableMenu={focusTableMenu()}
-              onTableMenuFocused={() => setFocusTableMenu(false)}
+              focusTableMenu={tableMenuFocus() === activeTableId}
+              onTableMenuFocused={() => setTableMenuFocus(undefined)}
             />
           )}
         </Show>
       </Suspense>
-      <output aria-label="Table creations">{tables().length}</output>
+      <output aria-label="Tables">{tables().length}</output>
     </main>
   );
 }
