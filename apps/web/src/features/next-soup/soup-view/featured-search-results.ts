@@ -27,30 +27,36 @@ export function withFeaturedDocumentData<T extends WithSearch<EntityData>>(
 }
 
 /**
- * Moves the featured rows that the list still shows to its top. A featured id
- * the view's filters dropped is not featured. Folded ids leave the list until
- * they are featured.
+ * Moves the featured rows that the list still shows to its top, and the
+ * leading rows right after them. A featured id the view's filters dropped is
+ * not featured. Folded ids leave the list until they are featured.
  */
 export function featureSearchResults<T extends { id: string }>(
   entities: readonly T[],
   featuredIds: readonly string[],
-  foldedIds: readonly string[] = []
+  foldedIds: readonly string[] = [],
+  leadingIds: readonly string[] = []
 ): { entities: T[]; featuredIds: string[] } {
   const folded = new Set(foldedIds);
   const listed = folded.size
     ? entities.filter((entity) => !folded.has(entity.id))
     : entities;
-  if (featuredIds.length === 0)
+  if (featuredIds.length === 0 && leadingIds.length === 0)
     return { entities: [...listed], featuredIds: [] };
   const byId = new Map(listed.map((entity) => [entity.id, entity]));
-  const featured = featuredIds.flatMap((id) => {
-    const entity = byId.get(id);
-    return entity ? [entity] : [];
-  });
+  const pick = (ids: readonly string[]) =>
+    ids.flatMap((id) => {
+      const entity = byId.get(id);
+      return entity ? [entity] : [];
+    });
+  const featured = pick(featuredIds);
   const shown = new Set(featured.map((entity) => entity.id));
+  const leading = pick(leadingIds).filter((entity) => !shown.has(entity.id));
+  for (const entity of leading) shown.add(entity.id);
   return {
     entities: [
       ...featured,
+      ...leading,
       ...listed.filter((entity) => !shown.has(entity.id)),
     ],
     featuredIds: featured.map((entity) => entity.id),
@@ -58,7 +64,10 @@ export function featureSearchResults<T extends { id: string }>(
 }
 
 /** The most name matches Search lists above the rest of its results. */
-export const BEST_MATCH_COUNT = 3;
+const BEST_MATCH_COUNT = 3;
+
+const straightApostrophes = (text: string) =>
+  text.replace(/[\u2018\u2019]/g, "'");
 
 /**
  * How well a name matches the typed text, best first: the whole name, its
@@ -66,12 +75,12 @@ export const BEST_MATCH_COUNT = 3;
  * a word, or neither (a loose fuzzy match).
  */
 function nameMatchLevel(name: string, text: string) {
-  const lowered = name.toLowerCase();
-  const query = text.trim().toLowerCase();
+  const lowered = straightApostrophes(name.toLowerCase());
+  const query = straightApostrophes(text.trim().toLowerCase());
   if (!query) return 5;
   if (lowered === query) return 0;
   const isWordCharacter = (char: string | undefined) =>
-    char !== undefined && /[\p{L}\p{N}]/u.test(char);
+    char !== undefined && /[\p{L}\p{M}\p{N}]/u.test(char);
   if (lowered.startsWith(query))
     return isWordCharacter(lowered[query.length]) ? 2 : 1;
   let at = lowered.indexOf(query);
@@ -107,12 +116,13 @@ const KIND_ORDER: Record<BestMatchKind, number> = {
  * documents and tasks before group chats, smaller group chats first. The
  * first {@link BEST_MATCH_COUNT} lead the list; the other chats wait behind
  * one row, so a first name shared by dozens of chats stays one screen of
- * results. Ties keep the local search's own order.
+ * results, and the other matches start the rest. Ties keep the local
+ * search's own order.
  */
 export function rankBestMatches(
   local: readonly EntityData[],
   text: string
-): { best: string[]; moreChats: string[] } {
+): { best: string[]; moreChats: string[]; others: string[] } {
   const ranked = local
     .map((entity, index) => {
       const kind = bestMatchKind(entity);
@@ -134,12 +144,14 @@ export function rankBestMatches(
         a.members - b.members ||
         a.index - b.index
     );
-  const best = ranked.slice(0, BEST_MATCH_COUNT);
+  const rest = ranked.slice(BEST_MATCH_COUNT);
   return {
-    best: best.map((match) => match.entity.id),
-    moreChats: ranked
-      .slice(BEST_MATCH_COUNT)
+    best: ranked.slice(0, BEST_MATCH_COUNT).map((match) => match.entity.id),
+    moreChats: rest
       .filter((match) => match.entity.type === 'channel')
+      .map((match) => match.entity.id),
+    others: rest
+      .filter((match) => match.entity.type !== 'channel')
       .map((match) => match.entity.id),
   };
 }

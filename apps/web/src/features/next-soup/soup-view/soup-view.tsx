@@ -1193,7 +1193,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 >
                   <div class="flex items-center gap-2 p-3 text-xs text-ink-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)">
                     <Spinner class="size-3 animate-spin" />
-                    Searching...
+                    {t('searchResults.searching')}
                   </div>
                 </Match>
                 <Match when={showEmptyState()}>
@@ -1460,7 +1460,20 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                               >
                                 <SearchMoreChats
                                   count={moreChatCount()}
-                                  onShow={showMoreChats}
+                                  rowFamily={rowEntry().family}
+                                  onShow={() => {
+                                    // Keyboard focus moves to the first chat
+                                    // shown, where this row was.
+                                    const index = i() + 1;
+                                    showMoreChats();
+                                    soup.navigate.toIndex(index);
+                                    virtualizerHandle()?.scrollToIndex(index, {
+                                      align: 'nearest',
+                                    });
+                                    panel
+                                      .panelRef()
+                                      ?.focus({ preventScroll: true });
+                                  }}
                                 />
                               </Show>
                               <Show
@@ -1473,8 +1486,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                 <div class="flex items-center gap-2 p-3 text-xs text-ink-muted">
                                   <Spinner class="size-3 animate-spin" />
                                   {source.isFetchingNextPage()
-                                    ? 'Loading more...'
-                                    : 'Searching...'}
+                                    ? t('searchResults.loadingMore')
+                                    : t('searchResults.searching')}
                                 </div>
                               </Show>
                               <Show when={i() === rows().length - 1}>

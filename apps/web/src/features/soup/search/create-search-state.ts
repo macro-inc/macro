@@ -240,6 +240,8 @@ export function createSearchState(options: CreateSearchStateOptions) {
     data,
     isSearching,
     localFuzzyResults,
+    /** The trimmed text the local name matches were found with. */
+    localSearchText: localText,
     serviceSearchResults,
     featuredIds,
     searchQuery,

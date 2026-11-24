@@ -115,13 +115,51 @@ it('ranks the exact name, then the start of a name, then a later word, then lett
   expect(moreChats).toEqual(['inside']);
 });
 
-it('keeps a channel with the letters inside a word ahead of nothing but looser matches', () => {
+it('keeps a channel with the letters inside a word, after the better matches', () => {
   const { best } = rankBestMatches(
-    [doc('loose', 'Assorted notes'), chat('inside', 'banana-bread', 'public')],
+    [
+      chat('inside', 'banana-bread', 'public'),
+      doc('loose', 'A narrow agenda'),
+      doc('word', 'Q3 ana review'),
+    ],
     'ana'
   );
 
-  expect(best).toEqual(['inside', 'loose']);
+  expect(best).toEqual(['word', 'inside', 'loose']);
+});
+
+it('does not lead with a DM whose person only has the letters inside a word', () => {
+  const { best } = rankBestMatches(
+    [chat('diana', 'Diana Kerr', 'direct_message'), doc('plan', 'Ana’s plan')],
+    'ana'
+  );
+
+  expect(best).toEqual(['plan', 'diana']);
+});
+
+it('reads curly and straight apostrophes alike', () => {
+  const { best } = rankBestMatches(
+    [doc('other', 'Notes on o’brien'), chat('dm', 'O’Brien', 'direct_message')],
+    "o'brien"
+  );
+
+  expect(best).toEqual(['dm', 'other']);
+});
+
+it('starts the rest with the other name matches that are not chats', () => {
+  const local = [
+    chat('dm-1', 'Ana Silva', 'direct_message'),
+    chat('dm-2', 'Ana Lima', 'direct_message'),
+    chat('dm-3', 'Ana Souza', 'direct_message'),
+    doc('notes', 'Ana’s notes'),
+    chat('group', 'Ana Silva, Ben Okafor', 'private'),
+  ];
+
+  const { best, moreChats, others } = rankBestMatches(local, 'ana');
+
+  expect(best).toEqual(['dm-1', 'dm-2', 'dm-3']);
+  expect(moreChats).toEqual(['group']);
+  expect(others).toEqual(['notes']);
 });
 
 it('puts smaller group chats first among equal matches', () => {
@@ -141,6 +179,15 @@ it('leaves folded chats out of the list below', () => {
 
   expect(featureSearchResults(rows, ['c'], ['b'])).toEqual({
     entities: [{ id: 'c' }, { id: 'a' }, { id: 'd' }],
+    featuredIds: ['c'],
+  });
+});
+
+it('puts the leading rows right after the featured ones', () => {
+  const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
+
+  expect(featureSearchResults(rows, ['c'], ['b'], ['d'])).toEqual({
+    entities: [{ id: 'c' }, { id: 'd' }, { id: 'a' }],
     featuredIds: ['c'],
   });
 });
