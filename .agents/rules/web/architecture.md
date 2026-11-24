@@ -70,6 +70,7 @@ Module layout, layering, and TypeScript conventions.
   Separate production composition and source-contract inversion still require
   explicit review; the existing rules do not enforce them.
 - **FE-71** A primitive owns real logic or is shared; one component's local UI state stays in that component.
+- **FE-73** Don't add a directory for a single file: place the file beside its only consumer or in an existing sibling folder, and group related small files in one folder rather than several one-file folders. FE-33 layer directories (`core/`, `queries/`, `primitives/`, `components/`, `views/`, `context/`) are exempt.
 - **FE-34** Treat the legacy block state system as adapter-boundary code, not
   state management for new or refactored surfaces. Do not add new `useBlock*`,
   `createBlock*`, block-scoped signal/store/memo/resource, or block permission
