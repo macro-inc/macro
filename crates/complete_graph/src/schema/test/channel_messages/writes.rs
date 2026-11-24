@@ -267,3 +267,88 @@ async fn writes_need_a_personal_session_write_access_and_a_valid_change(pool: Pg
         "NOT_FOUND"
     );
 }
+
+/// Every reference is viewable.
+struct AllReferences;
+impl messages::domain::ports::MessageReferenceAccess for AllReferences {
+    fn can_view<'a>(
+        &'a self,
+        _: &'a entity_access::domain::models::EntityAccessAuth,
+        _: EntityType,
+        _: &'a str,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = Result<bool, messages::domain::ports::MessageError>> + Send + 'a>,
+    > {
+        Box::pin(async { Ok(true) })
+    }
+}
+
+/// The channel's committed position.
+async fn channel_seq(pool: &PgPool) -> i64 {
+    sqlx::query_scalar!(
+        "SELECT seq FROM channel_change_counters WHERE channel_id = $1",
+        CHANNEL_ID,
+    )
+    .fetch_one(pool)
+    .await
+    .expect("channel counter")
+}
+
+/// Sends a message, then applies `edit` twice and returns both answers with
+/// the channel position after each.
+async fn edit_twice(pool: PgPool, edit: &str) -> [(Value, i64); 2] {
+    fixture(pool.clone()).await;
+    let reads = Arc::new(
+        MessageService::new(
+            PgMessageRepository::new(pool.clone()),
+            NoMessageEventPublisher,
+        )
+        .with_references(AllReferences),
+    );
+    let harness = harness();
+    let context = writable(&harness, &reads);
+    let id = Uuid::now_v7();
+    let send = format!(
+        "sendChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{id}\", content: \"Sent\" }}) {{ message {{ id }} }}"
+    );
+    data(
+        mutate(&harness, &context, Some(PERSON), &send).await,
+        "sendChannelMessage",
+    );
+    let edit = format!(
+        "editChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{id}\", {edit} }}) {{ message {{ {} }} }}",
+        message_selection()
+    );
+    let mut answers = Vec::new();
+    for _ in 0..2 {
+        let answer = data(
+            mutate(&harness, &context, Some(PERSON), &edit).await,
+            "editChannelMessage",
+        );
+        answers.push((answer, channel_seq(&pool).await));
+    }
+    answers.try_into().expect("two answers")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_replayed_edit_does_not_attach_an_email_thread_again_under_its_editor_alias(
+    pool: PgPool,
+) {
+    let [first, replay] = edit_twice(
+        pool,
+        r#"addAttachments: [
+            { entityType: "thread", entityId: "01900000-0000-7000-8000-0000000000aa" },
+            { entityType: "document", entityId: "01900000-0000-7000-8000-0000000000bb" }
+        ]"#,
+    )
+    .await;
+    assert_eq!(
+        first.0["attachments"][0]["entityType"],
+        json!("email_thread")
+    );
+    assert_eq!(first.0["attachments"].as_array().map(Vec::len), Some(2));
+    assert_eq!(
+        replay, first,
+        "the replay changed the message or the channel"
+    );
+}

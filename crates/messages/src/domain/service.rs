@@ -1,4 +1,8 @@
-use super::{mentions::MessageReferenceKind, models::*, ports::*};
+use super::{
+    mentions::{MessageReferenceKind, stored_attachment_type},
+    models::*,
+    ports::*,
+};
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{
     AdminParticipantRole, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
@@ -673,7 +677,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     .collect();
                 for attachment in add {
                     let held = retained.iter().any(|kept| {
-                        kept.entity_type == attachment.entity_type
+                        stored_attachment_type(&kept.entity_type)
+                            == stored_attachment_type(&attachment.entity_type)
                             && kept.entity_id == attachment.entity_id
                     });
                     if !held {
@@ -1442,7 +1447,8 @@ enum Replay {
 fn same_attachments(next: &[NewAttachment], current: &[MessageAttachment]) -> bool {
     next.len() == current.len()
         && next.iter().zip(current).all(|(next, current)| {
-            next.entity_type == current.entity_type
+            stored_attachment_type(&next.entity_type)
+                == stored_attachment_type(&current.entity_type)
                 && next.entity_id == current.entity_id
                 && next.width == current.width
                 && next.height == current.height

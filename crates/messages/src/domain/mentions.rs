@@ -101,3 +101,12 @@ impl MessageReferenceKind {
         })
     }
 }
+
+/// The entity type an attachment is stored under: email references arrive
+/// under several editor aliases and are kept under one.
+pub fn stored_attachment_type(entity_type: &str) -> &str {
+    match MessageReferenceKind::parse(entity_type) {
+        Some(MessageReferenceKind::EmailThread) => "email_thread",
+        _ => entity_type,
+    }
+}
