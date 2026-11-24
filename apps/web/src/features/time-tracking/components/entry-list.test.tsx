@@ -1,6 +1,7 @@
 import { formatLocale } from '@app/lib/i18n';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EntryList, type EntryPerson } from './entry-list';
 
@@ -142,4 +143,27 @@ it('offers no Show more for a note that fits', () => {
   renderList([entry({ note: 'Review' })]);
 
   expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+});
+
+it('keeps a note open when the list reads its entries again', () => {
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(200);
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(66);
+  const note = 'A long account of the work. '.repeat(20);
+  const [entries, setEntries] = createSignal([entry({ note })]);
+  render(() => (
+    <EntryList entries={entries()} today="2026-11-24" person={person} />
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+  setEntries([
+    entry({ note }),
+    entry({ id: 'entry-2', userId: 'ben', minutes: 10 }),
+  ]);
+
+  expect(
+    screen
+      .getByRole('button', { name: 'Show less' })
+      .getAttribute('aria-expanded')
+  ).toBe('true');
+  expect(screen.getByText('Ben Example').textContent).toBe('Ben Example');
 });

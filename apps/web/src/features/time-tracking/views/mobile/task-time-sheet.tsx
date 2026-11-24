@@ -7,14 +7,7 @@ import { t } from '@app/lib/i18n';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import {
-  createSignal,
-  createUniqueId,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { EntryForm } from '../../components/entry-form';
 import { QuickLengths } from '../../components/log-time-input';
 import { TimePill } from '../../components/time-pill';
@@ -41,15 +34,13 @@ function EditableEntry(props: {
   onEdit: () => void;
   children: JSX.Element;
 }): JSX.Element {
-  const labelId = createUniqueId();
   return (
-    <div class="relative">
-      <div id={labelId}>{props.children}</div>
+    <div class="relative w-full">
+      {props.children}
       <button
         type="button"
         class="absolute inset-0"
-        aria-labelledby={labelId}
-        aria-description={t('timeTracking.editEntry')}
+        aria-label={t('timeTracking.editEntry')}
         onClick={() => props.onEdit()}
       />
     </div>

@@ -1,11 +1,11 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import { Key } from '@solid-primitives/keyed';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
   createSignal,
-  For,
   type JSX,
   Match,
   on,
@@ -116,11 +116,11 @@ function EntryRow(props: {
     <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] content-center items-center gap-x-2 gap-y-1 px-2 py-1.5 text-sm touch:min-h-[44px]">
       <div class="flex shrink-0">{props.person.avatar(props.entry.userId)}</div>
       <div class="flex min-w-0 items-baseline gap-1">
-        <span class="min-w-0 truncate font-medium text-ink">
+        <span class="min-w-0 shrink-[100] truncate font-medium text-ink">
           {props.person.name(props.entry.userId)}
         </span>
         <Show when={detail()}>
-          <span class="max-w-[60%] shrink-0 truncate text-xs text-ink-extra-muted tabular-nums">
+          <span class="min-w-0 max-w-[calc(100%-3rem)] truncate text-xs text-ink-extra-muted tabular-nums">
             {detail()}
           </span>
         </Show>
@@ -153,20 +153,20 @@ export function EntryList(props: EntryListProps): JSX.Element {
   const days = () => groupByDay(props.entries);
   return (
     <div class="flex flex-col gap-2">
-      <For each={days()}>
+      <Key each={days()} by={(day) => day.day}>
         {(day) => (
           <section class="flex flex-col">
             <h3 class="px-2 py-1 text-xs font-medium text-ink-muted">
               {t('timeTracking.dayTotal', {
-                day: dayLabel(day.day, props.today),
-                length: formatLength(day.minutes),
+                day: dayLabel(day().day, props.today),
+                length: formatLength(day().minutes),
               })}
             </h3>
-            <For each={day.entries}>
+            <Key each={day().entries} by={(entry) => entry.id}>
               {(entry) => {
                 const content = (
                   <EntryRow
-                    entry={entry}
+                    entry={entry()}
                     person={props.person}
                     actions={props.actions}
                   />
@@ -174,15 +174,15 @@ export function EntryList(props: EntryListProps): JSX.Element {
                 return (
                   <Switch fallback={content}>
                     <Match when={props.row}>
-                      {(row) => row()(entry, content)}
+                      {(row) => row()(entry(), content)}
                     </Match>
                   </Switch>
                 );
               }}
-            </For>
+            </Key>
           </section>
         )}
-      </For>
+      </Key>
     </div>
   );
 }
