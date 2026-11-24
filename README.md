@@ -1,1 +1,1 @@
-Proof media for PR #12022 at head a56f8f0b5ccb4e2cd4feba5a24705e54340f191b (synthetic privacy fixture, stand-in mailbox connection).
+Proof media for PR #12022 at head a23b10a2f81ad5215af1955e3db763d6ee7c851e (synthetic privacy fixture, simulated in-place OAuth return; no real mailbox).
