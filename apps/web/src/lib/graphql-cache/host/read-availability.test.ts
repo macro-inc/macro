@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import {
   CacheReadAvailability,
   cacheRequestStamp,
@@ -20,6 +20,25 @@ it('interrupts a read waiting for initialization without interrupting a write or
   initialized.resolve();
   await write;
   await availability.waitUntilReady(() => initialized.promise, true);
+});
+
+it('ends an aborted wait as superseded, not as timed out', async () => {
+  const availability = new CacheReadAvailability();
+  const initialize = vi.fn(() => new Promise<void>(() => undefined));
+  const wait = (signal: AbortSignal) =>
+    availability.waitUntilReady(initialize, true, {
+      timeoutMs: 10,
+      error: () => new Error('timed out'),
+      signal,
+      superseded: () => new Error('superseded'),
+    });
+  const abort = new AbortController();
+  const waiting = expect(wait(abort.signal)).rejects.toThrow('superseded');
+  abort.abort();
+  await waiting;
+  initialize.mockClear();
+  await expect(wait(abort.signal)).rejects.toThrow('superseded');
+  expect(initialize).not.toHaveBeenCalled();
 });
 
 it.each([

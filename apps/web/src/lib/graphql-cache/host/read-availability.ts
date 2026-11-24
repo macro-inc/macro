@@ -95,20 +95,24 @@ export class CacheReadAvailability {
       timeoutMs: number;
       error: () => Error;
       signal?: AbortSignal;
+      superseded: () => Error;
     }
   ): Promise<void> {
     if (readOnly && this.unavailable) throw this.unavailable;
+    const bound = readOnly ? expiresAfter : undefined;
+    if (bound?.signal?.aborted) throw bound.superseded();
     let rejectRead: ((error: Error) => void) | undefined;
     const blocked = new Promise<never>((_resolve, reject) => {
       rejectRead = reject;
       if (readOnly) this.waiting.add(reject);
     });
-    const bound = readOnly ? expiresAfter : undefined;
-    const end = () => {
-      if (bound) rejectRead?.(bound.error());
+    const stopTimeout =
+      bound &&
+      visibleTimeout(() => rejectRead?.(bound.error()), bound.timeoutMs);
+    const onAbort = () => {
+      if (bound) rejectRead?.(bound.superseded());
     };
-    const stopTimeout = bound && visibleTimeout(end, bound.timeoutMs);
-    bound?.signal?.addEventListener('abort', end, { once: true });
+    bound?.signal?.addEventListener('abort', onAbort, { once: true });
     try {
       // Both read and write startup waits take the same microtask path so
       // making reads interruptible cannot reorder admission ahead of writes.
@@ -116,7 +120,7 @@ export class CacheReadAvailability {
       if (readOnly && this.unavailable) throw this.unavailable;
     } finally {
       stopTimeout?.();
-      bound?.signal?.removeEventListener('abort', end);
+      bound?.signal?.removeEventListener('abort', onAbort);
       if (rejectRead) this.waiting.delete(rejectRead);
     }
   }

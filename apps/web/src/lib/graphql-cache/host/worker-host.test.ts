@@ -1031,6 +1031,20 @@ describe('createWorkerCacheHost', () => {
     ]);
     // Only the startup's own limit is left, not the search's.
     expect(vi.getTimerCount()).toBe(1);
+
+    // Nor does one superseded before it asked leave a limit of its own.
+    await expect(
+      host.search(
+        {
+          profile: 'quick-access-v1',
+          buckets: ['document'],
+          query: 'to',
+          limit: 20,
+        },
+        { signal: AbortSignal.abort() }
+      )
+    ).rejects.toThrow('superseded');
+    expect(vi.getTimerCount()).toBe(1);
     host.dispose();
   });
 
