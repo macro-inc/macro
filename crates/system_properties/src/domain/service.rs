@@ -75,11 +75,13 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
         status: StatusOption,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 
-    /// Tasks whose Project property names `project_id`, in id order. Callers
+    /// Tasks whose Project property names `project_id`, in id order: the
+    /// first `limit` of them, or all when `limit` is absent. Callers
     /// authorize each task before showing it.
     fn project_task_ids(
         &self,
         project_id: Uuid,
+        limit: Option<u32>,
     ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
 
     /// The project each listed task belongs to, from its Project property.
@@ -181,8 +183,12 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
-        self.repository.project_task_ids(project_id).await
+    async fn project_task_ids(
+        &self,
+        project_id: Uuid,
+        limit: Option<u32>,
+    ) -> Result<Vec<String>, SystemPropertyError> {
+        self.repository.project_task_ids(project_id, limit).await
     }
 
     #[tracing::instrument(err, skip(self, task_ids))]

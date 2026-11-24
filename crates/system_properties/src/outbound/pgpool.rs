@@ -285,7 +285,11 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         Ok(())
     }
 
-    async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
+    async fn project_task_ids(
+        &self,
+        project_id: Uuid,
+        limit: Option<u32>,
+    ) -> Result<Vec<String>, SystemPropertyError> {
         // The Project id is a literal so a generic plan can prove the partial
         // predicate of idx_ep_project_value_gin. A bound parameter cannot.
         // Containment on values->'value' matches whole-value containment of
@@ -301,8 +305,10 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
                   'entity_id', $1::text, 'entity_type', 'INITIATIVE'
               ))
             ORDER BY entity_id
+            LIMIT $2
             "#,
             project_id.to_string(),
+            limit.map(i64::from),
         )
         .fetch_all(&self.pool)
         .await?;

@@ -588,8 +588,12 @@ async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> 
     .await?;
 
     assert_eq!(
-        repo.project_task_ids(first).await?,
+        repo.project_task_ids(first, None).await?,
         ["extra", "task-a", "task-b", "two"]
+    );
+    assert_eq!(
+        repo.project_task_ids(first, Some(2)).await?,
+        ["extra", "task-a"]
     );
     let mut projects = repo
         .task_projects(&[
