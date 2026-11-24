@@ -1047,6 +1047,27 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
   });
 
+  it('rebuilds the cache after a coordinator restart cut its startup off', async () => {
+    vi.useFakeTimers();
+    const owner = Promise.withResolvers<void>();
+    mocks.initializeCrmCacheOwner
+      .mockReturnValueOnce(owner.promise)
+      .mockReturnValueOnce(owner.promise);
+    const soup = await import('./graphql-soup');
+    const { CoordinatorRestartedError } = await import(
+      '@graphql-cache/host/worker-host'
+    );
+    const initialized = soup.initializeGraphqlSoupCache();
+    owner.reject(new CoordinatorRestartedError());
+    await initialized;
+    expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(2);
+    expect(soup.graphqlCacheRecoveryState()).toBe('ready');
+    expect(soup.graphqlDraftQueueBlocked()).toBe(false);
+  });
+
   it('uses the existing fallback when local owner initialization rejects', async () => {
     const owner = Promise.withResolvers<void>();
     mocks.initializeCrmCacheOwner
@@ -2047,6 +2068,25 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(mocks.platformFetch).toHaveBeenCalledOnce();
     }
   );
+
+  it('reports a coordinator that kept restarting without a toast, and retries it', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    const { CoordinatorRestartedError } = await import(
+      '@graphql-cache/host/worker-host'
+    );
+    soup.getGraphqlSoupClient();
+    const restarted = new CoordinatorRestartedError();
+    mocks.failInitialization(restarted);
+    expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(restarted, {
+      'error.source': 'graphql-cache',
+      'cache.backend': 'turso-wasm-opfs',
+      'cache.phase': 'initialization',
+    });
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+    expect(mocks.host.dispose).toHaveBeenCalledOnce();
+    expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+  });
 
   it('falls back quietly while another context holds the database', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});

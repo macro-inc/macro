@@ -6,9 +6,12 @@ import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runti
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
 import { createCacheCoordinatorPageAdapter } from '../worker/coordinator-page-adapter';
 import { CoordinatorRouter } from '../worker/coordinator-router';
-import { EFFECT_WORKER_CLOSE_FRAME } from '../worker/effect-worker-transport';
 import {
-  CoordinatorRestartsExhaustedError,
+  EFFECT_WORKER_CLOSE_FRAME,
+  WorkerRestartedError,
+} from '../worker/effect-worker-transport';
+import {
+  CoordinatorRestartedError,
   createWorkerCacheHost,
 } from './worker-host';
 import {
@@ -438,9 +441,11 @@ describe('worker CacheHost coordinator integration', () => {
     const affected = Promise.withResolvers<number[]>();
     host.onOpsAffected((keys) => affected.resolve(keys));
     const read = host.readQuery({ opKey: 7, query: 'query First { first }' });
-    const rejected = expect(read).rejects.toMatchObject({
-      errorCode: 'owner-epoch-lost',
-    });
+    const rejected = expect(read).rejects.toSatisfy(
+      (error) =>
+        error instanceof CoordinatorRestartedError &&
+        error.errorCode === 'owner-epoch-lost'
+    );
     await initializing.promise;
     hostInitGates.clear();
     router = new CoordinatorRouter({
@@ -459,6 +464,38 @@ describe('worker CacheHost coordinator integration', () => {
     expect(dedicatedWorkers[0]?.terminated).toBe(true);
     expect(sharedWorkers).toHaveLength(2);
     expect(onInitializationError).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
+  it('ends with a typed restart when the coordinator restarts before every registration acknowledgement', async () => {
+    const restartingRouter = (): CoordinatorRouter =>
+      new CoordinatorRouter({
+        verifyTabLockHeld: () => {
+          queueMicrotask(() => {
+            router = restartingRouter();
+            sharedWorkers.at(-1)?.restart(router);
+          });
+          return new Promise<boolean>(() => undefined);
+        },
+        watchTabLock: () => () => undefined,
+      });
+    router = restartingRouter();
+    localStorage.setItem('graphql-cache:scope', 'integration-scope');
+    const fallback = Promise.withResolvers<Error>();
+    const host = createWorkerCacheHost({
+      scope: 'integration-scope',
+      onInitializationError: fallback.resolve,
+    });
+    const revision = host.currentRevision();
+    const failure = await fallback.promise;
+    expect(failure).toBeInstanceOf(CoordinatorRestartedError);
+    expect(failure.cause).toBeInstanceOf(WorkerRestartedError);
+    await expect(revision).rejects.toBe(failure);
+    expect(sharedWorkers).toHaveLength(3);
+    expect(dedicatedWorkers).toHaveLength(0);
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      'integration-scope'
+    );
     host.dispose();
   });
 
@@ -487,7 +524,7 @@ describe('worker CacheHost coordinator integration', () => {
       errorCode: 'owner-epoch-lost',
     });
     const failure = await fallback.promise;
-    expect(failure).toBeInstanceOf(CoordinatorRestartsExhaustedError);
+    expect(failure).toBeInstanceOf(CoordinatorRestartedError);
     expect(failure).toMatchObject({ errorCode: 'owner-epoch-lost' });
     expect(sharedWorkers).toHaveLength(3);
     expect(dedicatedWorkers.every((worker) => worker.terminated)).toBe(true);

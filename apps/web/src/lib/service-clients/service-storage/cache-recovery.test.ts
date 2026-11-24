@@ -1,4 +1,4 @@
-import { CoordinatorRestartsExhaustedError } from '@graphql-cache/host/worker-host';
+import { CoordinatorRestartedError } from '@graphql-cache/host/worker-host';
 import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
@@ -109,7 +109,7 @@ it('retries after a read refused while the database changed owners', async () =>
 it('retries after the coordinator kept restarting before its handshake', async () => {
   const rebuild = vi.fn(async () => {});
   const recovery = createCacheRecovery(rebuild);
-  recovery.failed(new CoordinatorRestartsExhaustedError());
+  recovery.failed(new CoordinatorRestartedError());
   expect(recovery.state()).toBe('unavailable');
   await vi.advanceTimersByTimeAsync(2_000);
   expect(rebuild).toHaveBeenCalledOnce();

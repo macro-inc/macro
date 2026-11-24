@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { CoordinatorRestartsExhaustedError } from '@graphql-cache/host/worker-host';
+import { CoordinatorRestartedError } from '@graphql-cache/host/worker-host';
 import {
   isCacheSupersededError,
   isOwnerHandoffBlockedError,
@@ -32,7 +32,7 @@ export function canRetryCacheFailure(error: unknown): boolean {
   if (isCacheSupersededError(error)) return false;
   return (
     error instanceof CacheBootstrapExhaustedError ||
-    error instanceof CoordinatorRestartsExhaustedError ||
+    error instanceof CoordinatorRestartedError ||
     isOwnerLockUnavailableError(error) ||
     isOwnerHandoffBlockedError(error)
   );

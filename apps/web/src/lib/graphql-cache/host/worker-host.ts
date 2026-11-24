@@ -190,19 +190,20 @@ class CacheResponseError extends Error {
 }
 
 /**
- * The coordinator SharedWorker restarted on every reconnect before a
- * handshake completed. The host stopped with the database preserved and its
- * scope unquarantined, as an in-place reconnect does, so the page may build a
- * new host later.
+ * The coordinator SharedWorker restarted under this page (Safari can reconnect
+ * a port to an empty worker global). It rejects the requests the restart cut
+ * off, and ends the host once restarts used up the connect attempts before a
+ * handshake completed. Either way the database is preserved and its scope is
+ * not quarantined, so the page may build a new host later.
  */
-export class CoordinatorRestartsExhaustedError extends CacheResponseError {
+export class CoordinatorRestartedError extends CacheResponseError {
   constructor(options?: ErrorOptions) {
     super(
       'cache coordinator transport restarted',
       OWNER_EPOCH_LOST_ERROR_CODE,
       options
     );
-    this.name = 'CoordinatorRestartsExhaustedError';
+    this.name = 'CoordinatorRestartedError';
   }
 }
 
@@ -828,7 +829,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     options.onInitializationError?.(error);
   }
 
-  function failInitialization(error: Error): void {
+  function failInitialization(
+    error: Error,
+    stop: { preserveDatabase?: boolean } = {}
+  ): void {
     if (
       state === 'failed' ||
       state === 'suspended' ||
@@ -845,7 +849,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       durationMs:
         initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
     });
-    stopForSession(error);
+    stopForSession(error, stop);
     reportFailure(error);
   }
 
@@ -1103,11 +1107,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   function reconnectCoordinator(cause: WorkerRestartedError): void {
     if (state === 'failed' || state === 'suspended') return;
-    const error = new CacheResponseError(
-      'cache coordinator transport restarted',
-      OWNER_EPOCH_LOST_ERROR_CODE,
-      { cause }
-    );
+    // Typed, so that whoever was waiting on the cut-off startup may build a
+    // new host instead of treating the restart as damaged storage.
+    const error = new CoordinatorRestartedError({ cause });
     telemetry.record({
       name: 'graphql_cache.owner',
       operationCategory: 'lifecycle',
@@ -1122,10 +1124,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // Bound restarts during startup just like registration retries. A completed
     // handshake resets this budget; separate later restarts can recover again.
     if (++coordinatorRestarts >= COORDINATOR_CONNECT_ATTEMPTS) {
-      const exhausted = new CoordinatorRestartsExhaustedError({ cause });
       stopStorageHealthSampling();
-      stopForSession(exhausted, { uncertain: true, preserveDatabase: true });
-      reportFailure(exhausted);
+      stopForSession(error, { uncertain: true, preserveDatabase: true });
+      reportFailure(error);
       return;
     }
     suspendTransport(error);
@@ -1413,6 +1414,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         const initializationFailure = asError(error);
         if (attempt !== initializationAttempt) throw initializationFailure;
         initialization = undefined;
+        if (initializationFailure instanceof WorkerRestartedError) {
+          // Every registration attempt met a restarted coordinator. No tab
+          // registered, so nothing touched storage: end like a restart that
+          // ran out of attempts after registering.
+          const restarted = new CoordinatorRestartedError({
+            cause: initializationFailure,
+          });
+          failInitialization(restarted, { preserveDatabase: true });
+          throw restarted;
+        }
         if (isOwnerEpochLoss(initializationFailure)) {
           observeOwnerEpochLoss(initializationFailure);
         } else {
