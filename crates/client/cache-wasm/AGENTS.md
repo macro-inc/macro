@@ -12,6 +12,7 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 - `src/shell.rs`: the `CacheEngine` wasm-bindgen class — translates JS calls
   into `cache-core` engine calls behind an async mutex.
 - `src/shell/people.rs`: scoped person-context state/update/search, bounded label-reference reads and local Turso SQL (`peopleReadSql`) under the same engine lock; `shell/test/people.rs` exercises the real browser ABI and stale-generation rejection.
+- `src/shell/channel_timeline.rs`: channel pages, commits, eviction and `onChannelsChanged`, the listener the worker pushes to every tab. A write or hydrate carries its `channelCommit`, stored in the same transaction; the listener is installed again after a physical reset.
 - `src/query_telemetry.rs`: slow-query callback exposed to JS.
 - `open_cache_inner` in `src/shell.rs`: opens the OPFS database and adopts the worker's schema (`TursoStorage::adopt_schema` with the Soup projection inputs) before anything reads; a tier that fails or runs out of space resets the cache logically, and a corrupt file, an uncertain write or a cache that cannot even reset is reset physically and opened empty, and the open result carries the tier and counts for `cache.schema.*` telemetry.
 - `checkpointIfDue` in `src/shell.rs`: cache-turso's idle WAL copy, called by the engine worker once it has been quiet after a request that can write (`scheduleIdleCheckpoint` in `apps/web/src/lib/graphql-cache/worker/worker-core.ts`).

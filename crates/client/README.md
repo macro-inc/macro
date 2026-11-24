@@ -97,6 +97,25 @@ name embeds the format version, so a browser upgrade starts a new file instead
 of migrating; the previous file is left for any tab still running the older
 bundle.
 
+## Channel timelines
+
+The server numbers each channel's changes, and every `seq` it sends is a floor:
+the answer is at least that new. The engine keeps three things by it. Each
+message and activity row has the `seq` of the response that stored it; a removed
+one stays as a tombstone at the `seq` of its removal, pruned once it is 1,000
+changes behind; and the channel's watermark says up to where its changes were
+applied to everything held. Content older than its row, its tombstone or (for an
+entry not held) the watermark is dropped, so answers may arrive in any order.
+
+A page, a run of changes or a push is one write: its `channelCommit` names what
+the response proves (coverage, how the watermark moves, removed ids, a reset),
+and records, rows, coverage and watermark are stored in one transaction. A page
+lowers the watermark; changes advance it only when they continue it, and the
+outcome (`applied`, `stale`, `gap`, `unheld`) tells the host what to ask next. A
+bound of a covered stretch counts only when the page lists it or the device's
+coverage already reaches it. A response without a `seq` never adds a row.
+`onChannelChanged` names the channels each transaction changed, in every tab.
+
 ## Storage upgrades
 
 A native database written at an older `STORAGE_SCHEMA_VERSION` is upgraded in
@@ -424,10 +443,10 @@ validation protects the predicate/collation; a pre-release local schema-12 shape
 without it is incompatible, since it already records version 12 and no step
 runs. No contacts store was introduced.
 
-Storage schema 13 adds the channel timeline tables (`channel_timeline`,
-`channel_coverage`, `channel_sync`) the same way: an incompatible cutover, not a
-migration. Native `open_or_reset` replaces a schema-12 cache with its queued
-mutations; browsers open a fresh `s4.v4.t13` database. Native binaries must be
+Storage schema 14 adds the channel timeline tables (`channel_timeline`,
+`channel_coverage`, `channel_sync`), created empty by a step in
+`storage/migration.rs`: an upgraded native database keeps its records and queued
+mutations and holds no channel until a page is fetched. Native binaries must be
 rebuilt to gain the tables and the commands that read them.
 
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
