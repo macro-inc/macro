@@ -1552,6 +1552,26 @@ describe('a refusal', () => {
 });
 
 describe('signing out', () => {
+  it('drops the answer to a write the session ended under', async () => {
+    soup.mutation.mockImplementation(() => ({
+      toPromise: async () => {
+        soup.signedIn = false;
+        soup.sessionChanged();
+        return {
+          error: new CombinedError({ networkError: new Error('Unauthorized') }),
+        };
+      },
+    }));
+    const created = await outcomeOf(
+      createPropertyDefinition({
+        display_name: 'Phase',
+        data_type: { type: 'boolean' },
+        scope: 'user',
+      })
+    );
+    expect(isCatalogErrorCode(created, 'SIGNED_OUT')).toBe(true);
+  });
+
   it('reports no late failure when sign-out wipes the cache holding a write', async () => {
     const settle = queueingHost();
     soup.mutation.mockImplementation(() => ({

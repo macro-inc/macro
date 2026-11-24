@@ -425,6 +425,12 @@ async function settle<TData, TVariables extends AnyVariables>(
   let observing = false;
   try {
     const result = await trace.run(() => send(context));
+    // An answer that arrives after sign-out or a login change is not this
+    // page's to report.
+    if (queryAccountSession() !== session)
+      throw accountChanged('before the write was answered');
+    if (!graphqlSoupSessionActive())
+      throw signedOut('before the write was answered');
     const committed = commitOf(settlements, host, result, options.uuid);
     if (committed) {
       if (options.waitForCommit) {
