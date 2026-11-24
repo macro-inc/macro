@@ -72,6 +72,7 @@ import {
   type OperationResult,
   stringifyDocument,
 } from '@urql/core';
+import { ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import { queryAccountSession } from '../../auth/account-scope';
@@ -656,10 +657,14 @@ export async function ensureTagSet(
           (candidate) => candidate.definition?.id === definitionId
         );
       };
-      const wasListed = await listed().catch((error: unknown) => {
-        console.error('Reading the cached tag sets failed', error);
-        return false;
-      });
+      const read = await ResultAsync.fromPromise(
+        listed(),
+        (error: unknown) => error
+      );
+      if (read.isErr()) {
+        console.error('Reading the cached tag sets failed', read.error);
+      }
+      const wasListed = read.isOk() && read.value;
       span.setAttr('property.reloaded', !wasListed);
       if (!wasListed) {
         const reloaded = await client
