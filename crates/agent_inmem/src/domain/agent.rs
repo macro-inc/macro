@@ -81,6 +81,10 @@ const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// read. The failure itself goes to the prompt's error, not to them.
 pub(crate) const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
 
+/// Why a dropped call's row closes failed (see [`StreamPart::ToolCallDropped`]).
+pub(crate) const DROPPED_TOOL_CALL: &str =
+    "Not run: the model rewrote this step after calling a tool that was not loaded yet.";
+
 /// A failed turn's error inside `genai_telemetry::withhold_content`: the
 /// model library's text can quote the prompt or the answer, and the ACP
 /// error a turn ends with is logged and recorded on its span.
@@ -1111,6 +1115,7 @@ async fn run_turn(
                     }
                     StreamPart::ToolCall(_) | StreamPart::ToolCallStarted(_) => true,
                     StreamPart::ToolCallArgs { .. }
+                    | StreamPart::ToolCallDropped { .. }
                     | StreamPart::ToolResponse(_)
                     | StreamPart::Usage(_) => false,
                 };
@@ -1269,6 +1274,7 @@ impl TurnOutput {
                 }
             }
             StreamPart::ToolCallArgs { .. }
+            | StreamPart::ToolCallDropped { .. }
             | StreamPart::Thinking(_)
             | StreamPart::ToolResponse(ToolResponse::Json { .. })
             | StreamPart::Usage(_) => {}
@@ -1455,6 +1461,14 @@ fn update_for_part(
                 ))
             })
         }
+        StreamPart::ToolCallDropped { id } => streaming.finish(id).then(|| {
+            SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+                id.clone(),
+                ToolCallUpdateFields::new()
+                    .status(ToolCallStatus::Failed)
+                    .raw_output(serde_json::json!({ "error": DROPPED_TOOL_CALL })),
+            ))
+        }),
         StreamPart::ToolCall(call) if streaming.finish(&call.id) => {
             Some(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
                 call.id.clone(),

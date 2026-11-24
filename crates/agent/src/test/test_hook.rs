@@ -246,6 +246,66 @@ async fn invalid_call_to_unknown_tool_retries_with_feedback_without_loading() {
     assert!(feedback.contains("mcp__nope__hallucinated"));
 }
 
+/// A retry throws the whole reply away, so a call it had announced never
+/// runs: the stream drops it at once instead of leaving it open until the
+/// turn ends.
+#[tokio::test]
+async fn a_retry_drops_the_calls_its_reply_announced() {
+    let (register, _registered) = recording_register();
+    let catalog = Arc::new(vec![searchable("mcp__github__pull_request_read")]);
+    let (bridge, mut rx) = StreamBridge::channel(
+        BridgeInputs {
+            stream_tool_calls: true,
+            ..inputs(Arc::new(Mutex::new(Vec::new())), register, None)
+        },
+        catalog,
+        CancellationToken::new(),
+    );
+
+    bridge.handle_tool_call_delta(
+        "toolu_run",
+        "internal-run",
+        Some("ExecuteCode"),
+        "{\"source\":",
+    );
+    let action = bridge
+        .handle_invalid_tool_call("mcp__github__pull_request_read", Some("toolu_read"))
+        .await;
+    assert!(
+        matches!(action, Some(InvalidToolCallAction::Retry { .. })),
+        "{action:?}"
+    );
+
+    let summary: Vec<String> = drain(&mut rx)
+        .iter()
+        .map(|part| match part {
+            StreamPart::ToolCallStarted(start) => format!("start {}", start.id),
+            StreamPart::ToolCallArgs { id, .. } => format!("args {id}"),
+            StreamPart::ToolCallDropped { id } => format!("dropped {id}"),
+            other => format!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        ["start toolu_run", "args toolu_run", "dropped toolu_run"]
+    );
+
+    // A later retry drops only what its own reply announced: the call that
+    // finished and the one dropped before stay as they are.
+    bridge.handle_tool_call_delta("toolu_run2", "internal-run2", Some("ExecuteCode"), "{}");
+    bridge.handle_tool_call("ExecuteCode", Some("toolu_run2"), "internal-run2", "{}");
+    bridge
+        .handle_invalid_tool_call("mcp__github__pull_request_read", Some("toolu_read2"))
+        .await;
+    let parts = drain(&mut rx);
+    assert!(
+        !parts
+            .iter()
+            .any(|part| matches!(part, StreamPart::ToolCallDropped { .. })),
+        "{parts:?}"
+    );
+}
+
 // --- user tools ---
 
 const PENDING: &str = "\"PendingUserExecution\"";
