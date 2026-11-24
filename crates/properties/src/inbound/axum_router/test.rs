@@ -35,9 +35,11 @@ use uuid::Uuid;
 use super::{
     PropertiesRouterState, PropertyTeamExtractor,
     extract::{EditReceiptExtractor, ViewReceiptExtractor},
+    properties_err_status,
 };
 use crate::{
     PropertiesServiceImpl,
+    domain::error::PropertiesErr,
     domain::ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
 };
 
@@ -1023,4 +1025,20 @@ async fn the_guard_only_covers_team_definitions_with_a_managed_name() {
             .await;
         assert_eq!(result.is_ok(), allowed, "{name} owned by {owner:?}");
     }
+}
+
+#[test]
+fn taken_names_and_values_are_conflicts_and_blank_values_bad_requests() {
+    assert_eq!(
+        properties_err_status(&PropertiesErr::DuplicateDefinitionName),
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        properties_err_status(&PropertiesErr::DuplicateOptionValue),
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        properties_err_status(&PropertiesErr::Validation("blank".to_string())),
+        StatusCode::BAD_REQUEST
+    );
 }

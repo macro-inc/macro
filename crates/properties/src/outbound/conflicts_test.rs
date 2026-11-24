@@ -1,15 +1,15 @@
 //! Catalog writes that collide with a stored row, through the service and
 //! Postgres: a taken name or value is the caller's conflict, never an
-//! internal failure, and a replayed add answers with the option it made.
+//! internal failure, and a replayed add answers with the option it made. The
+//! router answers these errors with 409 and 400 (`inbound::axum_router` tests).
 
 use super::definitions_test::user_1;
 use super::properties_pg_repo::PropertiesPgRepo;
 use super::query_error::{DEFINITION_NAME_INDEXES, OPTION_VALUE_INDEXES};
+use crate::domain::error::PropertiesErr;
 use crate::domain::ports::{MockNotificationService, MockPermissionService};
 use crate::domain::service::PropertiesService;
 use crate::domain::service_impl::PropertiesServiceImpl;
-use crate::inbound::axum_router::properties_err_status;
-use axum::http::StatusCode;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_properties::api::requests::{
     AddPropertyOptionRequest, AddStringOptionRequest, CreatePropertyDefinitionRequest,
@@ -65,7 +65,10 @@ async fn a_taken_definition_name_is_a_conflict(pool: Pool<Postgres>) {
         .create_property_definition(&user_1(), None, &select("Test Notes", &[]))
         .await
         .unwrap_err();
-    assert_eq!(properties_err_status(&err), StatusCode::CONFLICT, "{err:?}");
+    assert!(
+        matches!(err, PropertiesErr::DuplicateDefinitionName),
+        "{err:?}"
+    );
 }
 
 #[sqlx::test(
@@ -77,7 +80,10 @@ async fn repeated_seed_options_are_a_conflict_and_write_nothing(pool: Pool<Postg
         .create_property_definition(&user_1(), None, &select("Phase", &["Lead", "Lead"]))
         .await
         .unwrap_err();
-    assert_eq!(properties_err_status(&err), StatusCode::CONFLICT, "{err:?}");
+    assert!(
+        matches!(err, PropertiesErr::DuplicateOptionValue),
+        "{err:?}"
+    );
     let stored: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM property_definitions WHERE display_name = 'Phase'",
     )
@@ -97,9 +103,8 @@ async fn blank_seed_options_are_refused(pool: Pool<Postgres>) {
             .create_property_definition(&user_1(), None, &select("Phase", &["Lead", blank]))
             .await
             .unwrap_err();
-        assert_eq!(
-            properties_err_status(&err),
-            StatusCode::BAD_REQUEST,
+        assert!(
+            matches!(err, PropertiesErr::Validation(_)),
             "{blank:?}: {err:?}"
         );
     }
@@ -115,7 +120,10 @@ async fn an_add_under_a_new_id_with_a_taken_value_is_a_conflict(pool: Pool<Postg
         .add_property_option_with_id(&user_1(), None, definition, Uuid::now_v7(), &add("Low"))
         .await
         .unwrap_err();
-    assert_eq!(properties_err_status(&err), StatusCode::CONFLICT, "{err:?}");
+    assert!(
+        matches!(err, PropertiesErr::DuplicateOptionValue),
+        "{err:?}"
+    );
 }
 
 #[sqlx::test(
