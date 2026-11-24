@@ -12,6 +12,7 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
+import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useBlockId } from '@core/block';
 import {
   createParamsState,
@@ -20,7 +21,7 @@ import {
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { crmAccessAllowed } from '@service-storage/crm-access-authority';
-import { createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 
 /**
  * Legacy adapter: bridges the block/split-layout system to the standalone
@@ -30,7 +31,10 @@ import { createSignal, Show } from 'solid-js';
 export function ContactBlockAdapter() {
   const contactId = useBlockId();
   const params = createParamsState();
-  const [section, setSection] = createSignal<ContactSection>('overview');
+  const [section, setSection] = useEntryState<ContactSection>(
+    `crm.recordSection:contact:${contactId}`,
+    { default: 'overview' }
+  );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: params.navigate,
   });

@@ -290,7 +290,10 @@ Workspace activity uses the shared single-row desktop header with New and an
 expandable Search control; record-detail tabs retain their section toolbar.
 Company and contact headers keep desktop section tabs; touch uses a labeled
 header island that opens the shared bottom drawer with the current section
-checked under **Switch view**. A collapsed host keeps the section icon and
+checked under **Switch view**. The standalone company and contact blocks keep
+that choice in their history entry (`useEntryState`, keyed by record so a
+preview host's other records start on Overview), so Back from an item opened
+in a section returns to it. A collapsed host keeps the section icon and
 accessible label; embedded phone headers put the switcher below the breadcrumb
 and action row. Keep the
 workspace's mobile view strip separate. Restore that strip when access loss
